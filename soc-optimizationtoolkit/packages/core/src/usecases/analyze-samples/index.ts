@@ -13,6 +13,11 @@ export {
   collectGapReports,
   resolveSolutionDcrFlows,
 } from "./analyze-samples";
+export type { DeprecatedGuidSuccessor } from "./deprecated-guid-successors";
+export {
+  deprecatedGuidSuccessorsForTable,
+  guidSuccessorMappings,
+} from "./deprecated-guid-successors";
 export type {
   SampleRoutingInput,
   SampleRoutingResult,

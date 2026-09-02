@@ -413,18 +413,47 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
       ],
     },
   },
+  // DBT-3: the copy below is deliberately dated where something was measured
+  // and hedged where it was not, and the two are not the same claim. Only ONE
+  // fact here was established: the Logs Ingestion API supported-tables list
+  // carries no Entra identity table, and only as a snapshot (content updated
+  // 2026-06-03, docs/features/content-preserving-native-reroute.md:35), which
+  // Microsoft says "may be added to" - so it states its date instead of
+  // "today". The other two claims trace to section 8 of that same doc, which
+  // records BOTH as unverified: whether the native Entra tables would accept a
+  // Kind:Direct DCR even if they were listed (:239), and whether a workspace
+  // will register a function alias named for an existing table (:241). Say
+  // what the SOURCE says is unverified and no more - an earlier rewrite was
+  // reverted for trading the unhedged claim for a differently-unhedged one
+  // ("nobody has tested that against a live workspace"), which is a claim
+  // about the state of the world that nobody established either.
+  //
+  // NO PIN GUARDS THIS, deliberately. The property worth protecting is "no
+  // unhedged assertion sourced from an unverified section", and that is a
+  // judgement about prose, not an assertion a test can make. The reverted
+  // attempt's pin blocked four literal spellings, so the identical defect was
+  // reintroduced in different words and the suite still passed 52 of 52. A pin
+  // that reads as protection while the defect is on screen is worse than none.
   {
     id: "entra-reroute",
     title: "Entra diagnostic reroute (content-preserving)",
+    // DBT-3: THIS FIELD RENDERS ALONE. The near-miss recommendation list shows
+    // `summary` with no `why` beside it, so a hedge that lives only in `why`
+    // is a hedge the operator never sees - which is how the first fix left the
+    // card's exact defect on screen while reporting it fixed. It said aliases
+    // "preserv[e] Sentinel content compatibility"; the source records alias
+    // registration over an existing table as UNVERIFIED (:241), so the summary
+    // now states the INTENT and marks the mechanism unproven, in the field
+    // that is actually read.
     summary:
-      "Entra ID sign-in/audit logs export to Event Hub, flow through Stream, and land in custom tables with function aliases preserving Sentinel content compatibility.",
+      "Entra ID sign-in/audit logs export to Event Hub, flow through Stream, and land in custom tables, with a function alias intended to keep Sentinel content resolving - alias registration over an existing table is unverified.",
     why:
-      "Native Entra tables do not accept Kind:Direct DCRs, so rerouting through Cribl requires landing in _CL tables; function aliases keep existing analytics content working.",
+      "Entra identity tables are absent from the Logs Ingestion API supported-tables list (snapshot content updated 2026-06-03), so a reroute through Cribl has to land in _CL tables and lean on a function alias to keep existing analytics content resolving. The reroute plan records both mechanisms as unverified: whether those native tables would accept a Kind:Direct DCR even if they were listed, and whether a workspace will register an alias named for a native table that already exists.",
     requiresProducts: ["stream"],
     requiresResources: ["event-hub", "entra-diagnostics", "sentinel"],
     considerations: [
-      "Mode A (clean native-table ingestion) is NOT available for Entra identity tables today - this is the Mode B path.",
-      "Create a KQL function alias named like the native table over the _CL table so rules and workbooks keep resolving.",
+      "Mode A (clean native-table ingestion) was unavailable for Entra identity tables as of the 2026-06-03 supported-tables snapshot - Microsoft says the list may be added to, so recheck it rather than assuming Mode B is still the only path.",
+      "Create a KQL function alias named like the native table over the _CL table so rules and workbooks keep resolving - but prove the registration in the target workspace first: the reroute plan records alias-versus-existing-table collision behaviour as inconsistently documented and not settled by Microsoft.",
       "UEBA cannot follow rerouted tables - keep that limitation explicit with stakeholders.",
       "Preserve the original schema through Stream: content compatibility depends on it.",
     ],

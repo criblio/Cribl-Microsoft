@@ -12,6 +12,7 @@ import {
   onboardBatch,
   onboardBatchStepsFor,
   pollAttemptsForTimeout,
+  safeAzureManagement,
   ONBOARD_BATCH_JOB_KIND,
 } from "./onboard-batch";
 import type {
@@ -185,6 +186,33 @@ function rejectingAzure(message: string): AzureManagement {
   return {
     request: async () => {
       throw new Error(message);
+    },
+  };
+}
+
+/**
+ * An AzureManagement that answers from `inner` until call `rejectOnCall`
+ * (1-based), which REJECTS instead.
+ *
+ * {@link rejectingAzure} can only ever exercise the batch's FIRST ARM call:
+ * a transport that rejects on everything fails fetch-workspace, and every
+ * later call site is then skipped as a failed prerequisite. That is why the
+ * DBT-48 pin above cannot say anything about the other six call sites, and
+ * why the never-rejects contract there was carried by hand until DBT-56.
+ */
+function azureRejectingOnCall(
+  inner: FakeAzureManagement,
+  rejectOnCall: number,
+  message: string,
+): AzureManagement {
+  let seen = 0;
+  return {
+    request: async (opts) => {
+      seen += 1;
+      if (seen === rejectOnCall) {
+        throw new Error(message);
+      }
+      return inner.request(opts);
     },
   };
 }
@@ -883,6 +911,154 @@ describe("onboardBatch transport rejections still finish the record (DBT-48)", (
       true,
     );
     expect(ports.cribl.calls.length).toBe(0);
+  });
+
+  it("a REJECTING ensure-dce fails that step, and the tables skip (DBT-56)", async () => {
+    const inner = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    // Only the prologue GET is scripted: the DCE existence GET is call 2 and
+    // never reaches the fake.
+    inner.respondWith(WORKSPACE_RESPONSE);
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    const jobs = new FakeJobStore();
+    const ports = {
+      azure: azureRejectingOnCall(inner, 2, "connect ETIMEDOUT 20.150.34.1:443"),
+      cribl,
+      jobs,
+    };
+
+    // Resolves. Before DBT-56 this held because of a hand-written try block
+    // around the DCE calls, and nothing in the suite noticed when that block
+    // was made transparent - the measured gap the safe view closes.
+    const job = await onboardBatch(
+      ports,
+      baseInput({
+        tables: [{ table: "Syslog" }],
+        options: makeOptions({ createDCE: true }),
+      }),
+    );
+
+    expect(job.status).toBe("failed");
+    expect(job.error).toBe(
+      "prerequisite step 'ensure-dce' failed - 1 table(s) skipped",
+    );
+    expect(job.steps.map((step) => `${step.name}:${step.status}`)).toEqual([
+      "fetch-workspace:succeeded",
+      "ensure-dce:failed",
+      "table:Syslog:skipped",
+    ]);
+    // The transport's own text, not a generic message.
+    expect(job.steps.find((step) => step.name === "ensure-dce")!.detail).toContain(
+      "ETIMEDOUT",
+    );
+
+    // Nothing stranded at 'running', and the table was never deployed.
+    const stored = await jobs.list(ONBOARD_BATCH_JOB_KIND);
+    expect(stored.map((record) => record.status)).toEqual(["failed"]);
+    expect(stored[0]!.steps.some((step) => step.status === "running")).toBe(false);
+    expect(cribl.calls.length).toBe(0);
+
+    const outcome = job.result as OnboardBatchOutcome;
+    expect(outcome.skipped).toBe(1);
+    expect(outcome.failed).toBe(0);
+    expect(outcome.tables[0]!.reason).toBe("prerequisite-failed");
+  });
+
+  it("a REJECTING skip-existing check fails ONE table and the next still deploys (DBT-56)", async () => {
+    const inner = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    inner.respondWith(
+      WORKSPACE_RESPONSE, // 1 prologue fetch-workspace
+      // 2 = the skip-existing GET for SecurityEvent, REJECTED before the fake
+      NOT_FOUND_RESPONSE, // 3 skip-existing GET for Syslog: no such DCR
+      WORKSPACE_RESPONSE, // 4 child
+      NATIVE_SCHEMA_RESPONSE, // 5
+      { status: 200, body: directDcrBody("immutable-syslog") }, // 6 PUT
+      { status: 200, body: directDcrBody("immutable-syslog") }, // 7 readback
+    );
+    const cribl = new FakeCriblClient({ outputsList: [] });
+    scriptCriblHappyPath(cribl, 1);
+    const jobs = new FakeJobStore();
+    const ports = {
+      azure: azureRejectingOnCall(inner, 2, "connect ECONNRESET 20.150.34.1:443"),
+      cribl,
+      jobs,
+    };
+
+    const job = await onboardBatch(
+      ports,
+      baseInput({
+        tables: [{ table: "SecurityEvent" }, { table: "Syslog" }],
+        options: makeOptions({ skipExistingDCRs: true }),
+      }),
+    );
+
+    expect(job.status).toBe("failed");
+    expect(job.error).toBe("1 of 2 table(s) failed");
+    expect(job.steps.map((step) => `${step.name}:${step.status}`)).toEqual([
+      "fetch-workspace:succeeded",
+      "table:SecurityEvent:failed",
+      "table:Syslog:succeeded",
+    ]);
+
+    const outcome = job.result as OnboardBatchOutcome;
+    expect(outcome.failed).toBe(1);
+    expect(outcome.succeeded).toBe(1);
+    expect(outcome.tables[0]!.error).toContain("ECONNRESET");
+
+    // ISOLATION survives a transport rejection, not only an HTTP error: the
+    // second table's DCR was deployed and its destination created.
+    expect(callSequence(inner)).toContain(`PUT ${DCR_BASE}/dcr-Syslog-eastus`);
+    expect(cribl.calls.length).toBe(4);
+  });
+});
+
+describe("safeAzureManagement: the never-rejects contract as a type (DBT-56)", () => {
+  const PROBE = { method: "GET" as const, path: "/probe", apiVersion: "2023-09-01" };
+
+  it("turns a REJECTING transport into ok:false carrying its text", async () => {
+    const safe = safeAzureManagement(
+      rejectingAzure("connect ECONNRESET 20.150.34.1:443"),
+    );
+
+    // The whole point: this AWAIT does not throw. A call site cannot forget a
+    // guard it is not allowed to write.
+    const attempt = await safe.request(PROBE);
+
+    expect(attempt).toEqual({
+      ok: false,
+      error: "connect ECONNRESET 20.150.34.1:443",
+    });
+  });
+
+  it("leaves a non-2xx ANSWER as ok:true - ARM refusing is not ARM unreachable", async () => {
+    const inner = new FakeAzureManagement({ dataCollectionRulesList: [] });
+    const forbidden = {
+      status: 403,
+      body: { error: { code: "AuthorizationFailed", message: "no" } },
+    };
+    inner.respondWith(forbidden);
+
+    const attempt = await safeAzureManagement(inner).request(PROBE);
+
+    // Collapsing these two into one failure shape would be worse than the
+    // convention this replaces: "ARM said no" and "ARM was never reached" are
+    // different operator actions, and every caller below still branches on
+    // status to build its own error text.
+    expect(attempt).toEqual({ ok: true, response: forbidden });
+    // Pass-through, not a rewrite: the request reaches the port verbatim.
+    expect(inner.calls).toEqual([PROBE]);
+  });
+
+  it("renders a non-Error rejection as text rather than dropping it", async () => {
+    const throwsAString: AzureManagement = {
+      request: async () => {
+        throw "socket hang up";
+      },
+    };
+
+    expect(await safeAzureManagement(throwsAString).request(PROBE)).toEqual({
+      ok: false,
+      error: "socket hang up",
+    });
   });
 });
 

@@ -529,10 +529,31 @@ export function SolutionBrowser({
               Clear selection
             </button>
           </div>
+          {/* DBT-9. TWO THINGS HERE ARE EASY TO GET WRONG, and the first
+              draft of this fix got both.
+              1. THE DELETION HAPPENS ON *CLEAR*, not on picking the next
+                 solution. handleSolutionChange guards on
+                 `prevName === null || prevName === nextName`
+                 (integrate-screen.tsx:658), so Clear (X -> null) falls
+                 through and removes every tagged sample, while the following
+                 pick (null -> Y) returns early and removes nothing. The
+                 browse list is hidden while a solution is selected, so Clear
+                 is the ONLY route to another one - which means every deletion
+                 in the product happens at the button this sentence sits under.
+                 Saying "changing the solution deletes" points the warning at
+                 the one step that is harmless.
+              2. DO NOT PROMISE THE MAPPINGS COME BACK. Approving the
+                 auto-generated mapping unchanged persists nothing, so a
+                 reassurance here would be false on the default path - and the
+                 save is fire-and-forget with a swallowed error besides. The
+                 copy stays silent about it rather than guessing.
+              The three sections still do not share a verb: samples are
+              DELETED and unrecoverable, mapping and coverage only empty. */}
           <span className="field-hint">
-            Every section below is scoped to this solution. Clear it to browse
-            and pick another - the sample, mapping, and coverage sections reset
-            when the solution changes.
+            Every section below is scoped to this solution. Clearing it deletes
+            the samples you acquired for it and empties the mapping and coverage
+            sections - it is how you pick another solution, so do that only when
+            you are done with this one.
           </span>
         </div>
       ) : (

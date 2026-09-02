@@ -749,11 +749,12 @@
       "feature": "DBT-F2",
       "title": "Reconcile the Entra `Kind:Direct` copy with what has been measured",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`architecture-patterns.ts:422,426` states flatly that native Entra tables do not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the plan doc that is its only source still calls it unverified. Either measure it or carry the caveat. ATTEMPTED AND REVERTED 2026-09-01, and the failure is worth more than the attempt would have been. An agent rewrote the copy to carry a caveat, and adversarial review showed the rewrite COMMITTED THE SAME OFFENCE THE CARD WAS FILED AGAINST, one level up: the new text told operators 'Nobody has tested that against a live workspace', which is a universal claim about the state of the world that nobody established. The source document says only that ONE specific thing is unverified. Trading an unhedged claim for a differently-unhedged claim is not a fix. Two further findings, both confirmed by reproduction rather than argued. The rewritten `why` still ended with an unhedged assertion drawn from the SAME section 8 of the SAME source - that function aliases keep existing analytics content working - while section 8's third risk says the alias trick may be rejected outright. And the pin titled 'never asserts the UNMEASURED half' did not enforce that property: it blocked four literal spellings, so the reviewer reintroduced the card's exact defect in different words and the file passed 52 of 52 with the UNVERIFIED bullet still on screen. WHAT THE NEXT ATTEMPT MUST DO DIFFERENTLY: state precisely what the source says is unverified and no more; do not characterise the state of the world's testing; hedge EVERY claim traceable to the unverified section rather than only the one this card names; and pin the PROPERTY - no unhedged assertion sourced from an unverified section - rather than a list of forbidden phrasings. If that property cannot be pinned, say so and leave the copy honest without a pin. Prose with no pin is an acceptable outcome here, and a pin that passes under the defect is WORSE than none, because it reads as protection. FULLY SCOPED 2026-09-01, which is what the reverted attempt lacked. The work is exactly: hedge three strings (architecture-patterns.ts:422 twice, and :427), DATE one (:426, using the 2026-06-03 snapshot from the source doc's line 35), and leave :428 alone. And the card's own escape clause is confirmed as the right outcome - the property CANNOT be pinned against this copy, so prose with no pin is the honest result, exactly as the card said it would be."
+      "detail": "`architecture-patterns.ts:422,426` states flatly that native Entra tables do not accept Kind:Direct DCRs, with no snapshot date and no hedge, while the plan doc that is its only source still calls it unverified. Either measure it or carry the caveat. ATTEMPTED AND REVERTED 2026-09-01, and the failure is worth more than the attempt would have been. An agent rewrote the copy to carry a caveat, and adversarial review showed the rewrite COMMITTED THE SAME OFFENCE THE CARD WAS FILED AGAINST, one level up: the new text told operators 'Nobody has tested that against a live workspace', which is a universal claim about the state of the world that nobody established. The source document says only that ONE specific thing is unverified. Trading an unhedged claim for a differently-unhedged claim is not a fix. Two further findings, both confirmed by reproduction rather than argued. The rewritten `why` still ended with an unhedged assertion drawn from the SAME section 8 of the SAME source - that function aliases keep existing analytics content working - while section 8's third risk says the alias trick may be rejected outright. And the pin titled 'never asserts the UNMEASURED half' did not enforce that property: it blocked four literal spellings, so the reviewer reintroduced the card's exact defect in different words and the file passed 52 of 52 with the UNVERIFIED bullet still on screen. WHAT THE NEXT ATTEMPT MUST DO DIFFERENTLY: state precisely what the source says is unverified and no more; do not characterise the state of the world's testing; hedge EVERY claim traceable to the unverified section rather than only the one this card names; and pin the PROPERTY - no unhedged assertion sourced from an unverified section - rather than a list of forbidden phrasings. If that property cannot be pinned, say so and leave the copy honest without a pin. Prose with no pin is an acceptable outcome here, and a pin that passes under the defect is WORSE than none, because it reads as protection. FULLY SCOPED 2026-09-01, which is what the reverted attempt lacked. The work is exactly: hedge three strings (architecture-patterns.ts:422 twice, and :427), DATE one (:426, using the 2026-06-03 snapshot from the source doc's line 35), and leave :428 alone. And the card's own escape clause is confirmed as the right outcome - the property CANNOT be pinned against this copy, so prose with no pin is the honest result, exactly as the card said it would be. DONE 2026-09-01, second attempt, after the first was reverted and THIS one was caught leaving the defect on screen. Three strings hedged and one dated with the 2026-06-03 snapshot, as scoped. THE BLOCKING REVIEW FINDING is the useful record: the `why` field was hedged correctly and the `summary` field two lines above it was not - and `summary` is the field that RENDERS ALONE in the near-miss recommendation list, with no `why` beside it. So the card's exact defect stayed on screen while the fix reported itself done. It claimed aliases 'preserv[e] Sentinel content compatibility'; the source records alias registration over an existing table as unverified. The summary now states the INTENT and marks the mechanism unproven. NO PIN, deliberately, and the card predicted this: the property worth protecting is 'no unhedged assertion sourced from an unverified section', which cannot be pinned against prose. A pin that passes under the defect reads as protection and is worse than none - which the reverted first attempt proved by passing 52 of 52 with the defect present.",
+      "verified": "none"
     },
     {
       "id": "DBT-4",
@@ -801,11 +802,12 @@
       "feature": "DBT-F1",
       "title": "Confirm the `eventsPerSec` 2x multiplier against worker config",
       "type": "enabler",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Inferred as the worker-process count from a hard changepoint, not confirmed. `zscaler-lake-lab.md:225-238`. HALF OF THIS IS DOABLE NOW AND NEEDS NO WORKER 2026-09-01: the vendored spec settles the UNIT and contradicts the doc. cribl-openapi.json:27074 titles datagen samples[].eventsPerSec 'Events Per Second Per Worker Node' - so zscaler-lake-lab.md:216's heading, 'eventsPerSec is per worker process', is wrong in its own repo's spec. Correcting the unit with that citation, and stopping the inference at :233 from guessing at process count, is a doc edit rather than a live experiment. The multiplier's CAUSE stays unconfirmed - that half does need a worker."
+      "detail": "Inferred as the worker-process count from a hard changepoint, not confirmed. `zscaler-lake-lab.md:225-238`. HALF OF THIS IS DOABLE NOW AND NEEDS NO WORKER 2026-09-01: the vendored spec settles the UNIT and contradicts the doc. cribl-openapi.json:27074 titles datagen samples[].eventsPerSec 'Events Per Second Per Worker Node' - so zscaler-lake-lab.md:216's heading, 'eventsPerSec is per worker process', is wrong in its own repo's spec. Correcting the unit with that citation, and stopping the inference at :233 from guessing at process count, is a doc edit rather than a live experiment. The multiplier's CAUSE stays unconfirmed - that half does need a worker. DONE 2026-09-01. The doc claimed eventsPerSec is 'per worker process'; the repo's own vendored spec says otherwise - cribl-openapi.json:27074 titles it 'Events Per Second Per Worker Node', Cribl's own wording, and it had been sitting in the repo since 2026-07-01 while the doc section was written 2026-08-26. Unit corrected with the citation; the inference that the multiplier equals the worker-process count is withdrawn rather than replaced with a new guess. The measured factor of 2 stands; its CAUSE stays unconfirmed and is labelled a candidate. REVIEW FINDING, carded rather than fixed here: nothing in the repo holds the spec fact. The reviewer flipped the spec's title to 'Worker Process' and every gate stayed green across 5,069 tests - so a re-vendor could silently invalidate the citation. That is [[DBT-73]], and the repo already has the pattern for it (entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source file).",
+      "verified": "none"
     },
     {
       "id": "DBT-8",
@@ -825,11 +827,12 @@
       "feature": "DBT-F2",
       "title": "Say \"are deleted\" instead of \"reset\" in the Sample Data helper text",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md#9`. VERIFIED READY 2026-09-01: the string still reads 'reset' at solution-browser.tsx:532-536, it is unique in the repo, and NO test pins it - so the change is one line with no pin to update. The deletion it describes is confirmed real at integrate-screen.tsx:663-667 (ports.samples.list() then Promise.all of removals), so 'are deleted' is the accurate word."
+      "detail": "The deletion is correct and intended; the wording is what misleads. One string. `backlog.md#9`. VERIFIED READY 2026-09-01: the string still reads 'reset' at solution-browser.tsx:532-536, it is unique in the repo, and NO test pins it - so the change is one line with no pin to update. The deletion it describes is confirmed real at integrate-screen.tsx:663-667 (ports.samples.list() then Promise.all of removals), so 'are deleted' is the accurate word. DONE 2026-09-01, and the first attempt was REFUTED before it landed - which is the part worth keeping. It rewrote the copy to say 'changing the solution deletes the samples you acquired'. Review demonstrated with a throwaway spec that the deletion fires on CLEAR SELECTION, not on the following pick: handleSolutionChange guards on `prevName === null || prevName === nextName` (integrate-screen.tsx:658), so Clear (X -> null) falls through and removes every tagged sample while the next pick (null -> Y) returns early and removes nothing. The browse list is hidden while a solution is selected, so Clear is the ONLY route to another one - meaning every deletion in the product happens at the button the new sentence described as harmless browsing. The fix had moved the warning off the one destructive step. A SECOND BLOCKER, also caught: the draft added 'Mapping decisions you approved are kept per solution and come back if you pick this one again' - a NEW positive claim the old copy never made, and FALSE on the default path, because approving the auto-generated mapping unchanged persists nothing. Dropped rather than reworded: the copy now says nothing about mappings surviving. Shipped copy names Clearing as the destructive act. No pin: the only available one would assert an exact sentence, which breaks on every future wording edit and catches no defect class this repo cares about. Stated rather than quietly skipped. See [[DBT-72]] for the product question this uncovered.",
+      "verified": "none"
     },
     {
       "id": "DBT-10",
@@ -1212,7 +1215,7 @@
       "feature": "HON-F3",
       "title": "`ADR-0004` per-table successor for deprecated guid columns (`AwsRequestId` to `AwsRequestId_`)",
       "type": "decision",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
@@ -1232,7 +1235,8 @@
         ],
         "chosen": "per-table-successor"
       },
-      "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  --- Source is docs/adr/0004-cast-guid-columns.md, \"What is NOT decided here\". The card previously tagged AZR-5, which is the diagnostic-settings cleanup and has nothing to do with guid columns. DECIDED: route deprecated guid columns to their `_` successor, per table. CONSTRAINT recorded with the decision and as load-bearing as the choice: this is a per-table CONTENT mapping and must NOT become a new RULE 2b clause, because a general rule would rewrite column names in tables where the successor does not exist. Reasoning in backlog.md section 18g, which is why this can settle. READY 2026-09-01, and the CONSTRAINT this card insists on is ALREADY ENFORCED IN CODE rather than by discipline: analyze-samples.ts:264-278 drops any Phase-0 entry whose destination column is absent from the resolved schema (:273) or already claimed (:274). That is exactly 'must not rewrite column names in tables where the successor does not exist', so the per-table content mapping can be added without touching schema-mapping at all."
+      "detail": "Explicitly out of scope for ADR-0004 as a per-table content decision. Matters because CloudTrail's `requestID` is frequently not a UUID, so `toguid()` returns null and drops it silently. `adr/0004:82-86`.  --- Source is docs/adr/0004-cast-guid-columns.md, \"What is NOT decided here\". The card previously tagged AZR-5, which is the diagnostic-settings cleanup and has nothing to do with guid columns. DECIDED: route deprecated guid columns to their `_` successor, per table. CONSTRAINT recorded with the decision and as load-bearing as the choice: this is a per-table CONTENT mapping and must NOT become a new RULE 2b clause, because a general rule would rewrite column names in tables where the successor does not exist. Reasoning in backlog.md section 18g, which is why this can settle. READY 2026-09-01, and the CONSTRAINT this card insists on is ALREADY ENFORCED IN CODE rather than by discipline: analyze-samples.ts:264-278 drops any Phase-0 entry whose destination column is absent from the resolved schema (:273) or already claimed (:274). That is exactly 'must not rewrite column names in tables where the successor does not exist', so the per-table content mapping can be added without touching schema-mapping at all. DONE 2026-09-01, implementing the settled per-table-successor decision. AWSCloudTrail's requestID now routes to AwsRequestId_ as per-table CONTENT, fed through the existing analyzeSamples Phase-0 guard - so THE CONSTRAINT HOLDS STRUCTURALLY: schema-mapping is untouched and no RULE 2b clause was added. Review reproduced all four mutations with the exact counts claimed, including the one that matters - deleting the schema-presence check kills both the D-11 constraint pin and a pre-existing pack-guard pin. The sweep is confirmed independently: across the whole bundled catalog exactly ONE column has a `<name>_` sibling that also exists, AwsRequestId -> AwsRequestId_, and it is the only guid-typed one. So the mapping is as narrow as the card demanded.",
+      "verified": "pins"
     },
     {
       "id": "GEN-2",
@@ -1553,11 +1557,12 @@
       "feature": "DBT-F1",
       "title": "The never-rejects contract is enforced call site by call site",
       "type": "enabler",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix will not stay fixed. `onboardBatch` promises it never rejects for step or table failures, and that promise is now kept by FOUR SEPARATE try blocks around four ARM calls. DBT-48 existed because one call was added without one. The next call added outside a guard reopens exactly the same defect, and nothing fails when it does - the contract is prose plus a habit. Options: an outer guard around the usecase body that converts any escape into a failed record; or a pin that drives EVERY ARM call site to reject in turn and asserts the record still resolves. The second is more work but catches the omission at the point it is made, which is what the four-try-blocks arrangement cannot do. SHAPE IDENTIFIED 2026-09-01: a never-rejecting ARM view composed where paceAzureManagement already sits (onboard-batch.ts:659) - a SafeAzureManagement whose request returns {ok:true,response} | {ok:false,error}, so the contract becomes a type rather than a convention repeated per call site."
+      "detail": "RAISED BY THE REVIEWER OF [[DBT-48]], 2026-08-31, as the reason that fix will not stay fixed. `onboardBatch` promises it never rejects for step or table failures, and that promise is now kept by FOUR SEPARATE try blocks around four ARM calls. DBT-48 existed because one call was added without one. The next call added outside a guard reopens exactly the same defect, and nothing fails when it does - the contract is prose plus a habit. Options: an outer guard around the usecase body that converts any escape into a failed record; or a pin that drives EVERY ARM call site to reject in turn and asserts the record still resolves. The second is more work but catches the omission at the point it is made, which is what the four-try-blocks arrangement cannot do. SHAPE IDENTIFIED 2026-09-01: a never-rejecting ARM view composed where paceAzureManagement already sits (onboard-batch.ts:659) - a SafeAzureManagement whose request returns {ok:true,response} | {ok:false,error}, so the contract becomes a type rather than a convention repeated per call site. DONE 2026-09-01. The never-rejects contract is now a TYPE rather than four hand-written try blocks: ArmAttempt / SafeAzureManagement / safeAzureManagement(), composed where paceAzureManagement already sits, applied to all seven of the batch's own ARM calls. The card's own SHAPE IDENTIFIED note described exactly this, so the build followed a settled design rather than inventing one. Before, the next ARM call added outside a try block reopened [[DBT-48]] and nothing failed when it did.",
+      "verified": "pins"
     },
     {
       "id": "DBT-57",
@@ -2095,13 +2100,14 @@
       "feature": "DBT-F1",
       "title": "check-schema-asset has no test, which is the gap it was built to close",
       "type": "enabler",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "DBT-67"
       ],
-      "detail": "apps/cribl-app/scripts/check-schema-asset.mjs ships with no test file, unlike board.mjs, check-listings.mjs, check-docs-drift.mjs and the other gate scripts, which all have one. The irony is the point, not a joke: [[DBT-67]] existed because a generator crashed for seven weeks and NO TEST RAN IT, so the breakage was silent. The checker added to close that is itself untested, so if it silently stops detecting drift - an exception swallowed, a comparison inverted, the restore in the finally block masking a real failure - nothing reports it, and the gate reads green while guarding nothing. Its behaviour WAS verified by hand at the time: both mutations were run and both were caught (stale asset names the 2 drifting tables; a broken generator path reports FAILED TO RUN with the original ENOENT). But a verification nobody recorded is a verification that expires. Sibling scripts board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not a lone offender - but those do not stand between a committed asset and the tree, which is why only this one is carded. READY 2026-09-01: premise verified intact - no test file, no exports, unguarded main(). Work is one guard, one extracted pure function, and a test file copying the shape three sibling scripts already establish. Two of the pins (line-ending tolerance, failure names the tables) are pure and cover [[DBT-70]] exactly."
+      "detail": "apps/cribl-app/scripts/check-schema-asset.mjs ships with no test file, unlike board.mjs, check-listings.mjs, check-docs-drift.mjs and the other gate scripts, which all have one. The irony is the point, not a joke: [[DBT-67]] existed because a generator crashed for seven weeks and NO TEST RAN IT, so the breakage was silent. The checker added to close that is itself untested, so if it silently stops detecting drift - an exception swallowed, a comparison inverted, the restore in the finally block masking a real failure - nothing reports it, and the gate reads green while guarding nothing. Its behaviour WAS verified by hand at the time: both mutations were run and both were caught (stale asset names the 2 drifting tables; a broken generator path reports FAILED TO RUN with the original ENOENT). But a verification nobody recorded is a verification that expires. Sibling scripts board-serve.mjs, package.mjs and pkgutil.mjs also lack tests, so this is not a lone offender - but those do not stand between a committed asset and the tree, which is why only this one is carded. READY 2026-09-01: premise verified intact - no test file, no exports, unguarded main(). Work is one guard, one extracted pure function, and a test file copying the shape three sibling scripts already establish. Two of the pins (line-ending tolerance, failure names the tables) are pure and cover [[DBT-70]] exactly. DONE 2026-09-01. check-schema-asset now exports its comparison and guards main, matching how board.mjs and check-listings.mjs are structured, with a test file alongside them. Pins include the one that matters most - CRLF-committed versus LF-generated must NOT read as drift, which is [[DBT-70]] exactly - plus that a real difference IS reported, that the message names the differing tables, and that the restore-in-finally leaves the asset untouched when the comparison fails.",
+      "verified": "pins"
     },
     {
       "id": "DBT-70",
@@ -2151,6 +2157,44 @@
         "chosen": "repo-wide"
       },
       "verified": "pins"
+    },
+    {
+      "id": "DBT-72",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "title": "Clearing a solution silently deletes its samples, and Clear is the only way out",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway spec, not inferred. handleSolutionChange guards on `prevName === null || prevName === nextName` (integrate-screen.tsx:658). Clearing a selection sends X -> null, which falls through and removes EVERY tagged sample via ports.samples.remove (:667-671). Picking the next solution then sends null -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE ONLY EXIT. The browse list is hidden while a solution is selected (solution-browser.tsx:447-449, 'clear it before choosing another solution'), so an operator who wants a different solution MUST press the button that destroys their samples - and the samples are durable, surviving page reloads via their store, so this is unrecoverable work rather than a cache. DBT-9 improved the wording to name Clearing as destructive, which is why this is filed at `now` rather than higher: the operator is at least warned. But a warning on the only available exit is not a design. The real question is whether Clear should delete at all, or whether the samples should follow the solution they were tagged for - which is what the per-solution learned-mappings cache already does for mappings. NOT DECIDED HERE. Options worth weighing: keep samples until the NEW solution is chosen and only then discard the old ones; scope the sample store per solution the way mappings already are; or add a confirm step. The first two remove the trap; the third only labels it."
+    },
+    {
+      "id": "DBT-73",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Nothing holds the vendored spec facts the docs cite",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND by review of [[DBT-7]], and demonstrated rather than argued: the reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node' to 'Worker Process' - the exact silent invalidation a re-vendor would cause - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs holds only that the file exists, and a re-vendor cannot delete the file, so its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing cribl-openapi.json. That citation is now load-bearing prose with nothing behind it, which is the shape [[DBT-12]] already names and [[DBT-67]] already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO: entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source file and fails with 'Either restore the file, or delete these provenance pins AND the claim together'; five more test files use readFileSync the same way. Scope: a provenance pin asserting InputDatagen.samples.items.properties.eventsPerSec's title against the vendored asset, and a sweep for other doc claims citing that spec which are equally unheld. Do NOT pin the whole spec - pin the facts documents actually lean on, or this becomes a second copy of the spec that drifts from the first."
+    },
+    {
+      "id": "DBT-74",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "content-install still hand-rolls the never-rejects contract DBT-56 made a type",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-56"
+      ],
+      "detail": "Found by the fifteenth architecture audit, check 2, and reported as ADJACENT rather than duplicated because the two are not the same question - a distinction worth stating, since the last two audits reported real smells with wrong causes. [[DBT-56]] replaced four hand-written try blocks in onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the never-rejects contract stops being a convention repeated per call site. Its scope was deliberately limited to the batch, and correctly so. content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is exactly the convention DBT-56 was filed about, in a module DBT-56 did not touch. Neither the card nor the SafeAzureManagement header records content-install as out of scope, so nothing today tells the next person these are the same pattern. THE TRAP, and the reason this needs care rather than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true, carrying the response. content-install ok means the STEP SUCCEEDED - it checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there naively would invert the meaning of every check. Scope: convert content-install to SafeAzureManagement for the transport half and keep its own is2xx step-outcome layer above it, so the two meanings stay separate and named. Do NOT rename either ok without deciding which one keeps the word. Priority next rather than now: the hand-rolled version WORKS and no defect is observed. What is missing is the guard - as with the batch before DBT-56, the next ARM call added outside a try block reopens the failure and nothing fails when it does."
     }
   ],
   "features": [

@@ -213,7 +213,7 @@ Zscaler Internet Access.
 - **`broken_feed` answered honestly**: *"Nothing on these events tells one log
   type from another, so 'broken_feed' is offered as a single log type."*
 
-### `eventsPerSec` is per worker process - a 2x multiplier here
+### `eventsPerSec` is per Worker NODE - and a 2x multiplier showed up here
 
 **Corrected 2026-08-26 after measuring it properly.** This section first claimed
 ~330 events/sec and a multiplier "of something like 80x". That was wrong, and
@@ -230,9 +230,41 @@ eventsPerSec: 4   ->  8.00 events/sec
 eventsPerSec: 1   ->  2.00 events/sec
 ```
 
-So the multiplier is **2**, which is the worker-process count (inferred - not
-confirmed against worker config). Still worth knowing, because the knob is not
-what it says: the number to trust is the one you measure off the dataset.
+What that establishes is a **factor of 2** between the configured number and the
+observed rate - twice, either side of one changepoint. What it does NOT
+establish is why.
+
+**Unit corrected 2026-09-01 (DBT-7).** The unit, at least, is settled, and it is
+not what this section originally said. Cribl's own spec, vendored in this repo
+at `packages/core/assets/cribl-openapi.json`, titles the
+`samples[].eventsPerSec` property of the `InputDatagen` schema **"Events Per
+Second Per Worker Node"**, and describes it as *"Maximum number of events to
+generate per second per Worker Node. Defaults to 10."* So the knob is per Worker
+**Node**. The earlier reading here - that it is per worker PROCESS, and that the
+2 is therefore a worker-process count - was contradicted by a reference sitting
+in this repository the whole time.
+
+(Cited by schema and property name rather than by line, deliberately. That spec
+is vendored and re-pinned per Cribl version - `packages/core/CONTEXT.md` - so a
+line number into it survives exactly until the next re-vendor, which is the
+silent-invalidation trap [[DBT-12]] already exists for. `check-docs` also reads
+a bare path and fails when it does not resolve, while a path carrying a
+`:line-range` suffix slips past it unchecked - so the shorter citation is the
+one a gate actually holds. Grep the title string.)
+
+Correcting the unit removes the explanation without touching the measurement.
+Two Worker Nodes running the datagen is the obvious candidate for a factor of 2,
+and the spec's wording is what makes it plausible - but it is a candidate, not a
+finding. The node count was never read off the worker config, and the rate was
+measured at the END of the path (off the Lake dataset, downstream of the route
+and the `cribl_lake` Destination), so a constant factor introduced anywhere
+along that path would look identical from where we were standing. Settling the
+cause needs a live worker and no credential here reaches one, so DBT-7 stays
+open for that half.
+
+The operational lesson survives the correction intact, which is why the section
+is still here: the number to trust is the one you measure off the dataset, not
+the one in the config box.
 
 One consequence while reading counts: the drop to 1 happened partway through the
 `-24h` window the app queries, so for a day afterwards the Zscaler trio's totals

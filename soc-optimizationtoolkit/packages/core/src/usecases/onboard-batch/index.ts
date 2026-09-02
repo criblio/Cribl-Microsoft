@@ -4,6 +4,7 @@ export {
   batchTableStepName,
   paceAzureManagement,
   pollAttemptsForTimeout,
+  safeAzureManagement,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
   DEFAULT_DCE_NAME_PREFIX,
   ONBOARD_BATCH_JOB_KIND,
@@ -11,6 +12,7 @@ export {
   POLL_ATTEMPT_SECONDS,
 } from "./onboard-batch";
 export type {
+  ArmAttempt,
   BatchPacing,
   CollectedArmRequest,
   CollectedArmRequestKind,
@@ -21,4 +23,5 @@ export type {
   OnboardBatchSkipReason,
   OnboardBatchTableResult,
   OnboardBatchTableSpec,
+  SafeAzureManagement,
 } from "./onboard-batch";
