@@ -376,6 +376,27 @@ Settled and unblocked, sequenced behind now.
   "the wheel never arrived", and an automated run would either report a false
   confirmation or a false all-clear. This card stays on the HUMAN reproduction
   that filed it. Whoever fixes it should verify by hand for the same reason.
+  STOP CONDITION LIKELY MET - static evidence 2026-09-02, gathered before wave
+  3 to avoid implementing blind. The scout named a stop: if the list freezes
+  while it still has ROOM to scroll, then overscroll-behavior is not the cause
+  and neither proposed option fixes it. Three things point that way. (1)
+  overscroll-behavior:contain governs scroll CHAINING AT THE BOUNDARY - it
+  does not prevent an element scrolling internally while it has room, so it
+  cannot by itself explain a list that will not move. (2) The card reports
+  five of EIGHT results reachable, which is a list that has room and is not
+  moving. (3) There is NO wheel handler anywhere in solution-browser - grep
+  for onWheel/wheel/preventDefault returns nothing - so no JS is swallowing
+  the event and the cause is CSS or the iframe. The rule at styles.css
+  .solution-browser-list carries max-height 420px plus overflow-y auto, and
+  its own comment records why contain was added on 2026-08-03: three nested
+  scroll regions, and reaching the END of the list handed the wheel to the
+  page mid-search. That is a BOUNDARY problem, which is a different symptom
+  from the one this card reports. NOT PROVEN - this is static reasoning and
+  the wheel cannot be tested by reading CSS. What it establishes is that
+  implementing either option (a) or (b) blind would likely fix nothing.
+  RE-SCOUT WITH A LIVE MEASUREMENT FIRST: does the list scroll at all with the
+  pointer over it, and does the behaviour differ between a filtered short list
+  and the full one.
 
 - **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
   `HON-F2` `decision` `settled`
