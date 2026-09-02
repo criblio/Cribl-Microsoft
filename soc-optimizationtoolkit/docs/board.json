@@ -903,7 +903,7 @@
       "feature": "DBT-F2",
       "title": "The solution deep link does not override a stored selection",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "unconfirmed",
       "dependsOn": [],
@@ -1187,7 +1187,7 @@
       "menu": "home",
       "title": "`DBT` Setup wizard header promises three phases while the stepper shows one",
       "type": "decision",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
@@ -2195,6 +2195,19 @@
         "DBT-56"
       ],
       "detail": "Found by the fifteenth architecture audit, check 2, and reported as ADJACENT rather than duplicated because the two are not the same question - a distinction worth stating, since the last two audits reported real smells with wrong causes. [[DBT-56]] replaced four hand-written try blocks in onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the never-rejects contract stops being a convention repeated per call site. Its scope was deliberately limited to the batch, and correctly so. content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is exactly the convention DBT-56 was filed about, in a module DBT-56 did not touch. Neither the card nor the SafeAzureManagement header records content-install as out of scope, so nothing today tells the next person these are the same pattern. THE TRAP, and the reason this needs care rather than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true, carrying the response. content-install ok means the STEP SUCCEEDED - it checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there naively would invert the meaning of every check. Scope: convert content-install to SafeAzureManagement for the transport half and keep its own is2xx step-outcome layer above it, so the two meanings stay separate and named. Do NOT rename either ok without deciding which one keeps the word. Priority next rather than now: the hand-rolled version WORKS and no defect is observed. What is missing is the guard - as with the batch before DBT-56, the next ARM call added outside a try block reopens the failure and nothing fails when it does."
+    },
+    {
+      "id": "DBT-75",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "title": "The solution deep-link chip advertises a URL the shipped shell cannot reach",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "priorityWhy": "Split out of [[DBT-28]] on 2026-09-01 by decision, and held at next because it is a DIFFERENT user story from the other two defects in that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a mount-only hash read that together make the pivot inert after first use. This one is a copyable link that leads somewhere the shell does not serve. Nothing is silently wrong on screen: the chip renders and the operator can read it, so the failure is discoverable rather than invisible, which is what separates it from the pivot defect. Keeping them in one card would also have put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at the time.",
+      "detail": "Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524 renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the shipped shell does not route it. So an operator who copies the advertised link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct the advertised URL to whatever the shell actually serves, to register the route, or to stop advertising a link at all. Which one depends on whether a shareable deep link is wanted at all, which nobody has decided. Establish that before writing code."
     }
   ],
   "features": [
