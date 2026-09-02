@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**50 in the backlog, 1 in progress, 91 done.**
+**51 in the backlog, 1 in progress, 91 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 7 | 52 | 2 |
+| Sentinel Integration | 8 | 52 | 3 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 51.
+Open work totals 52.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 76% (59/78)
+### `DBT` Quality and technical debt _(enabler)_ - 75% (59/79)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 30/35 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 30/36 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/11 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -219,7 +219,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (2)
 
 Next to pick up. Nothing blocks these.
 
@@ -269,6 +269,54 @@ Next to pick up. Nothing blocks these.
   inventory-standard failure inside the measurement used to justify the
   design. The reviewer refetched the live index and equality still has 0
   collisions, so the DESIGN holds and only the CLAIM overreached.
+
+- **DBT-77** AWS VPC Flow Logs are classified supported but the parser reads none of them
+  `DBT-F1` `bug` `settled`
+  REPORTED BY THE USER 2026-09-02 with a real file and REPRODUCED against the
+  shipped parser, not inferred: uploading a 22-line AWS VPC Flow Logs sample
+  to Sentinel Integration renders no events. parseSampleContent returns format
+  'unknown', 0 records, 0 fields, and the single error 'Could not parse any
+  events from the provided content'. THE FILE IS FINE. It is the canonical AWS
+  VPC Flow Logs VERSION 2 DEFAULT FORMAT - space-delimited, positional, no
+  header and no delimiters: 'version account-id interface-id srcaddr dstaddr
+  srcport dstport protocol packets bytes start end action log-status'. That is
+  what AWS writes to S3 unless an operator defines a custom format, so it is
+  the shape a user is overwhelmingly likely to have. THE CAUSE IS A MISSING
+  FORMAT, NOT A BUG IN AN EXISTING ONE. SampleFormat
+  (domain/sample-parsing/models.ts:29) is json | ndjson | csv | kv | cef |
+  leef | syslog | unknown. There is no positional or whitespace-delimited
+  member, so detection correctly falls through to 'unknown' and parseByFormat
+  yields nothing. Nothing is broken; the capability was never there. WHAT
+  MAKES IT A BUG RATHER THAN A FEATURE REQUEST, and why it is `now`: THE APP
+  CLAIMS THIS SOURCE IS SUPPORTED.
+  assets/sentinel-ingestion-classification.json carries 'AWS VPC Flow Logs'
+  with tier 'supported'. domain/pipeline-generation/source-types.ts:1103
+  declares an `aws_vpc_flow` preset labelled 'AWS VPC Flow Logs' / 'VPC flow
+  logs in S3', and :1223 routes the phrase 'aws vpc' to it. AWSVPCFlow is in
+  the bundled destination catalog (assets/dcr-template-schemas.json). So the
+  destination exists, the source is advertised as supported, the operator does
+  exactly the intended thing - and gets zero events. That is the same
+  confident-wrong-answer shape docs/inventory-standard.md exists for, in the
+  product catalog rather than in a listing. THE UI DOES REPORT IT, which is
+  worth crediting rather than piling on: sample-intake-section.tsx:804-806
+  renders 'Parse notes: <errors>', so the failure is not silent. But 'could
+  not parse any events' does not tell an operator that the format is
+  unsupported, that their file is correct, or what to do - it reads like a
+  broken file. SCOPE IS A CLASS, NOT ONE VENDOR. VPC Flow v2 is positional
+  space-delimited; so are AWS ELB access logs and CloudFront logs. A
+  positional parser needs a FIELD ORDER to name columns, and for VPC flow that
+  order is version-dependent (v2 is the 14 fields above; v3+ and custom
+  formats differ and can be reordered), so the honest options differ in how
+  much they claim: (1) detect whitespace-positional and emit positional names
+  (field1..fieldN) - parses everything, names nothing, and leaves mapping to
+  the operator; (2) add an aws_vpc_flow-aware parse keyed off the existing
+  preset, naming the v2 fields and REFUSING to guess when the column count is
+  not 14 - accurate where it applies, and honest about where it does not; (3)
+  leave parsing alone and fix the CLAIM instead - stop classifying the source
+  as supported, and say in the parse note that this format is not read yet.
+  Option 3 is the cheapest and is not a cop-out: it removes the false claim,
+  which is the actual defect. 1 and 2 add the capability the claim implies.
+  Decide which before building.
 
 ---
 
