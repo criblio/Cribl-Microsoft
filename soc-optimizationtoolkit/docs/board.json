@@ -2211,6 +2211,19 @@
       "dependsOn": [],
       "priorityWhy": "Split out of [[DBT-28]] on 2026-09-01 by decision, and held at next because it is a DIFFERENT user story from the other two defects in that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a mount-only hash read that together make the pivot inert after first use. This one is a copyable link that leads somewhere the shell does not serve. Nothing is silently wrong on screen: the chip renders and the operator can read it, so the failure is discoverable rather than invisible, which is what separates it from the pivot defect. Keeping them in one card would also have put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at the time.",
       "detail": "Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524 renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the shipped shell does not route it. So an operator who copies the advertised link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct the advertised URL to whatever the shell actually serves, to register the route, or to stop advertising a link at all. Which one depends on whether a shareable deep link is wanted at all, which nobody has decided. Establish that before writing code."
+    },
+    {
+      "id": "DBT-76",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "priorityWhy": "Held at next because nothing is currently WRONG on screen or in a build: the lock entry for a workspace package is bookkeeping, npm resolves the workspace from disk, and all eight gates pass at this drift including check-release, which reports 1.12.3 consistent across package.json, release/, release-notes.md and backlog.md. What it costs is that a fresh npm install silently rewrites the lock - which is how it was found - so the next person to run one gets an unrelated file in their diff and has to decide whether it is theirs.",
+      "detail": "packages/../package-lock.json records apps/cribl-app at 1.11.5; apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A GATE, and reported rather than fixed: during Sentinel Integration wave 2 an implementer ran npm install in its worktree, watched the lock correct itself 1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card, and wrote that someone should look at it separately. That was the right call by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT: check-release-drift holds FOUR claims to the version - package.json, release/, release-notes.md and backlog.md - and the lock file is not one of them. So the drift is invisible to the check that exists precisely to keep version claims honest. FIX is a single npm install committing only package-lock.json. The question worth deciding first is whether check-release-drift should hold a FIFTH claim, because a lock that disagrees with its package is exactly the class that check exists for."
     }
   ],
   "features": [

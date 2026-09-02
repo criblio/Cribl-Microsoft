@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**49 in the backlog, 1 in progress, 91 done.**
+**50 in the backlog, 1 in progress, 91 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 6 | 52 | 2 |
+| Sentinel Integration | 7 | 52 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 50.
+Open work totals 51.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 77% (59/77)
+### `DBT` Quality and technical debt _(enabler)_ - 76% (59/78)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 30/34 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 30/35 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/11 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -272,7 +272,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (17)
+## Backlog - next (18)
 
 Settled and unblocked, sequenced behind now.
 
@@ -587,6 +587,31 @@ Settled and unblocked, sequenced behind now.
   route, or to stop advertising a link at all. Which one depends on whether a
   shareable deep link is wanted at all, which nobody has decided. Establish
   that before writing code.
+
+- **DBT-76** The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3
+  `DBT-F1` `bug` `settled`
+  Not now because: Held at next because nothing is currently WRONG on screen
+  or in a build: the lock entry for a workspace package is bookkeeping, npm
+  resolves the workspace from disk, and all eight gates pass at this drift
+  including check-release, which reports 1.12.3 consistent across
+  package.json, release/, release-notes.md and backlog.md. What it costs is
+  that a fresh npm install silently rewrites the lock - which is how it was
+  found - so the next person to run one gets an unrelated file in their diff
+  and has to decide whether it is theirs.
+  packages/../package-lock.json records apps/cribl-app at 1.11.5;
+  apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A
+  GATE, and reported rather than fixed: during Sentinel Integration wave 2 an
+  implementer ran npm install in its worktree, watched the lock correct itself
+  1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card,
+  and wrote that someone should look at it separately. That was the right call
+  by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT:
+  check-release-drift holds FOUR claims to the version - package.json,
+  release/, release-notes.md and backlog.md - and the lock file is not one of
+  them. So the drift is invisible to the check that exists precisely to keep
+  version claims honest. FIX is a single npm install committing only
+  package-lock.json. The question worth deciding first is whether
+  check-release-drift should hold a FIFTH claim, because a lock that disagrees
+  with its package is exactly the class that check exists for.
 
 ---
 
