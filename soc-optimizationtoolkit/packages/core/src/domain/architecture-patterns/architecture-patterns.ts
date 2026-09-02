@@ -437,8 +437,16 @@ export const ARCHITECTURE_PATTERNS: readonly ArchitecturePattern[] = [
   {
     id: "entra-reroute",
     title: "Entra diagnostic reroute (content-preserving)",
+    // DBT-3: THIS FIELD RENDERS ALONE. The near-miss recommendation list shows
+    // `summary` with no `why` beside it, so a hedge that lives only in `why`
+    // is a hedge the operator never sees - which is how the first fix left the
+    // card's exact defect on screen while reporting it fixed. It said aliases
+    // "preserv[e] Sentinel content compatibility"; the source records alias
+    // registration over an existing table as UNVERIFIED (:241), so the summary
+    // now states the INTENT and marks the mechanism unproven, in the field
+    // that is actually read.
     summary:
-      "Entra ID sign-in/audit logs export to Event Hub, flow through Stream, and land in custom tables with function aliases preserving Sentinel content compatibility.",
+      "Entra ID sign-in/audit logs export to Event Hub, flow through Stream, and land in custom tables, with a function alias intended to keep Sentinel content resolving - alias registration over an existing table is unverified.",
     why:
       "Entra identity tables are absent from the Logs Ingestion API supported-tables list (snapshot content updated 2026-06-03), so a reroute through Cribl has to land in _CL tables and lean on a function alias to keep existing analytics content resolving. The reroute plan records both mechanisms as unverified: whether those native tables would accept a Kind:Direct DCR even if they were listed, and whether a workspace will register an alias named for a native table that already exists.",
     requiresProducts: ["stream"],
