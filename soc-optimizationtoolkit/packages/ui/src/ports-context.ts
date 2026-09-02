@@ -35,9 +35,12 @@
  * BOTH FIELDS STAY OPTIONAL, in the value as well as the props, because the
  * honest default is NOT shared. Screens disagree about what an absent context
  * means and they are each right: the DCR inventory reports on a request that
- * already succeeded so it defaults to connected, the Integrate page's workspace
- * listing defaults to {false, false} because it may run before anything is
- * connected, and BatchDeployScreen DERIVES its default from `forcedTemplateOnly`
+ * already succeeded so it defaults to connected, integrate-screen's
+ * `workspaceTableListing` hook defaults to {false, false} because it may run
+ * before anything is connected (review corrected this: it previously read "the
+ * Integrate page's workspace listing", which names AzureTargetingScreen - a
+ * DIFFERENT component in section 7 that does not use that default),
+ * and BatchDeployScreen DERIVES its default from `forcedTemplateOnly`
  * rather than defaulting at all. Resolving a single default in this provider
  * would silently overwrite three deliberate answers with one.
  */

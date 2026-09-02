@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**49 in the backlog, 2 in progress, 90 done.**
+**49 in the backlog, 1 in progress, 91 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 7 | 51 | 2 |
+| Sentinel Integration | 6 | 52 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 51.
+Open work totals 50.
 
 ## Epics and features
 
@@ -66,14 +66,14 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 73% (8/11)
+### `HON` Inventory and diagnostic honesty - 82% (9/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 2/4 | HON-6, HON-7*, D-1, D-2* |
-| `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
+| `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
@@ -142,27 +142,9 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `HON-F2` `decision` `settled`
-  , or carry them in `PortsContext` beside `config`? One seam change against
-  updating every `PortsProvider` call site. Cheap now, less so later; at eight
-  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
-  capabilities in PortsContext. One seam change against eight call sites that
-  must be kept in step - the duplication that drifts, and the same shape the
-  capability model already had to correct once. Reasoning in backlog.md
-  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
-  than this card prices it - the same correction backlog.md#4 already made
-  once when ADR-0002 left one shell instead of two. Real work: two fields on
-  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
-  the shell, update 14 App.tsx providers, convert 5 screens to read from
-  context.
-  DECISION: How do capabilities reach the ~8 listing screens?
-    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
-    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
   `DBT-F2` `bug` `settled`
@@ -192,7 +174,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
   and argued (b) down well: tagged samples have their own port keyed by
   logType ALONE (ports/tagged-sample-store.ts), the cloud adapter hashes that
   into a flat KV key with a single flat index, so per-solution scoping means a
-  third key generation, a per-solution index, both shells adapters, the fake
+  third key generation, a per-solution index, the cloud adapter, the fake
   store and the rename path, with silent-orphan risk. That reasoning still
   stands. BUT REVIEW FOUND OWNERSHIP LIVES ONLY IN A REACT REF, so a page
   reload after a Clear silently hands one solutions samples to a DIFFERENT
@@ -967,7 +949,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (90)
+## Done (91)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1761,6 +1743,47 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
     [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
     [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
+
+- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
+  `HON-F2` `decision` `settled` `verified: pins`
+  , or carry them in `PortsContext` beside `config`? One seam change against
+  updating every `PortsProvider` call site. Cheap now, less so later; at eight
+  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
+  capabilities in PortsContext. One seam change against eight call sites that
+  must be kept in step - the duplication that drifts, and the same shape the
+  capability model already had to correct once. Reasoning in backlog.md
+  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
+  than this card prices it - the same correction backlog.md#4 already made
+  once when ADR-0002 left one shell instead of two. Real work: two fields on
+  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
+  the shell, update 14 App.tsx providers, convert 5 screens to read from
+  context. DONE 2026-09-02, implementing the settled ports-context decision.
+  Capabilities and capabilityContext now ride PortsContext instead of being
+  prop-drilled, with deriveCapabilityContext memoized at the shell. THE
+  AMBIENT COST IS RECORDED RATHER THAN SOLVED, per the decision: a screen
+  signature no longer declares which capabilities it consults, usePorts hands
+  it all of them, and nothing preserves that declaration. That is written into
+  the module header as a known trade, and a second mechanism to preserve it
+  was considered and rejected as a list that would drift. REVIEW RAISED FOUR
+  MAJORS AND ONLY ONE WAS A SHIPPED DEFECT - a distinction worth recording,
+  because three were errors in the agents REPORT rather than in the code. (1)
+  The {false,false} default was attributed in ports-context.ts to the
+  Integrate pages workspace listing, which names AzureTargetingScreen; the
+  default actually belongs to integrate-screens own workspaceTableListing
+  hook, a different component. Real, in shipped source, FIXED. (2) The lint
+  gate was reported as 11 warnings with 3 elsewhere; the tree ships 8 and the
+  itemised list sums to 8. Report error, nothing in the code to fix. (3) The
+  report said content-install-section contains no capability code; it imports
+  hasAzureIdentity and calls it. Report error; no shipped comment makes that
+  claim. (4) The memo rationale was called unfounded - I CHECKED AND COULD NOT
+  REPRODUCE IT. getActiveConfig returns a fresh EMPTY_AZURE_CONFIG clone when
+  no profile is active, and App.tsx:864 calls it in the component body with no
+  memo, so an object-identity dep really would never hold in the disconnected
+  state. The comment is correct and was left alone rather than edited to
+  satisfy a finding.
+  DECISION: How do capabilities reach the ~8 listing screens?
+    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
+    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
   `VND-F1` `decision` `settled` `verified: none`
