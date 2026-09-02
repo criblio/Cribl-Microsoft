@@ -24,6 +24,10 @@
  */
 
 import type { SampleFormat } from "./models";
+import { looksPositional } from "./positional";
+
+/** Newline, built without an escape so no tool can mangle it. */
+const LINE_BREAK = String.fromCharCode(10);
 import { stripSyslogPrefix } from "./parsers";
 import { isPanosFormat } from "./panos-dictionary";
 
@@ -162,6 +166,20 @@ function detectLenient(content: string): SampleFormat {
   // syslog: <priority> or an RFC 3164 month-day-time prefix.
   if (/^<\d+>/.test(trimmed) || /^\w{3}\s+\d+\s+\d+:\d+:\d+/.test(trimmed)) {
     return "syslog";
+  }
+
+  // POSITIONAL, AND IT MUST STAY LAST (DBT-77). Every probe above is also
+  // whitespace-separated - syslog, CEF, LEEF and key=value lines all are - and
+  // each has a real fingerprint that should win. This one has no fingerprint at
+  // all, only a consistent column count, so anything reaching here has already
+  // failed every more specific test. Moving it earlier would swallow formats
+  // that parse properly today.
+  //
+  // The user report that produced this: a canonical AWS VPC Flow Logs v2 file
+  // fell through to `unknown` and rendered zero events, while the app
+  // classified that very source as `supported`.
+  if (looksPositional(trimmed.split(LINE_BREAK))) {
+    return "positional";
   }
 
   return "unknown";
