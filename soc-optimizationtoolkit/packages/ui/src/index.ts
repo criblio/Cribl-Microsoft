@@ -149,8 +149,9 @@ export type { DcrAutomationScreenProps } from "./screens/dcr-automation/dcr-auto
 // Exported so a shell can hold the tab selection (TBL-3's Tables -> Single
 // hand-off needs the host to own it).
 export type { DcrTab } from "./screens/dcr-automation/dcr-automation-state";
+// D-3: no props type - the panel takes none now, reading the audit it consults
+// off PortsContext with the ports and config that describe the same connection.
 export { DcrInventoryPanel } from "./screens/dcr-automation/dcr-inventory-panel";
-export type { DcrInventoryPanelProps } from "./screens/dcr-automation/dcr-inventory-panel";
 
 // The Tables tab (TBL-3): the workspace's Log Analytics tables, with whether
 // a DCR already targets each one.

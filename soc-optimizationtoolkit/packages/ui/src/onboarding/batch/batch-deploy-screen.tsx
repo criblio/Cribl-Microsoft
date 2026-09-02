@@ -35,9 +35,7 @@ import {
 import type {
   BatchPacing,
   Capability,
-  CapabilityContext,
   CapabilityFallback,
-  CapabilitySet,
   CriblGroupSummary,
   CriblOptions,
   JobStep,
@@ -129,22 +127,6 @@ export interface BatchDeployScreenProps {
    * an ingestion secret (no destination is created, so none is used).
    */
   forcedTemplateOnly?: boolean;
-  /**
-   * What the connected identity was MEASURED to be able to do, used only to
-   * decide which fallback artifacts this run offers (HON-7). Absent = an
-   * unaudited set, in which every write resolves `unknown`, routes live, and
-   * offers nothing - the honest answer when nothing has been measured.
-   */
-  capabilities?: CapabilitySet;
-  /**
-   * Connection facts for resolving unmeasured capabilities. Absent, they are
-   * derived from the two facts this screen already holds: the active config
-   * names an App registration, and `forcedTemplateOnly` IS "no reachable Cribl
-   * connection" (the shell derives it from exactly that - `destination.manage`
-   * unreachable). Deriving beats defaulting to reachable, which would claim a
-   * Cribl connection the mode has already said does not exist.
-   */
-  capabilityContext?: CapabilityContext;
 }
 
 /** The tri-state override select, one per overridable flag. */
@@ -190,10 +172,14 @@ export function BatchDeployScreen({
   criblDefaults,
   onOpenOptions,
   forcedTemplateOnly = false,
-  capabilities,
-  capabilityContext,
 }: BatchDeployScreenProps) {
-  const { ports, config } = usePorts();
+  // D-3: `capabilities` (what the identity was MEASURED to be able to do, used
+  // only to decide which fallback artifacts this run offers - HON-7) and
+  // `capabilityContext` now come off the ports seam instead of the shell.
+  // Absent capabilities = an unaudited set, in which every write resolves
+  // `unknown`, routes live, and offers nothing - the honest answer when nothing
+  // has been measured. Absent context is DERIVED below, not defaulted.
+  const { ports, config, capabilities, capabilityContext } = usePorts();
 
   // ---- Table selection ---------------------------------------------------
   const [listText, setListText] = useState("");
@@ -388,6 +374,15 @@ export function BatchDeployScreen({
   // and POINTS at the run that builds the pack, which is not this one.
   //
   // ANNOTATES, NEVER REMOVES (rule 3): Run batch onboarding above is untouched.
+  //
+  // THE DERIVED DEFAULT IS THIS SCREEN'S OWN ANSWER AND SURVIVES D-3. With no
+  // context on the seam, the two facts this screen already holds are better
+  // than a default: the active config names an App registration, and
+  // `forcedTemplateOnly` IS "no reachable Cribl connection" (the shell derives
+  // it from exactly that - `destination.manage` unreachable). Deriving beats
+  // defaulting to reachable, which would claim a Cribl connection the mode has
+  // already said does not exist. This is why PortsProvider does not resolve one
+  // shared default for everybody.
   const context = useMemo(
     () =>
       capabilityContext ?? deriveCapabilityContext(config, !forcedTemplateOnly),

@@ -315,14 +315,6 @@ export interface IntegrateScreenProps {
    */
   toolkitVersion: string;
   /**
-   * Measured capabilities, passed through to the Azure Resources section so an
-   * empty workspace list is only reported as a zero when the read was verified
-   * (docs/inventory-standard.md). Absent is safe - the message hedges.
-   */
-  capabilities?: CapabilitySet;
-  /** Connection facts for resolving unmeasured capabilities. */
-  capabilityContext?: CapabilityContext;
-  /**
    * Whether the active connection has a committed target scope (subscription
    * + resource group + workspace). The SHELL owns this fact (it derives it
    * the same way it composes JourneyFacts.scopeCommitted); the Azure
@@ -391,10 +383,12 @@ export function IntegrateScreen({
   onOperationChange,
   roleGuidance,
   mode = "full",
-  capabilities,
-  capabilityContext,
 }: IntegrateScreenProps) {
-  const { ports, config } = usePorts();
+  // D-3: the measured audit rides PortsContext with the ports and the config it
+  // describes, instead of arriving as props the shell threads in. This page and
+  // the AzureTargetingScreen it composes now read the same seam, which is what
+  // removed the pass-through that used to sit on that element.
+  const { ports, config, capabilities, capabilityContext } = usePorts();
 
   // ---- Cribl Configuration section (worker group + pack name) -----------
   const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
@@ -2153,12 +2147,10 @@ export function IntegrateScreen({
 
   const azureResourcesBody = (
     <>
-      <AzureTargetingScreen
-        offline={offline}
-        onCommitScope={onCommitScope}
-        {...(capabilities !== undefined ? { capabilities } : {})}
-        {...(capabilityContext !== undefined ? { capabilityContext } : {})}
-      />
+      {/* D-3: no capability pass-through. This screen and the targeting
+          cascade it composes read the same PortsContext, so the audit reaches
+          the cascade without being copied through this element. */}
+      <AzureTargetingScreen offline={offline} onCommitScope={onCommitScope} />
       <div className="discovery-result">
         <span className="field-label">
           Deployment capabilities

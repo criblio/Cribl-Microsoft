@@ -20,7 +20,7 @@ import {
   FakeContentCache,
   FakeCriblClient,
 } from "@soc/core";
-import type { AzureConfig } from "@soc/core";
+import type { AzureConfig, CapabilityContext } from "@soc/core";
 import type { UiPorts } from "../ports-context";
 import { useCapabilityAudit } from "./use-capability-audit";
 import type { CapabilityAuditState } from "./use-capability-audit";
@@ -196,5 +196,52 @@ describe("useCapabilityAudit", () => {
 
     expect(seen.current?.context.azureIdentityPresent).toBe(false);
     expect(seen.current?.capabilities.verdicts["dcr.write"]).not.toBe("denied");
+  });
+
+  /**
+   * D-3: `context` is now a CONTEXT VALUE - the shell puts it on PortsProvider,
+   * whose memo has it in the dep list. A fresh object per render therefore
+   * re-renders every screen under the provider on every unrelated shell render.
+   *
+   * THE FRESH CONFIG OBJECT IS THE POINT, not incidental. `getActiveConfig`
+   * returns a new `{...EMPTY_AZURE_CONFIG}` on every call while no profile is
+   * active, and the cribl shell calls it unmemoized each render - so the app's
+   * opening state hands this hook a different config object every time with the
+   * same tenant and client. A memo keyed on the config OBJECT would never hold
+   * there; keying on the two fields `deriveCapabilityContext` actually reads
+   * does. Both mutations - dropping the useMemo, and widening its deps to
+   * `[config, criblReachable]` - fail this.
+   */
+  it("keeps ONE context object across renders that hand it a fresh, equal config", async () => {
+    const { ports } = makePorts(new FakeContentCache());
+    const seen: CapabilityContext[] = [];
+
+    function Probe({ tick }: { tick: number }) {
+      void tick;
+      const state = useCapabilityAudit({
+        ports,
+        // A NEW object every render, same tenant/client - the disconnected
+        // shell's real shape.
+        config: { ...CONFIG },
+        criblShellMode: "cloud",
+        setupPath: "existing-rg",
+        criblReachable: true,
+        now: NOW,
+      });
+      seen.push(state.context);
+      return null;
+    }
+
+    const { rerender } = render(<Probe tick={0} />);
+    rerender(<Probe tick={1} />);
+    rerender(<Probe tick={2} />);
+    await waitFor(() => expect(seen.length).toBeGreaterThan(2));
+
+    // Identity, not equality: an equal-but-new object still re-renders every
+    // consumer of PortsContext, which is the whole cost being avoided.
+    for (const context of seen) {
+      expect(context).toBe(seen[0]);
+    }
+    expect(seen[0]).toEqual({ azureIdentityPresent: true, criblReachable: true });
   });
 });

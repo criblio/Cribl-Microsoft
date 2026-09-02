@@ -59,7 +59,6 @@ import type {
   TargetScope,
 } from "@soc/core";
 import { emptyCapabilitySet, listingRows } from "@soc/core";
-import type { CapabilityContext, CapabilitySet } from "@soc/core";
 import {
   emptyInventoryMessage,
   unmeasuredInventoryMessage,
@@ -84,15 +83,6 @@ export interface CommitScopeOutcome {
 }
 
 export interface AzureTargetingScreenProps {
-  /**
-   * What the connected identity was measured to be able to do. Used ONLY to
-   * decide whether an empty workspace list may be reported as a real zero
-   * (docs/inventory-standard.md). Absent is safe: the message hedges rather
-   * than claiming "none found".
-   */
-  capabilities?: CapabilitySet;
-  /** Connection facts for resolving unmeasured capabilities. */
-  capabilityContext?: CapabilityContext;
   /**
    * The air-gapped/offline branch: free-text scope entry, nothing fetched.
    * The SHELL derives this from the frame's resolved mode (no live Azure
@@ -124,8 +114,11 @@ type DepLoad =
   | { status: "error"; error: string };
 
 export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
-  const { offline, onCommitScope, capabilities, capabilityContext } = props;
-  const { ports, config } = usePorts();
+  const { offline, onCommitScope } = props;
+  // D-3: the audit rides PortsContext. Used ONLY to decide whether an empty
+  // workspace list may be reported as a real zero (docs/inventory-standard.md);
+  // absent is safe, the message hedges rather than claiming "none found".
+  const { ports, config, capabilities, capabilityContext } = usePorts();
 
   // Browse state - NEVER committed by itself. Seeded from the committed
   // scope so the pickers open on the current target.
