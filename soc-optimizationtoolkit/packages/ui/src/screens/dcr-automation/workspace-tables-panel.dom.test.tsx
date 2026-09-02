@@ -14,6 +14,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type {
   AzureConfig,
   Capability,
+  CapabilityContext,
   CapabilitySet,
   CapabilityVerdict,
   PortHttpResponse,
@@ -24,6 +25,7 @@ import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { FALLBACK_POINTER_LABEL } from "../../capabilities/fallback-notice-state";
 import { WorkspaceTablesPanel } from "./workspace-tables-panel";
+import type { WorkspaceTablesPanelProps } from "./workspace-tables-panel";
 
 afterEach(cleanup);
 
@@ -149,13 +151,33 @@ function measured(
 
 const CONNECTED = { azureIdentityPresent: true, criblReachable: true };
 
+/**
+ * D-3: `capabilities` and `capabilityContext` are CONTEXT now, so they go on
+ * the provider and everything else goes on the panel. Every pin below is
+ * unchanged - only where the audit enters the tree moved.
+ *
+ * TYPED, and deliberately not the `Record<string, unknown>` it used to take.
+ * That loose spread let this helper keep handing the panel two props the panel
+ * had stopped accepting: `tsc` saw an index signature and said nothing, and the
+ * four TBL-4 pins failed at RUN time instead. A test helper that can pass a
+ * prop the component does not have is a hole in every pin that goes through it.
+ */
 function renderPanel(
   ports: UiPorts,
-  props: Record<string, unknown> = {},
+  options: WorkspaceTablesPanelProps & {
+    capabilities?: CapabilitySet;
+    capabilityContext?: CapabilityContext;
+  } = {},
 ) {
+  const { capabilities, capabilityContext, ...panelProps } = options;
   return render(
-    <PortsProvider ports={ports} config={CONFIG}>
-      <WorkspaceTablesPanel {...props} />
+    <PortsProvider
+      ports={ports}
+      config={CONFIG}
+      capabilities={capabilities}
+      capabilityContext={capabilityContext}
+    >
+      <WorkspaceTablesPanel {...panelProps} />
     </PortsProvider>,
   );
 }

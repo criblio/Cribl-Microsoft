@@ -60,9 +60,7 @@ import {
   routeCapability,
 } from "@soc/core";
 import type {
-  CapabilityContext,
   CapabilityFallback,
-  CapabilitySet,
   DcrInventoryEntry,
   Listing,
   WorkspaceTable,
@@ -99,10 +97,6 @@ import {
 import type { ManualColumnDraft } from "../../onboarding/manual-schema-state";
 
 export interface WorkspaceTablesPanelProps {
-  /** What the connected identity was measured to be able to do. */
-  capabilities?: CapabilitySet;
-  /** Connection facts for resolving unmeasured capabilities. */
-  capabilityContext?: CapabilityContext;
   /**
    * Start a DCR for one table. OPTIONAL because it navigates - only a host
    * that owns the tab selection can honour it, and a button that went
@@ -113,8 +107,10 @@ export interface WorkspaceTablesPanelProps {
 }
 
 export function WorkspaceTablesPanel(props: WorkspaceTablesPanelProps = {}) {
-  const { capabilities, capabilityContext, onCreateDcr } = props;
-  const { ports, config } = usePorts();
+  const { onCreateDcr } = props;
+  // D-3: the measured audit comes off the ports seam, not from the shell as
+  // props - it is a fact about the connection `config` describes.
+  const { ports, config, capabilities, capabilityContext } = usePorts();
   const logger = ports.logger;
 
   // THE LISTING, NOT ITS ROWS (TBL-8). This used to hold the unwrapped array,

@@ -214,7 +214,33 @@ export function useCapabilityAudit(
     audit("launch");
   }, [audit, ready]);
 
-  const context = deriveCapabilityContext(config, criblReachable);
+  // MEMOIZED BECAUSE THIS OBJECT IS NOW A CONTEXT VALUE (D-3). The shell puts
+  // it on PortsProvider, whose own memo has it in the dep list, so a fresh
+  // identity every render would defeat that memo and re-render every screen
+  // under the provider on every shell render. It was rebuilt per render before
+  // D-3 and nothing noticed, because a prop reaching one screen is cheap in a
+  // way a context value is not.
+  //
+  // The deps are the WHOLE input: deriveCapabilityContext reads `tenantId` and
+  // `clientId` off the config and nothing else, so keying on the config OBJECT
+  // would be both wider than needed and unreliable - `getActiveConfig` returns a
+  // fresh EMPTY_AZURE_CONFIG clone on every call when no profile is active, so
+  // an object-identity dep would never hold in exactly the disconnected state
+  // the app opens in.
+  //
+  // The suppression is NARROW and it buys the dep list above: exhaustive-deps
+  // wants the whole `config` object, which is precisely the dep that would
+  // never hold. What makes the trade safe is a property of the shipped code
+  // today - `deriveCapabilityContext` (capability-audit-state.ts) calls only
+  // `hasAzureIdentity`, which reads exactly `tenantId` and `clientId`. Nothing
+  // enforces that, so a third field read there makes this dep list wrong, and
+  // the pin in use-capability-audit.dom.test.tsx would NOT catch it - it varies
+  // the config's identity, not its contents.
+  const context = useMemo(
+    () => deriveCapabilityContext(config, criblReachable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config.tenantId, config.clientId, criblReachable],
+  );
   const view = describeCapabilityAudit(capabilities, key, nowRef.current());
 
   const refresh = useCallback(() => audit("manual"), [audit]);

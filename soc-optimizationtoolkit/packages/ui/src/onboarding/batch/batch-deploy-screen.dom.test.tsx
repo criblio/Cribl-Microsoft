@@ -100,12 +100,14 @@ function batchPorts() {
 function renderBatch(capabilities: CapabilitySet) {
   const ports = batchPorts();
   render(
-    <PortsProvider ports={ports} config={CONFIG}>
-      <BatchDeployScreen
-        pacing={PACING}
-        capabilities={capabilities}
-        capabilityContext={CONNECTED}
-      />
+    // D-3: the audit reaches the screen through PortsContext, not props.
+    <PortsProvider
+      ports={ports}
+      config={CONFIG}
+      capabilities={capabilities}
+      capabilityContext={CONNECTED}
+    >
+      <BatchDeployScreen pacing={PACING} />
     </PortsProvider>,
   );
   return ports;

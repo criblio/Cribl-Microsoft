@@ -1078,6 +1078,27 @@ function App() {
   });
   const { audit: auditCapabilities } = capabilityAudit;
 
+  // D-3 (backlog 18b): what every PortsProvider in this shell carries. The
+  // measured audit is a fact about the CONNECTION, exactly like `config`, so it
+  // travels the same seam instead of being threaded screen by screen.
+  //
+  // ONE DEFINITION IS THE WHOLE POINT. This file passed the pair to four
+  // screens by hand (IntegrateScreen, BatchDeployScreen, DcrInventoryPanel,
+  // WorkspaceTablesPanel) and it opens 14 PortsProviders - so spelling the pair
+  // out at each provider would have been strictly worse than what it replaced.
+  // The object is spread, and the call sites cannot disagree.
+  //
+  // AppFrame at the bottom of this file is NOT converted and keeps its own two
+  // props, because it renders ABOVE every provider. The frame needs no ports;
+  // requiring one so it could annotate the nav would make the shell chrome
+  // throw without IO wiring, which is a worse trade than one honest prop pair.
+  const portsProviderProps = {
+    ports: cloudPorts,
+    config: activeConfig,
+    capabilities: capabilityAudit.capabilities,
+    capabilityContext: capabilityAudit.context,
+  };
+
   // Artifact-only output, derived from CAPABILITY rather than mode
   // (capability-model-plan step 4). Replaces `!hasCribl(mode)`, and preserves
   // what it meant: that check said "no live Cribl connection", which is
@@ -1380,7 +1401,7 @@ function App() {
 
   if (phase.phase === 'aua' || phase.phase === 'setup') {
     return (
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <SetupWizard
           capabilities={{
             // Cribl is reachable BY CONSTRUCTION here: the app is served by the
@@ -1643,7 +1664,7 @@ function App() {
           select Azure resources and grant roles, and connect GitHub content.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <HomeScreen
           facts={journeyFacts}
           links={JOURNEY_LINKS}
@@ -1674,7 +1695,7 @@ function App() {
           informational - it reports access, it does not gate the deploy.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <RbacPreflightPanel
           key={`preflight-${store.activeProfileId ?? 'none'}`}
           criblShellMode="cloud"
@@ -1713,7 +1734,7 @@ function App() {
       {secretNotice !== null && (
         <p className="connection-notice">{secretNotice}</p>
       )}
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
           // GEN-3: every pack this screen builds records what built it. The
@@ -1722,8 +1743,6 @@ function App() {
           // what the footer already does.
           toolkitVersion={window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}
           scopeCommitted={journeyFacts.scopeCommitted}
-          capabilities={capabilityAudit.capabilities}
-          capabilityContext={capabilityAudit.context}
           offline={!capabilityAudit.context.azureIdentityPresent}
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
@@ -1770,7 +1789,7 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
-          <PortsProvider ports={cloudPorts} config={activeConfig}>
+          <PortsProvider {...portsProviderProps}>
             {/* The key carries prefillTable (TBL-3) so handing a table over
                 from the Tables tab REMOUNTS this screen and re-seeds its
                 name field. initialTable is a mount-time seed, not a
@@ -1829,21 +1848,18 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
-          <PortsProvider ports={cloudPorts} config={activeConfig}>
+          <PortsProvider {...portsProviderProps}>
             <BatchDeployScreen
               key={`batch-${store.activeProfileId ?? 'none'}`}
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
+              // HON-7 wired the measured audit into this screen so its
+              // dcr.write/table.write fallback offers could reach production.
+              // D-3 moved the audit onto portsProviderProps above, so the wire
+              // is the provider now rather than two props here - the reachable
+              // half of HON-7 is unchanged.
               forcedTemplateOnly={forcedTemplateOnly}
-              // HON-7: without these the Batch screen's dcr.write/table.write
-              // fallback offers cannot reach production. The screen accepts
-              // both props and routes on them, but this shell was the only one
-              // of the three call sites not passing them, so its half of the
-              // rule was wired and unreachable. Integrate and the DCR
-              // inventory panel already passed them.
-              capabilities={capabilityAudit.capabilities}
-              capabilityContext={capabilityAudit.context}
             />
           </PortsProvider>
         </>
@@ -1861,22 +1877,17 @@ function App() {
       single={renderOnboard(nav)}
       batch={renderBatch(nav)}
       inventory={
-        <PortsProvider ports={cloudPorts} config={activeConfig}>
-          <DcrInventoryPanel
-            capabilities={capabilityAudit.capabilities}
-            capabilityContext={capabilityAudit.context}
-          />
+        <PortsProvider {...portsProviderProps}>
+          <DcrInventoryPanel />
         </PortsProvider>
       }
       tables={
-        <PortsProvider ports={cloudPorts} config={activeConfig}>
+        <PortsProvider {...portsProviderProps}>
           {/* TBL-3. Creating a TABLE needs no shell involvement - it is
               Azure-only and the panel calls createCustomTable itself. Only
               the DCR hand-off comes through here, because it navigates:
               it seeds the Single tab's name field and switches to it. */}
           <WorkspaceTablesPanel
-            capabilities={capabilityAudit.capabilities}
-            capabilityContext={capabilityAudit.context}
             onCreateDcr={(table) => {
               setPrefillTable(table);
               setDcrTab('single');
@@ -1909,7 +1920,7 @@ function App() {
           Secrets and tokens are excluded by construction.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <LogsScreen
           getRecentLogs={getRecentLogs}
           platformInfo={{
@@ -1936,7 +1947,7 @@ function App() {
           source configurations for the hubs worth onboarding.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <EventHubDiscoveryScreen />
       </PortsProvider>
     </>
@@ -1957,7 +1968,7 @@ function App() {
           every app-provisioned lab self-destructs when its TTL expires.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <LabsScreen />
       </PortsProvider>
     </>
@@ -1980,7 +1991,7 @@ function App() {
           rules, and pivot straight into Sentinel Integration per solution.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <SiemMigrationScreen onOpenIntegration={() => nav.navigate('integrate')} />
       </PortsProvider>
     </>
@@ -2074,7 +2085,7 @@ function App() {
           and cached by commit; nothing is mirrored.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <RepositoriesScreen platform="cloud" />
       </PortsProvider>
     </>
@@ -2100,7 +2111,7 @@ function App() {
           API, never from this list.
         </p>
       </header>
-      <PortsProvider ports={cloudPorts} config={activeConfig}>
+      <PortsProvider {...portsProviderProps}>
         <PackInventoryScreen key={`packs-${store.activeProfileId ?? 'none'}`} />
       </PortsProvider>
     </>

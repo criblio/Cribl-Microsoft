@@ -9,6 +9,40 @@
  *
  * No JSX in this module (plain createElement) so it stays a .ts file and the
  * context/hook/provider live together as one seam.
+ *
+ * CAPABILITIES TRAVEL HERE TOO, AND THAT COSTS SOMETHING (D-3, backlog 18b).
+ * The measured {@link PortsContextValue.capabilities} and the
+ * {@link PortsContextValue.capabilityContext} that resolves anything unmeasured
+ * used to be prop-drilled - from the shell onto four screens, and on again from
+ * IntegrateScreen into the AzureTargetingScreen it composes. They are facts
+ * about the CONNECTION, exactly like `config`, so they now ride the same seam:
+ * the shell states them once on its provider props and the pass-through inside
+ * Integrate is gone. That chain of call sites kept in step by hand is the
+ * duplication the decision judged would drift.
+ *
+ * THE KNOWN TRADE, accepted when D-3 was decided and written here so nobody has
+ * to rediscover it: this makes capabilities AMBIENT. A screen's props used to
+ * DECLARE which capabilities it consults - `capabilities?: CapabilitySet` on
+ * DcrInventoryPanel was a readable statement that this panel consults the audit,
+ * and its absence on a screen was a statement that it does not. After D-3
+ * `usePorts()` hands every screen all of them, and NOTHING preserves that
+ * declaration. Reading a screen no longer tells you whether it consults the
+ * audit; you have to grep it for `capabilities`. A second mechanism to keep the
+ * declaration (a per-screen list of consulted capabilities) was considered and
+ * REJECTED as a list that would drift - which is the same failure the decision
+ * was taken to avoid, reintroduced one layer up.
+ *
+ * BOTH FIELDS STAY OPTIONAL, in the value as well as the props, because the
+ * honest default is NOT shared. Screens disagree about what an absent context
+ * means and they are each right: the DCR inventory reports on a request that
+ * already succeeded so it defaults to connected, integrate-screen's
+ * `workspaceTableListing` hook defaults to {false, false} because it may run
+ * before anything is connected (review corrected this: it previously read "the
+ * Integrate page's workspace listing", which names AzureTargetingScreen - a
+ * DIFFERENT component in section 7 that does not use that default),
+ * and BatchDeployScreen DERIVES its default from `forcedTemplateOnly`
+ * rather than defaulting at all. Resolving a single default in this provider
+ * would silently overwrite three deliberate answers with one.
  */
 
 import { createContext, createElement, useContext, useMemo } from "react";
@@ -17,6 +51,8 @@ import type {
   ArtifactSink,
   AzureConfig,
   AzureManagement,
+  CapabilityContext,
+  CapabilitySet,
   ContentCache,
   CriblClient,
   GithubPatManager,
@@ -198,7 +234,10 @@ export interface UiPorts {
   graph?: GraphDirectory;
 }
 
-/** What PortsContext carries: the ports plus the active connection config. */
+/**
+ * What PortsContext carries: the ports, the active connection config, and what
+ * that connection was measured to be able to do.
+ */
 export interface PortsContextValue {
   ports: UiPorts;
   /**
@@ -208,6 +247,20 @@ export interface PortsContextValue {
    * travel as transient user input within a single interaction.
    */
   config: AzureConfig;
+  /**
+   * What the connected identity was MEASURED to be able to do (D-3). Absent
+   * means the shell wired no audit at all - which is not the same as an audit
+   * that measured nothing, so it is left undefined here and each screen states
+   * its own honest default. See the module header for why that is not resolved
+   * once in the provider.
+   */
+  capabilities?: CapabilitySet;
+  /**
+   * The connection facts that resolve anything unmeasured - is there an Azure
+   * identity, is Cribl reachable (D-3). Absent for the same reason as
+   * {@link capabilities}, and screens disagree about the right default.
+   */
+  capabilityContext?: CapabilityContext;
 }
 
 /**
@@ -221,16 +274,33 @@ export const PortsContext = createContext<PortsContextValue | null>(null);
 export interface PortsProviderProps {
   ports: UiPorts;
   config: AzureConfig;
+  /**
+   * The connection's measured capabilities (D-3). OPTIONAL so the many test
+   * mounts and the shell surfaces that consult no audit stay untouched; a
+   * screen reading an absent set gets `undefined` and applies its own default.
+   */
+  capabilities?: CapabilitySet;
+  /** Connection facts for resolving unmeasured capabilities (D-3). */
+  capabilityContext?: CapabilityContext;
   children: ReactNode;
 }
 
 /**
  * Convenience provider: memoizes the context value so consumers only
- * re-render when the ports bundle or the active config actually changes.
+ * re-render when the ports bundle, the active config, or the audit actually
+ * changes.
+ *
+ * D-3: the two capability fields are in the dep list, so a shell handing a
+ * FRESH object identity every render defeats this memo and re-renders every
+ * consumer of the context. `useCapabilityAudit` memoizes the context object it
+ * returns for exactly that reason - see its `context` note.
  */
 export function PortsProvider(props: PortsProviderProps): ReactElement {
-  const { ports, config, children } = props;
-  const value = useMemo(() => ({ ports, config }), [ports, config]);
+  const { ports, config, capabilities, capabilityContext, children } = props;
+  const value = useMemo(
+    () => ({ ports, config, capabilities, capabilityContext }),
+    [ports, config, capabilities, capabilityContext],
+  );
   return createElement(PortsContext.Provider, { value }, children);
 }
 

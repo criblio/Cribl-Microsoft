@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**50 in the backlog, 0 in progress, 90 done.**
+**49 in the backlog, 1 in progress, 91 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 6 | 51 | 2 |
+| Sentinel Integration | 6 | 52 | 2 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -66,14 +66,14 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 73% (8/11)
+### `HON` Inventory and diagnostic honesty - 82% (9/11)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 2/4 | HON-6, HON-7*, D-1, D-2* |
-| `HON-F2` Unverified empty inventories | Sentinel Integration | 2/3 | HON-1, HON-2, D-3 |
+| `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
 ### `GEN` Pipeline and pack generation - 100% (3/3)
@@ -116,14 +116,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 78% (59/76)
+### `DBT` Quality and technical debt _(enabler)_ - 77% (59/77)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 30/34 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 6/11 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,20 +142,74 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
+  `DBT-F2` `bug` `settled`
+  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
+  spec, not inferred. handleSolutionChange guards on `prevName === null ||
+  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
+  sends X -> null, which falls through and removes EVERY tagged sample via
+  ports.samples.remove (:667-671). Picking the next solution then sends null
+  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
+  ONLY EXIT. The browse list is hidden while a solution is selected
+  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
+  so an operator who wants a different solution MUST press the button that
+  destroys their samples - and the samples are durable, surviving page reloads
+  via their store, so this is unrecoverable work rather than a cache. DBT-9
+  improved the wording to name Clearing as destructive, which is why this is
+  filed at `now` rather than higher: the operator is at least warned. But a
+  warning on the only available exit is not a design. The real question is
+  whether Clear should delete at all, or whether the samples should follow the
+  solution they were tagged for - which is what the per-solution
+  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
+  worth weighing: keep samples until the NEW solution is chosen and only then
+  discard the old ones; scope the sample store per solution the way mappings
+  already are; or add a confirm step. The first two remove the trap; the third
+  only labels it. ATTEMPT 1 REVIEWED AND HELD 2026-09-02, and the blocking
+  finding CHANGES THE DESIGN QUESTION rather than just failing the code. The
+  agent chose option (a) - keep samples until a new solution is committed to -
+  and argued (b) down well: tagged samples have their own port keyed by
+  logType ALONE (ports/tagged-sample-store.ts), the cloud adapter hashes that
+  into a flat KV key with a single flat index, so per-solution scoping means a
+  third key generation, a per-solution index, the cloud adapter, the fake
+  store and the rename path, with silent-orphan risk. That reasoning still
+  stands. BUT REVIEW FOUND OWNERSHIP LIVES ONLY IN A REACT REF, so a page
+  reload after a Clear silently hands one solutions samples to a DIFFERENT
+  solution - a cross-solution CONTAMINATION path that was impossible before
+  the change. That is the finding that matters, because it is not a bug in the
+  implementation of (a); it is evidence that (a) CANNOT BE CORRECT AS
+  SPECIFIED. Ownership has to be DURABLE to be right, and the samples
+  themselves are durable - they survive reload via their store. So the
+  ownership record must live where the samples live, which is most of what
+  option (b) actually is. The card offered (a) and (b) as alternatives; the
+  attempt shows (a) collapses into (b) the moment reload is considered. FOUR
+  MORE, all real: samples acquired WHILE BROWSING after a Clear are destroyed
+  at the next pick, which the parent commit kept and which is broader than the
+  card words (a); the load-bearing restore-effect seeding is COMPLETELY
+  UNPINNED - deleting that line passes the whole UI suite; comments state an
+  invariant the code does not hold; and the destructive act moved to the
+  browse-list pick where there is NO warning at all, which review calls the
+  mirror image of the defect [[DBT-9]] review caught. WHAT THE ATTEMPT GOT
+  RIGHT AND SHOULD BE KEPT: the pure solutionSwitchEffects function means X to
+  null to Y and a direct X to Y reach the same rule, so the two routes cannot
+  diverge - that is the property [[DBT-28]] needs. Its mutation testing was
+  also unusually honest: mutation A found one of its own DOM pins passing
+  VACUOUSLY, and mutation D found an assertion it had just added did not guard
+  what it claimed, both reported rather than buried. NEXT ATTEMPT: persist
+  ownership beside the samples rather than in a ref, and re-cost (b) knowing
+  that (a) needs durable ownership anyway.
 
 ---
 
-## Backlog - now (2)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed`
+  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -185,31 +239,21 @@ Next to pick up. Nothing blocks these.
   (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
   the app's own SIEM-migration pivot the second time it is used. (3) The
   deep-link chip advertises a URL unreachable on the shipped shell (:519-524
-  vs App.tsx:2011-2017).
-
-- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
-  `DBT-F2` `bug` `settled`
-  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
-  spec, not inferred. handleSolutionChange guards on `prevName === null ||
-  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
-  sends X -> null, which falls through and removes EVERY tagged sample via
-  ports.samples.remove (:667-671). Picking the next solution then sends null
-  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
-  ONLY EXIT. The browse list is hidden while a solution is selected
-  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
-  so an operator who wants a different solution MUST press the button that
-  destroys their samples - and the samples are durable, surviving page reloads
-  via their store, so this is unrecoverable work rather than a cache. DBT-9
-  improved the wording to name Clearing as destructive, which is why this is
-  filed at `now` rather than higher: the operator is at least warned. But a
-  warning on the only available exit is not a design. The real question is
-  whether Clear should delete at all, or whether the samples should follow the
-  solution they were tagged for - which is what the per-solution
-  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
-  worth weighing: keep samples until the NEW solution is chosen and only then
-  discard the old ones; scope the sample store per solution the way mappings
-  already are; or add a confirm step. The first two remove the trap; the third
-  only labels it.
+  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
+  the first implementation was reviewed. The fix works and its resolver is
+  well pinned - 9 mutations, every one caught - but review found it makes the
+  pivot a SECOND route from solution X to solution Y that permanently deletes
+  every acquired sample, with no warning and no confirmation, while leaving a
+  code comment and an operator-visible sentence that both assert the opposite.
+  That is DBT-72s trap widened, so the decision was not to ship a second door
+  onto a known trap. DBT-72 settles whether Clear should delete at all; once
+  it does, the pivot is safe by construction rather than by warning. Review
+  also found the pivot resurrects the 2026-07-08 Clear-selection regression
+  through a new door, and that the 0-collisions measurement covered 436 of the
+  574 real Solutions folders - 24 percent unexamined, which is the
+  inventory-standard failure inside the measurement used to justify the
+  design. The reviewer refetched the live index and equality still has 0
+  collisions, so the DESIGN holds and only the CLAIM overreached.
 
 ---
 
@@ -348,24 +392,27 @@ Settled and unblocked, sequenced behind now.
   "the wheel never arrived", and an automated run would either report a false
   confirmation or a false all-clear. This card stays on the HUMAN reproduction
   that filed it. Whoever fixes it should verify by hand for the same reason.
-
-- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `HON-F2` `decision` `settled`
-  , or carry them in `PortsContext` beside `config`? One seam change against
-  updating every `PortsProvider` call site. Cheap now, less so later; at eight
-  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
-  capabilities in PortsContext. One seam change against eight call sites that
-  must be kept in step - the duplication that drifts, and the same shape the
-  capability model already had to correct once. Reasoning in backlog.md
-  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
-  than this card prices it - the same correction backlog.md#4 already made
-  once when ADR-0002 left one shell instead of two. Real work: two fields on
-  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
-  the shell, update 14 App.tsx providers, convert 5 screens to read from
-  context.
-  DECISION: How do capabilities reach the ~8 listing screens?
-    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
-    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
+  STOP CONDITION LIKELY MET - static evidence 2026-09-02, gathered before wave
+  3 to avoid implementing blind. The scout named a stop: if the list freezes
+  while it still has ROOM to scroll, then overscroll-behavior is not the cause
+  and neither proposed option fixes it. Three things point that way. (1)
+  overscroll-behavior:contain governs scroll CHAINING AT THE BOUNDARY - it
+  does not prevent an element scrolling internally while it has room, so it
+  cannot by itself explain a list that will not move. (2) The card reports
+  five of EIGHT results reachable, which is a list that has room and is not
+  moving. (3) There is NO wheel handler anywhere in solution-browser - grep
+  for onWheel/wheel/preventDefault returns nothing - so no JS is swallowing
+  the event and the cause is CSS or the iframe. The rule at styles.css
+  .solution-browser-list carries max-height 420px plus overflow-y auto, and
+  its own comment records why contain was added on 2026-08-03: three nested
+  scroll regions, and reaching the END of the list handed the wheel to the
+  page mid-search. That is a BOUNDARY problem, which is a different symptom
+  from the one this card reports. NOT PROVEN - this is static reasoning and
+  the wheel cannot be tested by reading CSS. What it establishes is that
+  implementing either option (a) or (b) blind would likely fix nothing.
+  RE-SCOUT WITH A LIVE MEASUREMENT FIRST: does the list scroll at all with the
+  pointer over it, and does the behaviour differ between a filtered short list
+  and the full one.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
   `DBT-F2` `decision` `settled`
@@ -378,7 +425,17 @@ Settled and unblocked, sequenced behind now.
   returns ordered {id,label,phase,skippable} with the exact labels the header
   enumerates (EXTRA_VIEW_LABELS at setup-wizard-state.ts:89-92, STEP_LABELS at
   first-run-wizard.ts:446-451). The build is one pure derivation beside
-  wizardViewProgress.
+  wizardViewProgress. FIX ROUND REVIEWED AND HELD 2026-09-02 with three
+  majors, and the first is the same shape the round existed to remove: it
+  INTRODUCED A NEW PRESENT-TENSE FALSEHOOD, asserting in both doc edits that
+  the stepper shows five entries for a full LOCAL run - a run ADR-0002
+  deleted. Second: the disclosed list of surviving stale mode-era prose was
+  materially incomplete and its stated measurement population silently
+  excluded apps/ and the test file the author was editing, with at least four
+  more instances surviving. Third, and the one worth remembering: THE PIN
+  CLOSING FINDING 5 DOES NOT FAIL ON THE CARDS OWN DEFECT DIRECTION - a header
+  promising MORE steps than the stepper shows, which is D-10 exactly, passes
+  every pin green.
   DECISION: Setup wizard header promises three phases; the stepper shows one.
     [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
     [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
@@ -494,6 +551,27 @@ Settled and unblocked, sequenced behind now.
   is observed. What is missing is the guard - as with the batch before DBT-56,
   the next ARM call added outside a try block reopens the failure and nothing
   fails when it does.
+
+- **DBT-75** The solution deep-link chip advertises a URL the shipped shell cannot reach
+  `DBT-F2` `bug` `settled`
+  Not now because: Split out of [[DBT-28]] on 2026-09-01 by decision, and held
+  at next because it is a DIFFERENT user story from the other two defects in
+  that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a
+  mount-only hash read that together make the pivot inert after first use.
+  This one is a copyable link that leads somewhere the shell does not serve.
+  Nothing is silently wrong on screen: the chip renders and the operator can
+  read it, so the failure is discoverable rather than invisible, which is what
+  separates it from the pivot defect. Keeping them in one card would also have
+  put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at
+  the time.
+  Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524
+  renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the
+  shipped shell does not route it. So an operator who copies the advertised
+  link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct
+  the advertised URL to whatever the shell actually serves, to register the
+  route, or to stop advertising a link at all. Which one depends on whether a
+  shareable deep link is wanted at all, which nobody has decided. Establish
+  that before writing code.
 
 ---
 
@@ -871,7 +949,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (90)
+## Done (91)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1665,6 +1743,47 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `each-owns` All three, each wiring its own onProduce - Integrate deploy, Batch Deploy and DCR Automation each pass a producer. One prop per screen, uniform mental model - but for pack and ARM kinds it is a button that cannot really produce the artifact on the spot.
     [ ] `inline-only` All three get the offer; only INLINE kinds get a button - Honours isInlineArtifact, which already splits these: role-assignment and app-registration are generated from data the app holds, while dcr-arm-bodies, table-arm-bodies, arm-template and cribl-pack come from a RUN. Run kinds point at that run instead of pretending. More wiring, no pretending.
     [ ] `where-producible` Only where a producer already exists - Batch Deploy already calls ports.artifacts.save; Integrate can hand over the pack build. DCR Automation waits until it has an artifact to give. Smallest step; leaves the capability rule partly unmet.
+
+- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
+  `HON-F2` `decision` `settled` `verified: pins`
+  , or carry them in `PortsContext` beside `config`? One seam change against
+  updating every `PortsProvider` call site. Cheap now, less so later; at eight
+  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
+  capabilities in PortsContext. One seam change against eight call sites that
+  must be kept in step - the duplication that drifts, and the same shape the
+  capability model already had to correct once. Reasoning in backlog.md
+  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
+  than this card prices it - the same correction backlog.md#4 already made
+  once when ADR-0002 left one shell instead of two. Real work: two fields on
+  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
+  the shell, update 14 App.tsx providers, convert 5 screens to read from
+  context. DONE 2026-09-02, implementing the settled ports-context decision.
+  Capabilities and capabilityContext now ride PortsContext instead of being
+  prop-drilled, with deriveCapabilityContext memoized at the shell. THE
+  AMBIENT COST IS RECORDED RATHER THAN SOLVED, per the decision: a screen
+  signature no longer declares which capabilities it consults, usePorts hands
+  it all of them, and nothing preserves that declaration. That is written into
+  the module header as a known trade, and a second mechanism to preserve it
+  was considered and rejected as a list that would drift. REVIEW RAISED FOUR
+  MAJORS AND ONLY ONE WAS A SHIPPED DEFECT - a distinction worth recording,
+  because three were errors in the agents REPORT rather than in the code. (1)
+  The {false,false} default was attributed in ports-context.ts to the
+  Integrate pages workspace listing, which names AzureTargetingScreen; the
+  default actually belongs to integrate-screens own workspaceTableListing
+  hook, a different component. Real, in shipped source, FIXED. (2) The lint
+  gate was reported as 11 warnings with 3 elsewhere; the tree ships 8 and the
+  itemised list sums to 8. Report error, nothing in the code to fix. (3) The
+  report said content-install-section contains no capability code; it imports
+  hasAzureIdentity and calls it. Report error; no shipped comment makes that
+  claim. (4) The memo rationale was called unfounded - I CHECKED AND COULD NOT
+  REPRODUCE IT. getActiveConfig returns a fresh EMPTY_AZURE_CONFIG clone when
+  no profile is active, and App.tsx:864 calls it in the component body with no
+  memo, so an object-identity dep really would never hold in the disconnected
+  state. The comment is correct and was left alone rather than edited to
+  satisfy a finding.
+  DECISION: How do capabilities reach the ~8 listing screens?
+    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
+    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-7** `VND-2` Does a persisted column order need a version or a captured-on date, so a firmware chang
   `VND-F1` `decision` `settled` `verified: none`

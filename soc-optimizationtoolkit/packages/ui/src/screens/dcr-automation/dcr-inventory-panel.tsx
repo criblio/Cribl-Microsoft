@@ -26,9 +26,7 @@ import {
 } from "@soc/core";
 import { emptyCapabilitySet, listingRows } from "@soc/core";
 import type {
-  CapabilityContext,
   CapabilityFallback,
-  CapabilitySet,
   DcrInventoryEntry,
   DcrUpdatePreview,
 } from "@soc/core";
@@ -42,21 +40,20 @@ import { usePorts } from "../../ports-context";
 import { SearchableSelect } from "../../components/searchable-select";
 import { mergePreviewColumns, summarizePreview } from "./dcr-inventory-state";
 
-export interface DcrInventoryPanelProps {
-  /**
-   * What the connected identity was measured to be able to do. Used ONLY to
-   * decide whether an empty DCR list may be reported as a real zero
-   * (docs/inventory-standard.md). Absent is safe: the message hedges rather
-   * than claiming "none".
-   */
-  capabilities?: CapabilitySet;
-  /** Connection facts for resolving unmeasured capabilities. */
-  capabilityContext?: CapabilityContext;
-}
-
-export function DcrInventoryPanel(props: DcrInventoryPanelProps = {}) {
-  const { capabilities, capabilityContext } = props;
-  const { ports, config } = usePorts();
+/**
+ * NO PROPS, and no props type either (D-3). This panel took exactly two -
+ * `capabilities` and `capabilityContext` - and both are facts about the
+ * CONNECTION rather than about this panel, so they ride the ports seam now.
+ * `DcrInventoryPanelProps` was deleted rather than left as an empty type: an
+ * exported props type for a component that takes none is a name a reader has to
+ * follow before finding out it says nothing.
+ */
+export function DcrInventoryPanel() {
+  // D-3: the audit is read from the same seam as the ports and the config it
+  // describes, not handed down. Used ONLY to decide whether an empty DCR list
+  // may be reported as a real zero (docs/inventory-standard.md) and which
+  // blocked writes offer a fallback; absent is safe, the message hedges.
+  const { ports, config, capabilities, capabilityContext } = usePorts();
   // Every button narrates to the Logs page (user request 2026-07-13).
   const logger = ports.logger;
   const logInfo = useCallback(

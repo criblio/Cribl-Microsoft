@@ -390,17 +390,21 @@ describe("IntegrateScreen - sample-source discovery is gated on CRIBL", () => {
   function renderGated(opts: { scopeCommitted: boolean; criblReachable: boolean }) {
     const ports = discoveryPorts();
     const { container } = render(
-      <PortsProvider ports={ports} config={CONFIG}>
+      // D-3: capabilityContext reaches the screen through PortsContext now.
+      <PortsProvider
+        ports={ports}
+        config={CONFIG}
+        capabilityContext={{
+          azureIdentityPresent: opts.scopeCommitted,
+          criblReachable: opts.criblReachable,
+        }}
+      >
         <IntegrateScreen
           toolkitVersion="9.9.9-test"
           scopeCommitted={opts.scopeCommitted}
           offline={false}
           onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
           criblDefaults={DEFAULT_CRIBL_OPTIONS}
-          capabilityContext={{
-            azureIdentityPresent: opts.scopeCommitted,
-            criblReachable: opts.criblReachable,
-          }}
         />
       </PortsProvider>,
     );
@@ -647,15 +651,19 @@ describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () =
       artifacts: { save: vi.fn().mockResolvedValue(undefined) },
     } as unknown as UiPorts;
     return render(
-      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+      // D-3: the measured audit reaches the screen through PortsContext.
+      <PortsProvider
+        ports={ports}
+        config={SCOPED_CONFIG}
+        capabilities={capabilities}
+        capabilityContext={CONNECTED}
+      >
         <IntegrateScreen
           toolkitVersion="9.9.9-test"
           scopeCommitted
           offline={false}
           onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
           criblDefaults={DEFAULT_CRIBL_OPTIONS}
-          capabilities={capabilities}
-          capabilityContext={CONNECTED}
         />
       </PortsProvider>,
     );
