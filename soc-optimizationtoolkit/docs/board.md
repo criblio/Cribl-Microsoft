@@ -146,8 +146,54 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
+- **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
+  `DBT-F2` `decision` `settled`
+  Either drop the enumeration from the header, or promote the sub-steps.
+  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED:
+  promote the sub-steps into the stepper. Dropping the header enumeration
+  would make the screen consistent by making it less informative. Reasoning in
+  backlog.md section 18f, which is why this can settle. READY 2026-09-01:
+  everything the promotion needs already exists as data. wizardViews(shape)
+  returns ordered {id,label,phase,skippable} with the exact labels the header
+  enumerates (EXTRA_VIEW_LABELS at setup-wizard-state.ts:89-92, STEP_LABELS at
+  first-run-wizard.ts:446-451). The build is one pure derivation beside
+  wizardViewProgress.
+  DECISION: Setup wizard header promises three phases; the stepper shows one.
+    [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
+    [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
+
+- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
+  `DBT-F2` `bug` `settled`
+  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
+  spec, not inferred. handleSolutionChange guards on `prevName === null ||
+  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
+  sends X -> null, which falls through and removes EVERY tagged sample via
+  ports.samples.remove (:667-671). Picking the next solution then sends null
+  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
+  ONLY EXIT. The browse list is hidden while a solution is selected
+  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
+  so an operator who wants a different solution MUST press the button that
+  destroys their samples - and the samples are durable, surviving page reloads
+  via their store, so this is unrecoverable work rather than a cache. DBT-9
+  improved the wording to name Clearing as destructive, which is why this is
+  filed at `now` rather than higher: the operator is at least warned. But a
+  warning on the only available exit is not a design. The real question is
+  whether Clear should delete at all, or whether the samples should follow the
+  solution they were tagged for - which is what the per-solution
+  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
+  worth weighing: keep samples until the NEW solution is chosen and only then
+  discard the old ones; scope the sample store per solution the way mappings
+  already are; or add a confirm step. The first two remove the trap; the third
+  only labels it.
+
+---
+
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
+
 - **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed`
+  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -177,53 +223,21 @@ Started. Anything here with an unfinished dependency is called out on its card.
   (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
   the app's own SIEM-migration pivot the second time it is used. (3) The
   deep-link chip advertises a URL unreachable on the shipped shell (:519-524
-  vs App.tsx:2011-2017).
-
-- **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
-  `DBT-F2` `decision` `settled`
-  Either drop the enumeration from the header, or promote the sub-steps.
-  Measured on two live walkthroughs 2026-08-06. `backlog.md#9`. DECIDED:
-  promote the sub-steps into the stepper. Dropping the header enumeration
-  would make the screen consistent by making it less informative. Reasoning in
-  backlog.md section 18f, which is why this can settle. READY 2026-09-01:
-  everything the promotion needs already exists as data. wizardViews(shape)
-  returns ordered {id,label,phase,skippable} with the exact labels the header
-  enumerates (EXTRA_VIEW_LABELS at setup-wizard-state.ts:89-92, STEP_LABELS at
-  first-run-wizard.ts:446-451). The build is one pure derivation beside
-  wizardViewProgress.
-  DECISION: Setup wizard header promises three phases; the stepper shows one.
-    [ ] `drop-enumeration` Drop the enumeration from the header - Header stops promising what the stepper does not show.
-    [x] `promote-substeps` Promote the sub-steps into the stepper - Stepper starts showing what the header promises.
-
----
-
-## Backlog - now (1)
-
-Next to pick up. Nothing blocks these.
-
-- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
-  `DBT-F2` `bug` `settled`
-  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
-  spec, not inferred. handleSolutionChange guards on `prevName === null ||
-  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
-  sends X -> null, which falls through and removes EVERY tagged sample via
-  ports.samples.remove (:667-671). Picking the next solution then sends null
-  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
-  ONLY EXIT. The browse list is hidden while a solution is selected
-  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
-  so an operator who wants a different solution MUST press the button that
-  destroys their samples - and the samples are durable, surviving page reloads
-  via their store, so this is unrecoverable work rather than a cache. DBT-9
-  improved the wording to name Clearing as destructive, which is why this is
-  filed at `now` rather than higher: the operator is at least warned. But a
-  warning on the only available exit is not a design. The real question is
-  whether Clear should delete at all, or whether the samples should follow the
-  solution they were tagged for - which is what the per-solution
-  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
-  worth weighing: keep samples until the NEW solution is chosen and only then
-  discard the old ones; scope the sample store per solution the way mappings
-  already are; or add a confirm step. The first two remove the trap; the third
-  only labels it.
+  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
+  the first implementation was reviewed. The fix works and its resolver is
+  well pinned - 9 mutations, every one caught - but review found it makes the
+  pivot a SECOND route from solution X to solution Y that permanently deletes
+  every acquired sample, with no warning and no confirmation, while leaving a
+  code comment and an operator-visible sentence that both assert the opposite.
+  That is DBT-72s trap widened, so the decision was not to ship a second door
+  onto a known trap. DBT-72 settles whether Clear should delete at all; once
+  it does, the pivot is safe by construction rather than by warning. Review
+  also found the pivot resurrects the 2026-07-08 Clear-selection regression
+  through a new door, and that the 0-collisions measurement covered 436 of the
+  574 real Solutions folders - 24 percent unexamined, which is the
+  inventory-standard failure inside the measurement used to justify the
+  design. The reviewer refetched the live index and equality still has 0
+  collisions, so the DESIGN holds and only the CLAIM overreached.
 
 ---
 
