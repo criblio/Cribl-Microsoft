@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**51 in the backlog, 0 in progress, 90 done.**
+**49 in the backlog, 2 in progress, 90 done.**
 
 ## By menu item
 
@@ -142,64 +142,27 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (2)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
-
----
-
-## Backlog - now (2)
-
-Next to pick up. Nothing blocks these.
-
-- **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
-  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
-  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
-  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
-  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
-  CAUSES and I have not separated them, which is why this is unconfirmed
-  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
-  hash lands on the OUTER frame, so the app may never see it at all - in which
-  case the advertised link is only usable in a standalone shell and the copy
-  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
-  Clear works", so a persisted selection may be designed to win. Settle which
-  before changing anything: if (1), the deep link is broken on the only
-  shipped shell and the card that advertises it is misleading; if (2), it
-  behaves as designed and the COPY needs to say that a stored selection takes
-  precedence. Worth noting the reporter could not tell from the outside, which
-  is the actual defect either way. PROMOTED TO NOW 2026-09-01, and the
-  priorityWhy that held it is retracted rather than merely lifted. It said two
-  candidate causes were recorded and it was unresolved which one bit, so a
-  live repro was cheaper than fixing the wrong one. Investigation measured a
-  THIRD cause the card never considered, and found BOTH recorded candidates
-  wrong - so waiting for a repro to choose between two wrong answers had no
-  value left. THREE SEPARATE DEFECTS SIT HERE. (1) resolveSelectedSolution
-  (browser-state.ts:163-176) matches exact then case-insensitive-exact only,
-  and NOT the punctuation-collapsing match the search box uses
-  (solutionMatchesQuery, :48-63) - so a deep link naming a solution that
-  exists under different punctuation resolves to nothing and is consumed
-  SILENTLY (solution-browser.tsx:390-394). (2) The hash is read on MOUNT only
-  (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
-  the app's own SIEM-migration pivot the second time it is used. (3) The
-  deep-link chip advertises a URL unreachable on the shipped shell (:519-524
-  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
-  the first implementation was reviewed. The fix works and its resolver is
-  well pinned - 9 mutations, every one caught - but review found it makes the
-  pivot a SECOND route from solution X to solution Y that permanently deletes
-  every acquired sample, with no warning and no confirmation, while leaving a
-  code comment and an operator-visible sentence that both assert the opposite.
-  That is DBT-72s trap widened, so the decision was not to ship a second door
-  onto a known trap. DBT-72 settles whether Clear should delete at all; once
-  it does, the pivot is safe by construction rather than by warning. Review
-  also found the pivot resurrects the 2026-07-08 Clear-selection regression
-  through a new door, and that the 0-collisions measurement covered 436 of the
-  574 real Solutions folders - 24 percent unexamined, which is the
-  inventory-standard failure inside the measurement used to justify the
-  design. The reviewer refetched the live index and equality still has 0
-  collisions, so the DESIGN holds and only the CLAIM overreached.
+- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
+  `HON-F2` `decision` `settled`
+  , or carry them in `PortsContext` beside `config`? One seam change against
+  updating every `PortsProvider` call site. Cheap now, less so later; at eight
+  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
+  capabilities in PortsContext. One seam change against eight call sites that
+  must be kept in step - the duplication that drifts, and the same shape the
+  capability model already had to correct once. Reasoning in backlog.md
+  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
+  than this card prices it - the same correction backlog.md#4 already made
+  once when ADR-0002 left one shell instead of two. Real work: two fields on
+  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
+  the shell, update 14 App.tsx providers, convert 5 screens to read from
+  context.
+  DECISION: How do capabilities reach the ~8 listing screens?
+    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
+    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
   `DBT-F2` `bug` `settled`
@@ -259,7 +222,60 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (18)
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
+
+- **DBT-28** The solution deep link does not override a stored selection
+  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
+  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
+  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
+  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
+  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
+  CAUSES and I have not separated them, which is why this is unconfirmed
+  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
+  hash lands on the OUTER frame, so the app may never see it at all - in which
+  case the advertised link is only usable in a standalone shell and the copy
+  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
+  Clear works", so a persisted selection may be designed to win. Settle which
+  before changing anything: if (1), the deep link is broken on the only
+  shipped shell and the card that advertises it is misleading; if (2), it
+  behaves as designed and the COPY needs to say that a stored selection takes
+  precedence. Worth noting the reporter could not tell from the outside, which
+  is the actual defect either way. PROMOTED TO NOW 2026-09-01, and the
+  priorityWhy that held it is retracted rather than merely lifted. It said two
+  candidate causes were recorded and it was unresolved which one bit, so a
+  live repro was cheaper than fixing the wrong one. Investigation measured a
+  THIRD cause the card never considered, and found BOTH recorded candidates
+  wrong - so waiting for a repro to choose between two wrong answers had no
+  value left. THREE SEPARATE DEFECTS SIT HERE. (1) resolveSelectedSolution
+  (browser-state.ts:163-176) matches exact then case-insensitive-exact only,
+  and NOT the punctuation-collapsing match the search box uses
+  (solutionMatchesQuery, :48-63) - so a deep link naming a solution that
+  exists under different punctuation resolves to nothing and is consumed
+  SILENTLY (solution-browser.tsx:390-394). (2) The hash is read on MOUNT only
+  (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
+  the app's own SIEM-migration pivot the second time it is used. (3) The
+  deep-link chip advertises a URL unreachable on the shipped shell (:519-524
+  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
+  the first implementation was reviewed. The fix works and its resolver is
+  well pinned - 9 mutations, every one caught - but review found it makes the
+  pivot a SECOND route from solution X to solution Y that permanently deletes
+  every acquired sample, with no warning and no confirmation, while leaving a
+  code comment and an operator-visible sentence that both assert the opposite.
+  That is DBT-72s trap widened, so the decision was not to ship a second door
+  onto a known trap. DBT-72 settles whether Clear should delete at all; once
+  it does, the pivot is safe by construction rather than by warning. Review
+  also found the pivot resurrects the 2026-07-08 Clear-selection regression
+  through a new door, and that the 0-collisions measurement covered 436 of the
+  574 real Solutions folders - 24 percent unexamined, which is the
+  inventory-standard failure inside the measurement used to justify the
+  design. The reviewer refetched the live index and equality still has 0
+  collisions, so the DESIGN holds and only the CLAIM overreached.
+
+---
+
+## Backlog - next (17)
 
 Settled and unblocked, sequenced behind now.
 
@@ -415,24 +431,6 @@ Settled and unblocked, sequenced behind now.
   RE-SCOUT WITH A LIVE MEASUREMENT FIRST: does the list scroll at all with the
   pointer over it, and does the behaviour differ between a filtered short list
   and the full one.
-
-- **D-3** How do capabilities reach the roughly eight listing screens - keep prop-drilling from the shell
-  `HON-F2` `decision` `settled`
-  , or carry them in `PortsContext` beside `config`? One seam change against
-  updating every `PortsProvider` call site. Cheap now, less so later; at eight
-  listers this is the duplication that drifts. `backlog.md#4`. DECIDED: carry
-  capabilities in PortsContext. One seam change against eight call sites that
-  must be kept in step - the duplication that drifts, and the same shape the
-  capability model already had to correct once. Reasoning in backlog.md
-  section 18b, which is why this can settle. SCOPED 2026-09-01, and SMALLER
-  than this card prices it - the same correction backlog.md#4 already made
-  once when ADR-0002 left one shell instead of two. Real work: two fields on
-  PortsContextValue and PortsProviderProps, memoize deriveCapabilityContext at
-  the shell, update 14 App.tsx providers, convert 5 screens to read from
-  context.
-  DECISION: How do capabilities reach the ~8 listing screens?
-    [ ] `prop-drill` Keep prop-drilling from the shell - No seam change; every PortsProvider call site updates. Cheap now, less so later.
-    [x] `ports-context` Carry them in PortsContext beside config - One seam change. At eight listers this is the duplication that drifts.
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
   `DBT-F2` `decision` `settled`
