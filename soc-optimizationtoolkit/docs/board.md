@@ -200,7 +200,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   VACUOUSLY, and mutation D found an assertion it had just added did not guard
   what it claimed, both reported rather than buried. NEXT ATTEMPT: persist
   ownership beside the samples rather than in a ref, and re-cost (b) knowing
-  that (a) needs durable ownership anyway.
+  that (a) needs durable ownership anyway. BOTH ATTEMPTS ARE RECOVERABLE BY
+  SHA, recorded here because their branches were deleted and nothing else
+  references them - a deleted branch stops being findable, and git will
+  eventually collect the objects. Round 1: 5849e34 ("DBT-72: stop Clear
+  deleting the samples, and name the one rule") - ownership in a React ref,
+  refuted on reload contamination. Round 2: 4751254 ("DBT-72: put sample
+  ownership where the samples are") - ownership as an optional solution field
+  on TaggedSample, refuted because two ordinary intake writes erase it. ROUND
+  2 IS THE ONE WORTH READING FIRST. Its shape is right and its reasoning is
+  recorded above: ownership and events become the same bytes, so the reload
+  state that killed round 1 cannot exist, and solutionSwitchEffects stops
+  taking the previous selection as an input so a Clear-then-pick, a direct
+  pivot and a fresh page load are literally the same call. What it did not
+  close is the write path - the intake writes that drop the field - so round 5
+  starts by making the stamp survive every write rather than by redesigning
+  ownership again.
 
 ---
 
