@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**65 in the backlog, 1 in progress, 97 done.**
+**65 in the backlog, 0 in progress, 98 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 22 | 58 | 5 |
+| Sentinel Integration | 21 | 59 | 4 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 66.
+Open work totals 65.
 
 ## Epics and features
 
@@ -116,14 +116,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 68% (65/96)
+### `DBT` Quality and technical debt _(enabler)_ - 69% (66/96)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 35/50 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 7/14 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 8/14 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,80 +142,11 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
-  `DBT-F2` `bug` `settled`
-  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
-  spec, not inferred. handleSolutionChange guards on `prevName === null ||
-  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
-  sends X -> null, which falls through and removes EVERY tagged sample via
-  ports.samples.remove (:667-671). Picking the next solution then sends null
-  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
-  ONLY EXIT. The browse list is hidden while a solution is selected
-  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
-  so an operator who wants a different solution MUST press the button that
-  destroys their samples - and the samples are durable, surviving page reloads
-  via their store, so this is unrecoverable work rather than a cache. DBT-9
-  improved the wording to name Clearing as destructive, which is why this is
-  filed at `now` rather than higher: the operator is at least warned. But a
-  warning on the only available exit is not a design. The real question is
-  whether Clear should delete at all, or whether the samples should follow the
-  solution they were tagged for - which is what the per-solution
-  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
-  worth weighing: keep samples until the NEW solution is chosen and only then
-  discard the old ones; scope the sample store per solution the way mappings
-  already are; or add a confirm step. The first two remove the trap; the third
-  only labels it. ATTEMPT 1 REVIEWED AND HELD 2026-09-02, and the blocking
-  finding CHANGES THE DESIGN QUESTION rather than just failing the code. The
-  agent chose option (a) - keep samples until a new solution is committed to -
-  and argued (b) down well: tagged samples have their own port keyed by
-  logType ALONE (ports/tagged-sample-store.ts), the cloud adapter hashes that
-  into a flat KV key with a single flat index, so per-solution scoping means a
-  third key generation, a per-solution index, the cloud adapter, the fake
-  store and the rename path, with silent-orphan risk. That reasoning still
-  stands. BUT REVIEW FOUND OWNERSHIP LIVES ONLY IN A REACT REF, so a page
-  reload after a Clear silently hands one solutions samples to a DIFFERENT
-  solution - a cross-solution CONTAMINATION path that was impossible before
-  the change. That is the finding that matters, because it is not a bug in the
-  implementation of (a); it is evidence that (a) CANNOT BE CORRECT AS
-  SPECIFIED. Ownership has to be DURABLE to be right, and the samples
-  themselves are durable - they survive reload via their store. So the
-  ownership record must live where the samples live, which is most of what
-  option (b) actually is. The card offered (a) and (b) as alternatives; the
-  attempt shows (a) collapses into (b) the moment reload is considered. FOUR
-  MORE, all real: samples acquired WHILE BROWSING after a Clear are destroyed
-  at the next pick, which the parent commit kept and which is broader than the
-  card words (a); the load-bearing restore-effect seeding is COMPLETELY
-  UNPINNED - deleting that line passes the whole UI suite; comments state an
-  invariant the code does not hold; and the destructive act moved to the
-  browse-list pick where there is NO warning at all, which review calls the
-  mirror image of the defect [[DBT-9]] review caught. WHAT THE ATTEMPT GOT
-  RIGHT AND SHOULD BE KEPT: the pure solutionSwitchEffects function means X to
-  null to Y and a direct X to Y reach the same rule, so the two routes cannot
-  diverge - that is the property [[DBT-28]] needs. Its mutation testing was
-  also unusually honest: mutation A found one of its own DOM pins passing
-  VACUOUSLY, and mutation D found an assertion it had just added did not guard
-  what it claimed, both reported rather than buried. NEXT ATTEMPT: persist
-  ownership beside the samples rather than in a ref, and re-cost (b) knowing
-  that (a) needs durable ownership anyway. BOTH ATTEMPTS ARE RECOVERABLE BY
-  SHA, recorded here because their branches were deleted and nothing else
-  references them - a deleted branch stops being findable, and git will
-  eventually collect the objects. Round 1: 5849e34 ("DBT-72: stop Clear
-  deleting the samples, and name the one rule") - ownership in a React ref,
-  refuted on reload contamination. Round 2: 4751254 ("DBT-72: put sample
-  ownership where the samples are") - ownership as an optional solution field
-  on TaggedSample, refuted because two ordinary intake writes erase it. ROUND
-  2 IS THE ONE WORTH READING FIRST. Its shape is right and its reasoning is
-  recorded above: ownership and events become the same bytes, so the reload
-  state that killed round 1 cannot exist, and solutionSwitchEffects stops
-  taking the previous selection as an input so a Clear-then-pick, a direct
-  pivot and a fresh page load are literally the same call. What it did not
-  close is the write path - the intake writes that drop the field - so round 5
-  starts by making the stamp survive every write rather than by redesigning
-  ownership again.
+_Nothing here._
 
 ---
 
@@ -224,7 +155,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
+  `DBT-F2` `bug` `unconfirmed`
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -268,7 +199,33 @@ Next to pick up. Nothing blocks these.
   574 real Solutions folders - 24 percent unexamined, which is the
   inventory-standard failure inside the measurement used to justify the
   design. The reviewer refetched the live index and equality still has 0
-  collisions, so the DESIGN holds and only the CLAIM overreached.
+  collisions, so the DESIGN holds and only the CLAIM overreached. UNBLOCKED
+  2026-09-03 by the [[DBT-72]] decision, and the unblocking is narrower than
+  it looks - read this before assuming the first implementation can simply be
+  relanded. The block had exactly one cause: the SIEM pivot would become a
+  SECOND route from solution X to solution Y that permanently deletes every
+  acquired sample, with no warning and no confirmation. That was refused as
+  widening [[DBT-72]]'s trap. The product owner has now said the deletion does
+  not matter, so widening it is no longer an objection and the dependency is
+  removed. TWO REVIEW FINDINGS FROM THAT ATTEMPT STILL STAND and are NOT
+  covered by the decision, because neither is about sample deletion: (a)
+  review found the pivot resurrects the 2026-07-08 Clear-selection regression
+  through a new door. Re-establish what that regression was and whether the
+  new route still opens it - the owner accepted losing SAMPLES, not the return
+  of a separate defect. (b) the attempt shipped a code comment and an
+  operator-visible sentence that both asserted the opposite of what the code
+  did. That is the [[DBT-9]] failure repeated and is blocking on its own
+  terms. ALSO NOT INHERITED: the attempt justified its design partly on
+  `solutionSwitchEffects` making both switch routes reach one rule. That
+  function was DBT-72's, and DBT-72 is closed without building it. If this
+  card still wants the single-rule property it has to argue for it here. One
+  measurement is settled and can be reused: the 0-collisions claim originally
+  covered 436 of 574 Solutions folders, and a reviewer refetched the live
+  index and confirmed equality still has 0 collisions across all of them - so
+  the DESIGN holds and only the original CLAIM overreached. Note defect (3) on
+  this card - the chip advertising an unreachable URL - was fixed by
+  [[DBT-75]] and is no longer part of this work. Its line citations here are
+  stale: [[DBT-96]].
 
 - **DBT-80** parseCef's extension parser truncates keys and swallows the pairs that follow
   `DBT-F1` `bug` `settled`
@@ -1250,7 +1207,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (97)
+## Done (98)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3946,6 +3903,108 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [ ] `narrow` Pin only the files that get read as bytes - A .gitattributes covering *.mjs (29 files) and the generated asset packages/core/src/assets/dcr-template-schemas.json. These are the files that scripts execute or byte-compare, which is where both defects landed. Roughly a 30-file renormalisation instead of 1,473, so blame and open branches survive. Leaves the other 1,440-odd files on per-clone config, so a third instance elsewhere is still possible.
     [x] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
     [ ] `leave-it` Leave it, keep fixing instances - Both known instances are fixed and pinned. The argument for waiting is that a 1,473-file diff is a real cost against a hazard that has surfaced twice in one unusually busy day. The argument against is that both instances reached main and CI could not see either, so the detection story is 'somebody happens to run the suite on Windows'.
+
+- **DBT-72** Clearing a solution silently deletes its samples, and Clear is the only way out
+  `DBT-F2` `bug` `settled` `verified: none`
+  FOUND by adversarial review of [[DBT-9]] and DEMONSTRATED with a throwaway
+  spec, not inferred. handleSolutionChange guards on `prevName === null ||
+  prevName === nextName` (integrate-screen.tsx:658). Clearing a selection
+  sends X -> null, which falls through and removes EVERY tagged sample via
+  ports.samples.remove (:667-671). Picking the next solution then sends null
+  -> Y, which returns early and removes nothing. THE TRAP IS THAT CLEAR IS THE
+  ONLY EXIT. The browse list is hidden while a solution is selected
+  (solution-browser.tsx:447-449, 'clear it before choosing another solution'),
+  so an operator who wants a different solution MUST press the button that
+  destroys their samples - and the samples are durable, surviving page reloads
+  via their store, so this is unrecoverable work rather than a cache. DBT-9
+  improved the wording to name Clearing as destructive, which is why this is
+  filed at `now` rather than higher: the operator is at least warned. But a
+  warning on the only available exit is not a design. The real question is
+  whether Clear should delete at all, or whether the samples should follow the
+  solution they were tagged for - which is what the per-solution
+  learned-mappings cache already does for mappings. NOT DECIDED HERE. Options
+  worth weighing: keep samples until the NEW solution is chosen and only then
+  discard the old ones; scope the sample store per solution the way mappings
+  already are; or add a confirm step. The first two remove the trap; the third
+  only labels it. ATTEMPT 1 REVIEWED AND HELD 2026-09-02, and the blocking
+  finding CHANGES THE DESIGN QUESTION rather than just failing the code. The
+  agent chose option (a) - keep samples until a new solution is committed to -
+  and argued (b) down well: tagged samples have their own port keyed by
+  logType ALONE (ports/tagged-sample-store.ts), the cloud adapter hashes that
+  into a flat KV key with a single flat index, so per-solution scoping means a
+  third key generation, a per-solution index, the cloud adapter, the fake
+  store and the rename path, with silent-orphan risk. That reasoning still
+  stands. BUT REVIEW FOUND OWNERSHIP LIVES ONLY IN A REACT REF, so a page
+  reload after a Clear silently hands one solutions samples to a DIFFERENT
+  solution - a cross-solution CONTAMINATION path that was impossible before
+  the change. That is the finding that matters, because it is not a bug in the
+  implementation of (a); it is evidence that (a) CANNOT BE CORRECT AS
+  SPECIFIED. Ownership has to be DURABLE to be right, and the samples
+  themselves are durable - they survive reload via their store. So the
+  ownership record must live where the samples live, which is most of what
+  option (b) actually is. The card offered (a) and (b) as alternatives; the
+  attempt shows (a) collapses into (b) the moment reload is considered. FOUR
+  MORE, all real: samples acquired WHILE BROWSING after a Clear are destroyed
+  at the next pick, which the parent commit kept and which is broader than the
+  card words (a); the load-bearing restore-effect seeding is COMPLETELY
+  UNPINNED - deleting that line passes the whole UI suite; comments state an
+  invariant the code does not hold; and the destructive act moved to the
+  browse-list pick where there is NO warning at all, which review calls the
+  mirror image of the defect [[DBT-9]] review caught. WHAT THE ATTEMPT GOT
+  RIGHT AND SHOULD BE KEPT: the pure solutionSwitchEffects function means X to
+  null to Y and a direct X to Y reach the same rule, so the two routes cannot
+  diverge - that is the property [[DBT-28]] needs. Its mutation testing was
+  also unusually honest: mutation A found one of its own DOM pins passing
+  VACUOUSLY, and mutation D found an assertion it had just added did not guard
+  what it claimed, both reported rather than buried. NEXT ATTEMPT: persist
+  ownership beside the samples rather than in a ref, and re-cost (b) knowing
+  that (a) needs durable ownership anyway. BOTH ATTEMPTS ARE RECOVERABLE BY
+  SHA, recorded here because their branches were deleted and nothing else
+  references them - a deleted branch stops being findable, and git will
+  eventually collect the objects. Round 1: 5849e34 ("DBT-72: stop Clear
+  deleting the samples, and name the one rule") - ownership in a React ref,
+  refuted on reload contamination. Round 2: 4751254 ("DBT-72: put sample
+  ownership where the samples are") - ownership as an optional solution field
+  on TaggedSample, refuted because two ordinary intake writes erase it. ROUND
+  2 IS THE ONE WORTH READING FIRST. Its shape is right and its reasoning is
+  recorded above: ownership and events become the same bytes, so the reload
+  state that killed round 1 cannot exist, and solutionSwitchEffects stops
+  taking the previous selection as an input so a Clear-then-pick, a direct
+  pivot and a fresh page load are literally the same call. What it did not
+  close is the write path - the intake writes that drop the field - so round 5
+  starts by making the stamp survive every write rather than by redesigning
+  ownership again. CLOSED 2026-09-03 BY PRODUCT DECISION, NOT BY A FIX - and
+  the distinction matters, because nothing in the code changed and a later
+  reader must not mistake this for repaired behaviour. Asked directly, the
+  product owner said they do not care if the samples are silently deleted when
+  a solution is cleared. So the behaviour STAYS: Clear removes every tagged
+  sample, the browse list is still hidden while a solution is selected, and
+  Clear is still the only exit. THAT ANSWER RETIRES THE CARD RATHER THAN
+  ANSWERING ITS DESIGN QUESTION. Two implementation rounds were refuted and a
+  three-way design panel returned readyToBuild: false, all of it spent on
+  making sample ownership durable enough to survive a solution switch. The
+  premise under every one of those attempts was that the samples are expensive
+  to lose. The owner says they are not - they are re-acquirable, and
+  re-acquiring them is cheaper than the third key generation, per-solution
+  index, cloud adapter, fake store and rename-path changes that option (b)
+  costs. Two refuted rounds bought exactly one thing: a well-measured price
+  for a problem the owner does not have. WHAT IS KEPT. [[DBT-9]]'s copy, which
+  names Clearing as the destructive act, stays and is now doing the whole job:
+  the deletion is deliberate, so warning about it is the entire mitigation
+  rather than a stopgap for a fix that never came. Nothing is silent to an
+  operator who reads the button. WHAT IS DISCARDED. The
+  `solutionSwitchEffects` pure function from round 2 - the one property worth
+  keeping, which made X to null to Y and a direct X to Y reach the same rule -
+  is not being built for its own sake. If [[DBT-28]] still wants that property
+  it must justify it on its own terms; it can no longer inherit the
+  justification from here. BOTH ROUNDS REMAIN RECOVERABLE BY SHA while git
+  retains the objects - round 1 `5849e34`, round 2 `4751254` - and those SHAs
+  are the only record, since the branches were deleted. WHAT WOULD REOPEN
+  THIS, stated so the decision is falsifiable rather than permanent: an
+  operator losing work they cannot cheaply re-acquire. The premise is that
+  samples are cheap to re-fetch. If sample acquisition ever becomes slow,
+  rate-limited, or manual - an uploaded file with no source to re-read is
+  already that case - the premise fails and the trap is back.
 
 - **DBT-73** Nothing holds the vendored spec facts the docs cite
   `DBT-F1` `enabler` `settled` `verified: pins`

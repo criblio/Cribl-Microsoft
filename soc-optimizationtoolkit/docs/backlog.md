@@ -1292,6 +1292,64 @@ not edit it by hand.
 
 ## 11. Explicitly not doing
 
+### Clearing a solution deletes its samples, and that is accepted - 2026-09-03
+
+`DBT-72`. Clearing a solution removes every tagged sample for it, and because the
+browse list is hidden while a solution is selected, **Clear is the only way to
+reach another solution**. So every solution switch destroys the samples acquired
+for the previous one.
+
+Asked directly, the product owner said they do not care if the samples are
+silently deleted when a solution is cleared. **The behaviour stays.** Nothing in
+the code changed; this is a decision, not a fix, and a later reader should not
+mistake the closed card for repaired behaviour.
+
+**Why this is worth writing down rather than just closing.** Two implementation
+rounds were built and refuted, and then a three-way design panel returned
+`readyToBuild: false`. All of that work went into making sample ownership durable
+enough to survive a switch:
+
+- **Round 1** (`5849e34`) put ownership in a React ref. Refuted: a page reload
+  after a Clear handed one solution's samples to a *different* solution - a
+  cross-solution contamination path that did not exist before the change.
+- **Round 2** (`4751254`) put ownership on `TaggedSample`, where the samples
+  already are. The right shape, and refuted for a narrower reason: two ordinary
+  intake writes erase the field.
+- The **design panel** then picked per-solution store scoping as the only
+  approach closing all four known failure modes, and flagged an unmeasured
+  upgrade path - under scoping, every existing operator's samples go
+  unattributed on first read.
+
+Every one of those attempts rests on a premise nobody had checked with the owner:
+*that the samples are expensive to lose*. They are not. They are re-acquirable,
+and re-acquiring them is cheaper than the third key generation, per-solution
+index, cloud adapter, fake store and rename-path changes that scoping costs.
+
+**The lesson is the ordering, not the outcome.** Two refuted rounds bought a
+well-measured price for a problem the owner does not have. The question "how much
+is this data worth to you" was answerable in one sentence at any point and was
+never asked. Design panels and adversarial review are good at *how* and cannot
+tell you *whether*.
+
+**What is kept.** `DBT-9`'s copy naming Clearing as the destructive act stays,
+and is now doing the whole job rather than standing in for a fix that never came.
+The deletion is deliberate, so warning about it is the entire mitigation.
+
+**What would reopen this** - stated so the decision is falsifiable rather than
+permanent: an operator losing work they cannot cheaply re-acquire. If sample
+acquisition ever becomes slow, rate-limited, or manual, the premise fails and the
+trap is back. **An uploaded file with no source to re-read is already that case**,
+and is the most likely route to reopening it.
+
+**Downstream.** `DBT-28` was blocked solely because the SIEM pivot would add a
+second, unwarned door onto this trap. That objection is gone and the dependency
+is removed - but two review findings from its first attempt are untouched by this
+decision, because neither is about sample deletion: it resurrected the 2026-07-08
+Clear-selection regression through a new door, and it shipped a comment and an
+operator-visible sentence that both asserted the opposite of what the code did.
+It also can no longer inherit `solutionSwitchEffects` as a justification, since
+DBT-72 closes without building it.
+
 ### Two refactor branches deleted unmerged - 2026-08-31
 
 `refactor/channel-manifest` and `refactor/pack-builder-decomp` were deleted
