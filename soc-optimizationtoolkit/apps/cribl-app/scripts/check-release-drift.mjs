@@ -8,19 +8,43 @@
 // instead - so this is it. A hand-maintained version claim decays exactly as
 // fast as the automated one it warns about, and nothing tells anyone.
 //
-// FOUR ERRORS and ONE WARNING, and the split is deliberate. The errors are all
+// FIVE ERRORS and ONE WARNING, and the split is deliberate. The errors are all
 // facts that are free to keep true at packaging time and that read as confident
 // answers when they are wrong - a doc naming the wrong version is worse than a
 // doc naming none. The warning is the one thing that CANNOT be an error: the app
 // releases in batches, so source landing ahead of the last package is the normal
 // state of a feature branch, not a defect.
 //
+// The fifth error - package-lock.json - was added after the lock was found
+// recording 1.11.5 while package.json said 1.12.3, and the argument against it
+// was taken seriously first. The lock is GENERATED, so a claim on it risks
+// failing whenever someone forgets npm install, which is how a check gets
+// bypassed rather than obeyed. Three measurements settled it the other way.
+// (1) That field mirrors package.json's version and NOTHING else, and
+// package.json's version is written in exactly one place - package.mjs, which
+// bumps it and never runs npm. So the lock can only drift at the release commit;
+// ordinary dependency work already forces an npm install. The false-positive
+// surface is one moment, not every day. (2) It does not self-correct: the lock
+// sat at 1.11.5 across FOURTEEN subsequent releases (1.11.6 through 1.12.3)
+// before an agent noticed it by accident. (3) The damage is exactly the damage
+// this check exists for and no more - npm ci accepts the mismatch (measured on
+// npm 11.4.2: exit 0, lock untouched) and the lock never ships inside the tgz,
+// so nothing breaks. What is wrong is a tracked file stating a version that is
+// not the version, which is the definition of the thing above.
+//
+// The honest cost, stated rather than buried: this makes THREE of the five
+// claims manual, where two were before. The difference is that the other two
+// manual ones need prose written and this one needs one deterministic command,
+// and the right end state is package.mjs regenerating the lock as it already
+// writes package.json and release/ - at which point this claim guards an
+// automated fact instead of a chore.
+//
 // The pure half takes facts and returns findings; main() gathers the facts. That
 // split is what lets the rules be pinned without a repo, a git history or a tgz.
 
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -29,7 +53,12 @@ const toolkitDir = join(appDir, '..', '..');
 
 const TGZ_VERSION = /^soc-optimizationtoolkit-(\d+\.\d+\.\d+)\.tgz$/;
 
-// backlog.md item 8 states the current release as "**1.12.0 IS CURRENT (date).**".
+// backlog.md item 8 states the current release as "**X.Y.Z IS CURRENT (date).**".
+// Placeholders, not the version of the day: this comment named 1.12.0 while the
+// backlog said 1.12.3, so the file that exists BECAUSE version literals in prose
+// decay was carrying one of its own. No code reads this comment, so nothing was
+// ever going to catch it; a shape has nothing to go stale.
+//
 // Prose rather than a machine field on purpose - it is read by people far more
 // often than by this script - so the script reads the prose. Keep the shape if
 // you reword around it.
@@ -49,6 +78,7 @@ const SOURCE_PATHS = [
 /**
  * @param {{
  *   manifestVersion: string,
+ *   lockVersion: string | null,
  *   releaseTarballs: string[],
  *   releaseNotes: string,
  *   backlog: string,
@@ -98,6 +128,34 @@ export function evaluateReleaseDrift(facts) {
   if (facts.manifestVersion !== packagedVersion) {
     errors.push(
       `package.json says ${facts.manifestVersion} but the packaged tarball is ${packagedVersion}. Do not hand-bump: scripts/package.mjs IS the bump.`,
+    );
+  }
+
+  // Held to the MANIFEST, not to the tarball, unlike every other claim here.
+  // The lock is a claim ABOUT package.json - npm copies that version field into
+  // it verbatim - and package.json is already held to the tarball one rule up,
+  // so this completes a chain rather than opening a second front. Comparing the
+  // lock to the tarball instead would report a hand-bump TWICE, once as the
+  // bump and once as a lock that faithfully recorded it; the extra-tarball rule
+  // above avoids the same cascade for the same reason.
+  //
+  // "npm install --package-lock-only" rather than "npm install" because it is
+  // the minimal command that fixes this and only this: it resolves the lock
+  // from the manifests without touching node_modules, and on the run that fixed
+  // the 1.11.5 drift it changed one line. The bare command is not WRONG, just
+  // wider - measured 2026-09-03 on npm 11.4.2 / node 24.4.1, seeding a sandbox
+  // with the real manifests and lock at manifest 1.12.4 / lock 1.12.3: both
+  // commands wrote a BYTE-IDENTICAL lock, same sha256, the same ONE changed
+  // line - this workspace's version field, one deletion and one insertion. The
+  // difference is node_modules, which the bare form resolves and installs and
+  // this form never creates.
+  if (facts.lockVersion === null) {
+    errors.push(
+      'package-lock.json states no version for the app workspace. Run "npm install --package-lock-only" to regenerate it; if the workspace moved, update this script.',
+    );
+  } else if (facts.lockVersion !== facts.manifestVersion) {
+    errors.push(
+      `package-lock.json records the app at ${facts.lockVersion} but package.json says ${facts.manifestVersion}. The lock is GENERATED - run "npm install --package-lock-only" rather than editing the version by hand.`,
     );
   }
 
@@ -157,8 +215,9 @@ function hasReleaseNotesSection(notes, version) {
 }
 
 async function gatherFacts() {
-  const [manifest, releaseEntries, releaseNotes, backlog] = await Promise.all([
+  const [manifest, lock, releaseEntries, releaseNotes, backlog] = await Promise.all([
     readFile(join(appDir, 'package.json'), 'utf8'),
+    readFile(join(toolkitDir, 'package-lock.json'), 'utf8').catch(() => ''),
     readdir(join(appDir, 'release')).catch(() => []),
     readFile(join(toolkitDir, 'docs', 'release-notes.md'), 'utf8'),
     readFile(join(toolkitDir, 'docs', 'backlog.md'), 'utf8'),
@@ -166,11 +225,34 @@ async function gatherFacts() {
 
   return {
     manifestVersion: JSON.parse(manifest).version,
+    lockVersion: readLockVersion(lock),
     releaseTarballs: releaseEntries.filter((name) => name.endsWith('.tgz')),
     releaseNotes,
     backlog,
     sourceCommitsSinceRelease: countSourceCommitsSinceRelease(),
   };
+}
+
+/**
+ * The lock keys its workspace entries by PATH relative to the lock, in posix
+ * form, so the key is derived from appDir rather than written out - a workspace
+ * move then keeps working instead of reporting the lock as versionless. The
+ * separator swap is not cosmetic: node's relative() yields "apps\\cribl-app" on
+ * Windows, which matches no key in any lock file, and the check would fail on
+ * every Windows run with a message pointing at npm.
+ *
+ * A parse failure returns null rather than throwing. This lock lives in a repo
+ * where several agents share one tree, so a half-written or conflict-marked
+ * lock is a state that happens; "the lock states no version, regenerate it" is
+ * a better report of that than a stack trace out of the version checker.
+ */
+function readLockVersion(lockJson) {
+  const workspaceKey = relative(toolkitDir, appDir).split(sep).join('/');
+  try {
+    return JSON.parse(lockJson).packages?.[workspaceKey]?.version ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -238,7 +320,7 @@ async function main() {
       : `${facts.sourceCommitsSinceRelease} source commit(s) since it was packaged`;
 
   console.log(
-    `Release ${packagedVersion} is consistent across package.json, release/, release-notes.md and backlog.md (${unreleased}).`,
+    `Release ${packagedVersion} is consistent across package.json, package-lock.json, release/, release-notes.md and backlog.md (${unreleased}).`,
   );
 }
 

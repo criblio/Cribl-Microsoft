@@ -3074,10 +3074,6 @@ button.journey-step-main:hover .journey-step-label {
   gap: 8px;
   padding: 0 12px 12px;
 }
-.solution-browser-deeplink {
-  font-family: var(--font-mono);
-  word-break: break-all;
-}
 
 /* ---------------------------------------------------------------------------
  * Repositories / PAT settings (porting-plan Unit 14): the reachability status

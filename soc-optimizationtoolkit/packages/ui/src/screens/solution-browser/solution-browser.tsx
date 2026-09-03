@@ -10,8 +10,12 @@
  *   - SELECTING a solution triggers an on-demand, per-solution fetch (a spinner
  *     on that row, never a bulk-mirror progress bar): its connector files are
  *     listed and decoded to the log types it carries, cached by solution+commit.
- *   - The deep-link contract `#/?solution=<name>` is READ on mount to preselect
- *     (Unit 26 relies on it) and shown as a shareable link for the selection.
+ *   - The `#/?solution=<name>` hash is an INTERNAL handoff, not a shareable
+ *     link: written on select, read on this route's FIRST mount to preselect
+ *     (keep-alive means there is no second one - DBT-28 defect (2)), and
+ *     written by the SIEM-migration pivot (Unit 26). It is NOT advertised on
+ *     screen - the DBT-75 note on the selected card records why there is no
+ *     chip.
  *
  * All decision logic is the pure browser-state module; this component only
  * renders and drives IO through the content ports in PortsContext (ZERO direct
@@ -505,24 +509,115 @@ export function SolutionBrowser({
               </span>
             </div>
           )}
+          {/* DBT-75. THERE IS NO DEEP-LINK CHIP HERE, and the absence is the
+              fix. Until 2026-09-02 this block also rendered
+              `Deep link: #/?solution=<name>` as a copyable code chip beside
+              the connector counts.
+              WHY IT WAS ONCE TRUE. The chip landed 2026-07-05 with the
+              browser itself (Unit 14), when ADR 0001 shipped a SECOND shell -
+              apps/local-app, a Node host on localhost - whose page in the
+              address bar WAS this app's own document, so appending the
+              fragment to it really did preselect a solution. ADR 0002
+              (2026-08-17) deleted that shell; its own note puts the removal
+              at "31 files and four comments", and this chip was a fifth
+              nobody found. The claim outlived the only shell it held on.
+              WHY IT CANNOT BE CORRECTED RATHER THAN REMOVED. The advertised
+              value is a bare FRAGMENT - no origin, no path - so it needs a
+              base, and on the shell that remains there is none to give it:
+              the app iframes on a SANDBOXED origin whose server answers EVERY
+              path with the app (see criblUiBase in apps/cribl-app/src/App.tsx
+              and the 2026-07-29 user report it cites), while the operator's
+              address bar shows the EMBEDDER, so a fragment typed there lands
+              on the leader's document. There is no string to substitute.
+              THE DEFECT IS THE MISSING ADDRESS, NOT A BROKEN CONSUMER, and
+              the first draft of this note got that backwards. It argued the
+              fragment could not be read because "AppFrame mounts a route on
+              FIRST VISIT only" - but first-visit mounting is exactly what
+              MAKES the read fire. If the fragment does reach this document it
+              is consumed normally: the operator navigates to Sentinel
+              Integration, this component mounts for the first time, and the
+              initializer above runs parseSolutionDeepLink on the hash, which
+              is still there because nothing cleared it in between - the only
+              writers in this package are select() and clearSelection() above
+              and the SIEM pivot (siem-migration-screen.tsx:225), all
+              user-driven and all in subtrees unmounted until visited. Pinned:
+              "preselects the solution named in the hash present at first
+              render" in solution-browser.dom.test.tsx. The app does open on
+              Dataflow first - App.tsx hardcodes initialRouteId="architecture"
+              and neither it nor AppFrame reads the hash for routing - so the
+              preselect waits for that navigation, but that is a DETOUR and
+              not a dead end. THE DETOUR IS WALKABLE ONCE, AND THE QUALIFIER
+              IS THE WHOLE POINT: it is the FIRST entry into Sentinel
+              Integration that mounts this component and runs the initializer.
+              AppFrame keeps a route mounted after its first visit - visitedRef
+              accumulates visited ids and `mounted` is filtered by it
+              (app-frame.tsx:153-162) - so a hash written later reaches a
+              component that never mounts again, and is never read. That is
+              DBT-28 defect (2) exactly: "The hash is read on MOUNT only ...
+              which breaks the app's own SIEM-migration pivot the second time
+              it is used". So the SIEM-migration pivot rides this same read,
+              and it arrives only while Sentinel Integration is still
+              UNMOUNTED - usually the first pivot, because the pivot is itself
+              what mounts the route. The condition is that first MOUNT and not
+              the pivot's use count, so DBT-28's "the second time" names the
+              common case rather than the mechanism: a pivot made after the
+              operator has already opened Sentinel Integration misses on its
+              FIRST use too. None of this says the pivot works in general. The
+              unqualified version of this sentence - "the same path the
+              SIEM-migration pivot already takes successfully" - stood here
+              until 2026-09-03 and was false. What the detour argument needs is
+              narrower and survives: a fragment that reaches this document
+              before the route's first mount IS consumed. So what was false
+              about the chip is entirely the paragraph above - there is no
+              pasteable ADDRESS to put the fragment on, not an inability to
+              consume one it is handed.
+              WHETHER THE FRAGMENT SURVIVES THE IFRAME IS UNSETTLED, and the
+              record points both ways. Do NOT cite the 2026-08-28 live attempt
+              for non-arrival, which an earlier draft here did: DBT-28
+              investigated non-arrival as its candidate (1) and records that it
+              "found BOTH recorded candidates wrong", attributing the unchanged
+              selection to a measured RESOLVER defect instead
+              (resolveSelectedSolution matches exact and case-insensitive-exact
+              only, so a punctuation variant resolves to nothing and is
+              consumed silently). Pointing the other way, the restoreName note
+              at the top of this file records live review 2026-08-03 finding
+              that "the Cribl app iframe does not preserve" the hash - which is
+              why the HOST restores the selection from the content cache at
+              all. The two have not been reconciled and neither is settled.
+              Removing the chip needs neither answer: with no address to paste,
+              advertising one is a FALSE CLAIM rather than an unfinished
+              feature.
+              THE MECHANISM IS UNTOUCHED - AND WAS ALREADY HALF BROKEN.
+              buildSolutionDeepLink still writes the hash in select() above,
+              the mount read still preselects on the FIRST mount of this route,
+              and the SIEM-migration pivot still hands off through it on the
+              entry that first mounts this route. It did not hand off once the
+              route was already mounted before this change either, for the
+              keep-alive reason above (DBT-28 defect (2)); removing the chip
+              neither caused that nor fixes it. Only the claim that an operator
+              can copy it somewhere is gone. BOTH
+              halves are pinned in solution-browser.dom.test.tsx now - the
+              write and the read - because deleting the chip is exactly the
+              kind of cleanup that would take the read with it, and until
+              2026-09-02 the read could be disabled outright with the whole
+              packages/ui suite green (80 files / 1343 tests). Re-measured
+              2026-09-03: with the read pin present the same inversion fails
+              exactly one test of 1344, and it is that pin.
+              WHETHER A SHAREABLE DEEP LINK IS WANTED IS STILL OPEN. Answering
+              it needs a base URL this app does not own, so it is a Cribl
+              platform question and not a routing one. Do not re-add a chip to
+              answer it - the pin in solution-browser.dom.test.tsx fails if
+              this card starts printing an address again. */}
           {detail.phase === "loaded" && (
-            <>
-              <span className="field-hint">
-                {detail.detail.connectorCount} connector file
-                {detail.detail.connectorCount === 1 ? "" : "s"};{" "}
-                {detail.detail.logTypes.length} log type
-                {detail.detail.logTypes.length === 1 ? "" : "s"} detected
-                {detail.detail.logTypes.length > 0
-                  ? `: ${detail.detail.logTypes.join(", ")}`
-                  : "."}
-              </span>
-              <span className="field-hint solution-browser-deeplink">
-                Deep link:{" "}
-                <code className="code-chip">
-                  {buildSolutionDeepLink(selected.name)}
-                </code>
-              </span>
-            </>
+            <span className="field-hint">
+              {detail.detail.connectorCount} connector file
+              {detail.detail.connectorCount === 1 ? "" : "s"};{" "}
+              {detail.detail.logTypes.length} log type
+              {detail.detail.logTypes.length === 1 ? "" : "s"} detected
+              {detail.detail.logTypes.length > 0
+                ? `: ${detail.detail.logTypes.join(", ")}`
+                : "."}
+            </span>
           )}
           <div className="panel-controls">
             <button className="run-button" onClick={clearSelection}>
