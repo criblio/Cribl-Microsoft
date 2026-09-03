@@ -39,8 +39,8 @@ export interface PositionalRecord {
  */
 export const VPC_FLOW_V2_FIELDS: readonly string[] = Object.freeze([
   "version",
-  "account-id",
-  "interface-id",
+  "account_id",
+  "interface_id",
   "srcaddr",
   "dstaddr",
   "srcport",
@@ -51,8 +51,33 @@ export const VPC_FLOW_V2_FIELDS: readonly string[] = Object.freeze([
   "start",
   "end",
   "action",
-  "log-status",
+  "log_status",
 ]);
+
+/**
+ * AWS's own spelling, kept so the mapping table can show an operator the name
+ * they will recognise from the AWS documentation.
+ *
+ * WHY THE TWO DIFFER, and it is not cosmetic. AWS writes `account-id`,
+ * `interface-id` and `log-status` with HYPHENS. Cribl parses a rename's
+ * `currentName` as a PROPERTY ACCESSOR PATH, and `account-id` is not one - it
+ * reads as `account` minus `id`. A pipeline built with the hyphenated names
+ * loads and then fails at runtime with:
+ *
+ *   Failed to build property accessor, path="account-id",
+ *   err=invalid property accessor path="account-id"
+ *
+ * which is what a user hit. So the parsed field names use `_`, which is a valid
+ * accessor and still obviously the same field, and the AWS spelling lives here
+ * for display only. Renaming to the destination column (AccountId) is
+ * unaffected either way.
+ */
+export const VPC_FLOW_V2_AWS_NAMES: Readonly<Record<string, string>> =
+  Object.freeze({
+    account_id: "account-id",
+    interface_id: "interface-id",
+    log_status: "log-status",
+  });
 
 /**
  * VPC Flow's `log-status` vocabulary - a closed set, and the strongest single
