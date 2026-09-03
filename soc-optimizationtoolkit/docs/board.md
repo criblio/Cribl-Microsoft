@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**65 in the backlog, 0 in progress, 98 done.**
+**60 in the backlog, 5 in progress, 98 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 21 | 59 | 4 |
+| Sentinel Integration | 21 | 59 | 5 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -142,17 +142,9 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (5)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-_Nothing here._
-
----
-
-## Backlog - now (4)
-
-Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
@@ -264,6 +256,22 @@ Next to pick up. Nothing blocks these.
   that does not happen. See also [[GEN-5]], which is the bigger hole in the
   same rule.
 
+- **GEN-6** A positional sample generates a pipeline whose extract step JSON-parses the line
+  `GEN-F1` `bug` `settled`
+  FOUND during [[DBT-78]] review. [[DBT-77]] added positional parsing (AWS VPC
+  Flow v2 and the field1..fieldN fallback), but pipeline-conf.ts has no
+  positional branch, so a positional sample falls to the trailing `else` and
+  emits an extract step that runs Cribl's JSON serde over `_raw`. A
+  whitespace-positional line is not JSON, so the step extracts nothing. The
+  app therefore PARSES the sample correctly, shows the operator named columns,
+  does a correct gap analysis - and then generates a pack that cannot
+  reproduce any of it. The shape of the fix is already established and is why
+  this is small: for positional the pipeline splits `_raw` itself and assigns
+  `name: account_id / value: __csvParts[1]`, which is exactly the case where
+  WE mint the runtime name, so the parser's chosen names and the pipeline's
+  names are the same by construction. That reasoning is written up in
+  [[DBT-78]]'s closing note and should be read first.
+
 - **DBT-90** The root package.json never forwarded check-release, so the documented command exits 1
   `DBT-F1` `bug` `settled`
   FOUND while closing [[DBT-76]]. The docs tell you to run check-release
@@ -279,7 +287,15 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (24)
+## Backlog - now (0)
+
+Next to pick up. Nothing blocks these.
+
+_Nothing here._
+
+---
+
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -613,28 +629,6 @@ Settled and unblocked, sequenced behind now.
   for real; parseKv's regex could not be replaced by the fallback's
   whitespace-split-plus-indexOf loop because splitting on whitespace cuts
   `msg=\"login ok\"` in half, which is pinned.
-
-- **GEN-6** A positional sample generates a pipeline whose extract step JSON-parses the line
-  `GEN-F1` `bug` `settled`
-  Not now because: Nobody is losing data: the positional path reaches a
-  pipeline that extracts nothing, so the failure is visible as an empty result
-  rather than as a wrong one. It is ranked here and not lower because
-  [[DBT-77]] shipped positional PARSING to a user who asked for it, and the
-  generated pack is the next thing that user will open - so the gap between
-  what the app parses and what it generates is short-lived by design.
-  FOUND during [[DBT-78]] review. [[DBT-77]] added positional parsing (AWS VPC
-  Flow v2 and the field1..fieldN fallback), but pipeline-conf.ts has no
-  positional branch, so a positional sample falls to the trailing `else` and
-  emits an extract step that runs Cribl's JSON serde over `_raw`. A
-  whitespace-positional line is not JSON, so the step extracts nothing. The
-  app therefore PARSES the sample correctly, shows the operator named columns,
-  does a correct gap analysis - and then generates a pack that cannot
-  reproduce any of it. The shape of the fix is already established and is why
-  this is small: for positional the pipeline splits `_raw` itself and assigns
-  `name: account_id / value: __csvParts[1]`, which is exactly the case where
-  WE mint the runtime name, so the parser's chosen names and the pipeline's
-  names are the same by construction. That reasoning is written up in
-  [[DBT-78]]'s closing note and should be read first.
 
 - **DBT-82** package.mjs should regenerate the lock it invalidates, retiring a manual release step
   `DBT-F1` `enabler` `settled`
