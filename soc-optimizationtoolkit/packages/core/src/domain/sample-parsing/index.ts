@@ -159,3 +159,8 @@ export {
   positionalNote,
   splitPositional,
 } from "./positional";
+
+// DBT-78: the ONE test for "can Cribl address a field by this name". Exported
+// because pipeline-generation's checkCriblYaml enforces the same rule, and two
+// copies of one rule drift - see the header of accessor-names.ts.
+export { isCriblAccessorSafe, unaddressableFieldNote } from "./accessor-names";

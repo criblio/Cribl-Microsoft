@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**47 in the backlog, 6 in progress, 92 done.**
+**65 in the backlog, 1 in progress, 97 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 9 | 53 | 4 |
+| Sentinel Integration | 22 | 58 | 5 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 53.
+Open work totals 66.
 
 ## Epics and features
 
@@ -76,13 +76,13 @@ Measured gaps where the app reports a confident wrong answer
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 100% (3/3)
+### `GEN` Pipeline and pack generation - 50% (3/6)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/3 | GEN-1, GEN-2, GEN-3 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/6 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6 |
 
 ### `PK` Pack maintenance parity - 25% (1/4)
 
@@ -116,14 +116,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 74% (60/81)
+### `DBT` Quality and technical debt _(enabler)_ - 68% (65/96)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 31/38 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 6/11 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 35/50 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 7/14 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,7 +142,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (6)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -217,134 +217,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   starts by making the stamp survive every write rather than by redesigning
   ownership again.
 
-- **DBT-73** Nothing holds the vendored spec facts the docs cite
-  `DBT-F1` `enabler` `settled`
-  FOUND by review of [[DBT-7]], and demonstrated rather than argued: the
-  reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node'
-  to 'Worker Process' - the exact silent invalidation a re-vendor would cause
-  - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs
-  holds only that the file exists, and a re-vendor cannot delete the file, so
-  its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing
-  cribl-openapi.json. That citation is now load-bearing prose with nothing
-  behind it, which is the shape [[DBT-12]] already names and [[DBT-67]]
-  already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO:
-  entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source
-  file and fails with 'Either restore the file, or delete these provenance
-  pins AND the claim together'; five more test files use readFileSync the same
-  way. Scope: a provenance pin asserting
-  InputDatagen.samples.items.properties.eventsPerSec's title against the
-  vendored asset, and a sweep for other doc claims citing that spec which are
-  equally unheld. Do NOT pin the whole spec - pin the facts documents actually
-  lean on, or this becomes a second copy of the spec that drifts from the
-  first.
-
-- **DBT-75** The solution deep-link chip advertises a URL the shipped shell cannot reach
-  `DBT-F2` `bug` `settled`
-  Not now because: Split out of [[DBT-28]] on 2026-09-01 by decision, and held
-  at next because it is a DIFFERENT user story from the other two defects in
-  that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a
-  mount-only hash read that together make the pivot inert after first use.
-  This one is a copyable link that leads somewhere the shell does not serve.
-  Nothing is silently wrong on screen: the chip renders and the operator can
-  read it, so the failure is discoverable rather than invisible, which is what
-  separates it from the pivot defect. Keeping them in one card would also have
-  put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at
-  the time.
-  Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524
-  renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the
-  shipped shell does not route it. So an operator who copies the advertised
-  link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct
-  the advertised URL to whatever the shell actually serves, to register the
-  route, or to stop advertising a link at all. Which one depends on whether a
-  shareable deep link is wanted at all, which nobody has decided. Establish
-  that before writing code.
-
-- **DBT-76** The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3
-  `DBT-F1` `bug` `settled`
-  Not now because: Held at next because nothing is currently WRONG on screen
-  or in a build: the lock entry for a workspace package is bookkeeping, npm
-  resolves the workspace from disk, and all eight gates pass at this drift
-  including check-release, which reports 1.12.3 consistent across
-  package.json, release/, release-notes.md and backlog.md. What it costs is
-  that a fresh npm install silently rewrites the lock - which is how it was
-  found - so the next person to run one gets an unrelated file in their diff
-  and has to decide whether it is theirs.
-  packages/../package-lock.json records apps/cribl-app at 1.11.5;
-  apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A
-  GATE, and reported rather than fixed: during Sentinel Integration wave 2 an
-  implementer ran npm install in its worktree, watched the lock correct itself
-  1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card,
-  and wrote that someone should look at it separately. That was the right call
-  by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT:
-  check-release-drift holds FOUR claims to the version - package.json,
-  release/, release-notes.md and backlog.md - and the lock file is not one of
-  them. So the drift is invisible to the check that exists precisely to keep
-  version claims honest. FIX is a single npm install committing only
-  package-lock.json. The question worth deciding first is whether
-  check-release-drift should hold a FIFTH claim, because a lock that disagrees
-  with its package is exactly the class that check exists for.
-
-- **DBT-78** A JSON source with a hyphen or dot in a key builds a pipeline that renames nothing
-  `DBT-F1` `bug` `settled`
-  FOUND while fixing [[DBT-77]], and it is PRE-EXISTING rather than caused by
-  it - the VPC work only produced the first field names that exposed it. Cribl
-  parses a rename's `currentName` as a PROPERTY ACCESSOR PATH, not a literal
-  string. pipeline-conf.ts emits `currentName: ${sourceName}` raw, so any
-  source field that is not a bare identifier produces a pipeline that LOADS
-  and then fails at runtime: 'Failed to build property accessor,
-  path="account-id", err=invalid property accessor path="account-id"' -
-  reported by a user against AWS VPC Flow Logs. MEASURED, not assumed, against
-  the shipped parsers: NDJSON/JSON passes keys through verbatim, so
-  `{"src-ip":...}` yields a field named `src-ip` and `{"a.b":...}` yields
-  `a.b`. Both reach the rename emitter unaltered. CSV is not affected because
-  its detector requires identifier headers (a hyphenated header falls to
-  `unknown` and parses as _0.._3, which is its own problem - see [[DBT-79]]).
-  THE DOTTED CASE IS THE DANGEROUS ONE and is why this is `now` rather than
-  `next`. `a.b` IS a valid accessor - for a NESTED field. So a flat field
-  literally named `a.b` does not error at all: it silently addresses something
-  that does not exist, renames nothing, and the build reports success. The
-  hyphen fails loudly; the dot fails quietly, and a silent no-op rename means
-  data lands in the wrong column or not at all. WHAT SHIPPED WITH DBT-77, and
-  what did NOT. Shipped: checkCriblYaml now REJECTS a name/currentName/newName
-  that is not a valid accessor, so a build that would die in Cribl fails at
-  generation instead, naming the field and the reason. That moves the failure
-  forward; it does not fix it. NOT SHIPPED, deliberately: the actual escape
-  syntax. Quoting is not available - the three rules above the new one forbid
-  single-quoted field names because Cribl's YAML loader rejects them. Bracket
-  notation may be the answer but I could not verify it against a live Cribl,
-  and guessing at a syntax then pinning the guess is how a wrong answer gets
-  credibility it has not earned. TO CLOSE THIS: determine what Cribl actually
-  accepts for a non-identifier field path in a rename, against a real
-  instance. Then either emit that form, or - as the positional parser now does
-  for VPC Flow - give the PARSER an addressable name and keep the vendor
-  spelling for display only.
-
-- **DBT-79** A key=value pair with a hyphen loses everything before the hyphen
-  `DBT-F1` `bug` `settled`
-  FOUND while checking whether [[DBT-78]] affected other formats. It does not
-  - this is a DIFFERENT and worse defect in the same neighbourhood, and it is
-  silent data loss. MEASURED against the shipped parser: the input
-  `src-ip=1.1.1.1 dst-ip=2.2.2.2 action=ACCEPT bytes=10` parses as format `kv`
-  with fields `ip, action, bytes`. Not `src-ip` and `dst-ip` - just `ip`. The
-  `src-` and `dst-` prefixes are DISCARDED, and worse, the two distinct fields
-  COLLIDE into one: `src-ip` and `dst-ip` both become `ip`, so one silently
-  overwrites the other and the event loses a value entirely. Four fields in,
-  three out, no error, no note. WHY IT MATTERS BEYOND THE ODDITY: hyphenated
-  keys are ordinary in real kv logs, and the failure is invisible at every
-  stage. The parse reports success, the gap analysis sees a field called `ip`
-  and maps it, and the operator has no way to know a field was eaten. It is
-  the confident wrong answer at the parsing layer rather than the reporting
-  layer. NOT INVESTIGATED FURTHER, and stated as unknown rather than guessed:
-  I did not read parseKv to find whether the hyphen is being treated as a
-  delimiter, as a token break, or something else, and I did not check whether
-  other characters (dots, colons, brackets) behave the same way. The
-  reproduction above is measured; the CAUSE is not. First step is to establish
-  which characters break a key and whether any of them collide the way
-  `src-ip` and `dst-ip` do.
-
 ---
 
-## Backlog - now (1)
+## Backlog - now (4)
 
 Next to pick up. Nothing blocks these.
 
@@ -395,9 +270,59 @@ Next to pick up. Nothing blocks these.
   design. The reviewer refetched the live index and equality still has 0
   collisions, so the DESIGN holds and only the CLAIM overreached.
 
+- **DBT-80** parseCef's extension parser truncates keys and swallows the pairs that follow
+  `DBT-F1` `bug` `settled`
+  FOUND while fixing [[DBT-79]], and it is the SAME defect class in a worse
+  form. parseKv's key truncation lost a prefix; parseCef's extension parser
+  truncates the key AND swallows the following pairs into the previous value,
+  so the loss is larger and equally silent. CEF is a first-class supported
+  format here, not an edge case. MEASURED against the shipped parser by the
+  agent that fixed parseKv; the exact reproduction is in that agent's report
+  and should be re-taken before work starts rather than trusted. The fix that
+  worked for parseKv is available and its traps are now documented in
+  parsers.ts: the key class must not absorb a leading prefix, must not restart
+  mid-token (quadratic), must let a key start after a quote or comma, and must
+  accept an EMPTY value. All four were learned by shipping each one wrong
+  first.
+
+- **GEN-4** A field name containing whitespace passes checkCriblYaml even on a rename line
+  `GEN-F1` `bug` `settled`
+  MEASURED end to end while closing [[DBT-78]]: a generated conf carrying `-
+  currentName: Source IP` returns ZERO issues from checkCriblYaml, while
+  `src-ip` and `a.b` each return one. So a rename Cribl cannot address ships
+  with a green build, and a space-headed CSV is a common source of exactly
+  that name. CAUSE, read at cribl-yaml-validator.ts:126: the field-name
+  capture is `([^'\"\s][^\s]*)\s*$`, which cannot match a value containing an
+  internal space, so whitespace names are invisible to the rule
+  `isCriblAccessorSafe` is wired into. The predicate itself is correct - it
+  rejects the name; the LINE MATCHER never hands it over. THE TRAP, reproduced
+  rather than predicted: `[^\s]*` is load-bearing. It is the only thing
+  stopping the rule flagging the three group headers every generated conf
+  carries - 'Field Extraction', 'Enrich & Classify', 'Sentinel Cleanup'.
+  Widening the character class alone produces exactly 3 false issues on two
+  existing generated-pack tests. So the rule must distinguish a group `name:`
+  from a field `name:`/`currentName:`/`newName:` FIRST, which is its own
+  change with its own pins. DBT-78 deliberately did NOT widen this, and
+  narrowed the operator-facing note instead so it stops promising a refusal
+  that does not happen. See also [[GEN-5]], which is the bigger hole in the
+  same rule.
+
+- **DBT-90** The root package.json never forwarded check-release, so the documented command exits 1
+  `DBT-F1` `bug` `settled`
+  FOUND while closing [[DBT-76]]. The docs tell you to run check-release
+  locally; the root package.json has no script forwarding it, so the command
+  as documented exits 1 with an npm error rather than running the check. It is
+  `now` because it is small and because it sits directly under the failure
+  mode [[DBT-76]] is about: a documented command that does not work is the
+  same class as a document describing a check it no longer matches, and this
+  one has presumably been failing for everyone who followed the instructions.
+  Confirm the exact invocation before writing the script - the check runs
+  under the apps/cribl-app workspace, so the root forward has to name the
+  workspace.
+
 ---
 
-## Backlog - next (15)
+## Backlog - next (24)
 
 Settled and unblocked, sequenced behind now.
 
@@ -671,9 +596,184 @@ Settled and unblocked, sequenced behind now.
   the next ARM call added outside a try block reopens the failure and nothing
   fails when it does.
 
+- **GEN-5** checkCriblYaml never sees an unaddressable field name unless the matcher renames it
+  `GEN-F1` `bug` `settled`
+  Not now because: Ranked below [[GEN-4]] on evidence, not on comfort. Both
+  are holes in the same rule, and this one is WIDER - but it is also the one
+  where the operator is not left blind: on the unmatched path the DBT-78 parse
+  note fires at sample-choice time and names the field, several screens before
+  a pack is built. DBT-81's whitespace case is the worse position, because
+  there the operator gets a note AND a clean build on a rename that will fail
+  in Cribl. The deciding factor is that closing DBT-81 needs the
+  group-name/field-name distinction built first, and that same distinction is
+  a prerequisite here, so DBT-81 is genuinely the earlier work rather than
+  merely the smaller.
+  MEASURED through the real chain (parseSampleContent -> matchSampleToSchema
+  -> buildPipelinePlan -> generatePipelineConfForPlan -> checkCriblYaml)
+  during the final whole-diff review of [[DBT-78]], not reasoned about.
+  checkCriblYaml only ever inspects a name that LANDS ON a
+  name:/currentName:/newName: line. An UNMATCHED field never emits one - it
+  appears only in the cleanup eval's `remove:` list - and a KEPT field emits
+  no rename either. So: a JSON sample keyed `aws.account` and `src_ip` against
+  SrcIpAddr/TimeGenerated builds with 0 issues, and integrate-screen's `if
+  (!preview.valid)` guard never fires; the same holds for `src-ip` and
+  `vendor-thing` left unmatched; a sample keyed `a.b` matched to a column also
+  named `a.b` takes action `keep` - 0 issues; and the rule DOES work when the
+  name is renamed: the same hyphenated sample matched to
+  SrcIpAddr/DstIpAddr/AccountId produces 3 issues. So an awkward vendor name
+  is refused only if it is RENAMED, and its ORDINARY fate - no matching
+  destination column - builds clean. WHY THIS IS NOT SIMPLY 'ADD THE CHECK':
+  an unmatched field is dropped, so an unaddressable name among dropped fields
+  may be harmless. The question this card has to answer first is whether the
+  cleanup eval's `remove:` list is itself accessor-parsed by Cribl - if it is,
+  an unaddressable name there fails at runtime too and the gap is real rather
+  than cosmetic. NOT MEASURED; it needs a live Cribl. Establish it before
+  building.
+
+- **DBT-84** parseKvLine still truncates keys on \w+, and widening it re-keys every stored sample
+  `DBT-F1` `bug` `settled`
+  Not now because: The truncation is real but currently LOAD-BEARING, so
+  fixing it in the wrong order breaks more than it repairs. parseKvLine feeds
+  format DISCRIMINATION, and DISCRIMINATOR_FIELDS holds word-only spellings
+  ('type') that hyphenated vendor keys ('log-type') truncate INTO. Measured:
+  `log-type=TRAFFIC action=A` yields ['type','action'] and 'type' is what
+  selects the format. So today's split works BY ACCIDENT, and widening the key
+  class first would silently re-key every stored sample and change which
+  parser is chosen. The required ordering is hyphenated aliases into
+  DISCRIMINATOR_FIELDS FIRST, key class second - never the reverse. That
+  ordering is why this is sequenced work rather than urgent work.
+  DELIBERATELY LEFT DIVERGENT by [[DBT-79]], and documented on both functions
+  so the next reader does not merge them by reflex - the first attempt left
+  splitting.ts still telling the reader the two parsers agree, which review
+  caught. MEASURED: `src-ip=1.1.1.1 action=A` yields parseKv
+  ['src-ip','action'] and parseKvLine ['ip','action']. The two now disagree on
+  ordinary input. parseKvLine's truncation is what makes format discrimination
+  work today, for the reason in priorityWhy. The eventual fix is ordered, and
+  the ordering is the whole content of this card: (1) add hyphenated aliases
+  to DISCRIMINATOR_FIELDS so discrimination stops depending on the truncation,
+  (2) then widen the key class. Reversing those two silently re-keys stored
+  samples. A quote-aware tokenizer would let the two paths collapse into one
+  for real; parseKv's regex could not be replaced by the fallback's
+  whitespace-split-plus-indexOf loop because splitting on whitespace cuts
+  `msg=\"login ok\"` in half, which is pinned.
+
+- **GEN-6** A positional sample generates a pipeline whose extract step JSON-parses the line
+  `GEN-F1` `bug` `settled`
+  Not now because: Nobody is losing data: the positional path reaches a
+  pipeline that extracts nothing, so the failure is visible as an empty result
+  rather than as a wrong one. It is ranked here and not lower because
+  [[DBT-77]] shipped positional PARSING to a user who asked for it, and the
+  generated pack is the next thing that user will open - so the gap between
+  what the app parses and what it generates is short-lived by design.
+  FOUND during [[DBT-78]] review. [[DBT-77]] added positional parsing (AWS VPC
+  Flow v2 and the field1..fieldN fallback), but pipeline-conf.ts has no
+  positional branch, so a positional sample falls to the trailing `else` and
+  emits an extract step that runs Cribl's JSON serde over `_raw`. A
+  whitespace-positional line is not JSON, so the step extracts nothing. The
+  app therefore PARSES the sample correctly, shows the operator named columns,
+  does a correct gap analysis - and then generates a pack that cannot
+  reproduce any of it. The shape of the fix is already established and is why
+  this is small: for positional the pipeline splits `_raw` itself and assigns
+  `name: account_id / value: __csvParts[1]`, which is exactly the case where
+  WE mint the runtime name, so the parser's chosen names and the pipeline's
+  names are the same by construction. That reasoning is written up in
+  [[DBT-78]]'s closing note and should be read first.
+
+- **DBT-82** package.mjs should regenerate the lock it invalidates, retiring a manual release step
+  `DBT-F1` `enabler` `settled`
+  [[DBT-76]] added a fifth version claim to check-release-drift and, in doing
+  so, made `npm run package` leave the repo in a state that FAILS that check:
+  package.mjs bumps apps/cribl-app/package.json and writes the tgz, but never
+  invokes npm, so the lock still records the previous version. MEASURED in a
+  sandbox at the exact release state: check-release-drift exits 1 with
+  'package-lock.json records the app at 1.12.3 but package.json says 1.12.4'.
+  CI runs that check on every PR touching soc-optimizationtoolkit, so it is
+  PR-blocking. The manual step (`npm install --package-lock-only`, which works
+  from either directory since npm walks up to the workspace root) is
+  documented in backlog.md item 8 as the interim answer. Making package.mjs do
+  it turns the fifth claim into a guard over an AUTOMATED fact rather than a
+  remembered one, and takes the manual claim count back from three of five to
+  two of five.
+
+- **DBT-92** The release-drift script carried a stale version literal
+  `DBT-F1` `bug` `settled`
+  Not now because: The stale literal was CORRECTED while closing [[DBT-76]],
+  so nothing is wrong in the tree right now. What is filed here is that
+  nothing STOPS it recurring, which is a gap in a guard rather than a live
+  defect - and the guard it belongs in is the one [[DBT-88]] is about, so the
+  two want doing together.
+  The file that exists to catch stale version literals contained one. Found
+  and corrected while closing [[DBT-76]]; the card is for the recurrence, not
+  the instance. The narrow question: should the script hold its OWN example
+  strings to the same standard it holds the four tracked documents to - either
+  by deriving them, or by pinning them. Deriving is better than pinning if it
+  is possible, because a pinned literal is a second copy that can drift, which
+  is the same argument [[DBT-73]] settled for the vendored spec.
+
+- **DBT-86** Reconcile the two contradictory live measurements of the solution hash in the iframe
+  `DBT-F1` `spike` `settled`
+  TWO LIVE OBSERVATIONS IN THIS REPO POINT OPPOSITE WAYS and neither has been
+  reconciled. solution-browser.tsx:74-77 records, from a live review on
+  2026-08-03, that the Cribl app iframe DOES NOT PRESERVE the `#/?solution=`
+  hash. [[DBT-28]] records an investigation that considered exactly that
+  candidate - 'the hash lands on the OUTER frame, so the app may never see it
+  at all' - and found BOTH its recorded candidates WRONG, attributing the
+  observed non-change to a measured resolver defect instead, which presupposes
+  the hash DID arrive. This blocked honest wording twice while closing
+  [[DBT-75]]: the first comment cited the DBT-28 attempt as evidence FOR
+  non-arrival, which the board contradicts, and the second asserted the SIEM
+  pivot 'already takes successfully' the same path - true on the first visit
+  only, since AppFrame keeps routes mounted after that. IT NEEDS A
+  MEASUREMENT, NOT AN ARGUMENT, and it is a small one: open the app in the
+  Cribl shell with a `?solution=` fragment appended and observe whether the
+  document sees it. Until then the comment says the two disagree and neither
+  is settled, which is the honest state. Answering this also unblocks the
+  wording on [[DBT-83]].
+
+- **DBT-87** DBT-1's detail names WIN-5, which is not a card id, and omits DBT-4
+  `DBT-F1` `bug` `settled`
+  Not now because: It misdirects a reader rather than breaking anything, and
+  the load-bearing instance was already fixed at the point of discovery: the
+  [[DBT-73]] provenance pin that would have printed WIN-5 in a failure message
+  now names the dependency EDGE instead. What remains is the board text
+  itself, which is read by people rather than by a gate.
+  FOUND while writing the [[DBT-73]] provenance pins, which nearly propagated
+  it into a load-bearing failure message. DBT-1's detail says it blocks 'AZR-7
+  and WIN-5'. THERE IS NO STORY WITH ID WIN-5: the WIN epic is WIN-1, WIN-2
+  and WIN-3, and 'WIN-5' survives across all 145 stories only as prose -
+  inside DBT-1's own detail and inside D-5's title. The cards that actually
+  declare `dependsOn: [\"DBT-1\"]` are AZR-7 (later) and DBT-4 (NEXT). So the
+  sentence names one phantom and omits the real, higher-priority dependent.
+  Fix the detail to match the dependency edges. The general version is
+  [[DBT-93]].
+
+- **DBT-95** check-docs never path-checks a backticked path carrying a :line suffix
+  `DBT-F1` `enabler` `settled`
+  FOUND while writing the [[DBT-73]] provenance pins. check-docs validates
+  that paths cited in documentation exist, but a citation written as
+  `path/to/file.ts:43-54` - which is the form this repo uses constantly, and
+  the form that makes a citation useful - carries a line suffix that defeats
+  the path check, so those citations are unvalidated. That is precisely the
+  class [[DBT-73]] exists for: a citation that reads as evidence with nothing
+  holding it. The repo's own habit of citing file:line makes the UNCHECKED
+  form the common one and the checked form the exception. Strip a trailing
+  `:N` or `:N-M` before the existence check. Do NOT try to validate that the
+  line numbers still point at the right thing - line numbers drift on every
+  edit above them, and a gate that fails on that would be bypassed within a
+  week.
+
+- **DBT-96** Refresh the line citations in DBT-28 and DBT-75 now that the chip is gone
+  `DBT-F2` `enabler` `settled`
+  [[DBT-75]] deleted the deep-link chip and rewrote the surrounding comment,
+  so the line numbers both cards cite in solution-browser.tsx no longer point
+  where they say. DBT-28 is OPEN and blocked on [[DBT-72]], so whoever picks
+  it up will follow those citations into the wrong place. This is the drift
+  [[DBT-95]] is about, in board prose rather than in docs - and it is worth
+  doing by hand now because DBT-28 is live work rather than a record.
+
 ---
 
-## Backlog - later (31)
+## Backlog - later (37)
 
 Settled, gated on something above.
 
@@ -1045,9 +1145,112 @@ Settled, gated on something above.
   workbooks are folded in) rather than the noun, then decide once whether both
   surfaces name the exclusion.
 
+- **DBT-89** A non-syslog prefix welded to the first KV key lands in the field name
+  `DBT-F1` `bug` `settled`
+  Not now because: It is NOT SILENT, which is what separates it from every
+  other defect in this cluster. The manufactured name is not a Cribl accessor,
+  so DBT-78's parse note fires and names the field to the operator at
+  sample-choice time. And the honest reason it is not fixed is not cost: the
+  widened key class is justified by matching what Cribl's own kvp serde sees
+  at runtime, and which prefixes kvp discards could not be checked against a
+  live Cribl. Guessing that and pinning the guess is how a wrong answer
+  acquires credibility, so this waits for a live measurement rather than for
+  time.
+  KNOWN AND STATED at the point of building [[DBT-79]] rather than discovered
+  afterwards. parseKv strips a bare syslog priority (`<189>date=...`,
+  FortiGate's default wire format) because that shape is common and the strip
+  is the narrowest one that closes it. Any OTHER prefix welded to the first
+  key with no separating whitespace still lands in the name:
+  `[2024-01-01]user=x` yields the key `2024-01-01]user`. Space-separated
+  prefixes need nothing - their first real key is preceded by whitespace, so
+  the anchor already starts the key in the right place. NOTE the module's own
+  stripSyslogPrefix cannot be reused here, measured twice: it handles RFC
+  5424, RFC 3164 and the PAN-OS positional start, and returns `<189>date=...`
+  UNCHANGED; and its PAN-OS branch is an UNANCHORED search, so handing it a KV
+  line corrupts it - `msg=\"1,2024/01/01 ok\" other=2` strips to `1,2024/01/01
+  ok\" other=2` and the msg field is destroyed.
+
+- **DBT-88** Nothing fails when a document stops describing the release-drift check accurately
+  `DBT-F1` `enabler` `settled`
+  [[DBT-76]] falsified two tracked documents that were TRUE before it (the CI
+  step comment and backlog.md item 8, both stating the check holds four
+  claims), then the fix for those introduced a THIRD false statement, then the
+  two records of the same decision disagreed about how many measurements
+  settled it. Three prose defects in the course of one change, each caught
+  only by a reviewer reading both artefacts side by side. So the check that
+  exists to keep version CLAIMS honest cannot keep the claims about ITSELF
+  honest. Worth weighing carefully rather than building reflexively: a gate
+  that pins prose against code is the shape [[DBT-73]] used successfully for
+  the vendored spec, but prose has no single checkable fact the way `title:
+  \"Events Per Second Per Worker Node\"` does. The honest scope is probably
+  narrow - the CLAIM COUNT and the list of held files, which are both
+  derivable from the script - rather than the surrounding argument. Pinning
+  the argument would make every rewording a failure and train people to bypass
+  it. Related: [[DBT-92]].
+
+- **DBT-83** Is a shareable solution deep link wanted, and can the shipped shell serve one?
+  `DBT-F2` `decision` `undecided`
+  [[DBT-75]] removed a chip advertising a URL the shipped shell cannot reach.
+  It removed the FALSE CLAIM without answering whether the feature is wanted,
+  which was the right split - the defect was the advertisement, and the
+  feature question is this card. THE MECHANISM STILL EXISTS and is now pinned
+  on both halves: buildSolutionDeepLink writes the hash, and the mount read
+  consumes it. The SIEM-migration pivot uses it today. So this is not 'build a
+  deep link' - it is 'can an operator be given an ADDRESS to paste', which is
+  the part the shell breaks: on Cribl.Cloud the app runs on a sandboxed origin
+  answering every path with the app, and the address bar belongs to the
+  embedder. ANSWER [[DBT-86]] FIRST. Whether the fragment even reaches the
+  document is measured contradictorily in two places, and the answer changes
+  what can honestly be offered. Options once it is known: advertise nothing
+  (today's state, and defensible); offer a copyable link only when the shell
+  demonstrably preserves it; or ask Cribl whether an app can obtain its own
+  addressable URL.
+
+- **DBT-93** check-board does not validate that card ids named in prose exist
+  `DBT-F1` `enabler` `settled`
+  [[DBT-87]] is the instance: DBT-1's detail has named a non-existent WIN-5
+  for long enough that a provenance pin nearly inherited it. check-board
+  validates the DATA - ids, dependencies, priorities, the bug/priorityWhy rule
+  - and does not look at ids mentioned inside `detail` prose or `[[wiki
+  links]]`. Scope it carefully: a bare id in prose is often a deliberate
+  reference to something outside the board (a deprecated card, an external
+  ticket), so a blanket rule would produce false failures and get bypassed.
+  The defensible narrow version is to validate `[[...]]` links only, since
+  those already assert a board relationship - and note that CLAUDE.md
+  explicitly permits a link to a card not yet written, so the rule would have
+  to warn rather than fail, or check only links that resemble existing epic
+  prefixes.
+
+- **DBT-94** Audit the other test-pin negatives that assert one shape of a multi-shape contract
+  `DBT-F1` `enabler` `settled`
+  GENERALISED FROM A REAL MISS in [[DBT-75]]. Its pin asserted that no chip
+  prints `#/?solution=`, and parseSolutionDeepLink accepts THREE hash shapes -
+  so a re-added chip printing either of the other two passed clean.
+  Demonstrated by re-adding one. Widening it to the common substring then
+  still missed an address carried in an HREF rather than printed as text,
+  which needed a STRUCTURAL assertion instead. The class: a negative pin that
+  names ONE spelling of a contract with several, and therefore reads as
+  protection while guarding a fraction of what it claims. It is the same
+  family as a vacuous pin but harder to spot, because the assertion really
+  does fail on the shape it names. Sweep the suites for negatives of the form
+  'does not contain <literal>' and check each against the full set of shapes
+  its subject accepts. Expect the fix to be a structural assertion rather than
+  a longer list of literals, since a list has the same defect one shape
+  further out.
+
+- **DBT-97** The .solution-browser-detail CSS rule has no consumer
+  `DBT-F2` `enabler` `settled`
+  Found while deleting `.solution-browser-deeplink`, which [[DBT-75]] orphaned
+  and removed in the same change. `.solution-browser-detail` is a second rule
+  in styles.css with no producer anywhere in packages/ui or apps/cribl-app.
+  Nothing renders wrong. It is filed rather than fixed because a sweep for ALL
+  orphaned rules is the sensible unit of work, not a second one-off - and
+  because a CSS rule with no consumer today may be a rule whose consumer is on
+  a branch.
+
 ---
 
-## Done (92)
+## Done (97)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3744,6 +3947,150 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `repo-wide` Pin everything to LF - `* text=auto eol=lf`. Closes the class properly and matches what CI already sees, so Windows and Linux stop disagreeing. Costs a 1,473-file renormalisation commit that breaks git blame across the repo and conflicts with every open branch. Best done when nothing is in flight, which is a scheduling constraint rather than a technical one.
     [ ] `leave-it` Leave it, keep fixing instances - Both known instances are fixed and pinned. The argument for waiting is that a 1,473-file diff is a real cost against a hazard that has surfaced twice in one unusually busy day. The argument against is that both instances reached main and CI could not see either, so the detection story is 'somebody happens to run the suite on Windows'.
 
+- **DBT-73** Nothing holds the vendored spec facts the docs cite
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  FOUND by review of [[DBT-7]], and demonstrated rather than argued: the
+  reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node'
+  to 'Worker Process' - the exact silent invalidation a re-vendor would cause
+  - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs
+  holds only that the file exists, and a re-vendor cannot delete the file, so
+  its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing
+  cribl-openapi.json. That citation is now load-bearing prose with nothing
+  behind it, which is the shape [[DBT-12]] already names and [[DBT-67]]
+  already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO:
+  entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source
+  file and fails with 'Either restore the file, or delete these provenance
+  pins AND the claim together'; five more test files use readFileSync the same
+  way. Scope: a provenance pin asserting
+  InputDatagen.samples.items.properties.eventsPerSec's title against the
+  vendored asset, and a sweep for other doc claims citing that spec which are
+  equally unheld. Do NOT pin the whole spec - pin the facts documents actually
+  lean on, or this becomes a second copy of the spec that drifts from the
+  first. DONE 2026-09-03.
+  `packages/core/src/testing/vendored-spec-provenance.test.ts` now holds the
+  spec facts documents actually lean on, following the established shape
+  (entra-diagnostics.test.ts:43-54) rather than inventing one. The boundary
+  held: the ~55 OutputSentinel properties the builder never writes are NOT
+  pinned. What review had to add was the four it DOES write unconditionally -
+  dcrID, dceEndpoint, streamName, scope - which the first pass left green
+  under rename or deletion while its own comment claimed 'the builder does not
+  lean on them'. Probes confirmed all four: 0 failed / 13 under each mutation.
+  That is the exact failure the card exists for - spec drifts, tests stay
+  green, and the destination written into a customer's Cribl carries a field
+  name Cribl no longer recognises. TWO MESSAGE DEFECTS, both instances of the
+  file's own thesis failing on itself ('THE MESSAGE IS THE DELIVERABLE'). The
+  PackRequestBody.id pin threw out of `at()` before `expect` ran, so the
+  reader got a generic error asserting the FALSE claim that the schema was
+  restructured and they should find where it moved - nothing had moved, the
+  field was dropped. Fixed by asserting existence with drifted() first, and by
+  rewording `at()`'s own throw so it stops claiming to know which of the two
+  happened. And the InputRest message pointed at WIN-5, which is NOT A CARD
+  ID: the real dependents are AZR-7 and DBT-4, and DBT-4 is the
+  higher-priority one it sent the reader past. Now phrased against the
+  dependency EDGE rather than an id list, which is drift-proof. The /rest/i
+  guard was anchored after a probe showed it would fire on `InputRestore`; the
+  first anchored draft used the /i flag, which silently made its `[a-z]`
+  lookahead match uppercase and let `InputRestCollector` through - caught by
+  testing the regex against hypotheticals BEFORE writing it. Board follow-up:
+  [[DBT-87]] (DBT-1's own detail is the source of the WIN-5 staleness).
+
+- **DBT-75** The solution deep-link chip advertises a URL the shipped shell cannot reach
+  `DBT-F2` `bug` `settled` `verified: pins`
+  Not now because: Split out of [[DBT-28]] on 2026-09-01 by decision, and held
+  at next because it is a DIFFERENT user story from the other two defects in
+  that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a
+  mount-only hash read that together make the pivot inert after first use.
+  This one is a copyable link that leads somewhere the shell does not serve.
+  Nothing is silently wrong on screen: the chip renders and the operator can
+  read it, so the failure is discoverable rather than invisible, which is what
+  separates it from the pivot defect. Keeping them in one card would also have
+  put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at
+  the time.
+  Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524
+  renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the
+  shipped shell does not route it. So an operator who copies the advertised
+  link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct
+  the advertised URL to whatever the shell actually serves, to register the
+  route, or to stop advertising a link at all. Which one depends on whether a
+  shareable deep link is wanted at all, which nobody has decided. Establish
+  that before writing code. DONE 2026-09-03. The chip is gone; the deep-link
+  MECHANISM is untouched. The card asked for the scoping first, and the split
+  it produced is the deliverable: the DEFECT is the false advertisement, which
+  is fixable without deciding whether shareable deep links are wanted. The
+  feature question is [[DBT-83]] and is deliberately still open. WHAT REVIEW
+  REFUTED, twice, is worth more than the deletion. Round 1's justifying
+  comment argued that even if the fragment arrives 'this component is not even
+  mounted to read it, since AppFrame mounts a route on FIRST VISIT only',
+  concluding the operator sees nothing either way. First-visit mounting is
+  exactly what makes the read FIRE: a DOM probe setting the hash before first
+  render preselected the solution, and nothing clears the hash in between. On
+  a deletion-only change the argument IS the deliverable, so a false argument
+  is the defect. It also cited DBT-28's live attempt as evidence for
+  non-arrival when DBT-28 records that candidate as REFUTED, and omitted the
+  contrary 2026-08-03 measurement sitting 450 lines above it in the same file.
+  Round 2 then overcorrected into 'the same path the SIEM-migration pivot
+  already takes successfully' - true on the FIRST visit only, which is
+  DBT-28's defect (2). The comment now carries the qualifier and says plainly
+  that the two live measurements have never been reconciled: [[DBT-86]]. The
+  true reason the chip was a false claim is the one round 1 stated correctly
+  and buried: a bare fragment has no BASE an operator can attach it to on the
+  shipped shell. THE PIN WENT THROUGH THE SAME CYCLE. It first asserted one of
+  the three hash shapes the router accepts, so a chip printing a different
+  accepted shape passed clean. Widened to the substring every shape carries,
+  plus a structural negative - and review then showed an address re-advertised
+  through an HREF rather than printed as TEXT still passed, so it now holds
+  attribute values too. The mount READ is pinned for the first time: inverting
+  the guard used to leave all 1,343 ui tests green. That half is what the SIEM
+  pivot and the refresh-restore actually depend on. verified `pins`: no live
+  check was taken, and the arrival question stays open on [[DBT-86]] rather
+  than being answered here.
+
+- **DBT-76** The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3
+  `DBT-F1` `bug` `settled` `verified: pins`
+  packages/../package-lock.json records apps/cribl-app at 1.11.5;
+  apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A
+  GATE, and reported rather than fixed: during Sentinel Integration wave 2 an
+  implementer ran npm install in its worktree, watched the lock correct itself
+  1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card,
+  and wrote that someone should look at it separately. That was the right call
+  by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT:
+  check-release-drift held FOUR claims to the version - package.json,
+  release/, release-notes.md and backlog.md - and the lock file was not one of
+  them (it now holds five; see the closing note). So the drift is invisible to
+  the check that exists precisely to keep version claims honest. FIX is a
+  single npm install committing only package-lock.json. The question worth
+  deciding first was whether check-release-drift should hold a FIFTH claim (it
+  now does), because a lock that disagrees with its package is exactly the
+  class that check exists for. DONE 2026-09-03. The lock records 1.12.3,
+  matching package.json, and check-release-drift now holds a FIFTH claim. THE
+  ASYMMETRY IS DELIBERATE: the other four claims are held to the packaged
+  tarball's version, and the fifth holds package-lock.json to PACKAGE.JSON
+  instead, because npm copies that field verbatim and package.mjs bumps the
+  manifest without regenerating the lock. Holding it to the tarball would
+  double-report a hand-bump. THE DECISION AND ITS COST are now in backlog.md
+  rather than only in a code comment, which is what CLAUDE.md requires and
+  what the first attempt left undone. The cost is real: THREE OF FIVE CLAIMS
+  ARE NOW MANUAL, and `npm run package` leaves check-release RED until someone
+  runs `npm install --package-lock-only`. That step is now documented in item
+  8's packaging procedure - it was a PR-blocking failure the next packager
+  would have discovered from a red CI run. The root fix is [[DBT-82]]. THREE
+  PROSE DEFECTS THIS CHANGE INTRODUCED AND THEN FIXED, all the same shape -
+  the change falsified documents it argued from. The CI comment and backlog.md
+  item 8 both still said 'four claims'; both were TRUE before this change.
+  Then the fix for those introduced a NEW false premise: it justified
+  `--package-lock-only` over a bare `npm install` by claiming the latter
+  'would invite a lock rewrite nobody asked for'. Measured in a sandbox on the
+  real manifests: both commands write the SAME two-line lock diff. The
+  difference is node_modules, not the lock. And the two records of the
+  decision disagreed about their own evidence - the script header numbered
+  THREE measurements, backlog.md said two and then pointed the reader at the
+  header. That is the failure mode this card exists for, committed three times
+  while fixing it, which is the honest thing to record. [[DBT-88]] asks
+  whether anything should FAIL when a document stops describing this check
+  accurately, since nothing did here. Also found and filed: [[DBT-90]], the
+  root package.json never forwarded check-release, so the command the docs
+  tell you to run locally exits 1.
+
 - **DBT-77** AWS VPC Flow Logs are classified supported but the parser reads none of them
   `DBT-F1` `bug` `settled` `verified: both`
   REPORTED BY THE USER 2026-09-02 with a real file and REPRODUCED against the
@@ -3838,3 +4185,144 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   stating - I reasoned about a _raw I had not looked at, and one screenshot of
   the running product replaced a plausible chain of inference that was wrong
   at its first link.
+
+- **DBT-78** A JSON source with a hyphen or dot in a key builds a pipeline that renames nothing
+  `DBT-F1` `bug` `settled` `verified: both`
+  FOUND while fixing [[DBT-77]], and it is PRE-EXISTING rather than caused by
+  it - the VPC work only produced the first field names that exposed it. Cribl
+  parses a rename's `currentName` as a PROPERTY ACCESSOR PATH, not a literal
+  string. pipeline-conf.ts emits `currentName: ${sourceName}` raw, so any
+  source field that is not a bare identifier produces a pipeline that LOADS
+  and then fails at runtime: 'Failed to build property accessor,
+  path="account-id", err=invalid property accessor path="account-id"' -
+  reported by a user against AWS VPC Flow Logs. MEASURED, not assumed, against
+  the shipped parsers: NDJSON/JSON passes keys through verbatim, so
+  `{"src-ip":...}` yields a field named `src-ip` and `{"a.b":...}` yields
+  `a.b`. Both reach the rename emitter unaltered. CSV is not affected because
+  its detector requires identifier headers (a hyphenated header falls to
+  `unknown` and parses as _0.._3, which is its own problem - see [[DBT-79]]).
+  THE DOTTED CASE IS THE DANGEROUS ONE and is why this is `now` rather than
+  `next`. `a.b` IS a valid accessor - for a NESTED field. So a flat field
+  literally named `a.b` does not error at all: it silently addresses something
+  that does not exist, renames nothing, and the build reports success. The
+  hyphen fails loudly; the dot fails quietly, and a silent no-op rename means
+  data lands in the wrong column or not at all. WHAT SHIPPED WITH DBT-77, and
+  what did NOT. Shipped: checkCriblYaml now REJECTS a name/currentName/newName
+  that is not a valid accessor, so a build that would die in Cribl fails at
+  generation instead, naming the field and the reason. That moves the failure
+  forward; it does not fix it. NOT SHIPPED, deliberately: the actual escape
+  syntax. Quoting is not available - the three rules above the new one forbid
+  single-quoted field names because Cribl's YAML loader rejects them. Bracket
+  notation may be the answer but I could not verify it against a live Cribl,
+  and guessing at a syntax then pinning the guess is how a wrong answer gets
+  credibility it has not earned. TO CLOSE THIS: determine what Cribl actually
+  accepts for a non-identifier field path in a rename, against a real
+  instance. Then either emit that form, or - as the positional parser now does
+  for VPC Flow - give the PARSER an addressable name and keep the vendor
+  spelling for display only. DONE 2026-09-03, and the shipped answer is NOT
+  the one the card asked for - deliberately, with the reasoning measured. The
+  card pointed at the DBT-77 precedent: give the parser an addressable name,
+  keep the vendor spelling for display. That works for positional and does NOT
+  work here, and the difference is WHO MINTS THE RUNTIME NAME. For positional
+  the generated pipeline splits `_raw` itself and assigns `name: account_id /
+  value: __csvParts[1]` - we are on the left-hand side, so choosing the name
+  makes parsed name and runtime name the same name by construction. For
+  JSON/NDJSON/KV the pipeline extracts with Cribl's OWN serde (`type: json` /
+  `type: kvp` over `_raw`), so runtime names come out of the vendor's bytes.
+  Sanitising `src-ip` to `src_ip` in the parser would have made the build pass
+  and then emitted a rename addressing a field no event carries: the identical
+  silent failure, moved one layer down and wearing a green build. Strictly
+  worse than refusing. SO THE PARSER KEEPS THE VENDOR SPELLING AND SAYS SO.
+  New `accessor-names.ts` holds `isCriblAccessorSafe` - now the ONE definition
+  of that rule, imported by cribl-yaml-validator.ts instead of the regex being
+  spelled twice - and `unaddressableFieldNote`, pushed into
+  ParsedSample.errors, the same non-fatal channel DBT-77's positional note
+  uses. WHAT THE NOTE MAY NOT SAY, and this took two rounds to get right.
+  Round 1's note ended 'Pack generation refuses these names rather than
+  emitting them.' FALSE, measured: checkCriblYaml's field-name capture cannot
+  match a value containing a space, so `Source IP` passes clean - and a
+  space-headed CSV is one of the note's most common triggers. The note fired,
+  promised a safety net, and the build then shipped a rename Cribl cannot
+  address. Round 3's whole-diff walk found the BIGGER hole underneath it:
+  checkCriblYaml only ever sees a name that LANDS ON a
+  name:/currentName:/newName: line, and an UNMATCHED or KEPT field never emits
+  one. Measured through the real chain - an awkward vendor name is refused
+  only if it is RENAMED; its ordinary fate, no matching destination column,
+  builds clean with the parse note as the ONLY warning there will ever be.
+  Both overclaims are gone. NOT SHIPPED, and still not: the escape syntax.
+  Quoting is ruled out by three existing validator rules (Cribl's YAML loader
+  rejects single-quoted field names); bracket notation could not be verified
+  against a live Cribl, and guessing a syntax then pinning the guess is how a
+  wrong answer acquires credibility. A TRAP RECORDED FOR WHOEVER WIDENS THE
+  VALIDATOR: the `[^\s]*` restriction is load-bearing. It is the only thing
+  stopping the rule flagging the three group headers every generated conf
+  carries ('Field Extraction', 'Enrich & Classify', 'Sentinel Cleanup').
+  Reproduced: widening the class alone produces exactly 3 false issues on two
+  generated-pack tests. The rule must distinguish a group `name:` from a field
+  `name:` FIRST. That is [[GEN-4]]; the unmatched/kept hole is [[GEN-5]].
+
+- **DBT-79** A key=value pair with a hyphen loses everything before the hyphen
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND while checking whether [[DBT-78]] affected other formats. It does not
+  - this is a DIFFERENT and worse defect in the same neighbourhood, and it is
+  silent data loss. MEASURED against the shipped parser: the input
+  `src-ip=1.1.1.1 dst-ip=2.2.2.2 action=ACCEPT bytes=10` parses as format `kv`
+  with fields `ip, action, bytes`. Not `src-ip` and `dst-ip` - just `ip`. The
+  `src-` and `dst-` prefixes are DISCARDED, and worse, the two distinct fields
+  COLLIDE into one: `src-ip` and `dst-ip` both become `ip`, so one silently
+  overwrites the other and the event loses a value entirely. Four fields in,
+  three out, no error, no note. WHY IT MATTERS BEYOND THE ODDITY: hyphenated
+  keys are ordinary in real kv logs, and the failure is invisible at every
+  stage. The parse reports success, the gap analysis sees a field called `ip`
+  and maps it, and the operator has no way to know a field was eaten. It is
+  the confident wrong answer at the parsing layer rather than the reporting
+  layer. NOT INVESTIGATED FURTHER, and stated as unknown rather than guessed:
+  I did not read parseKv to find whether the hyphen is being treated as a
+  delimiter, as a token break, or something else, and I did not check whether
+  other characters (dots, colons, brackets) behave the same way. The
+  reproduction above is measured; the CAUSE is not. First step is to establish
+  which characters break a key and whether any of them collide the way
+  `src-ip` and `dst-ip` do. DONE 2026-09-03 after THREE review rounds, and the
+  rounds are the record worth keeping: each one shipped a fix that passed
+  every gate green and each one introduced a new silent defect that only
+  measurement found. THE CAUSE, established rather than guessed as the card
+  demanded. parseKv's pair regex was `(\w+)=`, and `exec` scans FORWARD to the
+  first position that matches, so any other character in a key moved the match
+  start past it and the prefix vanished. Full survey: `-` `.` `:` `/` `@` `$`
+  all TRUNCATE to the trailing word run and COLLIDE when two keys share it;
+  `[`/`]` DROP the pair entirely, but only when some other pair on the line
+  matched - a line with no matching pair fell through to the whitespace
+  fallback, which kept the key whole. The two paths inside one function
+  disagreed about the same input. ROUND 1 widened the key class to `[^\s=,"]+`
+  and broke FortiGate: `<189>date=...` is FortiGate's default wire format, the
+  widened class absorbed the syslog PRI, and the first field became
+  `189>date`. The timestamp election changed with it (candidateKey is
+  `189date`, in no list, dropping from TIER_NAMED_AND_TYPED to TIER_NONE), and
+  DBT-78's new note then fired as a FALSE POSITIVE accusing the vendor of a
+  name the parser had manufactured. All 3,571 core tests passed with it
+  present. ROUND 1 was also QUADRATIC: `[^\s=,"]+` rescans a long bare token
+  from every offset. Measured 3ms to 4,175ms on a 64KB token, synchronous on
+  the samples screen. ROUND 2 fixed both and reintroduced the card's OWN
+  defect one shape to the left. The token-boundary anchor `(?:^|\s)` cannot
+  start a key after a quote or comma, so `user=root msg="login ok",id=7
+  act=deny` lost `id` SILENTLY - the whitespace fallback runs only on TOTAL
+  failure, so a partial loss produces no note. Measured by bundling the
+  working tree and HEAD separately and driving both. The equivalence corpus
+  that cleared the broken anchor was kv-keys.test.ts, none of whose 16 lines
+  has a key adjacent to a quoted value - the existing non-regression pin was
+  ONE SPACE away from catching it. ROUND 3 replaced it with the lookbehind
+  `(?<![^\s=,"])`, and a fourth defect surfaced in the final whole-diff walk:
+  the VALUE branch was `+`, so `a[0]=1 a[1]=` returned only `a[0]` where the
+  committed parser returned both. HEAD was better BY ACCIDENT - its `\w+`
+  matched zero pairs on that line, which is the only condition that runs the
+  fallback. Widening the key class switched the fallback off and cashed in the
+  hiding. `+` became `*`; an empty value is a real pair, and that also closes
+  a PRE-EXISTING drop (`user=root note=` loses `note` on HEAD too). FINAL
+  MEASUREMENT, 10,800 generated distinct-key lines against HEAD: ZERO lines
+  return fewer fields, 1,053 return more, 9,747 unchanged. Timing flat: 1.1ms
+  at 128KB against 17,492ms unanchored. THE LESSON, recorded because it caused
+  three of the four defects: a fallback that fires only on TOTAL failure hides
+  every partial failure above it, and widening anything upstream can silently
+  cash in that hiding. Follow-ups filed: [[DBT-84]] (parseKvLine still
+  truncates and cannot simply be widened), [[DBT-80]] (parseCef has the same
+  defect, worse), [[DBT-89]] (a non-syslog prefix still lands in the name).

@@ -1111,11 +1111,56 @@ name clash would stop being a visible failure and start being a silent reuse.
 
 **Release drift is CHECKED as of 2026-08-24.**
 `apps/cribl-app/scripts/check-release-drift.mjs`, run by CI on every PR touching
-`soc-optimizationtoolkit/**` and by `npm run check-release` locally. It reads the
-packaged tarball's version and holds four claims to it - `package.json`, the
-single tarball in `release/`, a `## X.Y.Z` section in
-[release-notes.md](release-notes.md), and the "IS CURRENT" line directly below -
-failing when any of them names a different version.
+`soc-optimizationtoolkit/**`. It reads the packaged tarball's version and holds
+four claims to it - `package.json`, the single tarball in `release/`, a
+`## X.Y.Z` section in [release-notes.md](release-notes.md), and the
+"**X.Y.Z IS CURRENT**" line further down this entry - failing when any of them
+names a different version. A FIFTH claim holds `package-lock.json` to
+`package.json`'s version rather than to the tarball's, because npm copies that
+field into the lock verbatim: the lock is a statement ABOUT the manifest, and the
+manifest is already held to the tarball by the first claim, so the two chain
+rather than opening a second front. Comparing the lock to the tarball instead
+would report a hand-bump twice - once as the bump, once as a lock that faithfully
+recorded it.
+
+That pointer read "the 'IS CURRENT' line directly below" until 2026-09-03, by
+which point it was directing readers past four intervening paragraphs - this note
+among them. It was already loose when committed, with one paragraph in between,
+and each addition to this entry moved it further. The first draft of this
+correction quoted the exact line distance; writing it moved the line and made the
+number wrong, which settled the wording: name the line by its SHAPE, count
+nothing. That is the same reason the script matches on the shape rather than on a
+version.
+
+**Running it locally needs the workspace NAMED.** Use
+`npm run check-release --workspace apps/cribl-app` from `soc-optimizationtoolkit`
+- which is exactly what CI runs - or a bare `npm run check-release` from
+`apps/cribl-app`. A plain `npm run check-release` from `soc-optimizationtoolkit`
+exits 1 with "Missing script": alone among its siblings (`check-board`,
+`check-docs`, `check-listings`, `check-schema-asset`, `check-board-freshness`) it
+was never forwarded in the root `package.json`. Measured 2026-09-03, after this
+entry had claimed the plain form worked since the check was written. Forwarding
+it at the root is the fix, and would make the shorter command true.
+
+**The lock claim was added 2026-09-02, and it costs a manual step.** The lock was
+found recording 1.11.5 while `package.json` said 1.12.3. The argument against
+checking a GENERATED file was taken seriously first - a claim on one fails
+whenever somebody forgets to regenerate it, which is how a check gets bypassed
+rather than obeyed - and it lost on THREE measurements, the same three the
+script's header numbers, in the same order. (1) The drift window is one moment,
+the release commit, because `package.mjs` writes the version and never invokes
+npm, while ordinary dependency work already forces an `npm install`. (2) It does
+not self-correct: the lock sat at 1.11.5 across FOURTEEN subsequent releases,
+1.11.6 through 1.12.3, before an agent noticed it by accident. (3) The damage is
+exactly the damage this check exists for and no more - `npm ci` accepts the
+mismatch (measured on npm 11.4.2 - exit 0, lock untouched) and the lock never
+ships inside the tgz, so nothing breaks except that a tracked file states a
+version that is not the version. The full argument is in the script's header.
+The cost, stated rather than buried: THREE of the five claims are now kept true
+by hand where two were. The root fix is `package.mjs` regenerating the lock as it
+already writes `package.json` and `release/`, at which point this claim guards an
+automated fact instead of a chore; until that lands, the packaging procedure
+below carries the step.
 
 **Unreleased source WARNS and never fails**, which is the one rule to keep if
 this is ever rewritten: a feature branch normally carries source the last package
@@ -1128,10 +1173,19 @@ applies to its tooling too. The pins live beside it in
 stated without a repo, a git history or a tarball.
 
 **1.12.3 IS CURRENT (2026-08-27).**
-`release/soc-optimizationtoolkit-1.12.1.tgz` - the guid-column cast (ADR-0004)
-and the architecture-audit cleanup, on top of 1.12.0's ADR-0003 in full.
+`release/soc-optimizationtoolkit-1.12.3.tgz` - a pack rebuild now REPLACES
+rather than merges, so it no longer inherits the previous build's orphaned
+pipelines, on top of 1.12.2's working Cribl Lake sample source, 1.12.1's
+guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.1.
+file at 1.4.0 and now current through 1.12.3.
+
+Both version claims in the two lines above were STALE until 2026-09-03: they
+named the 1.12.1 tarball and 1.12.1 notes while `release/` held 1.12.3 and the
+notes ran to 1.12.3. The check above stayed green throughout, because it reads
+the "IS CURRENT" number and nothing else on these lines - so the entry warning
+that hand-maintained version claims decay was itself carrying two decayed ones.
+Widening the check to the tarball FILENAME named here would have caught it.
 
 Note for anyone running 1.12.0: it does NOT contain the guid fix. Any DCR
 deployed from it still drops guid-typed columns, and the affected table columns
@@ -1158,6 +1212,28 @@ running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
 landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
 only place the doubled number shows up, and `release/` gets pruned to it, so the
 wrong version becomes the shipped one quietly. Bump by running the script.
+
+**AFTER `npm run package`, RUN `npm install --package-lock-only` AND COMMIT THE
+ONE-LINE LOCK CHANGE.** `package.mjs` bumps `apps/cribl-app/package.json` and
+writes the tgz but never invokes npm, so without this step every release commit
+leaves `package-lock.json` naming the PREVIOUS version and `check-release` red.
+That check runs in CI on every PR touching `soc-optimizationtoolkit/**`, so the
+consequence is a blocked PR, not a local nuisance. Measured 2026-09-02 in an
+isolated sandbox mirroring the layout: a faithful 1.12.3 -> 1.12.4 release with
+the lock left as npm left it exits 1 with "package-lock.json records the app at
+1.12.3 but package.json says 1.12.4"; running the command turns the same tree
+green. Run it from `soc-optimizationtoolkit` or from `apps/cribl-app` - npm walks
+up to the workspace root either way, also measured - and prefer
+`--package-lock-only` over a bare `npm install` because it is the minimal command
+that fixes this and only this. NOT because the bare form rewrites the lock: in
+the same sandbox, seeded at manifest 1.12.4 / lock 1.12.3, the two commands wrote
+a BYTE-IDENTICAL lock - same sha256, and the same SINGLE changed line, the
+`apps/cribl-app` version field: one deletion and one insertion, which is the
+one-line change the heading above asks you to commit. Re-measured 2026-09-03 on
+npm 11.4.2 / node 24.4.1, from both directories. The difference is
+`node_modules`, which the bare form resolves and installs and
+`--package-lock-only` never creates. This step disappears when `package.mjs`
+regenerates the lock itself.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing

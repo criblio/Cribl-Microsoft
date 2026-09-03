@@ -60,9 +60,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Fails when package.json, release/, release-notes.md and backlog.md stop
-      # agreeing on which version is current; warns, never fails, when source has
-      # landed since that version was packaged. See backlog.md item 8.
+      # Fails when package.json, package-lock.json, release/, release-notes.md
+      # and backlog.md stop agreeing on which version is current; warns, never
+      # fails, when source has landed since that version was packaged. The lock
+      # is the one held to package.json rather than to the tarball, since npm
+      # copies that field verbatim. See backlog.md item 8.
       - name: Check release drift
         run: npm run check-release --workspace apps/cribl-app
 

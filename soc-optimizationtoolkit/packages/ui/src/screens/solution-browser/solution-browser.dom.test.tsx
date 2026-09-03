@@ -352,4 +352,184 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
     expect(cardBadges()[0]?.textContent).toBe(DELIVERY_FIT_NO_CONNECTOR_LABEL);
     expect(cardBadges()[0]?.textContent).not.toBe("Recommended");
   });
+
+  /**
+   * DBT-75. The card must not print an ADDRESS.
+   *
+   * It used to render `Deep link: #/?solution=<name>` as a copyable chip - a
+   * bare fragment with no base on the only shipped shell, so an operator who
+   * copied it got nothing. The reasoning is on the component; what is pinned
+   * here is the outcome, because the failure was pure copy and nothing in the
+   * suite ever read the loaded card's text.
+   *
+   * TWO WAYS THIS PIN COULD LIE, both closed below. It could pass VACUOUSLY by
+   * asserting absence against a card that never reached the loaded phase, so
+   * the positive assertions come first and name the exact fetch result. And it
+   * could pass against a re-added chip under a friendlier label, so the word
+   * "Deep link" is not the only negative.
+   *
+   * THE SHAPE NEGATIVE IS DELIBERATELY WIDER THAN THE BUILDER. This pin first
+   * shipped asserting `#/?solution=` - the one shape buildSolutionDeepLink
+   * emits - under a docblock claiming "any re-advertisement has to print
+   * #/?solution= to be worth printing". That was false: parseSolutionDeepLink
+   * accepts THREE shapes (browser-state.ts:139-143, pinned at
+   * browser-state.test.ts:144-148), so a chip printing
+   * `#/integrate?solution=<name>` would be just as usable and just as wrong.
+   * Measured 2026-09-02 by re-adding exactly that chip: the file stayed at 13
+   * passed and this pin never fired. The assertion is now on `?solution=`, the
+   * substring every accepted shape carries, plus a STRUCTURAL negative that
+   * depends on no string at all.
+   *
+   * ...AND WIDER THAN TEXT, which is where it lied next. Everything above
+   * reads textContent, which sees nothing an element carries in an ATTRIBUTE.
+   * Measured 2026-09-03 against the pin as it then stood (the text negatives
+   * plus a `.code-chip` count) by adding
+   * `<a href={buildSolutionDeepLink(selected.name)}>Copy link to this
+   * solution</a>` to the loaded block: 14 passed, 0 failed, nothing fired - an
+   * address re-advertised through an href hands the operator the same false
+   * promise as one printed as text. With the attribute scan below in place the
+   * same mutation fails: re-measured 2026-09-03 at 13 passed, 1 failed, on
+   * "expected '#/?solution=Palo%20Alto%20Cortex%20XDR' not to contain
+   * '?solution='".
+   *
+   * ...AND WIDER THAN THE DOM, which is where it lied after that. A CONTROL can
+   * hold the address in a closure, where neither text nor attributes reach it.
+   * Measured 2026-09-03 by adding a button labelled "Copy link to this
+   * solution" whose onClick writes buildSolutionDeepLink to the clipboard: 14
+   * passed, 0 failed, every negative above silent - and an operator handed
+   * exactly the unreachable fragment the chip used to print. The property being
+   * pinned is the CLASS - nothing on this card offers an address - and text,
+   * attributes and controls are the three ways to offer one, so the last
+   * assertion below is the card's whole control set.
+   */
+  it("prints the connector detail without advertising an address", async () => {
+    await selectSolution(
+      contentWith(async () => [FILE], async () => PUSH_JSON),
+      ABSENT,
+    );
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected")?.textContent,
+      ).toContain("1 connector file");
+    });
+    const card = document.querySelector(".solution-browser-selected");
+    if (card === null) {
+      throw new Error("the selected-solution card did not render");
+    }
+    const text = card.textContent ?? "";
+    // The card really is in the loaded phase, so the negatives below mean
+    // "the chip is gone" and not "nothing rendered".
+    expect(text).toContain(ABSENT);
+    expect(text).toContain("1 connector file");
+    expect(text).toContain("Clear selection");
+    // The claim itself: no label, no fragment, no element for it. Matched
+    // case-insensitively because "Copy deep link" advertises exactly what
+    // "Deep link:" did. Measured 2026-09-03 with a button under that label and
+    // this line in its original exact-case form: it stayed silent, and only the
+    // control assertion at the end of this test caught the button.
+    expect(text.toLowerCase()).not.toContain("deep link");
+    // Every shape parseSolutionDeepLink accepts carries this substring; the
+    // `#/` prefix this used to assert only covered the builder's own output.
+    expect(text).not.toContain("?solution=");
+    // THE ATTRIBUTE HALF. Same negatives, over every attribute value on the
+    // card - href, title, aria-label, data-*, whatever a future chip picks -
+    // because a link is an address whether it is printed or carried.
+    const attributeValues = [card, ...card.querySelectorAll("*")].flatMap(
+      (el) => el.getAttributeNames().map((name) => el.getAttribute(name) ?? ""),
+    );
+    // Non-vacuity for the scan itself: an empty collection would satisfy every
+    // negative in the loop below without looking at anything. Measured
+    // 2026-09-03, the loaded card carries 10 attribute values - nine class
+    // names and the badge's title - so the floor sits well under that (a
+    // cosmetic class change must not fail this pin) and well over zero.
+    expect(attributeValues.length).toBeGreaterThan(3);
+    for (const value of attributeValues) {
+      expect(value).not.toContain("?solution=");
+      expect(value.toLowerCase()).not.toContain("deep link");
+    }
+    // THE STRUCTURAL HALF, independent of any string a future chip picks. The
+    // loaded card is a label, the solution name, its badges, the connector
+    // count, the Clear button and its warning: nothing on it navigates and
+    // nothing on it is a code chip, so an element of either kind appearing
+    // here IS an address being advertised. If a genuine link is ever wanted on
+    // this card - a GitHub URL for the solution, say - the fix is to assert
+    // that its href is not a deep link, not to drop this line.
+    expect(card.querySelectorAll("a, [href]").length).toBe(0);
+    expect(card.querySelectorAll(".code-chip").length).toBe(0);
+    expect(card.querySelector(".solution-browser-deeplink")).toBeNull();
+    // THE CONTROL HALF, which the two scans above cannot reach: a button whose
+    // onClick copies buildSolutionDeepLink carries the address in a CLOSURE,
+    // printing nothing and setting no attribute. So the assertion is the card's
+    // whole control set, measured 2026-09-03 in this exact case: one button,
+    // reading "Clear selection". Asserting the LIST rather than a count keeps it
+    // non-vacuous - an empty card fails this line too. When a control is
+    // genuinely wanted here, add it to this list and assert what it does with
+    // the address; do not delete the line, which is how the class stops being
+    // held.
+    const controls = [
+      ...card.querySelectorAll("button, a, input, [role='button']"),
+    ].map((el) => (el.textContent ?? "").trim());
+    expect(controls).toEqual(["Clear selection"]);
+  });
+
+  /**
+   * The other half of the same fix: removing the CLAIM must not remove the
+   * MECHANISM. select() still writes the hash, which is what the mount read
+   * and the SIEM-migration pivot both hand off through - so a future cleanup
+   * that deletes buildSolutionDeepLink along with the chip breaks Unit 26
+   * rather than this card, and would otherwise do it silently.
+   */
+  it("still writes the solution into the hash when one is selected", async () => {
+    await selectSolution(contentWith(async () => []), ABSENT);
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-selected")).toBeTruthy();
+    });
+    expect(window.location.hash).toBe("#/?solution=Palo%20Alto%20Cortex%20XDR");
+  });
+
+  /**
+   * ...and the READ half, which is the one that was unpinned and the one that
+   * matters. The write pin above catches a cleanup that deletes
+   * buildSolutionDeepLink; it says nothing about the MOUNT READ, and the read
+   * is what the SIEM-migration pivot and the refresh-restore both actually
+   * depend on, since each of them only ever writes a hash and navigates.
+   *
+   * Measured 2026-09-02: inverting the `typeof window !== "undefined"` guard on
+   * the deepLinkName initializer (solution-browser.tsx:179) disables the read
+   * outright, and the whole packages/ui suite still passed at 80 files / 1343
+   * tests. No test in the package set a solution hash and asserted a preselect.
+   * Re-measured 2026-09-03 with this pin in place: the same inversion fails
+   * this test and ONLY this test - 1 failed, 13 passed in the file, 1 failed
+   * file of 80 in the package - so the 1343 above is this pin's own absence,
+   * not a suite that was looking elsewhere.
+   *
+   * It also settles the mechanism the DBT-75 note on the component argues over:
+   * a fragment present BEFORE the first render is consumed normally. First-visit
+   * mounting is what makes that read fire, not what prevents it.
+   *
+   * The hash is written as a LITERAL rather than through buildSolutionDeepLink,
+   * so this pin still fails if a cleanup deletes the builder and the read
+   * together - which is precisely the cleanup it exists to catch.
+   */
+  it("preselects the solution named in the hash present at first render", async () => {
+    window.location.hash = "#/?solution=Palo%20Alto%20Cortex%20XDR";
+    render(
+      <PortsProvider
+        ports={{ content: contentWith(async () => []) } as unknown as UiPorts}
+        config={CONFIG}
+      >
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe(ABSENT);
+    });
+    // A SELECTION, not a browse list that happens to contain the name: the
+    // list is hidden once something is selected, and the selection is what the
+    // pivot hands off. Without this a rendered list would satisfy the name
+    // assertion if it were ever scoped more loosely.
+    expect(document.querySelector(".solution-browser-list")).toBeNull();
+  });
 });

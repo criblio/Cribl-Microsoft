@@ -18,6 +18,7 @@ import {
 } from "./models";
 import { parseByFormat } from "./parsers";
 import { positionalNote } from "./positional";
+import { unaddressableFieldNote } from "./accessor-names";
 import { detectCaptureInnerFormat, detectSampleFormat } from "./format-detection";
 import type { DetectMode } from "./format-detection";
 
@@ -428,6 +429,34 @@ export function parseSampleContent(
   const fields = collectFields(records);
   const timestampField = guessTimestampField(fields);
   const rawEvents = rawEventsFor(records, sourceLines);
+
+  // DBT-78: the sample carries field names Cribl cannot build an accessor for.
+  // Said HERE, beside the field list the operator is reading, because pack-build
+  // is both too late and - depending on what the matcher does with the field -
+  // never.
+  //
+  // checkCriblYaml refuses a hyphen or a dot only on a field the matcher
+  // RENAMES. It reads names off `name:`/`currentName:`/`newName:` lines, and a
+  // rename is the only thing that puts a VENDOR name on one - the other such
+  // lines a conf carries hold names this app minted, which are addressable by
+  // construction. A field with no destination column leaves only a bullet in
+  // the cleanup eval's `remove:` list, and a field kept under its own name
+  // leaves nothing at all. Measured end to end, both of those build
+  // clean, as does any name containing whitespace even on a rename line. See
+  // the tables in accessor-names.ts and in the KNOWN GAPS note in
+  // pipeline-generation/cribl-yaml-validator.ts.
+  //
+  // Not a complaint about the build message, which does quote the field by name
+  // and echo the offending line. The point is WHEN - section 2 of the Integrate
+  // page rather than section 9 - and, for an unmatched or kept name, WHETHER
+  // there is any message at all. For a DOTTED name nothing fails anywhere until
+  // production data arrives renamed to nothing. See accessor-names.ts for why
+  // the parser reports these rather than quietly rewriting them to safe names.
+  //
+  // AFTER the unwrap, deliberately: a Cribl capture's wrapper fields are
+  // replaced by the vendor's, and it is the vendor's names that reach a rename.
+  const accessorNote = unaddressableFieldNote(fields.map((f) => f.name));
+  if (accessorNote !== null) errors.push(accessorNote);
 
   return {
     format,

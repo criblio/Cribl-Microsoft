@@ -25,6 +25,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { isCriblAccessorSafe } from "../sample-parsing";
+
 /**
  * Return the list of Cribl-YAML acceptance issues in `content` (empty = clean).
  * `fileName` is used only in messages; route detection is content-based.
@@ -110,13 +112,93 @@ export function checkCriblYaml(content: string, fileName: string): string[] {
     // dots fail quietly, which is worse.
     //
     // Scope note: quoting is NOT the escape hatch here - the three rules above
-    // forbid it, because Cribl's YAML loader rejects those forms. The fix for a
-    // source that genuinely carries such names is to give the PARSER an
-    // addressable name, as the positional parser does for VPC Flow.
+    // forbid it, because Cribl's YAML loader rejects those forms. Where the app
+    // MINTS the runtime name (positional splits, PAN-OS CSV column assignment)
+    // the fix is to mint an addressable one, as positional.ts does for VPC Flow.
+    // Where Cribl's own serde mints it from the vendor's bytes (JSON, NDJSON,
+    // key=value) there is no such move, and this refusal is the answer - see the
+    // header of sample-parsing/accessor-names.ts.
+    //
+    // THE PREDICATE IS IMPORTED, not re-spelled: this rule was written here and
+    // again for the parse-time note, and one rule in two regexes is the drift
+    // this codebase keeps paying for.
+    //
+    // KNOWN GAPS - THIS RULE REACHES LESS THAN ITS MESSAGE IMPLIES. There are
+    // TWO holes and neither is in the imported predicate; the first is the
+    // bigger, and it is not in the line matcher below either.
+    //
+    // GAP 1 - THE ONLY SOURCE FIELD THIS RULE EVER SEES IS A RENAMED ONE. It
+    // reads names off `name:`/`currentName:`/`newName:` lines, and a rename is
+    // the only thing that puts a SOURCE field name on one. A field the matcher
+    // could not place appears solely as a bullet in the cleanup eval's
+    // `remove:` list; a field kept under its own name appears nowhere in the
+    // conf at all. The rule is not idle on those confs - it still reads the
+    // `name: Type` the enrich eval adds, and every other name this app mints -
+    // but a minted name is a bare identifier by construction, so reading it
+    // costs nothing and catches nothing. Measured
+    // 2026-09-03 by running parseSampleContent -> matchSampleToSchema ->
+    // buildPipelinePlan -> generatePipelineConfForPlan -> checkCriblYaml and
+    // counting issues on the WHOLE conf:
+    //
+    //   src-ip/dst-ip/account-id renamed to SrcIpAddr/
+    //     DstIpAddr/AccountId                            -> 3 issues  refused
+    //   aws.account, no destination column (drop; its
+    //     only trace is `- aws.account` under `remove:`)  -> 0 issues  ships
+    //   src-ip and vendor-thing, both unmatched           -> 0 issues  ships
+    //   a.b matched to a column also named a.b (keep)     -> 0 issues  ships
+    //
+    // So an awkward vendor name is refused only when the matcher RENAMES it,
+    // which needs a destination column AND a different spelling - the LAST row
+    // above had a column and still shipped, because a.b needed no rename.
+    // Closing this means checking names the conf does not present as
+    // identifiers - `remove:` bullets - which is a NEW rule, not a wider class
+    // here, and it has to decide what a drop of an unaddressable name even means
+    // (the remove is a glob list, not an accessor).
+    //
+    // GAP 2 - A NAME CONTAINING WHITESPACE IS NOT SEEN EVEN ON A RENAME LINE,
+    // and that one IS in the line matcher below. `([^'"\s][^\s]*)\s*$` cannot
+    // match a value containing a space, so the rule never runs on one. Measured
+    // with this file's own test helper:
+    //
+    //   "Source IP"  -> 0 issues     NOT refused
+    //   "account-id" -> 1 issue      refused
+    //   "a.b"        -> 1 issue      refused
+    //
+    // (A TAB name does produce one issue, but from the "contains tab character"
+    // rule above - not from this one. Do not read that as coverage.)
+    //
+    // A space-headed CSV is a common source of such names, so this is not a
+    // corner. It is recorded rather than fixed because `[^\s]*` IS LOAD-BEARING:
+    // pipeline GROUP headers are `name:` lines carrying prose, and widening the
+    // class alone makes this rule match them. Measured on four generated confs
+    // (kv, json and ndjson; renamed, dropped and kept fates), each carries the
+    // three headers this file's emitter writes unconditionally - "Field
+    // Extraction", "Enrich & Classify", "Sentinel Cleanup" - a widened class
+    // captures all three, none is an identifier, so every pack would gain three
+    // false failures. Two more group headers are emitted conditionally
+    // ("Volume Reduction", "Overflow Collection" - read from pipeline-conf.ts,
+    // not measured here), so a pack carrying those would gain five. Closing
+    // GAP 2 therefore requires distinguishing a GROUP `name:` from a field
+    // `name:`/`currentName:`/`newName:` FIRST; that is its own change with its
+    // own pins.
+    //
+    // NEITHER GAP IS ON A CARD. Checked against docs/board.json 2026-09-03:
+    // DBT-78 is the only card here and it is about the ESCAPE SYNTAX question,
+    // not about the rule's reach. This comment is the record until that
+    // changes; it does not defer to a card that exists.
+    //
+    // While these are open, the DBT-78 parse note is the only warning an
+    // unmatched, a kept or a spaced name gets, which is why that note
+    // deliberately promises no build-time refusal - see unaddressableFieldNote
+    // in sample-parsing/accessor-names.ts.
+    //
+    // The test in this module named "FLAGS a leading digit and a space" asserts
+    // only the leading digit; its name is wrong, and believing it is how the
+    // parse note came to claim a guarantee that does not exist.
     const fieldName = line.match(
       /^\s+-?\s*(?:name|currentName|newName): ([^'"\s][^\s]*)\s*$/,
     );
-    if (fieldName !== null && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldName[1] ?? "")) {
+    if (fieldName !== null && !isCriblAccessorSafe(fieldName[1] ?? "")) {
       issues.push(
         `Line ${lineNum}: field name "${fieldName[1]}" is not a valid Cribl ` +
           `property accessor - Cribl will fail to build an accessor for it at ` +

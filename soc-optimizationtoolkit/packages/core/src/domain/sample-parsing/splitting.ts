@@ -37,8 +37,34 @@ import {
  * pulls `key=value` and `key="quoted value"` pairs.
  *
  * Sibling to `parseKv` in ./parsers since the rehome (ADR 0003), and kept
- * separate on purpose - see that function's note. The two agree on ordinary
- * input today; the reason not to merge them is blast radius, not behaviour.
+ * separate on purpose - see that function's note.
+ *
+ * THEY DISAGREE, as of DBT-79, and this is the place someone checking the
+ * divergence looks - so it is written here rather than only on `parseKv`. That
+ * function's key class was widened to the whole token before the `=`; this one
+ * still truncates on `\w+`. Measured:
+ *
+ *   "src-ip=1.1.1.1 action=A"
+ *     parseKv     -> ["src-ip", "action"]
+ *     parseKvLine -> ["ip",     "action"]
+ *
+ * THE TRUNCATION IS LOAD-BEARING HERE, which is why it was not fixed at the same
+ * time. This function exists to find a DISCRIMINATOR, and `DISCRIMINATOR_FIELDS`
+ * holds word-only spellings (`type`, `subtype`, `action`, `category`,
+ * `logType`, ...) that hyphenated vendor keys truncate straight INTO. Measured:
+ *
+ *   "log-type=TRAFFIC src-ip=1.1.1.1 action=A"
+ *     parseKvLine -> ["type", "ip", "action"]
+ *
+ * `type` is the second entry in the list and in its high-confidence prefix, so
+ * a single distinct value selects it - today's split works BY ACCIDENT. Give
+ * this function the correct key `log-type`, which is in no list, and the field
+ * stops matching, the split falls back, and every stored sample is re-keyed
+ * (a log type is the tagged-sample store's KEY, see the DETERMINISM note above).
+ *
+ * So the ORDER of the eventual fix is fixed: teach `DISCRIMINATOR_FIELDS` the
+ * hyphenated aliases FIRST, then widen the key here - never the reverse. That
+ * sequencing is on the card requested with DBT-79, not a drive-by.
  */
 export function parseKvLine(line: string): Record<string, string> {
   const fields: Record<string, string> = {};
