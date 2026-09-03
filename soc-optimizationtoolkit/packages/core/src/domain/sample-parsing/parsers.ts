@@ -21,6 +21,7 @@
  */
 
 import { positionalFieldName } from "./models";
+import { parsePositional } from "./positional";
 import type { SampleFormat } from "./models";
 import { panosHeadersFor, panosLogTypeFrom } from "./panos-dictionary";
 
@@ -418,6 +419,11 @@ export function parseByFormat(
       return parseLeef(content, sourceLines);
     case "syslog":
       return parseSyslog(content, sourceLines);
+    case "positional":
+      // DBT-77. Named columns when the shape is recognisable (VPC Flow v2),
+      // field1..fieldN when it is not - see positional.ts for why naming is
+      // the hard half and why declining to name is the honest answer.
+      return parsePositional(content);
     default: {
       // Annotated so the JSON/NDJSON parsers (which take no accumulator and
       // never need one) sit in the same array as the line-oriented ones.

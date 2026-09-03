@@ -87,3 +87,45 @@ describe("route-key contract (filter: not condition:)", () => {
     expect(checkCriblYaml(breakers, "breakers.yml")).toEqual([]);
   });
 });
+
+describe("field names Cribl cannot address (DBT-78)", () => {
+  const renameYaml = (name: string): string =>
+    [
+      "  - id: rename",
+      "    conf:",
+      "      rename:",
+      `        - currentName: ${name}`,
+      "          newName: AccountId",
+    ].join(String.fromCharCode(10));
+
+  it("FLAGS the hyphenated name a user actually hit", () => {
+    // AWS VPC Flow Logs document their fields with hyphens. Cribl parses
+    // currentName as a property accessor path, so `account-id` reads as
+    // `account` minus `id` and dies at RUNTIME with "Failed to build property
+    // accessor" - after the pipeline has loaded and silently renamed nothing.
+    const issues = checkCriblYaml(renameYaml("account-id"), "conf.yml");
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain("account-id");
+    expect(issues[0]).toContain("property accessor");
+  });
+
+  it("FLAGS a DOTTED name, which is the dangerous one", () => {
+    // `a.b` IS a valid accessor - for a NESTED field. A flat field named `a.b`
+    // therefore does not error at all: it addresses something that does not
+    // exist, renames nothing, and reports success. Hyphens fail loudly; dots
+    // fail quietly, so this pin matters more than the one above.
+    expect(checkCriblYaml(renameYaml("a.b"), "conf.yml")).toHaveLength(1);
+  });
+
+  it("FLAGS a leading digit and a space", () => {
+    expect(checkCriblYaml(renameYaml("1field"), "conf.yml")).toHaveLength(1);
+  });
+
+  it("ACCEPTS a plain identifier, including underscores", () => {
+    // The fix for a source that genuinely carries an unaddressable name is to
+    // give the PARSER an addressable one - which is why the positional parser
+    // emits account_id rather than AWS's account-id.
+    expect(checkCriblYaml(renameYaml("account_id"), "conf.yml")).toEqual([]);
+    expect(checkCriblYaml(renameYaml("_raw"), "conf.yml")).toEqual([]);
+  });
+});

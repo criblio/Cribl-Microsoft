@@ -34,6 +34,10 @@ export type SampleFormat =
   | "cef"
   | "leef"
   | "syslog"
+  // DBT-77: whitespace-separated, fixed column order, no header - AWS VPC Flow
+  // Logs v2 and friends (ELB, CloudFront access logs). Named columns when the
+  // shape is recognised, field1..fieldN when it is not.
+  | "positional"
   | "unknown";
 
 /**

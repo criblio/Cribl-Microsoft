@@ -17,6 +17,7 @@ import {
   type SampleFormat,
 } from "./models";
 import { parseByFormat } from "./parsers";
+import { positionalNote } from "./positional";
 import { detectCaptureInnerFormat, detectSampleFormat } from "./format-detection";
 import type { DetectMode } from "./format-detection";
 
@@ -404,6 +405,17 @@ export function parseSampleContent(
 
   if (records.length === 0 && errors.length === 0) {
     errors.push("Could not parse any events from the provided content");
+  }
+
+  // DBT-77: a positional file parsed, but its columns may be unnamed. That is
+  // not an error and must not read like one - the events ARE here and the file
+  // is not at fault. The note says so, and says why the names are missing,
+  // because a positional format keeps its schema outside the file. It is
+  // omitted entirely when the shape was recognised and the columns carry real
+  // names, since a note on a working parse is noise.
+  if (format === "positional") {
+    const note = positionalNote(content);
+    if (note !== null) errors.push(note);
   }
 
   const unwrapped = unwrapCapture(records, format);
