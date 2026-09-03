@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**50 in the backlog, 1 in progress, 92 done.**
+**52 in the backlog, 1 in progress, 92 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 7 | 53 | 2 |
+| Sentinel Integration | 9 | 53 | 4 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 51.
+Open work totals 53.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 76% (60/79)
+### `DBT` Quality and technical debt _(enabler)_ - 74% (60/81)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 31/36 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 31/38 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/11 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -219,7 +219,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (3)
 
 Next to pick up. Nothing blocks these.
 
@@ -269,6 +269,64 @@ Next to pick up. Nothing blocks these.
   inventory-standard failure inside the measurement used to justify the
   design. The reviewer refetched the live index and equality still has 0
   collisions, so the DESIGN holds and only the CLAIM overreached.
+
+- **DBT-78** A JSON source with a hyphen or dot in a key builds a pipeline that renames nothing
+  `DBT-F1` `bug` `settled`
+  FOUND while fixing [[DBT-77]], and it is PRE-EXISTING rather than caused by
+  it - the VPC work only produced the first field names that exposed it. Cribl
+  parses a rename's `currentName` as a PROPERTY ACCESSOR PATH, not a literal
+  string. pipeline-conf.ts emits `currentName: ${sourceName}` raw, so any
+  source field that is not a bare identifier produces a pipeline that LOADS
+  and then fails at runtime: 'Failed to build property accessor,
+  path="account-id", err=invalid property accessor path="account-id"' -
+  reported by a user against AWS VPC Flow Logs. MEASURED, not assumed, against
+  the shipped parsers: NDJSON/JSON passes keys through verbatim, so
+  `{"src-ip":...}` yields a field named `src-ip` and `{"a.b":...}` yields
+  `a.b`. Both reach the rename emitter unaltered. CSV is not affected because
+  its detector requires identifier headers (a hyphenated header falls to
+  `unknown` and parses as _0.._3, which is its own problem - see [[DBT-79]]).
+  THE DOTTED CASE IS THE DANGEROUS ONE and is why this is `now` rather than
+  `next`. `a.b` IS a valid accessor - for a NESTED field. So a flat field
+  literally named `a.b` does not error at all: it silently addresses something
+  that does not exist, renames nothing, and the build reports success. The
+  hyphen fails loudly; the dot fails quietly, and a silent no-op rename means
+  data lands in the wrong column or not at all. WHAT SHIPPED WITH DBT-77, and
+  what did NOT. Shipped: checkCriblYaml now REJECTS a name/currentName/newName
+  that is not a valid accessor, so a build that would die in Cribl fails at
+  generation instead, naming the field and the reason. That moves the failure
+  forward; it does not fix it. NOT SHIPPED, deliberately: the actual escape
+  syntax. Quoting is not available - the three rules above the new one forbid
+  single-quoted field names because Cribl's YAML loader rejects them. Bracket
+  notation may be the answer but I could not verify it against a live Cribl,
+  and guessing at a syntax then pinning the guess is how a wrong answer gets
+  credibility it has not earned. TO CLOSE THIS: determine what Cribl actually
+  accepts for a non-identifier field path in a rename, against a real
+  instance. Then either emit that form, or - as the positional parser now does
+  for VPC Flow - give the PARSER an addressable name and keep the vendor
+  spelling for display only.
+
+- **DBT-79** A key=value pair with a hyphen loses everything before the hyphen
+  `DBT-F1` `bug` `settled`
+  FOUND while checking whether [[DBT-78]] affected other formats. It does not
+  - this is a DIFFERENT and worse defect in the same neighbourhood, and it is
+  silent data loss. MEASURED against the shipped parser: the input
+  `src-ip=1.1.1.1 dst-ip=2.2.2.2 action=ACCEPT bytes=10` parses as format `kv`
+  with fields `ip, action, bytes`. Not `src-ip` and `dst-ip` - just `ip`. The
+  `src-` and `dst-` prefixes are DISCARDED, and worse, the two distinct fields
+  COLLIDE into one: `src-ip` and `dst-ip` both become `ip`, so one silently
+  overwrites the other and the event loses a value entirely. Four fields in,
+  three out, no error, no note. WHY IT MATTERS BEYOND THE ODDITY: hyphenated
+  keys are ordinary in real kv logs, and the failure is invisible at every
+  stage. The parse reports success, the gap analysis sees a field called `ip`
+  and maps it, and the operator has no way to know a field was eaten. It is
+  the confident wrong answer at the parsing layer rather than the reporting
+  layer. NOT INVESTIGATED FURTHER, and stated as unknown rather than guessed:
+  I did not read parseKv to find whether the hyphen is being treated as a
+  delimiter, as a token break, or something else, and I did not check whether
+  other characters (dots, colons, brackets) behave the same way. The
+  reproduction above is measured; the CAUSE is not. First step is to establish
+  which characters break a key and whether any of them collide the way
+  `src-ip` and `dst-ip` do.
 
 ---
 
