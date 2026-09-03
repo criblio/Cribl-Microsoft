@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**52 in the backlog, 1 in progress, 92 done.**
+**47 in the backlog, 6 in progress, 92 done.**
 
 ## By menu item
 
@@ -142,7 +142,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (6)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -217,58 +217,72 @@ Started. Anything here with an unfinished dependency is called out on its card.
   starts by making the stamp survive every write rather than by redesigning
   ownership again.
 
----
+- **DBT-73** Nothing holds the vendored spec facts the docs cite
+  `DBT-F1` `enabler` `settled`
+  FOUND by review of [[DBT-7]], and demonstrated rather than argued: the
+  reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node'
+  to 'Worker Process' - the exact silent invalidation a re-vendor would cause
+  - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs
+  holds only that the file exists, and a re-vendor cannot delete the file, so
+  its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing
+  cribl-openapi.json. That citation is now load-bearing prose with nothing
+  behind it, which is the shape [[DBT-12]] already names and [[DBT-67]]
+  already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO:
+  entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source
+  file and fails with 'Either restore the file, or delete these provenance
+  pins AND the claim together'; five more test files use readFileSync the same
+  way. Scope: a provenance pin asserting
+  InputDatagen.samples.items.properties.eventsPerSec's title against the
+  vendored asset, and a sweep for other doc claims citing that spec which are
+  equally unheld. Do NOT pin the whole spec - pin the facts documents actually
+  lean on, or this becomes a second copy of the spec that drifts from the
+  first.
 
-## Backlog - now (3)
+- **DBT-75** The solution deep-link chip advertises a URL the shipped shell cannot reach
+  `DBT-F2` `bug` `settled`
+  Not now because: Split out of [[DBT-28]] on 2026-09-01 by decision, and held
+  at next because it is a DIFFERENT user story from the other two defects in
+  that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a
+  mount-only hash read that together make the pivot inert after first use.
+  This one is a copyable link that leads somewhere the shell does not serve.
+  Nothing is silently wrong on screen: the chip renders and the operator can
+  read it, so the failure is discoverable rather than invisible, which is what
+  separates it from the pivot defect. Keeping them in one card would also have
+  put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at
+  the time.
+  Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524
+  renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the
+  shipped shell does not route it. So an operator who copies the advertised
+  link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct
+  the advertised URL to whatever the shell actually serves, to register the
+  route, or to stop advertising a link at all. Which one depends on whether a
+  shareable deep link is wanted at all, which nobody has decided. Establish
+  that before writing code.
 
-Next to pick up. Nothing blocks these.
-
-- **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
-  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
-  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
-  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
-  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
-  CAUSES and I have not separated them, which is why this is unconfirmed
-  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
-  hash lands on the OUTER frame, so the app may never see it at all - in which
-  case the advertised link is only usable in a standalone shell and the copy
-  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
-  Clear works", so a persisted selection may be designed to win. Settle which
-  before changing anything: if (1), the deep link is broken on the only
-  shipped shell and the card that advertises it is misleading; if (2), it
-  behaves as designed and the COPY needs to say that a stored selection takes
-  precedence. Worth noting the reporter could not tell from the outside, which
-  is the actual defect either way. PROMOTED TO NOW 2026-09-01, and the
-  priorityWhy that held it is retracted rather than merely lifted. It said two
-  candidate causes were recorded and it was unresolved which one bit, so a
-  live repro was cheaper than fixing the wrong one. Investigation measured a
-  THIRD cause the card never considered, and found BOTH recorded candidates
-  wrong - so waiting for a repro to choose between two wrong answers had no
-  value left. THREE SEPARATE DEFECTS SIT HERE. (1) resolveSelectedSolution
-  (browser-state.ts:163-176) matches exact then case-insensitive-exact only,
-  and NOT the punctuation-collapsing match the search box uses
-  (solutionMatchesQuery, :48-63) - so a deep link naming a solution that
-  exists under different punctuation resolves to nothing and is consumed
-  SILENTLY (solution-browser.tsx:390-394). (2) The hash is read on MOUNT only
-  (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
-  the app's own SIEM-migration pivot the second time it is used. (3) The
-  deep-link chip advertises a URL unreachable on the shipped shell (:519-524
-  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
-  the first implementation was reviewed. The fix works and its resolver is
-  well pinned - 9 mutations, every one caught - but review found it makes the
-  pivot a SECOND route from solution X to solution Y that permanently deletes
-  every acquired sample, with no warning and no confirmation, while leaving a
-  code comment and an operator-visible sentence that both assert the opposite.
-  That is DBT-72s trap widened, so the decision was not to ship a second door
-  onto a known trap. DBT-72 settles whether Clear should delete at all; once
-  it does, the pivot is safe by construction rather than by warning. Review
-  also found the pivot resurrects the 2026-07-08 Clear-selection regression
-  through a new door, and that the 0-collisions measurement covered 436 of the
-  574 real Solutions folders - 24 percent unexamined, which is the
-  inventory-standard failure inside the measurement used to justify the
-  design. The reviewer refetched the live index and equality still has 0
-  collisions, so the DESIGN holds and only the CLAIM overreached.
+- **DBT-76** The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3
+  `DBT-F1` `bug` `settled`
+  Not now because: Held at next because nothing is currently WRONG on screen
+  or in a build: the lock entry for a workspace package is bookkeeping, npm
+  resolves the workspace from disk, and all eight gates pass at this drift
+  including check-release, which reports 1.12.3 consistent across
+  package.json, release/, release-notes.md and backlog.md. What it costs is
+  that a fresh npm install silently rewrites the lock - which is how it was
+  found - so the next person to run one gets an unrelated file in their diff
+  and has to decide whether it is theirs.
+  packages/../package-lock.json records apps/cribl-app at 1.11.5;
+  apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A
+  GATE, and reported rather than fixed: during Sentinel Integration wave 2 an
+  implementer ran npm install in its worktree, watched the lock correct itself
+  1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card,
+  and wrote that someone should look at it separately. That was the right call
+  by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT:
+  check-release-drift holds FOUR claims to the version - package.json,
+  release/, release-notes.md and backlog.md - and the lock file is not one of
+  them. So the drift is invisible to the check that exists precisely to keep
+  version claims honest. FIX is a single npm install committing only
+  package-lock.json. The question worth deciding first is whether
+  check-release-drift should hold a FIFTH claim, because a lock that disagrees
+  with its package is exactly the class that check exists for.
 
 - **DBT-78** A JSON source with a hyphen or dot in a key builds a pipeline that renames nothing
   `DBT-F1` `bug` `settled`
@@ -330,7 +344,60 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (18)
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
+
+- **DBT-28** The solution deep link does not override a stored selection
+  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-72`
+  FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
+  advertises `Deep link: #/?solution=1Password`. Navigating the live preview
+  to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
+  selected - the stored selection won and the URL had no effect. TWO CANDIDATE
+  CAUSES and I have not separated them, which is why this is unconfirmed
+  rather than a fix: (1) on the Cribl shell the app runs in an IFRAME and the
+  hash lands on the OUTER frame, so the app may never see it at all - in which
+  case the advertised link is only usable in a standalone shell and the copy
+  is overstating; (2) integrate-screen.tsx says the link is "consumed once so
+  Clear works", so a persisted selection may be designed to win. Settle which
+  before changing anything: if (1), the deep link is broken on the only
+  shipped shell and the card that advertises it is misleading; if (2), it
+  behaves as designed and the COPY needs to say that a stored selection takes
+  precedence. Worth noting the reporter could not tell from the outside, which
+  is the actual defect either way. PROMOTED TO NOW 2026-09-01, and the
+  priorityWhy that held it is retracted rather than merely lifted. It said two
+  candidate causes were recorded and it was unresolved which one bit, so a
+  live repro was cheaper than fixing the wrong one. Investigation measured a
+  THIRD cause the card never considered, and found BOTH recorded candidates
+  wrong - so waiting for a repro to choose between two wrong answers had no
+  value left. THREE SEPARATE DEFECTS SIT HERE. (1) resolveSelectedSolution
+  (browser-state.ts:163-176) matches exact then case-insensitive-exact only,
+  and NOT the punctuation-collapsing match the search box uses
+  (solutionMatchesQuery, :48-63) - so a deep link naming a solution that
+  exists under different punctuation resolves to nothing and is consumed
+  SILENTLY (solution-browser.tsx:390-394). (2) The hash is read on MOUNT only
+  (:174-178) behind keep-alive routes (app-frame.tsx:153-162), which breaks
+  the app's own SIEM-migration pivot the second time it is used. (3) The
+  deep-link chip advertises a URL unreachable on the shipped shell (:519-524
+  vs App.tsx:2011-2017). BLOCKED ON [[DBT-72]] 2026-09-02, by decision, after
+  the first implementation was reviewed. The fix works and its resolver is
+  well pinned - 9 mutations, every one caught - but review found it makes the
+  pivot a SECOND route from solution X to solution Y that permanently deletes
+  every acquired sample, with no warning and no confirmation, while leaving a
+  code comment and an operator-visible sentence that both assert the opposite.
+  That is DBT-72s trap widened, so the decision was not to ship a second door
+  onto a known trap. DBT-72 settles whether Clear should delete at all; once
+  it does, the pivot is safe by construction rather than by warning. Review
+  also found the pivot resurrects the 2026-07-08 Clear-selection regression
+  through a new door, and that the 0-collisions measurement covered 436 of the
+  574 real Solutions folders - 24 percent unexamined, which is the
+  inventory-standard failure inside the measurement used to justify the
+  design. The reviewer refetched the live index and equality still has 0
+  collisions, so the DESIGN holds and only the CLAIM overreached.
+
+---
+
+## Backlog - next (15)
 
 Settled and unblocked, sequenced behind now.
 
@@ -576,27 +643,6 @@ Settled and unblocked, sequenced behind now.
   settled hours ago, so decide it before building - backlog.md section 16 is
   the reasoning it would amend.
 
-- **DBT-73** Nothing holds the vendored spec facts the docs cite
-  `DBT-F1` `enabler` `settled`
-  FOUND by review of [[DBT-7]], and demonstrated rather than argued: the
-  reviewer flipped the vendored spec's eventsPerSec title from 'Worker Node'
-  to 'Worker Process' - the exact silent invalidation a re-vendor would cause
-  - and EVERY gate stayed green, 5,069 tests across 297 files. check-docs
-  holds only that the file exists, and a re-vendor cannot delete the file, so
-  its coverage of this risk is precisely zero. DBT-7 corrected a doc by citing
-  cribl-openapi.json. That citation is now load-bearing prose with nothing
-  behind it, which is the shape [[DBT-12]] already names and [[DBT-67]]
-  already cost seven weeks. THE PATTERN ALREADY EXISTS IN THIS REPO:
-  entra-diagnostics.test.ts:43-54 is a provenance pin that reads a non-source
-  file and fails with 'Either restore the file, or delete these provenance
-  pins AND the claim together'; five more test files use readFileSync the same
-  way. Scope: a provenance pin asserting
-  InputDatagen.samples.items.properties.eventsPerSec's title against the
-  vendored asset, and a sweep for other doc claims citing that spec which are
-  equally unheld. Do NOT pin the whole spec - pin the facts documents actually
-  lean on, or this becomes a second copy of the spec that drifts from the
-  first.
-
 - **DBT-74** content-install still hand-rolls the never-rejects contract DBT-56 made a type
   `DBT-F1` `enabler` `settled`
   Found by the fifteenth architecture audit, check 2, and reported as ADJACENT
@@ -624,52 +670,6 @@ Settled and unblocked, sequenced behind now.
   is observed. What is missing is the guard - as with the batch before DBT-56,
   the next ARM call added outside a try block reopens the failure and nothing
   fails when it does.
-
-- **DBT-75** The solution deep-link chip advertises a URL the shipped shell cannot reach
-  `DBT-F2` `bug` `settled`
-  Not now because: Split out of [[DBT-28]] on 2026-09-01 by decision, and held
-  at next because it is a DIFFERENT user story from the other two defects in
-  that card. DBT-28 is the SIEM-migration pivot - a punctuation mismatch and a
-  mount-only hash read that together make the pivot inert after first use.
-  This one is a copyable link that leads somewhere the shell does not serve.
-  Nothing is silently wrong on screen: the chip renders and the operator can
-  read it, so the failure is discoverable rather than invisible, which is what
-  separates it from the pivot defect. Keeping them in one card would also have
-  put DBT-28 into the region of solution-browser.tsx that DBT-9 was editing at
-  the time.
-  Measured during the [[DBT-28]] investigation: solution-browser.tsx:519-524
-  renders a deep-link chip advertising a URL, and App.tsx:2011-2017 shows the
-  shipped shell does not route it. So an operator who copies the advertised
-  link and opens it gets nothing. NOT YET SCOPED - the fix could be to correct
-  the advertised URL to whatever the shell actually serves, to register the
-  route, or to stop advertising a link at all. Which one depends on whether a
-  shareable deep link is wanted at all, which nobody has decided. Establish
-  that before writing code.
-
-- **DBT-76** The root lock file records cribl-app at 1.11.5 while its package.json says 1.12.3
-  `DBT-F1` `bug` `settled`
-  Not now because: Held at next because nothing is currently WRONG on screen
-  or in a build: the lock entry for a workspace package is bookkeeping, npm
-  resolves the workspace from disk, and all eight gates pass at this drift
-  including check-release, which reports 1.12.3 consistent across
-  package.json, release/, release-notes.md and backlog.md. What it costs is
-  that a fresh npm install silently rewrites the lock - which is how it was
-  found - so the next person to run one gets an unrelated file in their diff
-  and has to decide whether it is theirs.
-  packages/../package-lock.json records apps/cribl-app at 1.11.5;
-  apps/cribl-app/package.json declares 1.12.3. FOUND BY AN AGENT, NOT BY A
-  GATE, and reported rather than fixed: during Sentinel Integration wave 2 an
-  implementer ran npm install in its worktree, watched the lock correct itself
-  1.11.5 to 1.12.3, REVERTED the file to keep its commit scoped to its card,
-  and wrote that someone should look at it separately. That was the right call
-  by the agent and the follow-up is this card. WHY NO GATE CAUGHT IT:
-  check-release-drift holds FOUR claims to the version - package.json,
-  release/, release-notes.md and backlog.md - and the lock file is not one of
-  them. So the drift is invisible to the check that exists precisely to keep
-  version claims honest. FIX is a single npm install committing only
-  package-lock.json. The question worth deciding first is whether
-  check-release-drift should hold a FIFTH claim, because a lock that disagrees
-  with its package is exactly the class that check exists for.
 
 ---
 
