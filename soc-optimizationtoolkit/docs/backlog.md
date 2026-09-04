@@ -1274,13 +1274,21 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.6 IS CURRENT (2026-09-04).**
-`release/soc-optimizationtoolkit-1.12.3.tgz` - a pack rebuild now REPLACES
-rather than merges, so it no longer inherits the previous build's orphaned
-pipelines, on top of 1.12.2's working Cribl Lake sample source, 1.12.1's
-guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
+**1.12.7 IS CURRENT (2026-09-04).**
+`release/soc-optimizationtoolkit-1.12.7.tgz` - the operator chooses how a pack is
+wired, and the routable choice reports what the worker group must already have;
+a capture window may now run to its full 600 seconds. On top of 1.12.6's wizard
+workspace picker, 1.12.5's ungated deployment target, 1.12.3's replacing pack
+rebuild, 1.12.1's guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.3.
+file at 1.4.0 and now current through 1.12.7.
+
+The two sub-claims above were rewritten on 2026-09-04 having decayed AGAIN - they
+named the 1.12.3 tarball and 1.12.3 notes while `release/` held 1.12.6. That is
+the second time, in the entry that warns about exactly this, so the widening the
+paragraph below proposes is no longer hypothetical: the check reads the "IS
+CURRENT" number and nothing else on these lines, and both other numbers have now
+gone stale twice while it stayed green.
 
 Both version claims in the two lines above were STALE until 2026-09-03: they
 named the 1.12.1 tarball and 1.12.1 notes while `release/` held 1.12.3 and the
