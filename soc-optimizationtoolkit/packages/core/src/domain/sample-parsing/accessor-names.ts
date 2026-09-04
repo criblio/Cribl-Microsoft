@@ -48,66 +48,108 @@
  * is how a wrong answer acquires credibility.
  *
  * WHAT THIS NOTE MUST NOT PROMISE: that pack generation stops these names. It
- * stops ONE case of them - a field the matcher RENAMES - and that is not the
+ * stops ONE FATE of them - a field the matcher RENAMES - and that is not the
  * ordinary fate of an awkward vendor name. `checkCriblYaml` only ever reads a
- * name that LANDS ON a `name:`/`currentName:`/`newName:` line, and a rename is
- * the only thing that puts a VENDOR name on one. Other such lines do exist and
- * the rule does read them - each generated conf below carries `name: Type`
- * from its enrich eval - but those names are minted by this app and are bare
- * identifiers by construction. So the shipping rows below read 0 issues
- * because nothing UNADDRESSABLE reached the rule, not because nothing reached
- * it: with the predicate mutated to reject every name, each of the two
- * SHIPPING confs yields exactly 1 issue - that `Type` line - while the refused
- * one goes from 3 issues to 7. Measured 2026-09-03 by
- * running the whole chain (parseSampleContent -> matchSampleToSchema ->
- * buildPipelinePlan -> generatePipelineConfForPlan -> checkCriblYaml) and
- * counting issues on the FULL generated conf:
+ * name that lands on a `name:`/`currentName:`/`newName:` line UNDER a
+ * function's `conf: -> add:`/`rename:`, and a rename is the only thing that
+ * puts a VENDOR name on one.
+ *
+ * THE AXIS OF THIS GAP IS THE FATE, NOT THE CHARACTER CLASS, which is the part
+ * of this note worth carrying forward. GEN-4 widened the class on 2026-09-03 -
+ * a name containing WHITESPACE is now refused on a rename line, where before it
+ * was not - and every row of the fate table below moved by exactly zero. Expect
+ * the same of the next widening: the class decides WHICH names are refused once
+ * the rule sees them, the fate decides WHETHER it sees them at all.
+ *
+ * Measured 2026-09-03, re-measured after GEN-4, by running the whole chain
+ * (parseSampleContent -> matchSampleToSchema -> buildPipelinePlan ->
+ * generatePipelineConfForPlan -> checkCriblYaml) and counting issues on the
+ * FULL generated conf:
  *
  *   RENAMED   src-ip/dst-ip/account-id -> SrcIpAddr/DstIpAddr/AccountId, so
  *             `- currentName: src-ip` is emitted           3 issues  REFUSED
- *   UNMATCHED aws.account with no destination column: the
- *             only trace is a bullet in the cleanup eval's
- *             `remove:` list, which is not a name: line    0 issues  ships
- *   KEPT      a.b matched to a column also named a.b: no
- *             rename is emitted, so no line at all         0 issues  ships
+ *   RENAMED   "Device Action"/"Source IP"/"Destination IP"/
+ *             "Source Port"/"Destination Port" -> the
+ *             CommonSecurityLog columns spelled the same
+ *             way without the spaces                       5 issues  REFUSED
+ *   UNMATCHED aws.account, or "Source IP", with no
+ *             destination column: the only trace is a
+ *             bullet in the cleanup eval's `remove:` list,
+ *             which is not a name: line                    0 issues  ships
+ *   KEPT      a.b, or "Source IP", matched to a column of
+ *             the very same name: no rename is emitted,
+ *             so no line at all                            0 issues  ships
  *
- * And one more, measured on a rename line rather than a generated conf,
- * because it is a property of the line matcher and needs no chain to show:
+ * The two whitespace entries are what moved on 2026-09-03, and only one of them
+ * moved: the RENAMED one read 0 issues and shipped until GEN-4 taught the rule
+ * to see a value containing a space. The unmatched and kept ones did not move
+ * and CANNOT be moved by any character class - there is no line to read.
  *
- *   SPACED    "Source IP" ON a rename line - the line
- *             matcher `([^'"\s][^\s]*)\s*$` cannot match a
- *             value containing a space                     0 issues  ships
+ * THE REDUCTION CONF the same plan emits (generateReductionConfForPlan) agrees,
+ * but only after you account for which of its TWO shapes you asked for, and the
+ * numbers are misreadable otherwise. Measured against CommonSecurityLog, a
+ * table that HAS reduction rules, the emitted conf is the full transformation
+ * pipeline with the reduce group inserted: it carries the same
+ * `- currentName:` lines and returns the same counts, 5 and 3. Measured against
+ * TestTable_CL, which has none, it is the no-op FALLBACK pipeline, which
+ * renames nothing at all and returns 0 - honestly, because there is no rename
+ * in the file to refuse, not because the reduction path is a way around the
+ * refusal. Both are pinned, the second on the absence of `currentName` rather
+ * than on the 0, since the bare number reads like an escape hatch.
+ *
+ * THE SHIPPING ROWS READ 0 BECAUSE NOTHING UNADDRESSABLE REACHED THE RULE, not
+ * because nothing reached it: every generated conf carries `name: Type` from
+ * its enrich eval, which sits under `conf: -> add:` and IS read. Measured with
+ * the predicate mutated to reject every name: each shipping TRANSFORM conf
+ * yields exactly 1 issue - that `Type` line - while the hyphenated refused one
+ * goes 3 -> 7 (three currentName, three newName, one `Type`) and the spaced one
+ * 5 -> 11. The rules-carrying reduction conf (CommonSecurityLog again) holds
+ * one more such line throughout and reads one higher: 2, 8 and 12.
+ *
+ * NOT read, and NOT because they are identifiers - they are not. Every conf
+ * also carries three group headers unconditionally (`name: Field Extraction`,
+ * `name: Enrich & Classify`, `name: Sentinel Cleanup`), all of them prose, and
+ * a rule that read them would give every pack three false failures. They are
+ * excluded by their ENCLOSING BLOCK - `groups:`, never `conf:` - and not by
+ * their shape, which is exactly what let GEN-4 widen the value class to `.+`
+ * without collecting them. Confirmed by the same mutation: reject every name
+ * and a shipping conf still reports 1, not 4. See `enclosingBlockPath` in
+ * pipeline-generation/cribl-yaml-validator.ts.
  *
  * So the refusal is conditional on the FATE OF THE FIELD, not on the name: an
- * awkward name the schema has a column for is refused, and the same name with
- * no column - every vendor field the destination table has no home for, which
- * is the whole reason a gap analysis exists - builds clean with this note as its
- * only warning. The note therefore states the FACT (not an accessor, fix it
- * upstream) and claims no safety net - a note asserting a guarantee the build
- * does not honour is worse than no note, because the operator stops looking.
+ * awkward name the schema has a column for AND spells differently is refused,
+ * and the same name with no column - every vendor field the destination table
+ * has no home for, which is the whole reason a gap analysis exists - builds
+ * clean with this note as its only warning. The note therefore states the FACT
+ * (not an accessor, fix it upstream) and claims no safety net - a note
+ * asserting a guarantee the build does not honour is worse than no note,
+ * because the operator stops looking.
  *
- * NEITHER GAP IS CLOSED HERE. The unmatched/kept one needs the validator to
- * read names the conf does not present as identifiers (`remove:` bullets), which
- * is a NEW rule rather than a wider class. And widening the class for the spaced
- * one has a trap worth recording: `[^\s]*` is load-bearing. Widening it alone
- * makes the rule match pipeline GROUP headers, which are `name:` lines carrying
- * prose. Measured on four generated confs (kv, json, ndjson; renamed, dropped
- * and kept fates): each carries exactly the three group headers pipeline-conf.ts
- * emits unconditionally - "Field Extraction", "Enrich & Classify", "Sentinel
- * Cleanup" - a widened class matches all three, and none is an identifier, so
- * every pack would gain three false failures. Read from the emitter rather than
- * measured: two more headers are conditional ("Volume Reduction" with reduction
- * rules, "Overflow Collection" with an overflow field), so a pack carrying those
- * would gain five. Teaching the validator whitespace names first requires
- * telling a GROUP `name:` apart from a field
- * `name:`/`currentName:`/`newName:`, which is its own change with its own pins.
+ * ONE GAP REMAINS IN THE BUILD, WHERE THERE WERE TWO. The whitespace one is
+ * closed IN THE CODE: the validator now tells a GROUP `name:` apart from a
+ * field `name:`/`currentName:`/`newName:` by the enclosing block, and only then
+ * widens the value class - the order mattered, since widening alone would have
+ * collected the three group headers above. It has pins in
+ * cribl-yaml-validator.test.ts and the asymmetry pin in this file's test.
  *
- * NEITHER GAP IS ON A CARD. Checked against docs/board.json 2026-09-03: DBT-78
- * is the only card in this neighbourhood and it is about the ESCAPE SYNTAX
- * question (what Cribl accepts for a non-identifier path), not about either
- * hole in the rule's reach. Until cards exist this comment and the one in
- * cribl-yaml-validator.ts are the record - do not read "tracked elsewhere"
- * into them.
+ * The unmatched/kept one is OPEN, and no character class can close it - there
+ * is no line to read. It needs the validator to read names the conf does not
+ * present as identifiers (`remove:` bullets), which is a NEW rule, and it needs
+ * a LIVE Cribl measurement of what a glob list does with an unaddressable name.
+ * Guessing that and pinning the guess is how a wrong answer acquires
+ * credibility, which is the same reason DBT-78 declined to invent an escape
+ * syntax.
+ *
+ * WHICH CARDS COVER WHAT, read from docs/board.json on 2026-09-03: GEN-4 is the
+ * whitespace hole, GEN-5 the unmatched/kept one, and DBT-78 the original
+ * hyphen/dot defect this whole module answers. STATUS IS DELIBERATELY NOT
+ * RECORDED HERE. An earlier version of this comment and its counterpart in
+ * cribl-yaml-validator.ts each asserted board state - "NEITHER GAP IS ON A
+ * CARD" here against "THAT GAP IS ON A CARD, and this one no longer is" there -
+ * and on 2026-09-03 they were flatly contradicting each other, both dated the
+ * same day. A comment cannot keep a status in sync with a board that moves
+ * without it, so this one names the CARD IDS and stops. Read the board for
+ * where they stand.
  */
 
 /**
@@ -146,11 +188,14 @@ const MAX_LISTED = 5;
  *            currentName: account-id`. Anyone reasoning from "it only gives a
  *            line number" is reasoning from a false premise.
  *   WHETHER. Whether there is a build refusal to be early to at all depends on
- *            the field's fate, and of the four fates measured only one produces
- *            one: a RENAMED field. A name with no destination column, a name
- *            kept as-is, and a name containing whitespace all build clean (see
- *            the header's table). For those this note is the ONLY warning that
- *            will ever exist.
+ *            the field's FATE, and of the fates measured only one produces one:
+ *            a RENAMED field. A name with no destination column and a name kept
+ *            as-is both build clean, whatever characters they contain (see the
+ *            header's table). For those this note is the ONLY warning that will
+ *            ever exist. A name containing WHITESPACE was in that list until
+ *            2026-09-03 and is not any more - on a rename line GEN-4 refuses it
+ *            - but whitespace was never what decided it, the fate was, so the
+ *            note's job is unchanged.
  *
  * So the wording stops at what is true of every case: these are not accessors,
  * and the fix is upstream. It must not tell the operator the build will catch

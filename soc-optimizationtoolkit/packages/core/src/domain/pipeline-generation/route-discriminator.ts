@@ -16,8 +16,15 @@
  *   - a raw-content token (`_raw.indexOf(...) !== -1`) shaped by the
  *     sample format: `"field"` (quoted key) for JSON, `field=` for
  *     key-value shapes (CEF/KV/LEEF).
- * CSV data rows carry no field names, so CSV yields no discriminator
- * (null) - the caller keeps the match-all filter and orders it last.
+ * A COLUMN-ORDER format (csv, positional) carries no field names in its events
+ * at all - the names come from a column POSITION and are minted by an extract
+ * step the route has not reached - so those formats yield no discriminator
+ * (null). The caller then emits a PLACEHOLDER filter, not the match-all this
+ * header claimed until 2026-09-03: a match-all is what made routes unreachable
+ * in the first place, and plan.ts has emitted `placeholderRouteFilter` here
+ * since. Match-all survives only for a SINGLE-log-type pack, which never
+ * reaches the discriminator ladder (`if (tables.length > 1)`) and which
+ * route-yml then orders last.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
@@ -99,9 +106,15 @@ export function deriveRouteDiscriminator(
   format: string,
   ownValues?: LogTypeFieldValues,
 ): string | null {
-  // CSV data rows are positional: the field name never appears in _raw, and
-  // route-time events are unparsed - a presence-only filter would dead-end
-  // every event. No discriminator; the caller keeps "true".
+  // A COLUMN-ORDER format (csv, positional) is unroutable by construction: the
+  // field name never appears in _raw, and route-time events are unparsed, so
+  // BOTH terms this function emits are false for every event. Measured on a
+  // two-log-type positional plan, the filter this returned before the predicate
+  // was widened read `interface_id !== undefined || (typeof _raw === 'string'
+  // && _raw.indexOf('interface_id=') !== -1) || ...` and matched nothing -
+  // while the pack previewed CLEAN, because a filter had been produced and the
+  // log type therefore counted as neither placeholdered nor unreachable.
+  // Returning null hands it to the placeholder path, which is reported.
   //
   // ASKED, not restated (DBT-31). `formatCanDiscriminate` is the single
   // authority, because HON-5 tells the OPERATOR "more samples will not change

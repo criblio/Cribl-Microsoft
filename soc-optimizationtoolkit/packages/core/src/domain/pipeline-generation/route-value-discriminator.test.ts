@@ -157,6 +157,24 @@ describe("deriveValueDiscriminator - format rules", () => {
     expect(deriveValueDiscriminator(allowed, [blocked], "csv")).toBeNull();
   });
 
+  it("gives POSITIONAL nothing, for exactly the same reason", () => {
+    // GEN-6 fallout (2026-09-03). `formatCanDiscriminate` tested only
+    // `!== "csv"`, so a whitespace-positional log type reached the value path
+    // too and would have been offered `action === 'Allowed'` plus a raw
+    // fallback on `action=Allowed`. Neither can be true at route time: a
+    // positional event carries values in column order, `action` is a name the
+    // pipeline's extract step mints from a POSITION, and the route runs first.
+    expect(deriveValueDiscriminator(allowed, [blocked], "positional")).toBeNull();
+  });
+
+  it("...and the same corpus on a routable format still yields a filter", () => {
+    // The control for both nulls above. Without it they would pass just as
+    // well if the fixture stopped qualifying for any other reason.
+    expect(deriveValueDiscriminator(allowed, [blocked], "cef")).toContain(
+      "action === 'Allowed'",
+    );
+  });
+
   it("omits the raw fallback for JSON, where a bare value matches anywhere", () => {
     const filter = deriveValueDiscriminator(allowed, [blocked], "json") ?? "";
     expect(filter).toContain("action === 'Allowed'");

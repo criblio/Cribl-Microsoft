@@ -9,11 +9,21 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildCefIdentityOverrideFn, generatePipelineConf } from "./pipeline-conf";
+import {
+  buildCefIdentityOverrideFn,
+  generatePipelineConf,
+  generatePipelineConfForPlan,
+  generateReductionConfForPlan,
+  positionalColumns,
+} from "./pipeline-conf";
 import { checkCriblYaml } from "./cribl-yaml-validator";
 import type { PipelineFieldMapping } from "./models";
 import type { OverflowConfig } from "../field-matcher";
 import type { TableReductionRules } from "./reduction-rules";
+import { parseSampleContent } from "../sample-parsing/parse-sample";
+import { parsePositional } from "../sample-parsing/positional";
+import { matchSampleToSchema } from "../field-matcher/match-fields";
+import { buildPipelinePlan } from "./plan";
 
 const fdrFields: PipelineFieldMapping[] = [
   { source: "event_simpleName", target: "event_simpleName", type: "string", action: "keep" },
@@ -414,5 +424,288 @@ describe("CEF identity override", () => {
     expect(
       checkCriblYaml(conf({ DeviceVendor: "Palo Alto Networks" }), "conf.yml"),
     ).toEqual([]);
+  });
+});
+
+/**
+ * GEN-6 - a positional sample must get a POSITIONAL extraction.
+ *
+ * THE DEFECT, as it reached a user. They uploaded a 22-line AWS VPC Flow Logs
+ * sample. DBT-77 taught the parser to read it, so the app named the v2 columns
+ * and ran a correct gap analysis - and then this emitter, having no positional
+ * branch, fell to the trailing else and wrote `serde type: json` over `_raw`. A
+ * whitespace line is not JSON, so the step extracted nothing, the rename below
+ * it addressed a field no event carried, and the operator saw success on every
+ * screen while installing a pack that produced empty events.
+ *
+ * WHAT THESE PINS ASSERT, and it is deliberately NOT "a split step exists".
+ * That would pass with every column named wrongly, which is the same defect one
+ * layer down. The property is that the names AND SLOTS the PARSER produced and
+ * the names AND SLOTS the PIPELINE mints are the same - so the assertions run
+ * the emitted Cribl expressions as JavaScript over a real sample line and
+ * compare the resulting record to parsePositional's record for that same line.
+ * An off-by-one, a hyphenated AWS spelling, or a re-detection that disagreed
+ * with the parser all fail it.
+ */
+describe("positional extraction (GEN-6)", () => {
+  // A real AWS VPC Flow Logs v2 default-format sample, including the
+  // all-dashes NODATA row that made the reported file decline to be named
+  // until DBT-77 corrected isVpcFlowV2.
+  const VPC_V2 = [
+    "2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1418530010 1418530070 ACCEPT OK",
+    "2 123456789010 eni-1235b8ca123456789 172.31.9.69 172.31.9.12 49761 3389 6 20 4249 1418530010 1418530070 REJECT OK",
+    "2 123456789010 eni-1235b8ca123456789 - - - - - - - 1431280876 1431280934 - NODATA",
+    "2 123456789010 eni-1235b8ca123456789 10.0.1.5 10.0.2.7 443 51234 6 14 1200 1418530010 1418530070 ACCEPT OK",
+  ].join("\n");
+
+  // Six consistent whitespace columns and nothing AWS about them: the
+  // UNRECOGNISED half, which parsePositional names field1..field6.
+  const UNRECOGNISED = [
+    "alpha bravo charlie delta echo foxtrot",
+    "one two three four five six",
+    "aa bb cc dd ee ff",
+    "gg hh ii jj kk ll",
+  ].join("\n");
+
+  const SCHEMA = [
+    { name: "SrcIpAddr", type: "string" },
+    { name: "DstIpAddr", type: "string" },
+    { name: "AccountId", type: "string" },
+    { name: "TimeGenerated", type: "datetime" },
+  ];
+
+  /**
+   * THE REAL CHAIN, byte-to-conf: parseSampleContent -> matchSampleToSchema ->
+   * buildPipelinePlan -> generatePipelineConfForPlan. Hand-built field lists
+   * cannot show that the parser and the emitter agree, because they would let
+   * the test choose both halves.
+   */
+  function chain(content: string) {
+    const parsed = parseSampleContent(content, { sourceName: "flow.log" });
+    const match = matchSampleToSchema(
+      parsed.fields.map((f) => ({
+        name: f.name,
+        type: f.type,
+        sampleValues: f.examples,
+      })),
+      SCHEMA,
+    );
+    const plan = buildPipelinePlan({
+      solutionName: "AWS VPC Flow Logs",
+      packName: "cribl-aws-vpc-flow",
+      tables: [
+        {
+          sentinelTable: "AWSVPCFlow",
+          matchResult: match,
+          sourceFormat: parsed.format,
+        },
+      ],
+    });
+    const table = plan.tables[0];
+    if (table === undefined) throw new Error("planner produced no table");
+    return {
+      parsed,
+      table,
+      conf: generatePipelineConfForPlan(table, "AWS VPC Flow Logs"),
+      reduction: generateReductionConfForPlan(table, "AWS VPC Flow Logs"),
+    };
+  }
+
+  /**
+   * Run the emitted eval's `add` entries as Cribl would - in order, each seeing
+   * the fields the earlier ones set - and return the resulting event fields.
+   *
+   * The `\\` unescape is the YAML step: the file carries `\\s+` inside a
+   * double-quoted scalar, which a YAML loader hands to Cribl as `\s+`.
+   */
+  function runEmittedExtraction(
+    conf: string,
+    rawLine: string,
+  ): Record<string, unknown> {
+    const adds = [...conf.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    expect(
+      adds.length,
+      "no add entries found in the emitted conf",
+    ).toBeGreaterThan(0);
+    const event: Record<string, unknown> = {};
+    for (const [, name, raw] of adds) {
+      const expr = (raw ?? "").replace(/\\\\/g, "\\");
+      event[name ?? ""] = new Function(
+        "_raw",
+        "__posParts",
+        `return (${expr});`,
+      )(rawLine, event["__posParts"]);
+    }
+    delete event["__posParts"];
+    return event;
+  }
+
+  it("extracts EXACTLY the columns the parser named, at the same slots (v2)", () => {
+    const { parsed, conf } = chain(VPC_V2);
+
+    // Asserted so a detection change cannot move this case off the positional
+    // path and leave everything below passing for a different reason.
+    expect(parsed.format).toBe("positional");
+    expect(parsed.fields.map((f) => f.name)).toEqual([
+      "version",
+      "account_id",
+      "interface_id",
+      "srcaddr",
+      "dstaddr",
+      "srcport",
+      "dstport",
+      "protocol",
+      "packets",
+      "bytes",
+      "start",
+      "end",
+      "action",
+      "log_status",
+    ]);
+
+    // THE DEFECT ITSELF: no serde of any kind, and specifically not a JSON one.
+    expect(conf).not.toContain("id: serde");
+    expect(conf).not.toContain("type: json");
+
+    // THE PROPERTY. Not "a split step exists" - the pipeline's own expressions,
+    // executed, must reproduce the parser's record for the same line. Every
+    // line of the sample, so a slot that only differs on the NODATA row cannot
+    // hide.
+    for (const line of VPC_V2.split("\n")) {
+      const fromParser = parsePositional(line)[0];
+      expect(fromParser, line).toBeDefined();
+      expect(runEmittedExtraction(conf, line), line).toEqual(fromParser);
+    }
+
+    // ...and the names are the AWS-documented ones with UNDERSCORES, never the
+    // hyphenated display spellings. `account-id` is not a Cribl property
+    // accessor and is precisely what failed at runtime for the reporting user.
+    expect(conf).toContain("- name: account_id");
+    expect(conf).toContain("- name: interface_id");
+    expect(conf).toContain("- name: log_status");
+    expect(conf).not.toContain("account-id");
+
+    // The whole conf is Cribl-acceptable, and the rule is NOT idle on it: the
+    // 14 minted `- name:` lines are exactly the shape checkCriblYaml reads, so
+    // 0 issues means "every minted name is addressable", not "nothing was
+    // read". Measured: with a hyphen forced into one emitted name the count
+    // goes 0 -> 1.
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("extracts field1..fieldN when the shape was NOT recognised", () => {
+    // The honest case. The parser refuses to guess what column 4 means, so the
+    // pipeline must mint the same placeholder names rather than invent a
+    // vendor layout - and it must still extract, because the operator can map
+    // field4 by hand only if field4 exists at runtime.
+    const { parsed, conf } = chain(UNRECOGNISED);
+
+    expect(parsed.format).toBe("positional");
+    expect(parsed.fields.map((f) => f.name)).toEqual([
+      "field1",
+      "field2",
+      "field3",
+      "field4",
+      "field5",
+      "field6",
+    ]);
+    expect(conf).not.toContain("id: serde");
+    expect(conf).not.toContain("type: json");
+
+    for (const line of UNRECOGNISED.split("\n")) {
+      expect(runEmittedExtraction(conf, line), line).toEqual(
+        parsePositional(line)[0],
+      );
+    }
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("splits on RUNS of whitespace, as splitPositional does", () => {
+    // A hand-edited sample carrying a tab or a doubled space must not shift
+    // every column right. Pinned through the emitted expression rather than
+    // asserted about the regex text, so a change to `split(' ')` fails here.
+    const { conf } = chain(VPC_V2);
+    const messy =
+      "2  123456789010\teni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1418530010 1418530070 ACCEPT OK";
+    const event = runEmittedExtraction(conf, messy);
+    expect(event["account_id"]).toBe("123456789010");
+    expect(event["interface_id"]).toBe("eni-1235b8ca123456789");
+    expect(event["log_status"]).toBe("OK");
+  });
+
+  it("gives the FALLBACK REDUCTION pipeline the same extraction, not a JSON serde", () => {
+    // That pipeline's triage step exists so a drop filter an operator writes by
+    // hand can SEE a field. A JSON serde over a whitespace line gives it none,
+    // so every filter they add silently matches nothing - the same defect in
+    // the other conf the pack ships.
+    const { reduction } = chain(VPC_V2);
+    expect(reduction).not.toContain("type: json");
+    expect(reduction).toContain("groupId: triage");
+    expect(reduction).toContain("- name: log_status");
+    const line = VPC_V2.split("\n")[0] ?? "";
+    expect(runEmittedExtraction(reduction, line)).toEqual(
+      parsePositional(line)[0],
+    );
+    expect(checkCriblYaml(reduction, "conf.yml")).toEqual([]);
+  });
+
+  it("says so LOUDLY when no column names can be derived", () => {
+    // The one case that cannot be made right: positional format, but the plan
+    // carries no name of either shape. Emitting nothing would be the original
+    // defect wearing a different mask - a pipeline that quietly extracts
+    // nothing - so the conf splits anyway (leaving the values visible in
+    // __posParts) and carries a Comment saying what happened.
+    const conf = generatePipelineConf(
+      "p",
+      "Acme",
+      "Acme_CL",
+      [],
+      undefined,
+      "positional",
+    );
+    expect(conf).not.toContain("type: json");
+    expect(conf).toContain("name: __posParts");
+    expect(conf).toContain("id: comment");
+    expect(conf).toContain("no vendor fields at all");
+    // The split still runs, and __posParts is NOT removed here - it is the only
+    // thing the operator has left to look at.
+    expect(conf).not.toContain("        - __posParts");
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  describe("positionalColumns", () => {
+    const f = (source: string): PipelineFieldMapping => ({
+      source,
+      target: source,
+      type: "string",
+      action: "keep",
+    });
+
+    it("emits ALL 14 v2 columns even when the plan carries only some", () => {
+      // The plan's field list is not evidence about the FILE's width, and an
+      // unextracted column cannot be serialized into the catch-all or removed
+      // by cleanup. Recognising the layout means knowing all of it.
+      const cols = positionalColumns([f("srcaddr"), f("log_status")]);
+      expect(cols).toHaveLength(14);
+      expect(cols[0]).toEqual({ name: "version", index: 0 });
+      expect(cols[13]).toEqual({ name: "log_status", index: 13 });
+    });
+
+    it("keeps each numbered column at ITS OWN slot, inventing no width", () => {
+      // A subset must not become field1..field9 by inferring a width from the
+      // highest name seen - that would mint nine columns from evidence for two.
+      expect(positionalColumns([f("field9"), f("field2")])).toEqual([
+        { name: "field2", index: 1 },
+        { name: "field9", index: 8 },
+      ]);
+    });
+
+    it("refuses both shapes at once rather than picking a half", () => {
+      // Two shapes means these names did not come from one positional parse,
+      // so there is no honest column order - the caller makes that loud.
+      expect(positionalColumns([f("srcaddr"), f("field2")])).toEqual([]);
+      expect(positionalColumns([])).toEqual([]);
+      expect(positionalColumns([f("wat"), f("field0")])).toEqual([]);
+    });
   });
 });

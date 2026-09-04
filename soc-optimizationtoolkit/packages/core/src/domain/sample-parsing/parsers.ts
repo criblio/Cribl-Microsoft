@@ -140,7 +140,11 @@ export function parseCsv(
   content: string,
   sourceLines?: string[],
 ): Array<Record<string, unknown>> {
-  const lines = content.trim().split("\n").filter(Boolean);
+  // `\r?\n`, not `\n` - see the CRLF note on {@link parseCef}. The CELLS were
+  // always safe here (every one is trimmed), but the line pushed into
+  // `sourceLines` is the sample's raw event and it carried the carriage return
+  // on every line but the last.
+  const lines = content.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length === 0) {
     return [];
   }
@@ -384,6 +388,25 @@ const KV_PAIR = /(?<![^\s=,"])([^\s=,"]+)=(?:"([^"]*)"|((?:[^\s,]|,(?=\S))*))/g;
  * to the sentence, not the field. Only LEADING openers are trimmed: a trailing
  * subscript like `a[0]` is part of the name, and everything after the `=` is the
  * value's problem.
+ *
+ * parseKv ONLY. parseCef shared this for one revision and no longer does; the
+ * argument for removing it is on the assignment inside parseCef, and the short
+ * version is that a trimmed key can COLLIDE with a real one and the assignment is
+ * last-write-wins.
+ *
+ * IT HAS THE SAME COLLISION HERE, and this note says so rather than implying the
+ * whitespace-bounded value makes it safe. The value damage IS bounded in KV - a
+ * parenthetical contributes one token, not the rest of the line - but the KEY
+ * does not care what bounded the value. Measured through parseKv on committed
+ * code, unchanged by anything in this wave:
+ *
+ *   act=deny msg=blocked (act=drop) src=1.1.1.1  ->  act = "drop)"
+ *   suser=root msg=escalated (suser=admin) ...   ->  suser = "admin)"
+ *
+ * The device said `deny`; the operator is shown `drop)`, with `errors` empty.
+ * NOT FIXED HERE, deliberately: this trim is pinned committed behaviour
+ * (kv-keys.test.ts), removing it changes every KV sample's field names, and
+ * "found while fixing something else" is not a licence to spend that. Filed.
  */
 const KV_KEY_LEADING_GROUPING = /^[([{<]+/;
 
@@ -446,7 +469,10 @@ export function parseKv(
   sourceLines?: string[],
 ): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
-  for (const line of content.trim().split("\n").filter(Boolean)) {
+  // `\r?\n`, not `\n` - see the CRLF note on {@link parseCef}. The PAIRS were
+  // always safe here (the value class excludes whitespace, `\r` included); the
+  // line pushed into `sourceLines` was not.
+  for (const line of content.trim().split(/\r?\n/).filter(Boolean)) {
     const record: Record<string, unknown> = {};
     // The transport prefix comes off BEFORE any pair extraction, and BOTH paths
     // below read the same stripped body - the regex one and the whitespace
@@ -487,13 +513,300 @@ export function parseKv(
   return out;
 }
 
-/** Parse CEF (CEF:0|vendor|product|...|extension). Verbatim from legacy. */
+/**
+ * A CEF extension pair. CEF's extension is `k1=v1 k2=v2 ...`, and unlike KV a
+ * VALUE MAY CONTAIN SPACES (`msg=Blocked by rule 5`, `rt=Jan 01 2024 00:00:00`),
+ * so a value ends only where the NEXT key begins. That is why this is a lazy
+ * `.*?` bounded by a lookahead rather than KV_PAIR's whitespace-terminated value
+ * class - reusing KV_PAIR here was tried and measured, and it truncates
+ * `msg=Blocked by rule 5` to `Blocked`, dropping the rest of the value on the
+ * floor. The two patterns are the same idea over different grammars.
+ *
+ * THE PATTERN WAS `/(\w+)=(.*?)(?=\s\w+=|$)/g` UNTIL 2026-09-03 (DBT-80), AND IT
+ * HAS TWO SEPARATE `\w+`s THAT FAIL DIFFERENTLY. This is the measurement the card
+ * asked for, taken against this directory exported from HEAD before anything was
+ * changed, and it does not match the guess on the card:
+ *
+ *   THE CAPTURE `\w+` TRUNCATES. `exec` scans forward to the first offset that
+ *     matches, so any non-word character in a key moved the match start past it.
+ *     Surveyed one character at a time as the key `a` + CHAR + `b`, all 29 of
+ *     `- . : / @ $ [ ] # % + * ~ ^ ! & ' ( ) { } < > ? ; \ | " ,` came back
+ *     named `b`. Count preserved, name destroyed.
+ *   THE LOOKAHEAD `\w+` SWALLOWS, and this is the half that loses fields. The
+ *     value runs until it can see ` <word>=` ahead. A NEXT key that is not all
+ *     word characters is not a visible boundary, so the value keeps expanding
+ *     THROUGH it to the pair after that - taking the key, the `=` and the value
+ *     with it:
+ *
+ *       first=1 a-b=2 tail=3   ->  { first: "1 a-b=2", tail: "3" }
+ *
+ *     Three pairs in, TWO out, and `first` now carries another field's text as
+ *     if it were data. Nothing is reported. The reported line, same measurement:
+ *
+ *       src-ip=1.1.1.1 dst-ip=2.2.2.2 action=ACCEPT bytes=10
+ *         -> { ip: "1.1.1.1 dst-ip=2.2.2.2", action: "ACCEPT", bytes: "10" }
+ *
+ *     Four in, three out, with both halves of the defect visible at once: the
+ *     name truncated to `ip` AND the second pair eaten into its value. Worse than
+ *     DBT-79's KV collision, which at least left a clean value behind.
+ *
+ * A key breaking in the FIRST position only truncates (there is no preceding
+ * value to swallow it); from the second position on it also swallows. A leading
+ * `@`, `$` or `#` on any later key swallows the whole pair the same way.
+ * `_` and a leading digit were unaffected - both are `\w`.
+ *
+ * THE ESCAPED EQUALS IS NOT THE CAUSE, though the card named it as the likely
+ * one. Measured on HEAD: `msg=x y\=z dst=2.2.2.2` yields `{ msg: "x y\=z",
+ * dst: "2.2.2.2" }` - correct pairing, because the `\` before the `=` is not a
+ * `\w`, so the old lookahead never mistook `\=` for a boundary. The escape
+ * survives UNEXPANDED in the value (`\=` is not turned back into `=`); that is a
+ * real gap, it is a VALUE question rather than a key one, and it is filed rather
+ * than fixed here - see the note on parseCef.
+ *
+ * THE FIVE TRAPS - four DBT-79 paid for, re-measured for CEF rather than assumed
+ * to carry over, and a fifth CEF invented on its own (trap 5):
+ *
+ *   1. NO LEADING PREFIX ABSORBED. Two characters had to leave the key class or
+ *      the widened class ate them:
+ *        `|` is CEF's header delimiter, and BOTH this parser and the pack it
+ *          generates reach the extension as `split("|").slice(7).join("|")`
+ *          (pipeline-conf.ts builds exactly that expression for `__cefExtension`),
+ *          so a `|` inside a key is always header wreckage, never a name. With it
+ *          in the class, `a|b=2 dst=3` named a field `a|b` and the extension of a
+ *          header carrying an escaped `\|` named one `5|src`; HEAD names them `b`
+ *          and `src`, and excluding `|` keeps HEAD's names exactly.
+ *        `\` is CEF's escape character, so a key ending in `\` means the `=` after
+ *          it was ESCAPED and is not a separator at all. With `\` in the class,
+ *          `msg=x y\=z dst=2.2.2.2` invented a field `y\` = `z` and cut `msg`
+ *          down to `x` - a pair manufactured out of an escape. Excluding it
+ *          reproduces HEAD.
+ *      Re-measured after the DBT-80 round-2 change below: allowing `\` back into the key
+ *      class moves 7692 of 200000 corpus lines off this pattern's answer (it is
+ *      still `y\` manufactured out of an escape), and allowing `|` back moves
+ *      66367 (`a|b` where HEAD names `b`, and `5|{` out of header wreckage).
+ *   2. NO MID-TOKEN RESTART. Same quadratic blowup as KV, and CEF is WORSE off
+ *      than KV was because HEAD is already quadratic here. Measured through this
+ *      pattern on a bare token sitting before the first pair, RE-TAKEN for the
+ *      round-2 pattern rather than carried over from the round-1 one:
+ *
+ *        word-only token   16000B  HEAD   238ms   unanchored   524ms   this 0.2ms
+ *                          32000B  HEAD   901ms   unanchored  1472ms   this 0.6ms
+ *                          64000B  HEAD  2815ms   unanchored  5358ms   this 0.9ms
+ *                         128000B  HEAD 13595ms   unanchored 22024ms   this 1.4ms
+ *        JWT-ish (dotted)  64000B  HEAD     5ms   unanchored  7043ms   this 1.1ms
+ *                         128000B  HEAD     7ms   unanchored 17882ms   this 1.2ms
+ *
+ *      8x the bytes costs HEAD 57x the time and this pattern 7x. So the anchor is
+ *      not merely paying for the widened class - it retires a pre-existing freeze
+ *      on the samples screen, which runs parseSampleContent SYNCHRONOUSLY. The
+ *      dotted row is the shape DBT-79 hit: `\w` broke every scan short, so HEAD
+ *      looked fine there and only the wider class exposes it. The absolute
+ *      numbers are this machine's and drift between runs; the GROWTH is the
+ *      evidence, and 64000B through the real parseCef costs 1.18ms.
+ *   3. A KEY MAY START AFTER A NON-SPACE. The anchor is a zero-width lookbehind
+ *      forbidding EXACTLY the key class, so a legal offset is one whose
+ *      predecessor is whitespace, `=`, `|`, `\`, or the line start. The
+ *      whitespace-only `(?:^|\s)` that ate a field in DBT-79 does it again here,
+ *      differently and just as silently: over the 200000-line corpus below it
+ *      returned FEWER keys than HEAD on 9403 lines and dropped a HEAD key
+ *      outright on 25054, because a key reached through header wreckage
+ *      (`a|b=2 dst=3` -> HEAD `b`) has no space in front of it. This anchor: 0
+ *      and 110, and the 110 are trap 5's residue rather than the anchor's.
+ *      AND CEF SEPARATES THE TWO LESSONS KV COULD NOT. There the fix was read as
+ *      "be zero-width"; here `(?<!\S)` - zero-width, but whitespace-only - loses
+ *      the SAME 25054 lines. Being a lookbehind is not what makes this work; the
+ *      forbidden class matching the key class is. Measured side by side.
+ *   4. AN EMPTY VALUE IS A PAIR. `.*?` already admits one and HEAD already kept
+ *      them - `a=1 note= b=2` and `a= b= c=1` are identical on both. Written down
+ *      because DBT-79 shipped a `+` here and lost `a[1]=`, and because the
+ *      lookahead widening is exactly the kind of change that could have taken the
+ *      empty case with it. It did not; the pin says so out loud.
+ *   5. A KEY MUST CONTAIN A WORD CHARACTER, in BOTH halves - `(?=[^\s=|\\]*\w)`
+ *      before the capture and again inside the lookahead. THIS ONE COST TEXT, and
+ *      it is the round-2 half of this pattern rather than round 1's.
+ *
+ *      Without it in the LOOKAHEAD, a bare punctuation token followed by `=` is a
+ *      visible boundary, so the value ends there - and since the key then trims
+ *      or matches to something unusable, the rest of the message goes with it:
+ *
+ *        msg=Disk usage <= 90 percent on /var suser=root
+ *          HEAD  msg = "Disk usage <= 90 percent on /var"
+ *          DBT-80 pattern + the grouping trim it shipped with
+ *                msg = "Disk usage"     and `<= 90 percent on /var` in NO field
+ *
+ *      `<=` `(=` `[=` `{=` lost the text outright (the trimmed key was empty and
+ *      the pair was dropped); `>=` `!=` `~=` `:=` `/=` kept it under a field
+ *      literally named `>` or `!`. Requiring the word character in the lookahead
+ *      makes none of them a boundary, so the value stays whole. Corpus: 80978
+ *      lines lose HEAD value text without it, 0 with it.
+ *
+ *      Without it in the CAPTURE, the same token at the START of an extension -
+ *      the one place no preceding value has swallowed it - becomes the key:
+ *      `(=1 a=2` yields a field named `(`. Corpus: 81701 lines gain a
+ *      pure-punctuation field name without it, 0 with it, AND those fields open
+ *      values that then swallow the next pair, which is the whole of the gap
+ *      between 2857 and 110 HEAD keys lost.
+ *
+ *      HONEST ABOUT COVERAGE. The corpus reaches the CAPTURE half only through a
+ *      dedicated LEAD slot, because a bare `(=` is a legal start offset only at
+ *      the head of an extension - anywhere else a preceding value has already
+ *      consumed it, so no amount of fuzzing in the middle of a line can express
+ *      it. The 81701 figure above is therefore a count of lines whose lead slot
+ *      drew one, not evidence that the shape is common; the case for this half is
+ *      `(=1 a=2` naming a field `(`, which is pinned directly in cef-keys.test.ts
+ *      rather than inferred from a corpus count.
+ *
+ * WHAT IT COSTS, stated rather than discovered later: an UNESCAPED `=` inside a
+ * space-separated value now splits where it did not. `msg=see http://h/p?a=b more
+ * dst=1` was `{ msg: "see http://h/p?a=b more", dst: "1" }` and is now
+ * `{ msg: "see", "http://h/p?a": "b more", dst: "1" }`. This is not a new class of
+ * error - HEAD splits the same line the same way the moment the token is
+ * word-shaped (`msg=see foo=bar more dst=1` gives `{msg:"see", foo:"bar more",
+ * dst:"1"}` on HEAD and here alike) - it is the existing behaviour reaching
+ * further. CEF REQUIRES that `=` to be written `\=`, and when it is, trap 1's `\`
+ * exclusion keeps the value whole. A URL that is the whole value -
+ * `request=http://h/p?a=b` - has no interior space and is untouched, measured.
+ *
+ * THE MITIGATION IS NARROWER THAN THIS NOTE ONCE CLAIMED, and the correction is
+ * the point of DBT-80's second round. It read "the result gains a field rather than losing one;
+ * and the invented name is not a Cribl accessor, so DBT-78's parse note SAYS SO",
+ * both halves unqualified, both false outside the one shape that had been tested:
+ *
+ *   IT COULD LOSE TEXT, not merely gain a field. Trap 5 above is the measurement:
+ *     with the shipped grouping trim, a `<=` inside a message took the rest of
+ *     the message with it and `errors` stayed empty. The word requirement closes
+ *     that, and the claim now holds - but it holds BECAUSE of trap 5, not by
+ *     itself, and it was written before trap 5 existed.
+ *   THE INVENTED NAME IS OFTEN A PERFECTLY GOOD ACCESSOR, so no note fires.
+ *     `msg=start (retries=3) end=1` invents `retries` under the trim; `retries`,
+ *     `action`, `reason`, `ref` and `src` are all valid accessor paths and
+ *     unaddressableFieldNote returns null for every one of them. The note fires
+ *     for `http://h/p?a` because THAT shape happens to carry a `/` and a `.` -
+ *     the mitigation was generalised from a URL query string and does not
+ *     generalise. Keeping the bracket (`(retries`) is what puts the name back
+ *     outside the accessor grammar, which is why parseCef no longer trims.
+ *
+ * EQUIVALENCE, with the calibration that makes the number mean something, since
+ * DBT-79 was cleared twice by corpora blind to the defect and DBT-80's own corpus
+ * was blind to trap 5. REGENERATED for DBT-80 round 2: 200000 fuzzed lines over an
+ * alphabet holding every character this pattern reasons about (`|`, `\`, quote,
+ * comma, brackets, spaces in values, escaped equals, four headers including a
+ * syslog-wrapped one and one with an escaped `\|`) AND, new, the four grouping
+ * openers reachable as complete key tokens - `(=1` `<=2` `[=3` `{=4` and the
+ * `>= != := /= ~=` family, in a LEAD slot, because anywhere else a preceding
+ * value has already swallowed them and the failure cannot be expressed. Fragments
+ * are deduplicated by field name so a line cannot lose text to its own
+ * last-write-wins. Driving whole parsed RECORDS, keys and values:
+ *
+ *                                     fewer   HEAD-key   HEAD value    keys named
+ *                                      keys       lost   text lost   pure punct
+ *   clone driven with HEAD's pattern       0          0           0            0  <- calibration
+ *   clone driven with THIS pattern vs the real parseCef: 0 disagreements       <- calibration
+ *   THIS pattern                           0        110           0            0  <- the claim
+ *   DBT-80 pattern + grouping trim       443       2857       89772        76394  <- what it fixes
+ *   ...word requirement in lookahead only  0       2857           0        81701  <- trap 5
+ *   ...word requirement in capture only    0        110       80978            0  <- trap 5
+ *   `(?:^|\s)` anchor                   9403      25054       24125            0  <- trap 3
+ *
+ * Keys: HEAD 511048, this 682295. The two calibration rows are what make the rest
+ * readable - the first says the harness reproduces HEAD, the second says the
+ * pattern it measured is the one in this file and not a retyped approximation.
+ *
+ * THE BAR IS NOT ZERO, AND THIS NOTE USED TO SAY IT WAS. "HEAD keys neither kept
+ * nor extended" is 110 lines, not 0, and the earlier 0 was a corpus that could not
+ * reach the shape. The 110 are ONE mechanism and it is not trap 5's:
+ *
+ *   a[0]=7 5|src=1.1.1.1 dpt=80
+ *     HEAD  { src: "1.1.1.1", dpt: "80" }
+ *     this  { "a[0]": "7 5|src=1.1.1.1", dpt: "80" }        <- `src` gone
+ *
+ * The ANCHOR lets a key start after `|`, but the LOOKAHEAD still demands
+ * whitespace before the next key, so a key reached through header wreckage is not
+ * a visible boundary - and the widened capture class opens a pair at `a[0]` that
+ * HEAD never opened, whose value then runs straight through it. HEAD does exactly
+ * the same thing whenever it DOES open the pair (`first=1 5|src=1.1.1.1 dpt=80`
+ * gives `first: "1 5|src=1.1.1.1"` on HEAD too), so this is HEAD's own swallow
+ * re-exposed by the wider class, not a new one.
+ *
+ * THE OBVIOUS FIX WAS MEASURED AND IS WORSE, which is why the 110 stands rather
+ * than being closed in passing. Making the lookahead accept the same predecessors
+ * the anchor does - `(?=[\s|\\]<key>=|$)` - takes HEAD-key-lost to 0, and buys it
+ * by dropping the separator character itself out of the record on 18437 lines:
+ *
+ *   msg=a|b=2 dst=3    HEAD/this { msg: "a|b=2", dst: "3" }
+ *                      wide      { msg: "a", b: "2", dst: "3" }   <- `|` in no field
+ *
+ * That is the trade this whole note exists to refuse: a key gained at the cost of
+ * text that appears nowhere. It is filed as its own card with this measurement
+ * attached, not smuggled in here as a third behaviour change in one wave.
+ *
+ * "FEWER KEYS" IS A MASKABLE METRIC and is kept only because it is cheap. A line
+ * that loses one pair and gains two reads as a gain, which is why the DBT-80
+ * pattern scores 443 here while losing text on 89772 lines. The value-text column
+ * is the one that cannot be masked: every whitespace token of every HEAD value
+ * must still appear inside some `key=value` of the new record.
+ */
+const CEF_EXT_PAIR =
+  /(?<![^\s=|\\])((?=[^\s=|\\]*\w)[^\s=|\\]+)=(.*?)(?=\s(?=[^\s=|\\]*\w)[^\s=|\\]+=|$)/g;
+
+/**
+ * Parse CEF (CEF:0|vendor|product|...|extension).
+ *
+ * The header split is UNCHANGED and still naive, which is a real defect and is
+ * left deliberately: `CEF:0|V\|W|P|...` escapes the pipe per spec, this splits on
+ * it anyway, and every header field after it shifts by one (`DeviceVendor` reads
+ * `V\`, `DeviceProduct` reads `W`). It is not fixed HERE because the pack this app
+ * generates reaches the same bytes the same way - pipeline-conf.ts emits
+ * `_raw.substring(indexOf('CEF:')).split('|')` and `__cefParts.slice(7).join('|')`
+ * - so correcting one side alone would make the screen promise header fields the
+ * installed pipeline cannot produce, which is a worse failure than the shift.
+ * Measured: the shift damages header NAMES only; the extension pairs still parse,
+ * because `slice(7).join("|")` puts the pipe back. Filed as its own card.
+ *
+ * THE LINE SPLIT IS `\r?\n`, NOT `\n`, AND THAT WAS A SILENT FIELD LOSS (DBT-80).
+ * A CRLF file left a carriage return welded to the end of every line but the
+ * last. `.` does not match `\r` and `$` without the `m` flag does not match
+ * before it, so the FINAL value of each such line could never satisfy
+ * CEF_EXT_PAIR's lookahead and the last pair simply did not exist. Measured on
+ * this function, identical before and after the DBT-80 pattern change - this is
+ * not a regression, it is the card's own symptom and it was undocumented:
+ *
+ *   ...|a=1 b=2 CRLF ...|a=3 b=4   ->  [{a:"1"}, {a:"3", b:"4"}]      b LOST
+ *   ...|a=1     CRLF ...|a=3       ->  [{},      {a:"3"}]      the WHOLE ext
+ *   ...|a=1 b=2 LF   ...|a=3 b=4   ->  [{a:"1",b:"2"}, {...}]         control
+ *
+ * IT IS MASKED END TO END, which is what made it worth chasing rather than
+ * shrugging at. parseSampleContent UNIONS field names across records, so the
+ * last record - the one with no `\r` - contributes the missing name and the field
+ * list reads complete while record 0 lacks the field and `errors` is empty. The
+ * pin therefore asserts record 0's own keys AND VALUES; the unioned list is what
+ * hides it.
+ *
+ * THE SIBLINGS WERE CHECKED RATHER THAN ASSUMED, and checking them cost the
+ * first version of this note its own claim. It read "parseKv and parseCsv were
+ * measured CLEAN"; they are clean in their parsed FIELDS - KV's value class
+ * excludes whitespace, CSV trims every cell - and that is not the whole surface.
+ * EVERY line parser also pushes its line into `sourceLines`, which becomes
+ * `rawEvents`, which is what the generated pack is previewed and shipped against.
+ * Measured across all six on a CRLF file:
+ *
+ *   parseCef     last extension pair LOST
+ *   parseLeef    last VALUE carried the `\r`
+ *   parseSyslog  `_raw` and the raw event carried it
+ *   parseKv      fields clean, raw event `"a=1 b=2\r"`
+ *   parseCsv     cells clean, raw event `"1,2,3\r"` (both branches)
+ *   parseNdjson  clean, and takes no accumulator
+ *
+ * So all five line parsers that pair a source line now split on `\r?\n`, and the
+ * lesson is the one this file keeps relearning: "the fields are fine" is not the
+ * same statement as "the record we claim to have received is fine".
+ */
 export function parseCef(
   content: string,
   sourceLines?: string[],
 ): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
-  for (const line of content.trim().split("\n")) {
+  for (const line of content.trim().split(/\r?\n/)) {
     if (!line.includes("CEF:")) continue;
     {
       const cefStart = line.indexOf("CEF:");
@@ -510,9 +823,60 @@ export function parseCef(
         record["Severity"] = parts[6];
         if (parts.length > 7) {
           const extension = parts.slice(7).join("|");
-          const kvRegex = /(\w+)=(.*?)(?=\s\w+=|$)/g;
+          // A FRESH matcher per line, for the reason spelled out in parseKv: a
+          // module-level /g regex carries `lastIndex` between calls and would
+          // start the next line wherever this one stopped. The literal moved to
+          // module scope to carry its documentation; the per-use construction
+          // did not move with it.
+          const kvRegex = new RegExp(CEF_EXT_PAIR.source, "g");
           let match: RegExpExecArray | null;
           while ((match = kvRegex.exec(extension)) !== null) {
+            // NO GROUPING TRIM HERE, AND THAT IS THE POINT (DBT-80). The token
+            // is written to the record VERBATIM, brackets and all.
+            //
+            // For one revision this shared {@link KV_KEY_LEADING_GROUPING} with
+            // parseKv, on the argument that one vendor's field should not get two
+            // spellings. The argument was wrong in the only way that matters:
+            // ASSIGNMENT HERE IS LAST-WRITE-WINS, so a trimmed key is a key that
+            // can COLLIDE WITH A REAL ONE, and prose quoted inside `msg` then
+            // overwrote the device's own field with the wrong value. Measured
+            // through this function:
+            //
+            //   act=deny msg=blocked (act=drop) src=1.1.1.1
+            //     trimmed  act="drop)"   <- the device said deny
+            //     verbatim act="deny", "(act"="drop)"
+            //   suser=root msg=escalated (suser=admin) dst=8.8.8.8
+            //     trimmed  suser="admin)"   verbatim suser="root"
+            //
+            // AND NOTHING DOWNSTREAM COULD SEE IT. Through parseSampleContent the
+            // trimmed parse and HEAD reported the SAME three extension field
+            // names, the same count, and `errors` empty on both - the only
+            // difference between a correct event and a falsified one was a value
+            // nobody was comparing. A lost field is recoverable; a plausible wrong
+            // value reported as clean is not.
+            //
+            // KEEPING THE BRACKET IS WHAT MAKES IT LOUD. `(act` is not a Cribl
+            // property accessor, so unaddressableFieldNote names it beside the
+            // field list (DBT-78) - where the trimmed `act` was a perfectly valid
+            // accessor and therefore silent. The trim was not merely unsafe, it
+            // was the thing SUPPRESSING the only warning available.
+            //
+            // NOT A GUARD ON `record[key] !== undefined` INSTEAD, which was the
+            // other option: that protects the real field only when it happens to
+            // appear BEFORE the parenthetical, and a line with no real `act` at
+            // all still mints an accessor-shaped `act` holding prose, silently.
+            //
+            // parseKv STILL TRIMS, so the two parsers now spell this token
+            // differently on purpose. That divergence is not the whole story and
+            // the honest version is on {@link KV_KEY_LEADING_GROUPING}: parseKv
+            // has the SAME overwrite, measured, on committed code - it is filed
+            // rather than fixed here because its trim is pinned behaviour with a
+            // blast radius of its own.
+            //
+            // NO EMPTY-KEY GUARD IS NEEDED ANY MORE. The pattern requires a word
+            // character in the key, so `(=1` never forms a pair at all and there
+            // is no "" to write. A guard that can never fire is a claim about the
+            // code that has stopped being true.
             record[match[1]] = match[2].trim();
           }
         }
@@ -529,13 +893,19 @@ export function parseCef(
   return out;
 }
 
-/** Parse LEEF (LEEF:ver|vendor|product|...|tab-delimited kvp). Verbatim. */
+/**
+ * Parse LEEF (LEEF:ver|vendor|product|...|tab-delimited kvp). Verbatim, except
+ * for the `\r?\n` split - see the CRLF note on {@link parseCef}. Here the
+ * carriage return did not lose the pair, it CORRUPTED the value: measured on a
+ * CRLF file, `LEEF:1.0|V|P|1|100|a=1\tb=2` yielded `b` = "2\r", because
+ * `indexOf("=")` and `slice` neither know nor care what terminates the line.
+ */
 export function parseLeef(
   content: string,
   sourceLines?: string[],
 ): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
-  for (const line of content.trim().split("\n")) {
+  for (const line of content.trim().split(/\r?\n/)) {
     if (!line.includes("LEEF:")) continue;
     {
       const leefStart = line.indexOf("LEEF:");
@@ -566,13 +936,20 @@ export function parseLeef(
   return out;
 }
 
-/** Parse RFC 3164 / RFC 5424 syslog lines. Verbatim from legacy. */
+/**
+ * Parse RFC 3164 / RFC 5424 syslog lines. Verbatim from legacy, except for the
+ * `\r?\n` split - see the CRLF note on {@link parseCef}. The parsed FIELDS were
+ * already safe here (`.` cannot match `\r`, so `Message` stopped short of it),
+ * but `_raw` and the `sourceLines` entry - which becomes the sample's rawEvents,
+ * i.e. what the generated pack is previewed against - carried the stray carriage
+ * return on every line but the last.
+ */
 export function parseSyslog(
   content: string,
   sourceLines?: string[],
 ): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
-  for (const line of content.trim().split("\n").filter(Boolean)) {
+  for (const line of content.trim().split(/\r?\n/).filter(Boolean)) {
     {
       const record: Record<string, unknown> = { _raw: line };
       const rfc3164 = line.match(
@@ -646,7 +1023,19 @@ export function parseByFormat(
       // DBT-77. Named columns when the shape is recognisable (VPC Flow v2),
       // field1..fieldN when it is not - see positional.ts for why naming is
       // the hard half and why declining to name is the honest answer.
-      return parsePositional(content);
+      //
+      // `sourceLines` WAS MISSING FROM THIS ONE CASE (GEN-6) while the
+      // five above it all threaded it. rawEventsFor's length equality then
+      // failed - 0 lines against N records - and every positional sample fell
+      // back to JSON.stringify, so the pack shipped a JSON object string as its
+      // raw event. Measured: a VPC Flow sample's first raw event was
+      // `{"version":"2","account_id":...}` where a CEF sample's was the real CEF
+      // line, and running the generated positional extract over that shipped
+      // event recovered 1 field of 14 - JSON.stringify emits no spaces, so the
+      // whitespace split returns a single element. The header on parse-sample.ts
+      // already names this defect for LEEF, syslog and PAN-OS CSV; positional
+      // was simply left out of that fix.
+      return parsePositional(content, sourceLines);
     default: {
       // Annotated so the JSON/NDJSON parsers (which take no accumulator and
       // never need one) sit in the same array as the line-oriented ones.
