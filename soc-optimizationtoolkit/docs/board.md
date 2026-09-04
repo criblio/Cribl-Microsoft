@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**76 in the backlog, 1 in progress, 109 done.**
+**76 in the backlog, 1 in progress, 112 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
-| Azure Native Source Onboarding (planned) | 13 | 4 | 0 |
+| Azure Native Source Onboarding (planned) | 13 | 7 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
@@ -40,13 +40,13 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 24% (4/17)
+### `AZR` Azure native source onboarding - 35% (7/20)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `AZR-F1` Onboarding foundation and coverage data | Azure Native Source Onboarding (planned) | 1/1 | AZR-0 |
+| `AZR-F1` Onboarding foundation and coverage data | Azure Native Source Onboarding (planned) | 4/4 | AZR-0, AZR-14, AZR-15, AZR-16 |
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding (planned) | 0/2 | AZR-4, AZR-5 |
 | `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding (planned) | 1/3 | AZR-2, AZR-13, AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding (planned) | 0/1 | AZR-6 |
@@ -1464,7 +1464,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (109)
+## Done (112)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5171,3 +5171,109 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   event count, field list, errors, rawEvents count, inner format, isVpcFlowV2
   and column widths all deep-equal between original and fixture. THE SWEEP
   THIS CARD DEMANDED FOUND NINE MORE SILENT SITES: see [[DBT-116]].
+
+- **AZR-14** A workspace-list failure kills the resource-group fallback that exists for exactly that case
+  `AZR-F1` `bug` `settled` `verified: pins`
+  REPORTED BY THE USER 2026-09-04 after installing 1.12.4 into a NEW Cribl
+  org: the Azure targeting screen offers no resource groups to choose from,
+  and the Azure Access page reads unknown. FOUND BY READING
+  azure-targeting-screen.tsx:292-302, not inferred. listWorkspaces and
+  listResourceGroupChoices are awaited SEQUENTIALLY INSIDE ONE try.
+  listWorkspaces runs FIRST and throws on a denied or unauthorized ARM call,
+  so the catch sets status error and listResourceGroupChoices IS NEVER CALLED.
+  THAT IS THE FALLBACK THAT EXISTS FOR THIS EXACT CASE.
+  listResourceGroupChoices (azure-discovery.ts:388) is documented as never
+  rejecting: it catches a denied RG list, records the reason on listError, and
+  derives choices from workspace metadata so that a user who can list
+  workspaces but not resource groups still gets a usable picker. Its own doc
+  comment says so. It cannot run when the call ahead of it throws. So the RG
+  list is not merely denied - IT IS NEVER ATTEMPTED, and the operator cannot
+  tell those two states apart. FIX: give each lister its own try, so a
+  workspace failure degrades the workspace picker only. The RG call should
+  still be made and its own outcome reported. Pin the asymmetry: workspaces
+  throwing must still produce an ATTEMPTED resource-group list carrying its
+  own error text. DONE 2026-09-04. Each lister now has its own try, so a
+  denied workspace list degrades the workspace picker only and the
+  resource-group call is still made and still reports its own outcome.
+  DepLoad's loaded state carries workspaceError, because the two lists now
+  fail independently and one field cannot hold two outcomes. HONEST NOTE ON
+  HOW THIS WAS FOUND: it was confirmed by reading while diagnosing a user
+  report, and it turned out NOT to be what the user hit - they were on the
+  Setup page, not the targeting screen ([[AZR-16]]). The defect is real and
+  measured; the diagnosis that led here was wrong. Recorded because a fix
+  found while chasing the wrong screen is still a fix, and pretending it was
+  the reported one would misdescribe both.
+
+- **AZR-15** The resource-group picker reports a hard failure as an unmeasured inventory
+  `AZR-F1` `bug` `settled` `verified: pins`
+  FOUND while diagnosing the user report behind [[AZR-14]], by reading
+  azure-targeting-screen.tsx:735-782. The two pickers describe the SAME
+  failure differently. On a load error the WORKSPACE picker renders 'Workspace
+  discovery failed - see the error below' (:741-742), which is true and points
+  at the pre block at :803 carrying the real text. The RESOURCE GROUP picker,
+  on the same status, falls through to emptyResourceGroups.text (:770-772),
+  which is unmeasuredInventoryMessage('resource groups') - the UNKNOWN wording
+  this app reserves for a listing it could not measure. THE APP KNOWS THE CALL
+  FAILED AND HOLDS THE ERROR. Saying 'unknown' there is the inventory standard
+  violated in the direction nobody checks for: reporting an unmeasured absence
+  when a MEASURED FAILURE is in hand. docs/inventory-standard.md exists to
+  stop an empty list reading as a verified zero; this is the mirror image, and
+  the user read the screen exactly as written - 'shows unknown on the Azure
+  Access page like it cannot hit the APIs'. RELATED AND ALSO WRONG: listError
+  is rendered only when choices.source is 'workspaces' (:776-782), i.e. only
+  when the fallback SUCCEEDED. If the RG list fails AND the workspace-derived
+  fallback yields nothing, source stays 'list' and the reason is never shown
+  at all. FIX: on a hard failure the RG picker must say the call failed and
+  point at the error, matching the workspace picker beside it; and listError
+  must surface whenever it is non-null, not only on the fallback path. DONE
+  2026-09-04. The resource-group picker now says 'discovery failed - see the
+  reason below' when a failure is in hand, matching the workspace picker
+  beside it, and falls back to the unmeasured hedge ONLY when the list
+  genuinely returned nothing with no error. listError is surfaced whenever it
+  is non-null rather than only when the derived fallback succeeded - the case
+  where both the list and the fallback are empty is exactly where an operator
+  is most stuck and showed no reason at all. ALSO ADDED, because the bare
+  hedge is what backlog.md#4 calls 'honest, but inert': when the list
+  genuinely returns empty, the screen now names the likely cause. An identity
+  that can reach ARM but holds no role assignment gets HTTP 200 and an empty
+  array rather than a 403, so 'nothing here' and 'nothing granted to you' are
+  indistinguishable from the response alone. Saying so is the difference
+  between a hedge that is correct and one an operator can act on. [[CAP-6]]
+  remains the card for making these lists measurable rather than hedged.
+
+- **AZR-16** The deployment target is gated behind the setup path, so a workspace cannot be repointed
+  `AZR-F1` `bug` `settled` `verified: pins`
+  REPORTED BY THE USER 2026-09-04 after installing 1.12.4 into a fresh Cribl
+  org: 'there are 4 options in the drop down and none of them allow you to
+  select a specific Log Analytics workspace or resource group'. The four
+  options were the SETUP PATH chooser. FOUND BY READING
+  azure-resources-section.tsx:463 and :482. The workspace picker was gated on
+  setupPath === 'existing' and the resource-group picker on setupPath ===
+  'lab-byo-rg'. AzureSetupPath is existing | lab-new-rg | lab-byo-rg -
+  MUTUALLY EXCLUSIVE VALUES, so no path ever showed BOTH, and lab-new-rg
+  showed NEITHER. loadDependent was gated the same way and made it structural
+  rather than cosmetic: it returned early on lab-new-rg, listed only
+  workspaces on existing, only resource groups on lab-byo-rg. So the data was
+  not merely hidden, it was never fetched. WHY THIS IS THE WRONG SHAPE, which
+  is the part worth keeping. Setup CHOOSES a deployment shape ONCE. Repointing
+  an install at a different Log Analytics workspace happens for the life of
+  the install - the user's words were 'at any time they could come back to the
+  setup and change the workspace to deploy to different log analytics
+  workspace'. Making a permanent operation reachable only from one of three
+  first-run states is the defect; the missing dropdown was the symptom.
+  SHIPPED: both pickers are ungated and labelled as the deployment target,
+  sitting with the credentials they are scoped by. loadDependent lists
+  workspaces AND resource groups together whenever a subscription is present,
+  whatever the path; the path now only decides what the CREATE fields below
+  offer. THE TWO LISTS DEGRADE INDEPENDENTLY (Promise.allSettled), which is
+  [[AZR-14]]'s lesson applied rather than restated - a permission covering one
+  and not the other still fills the picker it covers, instead of one denial
+  emptying both. NOTHING WAS NEEDED FOR 'DRIVES THE WHOLE APP': workspaceName
+  and resourceGroup already write through updateField into activeConfig, which
+  every screen reads, and App.tsx already re-audits when the scope commits.
+  The wiring was right and only the picker was unreachable. PINNED PER PATH,
+  deliberately: azure-resources-target.dom.test.tsx renders all three paths
+  and asserts both fields on each, plus the both-at-once case that was
+  UNSATISFIABLE before. A single happy-path pin on 'existing' would have
+  passed with the old gate and would pass again if either picker were
+  re-gated. Mutation: re-gating the workspace picker fails 3 of 8.

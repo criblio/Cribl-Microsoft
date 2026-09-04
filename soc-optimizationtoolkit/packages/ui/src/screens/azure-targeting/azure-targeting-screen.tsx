@@ -108,9 +108,24 @@ type SubsLoad =
   | { status: "loaded"; list: AzureSubscription[] }
   | { status: "error"; error: string };
 
+/**
+ * The dependent load. `loaded` now carries `workspaceError` because the two
+ * listers FAIL INDEPENDENTLY (AZR-14): a denied workspace list no longer takes
+ * the resource-group call down with it, so the state has to hold one outcome
+ * per list rather than one for both.
+ *
+ * `error` survives for a failure that is not either list's - it is no longer
+ * reachable from a denied ARM call, which is the point.
+ */
 type DepLoad =
   | { status: "idle" | "loading" }
-  | { status: "loaded"; workspaces: AzureWorkspace[]; choices: ResourceGroupChoices }
+  | {
+      status: "loaded";
+      workspaces: AzureWorkspace[];
+      choices: ResourceGroupChoices;
+      /** Why the workspace list is empty, or null when it genuinely listed. */
+      workspaceError: string | null;
+    }
   | { status: "error"; error: string };
 
 export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
@@ -288,12 +303,33 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         loadedRef.current.dependentsKey = plan.dependentsKey;
         claimedDeps = true;
         setDepLoad({ status: "loading" });
+        // EACH LISTER GETS ITS OWN try, AND THE ORDER USED TO MATTER (AZR-14).
+        //
+        // Both awaits shared one try, with listWorkspaces FIRST. It throws on a
+        // denied ARM call, so the catch ran and `listResourceGroupChoices` was
+        // NEVER CALLED - and that function is the one documented as never
+        // rejecting, because it exists to catch a denied resource-group list and
+        // derive the choices from workspace metadata instead. The fallback
+        // written for "can list workspaces, cannot list resource groups" was
+        // unreachable from the failure beside it, and worse, a reader could not
+        // tell a DENIED resource-group list from one that was never attempted.
+        //
+        // Reported live: a fresh install offered no resource groups, and the
+        // screen said "cannot confirm there are no resource groups" - the hedge
+        // for an UNMEASURED list - when the truth was that nothing had been
+        // asked. Now the workspace failure degrades the workspace picker only,
+        // the resource-group call is still made, and each carries its own reason.
+        let workspaces: Awaited<ReturnType<typeof listWorkspaces>> = [];
+        let workspaceError: string | null = null;
         try {
-          const workspaces = await listWorkspaces(
-            ports.azure,
-            browseSub,
-            ports.logger,
-          );
+          workspaces = await listWorkspaces(ports.azure, browseSub, ports.logger);
+        } catch (err) {
+          workspaceError = String(err);
+        }
+        if (!cancelled) {
+          // The RG call runs whatever the workspaces did. When they failed it
+          // gets an empty array, so the derived fallback has nothing to offer -
+          // which is exactly why its OWN listError has to reach the screen.
           const choices = await listResourceGroupChoices(
             ports.azure,
             browseSub,
@@ -302,12 +338,12 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           );
           if (!cancelled) {
             claimedDeps = false;
-            setDepLoad({ status: "loaded", workspaces, choices });
-          }
-        } catch (err) {
-          if (!cancelled) {
-            claimedDeps = false;
-            setDepLoad({ status: "error", error: String(err) });
+            setDepLoad({
+              status: "loaded",
+              workspaces,
+              choices,
+              workspaceError,
+            });
           }
         }
       }
@@ -740,7 +776,10 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                     ? "Loading workspaces..."
                     : depLoad.status === "error"
                       ? "Workspace discovery failed - see the error below"
-                      : emptyWorkspaces.text}
+                      : depLoad.status === "loaded" &&
+                          depLoad.workspaceError !== null
+                        ? "Workspace discovery failed - see the error below"
+                        : emptyWorkspaces.text}
               </option>
             </select>
           )}
@@ -765,23 +804,66 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           ) : (
             <select disabled value="">
               <option value="">
+                {/* A MEASURED FAILURE MUST NOT READ AS AN UNMEASURED ABSENCE
+                    (AZR-15). This fell through to emptyResourceGroups.text -
+                    "cannot confirm there are no resource groups, no permission
+                    check covers this list" - for EVERY non-loading state,
+                    including one where the call had demonstrably failed and its
+                    reason was in hand. The workspace picker directly above said
+                    "discovery failed" for the same condition, so one screen gave
+                    two accounts of one failure.
+                    docs/inventory-standard.md is about not reporting an
+                    unverified empty list as a verified zero; this was the mirror
+                    image, and the direction nobody checks for - a KNOWN failure
+                    reported as an unknown. The hedge is correct only when the
+                    list genuinely returned nothing and no error was seen. */}
                 {browseSub === ""
                   ? "Select a subscription first..."
                   : depLoad.status === "loading"
                     ? "Loading resource groups..."
-                    : emptyResourceGroups.text}
+                    : depLoad.status === "error"
+                      ? "Resource group discovery failed - see the error below"
+                      : depLoad.status === "loaded" &&
+                          depLoad.choices.listError !== null
+                        ? "Resource group discovery failed - see the reason below"
+                        : emptyResourceGroups.text}
               </option>
             </select>
           )}
-          {depLoad.status === "loaded" && depLoad.choices.source === "workspaces" && (
+          {/* SURFACED WHENEVER IT EXISTS, not only on the fallback path. This
+              was gated on source === "workspaces", i.e. only when the derived
+              fallback SUCCEEDED - so the one case where the operator is most
+              stuck, both the list AND the fallback empty, showed no reason at
+              all. That is the state a fresh install lands in. */}
+          {depLoad.status === "loaded" && depLoad.choices.listError !== null && (
             <span className="field-hint">
-              The resource-group list call was denied or empty; these choices
-              are derived from workspace metadata instead.
-              {depLoad.choices.listError !== null
-                ? ` (${depLoad.choices.listError})`
-                : ""}
+              {depLoad.choices.source === "workspaces"
+                ? "The resource-group list call was denied or empty; these choices are derived from workspace metadata instead."
+                : "The resource-group list call failed, and no workspaces were readable to derive choices from."}{" "}
+              ({depLoad.choices.listError})
             </span>
           )}
+          {/* The genuinely-empty case, said once and said usefully. An identity
+              that can reach ARM but holds no role assignment on the subscription
+              gets HTTP 200 and an empty array - not a 403 - so "nothing here"
+              and "nothing granted to you" are indistinguishable from the
+              response alone. Naming the likely cause is the difference between
+              a hedge that is honest and one that is actionable; backlog.md#4
+              calls the bare hedge "honest, but inert" and CAP-6 is the card to
+              make these lists measurable rather than guessed at. */}
+          {depLoad.status === "loaded" &&
+            depLoad.choices.listError === null &&
+            rgOptionsWithSelection.length === 0 &&
+            browseSub !== "" && (
+              <span className="field-hint">
+                Azure returned an empty resource-group list for this
+                subscription rather than an error. That is also what an identity
+                with no role assignment on them sees, so it does not confirm the
+                subscription is empty - check that this app registration has a
+                role (Reader is enough to list) at the subscription or resource
+                group scope.
+              </span>
+            )}
         </label>
         <label className="field">
           <span className="field-label">Location</span>
