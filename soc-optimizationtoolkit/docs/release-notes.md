@@ -8,6 +8,31 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.5
+
+**The Log Analytics workspace can be chosen, and changed, from Setup.** The
+workspace picker was gated on one setup path and the resource-group picker on a
+different, mutually exclusive one - so no path ever showed both, and the
+lab-new-rg path showed neither. An operator installing into a fresh org saw the
+setup-path chooser and no way to name a workspace at all. The discovery call was
+gated the same way, so the lists were not hidden, they were never fetched.
+
+Both pickers now sit with the Azure credentials that scope them, on every path,
+and both lists load together whenever a subscription is selected. The path now
+only decides what the CREATE fields below them offer. Selecting a workspace
+still fills the resource group from its ARM id; either can be changed at any
+time to repoint the app, and every screen that names a workspace reads the same
+value.
+
+The two lists also degrade independently now: a permission that covers resource
+groups but not workspaces fills the picker it covers instead of emptying both.
+The same fix landed on the Azure Targeting screen, where a denied workspace list
+had been taking down the resource-group fallback written for exactly that case -
+and where a measured failure was being reported with the wording reserved for a
+list nothing had measured.
+
+---
+
 ## 1.12.4
 
 **AWS VPC Flow Logs are read, and the pack built from them extracts what the
