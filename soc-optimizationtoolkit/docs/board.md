@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**76 in the backlog, 1 in progress, 112 done.**
+**76 in the backlog, 1 in progress, 113 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
-| Azure Native Source Onboarding (planned) | 13 | 7 | 0 |
+| Azure Native Source Onboarding (planned) | 13 | 8 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
@@ -40,13 +40,13 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 35% (7/20)
+### `AZR` Azure native source onboarding - 38% (8/21)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `AZR-F1` Onboarding foundation and coverage data | Azure Native Source Onboarding (planned) | 4/4 | AZR-0, AZR-14, AZR-15, AZR-16 |
+| `AZR-F1` Onboarding foundation and coverage data | Azure Native Source Onboarding (planned) | 5/5 | AZR-0, AZR-14, AZR-15, AZR-16, AZR-17 |
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding (planned) | 0/2 | AZR-4, AZR-5 |
 | `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding (planned) | 1/3 | AZR-2, AZR-13, AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding (planned) | 0/1 | AZR-6 |
@@ -1464,7 +1464,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (112)
+## Done (113)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5277,3 +5277,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   UNSATISFIABLE before. A single happy-path pin on 'existing' would have
   passed with the old gate and would pass again if either picker were
   re-gated. Mutation: re-gating the workspace picker fails 3 of 8.
+
+- **AZR-17** The wizard promises a Select resources section it does not render
+  `AZR-F1` `bug` `settled` `verified: both`
+  REPORTED 2026-09-04 as "I still do not see any option to select workspace",
+  AFTER [[AZR-16]] shipped in 1.12.5. AZR-16 was correct and went into a
+  component the wizard NEVER RENDERS. FOUND BY OPENING THE SCREEN, not by
+  reading. AzureConnectStep tells the operator that Azure roles are granted
+  "in the Select resources and grant permissions section below, after you
+  discover your subscription". The wizard rendered azureConnectSection only,
+  so the step ended at Save and connect and that sentence pointed at nothing.
+  The section lives on the Setup PAGE - and it is where the deployment-target
+  pickers are, so the wizard offered no way to name a workspace at all. The
+  four options the operator saw were the setup-path radios. SHIPPED: the
+  wizard takes azureResourcesSection exactly as it already took
+  azureConnectSection, and the shell builds the element once for both
+  surfaces. THE PIN THAT SHOULD HAVE EXISTED. setup-wizard.dom.test.tsx was
+  created by an architecture audit on 2026-08-11 for THIS EXACT FAILURE IN
+  THIS EXACT STEP - a Connect Azure step that was "the one place you could not
+  connect Azure", shipped with no test and invisible to 665 green tests. The
+  twin pin for the resources half was never added, so the same defect recurred
+  in the same step four weeks later. Both halves are pinned now; removing the
+  render fails 2 of 5. THE PROCESS FAILURE IS THE LESSON, and it is mine:
+  1.12.5 was packaged and handed over on a green suite without opening the
+  screen, and the pickers were unreachable the whole time. Thirty seconds in
+  the live preview would have caught it. verified=both because this one WAS
+  driven in the live preview before packaging - the step now shows the section
+  with the workspace reading law-jpederson-eastus and the resource group
+  rg-jpederson-QuickstartLab.

@@ -8,6 +8,23 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.6
+
+**The first-run wizard offers the workspace picker its own copy promised.** The
+Connect Azure step said "Azure roles are granted in the Select resources and
+grant permissions section below" and then rendered only the credentials form, so
+the step ended at Save and connect and the sentence pointed at nothing. That
+section is where the deployment-target pickers live, so the wizard gave no way to
+name a Log Analytics workspace at all - the four options an operator saw were the
+setup-path radios.
+
+1.12.5 ungated those pickers correctly and put them in a component the wizard
+never rendered. The wizard now receives that section the same way it already
+received the credentials form, so both appear in the step that names them, and
+the target can be set while the tenant, client and secret are being entered.
+
+---
+
 ## 1.12.5
 
 **The Log Analytics workspace can be chosen, and changed, from Setup.** The

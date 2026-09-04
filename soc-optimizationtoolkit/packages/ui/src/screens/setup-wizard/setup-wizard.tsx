@@ -117,6 +117,24 @@ export interface SetupWizardProps {
    */
   azureConnectSection?: ReactNode;
   /**
+   * The resource selection + role grant section - subscription, the DEPLOYMENT
+   * TARGET pickers, and the role-assignment request.
+   *
+   * RENDERED IN THE WIZARD BECAUSE THE STEP ALREADY PROMISED IT (AZR-17).
+   * AzureConnectStep's own copy says "Azure roles are granted in the Select
+   * resources and grant permissions section below, after you discover your
+   * subscription", and that section was rendered only on the Setup PAGE. In the
+   * wizard the step ended at Save and connect, so the sentence pointed at
+   * nothing - reported live 2026-09-04 as "I still do not see any option to
+   * select workspace".
+   *
+   * Same shape as `azureConnectSection` and for the same reason: both shells
+   * already build the element for the Setup page, so this reuses their wiring
+   * rather than duplicating it, and an unwired shell renders the step exactly as
+   * it did before.
+   */
+  azureResourcesSection?: ReactNode;
+  /**
    * The active connection's change-request context (app name + non-secret
    * config). When present, the Azure step renders the app-registration ticket
    * generator INLINE.
@@ -165,6 +183,7 @@ export function SetupWizard(props: SetupWizardProps) {
     connectGuidance,
     azureConnectGuidance,
     azureConnectSection,
+    azureResourcesSection,
     azureChangeRequestContext,
     uploadArtifactName,
     repositoriesReachable = false,
@@ -298,6 +317,7 @@ export function SetupWizard(props: SetupWizardProps) {
                 changeRequestContext={azureChangeRequestContext}
               />
               {azureConnectSection}
+              {azureResourcesSection}
             </>
           )}
           {currentViewId === "preflight" && (

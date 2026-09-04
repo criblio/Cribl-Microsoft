@@ -1399,6 +1399,31 @@ function App() {
     />
   );
 
+  // Built once and used in BOTH places, exactly like azureConnectElement above
+  // and for the same reason (AZR-17). The wizard's Connect Azure step told the
+  // operator that "Azure roles are granted in the Select resources and grant
+  // permissions section below" while rendering only the connect form, so the
+  // step ended at Save and connect and the sentence pointed at nothing. That is
+  // also where the DEPLOYMENT TARGET pickers live, so the wizard offered no way
+  // to name a Log Analytics workspace at all - reported live 2026-09-04.
+  const azureResourcesElement = (
+    <AzureResourcesSection
+      key={`resources-${store.activeProfileId ?? 'none'}`}
+      clientId={activeConfig.clientId}
+      tenantId={activeConfig.tenantId}
+      setupPath={activeConfig.setupPath}
+      subscriptionId={activeConfig.subscriptionId}
+      onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
+      rgName={activeConfig.resourceGroup}
+      onRgNameChange={(v) => updateField({ resourceGroup: v })}
+      workspaceName={activeConfig.workspaceName}
+      onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
+      connectNonce={connectNonce}
+      ctx={changeRequestCtx}
+      storageContextLabel={`Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`}
+    />
+  );
+
   if (phase.phase === 'aua' || phase.phase === 'setup') {
     return (
       <PortsProvider {...portsProviderProps}>
@@ -1426,6 +1451,7 @@ function App() {
           defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
           azureChangeRequestContext={changeRequestCtx}
           azureConnectSection={azureConnectElement}
+          azureResourcesSection={azureResourcesElement}
           azureConnectGuidance={
             'Already have the credentials? Enter the tenant id, client id, and secret in the ' +
             'App registration and connect section on Setup. The secret is stored encrypted in ' +
@@ -1622,26 +1648,13 @@ function App() {
   // and the Repositories/PAT surface so everything setup-shaped lives on one
   // page. Keyed by the active profile so switching connections remounts them
   // and discards cached discovery and validation state.
+
   const setupSections = (
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
       <div id="setup-connect-section" />
       {azureConnectElement}
-      <AzureResourcesSection
-        key={`resources-${store.activeProfileId ?? 'none'}`}
-        clientId={activeConfig.clientId}
-        tenantId={activeConfig.tenantId}
-        setupPath={activeConfig.setupPath}
-        subscriptionId={activeConfig.subscriptionId}
-        onSubscriptionIdChange={(v) => updateField({ subscriptionId: v })}
-        rgName={activeConfig.resourceGroup}
-        onRgNameChange={(v) => updateField({ resourceGroup: v })}
-        workspaceName={activeConfig.workspaceName}
-        onWorkspaceNameChange={(v) => updateField({ workspaceName: v })}
-        connectNonce={connectNonce}
-        ctx={changeRequestCtx}
-        storageContextLabel={`Stored in KV for app ID ${window.CRIBL_APP_ID ?? '(unknown)'}:`}
-      />
+      {azureResourcesElement}
       <RepositoriesScreen platform="cloud" />
     </>
   );
