@@ -13,6 +13,12 @@
  *     positional map (now sourced from Unit 12's canonical PANOS_CSV_HEADERS
  *     dictionary instead of the legacy hard-coded subset) or a generic serde;
  *   - JSON/KV: serde json/kvp.
+ * ONE format is NOT legacy knowledge and was added 2026-09-03 (GEN-6):
+ *   - POSITIONAL: an eval that splits _raw on runs of whitespace and assigns
+ *     the SAME column names sample-parsing/positional.ts produced. Before it,
+ *     a positional sample fell to the trailing else and got a JSON serde over
+ *     a whitespace line, which extracted nothing while every screen reported
+ *     success. See positionalColumns / positionalExtractFunctions.
  * Timestamp logic (candidate list, CrowdStrike eval-first + backup
  * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map, the
  * `Type=<table>` enrichment, the fixed cleanup field list, and escapeYamlFilter
@@ -38,7 +44,7 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import { PANOS_CSV_HEADERS } from "../sample-parsing";
+import { PANOS_CSV_HEADERS, VPC_FLOW_V2_FIELDS } from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
 import { CEF_IDENTITY_FIELDS, overrideValueFor } from "../cef-identity";
 import type { CefIdentityOverride } from "../cef-identity";
@@ -160,6 +166,150 @@ export function buildCefIdentityOverrideFn(
     "    description: Override CEF identity so Sentinel content matches",
     "    groupId: extract",
   ].join("\n");
+}
+
+/** One whitespace-positional column: the name to mint and the slot it sits in. */
+interface PositionalColumn {
+  readonly name: string;
+  readonly index: number;
+}
+
+/**
+ * The positional columns this pipeline must mint, derived from the field names
+ * THE PARSER ALREADY PRODUCED (GEN-6).
+ *
+ * WHY DERIVE RATHER THAN RE-DETECT. sample-parsing/positional.ts decides once,
+ * from the bytes, whether a file is recognisable VPC Flow v2 - and that decision
+ * is deliberately strict (every row, 14 columns, version literally "2", a
+ * log-status from the closed vocabulary). Re-running any part of that judgement
+ * here would be a SECOND opinion about the same file, and two opinions drift:
+ * the failure mode is a pipeline that extracts `srcaddr` from a file the
+ * analyzer called `field4`, so the gap analysis the operator approved and the
+ * pack they install disagree about what the columns are. The plan's `source`
+ * names ARE the parser's output, so reading them back is one opinion, not two.
+ *
+ * WHY MINTING A NAME IS SAFE HERE AND NOT FOR JSON/KV (DBT-78's distinction,
+ * and the reason this branch can exist at all). The emitted eval splits `_raw`
+ * itself and puts the name on the LEFT of the assignment, so the parsed name and
+ * the runtime name are the same name by construction. For JSON and key=value
+ * Cribl's own serde mints the names from the vendor's bytes, which is why the
+ * parser must not sanitise those - see sample-parsing/accessor-names.ts.
+ *
+ * THE TWO SHAPES, matching parsePositional exactly:
+ *   RECOGNISED   the 14 VPC_FLOW_V2_FIELDS, imported rather than re-spelled.
+ *                All 14 are emitted even when the plan carries only some of
+ *                them: the layout is known, an unextracted column cannot be
+ *                serialized into the catch-all or removed by cleanup, and the
+ *                plan's field list is not evidence about the FILE's width.
+ *   UNRECOGNISED `field1..fieldN`, each at its own slot. No width is inferred
+ *                from the highest name seen - a plan carrying a subset would
+ *                make that a guess, and a guessed width invents columns.
+ *
+ * Returns EMPTY when the sources are neither shape, or are somehow both: that
+ * means these names did not come from one positional parse, and there is no
+ * honest column order to emit. The caller makes that case loud rather than
+ * quietly emitting an extraction that names nothing.
+ */
+export function positionalColumns(
+  fields: readonly PipelineFieldMapping[],
+): PositionalColumn[] {
+  const sources = [
+    ...new Set(fields.map((f) => f.source).filter((s) => s !== "")),
+  ];
+  const recognised = sources.some((s) => VPC_FLOW_V2_FIELDS.includes(s));
+  const numbered: PositionalColumn[] = [];
+  for (const source of sources) {
+    const m = /^field(\d+)$/.exec(source);
+    const slot = m === null ? 0 : Number(m[1]);
+    if (slot >= 1) numbered.push({ name: source, index: slot - 1 });
+  }
+  // Both shapes at once is not a positional parse we produced; refuse rather
+  // than pick a half.
+  if (recognised && numbered.length > 0) return [];
+  if (recognised) {
+    return VPC_FLOW_V2_FIELDS.map((name, index) => ({ name, index }));
+  }
+  return numbered.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * The extract-group functions for a whitespace-positional source.
+ *
+ * WHY THIS BRANCH EXISTS (GEN-6). Without it a positional sample fell to the
+ * trailing `else` and got `serde type: json` over `_raw`. A whitespace line is
+ * not JSON, so the step extracted NOTHING - and every step after it addressed
+ * fields that no event carried. The parse was right, the gap analysis was right,
+ * the build reported success, and the installed pack produced empty events. That
+ * is the failure this codebase is organised against, so the extraction has to
+ * reproduce the parse rather than merely differ from JSON.
+ *
+ * The split mirrors splitPositional: trim, then split on RUNS of whitespace, so
+ * a hand-edited sample carrying a tab or a doubled space does not shift every
+ * column right. `__posParts` is consumed in the same function that creates it
+ * (the CEF header eval's `__cefParts` precedent).
+ *
+ * WHEN NO COLUMN NAMES COULD BE DERIVED the pipeline says so instead of
+ * pretending. It still splits - so the operator sees the columns in `__posParts`
+ * in Cribl's preview rather than an empty event - and carries a Comment function
+ * stating that nothing was named and what to do. Emitting nothing at all here
+ * would be the original defect wearing a different mask.
+ */
+function positionalExtractFunctions(
+  columns: readonly PositionalColumn[],
+  groupId: string,
+): string[] {
+  const split =
+    "        - name: __posParts\n" +
+    `          value: "(_raw || '').trim().split(/\\\\s+/)"`;
+
+  if (columns.length === 0) {
+    return [
+      [
+        "  - id: eval",
+        '    filter: "true"',
+        "    disabled: false",
+        "    conf:",
+        "      add:",
+        split,
+        "      remove: []",
+        "    description: Split whitespace-positional columns from _raw",
+        `    groupId: ${groupId}`,
+      ].join("\n"),
+      [
+        "  - id: comment",
+        '    filter: "true"',
+        "    disabled: false",
+        "    conf:",
+        "      comment: >",
+        "        This source was read as a whitespace-positional log, but no",
+        "        positional column names reached the pack builder, so no column",
+        "        could be named. The split values are left in __posParts. Name",
+        "        the columns here before installing, or every event will reach",
+        "        the destination with no vendor fields at all.",
+        `    groupId: ${groupId}`,
+      ].join("\n"),
+    ];
+  }
+
+  const assignments = columns.map(
+    (c) =>
+      `        - name: ${c.name}\n          value: "(__posParts && __posParts.length > ${c.index}) ? __posParts[${c.index}] : undefined"`,
+  );
+  return [
+    [
+      "  - id: eval",
+      '    filter: "true"',
+      "    disabled: false",
+      "    conf:",
+      "      add:",
+      split,
+      ...assignments,
+      "      remove:",
+      "        - __posParts",
+      "    description: Split whitespace-positional columns from _raw and name them",
+      `    groupId: ${groupId}`,
+    ].join("\n"),
+  ];
 }
 
 /**
@@ -404,6 +554,10 @@ export function generatePipelineConf(
         ].join("\n"),
       );
     }
+  } else if (sourceFormat === "positional") {
+    // GEN-6. See positionalExtractFunctions - this branch is the whole fix, and
+    // its absence is why a positional sample used to be handed to a JSON serde.
+    functions.push(...positionalExtractFunctions(positionalColumns(fields), "extract"));
   } else {
     const serdeType = sourceFormat === "kv" ? "kvp" : "json";
     const serdeDesc =
@@ -927,17 +1081,28 @@ export function generateReductionConfForPlan(
         solutionName,
         table.sentinelTable,
         table.sourceFormat,
+        // GEN-6: the fallback's triage step exists so the filters an operator
+        // adds can SEE fields, and for a positional source it was the same JSON
+        // serde over a whitespace line. It needs the plan's field names to mint
+        // the columns, so they are threaded here rather than left behind.
+        table.fields,
       );
 }
 
 /**
  * A no-op reduction pipeline emitted when no rules match the table/vendor.
- * Ported verbatim from legacy generateFallbackReductionConf.
+ * Ported verbatim from legacy generateFallbackReductionConf, with ONE change:
+ * a positional source gets the GEN-6 split-and-name extraction instead of a
+ * serde, because its whole purpose is to let a hand-written drop filter read a
+ * field, and a JSON serde over a whitespace-positional line produces none.
+ * `fields` is optional so the legacy 3-argument call still compiles and still
+ * behaves identically for every non-positional format.
  */
 export function generateFallbackReductionConf(
   solutionName: string,
   tableName: string,
   sourceFormat?: string,
+  fields: readonly PipelineFieldMapping[] = [],
 ): string {
   const serdeType =
     sourceFormat === "csv"
@@ -947,6 +1112,25 @@ export function generateFallbackReductionConf(
           sourceFormat === "leef"
         ? "kvp"
         : "json";
+  const triage =
+    sourceFormat === "positional"
+      ? positionalExtractFunctions(positionalColumns(fields), "triage")
+      : [
+          [
+            "  - id: serde",
+            '    filter: "true"',
+            "    disabled: false",
+            "    conf:",
+            "      mode: extract",
+            `      type: ${serdeType}`,
+            "      srcField: _raw",
+            ...(serdeType === "kvp"
+              ? ['      delimChar: " "', '      pairDelim: "="']
+              : []),
+            `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
+            "    groupId: triage",
+          ].join("\n"),
+        ];
   return [
     `# Reduction Pipeline: ${solutionName} - ${tableName}`,
     "#",
@@ -974,18 +1158,7 @@ export function generateFallbackReductionConf(
     "    disabled: false",
     "asyncFuncTimeout: 1000",
     "functions:",
-    "  - id: serde",
-    '    filter: "true"',
-    "    disabled: false",
-    "    conf:",
-    "      mode: extract",
-    `      type: ${serdeType}`,
-    "      srcField: _raw",
-    ...(serdeType === "kvp"
-      ? ['      delimChar: " "', '      pairDelim: "="']
-      : []),
-    `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
-    "    groupId: triage",
+    ...triage,
     "  - id: comment",
     '    filter: "true"',
     "    disabled: true",

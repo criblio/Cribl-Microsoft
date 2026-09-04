@@ -18,7 +18,10 @@ import { parseSampleContent } from "./parse-sample";
 import { checkCriblYaml } from "../pipeline-generation/cribl-yaml-validator";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "../pipeline-generation/plan";
-import { generatePipelineConfForPlan } from "../pipeline-generation/pipeline-conf";
+import {
+  generatePipelineConfForPlan,
+  generateReductionConfForPlan,
+} from "../pipeline-generation/pipeline-conf";
 
 describe("isCriblAccessorSafe (DBT-78)", () => {
   it("accepts bare identifiers, including the underscore names we mint", () => {
@@ -77,13 +80,22 @@ describe("unaddressableFieldNote (DBT-78)", () => {
     expect(unaddressableFieldNote(["a-b"])).toContain("1 field name is");
   });
 
-  it("promises no build-time refusal, because the build does not deliver one", () => {
-    // THE NOTE SAID "Pack generation refuses these names rather than emitting
-    // them" UNTIL 2026-09-03, and that was measurably false for any name
-    // containing WHITESPACE - one of the note's most common triggers, since a
-    // space-headed CSV produces exactly that. The two halves are pinned
-    // together, because the wording is only wrong RELATIVE to what the
-    // validator does:
+  it("promises no build-time refusal, because two of the three fates ship", () => {
+    // THIS PIN HAS BEEN NARROWED TWICE AND IS NOW POINTED THE OTHER WAY, so
+    // read the history before touching it. The note said "Pack generation
+    // refuses these names rather than emitting them" until 2026-09-03; that was
+    // measurably false for a name containing WHITESPACE, so the claim came out
+    // and this pin held the wording to it. GEN-4 then taught checkCriblYaml
+    // whitespace names, this pin's `toEqual([])` FIRED AS DESIGNED, and the
+    // line below is what replaced it.
+    //
+    // What did NOT change is why the note still promises nothing. The reason
+    // was never "the line matcher cannot see a space" - that was only the
+    // mechanism of the day. It is that a refusal depends on the field's FATE:
+    // the rule only ever reads a name a RENAME put on a `currentName:` line,
+    // and an unmatched or kept name never reaches one, whatever it is spelled
+    // with. That is measured end-to-end in "what a whole generated pack
+    // actually refuses" below; this pin covers the line-level rule only.
     const note = unaddressableFieldNote(["Source IP"]) ?? "";
     expect(note).toContain("Source IP");
     // (a) the note claims no safety net...
@@ -91,11 +103,11 @@ describe("unaddressableFieldNote (DBT-78)", () => {
     // ...and does say the thing that is true of every case.
     expect(note).toContain("upstream");
 
-    // (b) ...because there is not one. `checkCriblYaml` reads a field name with
-    // `([^'"\s][^\s]*)\s*$`, which cannot match a value containing a space, so
-    // the rule never sees a spaced name. Asserted as an ASYMMETRY with real
-    // counts, so it cannot pass by the validator refusing everything or
-    // nothing.
+    // (b) ...and on a rename line the rule now refuses all three unaddressable
+    // shapes alike - the space no longer excepted. Asserted as an ASYMMETRY
+    // with real counts, because "refuses a spaced name" is also satisfied by a
+    // validator that refuses EVERYTHING: the two zero rows are what make the
+    // three ones mean something.
     const renameYaml = (name: string): string =>
       [
         "  - id: rename",
@@ -104,17 +116,32 @@ describe("unaddressableFieldNote (DBT-78)", () => {
         `        - currentName: ${name}`,
         "          newName: AccountId",
       ].join("\n");
-    expect(checkCriblYaml(renameYaml("Source IP"), "conf.yml")).toEqual([]);
+    expect(checkCriblYaml(renameYaml("Source IP"), "conf.yml")).toHaveLength(1);
     expect(checkCriblYaml(renameYaml("src-ip"), "conf.yml")).toHaveLength(1);
     expect(checkCriblYaml(renameYaml("a.b"), "conf.yml")).toHaveLength(1);
+    // An addressable name on the same line is untouched...
+    expect(checkCriblYaml(renameYaml("SourceIP"), "conf.yml")).toEqual([]);
+    // ...and so is a PROSE `name:` that is not a field name at all. This is the
+    // group-header trap: "Field Extraction" is not an identifier either, every
+    // generated conf carries three of them, and a rule that told them apart by
+    // the SHAPE of the value rather than by the enclosing block would fail
+    // every pack we build three times over.
+    expect(
+      checkCriblYaml(
+        ["groups:", "  fx:", "    name: Field Extraction"].join("\n"),
+        "conf.yml",
+      ),
+    ).toEqual([]);
 
-    // WHEN THIS PIN FAILS ON THE FIRST LINE OF (b), that is the good outcome:
-    // someone taught the validator whitespace names. Re-read the note's last
-    // sentence at the same time - it was narrowed only because of this gap, and
-    // it can widen again once the gap closes. Read the group-header trap in
-    // cribl-yaml-validator.ts first: a widened class also matches `name: Field
-    // Extraction` and its siblings. There is NO CARD for that trap (board.json,
-    // checked 2026-09-03), so that comment is the only record of it.
+    // TRIPWIRE FOR THE NEXT CHANGE, in the same style as the one that brought
+    // you here. The remaining hole is GEN-5: an unmatched or kept name reaches
+    // no `name:` line at all, so no character class can catch it - it needs the
+    // validator to read `remove:` bullets, and a live Cribl measurement of what
+    // a glob list does with an unaddressable name. WHEN THE "SHIPS" PINS BELOW
+    // FAIL, that is the good outcome: someone closed GEN-5. Re-read the note's
+    // WHETHER paragraph in accessor-names.ts at the same time, because at that
+    // point the note stops being the only warning those fates ever get, and
+    // (a) above becomes the claim to re-argue rather than to preserve.
   });
 
   it("is not early-because-clearer: the build message already names the field", () => {
@@ -170,7 +197,18 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
   function issuesForSample(
     content: string,
     schemaColumns: Array<{ name: string; type: string }>,
-  ): { actions: string[]; issues: string[]; conf: string } {
+    // WHICH DESTINATION TABLE, and it is not cosmetic: it decides whether the
+    // plan has REDUCTION RULES, and therefore which of two very different confs
+    // generateReductionConfForPlan emits. Defaulted so the cases that do not
+    // care read as before.
+    sentinelTable = "TestTable_CL",
+  ): {
+    actions: string[];
+    issues: string[];
+    reductionIssues: string[];
+    conf: string;
+    reductionConf: string;
+  } {
     const parsed = parseSampleContent(content, { sourceName: "s" });
     const match = matchSampleToSchema(
       parsed.fields.map((f) => ({
@@ -197,7 +235,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
       packName: "cribl-test",
       tables: [
         {
-          sentinelTable: "TestTable_CL",
+          sentinelTable,
           matchResult: match,
           sourceFormat: parsed.format,
         },
@@ -206,10 +244,15 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     const table = plan.tables[0];
     if (table === undefined) throw new Error("planner produced no table");
     const conf = generatePipelineConfForPlan(table, "Test Solution");
+    // THE OTHER CONF THE SAME PLAN EMITS. A pack ships both, so a refusal that
+    // held only on the transform path would be one a pack could walk around.
+    const reductionConf = generateReductionConfForPlan(table, "Test Solution");
     return {
       actions: table.fields.map((f) => `${f.source}:${f.action}`),
       issues: checkCriblYaml(conf, "conf.yml"),
+      reductionIssues: checkCriblYaml(reductionConf, "conf.yml"),
       conf,
+      reductionConf,
     };
   }
 
@@ -310,14 +353,149 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     expect(issues).toEqual([]);
   });
 
+  /**
+   * THE SAME THREE FATES, SPELLED WITH SPACES (GEN-4). Until 2026-09-03 all
+   * three of these shipped, because the validator's line matcher could not see
+   * a value containing a space. GEN-4 closed the RENAMED one and could not
+   * close the other two, and pinning all three together is what keeps that
+   * distinction from being read as "whitespace is handled now".
+   */
+  it("REFUSES a whitespace name the schema has a home for", () => {
+    // The ordinary shape of a space-headed export read against a Sentinel
+    // schema: prose headers, and CamelCase columns that are those headers with
+    // the spaces taken out, so the matcher pairs every one of them.
+    //
+    // NOTE THE FORMAT. detectSampleFormat does NOT call this csv - its CSV rule
+    // requires every header to be a bare identifier (format-detection.ts), and
+    // prose headers are not - so it falls to `unknown` and parseByFormat's
+    // fallback list reaches parseCsv anyway. Asserted because "space-headed
+    // CSV" is the obvious way to describe this case and is wrong about the
+    // format value; the five field names arrive regardless, which is all this
+    // pin needs.
+    const parsed = parseSampleContent(
+      "Device Action,Source IP,Destination IP,Source Port,Destination Port\nblock,1.1.1.1,2.2.2.2,443,80",
+      { sourceName: "s" },
+    );
+    expect(parsed.format).toBe("unknown");
+
+    const CSV =
+      "Device Action,Source IP,Destination IP,Source Port,Destination Port\nblock,1.1.1.1,2.2.2.2,443,80";
+    const COLUMNS = [
+      { name: "DeviceAction", type: "string" },
+      { name: "SourceIP", type: "string" },
+      { name: "DestinationIP", type: "string" },
+      { name: "SourcePort", type: "int" },
+      { name: "DestinationPort", type: "int" },
+      TIME,
+    ];
+
+    const { actions, issues, reductionIssues, reductionConf } = issuesForSample(
+      CSV,
+      COLUMNS,
+    );
+    // Asserted so a matcher change cannot move these off the rename branch and
+    // leave the counts passing for the wrong reason.
+    expect(actions.sort()).toEqual([
+      "Destination IP:rename",
+      "Destination Port:rename",
+      "Device Action:rename",
+      "Source IP:rename",
+      "Source Port:rename",
+    ]);
+    expect(issues).toHaveLength(5);
+    expect(issues.join("\n")).toContain('field name "Source IP"');
+
+    // THE REDUCTION CONF READS 0 HERE, AND THAT IS NOT A HOLE - it is the
+    // FALLBACK pipeline. TestTable_CL has no reduction rules, so
+    // generateReductionConfForPlan emits the no-op conf, which renames nothing
+    // at all; 0 issues is the honest count for a file with no rename in it.
+    // Pinned on the MECHANISM rather than the number, because "0" alone would
+    // read as the refusal being escapable.
+    expect(reductionConf).not.toContain("currentName");
+    expect(reductionIssues).toEqual([]);
+
+    // WHERE THE REDUCTION CONF DOES CARRY THE RENAMES, it refuses them too. A
+    // table with reduction rules gets the full transformation pipeline WITH the
+    // reduce group inserted, so the same five `- currentName:` lines are in it
+    // and the same five issues come back. This is the pairing that shows the
+    // refusal is not a property of one emitter.
+    const withRules = issuesForSample(CSV, COLUMNS, "CommonSecurityLog");
+    expect(withRules.reductionConf).toContain("- currentName: Source IP");
+    expect(withRules.issues).toHaveLength(5);
+    expect(withRules.reductionIssues).toHaveLength(5);
+  });
+
+  it("SHIPS a whitespace name when no destination column claims it", () => {
+    // GEN-5's hole, in the shape GEN-4 could not reach: same name, no column,
+    // so the matcher drops it and no rename line is ever emitted. No character
+    // class can close this one - there is nothing to read.
+    const { actions, issues, reductionIssues, conf } = issuesForSample(
+      '[{"Source IP":"1.1.1.1","Bad Thing":"x"}]',
+      [{ name: "SomethingElse", type: "string" }, TIME],
+    );
+    expect(actions.sort()).toEqual(["Bad Thing:drop", "Source IP:drop"]);
+    // EVERY line mentioning the name: exactly one, a `remove:` bullet, which is
+    // not a name:/currentName:/newName: line under a `conf:`. Asserting the
+    // whole set is what stops this passing because the name vanished entirely.
+    expect(
+      conf
+        .split("\n")
+        .filter((l) => l.includes("Source IP"))
+        .map((l) => l.trim()),
+    ).toEqual(["- Source IP"]);
+    // The rule is not idle here - it reads the enrich eval's `Type` - so 0
+    // means "nothing unaddressable reached it", not "nothing reached it".
+    expect(nameLinesFor(conf, "Type")).toHaveLength(1);
+    expect(issues).toEqual([]);
+    expect(reductionIssues).toEqual([]);
+    // ...on BOTH reduction paths. The line above is the no-op fallback, where 0
+    // is cheap; this is the full pipeline a table WITH reduction rules gets,
+    // where 0 costs something.
+    expect(
+      issuesForSample(
+        '[{"Source IP":"1.1.1.1","Bad Thing":"x"}]',
+        [{ name: "SomethingElse", type: "string" }, TIME],
+        "CommonSecurityLog",
+      ).reductionIssues,
+    ).toEqual([]);
+  });
+
+  it("SHIPS a whitespace name kept under its own spelling", () => {
+    // The worst of the three: the destination column IS "Source IP", so the
+    // match succeeds, no rename is needed, and the conf carries no line bearing
+    // the name at all. The build is green and the accessor is unbuildable.
+    const { actions, issues, reductionIssues, conf } = issuesForSample(
+      '[{"Source IP":"1.1.1.1"}]',
+      [{ name: "Source IP", type: "string" }, TIME],
+    );
+    expect(actions).toEqual(["Source IP:keep"]);
+    expect(conf).not.toContain("Source IP");
+    expect(nameLinesFor(conf, "Type")).toHaveLength(1);
+    expect(issues).toEqual([]);
+    expect(reductionIssues).toEqual([]);
+    // Same on the rules-carrying reduction path, for the same reason: there is
+    // no line bearing the name on either.
+    const withRules = issuesForSample(
+      '[{"Source IP":"1.1.1.1"}]',
+      [{ name: "Source IP", type: "string" }, TIME],
+      "CommonSecurityLog",
+    );
+    expect(withRules.reductionConf).not.toContain("Source IP");
+    expect(withRules.reductionIssues).toEqual([]);
+  });
+
   it("still says it at parse time in every one of those cases", () => {
-    // The asymmetry above is only tolerable because the note is unconditional.
-    // If this ever drops to fewer than three, the two shipping cases lose their
-    // only warning.
+    // The asymmetry above is only tolerable because the note is unconditional -
+    // it fires on all six, refused and shipping alike, and does not try to
+    // predict the fate. The four SHIPPING cases in this list have no other
+    // warning anywhere in the product.
     for (const content of [
       "src-ip=1.1.1.1 dst-ip=2.2.2.2 account-id=999",
       '[{"src-ip":"1.1.1.1","vendor-thing":"x"}]',
       '[{"a.b":"x"}]',
+      "Device Action,Source IP,Destination IP,Source Port,Destination Port\nblock,1.1.1.1,2.2.2.2,443,80",
+      '[{"Source IP":"1.1.1.1","Bad Thing":"x"}]',
+      '[{"Source IP":"1.1.1.1"}]',
     ]) {
       const parsed = parseSampleContent(content, { sourceName: "s" });
       expect(parsed.errors, content).toHaveLength(1);

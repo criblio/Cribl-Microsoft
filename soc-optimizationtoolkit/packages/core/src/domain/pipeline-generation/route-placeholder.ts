@@ -68,39 +68,102 @@ export function isPlaceholderFilter(routeCondition: string): boolean {
 }
 
 /**
- * WHY a log type will need a hand-written route filter - and the reason CSV
- * gets its own answer (HON-5).
+ * WHY a log type will need a hand-written route filter - and the reason a
+ * COLUMN-ORDER format gets its own answer (HON-5).
  *
  *   evidence  the samples did not separate it from a sibling THIS TIME. More
  *             or better samples can fix it, and often do.
- *   format    it can NEVER be separated automatically. CSV data rows are
- *             positional: at route time the event is unparsed, the field name
- *             never appears in `_raw`, and both discriminators return null by
- *             construction - see route-discriminator and
- *             route-value-discriminator, which each early-return on "csv".
+ *   format    it can NEVER be separated automatically. A column-order event
+ *             carries values in position and no names: at route time the event
+ *             is unparsed, the field name never appears in `_raw`, and both
+ *             discriminators return null - see route-discriminator and
+ *             route-value-discriminator, which each ask
+ *             {@link formatCanDiscriminate} rather than restating the rule.
  *
  * Collapsing these into one warning is the failure this exists to avoid. Told
- * "no discriminator found", a CSV operator will go and collect more samples,
+ * "no discriminator found", such an operator will go and collect more samples,
  * which cannot possibly help; told the truth, they write one filter and move
  * on. The generic placeholder message is right for every other format and
- * wrong for this one.
+ * wrong for these.
  */
 export type PlaceholderCause = "evidence" | "format";
 
 /**
+ * The formats whose events carry values in COLUMN ORDER and no field names.
+ *
+ * "csv" was only ever one half of this set, and the other half shipped without
+ * it (GEN-6 taught the parser and the pipeline about whitespace-positional logs
+ * and left the router believing they were routable).
+ */
+const POSITIONAL_FORMATS: ReadonlySet<string> = new Set(["csv", "positional"]);
+
+/**
  * Whether this format can EVER route automatically.
  *
+ * FALSE for the column-order formats. A route is evaluated BEFORE the pipeline
+ * extracts, so the only things a filter can test are the raw text and whatever
+ * the source already parsed - and neither carries a column-order format's field
+ * names, because those names come from a column POSITION and are minted by the
+ * extract step the route has not reached yet.
+ *
+ * MEASURED 2026-09-03 by parsing one event per format and asking which of the
+ * field names the parser produced occur anywhere in the raw line:
+ *
+ *   positional, AWS VPC Flow v2      14 names, 14 absent (version, account_id,
+ *                                    interface_id, srcaddr, dstaddr, ...)
+ *   positional, unrecognised shape    6 names,  6 absent (field1..field6)
+ *   csv, headerless PAN-OS            6 names,  6 absent (receive_time, serial,
+ *                                    type, subtype, generated_time, src)
+ *   json / ndjson / kv                0 absent - the name is IN the event text
+ *
+ * So on a two-log-type positional plan `deriveRouteDiscriminator` emitted
+ * `interface_id !== undefined || (typeof _raw === 'string' &&
+ * _raw.indexOf('interface_id=') !== -1) || ...` - every disjunct false for
+ * every event, a route that DEAD-ENDS. That was worse than the CSV case sitting
+ * next to it, because a filter WAS produced: the log type was therefore neither
+ * a placeholder nor reported unreachable, and the pack previewed clean.
+ *
  * Kept as a predicate over the format string rather than a list of formats
- * elsewhere, because the two discriminators already branch on exactly this and
- * a third opinion about which formats are positional is how they drift apart.
+ * elsewhere, because both discriminators call THIS and a third opinion about
+ * which formats are positional is how they drift apart.
+ *
+ * NOT THE ONLY FORMATS WHOSE NAMES ARE MINTED, and they are deliberately not
+ * folded in here. The same measurement says:
+ *
+ *   syslog   EVERY name absent from the raw line - Timestamp, Hostname,
+ *            Program, PID, Message, and for RFC 5424 also Priority, Version,
+ *            AppName, ProcID, MsgID. A whole-format instance of this defect.
+ *   cef      the 7 HEADER names are absent (CEFVersion, DeviceVendor,
+ *   leef     DeviceProduct, DeviceVersion, DeviceEventClassID, Name, Severity;
+ *            LEEF the same five plus EventID) while the extension pairs really
+ *            are in the text. A per-FIELD instance, not a per-format one - and
+ *            the length-first sort in route-discriminator PREFERS the long
+ *            header names over a short real one.
+ *   unknown  depends on the CONTENT, which a format string cannot see. The
+ *            try-each fallback in parseByFormat settled on parseCsv for a
+ *            PAN-OS line (12 names, 12 absent) and on parseSyslog for an RFC
+ *            3164 line (6 names, 6 absent), and on parseJson/parseKv for
+ *            content whose names ARE in the text. It cannot be answered here.
+ *
+ * None of these is folded into the set above. Their cause is different (a
+ * regex capture or a fallback parser, not a column position), so each needs its
+ * own operator wording rather than this one's; and a defect found in committed
+ * code becomes a card before it is fixed rather than a drive-by widening of
+ * somebody else's finding. Filed, not fixed - and this note is the loud part.
  */
 export function formatCanDiscriminate(format: string): boolean {
-  return format.toLowerCase() !== "csv";
+  return !POSITIONAL_FORMATS.has(format.toLowerCase());
 }
 
 /**
- * The warning for a CSV log type that WILL placeholder, or null when there is
- * nothing to say.
+ * The warning for a column-order log type that WILL placeholder, or null when
+ * there is nothing to say.
+ *
+ * THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03: it also answers for
+ * "positional". Renaming it would edit the pipeline-generation barrel and the
+ * samples screen, which are outside this change's scope, so the name is left
+ * and the rename is a card. The behaviour is defined by
+ * {@link formatCanDiscriminate}, not by this identifier.
  *
  * `siblingCount` is load-bearing and the reason this is not a one-line format
  * check. A single-log-type pack keeps its match-all and routes correctly -
@@ -117,10 +180,19 @@ export function csvRoutingWarning(
 ): string | null {
   if (formatCanDiscriminate(format)) return null;
   if (siblingCount < 1) return null;
+  // ONE MESSAGE FOR BOTH, and every clause has to be true of both. A CSV data
+  // row and a whitespace-positional line differ only in their separator: each
+  // carries values in column order, and the field names shown in the app were
+  // worked out from those positions rather than read out of the event. Naming
+  // CSV alone - which this did until positional joined the set - would have
+  // sent a VPC Flow operator looking for a CSV bug they do not have.
   return (
-    "CSV log types cannot be routed automatically. At route time the event is " +
-    "still unparsed and a CSV row carries no field names, so no filter can tell " +
-    "this log type from the others in the pack - more samples will not change " +
-    "that. Its route ships with a placeholder filter for you to complete."
+    "Column-order log types (CSV rows, whitespace-positional lines) cannot be " +
+    "routed automatically. Routes are evaluated before the pipeline extracts, " +
+    "and at that point the event is still unparsed: it carries values in column " +
+    "order, and the field names shown here were worked out from those positions " +
+    "rather than read out of the event. So no filter can tell this log type " +
+    "from the others in the pack - more samples will not change that. Its route " +
+    "ships with a placeholder filter for you to complete."
   );
 }

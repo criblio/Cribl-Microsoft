@@ -197,12 +197,30 @@ export function looksPositional(lines: readonly string[]): boolean {
  * The unnamed case is not a failure mode - it is the honest answer for a format
  * whose schema lives outside the file. The operator can still see their events,
  * see the column count, and map the fields themselves.
+ *
+ * ORIGINAL-LINE CAPTURE. `sourceLines` is the same accumulator every other
+ * line-oriented parser takes (see the header on parsers.ts): the input line is
+ * pushed AT THE POINT the record is emitted, so a filtered line cannot drift the
+ * pairing. It was MISSING here until 2026-09-03, and the cost was not cosmetic -
+ * `rawEventsFor` pairs all-or-nothing on length, so an empty accumulator sent
+ * every positional sample down the `JSON.stringify(record)` fallback and the
+ * generated pack was previewed, and shipped, against a JSON object string
+ * instead of the vendor's whitespace-separated line. Running the pack's own
+ * positional extract over that string recovers ONE field of fourteen, because
+ * `JSON.stringify` emits no spaces for the split to find.
+ *
+ * THE LINE IS PUSHED UNTRIMMED, which is why the trim moved off the filter and
+ * onto {@link splitPositional} (where it already was) rather than being applied
+ * up front. `sourceLines` becomes `rawEvents`, i.e. what we claim the vendor
+ * sent, and the records are byte-identical either way - `splitPositional` trims
+ * before splitting, so leading or trailing whitespace was never data here. A
+ * carriage return is the exception and is dropped with the newline, as framing.
  */
-export function parsePositional(content: string): PositionalRecord[] {
-  const lines = content
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l !== "");
+export function parsePositional(
+  content: string,
+  sourceLines?: string[],
+): PositionalRecord[] {
+  const lines = content.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return [];
 
   const named = isVpcFlowV2(lines);
@@ -215,6 +233,7 @@ export function parsePositional(content: string): PositionalRecord[] {
         : `field${i + 1}`;
       record[key] = value;
     });
+    sourceLines?.push(line);
     return record;
   });
 }

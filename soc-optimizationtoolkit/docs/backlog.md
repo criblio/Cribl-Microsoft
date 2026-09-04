@@ -1132,15 +1132,80 @@ number wrong, which settled the wording: name the line by its SHAPE, count
 nothing. That is the same reason the script matches on the shape rather than on a
 version.
 
-**Running it locally needs the workspace NAMED.** Use
-`npm run check-release --workspace apps/cribl-app` from `soc-optimizationtoolkit`
-- which is exactly what CI runs - or a bare `npm run check-release` from
-`apps/cribl-app`. A plain `npm run check-release` from `soc-optimizationtoolkit`
-exits 1 with "Missing script": alone among its siblings (`check-board`,
-`check-docs`, `check-listings`, `check-schema-asset`, `check-board-freshness`) it
-was never forwarded in the root `package.json`. Measured 2026-09-03, after this
-entry had claimed the plain form worked since the check was written. Forwarding
-it at the root is the fix, and would make the shorter command true.
+**Running it locally.** `npm run check-release` from `soc-optimizationtoolkit`
+works, as does the longer `npm run check-release --workspace apps/cribl-app` -
+which is what CI runs - and a bare `npm run check-release` from `apps/cribl-app`.
+
+The short form only became true on 2026-09-03, and the ten days before that are
+the point. Alone among its siblings (`check-board`, `check-docs`,
+`check-listings`, `check-schema-asset`, `check-board-freshness`), `check-release`
+was never forwarded in the root `package.json`, so the plain command exited 1
+with "Missing script". This entry had been telling readers to run it that way
+since the check was written on 2026-08-24 - the original sentence said the check
+was run "by CI ... and by `npm run check-release` locally". The instruction was
+wrong the day it was written and stood uncorrected for ten days with no card
+against it. The failure was LOUD - an npm "Missing script" error, not a silent
+pass - so this is not a case of a gate quietly reporting green. What it cost is
+that the pre-push check was simply unavailable to anyone who followed the
+instruction: they either knew to add the workspace flag or found out from CI
+instead. Fixed under [[DBT-90]] by adding the forward; the sibling list above is
+what made it obvious, since every other check that HAS an npm script had a
+forward too.
+
+That qualifier is doing real work. `apps/cribl-app/scripts/check-classnames.mjs`
+([[DBT-39]], added 2026-08-31) has no npm script anywhere and no CI step, and
+until this paragraph its NAME appeared in no document - [[DBT-61]]'s card
+discusses the thing but calls it "DBT-39's className checker", so a reader could
+not have grepped their way to the file. As of this edit a repo grep for
+`check-classnames` finds it in exactly two files: its own test file, and this
+paragraph. (Stated that way on purpose. The sentence this replaced said there was
+"no mention in any document", which was false the moment it was committed, because
+the sentence IS one. A claim about the whole repo that the claim itself falsifies
+is the same defect as the rest of this section, just small enough to miss.) Run by
+hand on 2026-09-03 it exits 1 reporting "36 undefined or undeclared" across 33
+distinct class names - and CI is green, which is the whole finding: the tree
+carries 36 findings and every build passes, because nothing invokes the script
+that would report them.
+
+NOTHING ACCUMULATED, AND THAT IS THE SHARPER VERSION OF THE FINDING. The script
+landed on 2026-08-31 ALREADY reporting those 36, and the set has not moved since.
+Measured by extracting the adding commit (e147332) with `git archive`, running the
+script inside that tree, running it on the current tree, and diffing the distinct
+name sets: both print "36 undefined or undeclared across 127 source file(s)", both
+resolve to the same 33 distinct names - 32 literal class names plus one prefix
+family, `log-type-evidence-*` - and the set difference is EMPTY in both directions.
+Zero added, zero removed, in three days. (The two runs are not byte-identical, and
+the differences are worth naming so the claim is not read wider than it was tested:
+the never-rendered notice moved from 169 to 171, and line numbers shifted in
+`mapping-review-section.tsx` and `rule-coverage-section.tsx`. Ordinary edits moving
+around unchanged findings - the ERROR set is what held still.) Introduction dates
+agree: of ten names sampled with `git log -S`, all ten predate 2026-08-31 and six
+are from July.
+
+So DBT-39's own four names - `pack-card`, `pack-card-head`, `dcr-progress-line`,
+`identity-row-editable` - were deleted in the SAME commit that added the script,
+and the other 33 were LEFT STANDING rather than accrued afterwards. What went
+unfixed is the RECURRENCE that card called "THE REAL FIX": the check was written
+and then wired to nothing, so it inherited a red tree at birth and has been
+reporting it to nobody ever since. [[DBT-61]] had already named the trap, citing
+this very script - "reports 36 pre-existing findings and therefore cannot be wired
+into CI until they are triaged. A gate that starts red never becomes a gate." That
+card recorded the diagnosis on 2026-08-31 and the count has not moved since, which
+is the corroboration from a second direction: the 36 were pre-existing THEN, by the
+account of a card written that day. It is a level worse than what this section
+describes: `check-release` was a working check behind a missing forward, while this
+one is a check nobody can invoke by name. Filed separately rather than fixed here -
+those 36 are UI defects, not release hygiene.
+
+NOTHING GUARDS THIS. No gate reads a command out of prose and tries it, so a
+document naming a script that does not exist stays green. That is the same family
+as [[DBT-88]] - prose about this check decaying with nothing failing - but it is
+NOT the check DBT-88 scopes. DBT-88 proposes pinning the claim COUNT and the list
+of held files, both derivable from the script; a command is a different fact,
+checkable by extracting `npm run X` from the docs and asserting X resolves. The
+hard half is knowing which directory the surrounding prose means - `npm run
+check-release` is correct from two directories and wrong from the third - which
+is why that is filed as its own card rather than settled in this paragraph.
 
 **The lock claim was added 2026-09-02, and it costs a manual step.** The lock was
 found recording 1.11.5 while `package.json` said 1.12.3. The argument against

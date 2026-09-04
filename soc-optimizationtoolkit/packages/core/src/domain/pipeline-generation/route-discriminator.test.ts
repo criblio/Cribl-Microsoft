@@ -65,6 +65,42 @@ describe("deriveRouteDiscriminator", () => {
     ).toBeNull();
   });
 
+  /**
+   * THE SAME RULE, THE OTHER COLUMN-ORDER FORMAT (GEN-6 fallout, 2026-09-03).
+   *
+   * `formatCanDiscriminate` tested only `!== "csv"`, so a whitespace-positional
+   * plan came through here and got a filter. Measured on a two-log-type
+   * positional plan built through the real chain, the emitted route read
+   * `interface_id !== undefined || (typeof _raw === 'string' &&
+   * _raw.indexOf('interface_id=') !== -1) || account_id ...`. Both names are
+   * minted from a COLUMN POSITION by the pipeline's extract step, and the route
+   * runs before it - so every disjunct is false for every event and the route
+   * dead-ends. It was worse than the CSV case above rather than equal to it: a
+   * filter existed, so the log type was neither a placeholder nor "unreachable"
+   * and the pack previewed clean.
+   */
+  it("returns null for positional (whitespace columns carry no field names)", () => {
+    expect(
+      deriveRouteDiscriminator(
+        ["interface_id", "account_id"],
+        others("field1"),
+        "positional",
+      ),
+    ).toBeNull();
+  });
+
+  it("...and the SAME fields on a routable format still produce a filter", () => {
+    // The control, without which the null above would pass for any reason at
+    // all - an empty unique set, a rejected name, a typo in the fixture.
+    expect(
+      deriveRouteDiscriminator(
+        ["interface_id", "account_id"],
+        others("field1"),
+        "cef",
+      ),
+    ).toContain("interface_id !== undefined");
+  });
+
   it("escapes quotes and backslashes in the raw token", () => {
     const filter = deriveRouteDiscriminator(
       ["odd'field"],
