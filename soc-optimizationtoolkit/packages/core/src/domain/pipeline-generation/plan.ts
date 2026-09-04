@@ -390,5 +390,10 @@ export function buildPipelinePlan(
     ...(input.toolkitVersion !== undefined
       ? { toolkitVersion: input.toolkitVersion }
       : {}),
+    // Same absent-stays-absent rule (GEN-13): an omitted shape means the
+    // all-inclusive default, and every consumer reads it that way, so writing a
+    // literal here would put a choice on plans nobody made one for - including
+    // the build records that predate the option.
+    ...(input.packShape !== undefined ? { packShape: input.packShape } : {}),
   };
 }

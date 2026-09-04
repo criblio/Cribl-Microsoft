@@ -52,6 +52,7 @@ import type {
   GapReport,
   LogTypeFieldValues,
   PipelineFieldMapping,
+  PackShape,
   PipelinePlan,
   PlanProvenance,
   TablePlan,
@@ -188,6 +189,12 @@ export interface PipelinePreviewInputs {
    * define and @soc/core is pure - so it arrives as input like everything else.
    */
   toolkitVersion?: string;
+  /**
+   * How the pack is wired - the operator's choice (GEN-13). Omitted means
+   * all-inclusive, which is what every pack built before the option existed
+   * was, so an unset preview renders exactly as it always did.
+   */
+  packShape?: PackShape;
   /** The Unit 18 gap reports (typed input, already computed). */
   reports: GapReport[];
   /**
@@ -556,6 +563,10 @@ export function derivePipelinePreview(
     ...(inputs.toolkitVersion !== undefined
       ? { toolkitVersion: inputs.toolkitVersion }
       : {}),
+    // GEN-13: the operator's wiring choice. Absent stays absent so a preview
+    // taken before the option existed renders the all-inclusive default rather
+    // than a shape nobody picked.
+    ...(inputs.packShape !== undefined ? { packShape: inputs.packShape } : {}),
     tables: planTables.map((r) =>
       reportToPlanInput(
         r,

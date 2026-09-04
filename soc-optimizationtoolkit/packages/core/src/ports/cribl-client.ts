@@ -34,6 +34,27 @@ export interface CriblRequest {
   body?: unknown;
   /** Query parameters. */
   query?: Record<string, string>;
+  /**
+   * How long the caller is willing to wait, in milliseconds. Omitted means the
+   * adapter's default, which is short on purpose.
+   *
+   * WHY THIS EXISTS (AZR-18). Nearly every product API call answers quickly, so
+   * the cloud adapter guards them all with one short client-side timeout - not
+   * because the platform imposes one, but because the locked fetch bridge
+   * IGNORES AbortSignal and a DETACHED bridge never settles at all. Without the
+   * guard a dead bridge hangs the UI silently, which is what platform/http.ts
+   * says it is for.
+   *
+   * ONE CALL IS LEGITIMATELY SLOW: POST /system/capture holds the response open
+   * for the whole capture window by design. Under a single 15s guard the ceiling
+   * on a capture was 12 seconds, and an operator asking for anything longer was
+   * told the platform bridge had given up on a capture that had in fact run.
+   *
+   * So the WAIT is now the caller's to state, because only the caller knows
+   * whether slow means broken. Adapters must still apply their own default when
+   * this is absent - a request with no opinion is not a request that may hang.
+   */
+  timeoutMs?: number;
 }
 
 /** Summary of one Worker Group / Edge Fleet as reported by the leader. */

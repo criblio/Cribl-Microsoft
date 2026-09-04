@@ -278,12 +278,24 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
   if (lookupsYml !== null) tree.set("default/lookups.yml", lookupsYml);
 
   // outputs.yml via the existing sentinel-destination module (deduped by id).
-  const configById = new Map<string, SentinelDestinationConfig>();
-  plan.tables.forEach((table, i) => {
-    const config = destinationConfigFor(table, tableInputs[i], input.outputsDefaults);
-    if (!configById.has(config.id)) configById.set(config.id, config);
-  });
-  tree.set("default/outputs.yml", serializeSentinelOutputsYml([...configById.values()]));
+  //
+  // WRITTEN ONLY FOR AN ALL-INCLUSIVE PACK, AND THIS IS THE LINE THAT DECIDES
+  // WHETHER THE PACK IS SELECTABLE (GEN-13).
+  //
+  // Established live 2026-09-04 by the operator, and it corrects this comment's
+  // first draft: a pack holding a configured destination is not offered in the
+  // group's Routes pipeline dropdown, whatever its routes say. They set the
+  // route to Cribl's "Send to Worker Group Routes" and the pack stayed hidden;
+  // they deleted the destination and it appeared. HelloPacks, which is
+  // selectable, ships no outputs.yml at all.
+  if (plan.packShape !== "routable") {
+    const configById = new Map<string, SentinelDestinationConfig>();
+    plan.tables.forEach((table, i) => {
+      const config = destinationConfigFor(table, tableInputs[i], input.outputsDefaults);
+      if (!configById.has(config.id)) configById.set(config.id, config);
+    });
+    tree.set("default/outputs.yml", serializeSentinelOutputsYml([...configById.values()]));
+  }
 
   return tree;
 }

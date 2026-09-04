@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**76 in the backlog, 1 in progress, 113 done.**
+**78 in the backlog, 1 in progress, 114 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 33 | 70 | 6 |
+| Sentinel Integration | 35 | 71 | 6 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 77.
+Open work totals 79.
 
 ## Epics and features
 
@@ -76,13 +76,13 @@ Measured gaps where the app reports a confident wrong answer
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 50% (6/12)
+### `GEN` Pipeline and pack generation - 47% (7/15)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 6/12 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9, GEN-10, GEN-11, GEN-12 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 7/15 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9, GEN-10, GEN-11, GEN-12, GEN-13, GEN-14, GEN-15 |
 
 ### `PK` Pack maintenance parity - 25% (1/4)
 
@@ -368,7 +368,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (31)
+## Backlog - next (33)
 
 Settled and unblocked, sequenced behind now.
 
@@ -930,6 +930,43 @@ Settled and unblocked, sequenced behind now.
   class, filed separately because it is the one site with no caller - which is
   also why it survived three waves unnoticed.
 
+- **GEN-14** Every app-built pack ships the unedited Cribl README template
+  `GEN-F1` `bug` `settled`
+  Not now because: Cosmetic and not misleading - the template is obviously
+  boilerplate rather than a wrong claim about the pack, so nobody acts on it
+  wrongly. It ranks above later because the README is the first thing an
+  operator opens on an unfamiliar pack, and this app ships packs to people who
+  did not build them.
+  SEEN IN THE LIVE UI 2026-09-04 while investigating [[GEN-13]]:
+  ms-sentinel-aws-vpc Pack Settings -> README is the stock Cribl scaffold,
+  verbatim - "Pack Name", "This is a paragraph that describes what this Pack
+  enables your target audience to accomplish", "Example benefit, with
+  formatted monospaced text", and a Deployment section reading "configure the
+  [Source|Destination|Dataset] by ____". The app knows everything the README
+  should say - it has the solution name, the log types, the destination table,
+  the DCR, and the vendor - and writes none of it. An operator opening the
+  pack sees placeholder text where the deployment instructions should be. The
+  Deployment section is the one that matters, and it is also where [[GEN-13]]
+  answer belongs: if the pack stays all-inclusive, this is where to say how it
+  is wired and why it does not appear in the Routes dropdown.
+
+- **GEN-15** Can an installed pack be switched between shapes without a rebuild?
+  `GEN-F1` `spike` `settled`
+  ASKED BY THE OPERATOR during [[GEN-13]] and PARTLY ANSWERED by them in the
+  live UI: deleting the Sentinel destination from an installed pack makes it
+  appear in the group Routes dropdown immediately, no rebuild needed. So the
+  switch is possible by hand in at least one direction. WHAT IS NOT KNOWN, and
+  each changes the advice: - does the guided deploy path still work against a
+  pack whose destination was deleted, or does it expect the pack to carry one;
+  - can a pack route name a GROUP-level destination, or only its own and
+  "default" - Cribl namespaces pack config, so probably not, and that decides
+  whether the reverse switch is even expressible; - whether the app rebuilding
+  the pack later silently reinstates the destination and undoes the operator
+  hand-edit, which would be the worst outcome and is the one worth checking
+  first. If the last one is true, the build-time choice is not a convenience
+  but the only durable way to set the shape, and the Pack wiring hint should
+  say so.
+
 ---
 
 ## Backlog - later (40)
@@ -1464,7 +1501,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (113)
+## Done (114)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5305,3 +5342,101 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   driven in the live preview before packaging - the step now shows the section
   with the workspace reading law-jpederson-eastus and the resource group
   rg-jpederson-QuickstartLab.
+
+- **GEN-13** An app-built pack cannot be selected from the Routes pipeline dropdown
+  `GEN-F1` `bug` `settled` `verified: both`
+  REPORTED BY THE USER 2026-09-04 and VERIFIED IN THE LIVE CRIBL UI in the
+  AzureManaged worker group. The pack installs and lands in the group, but it
+  cannot be picked as a Route pipeline. MEASURED, not inferred. Filtering the
+  Route pipeline dropdown for "sentinel" returns EXACTLY ONE entry: PACK
+  cribl-microsoft-sentinel (Microsoft Sentinel), which is Christoph Dittmann
+  pack v1.0.12. The three packs this app installed - ms-sentinel,
+  ms-sentinel-zscaler..., ms-sentinel-aws-vpc, all authored "Cribl SOC
+  Toolkit" - all contain "sentinel" in their id and NONE of them appears. THE
+  STRUCTURAL DIFFERENCE, found by comparing route lists side by side in the
+  UI: HelloPacks (SELECTABLE): its routes have NO destination - the columns
+  are Route / Filter / Pipeline only. ms-sentinel-aws-vpc (NOT SELECTABLE):
+  its single route is filter true -> pipeline AWS_VPC_v... -> DESTINATION
+  sentinel:MS-... So an ALL-INCLUSIVE pack, one whose own routes terminate at
+  their own destination, is not offered as a Route pipeline. That is coherent
+  on Cribl side: a pack used as a route pipeline must hand events back so the
+  ROUTE destination receives them, and a pack that already sent them somewhere
+  cannot. RULED OUT: it is not marketplace-vs-uploaded. HelloPacks is
+  file-sourced like ours and IS selectable, while the two URL-sourced packs
+  are also selectable - so the source is not the discriminator; the
+  destination is. THIS IS THE APP OWN DESIGN, not an accident, which is why
+  this card is UNDECIDED rather than a straightforward fix.
+  config/policies.yml already states it: "all-inclusive packs carry their OWN
+  sources/routes/pipelines/destinations invisible to the group-level
+  sections". The pack is meant to be wired by the guided deploy path, which
+  prepends routes at the GROUP level and points them at the pack. The operator
+  reasonably expected to wire it by hand from the Routes page and found they
+  could not, with nothing on either screen explaining why. THE DECISION, and
+  it should be made before code: (a) BUILD PACKS WITHOUT DESTINATIONS so they
+  are selectable as route pipelines, and let the operator attach the Sentinel
+  destination on the parent route. Costs the self-contained property the pack
+  currently has, and the destination + its secret would then have to exist at
+  group level, which is what the pack was designed to avoid. (b) KEEP THEM
+  ALL-INCLUSIVE and SAY SO where an operator will look - the pack build screen
+  and the README - naming how to wire it and that the Routes dropdown will not
+  list it. (c) BUILD BOTH SHAPES and let the operator choose at build time.
+  Not yet measured, and it decides (b) versus (a): whether Cribl offers an
+  all-inclusive pack ANYWHERE else in the UI (attach to a Source, or a
+  pack-level binding), or whether the guided deploy group-level route is
+  genuinely the only way to reach it. Establish that in the live UI first.
+  ALSO FOUND, separately and cosmetic: the pack README is the unedited Cribl
+  template - "Pack Name", "This is a paragraph that describes what this Pack
+  enables your target audience to accomplish". The app never writes one. See
+  [[GEN-14]]. MECHANISM CONFIRMED AT THE FILE LEVEL 2026-09-04, by extracting
+  a known-good pack the user supplied (HelloPacks_1.0.0.crbl) and diffing it
+  against what this app emits. Two differences, and both are ours: (1) THE
+  ROUTE OUTPUT. HelloPacks default/pipelines/route.yml sets "output: default"
+  on EVERY route - it names no destination, so events are handed back and
+  whatever consumes the pack decides where they go. route-yml.ts:107 and :123
+  write "output: " followed by the destination id, so every route this app
+  generates terminates at a named Sentinel destination. (2) THE OUTPUTS FILE.
+  Pack assembly emits default/outputs.yml. HelloPacks has no such file at all
+  - its tree is data/lookups, data/samples, default/pack.yml,
+  default/pipelines/route.yml, default/pipelines/<name>/conf.yml,
+  default/samples.yml, package.json, README.md. Together those two make the
+  pack ALL-INCLUSIVE, which is exactly what Cribl will not offer as a route
+  pipeline - a route pipeline has to return events for the ROUTE destination
+  to receive them, and this pack has already sent them. So the dropdown
+  absence is a CONSEQUENCE of the pack shape, not a bug in installation or
+  naming, and no amount of renaming or reinstalling will change it. THAT MAKES
+  OPTION (a) CONCRETE AND SMALL: emit "output: default" and stop writing
+  default/outputs.yml, and the pack becomes selectable. The cost is equally
+  concrete - the Sentinel destination and its secret then have to exist at
+  GROUP level, which is what the self-contained pack was designed to avoid,
+  and the guided deploy path currently creates them inside the pack. Whichever
+  way it goes, the two files above are the whole change. DONE 2026-09-04 as
+  option (c) - the operator chooses at build time - and MY DIAGNOSIS WAS HALF
+  WRONG, corrected by the operator testing it live. I claimed the ROUTE OUTPUT
+  was the gate. It is not. They set the pack route destination to Cribl own
+  "Send to Worker Group Routes" - the UI form of output: default - and the
+  pack STILL did not appear in the group dropdown. They then DELETED the
+  Sentinel destination from the pack and it appeared IMMEDIATELY. So the gate
+  is the EXISTENCE OF A CONFIGURED DESTINATION in the pack, and the route
+  output does not move it. Their read that "Send to Worker Group Routes" is
+  buggy looks right and is worth carrying to Cribl: the option means "hand
+  events back to the group", and the pack is still withheld from the group
+  dropdown while a destination object remains. THE FIX IS UNCHANGED AND STILL
+  CORRECT, because it does BOTH: a routable pack omits default/outputs.yml,
+  which is what earns the dropdown entry, AND writes output: default, which is
+  the necessary companion so no route names a destination the pack no longer
+  ships. What changed is the EXPLANATION - three code comments, the
+  operator-facing hint and a test header all asserted the wrong mechanism and
+  were rewritten against what was measured. That is the
+  comment-arguing-from-a-false-premise defect this repo treats as real,
+  committed by me, in the same session I spent enforcing it on agents.
+  SHIPPED: PackShape on the plan ("all-inclusive" default, "routable"),
+  threaded planner -> route emitter -> scaffold, with a Pack wiring control
+  beside Pack name whose copy names the consequence rather than the jargon.
+  Pinned in two files and mutation-checked SEPARATELY, because the two halves
+  drifting apart is the failure that produces a broken pack rather than a
+  different one. STILL OPEN, and the operator asked it directly: whether an
+  INSTALLED pack can be switched between shapes without a rebuild. Partly
+  answered - deleting the destination by hand works and is exactly what they
+  did - but nobody has checked whether the guided deploy path still functions
+  afterwards, or whether a pack route can name a GROUP-level destination. That
+  is [[GEN-15]].

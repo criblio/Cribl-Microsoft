@@ -12,8 +12,10 @@ import { describe, expect, it } from "vitest";
 
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import {
+  CAPTURE_TIMEOUT_HEADROOM_MS,
   DEFAULT_DURATION_SECONDS,
   DEFAULT_MAX_EVENTS,
+  MAX_DURATION_SECONDS,
   MAX_EVENTS_LIMIT,
   captureSamples,
   extractCapturedEvents,
@@ -177,19 +179,51 @@ describe("the defects the fixtures could not see (2026-08-20 bug-hunt)", () => {
     expect(result.rawEvents).toEqual(['{"type":"A","a":1}']);
   });
 
-  it("clamps a capture longer than the TRANSPORT survives, and says so", async () => {
-    // A 30s capture always failed with a message blaming the platform bridge,
-    // for a capture that had run perfectly server-side.
+  it("ASKS FOR A WAIT THAT COVERS THE WINDOW, which is what lifted the 12s ceiling", async () => {
+    // AZR-18, and the assertion that matters most in this file. The old ceiling
+    // was 12s for one reason: every product API call shared the adapter's short
+    // client-side guard, so the slowest legitimate call could not outlast it and
+    // a 30s capture reported a transport failure for a capture that had RUN.
+    //
+    // The wait is stated per request now, and it is DERIVED from the window
+    // rather than being a second constant - so raising the ceiling cannot leave
+    // the timeout behind and bring the defect back. That derivation is the thing
+    // pinned here; a fixed timeoutMs would pass a "long capture works" test today
+    // and fail the operator at whatever the next ceiling is.
     const cribl = client({ status: 200, body: ndjson([PANOS_A]) });
 
-    const result = await captureSamples(cribl, {
+    await captureSamples(cribl, {
       groupId: "g",
       filter: "true",
       durationSeconds: 30,
     });
 
-    expect((cribl.calls[0].body as Record<string, unknown>).duration).toBe(12);
-    expect(result.notes.join(" ")).toContain("gives up on a request");
+    // Passes through now - 30 is well inside the ceiling that replaced 12.
+    expect((cribl.calls[0].body as Record<string, unknown>).duration).toBe(30);
+    // And the wait exceeds the window it has to cover, by the stated headroom.
+    expect(cribl.calls[0].timeoutMs).toBe(30 * 1000 + CAPTURE_TIMEOUT_HEADROOM_MS);
+    expect(cribl.calls[0].timeoutMs).toBeGreaterThan(30 * 1000);
+  });
+
+  it("still clamps beyond the ceiling, and no longer blames the transport for it", async () => {
+    // The clamp survives - it is a product decision about how long an operator
+    // sits on one screen. What changed is the REASON, and the note had to change
+    // with it: it used to say the platform bridge gives up after this many
+    // seconds, which was true of the 12s cap and is false of this one.
+    const cribl = client({ status: 200, body: ndjson([PANOS_A]) });
+
+    const result = await captureSamples(cribl, {
+      groupId: "g",
+      filter: "true",
+      durationSeconds: MAX_DURATION_SECONDS + 60,
+    });
+
+    expect((cribl.calls[0].body as Record<string, unknown>).duration).toBe(
+      MAX_DURATION_SECONDS,
+    );
+    expect(result.notes.join(" ")).toContain("Capture window adjusted");
+    // The old explanation must not come back with a new number attached.
+    expect(result.notes.join(" ")).not.toContain("gives up on a request");
   });
 
   it("ignores a non-finite bound instead of putting null on the wire", async () => {

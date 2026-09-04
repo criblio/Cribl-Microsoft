@@ -116,6 +116,7 @@ import type {
 import type {
   ContentItem,
   CriblGroupSummary,
+  PackShape,
   CriblOptions,
   DcrRoleTarget,
   DeployMode,
@@ -400,6 +401,12 @@ export function IntegrateScreen({
   // name is applied by the effect further down, which is what makes switching
   // solutions work at all.
   const [packName, setPackName] = useState(() => defaultPackName(criblDefaults));
+  // GEN-13: how the pack is WIRED, and it is the operator's call because the
+  // trade runs both ways. All-inclusive is self-contained and is what the
+  // guided deploy wires; routable is selectable from the Cribl Routes page but
+  // needs the Sentinel destination to already exist in the worker group.
+  // Defaults to all-inclusive - the shape every pack had before this existed.
+  const [packShape, setPackShape] = useState<PackShape>("all-inclusive");
   // Multi-group deploy: opt-in fan-out beyond the primary worker group.
   const [multiGroup, setMultiGroup] = useState(false);
   const [extraGroups, setExtraGroups] = useState<string[]>([]);
@@ -986,6 +993,7 @@ export function IntegrateScreen({
       enrichments,
       approved: mappingsApproved,
       toolkitVersion,
+      packShape,
     }),
     [
       solution?.name,
@@ -998,6 +1006,7 @@ export function IntegrateScreen({
       enrichments,
       mappingsApproved,
       toolkitVersion,
+      packShape,
     ],
   );
   // What the solution's OWN analytic rules compare these fields against, per
@@ -2295,6 +2304,31 @@ export function IntegrateScreen({
           destination prefix in Options plus the selected solution, so each
           solution gets its own pack; editable, and an edit is never
           overwritten.
+        </span>
+      </label>
+      {/* GEN-13. Reported after a pack installed fine and then could not be
+          picked from the Cribl Routes page dropdown. The cause is structural -
+          an all-inclusive pack sends events itself, so Cribl will not offer it
+          as a route pipeline - and BOTH shapes are legitimate, so this is a
+          choice rather than a fix. The wording names the consequence for each,
+          because "all-inclusive" and "routable" mean nothing on their own. */}
+      <label className="field">
+        <span className="field-label">Pack wiring</span>
+        <select
+          value={packShape}
+          onChange={(e) => setPackShape(e.target.value as PackShape)}
+        >
+          <option value="all-inclusive">
+            Self-contained - the pack carries its own Sentinel destination
+          </option>
+          <option value="routable">
+            Routable - selectable from the Cribl Routes page
+          </option>
+        </select>
+        <span className="field-hint">
+          {packShape === "all-inclusive"
+            ? "The pack ships the Sentinel destination and its secret, so it works on install and nothing has to exist in the worker group first. It will NOT appear in the pipeline dropdown on the Cribl Routes page: verified 2026-09-04, a pack holding a destination is withheld from that list, and changing its routes to Send to Worker Group Routes does not change that. This is what Build and install pack wires for you."
+            : "No destination ships inside the pack and every route hands events back, so the pack DOES appear in the pipeline dropdown on the Cribl Routes page and can be dropped into a flow you already have. The Sentinel destination and its secret must ALREADY EXIST in the worker group - this pack does not carry them."}
         </span>
       </label>
       <div className="discovery-result">

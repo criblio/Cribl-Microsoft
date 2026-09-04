@@ -95,6 +95,16 @@ export function buildRouteEntries(
   const entries: string[] = [];
   const hasRules = table.reductionRules !== null;
   const line = filterLine(table.routeCondition);
+  // The COMPANION to dropping outputs.yml, not the thing that earns the
+  // dropdown entry - and the first version of this comment had that backwards.
+  //
+  // Measured live 2026-09-04: setting a pack route's destination to Cribl's own
+  // "Send to Worker Group Routes" (the UI form of `output: default`) did NOT
+  // make the pack selectable; deleting the pack's destination did. So the gate
+  // is the destination OBJECT, handled in scaffold.ts. This line exists so a
+  // routable pack's routes do not name a destination it no longer ships.
+  const output =
+    plan.packShape === "routable" ? "default" : table.destinationId;
 
   // Reduction route: full pipeline with volume reduction enabled
   if (hasRules) {
@@ -104,7 +114,7 @@ export function buildRouteEntries(
         `    name: "Reduction + Transform: ${table.suffix}"`,
         `    pipeline: ${table.reductionPipelineId}`,
         line,
-        `    output: ${table.destinationId}`,
+        `    output: ${output}`,
         "    final: true",
         "    disabled: false",
         `    description: Reduction + Transform for ${table.suffix} events`,
@@ -120,7 +130,7 @@ export function buildRouteEntries(
       `    name: "Transform: ${table.suffix}"`,
       `    pipeline: ${table.pipelineName}`,
       line,
-      `    output: ${table.destinationId}`,
+      `    output: ${output}`,
       "    final: true",
       `    disabled: ${hasRules ? "true" : "false"}`,
       `    description: Transform only for ${table.suffix} events`,
