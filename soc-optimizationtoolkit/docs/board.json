@@ -2599,6 +2599,55 @@
       "settled": "settled",
       "dependsOn": [],
       "detail": "THREE TIMES IN ONE SESSION a parser change was cleared by a corpus that could not express the failure it was clearing. [[DBT-79]] twice, [[DBT-80]] once - the last reporting '0 lines with fewer keys than HEAD' while an independent corpus found 319 lines losing keys and 24,367 HEAD keys lost. None of the generators was dishonest; each simply never emitted the failing shape. THE PRACTICE THAT WORKED, and it is now written into parsers.ts and cef-keys.test.ts: run the corpus against a CLONE driven with the OLD pattern and confirm it reproduces the known defect count, THEN run it against the new one. A zero from an uncalibrated corpus is indistinguishable from a zero from a corpus that cannot see. Scope: this is a convention, not code, so the question is where it should live - a note in the testing standard, a helper that takes an old and a new implementation and refuses to report until the old one fails, or nothing beyond the two comment blocks that now record it. Prefer the helper only if it can be made to fit more than parsers; a one-caller abstraction is worse than the comment."
+    },
+    {
+      "id": "GEN-8",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "title": "Syslog, CEF and LEEF packs get route filters that can never match, same as positional did",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, and it is the defect [[GEN-6]] closed for positional, still open for three more formats. The audit found it because route-placeholder.ts:152 says 'Filed, not fixed - and this note is the loud part' and NO CARD EXISTED. This card makes that sentence true. THE MECHANISM, already written out in that file's own comment at :133-146 and not disputed here: routes run BEFORE the pipeline extracts, so at route time the event is unparsed and any name the pipeline mints cannot be tested. formatCanDiscriminate excludes only csv and positional, so for these three it returns TRUE, both discriminators proceed, and a filter IS produced - which is what makes it silent. A log type with a filter is neither a placeholder nor 'unreachable', so pipeline-preview reports a CLEAN pack while every disjunct is false for every event. THE THREE ARE NOT THE SAME SHAPE, which is why they are one card and not one fix:   syslog - a WHOLE-FORMAT instance. Every name is absent from the raw line: Timestamp,     Hostname, Program, PID, Message, and for RFC 5424 also Priority, Version, AppName,     ProcID, MsgID. Pinned as knowingly uncovered at route-placeholder.test.ts:54.   cef / leef - a PER-FIELD instance. The 7 CEF header names (CEFVersion, DeviceVendor,     DeviceProduct, DeviceVersion, DeviceEventClassID, Name, Severity; LEEF the same five     plus EventID) are absent, while the EXTENSION pairs really are in the text. Worse,     route-discriminator's length-first sort PREFERS the long header names over a short     real one - so the discriminator actively picks the unusable half.   unknown - depends on CONTENT, which a format string cannot see, so it cannot be answered     in this predicate at all. parseByFormat's try-each fallback settled on parseCsv for a     PAN-OS line (12 names, 12 absent) and parseSyslog for an RFC 3164 line (6 of 6     absent), but on parseJson/parseKv for content whose names ARE in the text. SO DO NOT WIDEN POSITIONAL_FORMATS AND CALL IT DONE. The set means 'values in column order, no names'; syslog is names-absent-for-a-different-reason and cef/leef are per-field. Each needs its own operator wording - the whole reason PlaceholderCause distinguishes 'evidence' from 'format' is that telling an operator 'no discriminator found' sends them to collect more samples, which cannot possibly help. For cef/leef the honest fix is probably narrower than a format exclusion: let the discriminator consider only extension fields, since those ARE in the text."
+    },
+    {
+      "id": "GEN-9",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "title": "csvRoutingWarning is named for half of what it answers",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT. route-placeholder.ts:161-167 says 'THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03: it also answers for positional ... the rename is a card.' No card existed; this is it. csvRoutingWarning now produces the warning for every column-order format, not just CSV, and [[GEN-8]] may widen it further. The name will keep drifting from the behaviour as long as it names a format instead of the property. Deliberately `later`: nothing is wrong, the behaviour is correct and pinned, and the rename touches the pipeline-generation barrel and the samples screen - so it is worth doing WITH the next change in this area rather than as its own PR. Do it at the same time as GEN-8 if that lands, since GEN-8 decides whether the concept is 'column order' or something wider."
+    },
+    {
+      "id": "DBT-106",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "VPC_FLOW_V2_AWS_NAMES is exported, never consumed, and its comment claims a display that does not exist",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "priorityWhy": "Nothing is broken and nothing is silent to an OPERATOR - the parser's chosen names are correct and addressable, and the AWS spellings are recoverable from AWS's own docs. What is wrong is a comment claiming a behaviour the product does not have, which misleads the next reader rather than the user. That is a real defect by this repo's rules and a small one by consequence.",
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, dead-code check. MEASURED: a repo-wide grep over packages and apps for VPC_FLOW_V2_AWS_NAMES returns exactly two hits - its definition at positional.ts:75 and its re-export at sample-parsing/index.ts:154. Nothing imports it. No test reads it either. Its own comment says it exists 'so the mapping table can show an operator the name they will recognise from the AWS documentation'. No mapping table reads it, so that display does not happen - the comment describes behaviour the product does not have, which is the class this repo treats as a defect rather than a nit. The DISTINCTION it records is real and load-bearing, and must not be lost with the constant: AWS documents these fields with HYPHENS (account-id, interface-id, log-status), Cribl parses a rename's currentName as an accessor path, and account-id reads as account minus id. [[DBT-77]] chose underscored names for exactly that reason and that reasoning is also written at the constant. TWO HONEST ROUTES, and the choice is a product question rather than a cleanup: wire it into the mapping table so an operator sees the AWS spelling beside ours - which is what DBT-77 intended and would help anyone comparing against AWS's docs - or delete the constant and keep the reasoning as a comment on VPC_FLOW_V2_FIELDS. Do not just delete both; the hyphen trap is the thing worth keeping."
+    },
+    {
+      "id": "DBT-107",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "The column-name rule is spelled twice and the two can disagree",
+      "type": "enabler",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, duplicated-decisions check. CONFIRMED by reading both, not suspected. domain/custom-table/custom-table.ts:286 defines isValidColumnName as /^[A-Za-z_][A-Za-z0-9_]*$/, with COLUMN_NAME_RULE beside it holding the same rule 'in the operator's words'. usecases/update-dcr/update-dcr.ts:359 re-spells that regex INLINE and writes its own message ('letters, digits, and underscores only, not starting with a digit'). They answer the same question about the same thing - is this a legal Log Analytics column name - and they can disagree the moment either moves. The layering permits the fix: update-dcr is a usecase and custom-table is domain, so the import is legal and already the established direction. This is the exact shape the architecture-audit skill names: 'a predicate reimplemented inline rather than imported'. It is ALSO the shape that produced the capability model - app modes were a second, drifting proxy for permissions - so the repo has paid for this lesson before. Fix: import isValidColumnName and COLUMN_NAME_RULE, and pin that the two call sites reject the same set. Check for further copies first - the same regex appears in coverage-analysis and transform-kql-mining, but those are KQL IDENTIFIER parsing and accessor-names.ts is Cribl ACCESSOR safety. Three different questions that happen to share a regex is not duplication; only fold the two that answer the same one."
     }
   ],
   "features": [

@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**70 in the backlog, 0 in progress, 102 done.**
+**74 in the backlog, 0 in progress, 102 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 26 | 63 | 6 |
+| Sentinel Integration | 30 | 63 | 7 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 70.
+Open work totals 74.
 
 ## Epics and features
 
@@ -76,13 +76,13 @@ Measured gaps where the app reports a confident wrong answer
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 71% (5/7)
+### `GEN` Pipeline and pack generation - 56% (5/9)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 5/7 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 5/9 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9 |
 
 ### `PK` Pack maintenance parity - 25% (1/4)
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 65% (68/104)
+### `DBT` Quality and technical debt _(enabler)_ - 64% (68/106)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 37/55 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 37/57 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 8/17 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -150,7 +150,7 @@ _Nothing here._
 
 ---
 
-## Backlog - now (6)
+## Backlog - now (7)
 
 Next to pick up. Nothing blocks these.
 
@@ -360,9 +360,47 @@ Next to pick up. Nothing blocks these.
   should be re-taken rather than trusted. See also [[DBT-104]], found in the
   same sweep.
 
+- **GEN-8** Syslog, CEF and LEEF packs get route filters that can never match, same as positional did
+  `GEN-F1` `bug` `settled`
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, and it is the defect [[GEN-6]]
+  closed for positional, still open for three more formats. The audit found it
+  because route-placeholder.ts:152 says 'Filed, not fixed - and this note is
+  the loud part' and NO CARD EXISTED. This card makes that sentence true. THE
+  MECHANISM, already written out in that file's own comment at :133-146 and
+  not disputed here: routes run BEFORE the pipeline extracts, so at route time
+  the event is unparsed and any name the pipeline mints cannot be tested.
+  formatCanDiscriminate excludes only csv and positional, so for these three
+  it returns TRUE, both discriminators proceed, and a filter IS produced -
+  which is what makes it silent. A log type with a filter is neither a
+  placeholder nor 'unreachable', so pipeline-preview reports a CLEAN pack
+  while every disjunct is false for every event. THE THREE ARE NOT THE SAME
+  SHAPE, which is why they are one card and not one fix: syslog - a
+  WHOLE-FORMAT instance. Every name is absent from the raw line: Timestamp,
+  Hostname, Program, PID, Message, and for RFC 5424 also Priority, Version,
+  AppName, ProcID, MsgID. Pinned as knowingly uncovered at
+  route-placeholder.test.ts:54. cef / leef - a PER-FIELD instance. The 7 CEF
+  header names (CEFVersion, DeviceVendor, DeviceProduct, DeviceVersion,
+  DeviceEventClassID, Name, Severity; LEEF the same five plus EventID) are
+  absent, while the EXTENSION pairs really are in the text. Worse,
+  route-discriminator's length-first sort PREFERS the long header names over a
+  short real one - so the discriminator actively picks the unusable half.
+  unknown - depends on CONTENT, which a format string cannot see, so it cannot
+  be answered in this predicate at all. parseByFormat's try-each fallback
+  settled on parseCsv for a PAN-OS line (12 names, 12 absent) and parseSyslog
+  for an RFC 3164 line (6 of 6 absent), but on parseJson/parseKv for content
+  whose names ARE in the text. SO DO NOT WIDEN POSITIONAL_FORMATS AND CALL IT
+  DONE. The set means 'values in column order, no names'; syslog is
+  names-absent-for-a-different-reason and cef/leef are per-field. Each needs
+  its own operator wording - the whole reason PlaceholderCause distinguishes
+  'evidence' from 'format' is that telling an operator 'no discriminator
+  found' sends them to collect more samples, which cannot possibly help. For
+  cef/leef the honest fix is probably narrower than a format exclusion: let
+  the discriminator consider only extension fields, since those ARE in the
+  text.
+
 ---
 
-## Backlog - next (27)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -856,9 +894,33 @@ Settled and unblocked, sequenced behind now.
   Prefer the helper only if it can be made to fit more than parsers; a
   one-caller abstraction is worse than the comment.
 
+- **DBT-107** The column-name rule is spelled twice and the two can disagree
+  `DBT-F1` `enabler` `settled`
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, duplicated-decisions check.
+  CONFIRMED by reading both, not suspected.
+  domain/custom-table/custom-table.ts:286 defines isValidColumnName as
+  /^[A-Za-z_][A-Za-z0-9_]*$/, with COLUMN_NAME_RULE beside it holding the same
+  rule 'in the operator's words'. usecases/update-dcr/update-dcr.ts:359
+  re-spells that regex INLINE and writes its own message ('letters, digits,
+  and underscores only, not starting with a digit'). They answer the same
+  question about the same thing - is this a legal Log Analytics column name -
+  and they can disagree the moment either moves. The layering permits the fix:
+  update-dcr is a usecase and custom-table is domain, so the import is legal
+  and already the established direction. This is the exact shape the
+  architecture-audit skill names: 'a predicate reimplemented inline rather
+  than imported'. It is ALSO the shape that produced the capability model -
+  app modes were a second, drifting proxy for permissions - so the repo has
+  paid for this lesson before. Fix: import isValidColumnName and
+  COLUMN_NAME_RULE, and pin that the two call sites reject the same set. Check
+  for further copies first - the same regex appears in coverage-analysis and
+  transform-kql-mining, but those are KQL IDENTIFIER parsing and
+  accessor-names.ts is Cribl ACCESSOR safety. Three different questions that
+  happen to share a regex is not duplication; only fold the two that answer
+  the same one.
+
 ---
 
-## Backlog - later (37)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -1332,6 +1394,49 @@ Settled, gated on something above.
   orphaned rules is the sensible unit of work, not a second one-off - and
   because a CSS rule with no consumer today may be a rule whose consumer is on
   a branch.
+
+- **GEN-9** csvRoutingWarning is named for half of what it answers
+  `GEN-F1` `enabler` `settled`
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT. route-placeholder.ts:161-167
+  says 'THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03: it also
+  answers for positional ... the rename is a card.' No card existed; this is
+  it. csvRoutingWarning now produces the warning for every column-order
+  format, not just CSV, and [[GEN-8]] may widen it further. The name will keep
+  drifting from the behaviour as long as it names a format instead of the
+  property. Deliberately `later`: nothing is wrong, the behaviour is correct
+  and pinned, and the rename touches the pipeline-generation barrel and the
+  samples screen - so it is worth doing WITH the next change in this area
+  rather than as its own PR. Do it at the same time as GEN-8 if that lands,
+  since GEN-8 decides whether the concept is 'column order' or something
+  wider.
+
+- **DBT-106** VPC_FLOW_V2_AWS_NAMES is exported, never consumed, and its comment claims a display that does not exist
+  `DBT-F1` `bug` `settled`
+  Not now because: Nothing is broken and nothing is silent to an OPERATOR -
+  the parser's chosen names are correct and addressable, and the AWS spellings
+  are recoverable from AWS's own docs. What is wrong is a comment claiming a
+  behaviour the product does not have, which misleads the next reader rather
+  than the user. That is a real defect by this repo's rules and a small one by
+  consequence.
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, dead-code check. MEASURED: a
+  repo-wide grep over packages and apps for VPC_FLOW_V2_AWS_NAMES returns
+  exactly two hits - its definition at positional.ts:75 and its re-export at
+  sample-parsing/index.ts:154. Nothing imports it. No test reads it either.
+  Its own comment says it exists 'so the mapping table can show an operator
+  the name they will recognise from the AWS documentation'. No mapping table
+  reads it, so that display does not happen - the comment describes behaviour
+  the product does not have, which is the class this repo treats as a defect
+  rather than a nit. The DISTINCTION it records is real and load-bearing, and
+  must not be lost with the constant: AWS documents these fields with HYPHENS
+  (account-id, interface-id, log-status), Cribl parses a rename's currentName
+  as an accessor path, and account-id reads as account minus id. [[DBT-77]]
+  chose underscored names for exactly that reason and that reasoning is also
+  written at the constant. TWO HONEST ROUTES, and the choice is a product
+  question rather than a cleanup: wire it into the mapping table so an
+  operator sees the AWS spelling beside ours - which is what DBT-77 intended
+  and would help anyone comparing against AWS's docs - or delete the constant
+  and keep the reasoning as a comment on VPC_FLOW_V2_FIELDS. Do not just
+  delete both; the hyphen trap is the thing worth keeping.
 
 ---
 
