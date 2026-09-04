@@ -16,10 +16,13 @@
  *   - a raw-content token (`_raw.indexOf(...) !== -1`) shaped by the
  *     sample format: `"field"` (quoted key) for JSON, `field=` for
  *     key-value shapes (CEF/KV/LEEF).
- * A COLUMN-ORDER format (csv, positional) carries no field names in its events
- * at all - the names come from a column POSITION and are minted by an extract
- * step the route has not reached - so those formats yield no discriminator
- * (null). The caller then emits a PLACEHOLDER filter, not the match-all this
+ * A NAME THE PIPELINE MINTS CANNOT BE TESTED HERE, because the route runs
+ * first. Whole formats are like that - csv and positional name their fields
+ * from a column POSITION, syslog from a REGEX CAPTURE - and so are the CEF and
+ * LEEF header fields, whose names sit nowhere but the parsed record while their
+ * extension pairs really are in the text. Those yield no discriminator (null);
+ * see route-placeholder, which owns both the format rule and the per-field one.
+ * The caller then emits a PLACEHOLDER filter, not the match-all this
  * header claimed until 2026-09-03: a match-all is what made routes unreachable
  * in the first place, and plan.ts has emitted `placeholderRouteFilter` here
  * since. Match-all survives only for a SINGLE-log-type pack, which never
@@ -31,7 +34,10 @@
 
 import { fieldPresence } from "./route-value-discriminator";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
-import { formatCanDiscriminate } from "./route-placeholder";
+import {
+  formatCanDiscriminate,
+  isMintedHeaderField,
+} from "./route-placeholder";
 
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -106,15 +112,16 @@ export function deriveRouteDiscriminator(
   format: string,
   ownValues?: LogTypeFieldValues,
 ): string | null {
-  // A COLUMN-ORDER format (csv, positional) is unroutable by construction: the
-  // field name never appears in _raw, and route-time events are unparsed, so
-  // BOTH terms this function emits are false for every event. Measured on a
-  // two-log-type positional plan, the filter this returned before the predicate
-  // was widened read `interface_id !== undefined || (typeof _raw === 'string'
-  // && _raw.indexOf('interface_id=') !== -1) || ...` and matched nothing -
-  // while the pack previewed CLEAN, because a filter had been produced and the
-  // log type therefore counted as neither placeholdered nor unreachable.
-  // Returning null hands it to the placeholder path, which is reported.
+  // A format with NO usable names (csv, positional, syslog) is unroutable by
+  // construction: the field name never appears in _raw, and route-time events
+  // are unparsed, so BOTH terms this function emits are false for every event.
+  // Measured on a two-log-type positional plan, the filter this returned before
+  // the predicate was widened read `interface_id !== undefined || (typeof _raw
+  // === 'string' && _raw.indexOf('interface_id=') !== -1) || ...` and matched
+  // nothing - while the pack previewed CLEAN, because a filter had been
+  // produced and the log type therefore counted as neither placeholdered nor
+  // unreachable. Returning null hands it to the placeholder path, which is
+  // reported.
   //
   // ASKED, not restated (DBT-31). `formatCanDiscriminate` is the single
   // authority, because HON-5 tells the OPERATOR "more samples will not change
@@ -126,6 +133,20 @@ export function deriveRouteDiscriminator(
   const unique = [...new Set(ownSources)].filter(
     (field) =>
       field !== "" &&
+      // GEN-8, and the half the gate above cannot answer. cef and leef ARE
+      // routable - their extension pairs sit in the raw text as `name=value` -
+      // but their pipe-delimited HEADER names exist only in the parsed record,
+      // so a term built on one is false for every event. The sort below makes
+      // this the DEFAULT rather than an edge case: it ranks longest name first,
+      // and `DeviceEventClassID` (18) and `_syslogHeader` (13) outrank the
+      // `src` / `dst` / `act` (3 each) a firewall event actually carries.
+      //
+      // THE COUNTS LIVE HERE AND NOWHERE ELSE, because the sort they justify is
+      // right below. route-placeholder said `_syslogHeader` was 14 while these
+      // two copies said 13 and the string is 13 - a rule with three copies had
+      // drifted in exactly the way this file's own DBT-31 note warns about. The
+      // other sites now defer to this one; keep it that way.
+      !isMintedHeaderField(field, format) &&
       !siblingSources.some((set) => set.has(field.toLowerCase())) &&
       isCharacteristic(field, ownValues),
   );

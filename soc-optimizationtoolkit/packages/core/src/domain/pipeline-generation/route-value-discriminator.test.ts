@@ -167,8 +167,49 @@ describe("deriveValueDiscriminator - format rules", () => {
     expect(deriveValueDiscriminator(allowed, [blocked], "positional")).toBeNull();
   });
 
+  it("gives SYSLOG nothing, because its names come off a regex", () => {
+    // GEN-8 (2026-09-04). parseSyslog captures Timestamp, Hostname, Program,
+    // PID and Message from a regex, so none of those words is in the line, and
+    // the only key it copies verbatim - `_raw` - is carried by every syslog log
+    // type in the pack. Measured through the real chain before the fix, a
+    // two-log-type plan (sshd vs CRON) got `Program === 'sshd' || (typeof _raw
+    // === 'string' && _raw.indexOf('Program=sshd') !== -1)` and matched 0 of
+    // that log type's 2 OWN events at route time.
+    expect(deriveValueDiscriminator(allowed, [blocked], "syslog")).toBeNull();
+  });
+
+  it("gives SYSLOG nothing on the thin corpus that produced its WORST filter", () => {
+    // The second measured shape (2026-09-04). One event per log type, the log
+    // type tagged from the text of the message, and this function chose
+    // `Message === 'Failed password for root'` - a whole message string. That
+    // is over-fitted to one sampled event AND untestable at route time, since
+    // `Message` is a regex capture name that appears nowhere in the line.
+    const failed = lt("Failed password", {
+      _raw: ["Oct 11 22:14:15 host1 sshd[1234]: Failed password for root"],
+      Timestamp: ["Oct 11 22:14:15"],
+      Hostname: ["host1"],
+      Program: ["sshd"],
+      Message: ["Failed password for root"],
+    });
+    const cron = lt("CMD", {
+      _raw: ["Oct 11 22:15:01 host1 CRON[2001]: (root) CMD (run-parts)"],
+      Timestamp: ["Oct 11 22:15:01"],
+      Hostname: ["host1"],
+      Program: ["CRON"],
+      Message: ["(root) CMD (run-parts)"],
+    });
+    expect(deriveValueDiscriminator(failed, [cron], "syslog")).toBeNull();
+
+    // The control: the SAME fixture on a format whose names are in the text
+    // still yields that filter, so the null above is the format gate and not
+    // the fixture failing some other guard.
+    expect(deriveValueDiscriminator(failed, [cron], "kv")).toContain(
+      "Message === 'Failed password for root'",
+    );
+  });
+
   it("...and the same corpus on a routable format still yields a filter", () => {
-    // The control for both nulls above. Without it they would pass just as
+    // The control for all three nulls above. Without it they would pass just as
     // well if the fixture stopped qualifying for any other reason.
     expect(deriveValueDiscriminator(allowed, [blocked], "cef")).toContain(
       "action === 'Allowed'",
@@ -480,5 +521,123 @@ describe("fieldPresence - one definition, three answers", () => {
     const sib = lt("Blocked", { act: ["Blocked", "Blocked", "Blocked"] });
     expect(fieldPresence(partial, "act")).toBe("some-events");
     expect(deriveValueDiscriminator(partial, [sib], "cef")).toBeNull();
+  });
+});
+
+/**
+ * GEN-8: A CEF OR LEEF HEADER IS THE FIELD THIS FUNCTION MOST WANTS AND CAN
+ * LEAST USE.
+ *
+ * The governing rule here is that the defining field carries a value that NAMES
+ * the log type - and the CEF header is where a vendor writes exactly that.
+ * `DeviceEventClassID` is "AUTH" in AUTH; `Name` is "Traffic" in TRAFFIC;
+ * LEEF's `EventID` does the same job. Every guard in this module therefore
+ * passes on them with maximum confidence, and every one of those names lives
+ * only in the parsed record: parseCef splits them out of the pipe-delimited
+ * header, so the word `DeviceEventClassID` is nowhere in the event, and neither
+ * `DeviceEventClassID === 'AUTH'` nor `_raw.indexOf('DeviceEventClassID=AUTH')`
+ * can be true at route time.
+ *
+ * MEASURED THROUGH THE REAL CHAIN, 2026-09-04. Two CEF log types sharing one
+ * extension schema (AUTH and TRAFFIC, differing only in the header) were parsed
+ * by parseCef, turned into evidence by fieldValuesFromRecords, put through this
+ * function, and the emitted filter evaluated against an unparsed route-time
+ * event carrying only `_raw`:
+ *
+ *   AUTH     DeviceEventClassID === 'AUTH'     0 of 2 own events
+ *   TRAFFIC  DeviceEventClassID === 'TRAFFIC'  0 of 2 own events
+ *   LEEF AUTH / TRAFFIC on EventID             0 of 2 each
+ *   the SAME corpus differing on `act`         2 of 2 each
+ *
+ * The last row is the calibration: the harness could return true, so the zeros
+ * are the defect and not a broken evaluator. It is also the behaviour that must
+ * not regress, which is why the extension controls below are not optional.
+ */
+describe("deriveValueDiscriminator - a CEF or LEEF header cannot be tested at route time", () => {
+  it("refuses DeviceEventClassID even though its value names the log type", () => {
+    const auth = lt("AUTH", {
+      DeviceEventClassID: ["AUTH", "AUTH"],
+      src: ["1.1.1.1", "1.1.1.5"],
+    });
+    const traffic = lt("TRAFFIC", {
+      DeviceEventClassID: ["TRAFFIC", "TRAFFIC"],
+      src: ["1.1.1.3", "1.1.1.7"],
+    });
+    expect(deriveValueDiscriminator(auth, [traffic], "cef")).toBeNull();
+  });
+
+  it("...and the SAME corpus on kv, where that name IS in the text, still routes", () => {
+    // The control. `DeviceEventClassID` clears every other guard - present in
+    // every event, single-valued, names its log type, column-shaped - so the
+    // null above can only be the header exclusion.
+    const auth = lt("AUTH", {
+      DeviceEventClassID: ["AUTH", "AUTH"],
+      src: ["1.1.1.1", "1.1.1.5"],
+    });
+    const traffic = lt("TRAFFIC", {
+      DeviceEventClassID: ["TRAFFIC", "TRAFFIC"],
+      src: ["1.1.1.3", "1.1.1.7"],
+    });
+    expect(deriveValueDiscriminator(auth, [traffic], "kv")).toContain(
+      "DeviceEventClassID === 'AUTH'",
+    );
+  });
+
+  it("picks the EXTENSION field when the header would also have qualified", () => {
+    // The common real shape, and the one that matters most: the header is not
+    // merely dropped, the live alternative beside it is chosen. Both name the
+    // log type, so before GEN-8 the ranking decided - and the header could win.
+    const allow = lt("Allowed", {
+      DeviceEventClassID: ["Allowed", "Allowed"],
+      Name: ["Allowed", "Allowed"],
+      act: ["Allowed", "Allowed"],
+    });
+    const block = lt("Blocked", {
+      DeviceEventClassID: ["Blocked", "Blocked"],
+      Name: ["Blocked", "Blocked"],
+      act: ["Blocked", "Blocked"],
+    });
+    const filter = deriveValueDiscriminator(allow, [block], "cef") ?? "";
+
+    expect(filter).toContain("act === 'Allowed'");
+    expect(filter).toContain("_raw.indexOf('act=Allowed')");
+    expect(filter).not.toContain("DeviceEventClassID");
+    // `Name` is a CEF header too, and one whose short name makes it easy to
+    // mistake for an extension pair.
+    expect(filter).not.toContain("Name ===");
+  });
+
+  it("refuses LEEF's EventID, and keeps its extension pairs", () => {
+    const auth = lt("AUTH", {
+      EventID: ["AUTH", "AUTH"],
+      usrName: ["jim", "amy"],
+    });
+    const traffic = lt("TRAFFIC", {
+      EventID: ["TRAFFIC", "TRAFFIC"],
+      usrName: ["bob", "eve"],
+    });
+    expect(deriveValueDiscriminator(auth, [traffic], "leef")).toBeNull();
+
+    // ...and a LEEF pair that names the log type is still chosen.
+    const authByPair = lt("AUTH", {
+      EventID: ["AUTH", "AUTH"],
+      evtType: ["AUTH", "AUTH"],
+    });
+    const trafficByPair = lt("TRAFFIC", {
+      EventID: ["TRAFFIC", "TRAFFIC"],
+      evtType: ["TRAFFIC", "TRAFFIC"],
+    });
+    expect(
+      deriveValueDiscriminator(authByPair, [trafficByPair], "leef"),
+    ).toContain("evtType === 'AUTH'");
+  });
+
+  it("does not disturb the Zscaler shape it was built for", () => {
+    // `action`, `srcIP` and `url` are extension names on any CEF vendor, so the
+    // headline fixtures must be untouched by the exclusion.
+    expect(deriveValueDiscriminator(allowed, [blocked, cautioned], "cef")).toBe(
+      "action === 'Allowed' || " +
+        "(typeof _raw === 'string' && _raw.indexOf('action=Allowed') !== -1)",
+    );
   });
 });

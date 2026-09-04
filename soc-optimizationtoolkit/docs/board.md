@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**74 in the backlog, 0 in progress, 102 done.**
+**76 in the backlog, 1 in progress, 109 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 30 | 63 | 7 |
+| Sentinel Integration | 33 | 70 | 6 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 74.
+Open work totals 77.
 
 ## Epics and features
 
@@ -76,13 +76,13 @@ Measured gaps where the app reports a confident wrong answer
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 56% (5/9)
+### `GEN` Pipeline and pack generation - 50% (6/12)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 5/9 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 6/12 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9, GEN-10, GEN-11, GEN-12 |
 
 ### `PK` Pack maintenance parity - 25% (1/4)
 
@@ -116,14 +116,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 64% (68/106)
+### `DBT` Quality and technical debt _(enabler)_ - 65% (74/113)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 37/57 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 8/17 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 40/64 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107, DBT-108, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 11/17 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,17 +142,9 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-_Nothing here._
-
----
-
-## Backlog - now (7)
-
-Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
@@ -271,20 +263,11 @@ Next to pick up. Nothing blocks these.
   and could be fixed first. Defect (3) was closed by [[DBT-75]]. Both attempts
   are recoverable only from this session's transcript; neither was committed.
 
-- **DBT-98** parseCef's header split ignores CEF's own pipe escape, and so does the generated pack
-  `DBT-F1` `bug` `settled`
-  FOUND while fixing [[DBT-80]] and MEASURED:
-  `CEF:0|V\|W|P|1.0|100|worm|5|src=...` escapes the pipe exactly as the CEF
-  specification requires, parseCef splits on it anyway, and EVERY header field
-  shifts by one - DeviceVendor reads `V\`, DeviceProduct reads `W`, and so on
-  down the header. It is silent: the field NAMES are all present and correct,
-  so a field list looks right while the values are off by one position. IT
-  REACHES THE PACK, which is what makes it `now` rather than a parser
-  curiosity: pipeline-conf.ts emits the same naive split for the generated
-  pipeline, so an operator who installs the pack gets the same shifted header
-  at runtime. Fixing the parser alone would make the app disagree with the
-  pack it generates, which is the shape [[GEN-6]] just closed - fix both or
-  neither.
+---
+
+## Backlog - now (5)
+
+Next to pick up. Nothing blocks these.
 
 - **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
   `GEN-F1` `bug` `settled`
@@ -305,102 +288,87 @@ Next to pick up. Nothing blocks these.
   about type promotion in transformKql before choosing - the same argument
   about who does the conversion applies.
 
-- **DBT-100** check-classnames is wired to nothing: 36 findings sit in the tree and every build is green
-  `DBT-F1` `bug` `settled`
-  FOUND while closing [[DBT-90]] and VERIFIED INDEPENDENTLY by two agents.
-  apps/cribl-app/scripts/check-classnames.mjs exists, has its own test file,
-  and reports '36 undefined or undeclared across 127 source file(s)' - 33
-  distinct class names. NOTHING INVOKES IT: no manifest defines a
-  check-classnames npm script, and .github/workflows/soc-toolkit-ci.yml has no
-  such step (its npm steps are lint, typecheck, check-listings,
-  check-schema-asset, build, check-release, check-docs, check-board,
-  check-board-freshness). MEASURED, and this corrects the first account of it:
-  the 33 names did NOT accumulate after the script landed. A reviewer
-  extracted the tree at e147332 - the commit that added the script - ran it
-  there and on the current tree, and diffed the sets. Byte-identical: 36
-  findings, 33 names, both times. Zero added and zero removed in three days.
-  The four DBT-39 names were fixed in that same commit and the other 33 were
-  left standing. SO THE DECISION IS NOT 'WIRE IT UP' - it is whether those 33
-  names are defects at all. A gate that fails on 33 pre-existing findings the
-  day it is enabled gets bypassed within a week, which is the failure mode
-  [[DBT-88]] is about. Establish whether the 33 are real (a class referenced
-  with no rule, so the element renders unstyled) or an artefact of how the
-  script resolves names, BEFORE deciding to enforce it.
-
-- **DBT-102** The SIEM pivot deletes every acquired sample and its own button says nothing
-  `DBT-F2` `bug` `settled`
-  FOUND during the [[DBT-28]] attempt and SURVIVES its revert, because it is
-  present in shipped code rather than in the reverted diff. The SIEM migration
-  screen's pivot writes a solution deep link and navigates to Integrate. When
-  that lands on a DIFFERENT solution than the one selected,
-  handleSolutionChange takes the branch that removes every tagged sample. The
-  Clear button carries [[DBT-9]]'s warning; this button carries nothing. NOTE
-  WHAT THE [[DBT-72]] DECISION DOES AND DOES NOT COVER. The product owner
-  accepted silent sample deletion when a solution is CLEARED - a button the
-  operator presses knowing it is destructive, with copy that says so. This is
-  a different button, presented as navigation, with no warning at all. The
-  decision retired the design work on ownership; it did not say every path may
-  delete silently. CHEAPEST HONEST FIX is copy, not behaviour: say on the
-  pivot what Clear already says. That is consistent with the DBT-72 decision
-  rather than reopening it.
-
-- **DBT-103** The SIEM knowledge base maps every f5_ sourcetype to the Cisco ASA solution
-  `DBT-F2` `bug` `settled`
-  FOUND during the [[DBT-28]] investigation while measuring the knowledge
-  base, and unrelated to the deep link - it survives that card's revert. Every
-  `f5_` sourcetype in the SIEM migration knowledge base resolves to the Cisco
-  ASA Sentinel solution. F5 and Cisco ASA are different vendors and different
-  products, so an operator migrating F5 content is pointed at the wrong
-  solution, and the mapping is presented with the same confidence as every
-  correct one. It is `now` because it is a CONFIDENT WRONG ANSWER in the
-  product's own reference data, which is the class this toolkit exists to
-  prevent, and because a wrong mapping costs an operator the whole downstream
-  path before it becomes visible. Re-measure the mapping before fixing - the
-  count and the exact sourcetype list are in the DBT-28 agent's report and
-  should be re-taken rather than trusted. See also [[DBT-104]], found in the
-  same sweep.
-
-- **GEN-8** Syslog, CEF and LEEF packs get route filters that can never match, same as positional did
+- **GEN-11** An undetected sample reaches the router as `json` and gets a filter that cannot match
   `GEN-F1` `bug` `settled`
-  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, and it is the defect [[GEN-6]]
-  closed for positional, still open for three more formats. The audit found it
-  because route-placeholder.ts:152 says 'Filed, not fixed - and this note is
-  the loud part' and NO CARD EXISTED. This card makes that sentence true. THE
-  MECHANISM, already written out in that file's own comment at :133-146 and
-  not disputed here: routes run BEFORE the pipeline extracts, so at route time
-  the event is unparsed and any name the pipeline mints cannot be tested.
-  formatCanDiscriminate excludes only csv and positional, so for these three
-  it returns TRUE, both discriminators proceed, and a filter IS produced -
-  which is what makes it silent. A log type with a filter is neither a
-  placeholder nor 'unreachable', so pipeline-preview reports a CLEAN pack
-  while every disjunct is false for every event. THE THREE ARE NOT THE SAME
-  SHAPE, which is why they are one card and not one fix: syslog - a
-  WHOLE-FORMAT instance. Every name is absent from the raw line: Timestamp,
-  Hostname, Program, PID, Message, and for RFC 5424 also Priority, Version,
-  AppName, ProcID, MsgID. Pinned as knowingly uncovered at
-  route-placeholder.test.ts:54. cef / leef - a PER-FIELD instance. The 7 CEF
-  header names (CEFVersion, DeviceVendor, DeviceProduct, DeviceVersion,
-  DeviceEventClassID, Name, Severity; LEEF the same five plus EventID) are
-  absent, while the EXTENSION pairs really are in the text. Worse,
-  route-discriminator's length-first sort PREFERS the long header names over a
-  short real one - so the discriminator actively picks the unusable half.
-  unknown - depends on CONTENT, which a format string cannot see, so it cannot
-  be answered in this predicate at all. parseByFormat's try-each fallback
-  settled on parseCsv for a PAN-OS line (12 names, 12 absent) and parseSyslog
-  for an RFC 3164 line (6 of 6 absent), but on parseJson/parseKv for content
-  whose names ARE in the text. SO DO NOT WIDEN POSITIONAL_FORMATS AND CALL IT
-  DONE. The set means 'values in column order, no names'; syslog is
-  names-absent-for-a-different-reason and cef/leef are per-field. Each needs
-  its own operator wording - the whole reason PlaceholderCause distinguishes
-  'evidence' from 'format' is that telling an operator 'no discriminator
-  found' sends them to collect more samples, which cannot possibly help. For
-  cef/leef the honest fix is probably narrower than a format exclusion: let
-  the discriminator consider only extension fields, since those ARE in the
-  text.
+  MEASURED during [[GEN-8]] through the real chain. normalizeSourceFormat
+  (pipeline-preview-state.ts:303) erases 'unknown' into 'json' BEFORE the
+  planner sees it, so the undetected-format gap ships under 'json' - not under
+  the name every comment and card had been keyed on. With planFormat 'json':
+  CEF content AUTH vs TRAFFIC gives 0/2 own events; RFC 3164 syslog 0/2;
+  headerless PAN-OS CSV 0/2. Calibration was taken - the same harness returns
+  2/2 for content whose names really are in the text - so the zeros mean the
+  filter is dead rather than the harness being blind. All three still produce
+  a filter, so each log type counts as neither placeholder nor unreachable and
+  the pack previews CLEAN. WORSE THAN THE POSITIONAL CASE:
+  route-value-discriminator.ts:396 suppresses the _raw fallback for json and
+  ndjson, so the emitted filter is a BARE field test with no second disjunct
+  at all. The hard part is that 'json' is a real format that routes fine when
+  the names ARE in the text, so this cannot be fixed by excluding json. The
+  signal has to survive normalizeSourceFormat - either carry detection
+  confidence alongside the format, or decide the question where the sample is
+  still available.
+
+- **DBT-109** A syslog-wrapped line whose CEF header cannot be read becomes a phantom event
+  `DBT-F1` `bug` `settled`
+  FOUND during [[DBT-98]] and confirmed PRE-EXISTING rather than caused by it
+  - measured against HEAD's own code, a short header already produced this.
+  DBT-98 widened the set of lines that reach it. parseCef sets _syslogHeader
+  when the CEF marker is not at position 0, and pushes the record when it has
+  ANY key - so a header-match failure never reaches the emptiness guard. A
+  bare unreadable line yields no record and no raw event; a SYSLOG-WRAPPED one
+  yields a record whose only field is _syslogHeader, plus a raw event. THE
+  PHANTOM IS THE WORSE HALF because it keeps the count looking right: on a
+  4-line sample, eventCount 4, rawEvents 4, errors [], the full field list
+  present - because parseSampleContent UNIONS field names across records, so
+  the three good records supply every name the phantom lacks. The phantom also
+  occupies a slot in the pack's sample file. CEF over syslog is the standard
+  transport shape, so this is not an edge case. Both spellings are pinned;
+  what is missing is any way for the operator to learn it happened.
+
+- **DBT-110** The pack's independent CEF oracle encodes a rule the parser no longer follows
+  `DBT-F1` `bug` `settled`
+  FOUND by review of [[DBT-98]]. pipeline-conf.test.ts drives an
+  anti-collusion oracle - a second implementation, deliberately independent,
+  so 'parser and pack agree' cannot mean 'both carry the same bug'. That is
+  the right design and it is why the CEF work could be trusted. But the oracle
+  was not updated when the header unescape narrowed to the two characters CEF
+  defines, so it now encodes the WIDE rule. Worse, the load-bearing agreement
+  loop did not fail: none of its eleven lines carries a lone backslash, so the
+  corpus cannot express the disagreement it exists to catch. That is the
+  calibration failure this session has now hit four times ([[DBT-105]]): a
+  corpus reporting agreement while blind to the case. Fix the oracle AND add a
+  line that carries a lone backslash, then confirm the loop FAILS before the
+  oracle is corrected.
+
+- **DBT-116** Nine more consumers enumerate SampleFormat and silently mishandle a missing member
+  `DBT-F1` `bug` `settled`
+  FOUND BY THE SWEEP [[DBT-108]] demanded, which is the point: three
+  user-visible defects had already come from one root cause ([[DBT-77]] added
+  positional to SampleFormat, [[GEN-6]] found pipeline-conf.ts untaught,
+  DBT-108 found the capture detector untaught) and nobody had asked how many
+  more there were. TWELVE sites enumerate the union; NINE fail SILENTLY on a
+  member they do not handle - a confident wrong answer rather than an error.
+  Measured, not read, wherever the reviewer could reach the code:
+  pipeline-conf.ts generatePipelineConf is missing syslog in its extract-group
+  ladder, and generateFallbackReductionConf maps cef and leef to kvp but has
+  nothing for syslog. route-discriminator.ts is missing ndjson.
+  pipeline-preview-section.tsx is missing positional AND syslog in two places
+  - only csv is named. splitting.ts hasNamedFields returns false for a VPC v2
+  capture whose columns ARE named, measured on the reported file own lines.
+  models.ts carries a comment listing the members that omits positional and
+  unknown. detectStrict can never return ndjson, csv or positional at all. THE
+  STRUCTURAL ANSWER IS WORTH MORE THAN THE LIST, and the sweep was asked to
+  cost it: TypeScript can make this class impossible rather than findable,
+  with a never-typed default on a switch over the union. Read the sweep report
+  before choosing - some sites are ladders rather than switches and would have
+  to be restructured first, and a site that DEFAULTS correctly does not need
+  it. Do the exhaustiveness work first where it is cheap; the individual fixes
+  are worth less than the guarantee that the next member added is caught at
+  compile time.
 
 ---
 
-## Backlog - next (28)
+## Backlog - next (31)
 
 Settled and unblocked, sequenced behind now.
 
@@ -860,22 +828,6 @@ Settled and unblocked, sequenced behind now.
   make check-docs a second CI and it would be turned off. Related: [[DBT-95]]
   (backticked paths carrying a :line suffix defeat the existing path check).
 
-- **DBT-104** Ten of the 24 SIEM knowledge-base solutions name no Sentinel Solutions folder
-  `DBT-F2` `bug` `settled`
-  Not now because: It fails in the honest direction, which is what separates
-  it from [[DBT-103]]. A solution with no named Sentinel folder points the
-  operator nowhere, and nowhere is visibly nothing; an f5_ sourcetype pointing
-  at Cisco ASA looks like an answer. Ten of 24 is a gap worth closing, but the
-  operator can see it, so it queues behind the mapping that lies.
-  MEASURED during the [[DBT-28]] investigation against the live Solutions
-  index: 10 of the 24 solutions in the SIEM migration knowledge base name no
-  Sentinel Solutions folder at all, so the pivot into Integrate has nothing to
-  land on. Those are also the ten most likely to reach the unresolved-handoff
-  path, which is what made them visible. Establish for each whether a folder
-  exists under a different name (in which case it is a mapping gap) or
-  genuinely does not exist (in which case the knowledge base should say so
-  rather than offering a pivot that cannot complete).
-
 - **DBT-105** A fuzz corpus must be calibrated against the defect before its zero means anything
   `DBT-F1` `enabler` `settled`
   THREE TIMES IN ONE SESSION a parser change was cleared by a corpus that
@@ -918,9 +870,69 @@ Settled and unblocked, sequenced behind now.
   happen to share a regex is not duplication; only fold the two that answer
   the same one.
 
+- **GEN-10** HON-5's live verification no longer covers the column-order routing warning
+  `GEN-F1` `enabler` `settled`
+  RECORDED 2026-09-04 so a live pass knows what to re-read.
+  csvRoutingWarning's column-order text was HON-5's, live-verified in both
+  directions on 2026-08-30. [[GEN-8]] changed one clause of it: 'no filter can
+  tell this log type from the others' was MEASURED FALSE
+  (_raw.indexOf(',TRAFFIC,') separates a headerless PAN-OS TRAFFIC row from a
+  THREAT row) and is now scoped to the field NAMES, with the working filter
+  shown. THE DEFERRAL ARGUMENT IS WORTH KEEPING because it was nearly right:
+  rewriting live-verified operator copy as a drive-by is how wording gets
+  worse than the defect. What it missed is that HON-5 verified the copy
+  RENDERS, not that it is TRUE, and a clause measured false is not protected
+  by having once been reviewed. TO CLOSE: read both branches of
+  csvRoutingWarning on screen in the live preview and confirm the new sentence
+  reads as well as the one it replaced. Both branches are pinned together now,
+  which is what stops them diverging again.
+
+- **GEN-12** PlaceholderCause is declared, documented as operator-facing, and never emitted
+  `GEN-F1` `enabler` `settled`
+  FOUND during [[GEN-8]]: a comment justified saying nothing for CEF and LEEF
+  on the grounds that such a log type 'reports the generic evidence cause
+  instead'. Nothing reports it. A repo-wide grep returns exactly two hits -
+  the type declaration and a type-only re-export. No function returns it, no
+  state stores it, no screen renders it. So a CEF header-only log type gets a
+  placeholder route and NO explanation of any kind, and the type's whole
+  purpose - distinguishing 'not enough evidence' from 'this format can never
+  be separated', so an operator is not sent to collect more samples that
+  cannot help - is unrealised. Decide: emit it and render it, or delete it and
+  stop the next reader arguing from it as this comment did. Deleting is
+  defensible; leaving a declared-but-dead operator concept is not.
+
+- **DBT-114** Decide the fourteen elements recorded in the class-name baseline
+  `DBT-F1` `enabler` `settled`
+  [[DBT-100]] wired check-classnames into CI with the real residue recorded as
+  a baseline, so the gate does not fail on day one - which is what makes it
+  survivable. The residue is FOURTEEN elements recorded as THIRTEEN
+  path-plus-name pairs, because one name is bare at two lines in one file.
+  Each is an element whose classes resolve to no CSS rule, so it renders
+  unstyled. Decide per element: styled by an ancestor selector the check
+  cannot see (then it is a check limitation - see [[DBT-115]]), genuinely dead
+  (delete the attribute), or a missing rule (add it). NOTE the baseline is
+  keyed on path and name with no count, so a repeat of a recorded name in a
+  recorded file is NOT gated. Tightening that to a count or a line is part of
+  this card, or the baseline quietly absorbs new instances.
+
+- **DBT-117** hasNamedFields says a recognised VPC Flow capture has no named fields
+  `DBT-F1` `bug` `settled`
+  Not now because: hasNamedFields has NO production caller today - only its
+  own test and the barrel export - so nothing is currently wrong for an
+  operator. It is ranked here rather than later because the moment something
+  does call it, it answers false for a recognised VPC v2 capture, which is the
+  kind of wrong answer that gets built on before it is noticed.
+  MEASURED during the [[DBT-108]] sweep on the reported file own 100 VPC Flow
+  v2 lines: hasNamedFields(lines, positional) returns FALSE, although
+  isVpcFlowV2 recognises the shape and the columns carry real names (srcaddr,
+  dstaddr, account_id). splitting.ts has no positional branch so it falls off
+  the end to return false. Same root cause as DBT-108 and part of [[DBT-116]]
+  class, filed separately because it is the one site with no caller - which is
+  also why it survived three waves unnoticed.
+
 ---
 
-## Backlog - later (39)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -1438,9 +1450,21 @@ Settled, gated on something above.
   and keep the reasoning as a comment on VPC_FLOW_V2_FIELDS. Do not just
   delete both; the hyphen trap is the thing worth keeping.
 
+- **DBT-115** check-classnames cannot see descendant selectors, so some findings are false
+  `DBT-F1` `enabler` `settled`
+  FOUND while closing [[DBT-100]]. The check resolves a class name against
+  rules that name it directly. A class styled only through a descendant or
+  compound selector reads as unbacked, so some of the recorded residue may be
+  styled after all. This is a PRECISION limit, not a correctness one - it
+  over-reports rather than under- reporting, which is the safe direction and
+  is why the check is still worth running. Worth doing WITH [[DBT-114]]: the
+  fourteen have to be classified by hand anyway, and however many turn out to
+  be ancestor-styled is the measurement that says whether teaching the check
+  about descendant selectors is worth the complexity.
+
 ---
 
-## Done (102)
+## Done (109)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4837,3 +4861,313 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   forward. Delete the root check-release script tomorrow and every gate stays
   green. [[DBT-101]] asks for the general version, since the same is true of
   every documented npm command.
+
+- **DBT-98** parseCef's header split ignores CEF's own pipe escape, and so does the generated pack
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND while fixing [[DBT-80]] and MEASURED:
+  `CEF:0|V\|W|P|1.0|100|worm|5|src=...` escapes the pipe exactly as the CEF
+  specification requires, parseCef splits on it anyway, and EVERY header field
+  shifts by one - DeviceVendor reads `V\`, DeviceProduct reads `W`, and so on
+  down the header. It is silent: the field NAMES are all present and correct,
+  so a field list looks right while the values are off by one position. IT
+  REACHES THE PACK, which is what makes it `now` rather than a parser
+  curiosity: pipeline-conf.ts emits the same naive split for the generated
+  pipeline, so an operator who installs the pack gets the same shifted header
+  at runtime. Fixing the parser alone would make the app disagree with the
+  pack it generates, which is the shape [[GEN-6]] just closed - fix both or
+  neither. DONE 2026-09-04, parser and pack together as the card required.
+  parseCef now reads its header with an escape-CONSUMING pattern shared with
+  pipeline-conf.ts, which emits its source rather than re-spelling it, so the
+  two cannot drift. THE ROW THAT DECIDED THE DESIGN: a doubled backslash is a
+  literal backslash, so the pipe AFTER it IS a separator. 'Split on a pipe
+  with no backslash in front of it' gets that case wrong in the opposite
+  direction. Only consuming escape pairs handles all three shapes, and a
+  mutation pinning exactly that (only the pipe treated as escapable) fails one
+  pin and not the escaped-pipe one - so the case is genuinely covered rather
+  than incidentally passing. THE FIX'S OWN DEFECT, caught by review: the
+  unescape consumed ANY escaped character, so a Windows path in DeviceProduct
+  lost its backslashes - C:\\Program Files became C:Program Files - while the
+  identical bytes in the extension stayed verbatim. Narrowed to the two
+  characters CEF defines. The vacuity check on its pin is the useful part: a
+  no-op unescape ALSO fails it, so it cannot pass by simply not unescaping.
+  TWO COSTS ARE NOW RECORDED RATHER THAN DISCOVERED LATER. A header ending in
+  a dangling backslash no longer matches - and the cost differs by transport,
+  which the first statement got wrong: a BARE line yields no record and no raw
+  event, while a SYSLOG-WRAPPED line yields a phantom record carrying only
+  _syslogHeader, keeping the event count right and masked by the field union.
+  Review then corrected the correction: that phantom mechanism PREDATES this
+  card - measured against HEAD's own code, a short header already produced it
+  - so DBT-98 widened the set of lines reaching it rather than creating it.
+  Filed separately as [[DBT-109]]. And a producer writing an UNESCAPED
+  backslash now shifts every later field, which is the price of following the
+  spec and is pinned as a recorded decision. Corpus calibrated per the rule
+  this session earned: the HEAD clone reproduces all six known HEAD shapes,
+  and HEAD disagrees with an independent character-scanner oracle on 188,728
+  of 200,000 lines - so the new parser's 0 is readable. Parser, pack and
+  oracle agree 0/200,000 three ways.
+
+- **DBT-100** check-classnames is wired to nothing: 36 findings sit in the tree and every build is green
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND while closing [[DBT-90]] and VERIFIED INDEPENDENTLY by two agents.
+  apps/cribl-app/scripts/check-classnames.mjs exists, has its own test file,
+  and reports '36 undefined or undeclared across 127 source file(s)' - 33
+  distinct class names. NOTHING INVOKES IT: no manifest defines a
+  check-classnames npm script, and .github/workflows/soc-toolkit-ci.yml has no
+  such step (its npm steps are lint, typecheck, check-listings,
+  check-schema-asset, build, check-release, check-docs, check-board,
+  check-board-freshness). MEASURED, and this corrects the first account of it:
+  the 33 names did NOT accumulate after the script landed. A reviewer
+  extracted the tree at e147332 - the commit that added the script - ran it
+  there and on the current tree, and diffed the sets. Byte-identical: 36
+  findings, 33 names, both times. Zero added and zero removed in three days.
+  The four DBT-39 names were fixed in that same commit and the other 33 were
+  left standing. SO THE DECISION IS NOT 'WIRE IT UP' - it is whether those 33
+  names are defects at all. A gate that fails on 33 pre-existing findings the
+  day it is enabled gets bypassed within a week, which is the failure mode
+  [[DBT-88]] is about. Establish whether the 33 are real (a class referenced
+  with no rule, so the element renders unstyled) or an artefact of how the
+  script resolves names, BEFORE deciding to enforce it. DONE 2026-09-04, and
+  the decision the card asked for was made rather than deferred: the 33 names
+  are NOT all defects, so the script was rewritten to ask a better question
+  before being wired up. MEASURED: the original asked one CLASS NAME at a time
+  and asserted each 'renders as a bare element'. That was false for 23 of the
+  36 - they name an element that another class on the SAME element already
+  styles - and its advice ('either DELETE it') would have broken the suite,
+  since six are live test selectors. Counted two independent ways on the tree
+  at e147332, which reproduces the original 36 exactly. An earlier draft said
+  21, unmeasured; that is corrected. So the check now asks whether an ELEMENT
+  is styled at all, the real residue is recorded as a baseline, and CI runs
+  it. Review caught the fix reopening the class it closes: an opaque
+  interpolation set 'backed', converting 'we cannot check this' into 'this is
+  fine' and demoting every other dead class on that element - the exact
+  allowlist the file's own header rejects in prose. Fixed as a third state.
+  STILL LOOSER THAN ITS COMMENTS CLAIMED, now stated accurately: the baseline
+  is keyed on path and name with no count, so a repeat of a recorded name in a
+  recorded file is not gated. [[DBT-114]] decides the fourteen; [[DBT-115]]
+  covers descendant selectors, which the check cannot see.
+
+- **DBT-102** The SIEM pivot deletes every acquired sample and its own button says nothing
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND during the [[DBT-28]] attempt and SURVIVES its revert, because it is
+  present in shipped code rather than in the reverted diff. The SIEM migration
+  screen's pivot writes a solution deep link and navigates to Integrate. When
+  that lands on a DIFFERENT solution than the one selected,
+  handleSolutionChange takes the branch that removes every tagged sample. The
+  Clear button carries [[DBT-9]]'s warning; this button carries nothing. NOTE
+  WHAT THE [[DBT-72]] DECISION DOES AND DOES NOT COVER. The product owner
+  accepted silent sample deletion when a solution is CLEARED - a button the
+  operator presses knowing it is destructive, with copy that says so. This is
+  a different button, presented as navigation, with no warning at all. The
+  decision retired the design work on ownership; it did not say every path may
+  delete silently. CHEAPEST HONEST FIX is copy, not behaviour: say on the
+  pivot what Clear already says. That is consistent with the DBT-72 decision
+  rather than reopening it. DONE 2026-09-04. The SIEM pivot now says what it
+  does. The DBT-72 decision covered a button an operator presses knowing it is
+  destructive, with copy that says so; this one was presented as navigation
+  and said nothing, which the decision did not license. THE COPY TOOK TWO
+  ROUNDS BECAUSE THE BEHAVIOUR IS A RACE. The first version asserted the
+  deletion as a certainty. Measured: with the stored-selection cache resolving
+  immediately the samples are removed; with a 200ms delay on that one read,
+  nothing is removed and the page ends up NAMING TWO DIFFERENT SOLUTIONS AT
+  ONCE - and the losing ordering was the one the warning never mentioned. The
+  second version then called the already-visited case harmless, which
+  measurement showed is the opposite of what happens: the click still writes
+  the hash, so it ARMS the deletion for the next page load. Both corrected
+  against probes rather than reasoning.
+
+- **DBT-103** The SIEM knowledge base maps every f5_ sourcetype to the Cisco ASA solution
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND during the [[DBT-28]] investigation while measuring the knowledge
+  base, and unrelated to the deep link - it survives that card's revert. Every
+  `f5_` sourcetype in the SIEM migration knowledge base resolves to the Cisco
+  ASA Sentinel solution. F5 and Cisco ASA are different vendors and different
+  products, so an operator migrating F5 content is pointed at the wrong
+  solution, and the mapping is presented with the same confidence as every
+  correct one. It is `now` because it is a CONFIDENT WRONG ANSWER in the
+  product's own reference data, which is the class this toolkit exists to
+  prevent, and because a wrong mapping costs an operator the whole downstream
+  path before it becomes visible. Re-measure the mapping before fixing - the
+  count and the exact sourcetype list are in the DBT-28 agent's report and
+  should be re-taken rather than trusted. See also [[DBT-104]], found in the
+  same sweep. DONE 2026-09-04. The f5_ sourcetypes no longer resolve to the
+  Cisco ASA solution, and the sweep the card demanded found a SECOND
+  cross-vendor mapping of the same shape: zeek_ pointed Zeek network logs at
+  the Windows Security Events solution. Both were confident wrong answers in
+  the product's own reference data, which is worse than a gap because nothing
+  about them looks uncertain. THE SHAPE PIN IS THE DELIVERABLE, not the two
+  corrections. A pin naming one sourcetype is worth little when forty others
+  can drift, so the guard is now cross-vendor: a mapping whose vendor prefix
+  disagrees with its solution's vendor fails. Review then showed the FIRST
+  version of that guard could not detect its own class - a spacing-only rename
+  passed all 26 tests including the shape pin, because it judged names through
+  a normalized asset lookup rather than the ladder the pivot actually walks.
+  Re-pinned against directory names with the real ladder, and mutation-checked
+  with the spacing rename that previously passed. A CROSS-AGENT COLLISION IS
+  WORTH RECORDING: the pivot agent added a third separator-insensitive pass to
+  resolveSelectedSolution WHILE this agent was measuring which names resolve,
+  so the first 'Cisco ASA cannot land' measurement was taken against a ladder
+  that no longer existed. Disjoint FILES are not disjoint BEHAVIOUR, and the
+  re-measure had to be forced explicitly.
+
+- **DBT-104** Ten of the 24 SIEM knowledge-base solutions name no Sentinel Solutions folder
+  `DBT-F2` `bug` `settled` `verified: pins`
+  Not now because: It fails in the honest direction, which is what separates
+  it from [[DBT-103]]. A solution with no named Sentinel folder points the
+  operator nowhere, and nowhere is visibly nothing; an f5_ sourcetype pointing
+  at Cisco ASA looks like an answer. Ten of 24 is a gap worth closing, but the
+  operator can see it, so it queues behind the mapping that lies.
+  MEASURED during the [[DBT-28]] investigation against the live Solutions
+  index: 10 of the 24 solutions in the SIEM migration knowledge base name no
+  Sentinel Solutions folder at all, so the pivot into Integrate has nothing to
+  land on. Those are also the ten most likely to reach the unresolved-handoff
+  path, which is what made them visible. Establish for each whether a folder
+  exists under a different name (in which case it is a mapping gap) or
+  genuinely does not exist (in which case the knowledge base should say so
+  rather than offering a pivot that cannot complete). DONE 2026-09-04
+  alongside [[DBT-103]]. The knowledge-base solutions that name no Sentinel
+  Solutions folder are now DECLARED rather than silently offering a pivot that
+  cannot complete, and the count was re-measured rather than inherited - the
+  reviewer's independent fetch of the live index (574 directories) is what
+  caught that the original figure was short by one. The remaining judgement
+  calls are carded rather than guessed, which is the point: whether 'Cisco
+  ASA' should become 'CiscoASA' ([[DBT-113]]), what the google_ prefix should
+  resolve to ([[DBT-112]]), and whether suricata should be repointed
+  ([[DBT-111]]). Inventing a plausible-looking folder name would have been
+  adding the exact defect DBT-103 was filed for.
+
+- **GEN-8** Syslog, CEF and LEEF packs get route filters that can never match, same as positional did
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, and it is the defect [[GEN-6]]
+  closed for positional, still open for three more formats. The audit found it
+  because route-placeholder.ts:152 says 'Filed, not fixed - and this note is
+  the loud part' and NO CARD EXISTED. This card makes that sentence true. THE
+  MECHANISM, already written out in that file's own comment at :133-146 and
+  not disputed here: routes run BEFORE the pipeline extracts, so at route time
+  the event is unparsed and any name the pipeline mints cannot be tested.
+  formatCanDiscriminate excludes only csv and positional, so for these three
+  it returns TRUE, both discriminators proceed, and a filter IS produced -
+  which is what makes it silent. A log type with a filter is neither a
+  placeholder nor 'unreachable', so pipeline-preview reports a CLEAN pack
+  while every disjunct is false for every event. THE THREE ARE NOT THE SAME
+  SHAPE, which is why they are one card and not one fix: syslog - a
+  WHOLE-FORMAT instance. Every name is absent from the raw line: Timestamp,
+  Hostname, Program, PID, Message, and for RFC 5424 also Priority, Version,
+  AppName, ProcID, MsgID. Pinned as knowingly uncovered at
+  route-placeholder.test.ts:54. cef / leef - a PER-FIELD instance. The 7 CEF
+  header names (CEFVersion, DeviceVendor, DeviceProduct, DeviceVersion,
+  DeviceEventClassID, Name, Severity; LEEF the same five plus EventID) are
+  absent, while the EXTENSION pairs really are in the text. Worse,
+  route-discriminator's length-first sort PREFERS the long header names over a
+  short real one - so the discriminator actively picks the unusable half.
+  unknown - depends on CONTENT, which a format string cannot see, so it cannot
+  be answered in this predicate at all. parseByFormat's try-each fallback
+  settled on parseCsv for a PAN-OS line (12 names, 12 absent) and parseSyslog
+  for an RFC 3164 line (6 of 6 absent), but on parseJson/parseKv for content
+  whose names ARE in the text. SO DO NOT WIDEN POSITIONAL_FORMATS AND CALL IT
+  DONE. The set means 'values in column order, no names'; syslog is
+  names-absent-for-a-different-reason and cef/leef are per-field. Each needs
+  its own operator wording - the whole reason PlaceholderCause distinguishes
+  'evidence' from 'format' is that telling an operator 'no discriminator
+  found' sends them to collect more samples, which cannot possibly help. For
+  cef/leef the honest fix is probably narrower than a format exclusion: let
+  the discriminator consider only extension fields, since those ARE in the
+  text. DONE 2026-09-04. formatCanDiscriminate now excludes the formats whose
+  field names are MINTED by the pipeline rather than present in the raw event,
+  so syslog joins csv and positional instead of producing a filter that can
+  never match. CEF and LEEF are handled per-FIELD rather than per-format,
+  since their extension pairs really are in the text and only the headers are
+  not - which is what the card argued for and is why widening the set would
+  have been wrong. THE OPERATOR WORDING WAS HALF THE CARD AND IT TOOK TWO
+  ROUNDS. The first syslog warning said 'no filter can tell this log type from
+  the others in the pack' and then asked the operator to complete a
+  placeholder filter - so it contradicted itself, and the middle clause was
+  FALSE: measured on the diff's own fixture, _raw.indexOf('sshd[') separates
+  the two log types cleanly. The comment above it made it worse by stating
+  that naming _raw existed to stop an operator 'concluding they could just
+  filter on it' - the code deliberately steering them off the working answer.
+  Both branches now scope the impossibility to the NAMES and hand over the
+  working form, and both are pinned together ([[GEN-10]] records that the
+  column-order half was HON-5's live-verified copy). TWO JUSTIFICATIONS
+  DESCRIBED BEHAVIOUR NOTHING PERFORMS. The silence for cef/leef was argued on
+  the grounds that such a log type 'reports the generic evidence cause
+  instead' - but PlaceholderCause is declared and NEVER EMITTED anywhere (two
+  grep hits, the declaration and a type-only re-export), so what it actually
+  gets is a placeholder route and no message at all. And the undetected-format
+  gap is keyed on the wrong string: normalizeSourceFormat erases 'unknown'
+  into 'json' before the planner sees it, so the dead filter ships under
+  'json' - and route-value-discriminator suppresses the _raw fallback for
+  json, making the emitted filter a BARE field test with no second disjunct.
+  Both corrected; the remainders are [[GEN-11]] and [[GEN-12]]. Also fixed: a
+  measured count that was wrong (_syslogHeader is 13 characters, not 14) in
+  the file whose own design argument is that a rule with two copies is free to
+  drift - two of the three copies had been corrected and the third had not.
+
+- **DBT-108** A Cribl capture of a positional log unwraps to the envelope, not the events
+  `DBT-F1` `bug` `settled` `verified: pins`
+  REPORTED BY THE USER 2026-09-04 with a live capture from Cribl (99 lines,
+  AWS VPC Flow Logs via an S3 source), and REPRODUCED against HEAD before
+  anything was changed. Uploading it to Sentinel Integration extracts no VPC
+  fields. MEASURED, HEAD: format ndjson, 100 events, 13 fields - and the 13
+  are the CRIBL ENVELOPE: __criblEventType, __ctrlFields, __final,
+  __cloneCount, _raw, __channel, source, __source, __isBroken, __raw, _time,
+  cribl_breaker, __inputId. errors is EMPTY. So the operator is shown a clean
+  parse of Cribl internals where they expected srcaddr and dstaddr, with
+  nothing saying otherwise - the confident wrong answer, again. ROOT CAUSE,
+  read line by line rather than inferred. The capture unwrap EXISTS and is
+  first-class (format-detection.ts:213, ENG-15). parse-sample.ts:532-535 asks
+  detectCaptureInnerFormat what is inside _raw and, at :533, DECLINES TO
+  UNWRAP when the answer is unknown. detectCaptureInnerFormat
+  (format-detection.ts:231) tests for CEF, LEEF, JSON, CSV at five commas, kv
+  at three pairs, and syslog by prefix - AND HAS NO POSITIONAL BRANCH. Its own
+  header says it was ported verbatim from the legacy detectInnerRawFormat. So
+  a VPC Flow v2 line matches nothing, returns unknown, and the unwrap silently
+  gives up. THE PARSER IS ALREADY CORRECT, which is what makes this cheap.
+  Measured on the reported file: looksPositional true, isVpcFlowV2 TRUE across
+  all 100 inner lines, parsePositional returns 100 records with all 14 v2
+  names, one distinct column width. Nothing needs inventing - one detector
+  needs teaching. THIS IS THE THIRD INSTANCE OF ONE ROOT CAUSE. [[DBT-77]]
+  added positional to SampleFormat. [[GEN-6]] then found pipeline-conf.ts had
+  never been taught about it and emitted a JSON extract for a whitespace line.
+  This is the same gap in the capture detector. A member was added to a union
+  and the consumers that ENUMERATE its members were not swept - so the sweep
+  is part of this card, not a follow-up. BLAST RADIUS IS WIDER THAN THE
+  REPORT. capture-samples.ts:304 calls the same function, so samples acquired
+  through the app OWN Cribl capture path have the same defect - the user hit
+  it by manual upload, but the in-app path is the one the product steers
+  people to. DONE 2026-09-04. detectCaptureInnerFormat now has a positional
+  branch, placed LAST before the unknown return and using the existing
+  looksPositional rather than a second spelling of the rule. THE REPORTED
+  FILE, before and after: ndjson / 13 envelope fields -> positional / 14 VPC
+  fields (version, account_id, interface_id, srcaddr, dstaddr, srcport,
+  dstport, protocol, packets, bytes, start, end, action, log_status), and
+  rawEvents[0] is now the vendor line rather than the re-serialized envelope.
+  The event count is 100 BOTH ways and 13 vs 14 fields does not look wrong at
+  a glance, which is why the pin asserts the full ordered name list AND the
+  absence of all 13 envelope names rather than a count. THE ORDERING IS THE
+  WHOLE RISK and a mutation proves it: moving the branch to the TOP of the
+  ladder fails five pins at once - kv, syslog with and without priority,
+  JSON-with-spaces and a syslog-wrapped PAN-OS CSV are all whitespace-columned
+  and would be stolen. Each ladder pin asserts looksPositional is true BEFORE
+  asserting the format, so the guard cannot go vacuous if a fixture is later
+  shortened. THE FIX OPENED A DOOR ONE STEP OVER, found by both reviewers
+  independently and fixed here: positionalNote was computed BEFORE
+  unwrapCapture and read the wrapper. A captures outer format is ndjson, so
+  the guard never fired - and before this card no capture could BE positional,
+  so the case was unreachable until this card made it reachable. Measured on
+  the same two lines: plain upload gave field1..field10 WITH the note,
+  capture-wrapped gave field1..field10 and errors []. Moving the block alone
+  was not enough either - on the capture path content is the wrapper JSON,
+  whose own values carry spaces, so the note described the envelope. It now
+  reads sourceLines. DBT-78 unaddressableFieldNote was already on the correct
+  side. THE APP OWN CAPTURE PATH IS FIXED TOO, measured rather than assumed:
+  capture-samples.ts feeds the already-extracted _raw values to the same
+  detector, and the format carried onto the SplitSample goes unknown ->
+  positional. That path is the one the product steers people to, so its blast
+  radius was larger than the manual upload reported. CUSTOMER DATA WAS CAUGHT
+  BEFORE IT REACHED A PUBLIC REPO. The reported file carries a customer S3
+  bucket (200 occurrences), the customer name in __inputId (100) and a real
+  AWS account id (600). The vendored fixture replaces exactly those three and
+  nothing else, and the redaction was verified MEASUREMENT-NEUTRAL - format,
+  event count, field list, errors, rawEvents count, inner format, isVpcFlowV2
+  and column widths all deep-equal between original and fixture. THE SWEEP
+  THIS CARD DEMANDED FOUND NINE MORE SILENT SITES: see [[DBT-116]].

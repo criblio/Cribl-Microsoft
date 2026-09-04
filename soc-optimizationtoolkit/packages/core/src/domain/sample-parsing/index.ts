@@ -48,6 +48,13 @@ export {
   parseByFormat,
 } from "./parsers";
 
+// DBT-98: the CEF header split and its unescape, exported so pipeline-generation
+// can emit the SAME expressions into the generated pack. One source of truth, for
+// the reason the positional export below records: the screen and the installed
+// pipeline must reach the seven header fields the same way, and a second copy of
+// an escape rule drifts. The pack emits `.source` verbatim - see pipeline-conf.ts.
+export { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+
 export type { ParseSampleOptions } from "./parse-sample";
 export {
   parseSampleContent,

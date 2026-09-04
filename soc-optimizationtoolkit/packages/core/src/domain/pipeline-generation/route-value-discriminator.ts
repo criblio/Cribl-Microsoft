@@ -24,12 +24,18 @@
  * was removed 2026-08-13 (the column test made it unreachable) and the rule
  * that decides most cases arrived 2026-08-17, so this list is the current one:
  *
+ * BEFORE ANY OF THEM, THE NAME HAS TO REACH THE ROUTE AT ALL (GEN-8). A CEF or
+ * LEEF header field is skipped before it is judged on anything: its name lives
+ * only in the parsed record, so a filter mentioning it is false for every
+ * event. It has to run first precisely because guard 1 is at its most confident
+ * on these fields - a vendor writes its log type's name into the CEF header -
+ * so asking later would mean preferring a dead filter to a live one.
+ *
  *   1. ITS VALUE NAMES THE LOG TYPE. The governing rule (user, 2026-08-17):
  *      each vendor log type can be defined with the contents of the log
  *      itself, so the field that DEFINES a log type carries a value that names
- *      it - `action` is "Cautioned" in CAUTIONED, `DeviceEventClassID` is
- *      "AUTH" in AUTH. Containment either way, case-insensitive. See
- *      {@link namesLogType}.
+ *      it - `action` is "Cautioned" in CAUTIONED, `event_type` is "dns" in dns.
+ *      Containment either way, case-insensitive. See {@link namesLogType}.
  *   2. PRESENT IN EVERY OWN EVENT, via the shared {@link fieldPresence}. A
  *      field only sometimes there yields a filter that misses the rest.
  *   3. EXACTLY ONE OWN VALUE - constant, therefore categorical. This is what
@@ -57,7 +63,10 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import { formatCanDiscriminate } from "./route-placeholder";
+import {
+  formatCanDiscriminate,
+  isMintedHeaderField,
+} from "./route-placeholder";
 
 /** A bare name usable as a JS identifier in a Cribl filter expression. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -239,9 +248,10 @@ export function deriveValueDiscriminator(
   format: string,
 ): string | null {
   const none = null;
-  // CSV data rows are positional: at route time the event is unparsed and the
-  // field name never appears in _raw, so neither test below can run. Nothing to
-  // suggest either - the filter could not be written at all.
+  // CSV data rows are positional and syslog names come off a regex: at route
+  // time the event is unparsed and the field name never appears in _raw, so
+  // neither test below can run. Nothing to suggest either - the filter could
+  // not be written at all.
   //
   // ASKED, not restated (DBT-31) - see route-discriminator for why the single
   // authority matters: HON-5's operator warning is derived from it.
@@ -273,6 +283,22 @@ export function deriveValueDiscriminator(
     spread: number;
   }> = [];
   for (const field of Object.keys(own.values)) {
+    // GEN-8, and the check this function needed most. A CEF or LEEF header is
+    // EXACTLY where a vendor writes the name of its own log type, so guard 0
+    // below - "the value must name the log type" - is at its most confident on
+    // precisely the fields whose NAMES no route filter can test. Measured on
+    // AUTH vs TRAFFIC sharing one extension schema, this loop chose
+    // `DeviceEventClassID === 'AUTH'`; evaluated against an unparsed route-time
+    // event it matched 0 of that log type's 2 events, and LEEF's `EventID`
+    // behaved identically. The extension pairs are unaffected: `act=Allowed` is
+    // in the text, and the same corpus still yields `act === 'Allowed'`.
+    //
+    // ASKED, not restated, like the format gate above - route-placeholder owns
+    // which names a format mints, so the two discriminators cannot disagree
+    // about it.
+    if (isMintedHeaderField(field, format)) {
+      continue;
+    }
     const value = constantValue(own, field);
     if (value === null) {
       continue;

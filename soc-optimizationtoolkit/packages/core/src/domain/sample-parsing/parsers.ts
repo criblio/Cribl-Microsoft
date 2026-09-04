@@ -568,13 +568,18 @@ export function parseKv(
  *
  *   1. NO LEADING PREFIX ABSORBED. Two characters had to leave the key class or
  *      the widened class ate them:
- *        `|` is CEF's header delimiter, and BOTH this parser and the pack it
- *          generates reach the extension as `split("|").slice(7).join("|")`
- *          (pipeline-conf.ts builds exactly that expression for `__cefExtension`),
- *          so a `|` inside a key is always header wreckage, never a name. With it
- *          in the class, `a|b=2 dst=3` named a field `a|b` and the extension of a
- *          header carrying an escaped `\|` named one `5|src`; HEAD names them `b`
- *          and `src`, and excluding `|` keeps HEAD's names exactly.
+ *        `|` is CEF's header delimiter, so it reaches the extension only inside
+ *          a VALUE the vendor wrote (`msg=a|b`) or as stray text - never as part
+ *          of a key NAME. With it in the class, `a|b=2 dst=3` named a field
+ *          `a|b` and `5|src=1.1.1.1 dst=2.2.2.2` named one `5|src`; HEAD names
+ *          them `b` and `src`, and excluding `|` keeps HEAD's names exactly.
+ *          THIS ARGUMENT USED TO READ "always header wreckage, never a name",
+ *          justified by both this parser and the pack reaching the extension as
+ *          `split("|").slice(7).join("|")`. DBT-98 made that premise false: the
+ *          header split is escape-aware on BOTH sides now and the extension is
+ *          the verbatim remainder after the seventh unescaped pipe, so an escaped
+ *          `\|` in the header no longer leaks a `5|` prefix into the extension at
+ *          all. The trap is unchanged - the reason for it is narrower.
  *        `\` is CEF's escape character, so a key ending in `\` means the `=` after
  *          it was ESCAPED and is not a separator at all. With `\` in the class,
  *          `msg=x y\=z dst=2.2.2.2` invented a field `y\` = `z` and cut `msg`
@@ -584,6 +589,15 @@ export function parseKv(
  *      class moves 7692 of 200000 corpus lines off this pattern's answer (it is
  *      still `y\` manufactured out of an escape), and allowing `|` back moves
  *      66367 (`a|b` where HEAD names `b`, and `5|{` out of header wreckage).
+ *      BOTH FIGURES WERE TAKEN WITH THE PRE-DBT-98 HEADER SPLIT, and they are
+ *      claims about this pattern over extension STRINGS, which DBT-98 did not
+ *      touch. What DBT-98 changed is where such a string can come from. This
+ *      note attributed `5|{` to header wreckage; DBT-98 measured only that the
+ *      escaped-`\|` ROUTE to it is closed (that header handed the extension
+ *      `5|src=...` before and hands it `src=...` now), not which route the 66367
+ *      actually took. An unescaped `|` the vendor wrote inside an extension value
+ *      still reaches this pattern, which is why the trap stays and the figures
+ *      were not re-taken.
  *   2. NO MID-TOKEN RESTART. Same quadratic blowup as KV, and CEF is WORSE off
  *      than KV was because HEAD is already quadratic here. Measured through this
  *      pattern on a bare token sitting before the first pair, RE-TAKEN for the
@@ -609,7 +623,7 @@ export function parseKv(
  *      whitespace-only `(?:^|\s)` that ate a field in DBT-79 does it again here,
  *      differently and just as silently: over the 200000-line corpus below it
  *      returned FEWER keys than HEAD on 9403 lines and dropped a HEAD key
- *      outright on 25054, because a key reached through header wreckage
+ *      outright on 25054, because a key reached through an interior `|`
  *      (`a|b=2 dst=3` -> HEAD `b`) has no space in front of it. This anchor: 0
  *      and 110, and the 110 are trap 5's residue rather than the anchor's.
  *      AND CEF SEPARATES THE TWO LESSONS KV COULD NOT. There the fix was read as
@@ -712,6 +726,14 @@ export function parseKv(
  * readable - the first says the harness reproduces HEAD, the second says the
  * pattern it measured is the one in this file and not a retyped approximation.
  *
+ * THE WHOLE TABLE PREDATES DBT-98 and was NOT re-taken for it. Every column is a
+ * comparison between two EXTENSION PATTERNS over the same extension strings, and
+ * DBT-98 changed neither pattern. It changed which strings a header produces: the
+ * escaped-`\|` header in the alphabet above used to hand this pattern
+ * `5|src=1.1.1.1 ...` and now hands it `src=1.1.1.1 ...`. So the numbers stand as
+ * statements about the pattern, and the escaped-`\|` row of the corpus no longer
+ * exercises the interior-`|` shape it used to - the `msg=a|b` shape still does.
+ *
  * THE BAR IS NOT ZERO, AND THIS NOTE USED TO SAY IT WAS. "HEAD keys neither kept
  * nor extended" is 110 lines, not 0, and the earlier 0 was a corpus that could not
  * reach the shape. The 110 are ONE mechanism and it is not trap 5's:
@@ -721,7 +743,7 @@ export function parseKv(
  *     this  { "a[0]": "7 5|src=1.1.1.1", dpt: "80" }        <- `src` gone
  *
  * The ANCHOR lets a key start after `|`, but the LOOKAHEAD still demands
- * whitespace before the next key, so a key reached through header wreckage is not
+ * whitespace before the next key, so a key reached through an interior `|` is not
  * a visible boundary - and the widened capture class opens a pair at `a[0]` that
  * HEAD never opened, whose value then runs straight through it. HEAD does exactly
  * the same thing whenever it DOES open the pair (`first=1 5|src=1.1.1.1 dpt=80`
@@ -749,20 +771,256 @@ export function parseKv(
 const CEF_EXT_PAIR =
   /(?<![^\s=|\\])((?=[^\s=|\\]*\w)[^\s=|\\]+)=(.*?)(?=\s(?=[^\s=|\\]*\w)[^\s=|\\]+=|$)/g;
 
+/** One CEF HEADER FIELD: `\<any>` is one escaped character, `|` ends the field. */
+const CEF_HEADER_FIELD = String.raw`((?:\\[\s\S]|[^|\\])*)`;
+
+/**
+ * The CEF header, escape-aware, in ONE anchored match (DBT-98).
+ *
+ * Groups 1-7 are CEFVersion, DeviceVendor, DeviceProduct, DeviceVersion,
+ * DeviceEventClassID, Name and Severity, still carrying their escapes; group 8
+ * is the extension, VERBATIM, and is absent when the header has no 8th field.
+ *
+ * THE SPEC RULE THIS ENCODES, and the three shapes it has to tell apart. The
+ * header separator is `|`; a literal pipe inside a header VALUE is written `\|`,
+ * and a literal backslash is written `\\`. So a DOUBLE backslash before a pipe
+ * leaves that pipe a REAL separator, and the naive `split("|")` and a naive
+ * "pipe not preceded by a backslash" rule get OPPOSITE halves of that wrong.
+ *
+ * WHAT THE NAIVE SPLIT DID, measured on this file at HEAD before the change, the
+ * bytes written with `<BS>` for a backslash so the shell cannot lie about them:
+ *
+ *   shape                          bytes (vendor field)   HEAD parser
+ *   unescaped                      V                      vendor V, and correct
+ *   escaped pipe        `\|`       V<BS>|W                vendor `V<BS>`,
+ *                                                         product `W`, version
+ *                                                         `P`, class `1.0`, name
+ *                                                         `100`, severity `worm`
+ *                                                         - SIX fields shifted
+ *   escaped backslash   `\\`       V<BS><BS>|P            vendor `V<BS><BS>`,
+ *                                                         product `P` - the
+ *                                                         SEPARATOR was right by
+ *                                                         luck, the VALUE was not
+ *   `\\` then `\|`                 V<BS><BS><BS>|W        vendor `V<BS><BS><BS>`,
+ *                                                         product `W` - shifted
+ *
+ * The middle row is the case that makes "split on a pipe with no backslash in
+ * front of it" wrong: there the pipe IS a separator and HEAD happened to agree.
+ * Only counting the escapes, or consuming them as this pattern does, gets both.
+ *
+ * WHY AN ALTERNATION RATHER THAN A LOOKBEHIND. `(?:\\[\s\S]|[^|\\])` consumes an
+ * escape pair as ONE unit, so "how many backslashes precede this pipe" never has
+ * to be counted or looked behind at - and the two branches are disjoint on their
+ * first character, so every position has exactly one way to be consumed and the
+ * scan is linear. A variable-length lookbehind would be V8-only; this is plain
+ * ES5 regex syntax, which matters because {@link CEF_HEADER_PATTERN} is emitted
+ * verbatim into the generated pack (see pipeline-conf.ts) and has to run in
+ * Cribl's expression evaluator, not only here.
+ *
+ * `\\[\s\S]` rather than `\\.`: `.` does not match a line terminator, so a
+ * backslash immediately before a lone carriage return would make the WHOLE
+ * header fail to match and the record disappear. Neither shape can be made loud
+ * from here - this function has no error channel - so the choice is the one that
+ * loses less: the odd character stays in the field.
+ *
+ * ANCHORED AT BOTH ENDS, so a header with fewer than seven fields does not match
+ * at all. That is HEAD's behaviour too (it required `parts.length >= 7`) and it
+ * is what the emitted pack now does as well; before DBT-98 the pack disagreed
+ * with this parser there, filling in whatever fields a short header had.
+ */
+export const CEF_HEADER_PATTERN = new RegExp(
+  "^CEF:" +
+    [
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+      CEF_HEADER_FIELD,
+    ].join(String.raw`\|`) +
+    String.raw`(?:\|([\s\S]*))?$`,
+);
+
+/**
+ * The CEF header UNESCAPE: `\\` -> `\` and `\|` -> `|`, applied left to right,
+ * and NOTHING ELSE (DBT-98, narrowed 2026-09-04).
+ *
+ * THE CLASS IS THE TWO CHARACTERS CEF DEFINES, NOT ANY CHARACTER, and that is a
+ * measured VALUE fix, not a tidy-up. For one revision this was `/\\([\s\S])/g` -
+ * consume whatever follows a backslash - and every LONE backslash in a header
+ * value was silently deleted. A Windows path is the shape that shows it, and it
+ * shows it twice on one line, because the extension is not unescaped at all:
+ *
+ *   CEF:0|Acme|C:\Program Files\Acme|1.0|100|worm|5|path=C:\Program Files\Acme fname=a\b
+ *     wide class   DeviceProduct  "C:Program FilesAcme"    two characters GONE
+ *     this class   DeviceProduct  "C:\Program Files\Acme"
+ *     either       path           "C:\Program Files\Acme"  extension, verbatim
+ *     either       fname          "a\b"                    extension, verbatim
+ *
+ * The same bytes, in the same event, read two different ways with nothing said -
+ * and the half that lost them is the one an operator maps to a destination
+ * column. Measured on the DBT-98 corpus against the character scanner described
+ * below: the wide class disagreed on 140005 of 200000 lines, this one on 0.
+ *
+ * THE PATTERN'S WIDE CLASS IS A DIFFERENT ARGUMENT AND DOES NOT REACH HERE.
+ * {@link CEF_HEADER_PATTERN} consumes `\\[\s\S]` so that a backslash before a
+ * line terminator cannot make the whole header fail to match: that decides WHERE
+ * A FIELD ENDS. This constant decides WHAT THE FIELD SAYS, and the two questions
+ * have different right answers for the same byte - a lone backslash is not a
+ * separator, so the pattern must step over it, and it is not an escape either,
+ * so this must leave it alone. Widening one to match the other deletes vendor
+ * text; narrowing the other to match this one would drop records.
+ *
+ * ONE PASS IS STILL CORRECT FOR BOTH ESCAPES AT ONCE, because `replace` does not
+ * reconsider what it has already consumed: in `V\\\|W` the leading `\\` is taken
+ * first and yields a literal backslash, and the `\|` after it then yields a
+ * literal pipe - `V` `\` `|` `W`, which is what the spec says those bytes mean.
+ * The narrow class does not disturb that; both members are still consumed as a
+ * unit, so the second escape never re-uses the first one's backslash.
+ *
+ * A MODULE-LEVEL `/g` REGEX IS SAFE HERE and would not be with `exec`. The
+ * per-line rebuild inside parseCef exists because `exec` carries `lastIndex`
+ * between calls; `String.prototype.replace` sets `lastIndex` to 0 for a global
+ * pattern, so it holds no state between callers.
+ *
+ * Exported for the same reason {@link CEF_HEADER_PATTERN} is: the generated pack
+ * emits this exact source text, and two spellings of one escape rule drift. The
+ * narrowing therefore moved both halves at once by construction, and the pin for
+ * that is an equality against this `.source` in pipeline-conf.test.ts.
+ */
+export const CEF_HEADER_ESCAPE = /\\([\\|])/g;
+
+/** A CEF header field with its escapes resolved to the characters they stand for. */
+function unescapeCefHeaderField(field: string): string {
+  return field.replace(CEF_HEADER_ESCAPE, "$1");
+}
+
 /**
  * Parse CEF (CEF:0|vendor|product|...|extension).
  *
- * The header split is UNCHANGED and still naive, which is a real defect and is
- * left deliberately: `CEF:0|V\|W|P|...` escapes the pipe per spec, this splits on
- * it anyway, and every header field after it shifts by one (`DeviceVendor` reads
- * `V\`, `DeviceProduct` reads `W`). It is not fixed HERE because the pack this app
- * generates reaches the same bytes the same way - pipeline-conf.ts emits
- * `_raw.substring(indexOf('CEF:')).split('|')` and `__cefParts.slice(7).join('|')`
- * - so correcting one side alone would make the screen promise header fields the
- * installed pipeline cannot produce, which is a worse failure than the shift.
- * Measured: the shift damages header NAMES only; the extension pairs still parse,
- * because `slice(7).join("|")` puts the pipe back. Filed as its own card.
+ * THE HEADER SPLIT HONOURS CEF'S OWN PIPE ESCAPE (DBT-98), and until 2026-09-04
+ * it did not. `CEF:0|V\|W|P|1.0|100|worm|5|src=...` escapes the pipe exactly as
+ * the specification requires; the old `split("|")` split on it anyway and EVERY
+ * header field from DeviceVendor down shifted by one position. It was silent in
+ * the way this file exists to prevent: the seven field NAMES were all present and
+ * correct, so a field list read right while the VALUES were off by one - in the
+ * seven fields an operator is most likely to map to a destination column. The
+ * measured before/after is on {@link CEF_HEADER_PATTERN}.
  *
+ * THE PACK WAS FIXED IN THE SAME CHANGE, and that is not a nicety. pipeline-conf.ts
+ * emitted `_raw.substring(indexOf('CEF:')).split('|')` and
+ * `__cefParts.slice(7).join('|')`, so an operator who installed the pack got the
+ * same shifted header at runtime. Fixing this side alone would have made the
+ * screen promise header values the installed pipeline cannot produce - the split
+ * GEN-6 closed, re-opened. It now emits {@link CEF_HEADER_PATTERN}'s own source
+ * text and {@link CEF_HEADER_ESCAPE}'s, so the two cannot drift by construction.
+ *
+ * WHAT THE EXTENSION IS NOW, and it is not a re-join. Group 8 is the remainder
+ * after the seventh UNESCAPED pipe, taken VERBATIM - escapes intact, interior
+ * pipes intact. The old `slice(7).join("|")` reconstituted the same bytes only
+ * because the split had been naive; a correct split cannot be undone that way.
+ * The extension's own escape rules differ from the header's (`\=` inside a value
+ * survives unexpanded - see {@link CEF_EXT_PAIR}), so nothing is unescaped here.
+ *
+ * WHAT THE FIX COSTS, stated rather than discovered later, and it costs TWO
+ * different things on two different shapes. Neither is made loud, because this
+ * function has no error channel; writing them down is the whole mitigation.
+ *
+ * COST 1 - A DANGLING ESCAPE, AND IT HAS TWO SPELLINGS WITH DIFFERENT ANSWERS.
+ * A header whose last character is a backslash (`...|worm|5\`) is malformed CEF -
+ * an escape with nothing to escape - and the pattern cannot read it. What happens
+ * next depends entirely on whether a SYSLOG PREFIX sits in front of it, which is
+ * the standard transport shape and therefore the one that matters:
+ *
+ *   CEF:0|V|P|1.0|100|worm|5\               ->  []                 no record,
+ *                                               and NO raw event either
+ *   <134>host1 CEF:0|V|P|1.0|100|worm|5\    ->  [{_syslogHeader: "<134>host1"}]
+ *                                               a record, a raw event, and
+ *                                               NOT ONE HEADER FIELD
+ *
+ * The second is the worse half and it is not a special case: `_syslogHeader` is
+ * assigned below whenever `cefStart > 0`, OUTSIDE the `header !== null` branch,
+ * and the push is guarded on the record having ANY key - so a header that failed
+ * to match never reaches the emptiness guard. The line is kept, `sourceLines`
+ * keeps it too, and the event is a shell.
+ *
+ * THE SHELL IS NOT DBT-98'S DOING, WHICH IS WHY IT IS FILED SEPARATELY. HEAD
+ * dropped a SHORT header as well (`parts.length >= 7`), and measured against
+ * HEAD's own code `<134>host1 CEF:0|V|P|1.0|100|worm` already produced
+ * `[{_syslogHeader: "<134>host1"}]` and a raw event, while the bare form produced
+ * nothing. The stricter pattern only widened the set of lines that arrive here.
+ *
+ * IT IS MASKED END TO END, which is what makes it worse than the drop it looks
+ * like a milder version of. Through parseSampleContent on a 4-line sample whose
+ * third line is that shape: eventCount 4, rawEvents 4, errors [], and the seven
+ * missing names are supplied by the OTHER THREE RECORDS through the field union -
+ * so the field list reads complete while record 2's own keys are
+ * `["_syslogHeader"]`. The count looks right, which is why it is pinned by
+ * asserting that record's own keys and not the sample's field list.
+ *
+ * COST 2 - A NON-COMPLIANT PRODUCER'S UNESCAPED BACKSLASH BEFORE A PIPE SHIFTS
+ * EVERY FIELD AFTER IT. HEAD split on that pipe and, by accident, agreed with a
+ * reader who thinks the backslash is data; this pattern consumes `\|` as the
+ * escape the specification says it is, so the pipe stops separating:
+ *
+ *   CEF:0|V|P|1.0\|100|worm|5|src=1.1.1.1 dpt=80
+ *     HEAD  DeviceVersion `1.0\`  ClassID `100`  Name `worm`  Severity `5`
+ *           extension `src=1.1.1.1 dpt=80`
+ *     NOW   DeviceVersion `1.0|100`  ClassID `worm`  Name `5`
+ *           Severity `src=1.1.1.1 dpt=80`  -  NO EXTENSION AT ALL
+ *
+ * THE SPEC CHOICE IS STILL RIGHT - a producer that means a literal backslash must
+ * write `\\`, and guessing which one it meant is how the `\\`-before-pipe row
+ * above gets broken. It is recorded here as a DECISION rather than left to be
+ * discovered: 20000 lines each given one unescaped backslash before a separator
+ * in a random header position, and this parser differs from HEAD on all 20000,
+ * loses the extension entirely on all 20000, keeps all seven header NAMES on all
+ * 20000, and parseSampleContent reports 0 errors. Silent, by construction.
+ *
+ * A LONE BACKSLASH BEFORE AN ORDINARY CHARACTER USED TO BE A THIRD COST AND IS
+ * NOT ONE ANY MORE. `CEF:0|FireEye\NX|...` read `FireEyeNX` while the wide
+ * unescape stood; with the narrowed {@link CEF_HEADER_ESCAPE} it reads
+ * `FireEye\NX`, which is HEAD's answer - measured, 0 of 9942 such lines differ
+ * from HEAD.
+ *
+ * THE MEASUREMENT, with the calibration that makes it mean anything, because this
+ * directory has twice been cleared by a corpus blind to the defect it was clearing.
+ * 200000 generated lines over an alphabet whose header fragments include `\|`,
+ * `\\`, `\\\|`, a LONE backslash before a letter, a Windows path, an empty field,
+ * quotes, commas and a syslog prefix, and whose extensions include `msg=a|b`,
+ * `5|src=`, `\=` and a bare `(=`. Compared against a CHARACTER SCANNER written for
+ * the measurement - no regex, no split, spelling the spec rule directly - so
+ * "parser and pack agree" cannot mean "both carry the same bug":
+ *
+ *   HEAD's header logic vs the scanner       170234 / 200000 lines disagree  <- calibration
+ *   ...of which the extension differed too   139762
+ *   the WIDE unescape vs the scanner         140005 / 200000                 <- calibration
+ *   THIS parser vs the scanner                    0 / 200000                 <- the claim
+ *   the EMITTED PACK vs the scanner               0 / 200000 header,
+ *                                                 0 / 200000 extension
+ *   parser vs pack, field by field                0 / 200000
+ *   well-formed lines this parser drops           0 / 200000
+ *   lines carrying `\|` 169714   `\\` 139912   a lone backslash 148544
+ *
+ * The first two rows are what make the rest readable: a corpus on which HEAD
+ * scores 0 would be measuring nothing, and the second row is the calibration for
+ * the NARROWING specifically - the same corpus reproduces the deleted-backslash
+ * defect on 140005 lines before the class was narrowed and on 0 after. The
+ * earlier revision of this note carried numbers from a scanner that consumed ANY
+ * escaped character; that scanner disagrees with the spec on the lone-backslash
+ * shape, so its figures are superseded rather than merely restated.
+ *
+ * THE COST ROWS, separately generated. Of 20000 lines deliberately given a
+ * trailing backslash on the last header field, HEAD kept 20000 and this parser
+ * kept 10020; the 9980 it drops are the ones where that backslash was the last
+ * character of the LINE, and in the other 10020 the escape had the following `|`
+ * to consume, which is a legal header and the scanner agrees. THE SAME 20000
+ * LINES GIVEN A SYSLOG PREFIX: HEAD kept 20000 and this parser kept 20000 too -
+ * of which 9980 are the header-less `_syslogHeader` shells of COST 1, counted as
+ * events and written into the pack's sample file.
+ *
+
  * THE LINE SPLIT IS `\r?\n`, NOT `\n`, AND THAT WAS A SILENT FIELD LOSS (DBT-80).
  * A CRLF file left a carriage return welded to the end of every line but the
  * last. `.` does not match `\r` and `$` without the `m` flag does not match
@@ -811,18 +1069,24 @@ export function parseCef(
     {
       const cefStart = line.indexOf("CEF:");
       const cefPart = line.slice(cefStart);
-      const parts = cefPart.split("|");
+      // NOT `.split("|")` - see the DBT-98 note above and CEF_HEADER_PATTERN.
+      // The pattern is anchored and non-global, so `exec` carries no `lastIndex`
+      // between lines and needs no per-line rebuild (CEF_EXT_PAIR below does).
+      const header = CEF_HEADER_PATTERN.exec(cefPart);
       const record: Record<string, unknown> = {};
-      if (parts.length >= 7) {
-        record["CEFVersion"] = parts[0].replace("CEF:", "");
-        record["DeviceVendor"] = parts[1];
-        record["DeviceProduct"] = parts[2];
-        record["DeviceVersion"] = parts[3];
-        record["DeviceEventClassID"] = parts[4];
-        record["Name"] = parts[5];
-        record["Severity"] = parts[6];
-        if (parts.length > 7) {
-          const extension = parts.slice(7).join("|");
+      if (header !== null) {
+        record["CEFVersion"] = unescapeCefHeaderField(header[1]);
+        record["DeviceVendor"] = unescapeCefHeaderField(header[2]);
+        record["DeviceProduct"] = unescapeCefHeaderField(header[3]);
+        record["DeviceVersion"] = unescapeCefHeaderField(header[4]);
+        record["DeviceEventClassID"] = unescapeCefHeaderField(header[5]);
+        record["Name"] = unescapeCefHeaderField(header[6]);
+        record["Severity"] = unescapeCefHeaderField(header[7]);
+        // Group 8 is ABSENT for a header with no extension, which is a different
+        // statement from an EMPTY extension (`...|5|`, which HEAD also kept as a
+        // pair-less record). Both reach the same place; the guard is on the first.
+        const extension: string | undefined = header[8];
+        if (extension !== undefined) {
           // A FRESH matcher per line, for the reason spelled out in parseKv: a
           // module-level /g regex carries `lastIndex` between calls and would
           // start the next line wherever this one stopped. The literal moved to
@@ -881,6 +1145,14 @@ export function parseCef(
           }
         }
       }
+      // OUTSIDE the `header !== null` branch ON PURPOSE - the syslog prefix is
+      // the vendor's bytes whether or not the CEF part parsed - and that is also
+      // what makes an UNREADABLE header behave differently depending on the
+      // transport. A bare malformed line adds no key and the guard below drops
+      // it; a syslog-wrapped one gets this key, so the guard passes and the
+      // record survives WITH NO HEADER FIELDS IN IT. See COST 1 in the note
+      // above; both spellings are pinned in cef-header.test.ts, which asserts
+      // this record's OWN keys because the sample's unioned field list hides it.
       if (cefStart > 0) {
         record["_syslogHeader"] = line.slice(0, cefStart).trim();
       }

@@ -111,6 +111,16 @@ type DetailState =
   | { phase: "error"; message: string };
 
 /**
+ * A handoff that named a solution the index does not contain, and WHICH handoff
+ * it was. Both callers of resolveSelectedSolution below can miss; they leave
+ * the page in different states, so they cannot share one sentence.
+ */
+interface UnresolvedHandoff {
+  name: string;
+  source: "deep-link" | "restore";
+}
+
+/**
  * Translate the screen's fetch phase into the evidence the badge derivation
  * reasons over (DBT-15). Structural on purpose - every judgement about what the
  * evidence MEANS lives in deliveryFitBadge, where it is pinned without a DOM.
@@ -180,6 +190,21 @@ export function SolutionBrowser({
       ? parseSolutionDeepLink(window.location.hash)
       : null,
   );
+
+  // The name a handoff asked for that the index does NOT contain (DBT-28
+  // defect (1)). The deep link is consumed whether or not it resolves, so
+  // before this existed a miss was indistinguishable from no link at all: the
+  // operator pivoted from SIEM Migration and landed on a page that had quietly
+  // decided their solution was not real. Rendered above every view below.
+  //
+  // THE SOURCE IS CARRIED because the two handoffs fail DIFFERENTLY, and the
+  // first version of this state (a bare name) could only describe one of them.
+  // A deep link that misses leaves the page untouched. A restoreName that
+  // misses leaves the HOST fully scoped to the solution it restored while this
+  // section falls back to the browse list, so "nothing was changed" would be
+  // false in exactly the case the operator most needs the truth.
+  const [unresolvedHandoff, setUnresolvedHandoff] =
+    useState<UnresolvedHandoff | null>(null);
 
   // Load the solution index lazily: resolve the HEAD commit (the cache stamp),
   // then read the cached index for that commit or fetch it once and cache it.
@@ -327,6 +352,10 @@ export function SolutionBrowser({
   const select = useCallback(
     (solution: SolutionRef) => {
       setSelectedName(solution.name);
+      // A selection answers the failed handoff: the operator has now said which
+      // solution they meant, so the notice about the one that did not resolve
+      // has nothing left to warn about.
+      setUnresolvedHandoff(null);
       onSelect?.(solution);
       // Persist the selection in the URL hash so a full page refresh restores
       // it (the on-mount deep-link read re-selects it), keeping the solution in
@@ -362,6 +391,19 @@ export function SolutionBrowser({
   // true deprecation state rather than whatever stub the host restored. The
   // ref is consumed only when a restore is actually attempted, so an early
   // render (index still loading) does not burn it.
+  //
+  // A MISS IS AS LOUD AS THE DEEP LINK'S, and until 2026-09-04 it was silent -
+  // the class DBT-28 defect (1) names was only half closed, because
+  // resolveSelectedSolution has TWO callers here and only the deep-link one was
+  // made to say so. This is the WORSE of the two to lose: a deep-link miss
+  // leaves a page that selected nothing, while a restore miss leaves the host
+  // scoped to the solution it restored and this section showing the browse list,
+  // so the page reports two different things at once (measured 2026-09-04:
+  // restoreName "Cisco ASA Legacy" against an index of CiscoASA/Zscaler gave
+  // notice absent, logger.warn calls 0, no card).
+  // The host is NOT told. It restored the name from its own store and the
+  // samples in that store belong to it, so reporting a null back would delete
+  // the operator's work to resolve a disagreement about a name.
   const restoredRef = useRef(false);
   useEffect(() => {
     if (
@@ -375,11 +417,18 @@ export function SolutionBrowser({
       return;
     }
     restoredRef.current = true;
-    const match = resolveSelectedSolution(mergedSolutions ?? solutions, restoreName);
+    const index = mergedSolutions ?? solutions;
+    const match = resolveSelectedSolution(index, restoreName);
     if (match !== null) {
       setSelectedName(match.name);
+      return;
     }
-  }, [solutions, mergedSolutions, restoreName, selectedName]);
+    setUnresolvedHandoff({ name: restoreName, source: "restore" });
+    ports.logger?.warn("restored solution selection did not resolve", {
+      requested: restoreName,
+      indexSize: index.length,
+    });
+  }, [solutions, mergedSolutions, restoreName, selectedName, ports.logger]);
 
   // Once the index is present, honor a deep-linked solution ONCE (the preserved
   // `#/?solution=` contract). Sets the selection like a click; the effect above
@@ -395,8 +444,31 @@ export function SolutionBrowser({
     const match = resolveSelectedSolution(solutions, deepLinkName);
     if (match !== null) {
       select(match);
+      return;
     }
-  }, [solutions, deepLinkName, selectedName, select]);
+    // CONSUMED AND UNRESOLVED - the case that used to end here in silence
+    // (DBT-28 defect (1)). The name is kept so the notice below can print it:
+    // the operator is the only one who can tell whether it is a solution under
+    // another name or one Sentinel does not ship.
+    //
+    // A RECORDED RESTORE MISS WINS, and the update is functional so it cannot
+    // be clobbered by a stale read. Both handoffs can miss on one mount (a
+    // stored name the index no longer carries, plus a link that also misses),
+    // and the effects run in declaration order, so this one would otherwise
+    // overwrite the restore's sentence with "Nothing was changed" - on a page
+    // where the host IS scoped to the restored name. The restore sentence
+    // describes the page the operator is looking at, so it stays; this miss is
+    // still recorded in the log below.
+    setUnresolvedHandoff((prev) =>
+      prev !== null && prev.source === "restore"
+        ? prev
+        : { name: deepLinkName, source: "deep-link" },
+    );
+    ports.logger?.warn("solution deep link did not resolve", {
+      requested: deepLinkName,
+      indexSize: solutions.length,
+    });
+  }, [solutions, deepLinkName, selectedName, select, ports.logger]);
 
   const counts = useMemo(
     () => (mergedSolutions === null ? null : solutionCounts(mergedSolutions)),
@@ -429,6 +501,50 @@ export function SolutionBrowser({
 
   return (
     <div className="solution-browser">
+      {/* DBT-28 defect (1). OUTSIDE the branch below on purpose, so it is not
+          tied to whichever of that branch's views is up. Two of them matter
+          here: the browse list, where the operator is about to pick by hand,
+          and the selected-solution card - reachable with this notice showing
+          because the HOST can restore its own selection through restoreName
+          after the link missed, which puts the operator in front of a solution
+          that is NOT the one they asked for. It does not name the
+          reason: the resolver tried exact, case-insensitive and separator-
+          insensitive equality, so past that point "why" is a fact about the
+          Sentinel catalog and not about this app.
+          TWO SENTENCES, BECAUSE THE TWO MISSES LEAVE DIFFERENT PAGES, and one
+          of them makes the other's wording false. After a deep-link miss
+          nothing was selected and nothing was changed. After a RESTORE miss the
+          host is still scoped to the name it restored, so the page is split -
+          telling that operator "nothing was changed" would describe a page they
+          are not looking at. The restore sentence therefore names the split and
+          the cost of resolving it: picking here reports a CHANGE to the host,
+          and on the one host that passes restoreName (IntegrateScreen) a change
+          away from the restored name deletes its samples - the same deletion
+          Clear selection warns about (DBT-9), pinned on that side in
+          integrate-screen.dom.test.tsx rather than asserted from here.
+          `match-warning` carries the whole amber-box style (styles.css:2810);
+          `solution-browser-unresolved` is a naming hook for the pin and has no
+          rule of its own, deliberately - this file's stylesheet is not the one
+          being changed here. */}
+      {unresolvedHandoff !== null && (
+        <p className="match-warning solution-browser-unresolved" role="status">
+          Nothing in the Sentinel solution index is named{" "}
+          <strong>{unresolvedHandoff.name}</strong>,{" "}
+          {unresolvedHandoff.source === "deep-link" ? (
+            <>
+              so no solution was preselected from that link. Nothing was changed
+              - pick the solution you meant.
+            </>
+          ) : (
+            <>
+              so this section cannot show the solution the rest of the page
+              restored. Every other section is still scoped to it - picking a
+              solution here replaces that scope and deletes the samples acquired
+              for it, the same deletion the Clear selection button warns about.
+            </>
+          )}
+        </p>
+      )}
       {loadError !== "" ? (
         <div className="discovery-result">
           <p className="field-hint">
@@ -576,10 +692,20 @@ export function SolutionBrowser({
               for non-arrival, which an earlier draft here did: DBT-28
               investigated non-arrival as its candidate (1) and records that it
               "found BOTH recorded candidates wrong", attributing the unchanged
-              selection to a measured RESOLVER defect instead
-              (resolveSelectedSolution matches exact and case-insensitive-exact
-              only, so a punctuation variant resolves to nothing and is
-              consumed silently). Pointing the other way, the restoreName note
+              selection to a measured RESOLVER defect instead. THAT DEFECT IS
+              HISTORY, NOT A DESCRIPTION OF THE CODE BESIDE THIS NOTE, and it is
+              cited here only for what it displaced: AS OF 2026-08-28
+              resolveSelectedSolution matched exact and case-insensitive-exact
+              only, so a punctuation variant resolved to nothing and was consumed
+              in silence. Both halves are closed as of 2026-09-04 - the
+              separator-insensitive third pass is in browser-state.ts (with its
+              own note on why equality and not substring), and both callers here
+              now raise the unresolved-handoff notice above instead of
+              swallowing the miss. What that leaves standing is only the
+              displacement itself: an unchanged selection in 2026-08-28's live
+              attempt has a measured cause that is NOT non-arrival, so it is not
+              evidence that the fragment failed to reach this document.
+              Pointing the other way, the restoreName note
               at the top of this file records live review 2026-08-03 finding
               that "the Cribl app iframe does not preserve" the hash - which is
               why the HOST restores the selection from the content cache at
@@ -629,14 +755,22 @@ export function SolutionBrowser({
               1. THE DELETION HAPPENS ON *CLEAR*, not on picking the next
                  solution. handleSolutionChange guards on
                  `prevName === null || prevName === nextName`
-                 (integrate-screen.tsx:658), so Clear (X -> null) falls
-                 through and removes every tagged sample, while the following
-                 pick (null -> Y) returns early and removes nothing. The
-                 browse list is hidden while a solution is selected, so Clear
-                 is the ONLY route to another one - which means every deletion
-                 in the product happens at the button this sentence sits under.
+                 (integrate-screen.tsx, the guard in handleSolutionChange - the
+                 line moved on 2026-09-04 and is not cited here again, because
+                 the last citation went stale in one wave), so Clear (X -> null)
+                 falls through and removes every tagged sample, while the
+                 following pick (null -> Y) returns early and removes nothing.
                  Saying "changing the solution deletes" points the warning at
                  the one step that is harmless.
+                 THIS IS NO LONGER THE ONLY DELETING ROUTE, and the sentence
+                 that said so was true when written and is not now. It read
+                 "every deletion in the product happens at the button this
+                 sentence sits under", which rested on the browse list being
+                 hidden while a solution is selected. The SIEM-migration pivot
+                 is a second route: it hands off a different solution and
+                 reaches the same delete branch, which is DBT-102 - and the
+                 pivot now carries its own warning. Keep this one pointed at
+                 Clear; it is still the route an operator takes deliberately.
               2. DO NOT PROMISE THE MAPPINGS COME BACK. Approving the
                  auto-generated mapping unchanged persists nothing, so a
                  reassurance here would be false on the default path - and the

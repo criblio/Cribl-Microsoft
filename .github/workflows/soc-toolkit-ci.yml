@@ -54,6 +54,24 @@ jobs:
       - name: Check schema asset
         run: npm run check-schema-asset --workspace apps/cribl-app
 
+      # DBT-100. An element whose every class name resolves to no rule renders
+      # unstyled in SILENCE - nothing throws, no test fails, the screen just
+      # looks plain. It happened twice and both were found by hand months later.
+      # Narrowed to that case on purpose: asking the same question one class
+      # name at a time reported 36 findings of which 21 named elements a sibling
+      # class already styled, and this gate would have failed on its first run.
+      #
+      # FOURTEEN elements survive that narrowing, recorded in UNDECIDED_BARE as
+      # THIRTEEN path-plus-name entries - `gap-overflow-triage` is bare at two
+      # lines of one file. Both numbers, because they are not the same number:
+      # an earlier draft of this comment said only "13" and claimed the gate
+      # fails on the fourteenth, and the fourteenth already existed and passed.
+      # Entries carry no line - a line moves on any edit above it - so each one
+      # carries an EXACT COUNT instead, and a further bare element under a
+      # recorded name fails the step rather than joining the record.
+      - name: Check class names
+        run: npm run check-classnames --workspace apps/cribl-app
+
       - name: Test
         run: npm test
 

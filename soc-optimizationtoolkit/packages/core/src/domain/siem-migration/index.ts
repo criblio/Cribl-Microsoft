@@ -25,11 +25,13 @@ export {
 export type { SolutionTableTarget } from "./knowledge-bases";
 export {
   QRADAR_EXTENSION_MAP,
+  SOLUTIONS_WITHOUT_SENTINEL_FOLDER,
   SPLUNK_DATAMODEL_MAP,
   SPLUNK_INTERNAL_MACROS,
   SPLUNK_MACRO_MAP,
   SPLUNK_PREFIX_MAP,
   SPLUNK_SKIP_MACROS,
+  hasSentinelSolutionFolder,
   isSplunkFilterMacro,
   resolveSplunkMacro,
 } from "./knowledge-bases";

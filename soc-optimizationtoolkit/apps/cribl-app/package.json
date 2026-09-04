@@ -19,6 +19,7 @@
     "board:serve": "node scripts/board-serve.mjs",
     "check-board": "node scripts/board.mjs --check",
     "check-listings": "node scripts/check-listings.mjs",
+    "check-classnames": "node scripts/check-classnames.mjs",
     "check-schema-asset": "node scripts/check-schema-asset.mjs",
     "check-board-freshness": "node scripts/board-freshness.mjs"
   },

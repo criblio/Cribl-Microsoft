@@ -198,12 +198,19 @@ describe("parseCef extension keys (DBT-80)", () => {
     expect(thenHyphen["a-b"]).toBe("2");
   });
 
-  it("does not read header wreckage as part of a key", () => {
-    // A `|` inside the extension text is always the residue of the naive header
-    // split (parseCef splits on `|` and re-joins slice(7), and the pack this app
-    // generates builds `__cefExtension` with the same two expressions). So a key
-    // must never absorb one - and the widened class would have, which is the CEF
-    // form of DBT-79's "widened class ate the syslog PRI".
+  it("does not read an interior pipe as part of a key", () => {
+    // A `|` inside the extension text is never part of a key NAME - it belongs to
+    // a value the vendor wrote, or it is stray text. So a key must never absorb
+    // one, and the widened class would have, which is the CEF form of DBT-79's
+    // "widened class ate the syslog PRI".
+    //
+    // THIS COMMENT USED TO ARGUE FROM THE HEADER SPLIT - "always the residue of
+    // the naive header split (parseCef splits on `|` and re-joins slice(7), and
+    // the pack builds `__cefExtension` with the same two expressions)". DBT-98
+    // made that premise false on both sides: the split is escape-aware now and
+    // the extension is the verbatim remainder after the seventh unescaped pipe,
+    // so an escaped `\|` in the header no longer leaks a `5|` into the extension.
+    // The pins are unchanged - they feed these strings to the extension directly.
     //
     // Measured: with `|` in the key class these two name fields `a|b` and
     // `5|src`; HEAD names them `b` and `src`, and so does this parser. The whole
@@ -224,7 +231,7 @@ describe("parseCef extension keys (DBT-80)", () => {
   it("starts a key after a non-space, not only after whitespace", () => {
     // THE ANCHOR'S OWN FAILURE MODE, which in DBT-79 shipped as a silent field
     // loss and was caught only by measurement. A whitespace-only anchor cannot
-    // begin a key that is reached through header wreckage, because there is no
+    // begin a key that is reached through an interior `|`, because there is no
     // space in front of it. Measured over the same 200000 lines, with everything
     // else identical to what ships: `(?:^|\s)` returns FEWER keys than HEAD on
     // 18828 of them; this anchor, on 0.

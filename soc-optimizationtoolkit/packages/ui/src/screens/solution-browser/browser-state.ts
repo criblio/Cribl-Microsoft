@@ -157,8 +157,48 @@ export function parseSolutionDeepLink(hash: string): string | null {
 
 /**
  * Resolve a deep-linked / selected solution NAME to the index entry: an exact
- * match first, then a case-insensitive fallback (the deep link may not preserve
- * the exact casing). Returns null when nothing matches.
+ * match, then case-insensitive, then SEPARATOR-INSENSITIVE equality. Returns
+ * null when nothing matches.
+ *
+ * WHY THE THIRD PASS EXISTS (DBT-28 defect (1)). Until 2026-09-04 this stopped
+ * at case-insensitive-exact, while the search box beside it already collapsed
+ * separators (solutionMatchesQuery above) - so a name that differs from the
+ * folder only in punctuation resolved to NOTHING, and the caller consumed the
+ * handoff in silence.
+ *
+ * That is not hypothetical. Measured 2026-09-04 against the live Solutions
+ * listing, of the 26 distinct solution names the SIEM-migration knowledge
+ * bases carried at that moment, 17 matched a folder exactly, 1
+ * case-insensitively, 1 ONLY under this new pass, and 7 matched nothing at all
+ * under any rule - which is why the caller must also SAY SO when this returns
+ * null. Those counts are a SNAPSHOT of a table being edited the same day
+ * (DBT-103): an earlier read hours before gave 24 / 12 / 1 / 1 / 10. What did
+ * not move across either read is the collapse-only entry, and it is the only
+ * part of the count this function depends on.
+ * That entry is "Cisco ASA" - the SPLUNK_PREFIX_MAP target for a
+ * `cisco_` macro with no direct SPLUNK_MACRO_MAP entry of its own, since
+ * resolveSplunkMacro tries the exact table first - against the folder
+ * "CiscoASA". Nothing downstream rescued it: the fuzzy tier returns early
+ * unless confidence === "none", so a knowledge-base hit reaches the pivot
+ * verbatim.
+ *
+ * TREAT THAT ROW AS EVIDENCE, NOT AS THE REASON. The knowledge bases are hand-
+ * maintained and under active correction (DBT-103 is in flight against a
+ * neighbouring row in the same table), so a later reader may well find
+ * "Cisco ASA" gone - that would fix ONE instance and not the class. The class
+ * survives every such correction: a hand-written name still has to hit a
+ * 574-folder catalog of which 332 names carry a separator, and the deep link is
+ * not only the pivot's - it is also what select() writes and what a refresh
+ * reads back, so any producer of a name reaches this function.
+ *
+ * EQUALITY, NEVER SUBSTRING. The collapsed form is used as an identity here,
+ * not as a search: substring would let "Cisco" claim "CiscoASA". The identity
+ * is safe because it does not collide - measured 2026-09-04 by listing
+ * github.com/Azure/Azure-Sentinel/contents/Solutions: 574 folders, 332 of them
+ * carrying a separator, and 0 groups of two or more names sharing a collapsed
+ * form (0 sharing a lower-cased form either). An earlier version of this claim
+ * covered only the 436 names in the shipped classification asset; this one is
+ * the full index.
  */
 export function resolveSelectedSolution(
   solutions: readonly SolutionRef[],
@@ -172,5 +212,18 @@ export function resolveSelectedSolution(
     return exact;
   }
   const lower = name.toLowerCase();
-  return solutions.find((s) => s.name.toLowerCase() === lower) ?? null;
+  const insensitive = solutions.find((s) => s.name.toLowerCase() === lower);
+  if (insensitive !== undefined) {
+    return insensitive;
+  }
+  const collapsed = collapseForSearch(name);
+  // An all-punctuation name collapses to "", and so would a hypothetical
+  // all-punctuation solution name - matching them to each other would be an
+  // accident, not a resolution. Same guard solutionMatchesQuery uses.
+  if (collapsed === "") {
+    return null;
+  }
+  return (
+    solutions.find((s) => collapseForSearch(s.name) === collapsed) ?? null
+  );
 }

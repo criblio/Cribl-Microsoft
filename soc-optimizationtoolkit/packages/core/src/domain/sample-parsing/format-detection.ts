@@ -220,13 +220,15 @@ function detectStrict(content: string): SampleFormat {
  * from the (JSON) wrapper (user memory: "format is ALWAYS detected from
  * rawEvents content, never the declared format").
  *
- * Ported verbatim from legacy detectInnerRawFormat. The edge cases pinned by
- * capture.test.ts:
+ * Ported verbatim from legacy detectInnerRawFormat, THEN taught positional
+ * (DBT-108) - the one member the port could not have known about, because
+ * `SampleFormat` gained it afterwards. The edge cases pinned by capture.test.ts:
  * - CEF/LEEF are matched with `includes` across the first few samples (a
  *   syslog header before "CEF:" does not hide it).
  * - CSV is claimed at the >= 5-comma threshold, AFTER stripping any syslog
  *   prefix (so a syslog-wrapped PAN-OS CSV line is counted correctly).
  * - kv needs >= 3 space-separated pairs; syslog needs a priority/date prefix.
+ * - positional is the LAST branch before `unknown` - see the note on it.
  */
 export function detectCaptureInnerFormat(rawValues: string[]): SampleFormat {
   const samples = rawValues.slice(0, 5);
@@ -265,6 +267,49 @@ export function detectCaptureInnerFormat(rawValues: string[]): SampleFormat {
 
   if (/^<\d+>/.test(first) || /^\w{3}\s+\d+\s+\d+:\d+:\d+/.test(first)) {
     return "syslog";
+  }
+
+  // POSITIONAL, AND IT MUST STAY LAST (DBT-108) - the same rule and the same
+  // reason as detectLenient's positional branch above, which positional.ts's own
+  // header states: this probe has NO fingerprint, only a consistent column
+  // count, while syslog, CEF, LEEF and key=value lines are all
+  // whitespace-separated too and each has a real one. Anything reaching here has
+  // already failed every more specific test. Moved earlier it does not fail
+  // loudly - it silently renames somebody else's columns, which is the exact
+  // harm isVpcFlowV2 was written strict to avoid. The characterization suite in
+  // capture.test.ts pins each of cef, leef, ndjson, csv, kv and syslog against
+  // an inner line that IS consistently whitespace-columned, so moving this up
+  // breaks those pins rather than passing quietly.
+  //
+  // THE DEFECT IT CLOSES. A Cribl capture of an S3 AWS VPC Flow Logs feed - 100
+  // events, every `_raw` a canonical v2 line - matched none of the branches
+  // above and returned "unknown", so unwrapCapture (parse-sample.ts) declined to
+  // unwrap and the operator was shown the CRIBL ENVELOPE: 13 fields named
+  // `__criblEventType`, `__ctrlFields`, `_raw`, `__inputId` and so on, with an
+  // EMPTY errors array saying nothing was wrong. They wanted srcaddr and
+  // dstaddr. Nothing needed inventing: `parseByFormat` already handles
+  // "positional" and `parsePositional` already named all 14 columns of that very
+  // file. Only this detector had never been taught the member.
+  //
+  // THIS IS THE THIRD SWEEP OF ONE ROOT CAUSE. DBT-77 added "positional" to
+  // `SampleFormat`, GEN-6 found pipeline-conf.ts had never been told, and this
+  // is the capture detector: a union gained a member and its enumerating
+  // consumers were not swept.
+  //
+  // {@link looksPositional} IS THE ONE DEFINITION and is imported rather than
+  // re-expressed here, so "is this positional" cannot drift between the
+  // whole-file detector and this one. Its >= 2-row floor and >= 4-column floor
+  // are deliberate (see positional.ts) and are what keep `["just words","more
+  // words"]` and a lone opaque line at "unknown".
+  //
+  // It reads `samples` - the same first-five budget every probe above uses - not
+  // all of `rawValues`. Safe because naming is decided elsewhere and
+  // all-or-nothing: `parsePositional` runs `isVpcFlowV2` over the WHOLE content,
+  // so a sixth row that disagrees can only downgrade the columns to
+  // field1..fieldN, never mis-name them. Measured on the reported capture,
+  // `looksPositional` is true over the first 5 rows and over all 100.
+  if (looksPositional(samples)) {
+    return "positional";
   }
 
   return "unknown";
