@@ -1274,7 +1274,7 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.5 IS CURRENT (2026-09-04).**
+**1.12.6 IS CURRENT (2026-09-04).**
 `release/soc-optimizationtoolkit-1.12.3.tgz` - a pack rebuild now REPLACES
 rather than merges, so it no longer inherits the previous build's orphaned
 pipelines, on top of 1.12.2's working Cribl Lake sample source, 1.12.1's
