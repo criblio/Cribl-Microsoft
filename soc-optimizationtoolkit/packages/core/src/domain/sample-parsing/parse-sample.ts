@@ -414,16 +414,38 @@ export function parseSampleContent(
   // because a positional format keeps its schema outside the file. It is
   // omitted entirely when the shape was recognised and the columns carry real
   // names, since a note on a working parse is noise.
-  if (format === "positional") {
-    const note = positionalNote(content);
-    if (note !== null) errors.push(note);
-  }
-
   const unwrapped = unwrapCapture(records, format);
   records = unwrapped.records;
   format = unwrapped.format;
   if (unwrapped.sourceLines !== undefined) {
     sourceLines = unwrapped.sourceLines;
+  }
+
+  // AFTER THE UNWRAP, AND SOURCED FROM THE UNWRAPPED LINES. Both halves are
+  // load-bearing and DBT-108 got both wrong, in a way that was unreachable
+  // until DBT-108 itself made it reachable.
+  //
+  // The block used to sit ABOVE unwrapCapture and read `content`. A Cribl
+  // capture's OUTER format is "ndjson" - the file starts with `{` - so the
+  // guard was false, and by the time `format` became "positional" the block had
+  // already run. Before DBT-108 no capture could ever be positional, so the
+  // case could not arise; teaching the detector about positional opened it.
+  // Measured, the same two lines both ways: as a plain upload, field1..field10
+  // WITH the note; inside a capture, field1..field10 and errors [].
+  //
+  // Reading `content` is the other half, and moving the block alone does not
+  // fix it: on the capture path `content` is the WRAPPER JSON, whose own
+  // whitespace (a value like "AWS Ruleset:AWS VPC Flow" carries spaces) makes
+  // positionalNote describe the envelope rather than the events. `sourceLines`
+  // is what parsePositional filled with the vendor's own lines.
+  //
+  // Note DBT-78's unaddressableFieldNote was already correctly on this side;
+  // positionalNote was the only one stranded above.
+  if (format === "positional") {
+    const note = positionalNote(
+      sourceLines.length > 0 ? sourceLines.join("\n") : content,
+    );
+    if (note !== null) errors.push(note);
   }
 
   const fields = collectFields(records);

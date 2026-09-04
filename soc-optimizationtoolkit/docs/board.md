@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**74 in the backlog, 2 in progress, 108 done.**
+**76 in the backlog, 1 in progress, 109 done.**
 
 ## By menu item
 
@@ -23,7 +23,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 32 | 69 | 6 |
+| Sentinel Integration | 33 | 70 | 6 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
@@ -31,7 +31,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 24 | 0 |
 
-Open work totals 76.
+Open work totals 77.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 66% (73/111)
+### `DBT` Quality and technical debt _(enabler)_ - 65% (74/113)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 39/62 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107, DBT-108, DBT-109, DBT-110, DBT-114, DBT-115 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 40/64 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107, DBT-108, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 11/17 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
@@ -142,7 +142,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -263,43 +263,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   and could be fixed first. Defect (3) was closed by [[DBT-75]]. Both attempts
   are recoverable only from this session's transcript; neither was committed.
 
-- **DBT-108** A Cribl capture of a positional log unwraps to the envelope, not the events
-  `DBT-F1` `bug` `settled`
-  REPORTED BY THE USER 2026-09-04 with a live capture from Cribl (99 lines,
-  AWS VPC Flow Logs via an S3 source), and REPRODUCED against HEAD before
-  anything was changed. Uploading it to Sentinel Integration extracts no VPC
-  fields. MEASURED, HEAD: format ndjson, 100 events, 13 fields - and the 13
-  are the CRIBL ENVELOPE: __criblEventType, __ctrlFields, __final,
-  __cloneCount, _raw, __channel, source, __source, __isBroken, __raw, _time,
-  cribl_breaker, __inputId. errors is EMPTY. So the operator is shown a clean
-  parse of Cribl internals where they expected srcaddr and dstaddr, with
-  nothing saying otherwise - the confident wrong answer, again. ROOT CAUSE,
-  read line by line rather than inferred. The capture unwrap EXISTS and is
-  first-class (format-detection.ts:213, ENG-15). parse-sample.ts:532-535 asks
-  detectCaptureInnerFormat what is inside _raw and, at :533, DECLINES TO
-  UNWRAP when the answer is unknown. detectCaptureInnerFormat
-  (format-detection.ts:231) tests for CEF, LEEF, JSON, CSV at five commas, kv
-  at three pairs, and syslog by prefix - AND HAS NO POSITIONAL BRANCH. Its own
-  header says it was ported verbatim from the legacy detectInnerRawFormat. So
-  a VPC Flow v2 line matches nothing, returns unknown, and the unwrap silently
-  gives up. THE PARSER IS ALREADY CORRECT, which is what makes this cheap.
-  Measured on the reported file: looksPositional true, isVpcFlowV2 TRUE across
-  all 100 inner lines, parsePositional returns 100 records with all 14 v2
-  names, one distinct column width. Nothing needs inventing - one detector
-  needs teaching. THIS IS THE THIRD INSTANCE OF ONE ROOT CAUSE. [[DBT-77]]
-  added positional to SampleFormat. [[GEN-6]] then found pipeline-conf.ts had
-  never been taught about it and emitted a JSON extract for a whitespace line.
-  This is the same gap in the capture detector. A member was added to a union
-  and the consumers that ENUMERATE its members were not swept - so the sweep
-  is part of this card, not a follow-up. BLAST RADIUS IS WIDER THAN THE
-  REPORT. capture-samples.ts:304 calls the same function, so samples acquired
-  through the app OWN Cribl capture path have the same defect - the user hit
-  it by manual upload, but the in-app path is the one the product steers
-  people to.
-
 ---
 
-## Backlog - now (4)
+## Backlog - now (5)
 
 Next to pick up. Nothing blocks these.
 
@@ -374,9 +340,35 @@ Next to pick up. Nothing blocks these.
   line that carries a lone backslash, then confirm the loop FAILS before the
   oracle is corrected.
 
+- **DBT-116** Nine more consumers enumerate SampleFormat and silently mishandle a missing member
+  `DBT-F1` `bug` `settled`
+  FOUND BY THE SWEEP [[DBT-108]] demanded, which is the point: three
+  user-visible defects had already come from one root cause ([[DBT-77]] added
+  positional to SampleFormat, [[GEN-6]] found pipeline-conf.ts untaught,
+  DBT-108 found the capture detector untaught) and nobody had asked how many
+  more there were. TWELVE sites enumerate the union; NINE fail SILENTLY on a
+  member they do not handle - a confident wrong answer rather than an error.
+  Measured, not read, wherever the reviewer could reach the code:
+  pipeline-conf.ts generatePipelineConf is missing syslog in its extract-group
+  ladder, and generateFallbackReductionConf maps cef and leef to kvp but has
+  nothing for syslog. route-discriminator.ts is missing ndjson.
+  pipeline-preview-section.tsx is missing positional AND syslog in two places
+  - only csv is named. splitting.ts hasNamedFields returns false for a VPC v2
+  capture whose columns ARE named, measured on the reported file own lines.
+  models.ts carries a comment listing the members that omits positional and
+  unknown. detectStrict can never return ndjson, csv or positional at all. THE
+  STRUCTURAL ANSWER IS WORTH MORE THAN THE LIST, and the sweep was asked to
+  cost it: TypeScript can make this class impossible rather than findable,
+  with a never-typed default on a switch over the union. Read the sweep report
+  before choosing - some sites are ladders rather than switches and would have
+  to be restructured first, and a site that DEFAULTS correctly does not need
+  it. Do the exhaustiveness work first where it is cheap; the individual fixes
+  are worth less than the guarantee that the next member added is caught at
+  compile time.
+
 ---
 
-## Backlog - next (30)
+## Backlog - next (31)
 
 Settled and unblocked, sequenced behind now.
 
@@ -923,6 +915,21 @@ Settled and unblocked, sequenced behind now.
   recorded file is NOT gated. Tightening that to a count or a line is part of
   this card, or the baseline quietly absorbs new instances.
 
+- **DBT-117** hasNamedFields says a recognised VPC Flow capture has no named fields
+  `DBT-F1` `bug` `settled`
+  Not now because: hasNamedFields has NO production caller today - only its
+  own test and the barrel export - so nothing is currently wrong for an
+  operator. It is ranked here rather than later because the moment something
+  does call it, it answers false for a recognised VPC v2 capture, which is the
+  kind of wrong answer that gets built on before it is noticed.
+  MEASURED during the [[DBT-108]] sweep on the reported file own 100 VPC Flow
+  v2 lines: hasNamedFields(lines, positional) returns FALSE, although
+  isVpcFlowV2 recognises the shape and the columns carry real names (srcaddr,
+  dstaddr, account_id). splitting.ts has no positional branch so it falls off
+  the end to return false. Same root cause as DBT-108 and part of [[DBT-116]]
+  class, filed separately because it is the one site with no caller - which is
+  also why it survived three waves unnoticed.
+
 ---
 
 ## Backlog - later (40)
@@ -1457,7 +1464,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (108)
+## Done (109)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5094,3 +5101,73 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   measured count that was wrong (_syslogHeader is 13 characters, not 14) in
   the file whose own design argument is that a rule with two copies is free to
   drift - two of the three copies had been corrected and the third had not.
+
+- **DBT-108** A Cribl capture of a positional log unwraps to the envelope, not the events
+  `DBT-F1` `bug` `settled` `verified: pins`
+  REPORTED BY THE USER 2026-09-04 with a live capture from Cribl (99 lines,
+  AWS VPC Flow Logs via an S3 source), and REPRODUCED against HEAD before
+  anything was changed. Uploading it to Sentinel Integration extracts no VPC
+  fields. MEASURED, HEAD: format ndjson, 100 events, 13 fields - and the 13
+  are the CRIBL ENVELOPE: __criblEventType, __ctrlFields, __final,
+  __cloneCount, _raw, __channel, source, __source, __isBroken, __raw, _time,
+  cribl_breaker, __inputId. errors is EMPTY. So the operator is shown a clean
+  parse of Cribl internals where they expected srcaddr and dstaddr, with
+  nothing saying otherwise - the confident wrong answer, again. ROOT CAUSE,
+  read line by line rather than inferred. The capture unwrap EXISTS and is
+  first-class (format-detection.ts:213, ENG-15). parse-sample.ts:532-535 asks
+  detectCaptureInnerFormat what is inside _raw and, at :533, DECLINES TO
+  UNWRAP when the answer is unknown. detectCaptureInnerFormat
+  (format-detection.ts:231) tests for CEF, LEEF, JSON, CSV at five commas, kv
+  at three pairs, and syslog by prefix - AND HAS NO POSITIONAL BRANCH. Its own
+  header says it was ported verbatim from the legacy detectInnerRawFormat. So
+  a VPC Flow v2 line matches nothing, returns unknown, and the unwrap silently
+  gives up. THE PARSER IS ALREADY CORRECT, which is what makes this cheap.
+  Measured on the reported file: looksPositional true, isVpcFlowV2 TRUE across
+  all 100 inner lines, parsePositional returns 100 records with all 14 v2
+  names, one distinct column width. Nothing needs inventing - one detector
+  needs teaching. THIS IS THE THIRD INSTANCE OF ONE ROOT CAUSE. [[DBT-77]]
+  added positional to SampleFormat. [[GEN-6]] then found pipeline-conf.ts had
+  never been taught about it and emitted a JSON extract for a whitespace line.
+  This is the same gap in the capture detector. A member was added to a union
+  and the consumers that ENUMERATE its members were not swept - so the sweep
+  is part of this card, not a follow-up. BLAST RADIUS IS WIDER THAN THE
+  REPORT. capture-samples.ts:304 calls the same function, so samples acquired
+  through the app OWN Cribl capture path have the same defect - the user hit
+  it by manual upload, but the in-app path is the one the product steers
+  people to. DONE 2026-09-04. detectCaptureInnerFormat now has a positional
+  branch, placed LAST before the unknown return and using the existing
+  looksPositional rather than a second spelling of the rule. THE REPORTED
+  FILE, before and after: ndjson / 13 envelope fields -> positional / 14 VPC
+  fields (version, account_id, interface_id, srcaddr, dstaddr, srcport,
+  dstport, protocol, packets, bytes, start, end, action, log_status), and
+  rawEvents[0] is now the vendor line rather than the re-serialized envelope.
+  The event count is 100 BOTH ways and 13 vs 14 fields does not look wrong at
+  a glance, which is why the pin asserts the full ordered name list AND the
+  absence of all 13 envelope names rather than a count. THE ORDERING IS THE
+  WHOLE RISK and a mutation proves it: moving the branch to the TOP of the
+  ladder fails five pins at once - kv, syslog with and without priority,
+  JSON-with-spaces and a syslog-wrapped PAN-OS CSV are all whitespace-columned
+  and would be stolen. Each ladder pin asserts looksPositional is true BEFORE
+  asserting the format, so the guard cannot go vacuous if a fixture is later
+  shortened. THE FIX OPENED A DOOR ONE STEP OVER, found by both reviewers
+  independently and fixed here: positionalNote was computed BEFORE
+  unwrapCapture and read the wrapper. A captures outer format is ndjson, so
+  the guard never fired - and before this card no capture could BE positional,
+  so the case was unreachable until this card made it reachable. Measured on
+  the same two lines: plain upload gave field1..field10 WITH the note,
+  capture-wrapped gave field1..field10 and errors []. Moving the block alone
+  was not enough either - on the capture path content is the wrapper JSON,
+  whose own values carry spaces, so the note described the envelope. It now
+  reads sourceLines. DBT-78 unaddressableFieldNote was already on the correct
+  side. THE APP OWN CAPTURE PATH IS FIXED TOO, measured rather than assumed:
+  capture-samples.ts feeds the already-extracted _raw values to the same
+  detector, and the format carried onto the SplitSample goes unknown ->
+  positional. That path is the one the product steers people to, so its blast
+  radius was larger than the manual upload reported. CUSTOMER DATA WAS CAUGHT
+  BEFORE IT REACHED A PUBLIC REPO. The reported file carries a customer S3
+  bucket (200 occurrences), the customer name in __inputId (100) and a real
+  AWS account id (600). The vendored fixture replaces exactly those three and
+  nothing else, and the redaction was verified MEASUREMENT-NEUTRAL - format,
+  event count, field list, errors, rawEvents count, inner format, isVpcFlowV2
+  and column widths all deep-equal between original and fixture. THE SWEEP
+  THIS CARD DEMANDED FOUND NINE MORE SILENT SITES: see [[DBT-116]].
