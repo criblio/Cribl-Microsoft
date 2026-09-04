@@ -134,54 +134,77 @@ export function AzureResourcesSection({
         setDependentStatus("");
         return;
       }
-      if (path === "lab-new-rg") {
-        setDependentStatus(
-          "This setup path creates its own resource group in the lab, so no resource selection is needed here.",
-        );
-        return;
-      }
-      if (path === "existing") {
-        setDependentStatus("Listing Log Analytics workspaces...");
-        try {
-          const res = await ports.azure.request({
-            method: "GET",
-            path: `/subscriptions/${encodeURIComponent(sub)}/providers/Microsoft.OperationalInsights/workspaces`,
-            apiVersion: WORKSPACES_API_VERSION,
-          });
-          if (!is2xx(res.status)) {
-            setDependentStatus(armFailureMessage("Workspaces", res.status, res.body));
-            return;
-          }
-          const list = parseWorkspaceOptions(res.body);
-          setWorkspaces(list);
-          // HON-2: the wording is a pure decision and lives in
-          // azure-setup-state, where it is pinned. It used to be inline here
-          // and said "No workspaces found... Create one", which is the exact
-          // confident wrong answer docs/inventory-standard.md forbids.
-          setDependentStatus(dependentListingStatus("workspaces", list.length));
-        } catch (err) {
-          setDependentStatus(`Workspace discovery error: ${String(err)}`);
-        }
-        return;
-      }
-      // lab-byo-rg: list the resource groups so the user can pick the pre-created one.
-      setDependentStatus("Listing resource groups...");
-      try {
-        const res = await ports.azure.request({
+      // BOTH LISTS, ALWAYS, WHATEVER THE PATH. This used to branch: lab-new-rg
+      // returned without listing anything, `existing` listed only workspaces,
+      // lab-byo-rg only resource groups. That made the DEPLOYMENT TARGET a
+      // property of the setup path, so an operator could only repoint a
+      // workspace from `existing` and only a resource group from lab-byo-rg,
+      // and from lab-new-rg neither - reported live 2026-09-04 as "there are 4
+      // options in the drop down and none of them allow you to select a
+      // specific Log Analytics workspace or resource group".
+      //
+      // The target is not a setup-path question. First-run setup CHOOSES a
+      // shape; repointing an install that already works is a different act and
+      // has to stay available. So the lists load together and the path now only
+      // decides what the CREATE fields below offer.
+      //
+      // EACH LIST DEGRADES INDEPENDENTLY, and that is AZR-14's lesson applied
+      // rather than restated: on the targeting screen these two calls shared one
+      // try, so a denied workspace list took the resource-group call down with
+      // it and the operator could not tell a denied list from one never
+      // attempted. Promise.allSettled here means a permission that covers one
+      // and not the other still fills the picker it covers.
+      setDependentStatus("Listing workspaces and resource groups...");
+      const [wsOutcome, rgOutcome] = await Promise.allSettled([
+        ports.azure.request({
+          method: "GET",
+          path: `/subscriptions/${encodeURIComponent(sub)}/providers/Microsoft.OperationalInsights/workspaces`,
+          apiVersion: WORKSPACES_API_VERSION,
+        }),
+        ports.azure.request({
           method: "GET",
           path: `/subscriptions/${encodeURIComponent(sub)}/resourcegroups`,
           apiVersion: RESOURCE_GROUPS_API_VERSION,
-        });
-        if (!is2xx(res.status)) {
-          setDependentStatus(armFailureMessage("Resource groups", res.status, res.body));
-          return;
-        }
-        const list = parseResourceGroupOptions(res.body);
-        setResourceGroups(list);
-        setDependentStatus(dependentListingStatus("resource-groups", list.length));
-      } catch (err) {
-        setDependentStatus(`Resource group discovery error: ${String(err)}`);
+        }),
+      ]);
+
+      const notes: string[] = [];
+
+      if (wsOutcome.status === "rejected") {
+        notes.push(`Workspace discovery error: ${String(wsOutcome.reason)}`);
+      } else if (!is2xx(wsOutcome.value.status)) {
+        notes.push(
+          armFailureMessage("Workspaces", wsOutcome.value.status, wsOutcome.value.body),
+        );
+      } else {
+        const list = parseWorkspaceOptions(wsOutcome.value.body);
+        setWorkspaces(list);
+        // HON-2: the wording is a pure decision and lives in
+        // azure-setup-state, where it is pinned. It used to be inline here
+        // and said "No workspaces found... Create one", which is the exact
+        // confident wrong answer docs/inventory-standard.md forbids.
+        notes.push(dependentListingStatus("workspaces", list.length));
       }
+
+      if (rgOutcome.status === "rejected") {
+        notes.push(`Resource group discovery error: ${String(rgOutcome.reason)}`);
+      } else if (!is2xx(rgOutcome.value.status)) {
+        notes.push(
+          armFailureMessage("Resource groups", rgOutcome.value.status, rgOutcome.value.body),
+        );
+      } else {
+        const list = parseResourceGroupOptions(rgOutcome.value.body);
+        setResourceGroups(list);
+        notes.push(dependentListingStatus("resource-groups", list.length));
+      }
+
+      if (path === "lab-new-rg") {
+        notes.push(
+          "This setup path CREATES a resource group in the lab - the target above still selects where the app deploys.",
+        );
+      }
+
+      setDependentStatus(notes.join(" "));
     },
     [ports],
   );
@@ -460,44 +483,66 @@ export function AzureResourcesSection({
             </span>
           </label>
         )}
-        {setupPath === "existing" && (
-          <label className="field">
-            <span className="field-label">Log Analytics workspace</span>
-            <SearchableSelect
-              options={workspaceSelectOptions(workspaces ?? [])}
-              value={workspaceName}
-              onChange={onWorkspaceSelect}
-              disabled={workspaces === null || workspaces.length === 0}
-              placeholder={
-                workspaces !== null && workspaces.length > 0
-                  ? "Select a workspace..."
-                  : subscriptionId === ""
-                    ? "Select a subscription first..."
-                    : "Waiting for workspace discovery..."
-              }
-              ariaLabel="Filter workspaces"
-            />
-          </label>
-        )}
-        {setupPath === "lab-byo-rg" && (
-          <label className="field">
-            <span className="field-label">Resource group</span>
-            <SearchableSelect
-              options={resourceGroupSelectOptions(resourceGroups ?? [])}
-              value={rgName}
-              onChange={onRgNameChange}
-              disabled={resourceGroups === null || resourceGroups.length === 0}
-              placeholder={
-                resourceGroups !== null && resourceGroups.length > 0
-                  ? "Select a resource group..."
-                  : subscriptionId === ""
-                    ? "Select a subscription first..."
-                    : "Waiting for resource group discovery..."
-              }
-              ariaLabel="Filter resource groups"
-            />
-          </label>
-        )}
+        {/* THE DEPLOYMENT TARGET, AND IT IS NOT GATED ON THE SETUP PATH.
+            Both pickers used to be: the workspace only on `existing`, the
+            resource group only on `lab-byo-rg`, and neither on `lab-new-rg`.
+            Since the paths are mutually exclusive no path ever showed both, so
+            repointing an install that already worked meant knowing which path
+            happened to expose the field you needed.
+            Setup CHOOSES a shape once; the target is changed for the life of
+            the install, so it lives here beside the credentials it is scoped
+            by, always. Both write straight to the shared config
+            (workspaceName / resourceGroup), which is what every screen already
+            reads - so changing one here repoints the app and re-runs the audit
+            (App.tsx: a connection switch or scope commit falls out of the audit
+            key changing). */}
+        <label className="field">
+          <span className="field-label">Log Analytics workspace (deployment target)</span>
+          <SearchableSelect
+            options={workspaceSelectOptions(workspaces ?? [])}
+            value={workspaceName}
+            onChange={onWorkspaceSelect}
+            disabled={workspaces === null || workspaces.length === 0}
+            placeholder={
+              workspaces !== null && workspaces.length > 0
+                ? "Select a workspace..."
+                : subscriptionId === ""
+                  ? "Select a subscription first..."
+                  : workspaces !== null
+                    ? "No workspaces were readable - see the discovery note above"
+                    : "Click Discover / refresh from Azure above"
+            }
+            ariaLabel="Filter workspaces"
+          />
+          <span className="field-hint">
+            Every screen that names a workspace uses this one. Change it at any
+            time to deploy to a different workspace; selecting one also fills
+            the resource group below from its ARM id.
+          </span>
+        </label>
+        <label className="field">
+          <span className="field-label">Resource group (deployment target)</span>
+          <SearchableSelect
+            options={resourceGroupSelectOptions(resourceGroups ?? [])}
+            value={rgName}
+            onChange={onRgNameChange}
+            disabled={resourceGroups === null || resourceGroups.length === 0}
+            placeholder={
+              resourceGroups !== null && resourceGroups.length > 0
+                ? "Select a resource group..."
+                : subscriptionId === ""
+                  ? "Select a subscription first..."
+                  : resourceGroups !== null
+                    ? "No resource groups were readable - see the discovery note above"
+                    : "Click Discover / refresh from Azure above"
+            }
+            ariaLabel="Filter resource groups"
+          />
+          <span className="field-hint">
+            Where DCRs are created. Selecting a workspace above sets this for
+            you; override it here if the DCRs belong somewhere else.
+          </span>
+        </label>
       </div>
       {dependentStatus !== "" && (
         <div className="discovery-result">
