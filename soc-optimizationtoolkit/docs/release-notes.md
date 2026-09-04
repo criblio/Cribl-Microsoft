@@ -8,6 +8,48 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.7
+
+**A pack can now be wired either way, and the routable way says what it needs.**
+An app-built pack installed into the worker group and then could not be selected
+from the pipeline dropdown on the Cribl Routes page. Diffing against a known-good
+pack found exactly two differences - every route carried `output: <destinationId>`
+where the good one carries `output: default`, and the pack shipped a
+`default/outputs.yml` the good one has no equivalent of.
+
+Which of the two is the gate was established live, and it is not the one that
+looked obvious. Setting the pack route's destination to Cribl's own "Send to
+Worker Group Routes" - the UI form of `output: default` - did not make the pack
+appear. Deleting the destination from the pack did, immediately. So the gate is
+the existence of a configured destination object inside the pack, and the route
+output is its necessary companion: a route naming a destination the pack no
+longer ships would dangle.
+
+Neither shape is right in general, so Pack wiring is a choice rather than a fix.
+**Self-contained** ships the destination and its secret, works on install, and
+stays out of that dropdown; it is the default and what every pack built before
+this was. **Routable** ships no destination and hands every route's events back,
+appears in the dropdown, and can be dropped into a flow that already exists.
+
+**Choosing routable now tells you what the worker group must already have.** The
+app does create a group-level Sentinel destination - Deploy step 6 does it, with
+a collision-and-reuse scan - but that is a separate action from building a pack,
+and nothing connected the two. The pack builder cannot create one itself: doing
+so needs the DCR immutable id, the ingestion endpoint, and the ingestion client
+secret, and that secret is transient because the platform's encrypted KV is
+write-only and can never be read back. So the group is read and the prerequisite
+reported, naming Deploy as the step that satisfies it, and the build is never
+blocked - building before deploying is a legitimate thing to do.
+
+**A capture window longer than 12 seconds no longer reports a failure for a
+capture that ran.** The ceiling was the transport's, not the product's: the
+platform's fetch bridge applied one short default to every call, so a capture
+asked to hold its response open for 600 seconds timed out client-side. The
+request now carries its own wait - the window plus headroom - and the ceiling
+moves from 12 seconds to the 600 the control already offered.
+
+---
+
 ## 1.12.6
 
 **The first-run wizard offers the workspace picker its own copy promised.** The
