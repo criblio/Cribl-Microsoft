@@ -659,6 +659,16 @@ export function renderBoard(data, today) {
   L.push('alternatives. This board holds only what is a unit of work, what state it is');
   L.push('in, and what it waits on.');
   L.push('');
+  // Added 2026-09-04 with the prune of every card done through 1.12.7. A
+  // `[[link]]` in a surviving card may now name a card this board no longer
+  // shows - 60 such links pointed at 29 pruned cards the day this was written.
+  // Saying so here is cheaper than rewriting the prose, and honest: the target
+  // is not lost, it is just not on this page any more.
+  L.push('A `[[CARD-ID]]` link may name a card that has been PRUNED from this board.');
+  L.push('Cards done through 1.12.7 were removed on 2026-09-04; their reasoning is in');
+  L.push('`backlog.md` and their full text in the git history of `board.json`. A link');
+  L.push('that resolves to nothing here is a pruned card, not a typo.');
+  L.push('');
   L.push(`**${count((s) => s.status === 'backlog')} in the backlog, ${count((s) => s.status === 'in-progress')} in progress, ${count((s) => s.status === 'done')} done.**`);
   L.push('');
 
