@@ -2669,3 +2669,59 @@ DBT-70's fix, stays correct and stays in. It defends code we control against a
 tree we may not; the `.gitattributes` defends the tree. DBT-66 is the reason
 both are needed - a tool choked on CRLF in a file nothing compared, so no
 amount of careful comparison would have saved it.
+
+
+## 20. DBT-83 answered: the deep link is wanted and the shell cannot carry it - 2026-09-04
+
+The operator asked for shareable solution links. The card was deliberately split
+into a preference and a fact, and they came back with different answers, which is
+the whole reason it was split.
+
+**Wanted: yes.** "Yes - keep it, I'll want to share links."
+
+**Deliverable on the shipped shell: no.** Measured rather than argued. Navigating
+to `#/?solution=ZZZ-does-not-exist` and reading the mounted iframe's `src`:
+
+| mount | iframe src | fragment |
+|---|---|---|
+| Live Preview `/apps/a/__local__` | `http://localhost:5173/?init=...` | none |
+| Installed app 1.11.3 | `.../app-ui/soc-optimizationtoolkit/` | none |
+
+The outer frame carried the hash both times. The Cribl shell builds the iframe
+`src`, and it builds it without the fragment and without a query, so an
+externally supplied deep link never reaches the app on either mount. A
+deliberately nonexistent solution name was used so the probe could not disturb
+the session's real selection - the measurement did not need a real one, because
+what was being observed was whether the fragment crossed the boundary at all.
+
+### The distinction that saves the mechanism
+
+Nothing here should be deleted. Inside the iframe the hash works perfectly:
+`select()` writes it so a refresh restores the selection, and the SIEM-migration
+pivot navigates by writing the same hash. Intra-app deep linking is live and
+load-bearing. Only the EXTERNAL shareable link is undeliverable, and the two
+share one function - which is exactly the trap the `solution-browser.dom.test.tsx`
+pins were written to catch, and they still guard it.
+
+### What this closed, and what it opened
+
+`DBT-28` reported that a deep-link URL did not override a stored selection, with
+two unseparated candidate causes. The measurement settles it: cause (1), the
+fragment never arriving, is correct, and cause (2), a precedence rule, is never
+reached. There is no precedence bug. Its other premise had also expired - the
+`Deep link:` chip it says the card advertises was removed by `DBT-75` on
+2026-09-02, and `solution-browser.tsx` now carries a comment where it used to be
+saying the absence IS the fix. So DBT-28 closed without a code change, which is
+the honest outcome rather than a dodge: both halves of what it reported are
+accounted for, and neither is app work.
+
+The wanted feature moved to `DBT-119` at `later`. The priority reflects **who can
+act**, not how much it is wanted: unblocking it needs Cribl either to forward a
+query parameter onto the app-ui URL or to post the entry route to the app on
+mount. Both are platform requests. Until one exists, the only honest app-side
+behaviour is the one already shipped - advertise no link the shell cannot deliver.
+
+There is one non-platform path that would also unblock it, worth recording
+because it existed once: an ADR 0001 style shell whose own document is the
+address bar. The chip worked there, which is why it was true when it shipped and
+false after ADR 0002.
