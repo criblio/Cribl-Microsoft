@@ -11,7 +11,12 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**81 in the backlog, 0 in progress, 0 done.**
+A `[[CARD-ID]]` link may name a card that has been PRUNED from this board.
+Cards done through 1.12.7 were removed on 2026-09-04; their reasoning is in
+`backlog.md` and their full text in the git history of `board.json`. A link
+that resolves to nothing here is a pruned card, not a typo.
+
+**82 in the backlog, 0 in progress, 0 done.**
 
 ## By menu item
 
@@ -30,9 +35,9 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 0 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 8 | 0 | 0 |
+| Cross-cutting | 9 | 0 | 0 |
 
-Open work totals 81.
+Open work totals 82.
 
 ## Epics and features
 
@@ -106,7 +111,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 0% (0/39)
+### `DBT` Quality and technical debt _(enabler)_ - 0% (0/40)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -115,7 +120,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 0/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 0/5 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 0/5 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119* |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 0/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -284,7 +289,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (34)
+## Backlog - next (35)
 
 Settled and unblocked, sequenced behind now.
 
@@ -911,6 +916,42 @@ Settled and unblocked, sequenced behind now.
   missing that is sitting right there under the sanitized name. The fix is one
   function, and the sanitizing one is the one to keep - it is the version
   whose output has to survive as a real Cribl object id.
+
+- **DBT-120** check-board validates everything about a card except its [[links]]
+  `DBT-F4` `bug` `settled`
+  Not now because: Not `now` because nothing is WRONG in the tree - the links
+  point at real cards that really were done, and the board header now says so,
+  so a reader is not misled. What is filed here is that nothing STOPS the
+  decay: the next prune adds more dangling links silently and the header note
+  ages into a claim about one particular prune. It is ranked above `later`
+  because the cost lands on exactly the reader the board exists for - someone
+  picking up a card and following its reasoning.
+  FOUND 2026-09-04 by the architecture audit, immediately after the prune that
+  caused it, which is the only reason it was caught at all. MEASURED on the
+  pruned board: 60 `[[CARD-ID]]` links across surviving cards name 29 cards
+  that are no longer on the board. `check-board` passed green through all of
+  it, because it validates ids, menus, feature membership, priorities,
+  `verified` values and the rendered file - and never looks inside card prose.
+  THIS IS THE RELEASE-DRIFT SHAPE AGAIN, and that precedent is why it is filed
+  rather than shrugged off. check-release-drift held four claims to the
+  version and read only one of them, and the other two decayed TWICE while it
+  stayed green. A checker that validates the structured fields and ignores the
+  prose is the same bet: it reports health over the half it can see.
+  MITIGATED, NOT FIXED, on the day: `board.mjs` now emits a header paragraph
+  saying a `[[link]]` may name a pruned card and where to find it. That keeps
+  a reader from reading a dead link as a typo, and it is honest about the
+  current board. It does nothing for the next prune, and it hardcodes "through
+  1.12.7" and a date - so the note itself is the kind of hand-maintained claim
+  this repo has now watched decay twice. THE FIX is a check-board pass that
+  resolves every `[[CARD-ID]]` against the live card set. WHAT IT SHOULD DO IS
+  THE REAL DECISION and is worth more than the parsing: a dangling link is NOT
+  an error - pruning is deliberate and the target is preserved in backlog.md
+  and git history - so failing on it would make the check something people
+  disable. A WARNING with a count, printed the way the drift check prints its
+  commit-count warning, states the size of the decay without blocking anyone.
+  Consider also having it rewrite the header count from the measurement
+  instead of the hardcoded sentence added above, which would retire the
+  hand-maintained claim rather than adding one.
 
 ---
 
