@@ -11,7 +11,7 @@
  * here is counted over the RENDERED rows: every row, one badge, non-empty text.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   AzureConfig,
@@ -531,5 +531,219 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
     // pivot hands off. Without this a rendered list would satisfy the name
     // assertion if it were ever scoped more loosely.
     expect(document.querySelector(".solution-browser-list")).toBeNull();
+  });
+});
+
+/**
+ * DBT-28 defect (1): a handoff that names a solution the resolver cannot match
+ * used to be CONSUMED IN SILENCE.
+ *
+ * Two halves, and neither is worth much without the other. The resolver now
+ * also matches on separator-insensitive EQUALITY, which is pinned without a DOM
+ * in browser-state.test.ts - what is pinned HERE is that the browser actually
+ * preselects through it. And when it still misses, the miss has to reach the
+ * screen, which is the only thing that can turn "the app decided your solution
+ * is not real" into something an operator can act on.
+ *
+ * The fixture pair is the real one the product ships into: the SIEM knowledge
+ * base hands over "Cisco ASA" and the Sentinel repo folder is "CiscoASA".
+ */
+describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
+  const INDEX: SolutionRef[] = [
+    { name: "CiscoASA", path: "Solutions/CiscoASA" },
+    { name: "Zscaler", path: "Solutions/Zscaler" },
+  ];
+
+  const handoffContent = {
+    async getCommitSha(): Promise<string | null> {
+      return "abcdef012345";
+    },
+    async listSolutions(): Promise<SolutionRef[]> {
+      return INDEX;
+    },
+    async listConnectorFiles(): Promise<SolutionFileRef[]> {
+      return [];
+    },
+    async readFile(): Promise<string | null> {
+      return null;
+    },
+  } as unknown as SentinelContent;
+
+  function renderBrowser(
+    hash: string,
+    opts: { restoreName?: string; logger?: { warn: ReturnType<typeof vi.fn> } } = {},
+  ) {
+    window.location.hash = hash;
+    render(
+      <PortsProvider
+        ports={
+          {
+            content: handoffContent,
+            ...(opts.logger === undefined ? {} : { logger: opts.logger }),
+          } as unknown as UiPorts
+        }
+        config={CONFIG}
+      >
+        <SolutionBrowser restoreName={opts.restoreName ?? null} />
+      </PortsProvider>,
+    );
+  }
+
+  function notice(): HTMLElement | null {
+    return document.querySelector<HTMLElement>(".solution-browser-unresolved");
+  }
+
+  it("preselects a solution the handoff named with different punctuation", async () => {
+    // The shipped failure: "Cisco ASA" is what the pivot writes, "CiscoASA" is
+    // what the index holds, and exact + case-insensitive both miss it.
+    renderBrowser("#/?solution=Cisco%20ASA");
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("CiscoASA");
+    });
+    // It is a real SELECTION - the browse list is gone - and nothing is
+    // complaining about an unresolved handoff.
+    expect(document.querySelector(".solution-browser-list")).toBeNull();
+    expect(notice()).toBeNull();
+  });
+
+  it("SAYS SO when the handoff names nothing in the index", async () => {
+    renderBrowser("#/?solution=Definitely%20Not%20A%20Solution");
+    await waitFor(() => {
+      expect(notice()).toBeTruthy();
+    });
+    const text = notice()?.textContent ?? "";
+    // The name the operator asked for has to be IN the message: "no solution
+    // was preselected" without it leaves them unable to tell which handoff
+    // failed, or whether they mistyped.
+    expect(text).toContain("Definitely Not A Solution");
+    // And it must not read as damage: nothing was selected, so nothing was
+    // switched away from and no samples were touched.
+    expect(text.toLowerCase()).toMatch(/nothing was changed/);
+    // The browser fell back to the browse list rather than to an empty pane.
+    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    expect(document.querySelector(".solution-browser-selected")).toBeNull();
+  });
+
+  it("stays quiet when the handoff resolves, and when there is no handoff", async () => {
+    // NON-VACUITY for the pin above: a notice that rendered unconditionally
+    // would satisfy it while telling the operator their working deep link had
+    // failed. Both silent cases are checked after the list has really loaded,
+    // so this is not just an assertion against an empty document.
+    renderBrowser("#/?solution=Zscaler");
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("Zscaler");
+    });
+    expect(notice()).toBeNull();
+    cleanup();
+
+    renderBrowser("#/");
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    });
+    expect(screen.getByText("CiscoASA")).toBeTruthy();
+    expect(notice()).toBeNull();
+  });
+
+  it("drops the notice once the operator picks a solution by hand", async () => {
+    renderBrowser("#/?solution=Definitely%20Not%20A%20Solution");
+    await waitFor(() => {
+      expect(notice()).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Zscaler"));
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-selected")).toBeTruthy();
+    });
+    // The question the notice asked has been answered; leaving it up would
+    // report a failure about a selection that is now made.
+    expect(notice()).toBeNull();
+  });
+
+  /**
+   * THE SECOND CALLER, which the first version of this fix left silent (review
+   * 2026-09-04). resolveSelectedSolution is called from the deep-link effect
+   * AND from the restoreName effect, and only the first was made loud - so the
+   * class was half closed, in the half that leaves the page contradicting
+   * itself rather than merely empty.
+   *
+   * Measured before the fix, with exactly this fixture: notice absent,
+   * logger.warn calls 0, no selected card - the browse list rendered as though
+   * no restore had been attempted, while the host stayed scoped to the name it
+   * restored.
+   */
+  it("SAYS SO when the HOST's restored selection names nothing in the index", async () => {
+    const logger = { warn: vi.fn() };
+    renderBrowser("#/", { restoreName: "Cisco ASA Legacy", logger });
+    await waitFor(() => {
+      expect(notice()).toBeTruthy();
+    });
+    const text = notice()?.textContent ?? "";
+    expect(text).toContain("Cisco ASA Legacy");
+    // The restore sentence must NOT borrow the deep link's reassurance. After a
+    // restore miss the host is still scoped to that name, so "nothing was
+    // changed" would describe a page the operator is not looking at.
+    expect(text.toLowerCase()).not.toContain("nothing was changed");
+    // It has to name the split (the rest of the page still holds that
+    // solution) and the price of resolving it (picking here deletes samples,
+    // the DBT-9 vocabulary, pinned host-side in integrate-screen.dom.test.tsx).
+    expect(text).toMatch(/rest of the page|every other section/i);
+    expect(text).toMatch(/delet/i);
+    expect(text).toMatch(/samples?/i);
+    // And the miss reaches the LOG as well as the screen: an operator who has
+    // scrolled past the notice still leaves a trace behind.
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(String(logger.warn.mock.calls[0]?.[0])).toMatch(/resolve/i);
+    expect(logger.warn.mock.calls[0]?.[1]).toMatchObject({
+      requested: "Cisco ASA Legacy",
+    });
+    // The browse list is what the operator is left with - the notice sits above
+    // it rather than replacing it.
+    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    expect(document.querySelector(".solution-browser-selected")).toBeNull();
+  });
+
+  it("keeps the RESTORE sentence when both handoffs miss on one mount", async () => {
+    // Both can miss together - a stored name the index no longer carries plus a
+    // link that also misses - and the two effects fire in declaration order, so
+    // the deep link's "Nothing was changed" would land last and describe a page
+    // that IS still scoped to the restored name. The wrong sentence is worse
+    // than the missing one: the deep-link miss is still in the log.
+    const logger = { warn: vi.fn() };
+    renderBrowser("#/?solution=Definitely%20Not%20A%20Solution", {
+      restoreName: "Cisco ASA Legacy",
+      logger,
+    });
+    await waitFor(() => {
+      expect(notice()).toBeTruthy();
+    });
+    const text = notice()?.textContent ?? "";
+    expect(text).toContain("Cisco ASA Legacy");
+    expect(text.toLowerCase()).not.toContain("nothing was changed");
+    // BOTH misses are recorded, so nothing is lost by choosing one sentence.
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(
+      logger.warn.mock.calls.map((call) => (call[1] as { requested: string }).requested),
+    ).toEqual(
+      expect.arrayContaining(["Cisco ASA Legacy", "Definitely Not A Solution"]),
+    );
+  });
+
+  it("stays quiet when the restore RESOLVES, punctuation and all", async () => {
+    // NON-VACUITY for the pin above, and the second caller's half of the third
+    // resolver pass: "Cisco ASA" is not in the index either, but it collapses
+    // onto "CiscoASA" - so this is a resolved restore, not a missing one, and a
+    // notice here would be crying failure over a working restore.
+    const logger = { warn: vi.fn() };
+    renderBrowser("#/", { restoreName: "Cisco ASA", logger });
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("CiscoASA");
+    });
+    expect(notice()).toBeNull();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

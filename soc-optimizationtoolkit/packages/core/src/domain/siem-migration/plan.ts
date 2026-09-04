@@ -25,6 +25,7 @@ import {
   SPLUNK_DATAMODEL_MAP,
   SPLUNK_MACRO_MAP,
   SPLUNK_SKIP_MACROS,
+  hasSentinelSolutionFolder,
   resolveSplunkMacro,
 } from "./knowledge-bases";
 import { MIGRATION_RAW_SEARCH_CAP } from "./models";
@@ -60,6 +61,16 @@ const CONFIDENCE_ORDER: Record<MigrationConfidence, number> = {
  * MERGE sources resolving to the same solution into one entry (kube_audit +
  * kube_container_falco -> one "Azure Kubernetes Service"). Sorted by rule
  * count, descending.
+ *
+ * CONFIDENCE IS CAPPED AT `low` FOR A SOLUTION THAT NAMES NO `Solutions/`
+ * DIRECTORY (DBT-104, hasSentinelSolutionFolder). Being in the knowledge base
+ * earned `high`/`medium` regardless of whether the name could be opened, so a
+ * PingID or Firewall row carried the same badge - and the same "Open in
+ * Sentinel Integration" button - as a row that resolves. The button still
+ * renders (the screen owns that), but the badge no longer says the mapping is
+ * settled. `low` deliberately does not reach `none`: the fuzzy tier only
+ * rewrites `none` entries, and letting it re-guess these would replace a known
+ * dead end with an invented live one.
  */
 export function identifyDataSources(
   rules: readonly ParsedRule[],
@@ -104,14 +115,20 @@ export function identifyDataSources(
       if (resolved?.solution) {
         sentinelSolution = resolved.solution;
         sentinelTable = resolved.table;
-        confidence = SPLUNK_MACRO_MAP[rawId] ? "high" : "medium";
+        confidence = !hasSentinelSolutionFolder(resolved.solution)
+          ? "low"
+          : SPLUNK_MACRO_MAP[rawId]
+            ? "high"
+            : "medium";
       }
     } else {
       const resolved = QRADAR_EXTENSION_MAP[rawId];
       if (resolved?.solution) {
         sentinelSolution = resolved.solution;
         sentinelTable = resolved.table;
-        confidence = "high";
+        confidence = hasSentinelSolutionFolder(resolved.solution)
+          ? "high"
+          : "low";
       } else if (!rawId.startsWith("extension:")) {
         // The QRadar parser already resolved this extension to its solution
         // name at parse time; recover the table via reverse lookup so the
@@ -122,7 +139,7 @@ export function identifyDataSources(
         );
         sentinelSolution = rawId;
         sentinelTable = target?.table ?? "";
-        confidence = "high";
+        confidence = hasSentinelSolutionFolder(rawId) ? "high" : "low";
       }
     }
 

@@ -55,6 +55,8 @@ import type {
   CapabilityContext,
   CapabilitySet,
   CapabilityVerdict,
+  SolutionRef,
+  TaggedSample,
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -716,5 +718,261 @@ describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () =
     // into "denied" the capability model is built to prevent.
     renderAudited(emptyCapabilitySet());
     expect(offerButton()).toBeUndefined();
+  });
+});
+
+/**
+ * DBT-102: what the SIEM pivot actually costs, driven end to end.
+ *
+ * WHY IT IS PINNED AND NOT ARGUED. The warning added to the SIEM screen says
+ * the pivot deletes samples. That sentence is only allowed to exist if the
+ * deletion is real, and the only place it can be SEEN is a mount: the deep link
+ * arrives in a mount initializer inside SolutionBrowser, the previous solution
+ * arrives from an async contentCache read inside this screen, and the deletion
+ * is the interaction of the two. No pure module sees any of it - which is
+ * exactly why the behaviour shipped with a button that said nothing.
+ *
+ * THE SETUP IS THE PIVOT, not a proxy for it. The hash is what
+ * siem-migration-screen's openInIntegration writes, "CiscoASA" is the solution
+ * the content cache is holding from before, and "Zscaler" is where the pivot
+ * lands. handleSolutionChange then sees a real change and takes the branch that
+ * removes every tagged sample (integrate-screen.tsx:652-665).
+ *
+ * WHAT THIS PIN DOES NOT SAY. It does not endorse the deletion - the DBT-72
+ * decision settled that samples are cheap to re-acquire. It says the
+ * destructive path is REACHABLE from a button labelled "Open in Sentinel
+ * Integration", which is the whole claim the warning makes.
+ *
+ * IT USED TO CARVE OUT THE ORDERING, AND THAT CARVE-OUT IS GONE (review
+ * 2026-09-04). This block said the deletion was not guaranteed "because the
+ * previous solution has to have been restored before the deep link resolves and
+ * those are two independent async paths". Measured, that was not a caveat about
+ * a warning being approximate - it was a second failure hiding behind one: with
+ * a 200ms delay on the stored-selection read the deep link landed first, the
+ * restore's continuation then overwrote the host's solution with the STORED
+ * name while the browser's card still showed the deep-linked one, so the page
+ * named TWO different solutions at once and removed nothing (remove calls 0,
+ * against 1 with the same fixture and no delay). The screen now re-checks after
+ * that await and replays the late restore through handleSolutionChange, so both
+ * orderings end in the same state - which is what makes the warning true as
+ * written rather than true when it happens to win a race. The delayed ordering
+ * is pinned below beside the immediate one.
+ */
+describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () => {
+  const SAMPLE = {
+    logType: "CISCO_ASA",
+    format: "syslog",
+    rawEvents: ["%ASA-6-302013: Built outbound TCP connection"],
+    parsed: {
+      format: "syslog",
+      records: [{ msg: "Built outbound TCP connection" }],
+      eventCount: 1,
+      fields: [],
+      rawEvents: ["%ASA-6-302013: Built outbound TCP connection"],
+      sourceName: "asa.log",
+      errors: [],
+    },
+  } as unknown as TaggedSample;
+
+  const INDEX: SolutionRef[] = [
+    { name: "CiscoASA", path: "Solutions/CiscoASA" },
+    { name: "Zscaler", path: "Solutions/Zscaler" },
+  ];
+
+  function renderPivotedInto(
+    hash: string,
+    storedSolution: string,
+    // Delays ONLY the stored-selection read, which is how the two async paths
+    // are put in a chosen order. Undefined leaves it resolving immediately -
+    // the ordering every other case in this describe runs in.
+    restoreDelayMs?: number,
+  ) {
+    window.location.hash = hash;
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      content: {
+        getCommitSha: vi.fn().mockResolvedValue("abcdef012345"),
+        listSolutions: vi.fn().mockResolvedValue(INDEX),
+        listConnectorFiles: vi.fn().mockResolvedValue([]),
+        readFile: vi.fn().mockResolvedValue(null),
+      },
+      contentCache: {
+        // Only the selected-solution entry is seeded; every other key (the
+        // solution index cache) reads as a miss so the index is fetched.
+        get: vi.fn(async (key: string) => {
+          if (!key.includes("selected-solution")) {
+            return null;
+          }
+          if (restoreDelayMs !== undefined) {
+            await new Promise((resolve) => setTimeout(resolve, restoreDelayMs));
+          }
+          return storedSolution;
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      },
+      samples: {
+        list: vi.fn().mockResolvedValue([SAMPLE]),
+        get: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn().mockResolvedValue(undefined),
+        remove,
+      },
+    } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    return remove;
+  }
+
+  afterEach(() => {
+    window.location.hash = "#/";
+  });
+
+  it("REMOVES every tagged sample when the pivot lands on a different solution", async () => {
+    const remove = renderPivotedInto("#/?solution=Zscaler", "CiscoASA");
+    // The handoff really landed - without this the removal assertion could pass
+    // for some unrelated reason while the pivot silently did nothing.
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("Zscaler");
+    });
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledWith("CISCO_ASA");
+    });
+    // One store entry, one removal: the branch walks the whole list.
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("REMOVES them on the same pivot when the stored read comes back LATE", async () => {
+    // THE ORDERING THIS SCREEN USED TO LOSE SILENTLY. Everything is identical
+    // to the case above except that the stored-selection read takes 200ms, so
+    // the deep link resolves first. Measured before the fix with exactly this
+    // fixture: card "Zscaler", pack name "MS-Sentinel-CiscoASA", remove calls
+    // 0 - the page naming two solutions at once with nothing deleted, and no
+    // notice of either. What makes that zero a measurement rather than a blind
+    // spot is the case above: the same harness, one line different, seeing a
+    // removal.
+    const remove = renderPivotedInto("#/?solution=Zscaler", "CiscoASA", 200);
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("Zscaler");
+    });
+    await waitFor(
+      () => {
+        expect(remove).toHaveBeenCalledWith("CISCO_ASA");
+      },
+      { timeout: 3000 },
+    );
+    expect(remove).toHaveBeenCalledTimes(1);
+    // ONE SOLUTION ON THE PAGE. The pack name is derived from the HOST's
+    // `solution` state and the card from the BROWSER's, so the two disagreeing
+    // is how the split reached the screen - and it is invisible to any
+    // assertion that reads only the card.
+    const packField = screen.getByDisplayValue(/^MS-Sentinel/);
+    expect((packField as HTMLInputElement).value).toBe("MS-Sentinel-Zscaler");
+  });
+
+  it("makes good on what the UNRESOLVED-RESTORE notice says picking will cost", async () => {
+    // The notice this screen's browser raises when the RESTORED name matches
+    // nothing (DBT-28 defect (1), second caller) tells the operator that
+    // picking a solution here deletes the samples acquired for the restored
+    // one. That is a claim about THIS screen, made from a component that
+    // cannot see it, so it is pinned on this side: the browser is entitled to
+    // say it only while this stays green.
+    const remove = renderPivotedInto("#/", "Cisco ASA Legacy");
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-unresolved")).toBeTruthy();
+    });
+    // The split the notice describes: the browse list is up here while the
+    // host is still scoped to the restored name (the pack name proves it).
+    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    expect(
+      (screen.getByDisplayValue(/^MS-Sentinel/) as HTMLInputElement).value,
+    ).toBe("MS-Sentinel-Cisco-ASA");
+    fireEvent.click(screen.getByText("Zscaler"));
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledWith("CISCO_ASA");
+    });
+  });
+
+  it("removes NOTHING when the pivot lands on the solution already selected", async () => {
+    // NON-VACUITY, and the honest boundary of the warning: re-opening the same
+    // solution is not destructive, because handleSolutionChange returns early
+    // when prevName === nextName. A pin that fired here would be describing a
+    // screen that deletes on every navigation.
+    const remove = renderPivotedInto("#/?solution=CiscoASA", "CiscoASA");
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("CiscoASA");
+    });
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("IGNORES a deep link written after it is already mounted - and keeps it", async () => {
+    // The other half of the SIEM screen's warning, and the half its copy used
+    // to end on: pressing the pivot while Sentinel Integration is already
+    // mounted changes nothing NOW. Nothing in this package listens for
+    // hashchange - the hash is read in a mount initializer
+    // (solution-browser.tsx) - so the write lands in the address and stops
+    // there.
+    //
+    // WHAT THAT IS NOT is harmless, which is why the copy no longer says the
+    // click "leaves the selection alone" and stops. The hash is not consumed
+    // and nothing clears it, so the pivot stays ARMED: the next FRESH mount
+    // carrying it applies the switch and takes the deletion with it. That
+    // second half is not asserted here by inspection - it is the two tests
+    // above, which are this same fixture mounted fresh on this same hash.
+    const remove = renderPivotedInto("#/", "CiscoASA");
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("CiscoASA");
+    });
+    act(() => {
+      window.location.hash = "#/?solution=Zscaler";
+      window.dispatchEvent(new Event("hashchange"));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(
+      document.querySelector(".solution-browser-selected-name")?.textContent,
+    ).toBe("CiscoASA");
+    expect(remove).not.toHaveBeenCalled();
+    // The write SURVIVES - it is what a later mount reads. If some cleanup
+    // ever consumed or cleared it here, the warning's "applied on the next
+    // load" clause would be the false half instead.
+    expect(window.location.hash).toBe("#/?solution=Zscaler");
+  });
+
+  it("resolves the handoff through a punctuation variant - and still deletes", async () => {
+    // DBT-28 defect (1) and DBT-102 meeting on one path, which is the reason
+    // the two cards were read together. "Cisco ASA" is the string the SIEM
+    // knowledge base hands over for a `cisco_` macro with no direct entry of
+    // its own; "CiscoASA" is the folder. The pair is hard-coded rather than
+    // imported, so a knowledge-base correction (DBT-103) leaves this pin
+    // describing the same defect class.
+    // Before the resolver collapsed separators this link resolved to
+    // nothing and was consumed in silence - so the fix turns a silent no-op
+    // into a working pivot that IS destructive, and the warning is what makes
+    // that trade honest rather than a new surprise.
+    const remove = renderPivotedInto("#/?solution=Cisco%20ASA", "Zscaler");
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe("CiscoASA");
+    });
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledWith("CISCO_ASA");
+    });
   });
 });

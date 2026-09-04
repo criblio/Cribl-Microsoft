@@ -101,6 +101,37 @@ describe("deriveRouteDiscriminator", () => {
     ).toContain("interface_id !== undefined");
   });
 
+  /**
+   * SYSLOG, THE THIRD WHOLE FORMAT (GEN-8, 2026-09-04).
+   *
+   * parseSyslog names its fields from a regex capture, so Timestamp, Hostname,
+   * Program, PID and Message appear nowhere in the line, and the only key it
+   * copies verbatim - `_raw` - is carried by every syslog log type in the pack.
+   * Both terms this function emits are therefore false for every event.
+   */
+  it("returns null for syslog (regex captures carry no field names)", () => {
+    expect(
+      deriveRouteDiscriminator(
+        ["Program", "Hostname", "PID"],
+        others("Message"),
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("...and the SAME syslog field names on a routable format still produce a filter", () => {
+    // The control. Without it the null above passes for any reason at all -
+    // and these names are not CEF headers, so nothing but the format gate can
+    // account for it.
+    expect(
+      deriveRouteDiscriminator(
+        ["Program", "Hostname", "PID"],
+        others("Message"),
+        "kv",
+      ),
+    ).toContain("Hostname !== undefined");
+  });
+
   it("escapes quotes and backslashes in the raw token", () => {
     const filter = deriveRouteDiscriminator(
       ["odd'field"],
@@ -200,5 +231,95 @@ describe("deriveRouteDiscriminator - unique is not the same as characteristic", 
     const filter =
       deriveRouteDiscriminator(["alert_source"], [new Set(["dst"])], "json") ?? "";
     expect(filter).toContain("alert_source");
+  });
+});
+
+/**
+ * GEN-8, per-field half: a CEF or LEEF HEADER name is not a candidate, while
+ * the extension pairs beside it still are.
+ *
+ * THE SORT IS WHY THIS WAS SILENT RATHER THAN RARE. This function ranks longest
+ * name first, and every CEF header name is longer than the `src` / `dst` / `act`
+ * a firewall event actually carries. The character counts are stated once, on
+ * the sort itself in route-discriminator.ts, and are not repeated here: three
+ * copies of them had already drifted apart by 2026-09-04, one of them calling
+ * `_syslogHeader` 14 characters. So on any CEF plan where a header was unique
+ * to one log type, the header WON, and the filter it produced was false for
+ * every event. Measured through the real chain on 2026-09-04: a two-log-type
+ * CEF plan where only one type's lines had a syslog prefix emitted
+ * `_syslogHeader !== undefined || (typeof _raw === 'string' &&
+ * _raw.indexOf('_syslogHeader=') !== -1)` and matched 0 of that type's 2 own
+ * events, while its sibling's `fwrule` - a real extension pair - matched 2 of 2.
+ */
+describe("deriveRouteDiscriminator - CEF and LEEF header names are not candidates", () => {
+  it("prefers a SHORT extension field over the long header names", () => {
+    const filter =
+      deriveRouteDiscriminator(
+        ["DeviceEventClassID", "_syslogHeader", "act"],
+        [new Set(["src"])],
+        "cef",
+      ) ?? "";
+
+    expect(filter).toContain("act !== undefined");
+    expect(filter).not.toContain("DeviceEventClassID");
+    expect(filter).not.toContain("_syslogHeader");
+  });
+
+  it("returns null when the ONLY unique fields are CEF headers", () => {
+    // The log type then placeholders and is reported, instead of shipping a
+    // route that reads clean and receives nothing.
+    expect(
+      deriveRouteDiscriminator(
+        ["DeviceEventClassID", "Name", "Severity", "_syslogHeader"],
+        [new Set(["src"])],
+        "cef",
+      ),
+    ).toBeNull();
+  });
+
+  it("...and the SAME names on a format with no CEF header still route", () => {
+    // The control that makes the null above about the exclusion rather than
+    // about the fixture. A kv event that really sends `DeviceEventClassID=...`
+    // carries that name in its text, so the term can fire and is kept.
+    expect(
+      deriveRouteDiscriminator(
+        ["DeviceEventClassID", "Name", "Severity", "_syslogHeader"],
+        [new Set(["src"])],
+        "kv",
+      ),
+    ).toContain("DeviceEventClassID !== undefined");
+  });
+
+  it("does the same for LEEF, whose header list differs from CEF's", () => {
+    const filter =
+      deriveRouteDiscriminator(
+        ["EventID", "LEEFVersion", "usrName"],
+        [new Set(["src"])],
+        "leef",
+      ) ?? "";
+
+    expect(filter).toContain("usrName !== undefined");
+    expect(filter).not.toContain("EventID");
+    expect(filter).not.toContain("LEEFVersion");
+  });
+
+  it("keeps _syslogHeader for LEEF, which never mints one", () => {
+    // parseLeef assigns no syslog-prefix key, so excluding the name there would
+    // cost a vendor who genuinely sends `_syslogHeader=` as a tab-delimited
+    // pair - a name that IS in their raw text.
+    expect(
+      deriveRouteDiscriminator(["_syslogHeader"], [new Set(["src"])], "leef"),
+    ).toContain("_syslogHeader !== undefined");
+  });
+
+  it("leaves every ordinary CEF extension field alone", () => {
+    // The exclusion must not become "CEF cannot route". These are the fields
+    // real CEF packs discriminate on, and all of them are in the raw text.
+    for (const field of ["act", "suser", "requestClientApplication", "cs6"]) {
+      expect(
+        deriveRouteDiscriminator([field], [new Set(["src"])], "cef"),
+        field,
+      ).toContain(`${field} !== undefined`);
+    }
   });
 });

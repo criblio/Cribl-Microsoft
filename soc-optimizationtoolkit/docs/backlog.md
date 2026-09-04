@@ -1152,50 +1152,84 @@ instead. Fixed under [[DBT-90]] by adding the forward; the sibling list above is
 what made it obvious, since every other check that HAS an npm script had a
 forward too.
 
-That qualifier is doing real work. `apps/cribl-app/scripts/check-classnames.mjs`
-([[DBT-39]], added 2026-08-31) has no npm script anywhere and no CI step, and
-until this paragraph its NAME appeared in no document - [[DBT-61]]'s card
-discusses the thing but calls it "DBT-39's className checker", so a reader could
-not have grepped their way to the file. As of this edit a repo grep for
-`check-classnames` finds it in exactly two files: its own test file, and this
-paragraph. (Stated that way on purpose. The sentence this replaced said there was
-"no mention in any document", which was false the moment it was committed, because
-the sentence IS one. A claim about the whole repo that the claim itself falsifies
-is the same defect as the rest of this section, just small enough to miss.) Run by
-hand on 2026-09-03 it exits 1 reporting "36 undefined or undeclared" across 33
-distinct class names - and CI is green, which is the whole finding: the tree
-carries 36 findings and every build passes, because nothing invokes the script
-that would report them.
+That qualifier was doing real work, and the case it pointed at is now closed.
+**`apps/cribl-app/scripts/check-classnames.mjs` ([[DBT-39]], added 2026-08-31) was
+wired on 2026-09-04 under [[DBT-100]].** It is forwarded in BOTH manifests - a
+`check-classnames` script in `apps/cribl-app/package.json` and a forward in the
+root `soc-optimizationtoolkit/package.json` - and it runs in CI as the step
+"Check class names", between "Check schema asset" and "Test" in
+`.github/workflows/soc-toolkit-ci.yml`. All three invocation forms were measured
+on 2026-09-04 and all three exit 0: `npm run check-classnames` from
+`soc-optimizationtoolkit`, the same command from `apps/cribl-app`, and the
+`--workspace apps/cribl-app` form CI uses. A repo grep for `check-classnames`
+(`git grep -l`) now returns EIGHT tracked files: the workflow, both manifests, the
+script AND its test file, this document, and `board.json` with its rendered
+`board.md`. The script is in that list only because the same change that wired it
+up added a "HOW IT RUNS" note naming the npm script; before that it never wrote
+its own name, which is why this document was the first place a grep could land,
+and why
+the state of the check has to be stated here accurately rather than left to be
+inferred from a commit.
 
-NOTHING ACCUMULATED, AND THAT IS THE SHARPER VERSION OF THE FINDING. The script
-landed on 2026-08-31 ALREADY reporting those 36, and the set has not moved since.
-Measured by extracting the adding commit (e147332) with `git archive`, running the
-script inside that tree, running it on the current tree, and diffing the distinct
-name sets: both print "36 undefined or undeclared across 127 source file(s)", both
-resolve to the same 33 distinct names - 32 literal class names plus one prefix
-family, `log-type-evidence-*` - and the set difference is EMPTY in both directions.
-Zero added, zero removed, in three days. (The two runs are not byte-identical, and
-the differences are worth naming so the claim is not read wider than it was tested:
-the never-rendered notice moved from 169 to 171, and line numbers shifted in
-`mapping-review-section.tsx` and `rule-coverage-section.tsx`. Ordinary edits moving
-around unchanged findings - the ERROR set is what held still.) Introduction dates
-agree: of ten names sampled with `git log -S`, all ten predate 2026-08-31 and six
-are from July.
+**The prose that stood here until 2026-09-04 was false line by line, and it
+predicted so itself.** It said there was no npm script and no CI step; both now
+exist. It said a repo grep found the file in exactly two files; the answer is
+seven. It said running it exits 1 reporting 36 findings; it exits 0. That
+paragraph had congratulated itself for being self-checking - "a claim about the
+whole repo that the claim itself falsifies is the same defect as the rest of this
+section" - and the trap it named is the one it fell into: a measured count written
+into prose is true for exactly as long as nobody changes the thing measured. The
+lesson worth keeping is not "count fewer things", it is that a document whose
+claims are checkable by grep needs a reader to actually run the grep before
+trusting the paragraph, and that [[DBT-88]]'s idea - a gate that reads a claim out
+of prose and tests it - is the only thing that makes such a sentence durable.
+
+**THE 36 DID NOT GET FIXED; THE QUESTION CHANGED, AND THAT IS THE SUBSTANCE OF
+DBT-100.** The old count asked "does this class NAME resolve to a rule?" and
+answered 36 times, asserting of each that the element renders bare. Measured
+against the tree, that assertion was false for most of them: they name an element
+that a DIFFERENT class on the same element already styles, so nothing rendered
+bare and there was nothing to fix. Worse, the advice attached to it ("delete it")
+would have broken the suite - several of the names are live test selectors, and
+`numbered-section.dom.test.tsx` asserts `className === "numbered-section-body"` by
+string equality. Asking it per ELEMENT instead - a name with no rule is a defect
+only when nothing else on that element carries one - gives FOURTEEN bare elements
+on the tree of 2026-09-04, measured with an empty baseline. Twenty-nine names
+still resolve to nothing and are reported as an ungated note, because the element
+they sit on is styled by a sibling. The narrowing was calibrated against the tree
+at `864facb^`, where the `.identity-mismatch-block` defect is live: it yields 17
+error elements there and still names all three `identity-mismatch` classes, so it
+did not narrow past the defect it exists to catch.
+
+**What is recorded, and what is still open.** The fourteen are held in
+`UNDECIDED_BARE` in the script, as THIRTEEN path-plus-name entries - the two
+numbers differ because `gap-overflow-triage` is bare at two separate lines of
+`overflow-triage-block.tsx`. Both are stated because the first version of this
+wiring stated only "13", in the CI comment and in the script header, and claimed
+the gate would fail on the fourteenth: the fourteenth already existed and passed,
+because an entry keyed on path and name with no line and no count absorbs any
+number of elements sharing that name in that file. Each entry now carries an exact
+count, so a further bare element under a recorded name FAILS the step, and a count
+left higher than the truth fails it too - an entry larger than the residue is a
+slot held open for the next one. NONE OF THE FOURTEEN HAS BEEN SHOWN TO BE A
+DEFECT and none has been shown to be harmless; four sit on an `a`, a `tr`, a `td`
+and a `details`, all of which pick up user-agent styling or an ancestor selector
+this check cannot model. Deciding them needs the design intent of each screen's
+owner, and NO CARD OWNS THAT YET.
 
 So DBT-39's own four names - `pack-card`, `pack-card-head`, `dcr-progress-line`,
 `identity-row-editable` - were deleted in the SAME commit that added the script,
-and the other 33 were LEFT STANDING rather than accrued afterwards. What went
-unfixed is the RECURRENCE that card called "THE REAL FIX": the check was written
-and then wired to nothing, so it inherited a red tree at birth and has been
-reporting it to nobody ever since. [[DBT-61]] had already named the trap, citing
-this very script - "reports 36 pre-existing findings and therefore cannot be wired
-into CI until they are triaged. A gate that starts red never becomes a gate." That
-card recorded the diagnosis on 2026-08-31 and the count has not moved since, which
-is the corroboration from a second direction: the 36 were pre-existing THEN, by the
-account of a card written that day. It is a level worse than what this section
-describes: `check-release` was a working check behind a missing forward, while this
-one is a check nobody can invoke by name. Filed separately rather than fixed here -
-those 36 are UI defects, not release hygiene.
+and the rest were LEFT STANDING rather than accrued afterwards. What went unfixed
+for four days was the RECURRENCE that card called "THE REAL FIX": the check was
+written and then wired to nothing, so it reported to nobody. [[DBT-61]] had named
+the trap on the day the script landed, citing it directly - "reports 36
+pre-existing findings and therefore cannot be wired into CI until they are
+triaged. A gate that starts red never becomes a gate." That diagnosis was right
+about the danger and wrong about the only way out: the third option, taken here,
+is to record the residue by name with a count and gate everything else, so the
+gate starts green without anything being declared clean. It was a level worse than
+what the `check-release` case above describes - that was a working check behind a
+missing forward, this was a check nobody could invoke by name at all.
 
 NOTHING GUARDS THIS. No gate reads a command out of prose and tries it, so a
 document naming a script that does not exist stays green. That is the same family
@@ -1205,7 +1239,10 @@ of held files, both derivable from the script; a command is a different fact,
 checkable by extracting `npm run X` from the docs and asserting X resolves. The
 hard half is knowing which directory the surrounding prose means - `npm run
 check-release` is correct from two directories and wrong from the third - which
-is why that is filed as its own card rather than settled in this paragraph.
+is why that is filed as [[DBT-101]] rather than settled in this paragraph. That
+card now has a second unpinned command to cover: this section documents
+`npm run check-classnames` as well, and deleting either forward would leave every
+gate green while both documented commands exit 1.
 
 **The lock claim was added 2026-09-02, and it costs a manual step.** The lock was
 found recording 1.11.5 while `package.json` said 1.12.3. The argument against

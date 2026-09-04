@@ -28,7 +28,7 @@
  * so its filters see RAW vendor field names. Reordering silently breaks every KB
  * filter.
  *
- * TWO fixes vs legacy, both pinned by pipeline-conf.test.ts:
+ * THREE fixes vs legacy, all pinned by pipeline-conf.test.ts:
  *   1. SUPPRESS honors maxEvents. Legacy's live path emitted `allow: rule.allow
  *      || 1` - `allow` is not a field of SuppressRule, so it was always
  *      undefined and every suppress rule collapsed to allow:1, discarding the
@@ -40,11 +40,22 @@
  *      a garbage __cefParts split. The header eval now guards indexOf>=0 and
  *      emits [] otherwise, so a non-CEF line cleanly produces undefined header
  *      fields instead of garbage.
+ *   3. CEF PIPE ESCAPE (DBT-98, 2026-09-04). The header eval emitted
+ *      `.split('|')`, which splits on the `\|` the CEF specification requires for
+ *      a literal pipe inside a header value - shifting every header field after
+ *      it by one position in the INSTALLED pipeline, silently, because the field
+ *      names all stay right. It now emits sample-parsing's CEF_HEADER_PATTERN
+ *      verbatim, the same characters the analyzer parses with. See cefHeaderAdds.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import { PANOS_CSV_HEADERS, VPC_FLOW_V2_FIELDS } from "../sample-parsing";
+import {
+  CEF_HEADER_ESCAPE,
+  CEF_HEADER_PATTERN,
+  PANOS_CSV_HEADERS,
+  VPC_FLOW_V2_FIELDS,
+} from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
 import { CEF_IDENTITY_FIELDS, overrideValueFor } from "../cef-identity";
 import type { CefIdentityOverride } from "../cef-identity";
@@ -166,6 +177,106 @@ export function buildCefIdentityOverrideFn(
     "    description: Override CEF identity so Sentinel content matches",
     "    groupId: extract",
   ].join("\n");
+}
+
+/**
+ * The seven CEF header fields, in header order, under the names the pipeline
+ * gives them. `Name` and `Severity` are emitted as `Activity` and `LogSeverity`
+ * because those are Sentinel's CommonSecurityLog columns; the analyzer screen
+ * shows the CEF spellings. That mapping is verbatim from the legacy emitter.
+ */
+const CEF_HEADER_ADD_NAMES = [
+  "CEFVersion",
+  "DeviceVendor",
+  "DeviceProduct",
+  "DeviceVersion",
+  "DeviceEventClassID",
+  "Activity",
+  "LogSeverity",
+];
+
+/**
+ * The `add:` entries of the CEF header eval (DBT-98).
+ *
+ * WHY THIS IS BUILT RATHER THAN WRITTEN OUT. Until 2026-09-04 these nine `add`
+ * entries were literals ending in `.split('|')` and `.slice(7).join('|')` - the naive
+ * header split, emitted into every generated pack. `CEF:0|V\|W|P|1.0|100|worm|5|`
+ * escapes that pipe exactly as the CEF specification requires, the split cut on
+ * it anyway, and every header field from DeviceVendor down shifted one position
+ * at RUNTIME, in the installed pipeline, for the seven fields an operator is
+ * most likely to map to a destination column. sample-parsing/parsers.ts had the
+ * same defect and carries the measured before/after on CEF_HEADER_PATTERN.
+ *
+ * FIXING ONE SIDE ALONE WOULD HAVE BEEN WORSE THAN THE SHIFT, which is why the
+ * pattern is IMPORTED and its `.source` emitted verbatim instead of a second
+ * regex being typed here. The screen and the shipped pack now reach the seven
+ * header fields through literally the same characters, so they cannot drift into
+ * the state GEN-6 closed: an app that promises fields the pack cannot produce.
+ * The pin for that is an equality between the emitted text and the constant, not
+ * an eyeball.
+ *
+ * WHAT RUNS IN CRIBL, stated as narrowly as it was checked. The expressions use
+ * `indexOf`, `substring`, `match`, `slice` and `replace` with a regex literal and
+ * a `'$1'` backreference - ES5-level constructs, and the same class this emitter
+ * already ships (`__posParts` splits on `/\s+/`, the PAN-OS CSV step replaces
+ * with `'$1'`). NOT VERIFIED AGAINST A LIVE CRIBL INSTANCE in this change; what
+ * is verified is that the emitted text, YAML-unescaped and evaluated, reproduces
+ * parseCef's header record byte for byte (pipeline-conf.test.ts).
+ *
+ * THE UNESCAPE IS IMPORTED FOR THE SAME REASON AND WAS NARROWED ON 2026-09-04.
+ * `CEF_HEADER_ESCAPE` resolves `\\` and `\|` and nothing else; while it was the
+ * wider `/\\([\s\S])/g` this emitter shipped a pipeline that DELETED every lone
+ * backslash in a header value at runtime - `C:\Program Files\Acme` reached the
+ * destination column as `C:Program FilesAcme` - while the kvp serde below left
+ * the identical bytes in the extension alone. Because the emitter reads the
+ * constant rather than spelling a second regex, the installed pack and the
+ * analyzer screen changed in the same commit; the pin is the `.source` equality
+ * in pipeline-conf.test.ts, and the measured before/after is on the constant.
+ *
+ * `.slice(1)` DROPS THE WHOLE-MATCH ELEMENT, so `__cefParts[0..6]` are the seven
+ * header fields and `__cefParts[7]` is the extension - one index left of the raw
+ * match, and the same slots the `length > N` guards below already used. It also
+ * turns the match object into a PLAIN array, so nothing downstream depends on
+ * Cribl preserving a match array's `index`/`input`/`groups` properties.
+ *
+ * The extension is `__cefParts[7]` VERBATIM, not a re-join: group 8 is everything
+ * after the seventh unescaped pipe. `.slice(7).join('|')` only ever reconstituted
+ * the extension because the split it undid had been naive.
+ */
+function cefHeaderAdds(): string[] {
+  const headerRe = `/${CEF_HEADER_PATTERN.source}/`;
+  const unescape = `.replace(/${CEF_HEADER_ESCAPE.source}/g, '$1')`;
+  const raw = "(_raw || '')";
+  const adds = [
+    "        - name: __cefParts",
+    `          value: "${escapeYamlFilter(
+      `${raw}.indexOf('CEF:') >= 0 ? (${raw}.substring(${raw}.indexOf('CEF:')).match(${headerRe}) || []).slice(1) : []`,
+    )}"`,
+  ];
+  for (let i = 0; i < CEF_HEADER_ADD_NAMES.length; i++) {
+    adds.push(`        - name: ${CEF_HEADER_ADD_NAMES[i]}`);
+    adds.push(
+      `          value: "${escapeYamlFilter(
+        `(__cefParts && __cefParts.length > ${i}) ? __cefParts[${i}]${unescape} : undefined`,
+      )}"`,
+    );
+  }
+  // The same guard shape as the seven above, and for the same reason: it tests
+  // whether the header matched AT ALL (`[]` slices to length 0). A header that
+  // matched with no extension leaves the element itself undefined, which Cribl
+  // already treats as "do not set the field" - so an extra `!== undefined` test
+  // was written here first and then removed, because it could never change an
+  // answer, and a guard that cannot fire is a claim about the code that has
+  // stopped being true. MEASURED rather than argued, both spellings run over
+  // seven shapes - extension present, absent, empty, short header, non-CEF line,
+  // escaped pipe, dangling backslash: the guard changed the answer on 0 of 7.
+  adds.push("        - name: __cefExtension");
+  adds.push(
+    `          value: "${escapeYamlFilter(
+      "(__cefParts && __cefParts.length > 7) ? __cefParts[7] : undefined",
+    )}"`,
+  );
+  return adds;
 }
 
 /** One whitespace-positional column: the name to mint and the slot it sits in. */
@@ -403,24 +514,7 @@ export function generatePipelineConf(
         "    disabled: false",
         "    conf:",
         "      add:",
-        "        - name: __cefParts",
-        `          value: "(_raw || '').indexOf('CEF:') >= 0 ? (_raw || '').substring((_raw || '').indexOf('CEF:')).split('|') : []"`,
-        "        - name: CEFVersion",
-        "          value: \"(__cefParts && __cefParts.length > 0) ? __cefParts[0].replace('CEF:','') : undefined\"",
-        "        - name: DeviceVendor",
-        '          value: "(__cefParts && __cefParts.length > 1) ? __cefParts[1] : undefined"',
-        "        - name: DeviceProduct",
-        '          value: "(__cefParts && __cefParts.length > 2) ? __cefParts[2] : undefined"',
-        "        - name: DeviceVersion",
-        '          value: "(__cefParts && __cefParts.length > 3) ? __cefParts[3] : undefined"',
-        "        - name: DeviceEventClassID",
-        '          value: "(__cefParts && __cefParts.length > 4) ? __cefParts[4] : undefined"',
-        "        - name: Activity",
-        '          value: "(__cefParts && __cefParts.length > 5) ? __cefParts[5] : undefined"',
-        "        - name: LogSeverity",
-        '          value: "(__cefParts && __cefParts.length > 6) ? __cefParts[6] : undefined"',
-        "        - name: __cefExtension",
-        "          value: \"(__cefParts && __cefParts.length > 7) ? __cefParts.slice(7).join('|') : undefined\"",
+        ...cefHeaderAdds(),
         "      remove:",
         "        - __cefParts",
         "    description: Parse CEF header from _raw",

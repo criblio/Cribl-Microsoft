@@ -11,10 +11,18 @@
  *    under SIEM_MIGRATION_PLAN_KEY and restores on mount, so bouncing
  *    between this screen and Sentinel Integration loses nothing (the legacy
  *    kept the plan in volatile React state only).
- *  - SEAMLESS PIVOT: "Open in Sentinel Integration" writes the EXISTING
+ *  - PIVOT PER SOLUTION: "Open in Sentinel Integration" writes the EXISTING
  *    solution deep link (buildSolutionDeepLink - the contract preserved for
  *    this exact unit) and navigates via the shell callback; the Integrate
- *    page consumes the link once and preselects the solution.
+ *    page consumes the link once, on the FIRST mount of that route, and
+ *    preselects the solution.
+ *    THIS BULLET SAID "SEAMLESS PIVOT" UNTIL 2026-09-04 AND THAT WAS AN
+ *    OVERCLAIM in two directions, both now stated on screen (DBT-102): the
+ *    preselect is a solution CHANGE on the Integrate side, and a change from
+ *    one solution to a different one deletes every tagged sample; and it does
+ *    not arrive at all once that route is already mounted (DBT-28 defect (2),
+ *    still open). The mechanism below is unchanged; only the description of
+ *    it, and the operator-visible copy, are honest now.
  *  - The report downloads through the ArtifactSink port (both shells)
  *    instead of an Electron-only Downloads write; analysis runs through the
  *    analyzeSiemExport usecase over the SentinelContent port (lazy GitHub,
@@ -218,8 +226,16 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
     [analyze],
   );
 
-  // The SEAMLESS PIVOT: write the preserved deep-link contract, then let the
-  // shell navigate. The Integrate page consumes #/?solution= once on mount.
+  // THE PIVOT: write the preserved deep-link contract, then let the shell
+  // navigate. The Integrate page consumes #/?solution= once, in a mount
+  // initializer - so this lands on the first mount of that route and is inert
+  // afterwards (DBT-28 defect (2)).
+  // INERT IS NOT THE SAME AS UNDONE. The write happens every time regardless,
+  // and nothing consumes or clears the hash while the route stays mounted, so a
+  // press that changes nothing on screen still leaves the next fresh mount
+  // pointed at this solution. The copy above the cards says so; do not soften
+  // either half without re-reading handleSolutionChange
+  // (integrate-screen.tsx) and the pins in integrate-screen.dom.test.tsx.
   const openInIntegration = useCallback(
     (solutionName: string) => {
       window.location.hash = buildSolutionDeepLink(solutionName);
@@ -330,6 +346,63 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
               </div>
             ))}
           </div>
+
+          {/* DBT-102. THE PIVOT IS PRESENTED AS NAVIGATION AND IS NOT ONLY
+              NAVIGATION, and until 2026-09-04 nothing on this screen said so.
+              Two facts, both measured rather than argued - see the pins in
+              siem-migration-screen.dom.test.tsx and integrate-screen.dom.test.tsx.
+
+              (1) IT DELETES SAMPLES. The pivot writes the solution deep link
+              and the Integrate screen reports the preselect through
+              handleSolutionChange, which on a change from one solution to a
+              DIFFERENT one removes every tagged sample
+              (integrate-screen.tsx:652-665). Clear selection does the same
+              thing and says so on its own button (DBT-9); this button is the
+              second door onto that behaviour and it carried nothing. The
+              DBT-72 decision accepted the deletion at a button the
+              operator presses knowing it is destructive - it did not make
+              every path allowed to delete in silence, which is the whole
+              reason this copy exists rather than a behaviour change.
+
+              (2) IT OFTEN DOES NOTHING YET - WHICH IS NOT THE SAME AS DOING
+              NOTHING, and the first version of this copy stopped at the first
+              half. The handoff channel is the URL hash, and the Integrate
+              screen reads it only in a mount initializer
+              (solution-browser.tsx:178-182), while AppFrame keeps every visited
+              route MOUNTED and merely hidden (app-frame.tsx:162, 255-262). So
+              the preselect lands on the FIRST mount of that route and never
+              again until the page reloads. That is DBT-28 defect (2), still
+              open, and saying it here is the honest thing available while the
+              channel is what it is.
+              BUT openInIntegration WRITES THE HASH UNCONDITIONALLY, and while
+              the route is mounted nothing consumes or clears it - the only
+              writers in the app are select(), clearSelection() and this
+              function. So the press that "does nothing" ARMS the switch:
+              measured 2026-09-04, with Integrate already mounted the click left
+              the selection untouched and removed nothing, and the same fixture
+              mounted FRESH on that same hash selected the pivot target and
+              deleted the samples. Both are pinned in
+              integrate-screen.dom.test.tsx ("IGNORES a deep link written after
+              it is already mounted - and keeps it", beside the two that mount
+              on it). Whether the hash survives a page load inside the Cribl
+              iframe is NOT settled - the restoreName note in
+              solution-browser.tsx records a live review finding that it does
+              not - so the copy says "if that link is still there", which is the
+              part that was measured, and does not promise the reload. */}
+          <p className="match-warning siem-pivot-warning">
+            Opening a solution in Sentinel Integration is not only navigation.
+            If a different solution is already selected there, the switch
+            DELETES every sample you acquired for it - the same deletion the
+            Clear selection button on that screen warns about, and it cannot be
+            undone. The switch only takes effect NOW if Sentinel Integration
+            has not been opened yet since this page loaded. If you have already
+            been there, nothing on that screen changes when you press this - but
+            the button still rewrites the link this page carries, and nothing
+            clears it, so if that link is still there the next time the app
+            loads, the switch is applied then and deletes the samples then.
+            Pressing it is never a no-op: to leave the selection where it is,
+            choose the solution on that screen by hand instead.
+          </p>
 
           {mappedSources(plan).map((ds) => (
             <div key={ds.id} className="siem-solution-card">

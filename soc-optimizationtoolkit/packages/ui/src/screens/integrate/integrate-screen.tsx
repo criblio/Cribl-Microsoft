@@ -441,29 +441,9 @@ export function IntegrateScreen({
   // now-built Solution section and lights the Solution readiness pill, but it
   // never gates the native-table deploy (the MVP-transition canDeploy rule).
   const [solution, setSolution] = useState<SolutionRef | null>(null);
-  // Restore the persisted selection once on mount (deep links and clicks
-  // both overwrite it via handleSolutionChange).
-  const restoredRef = useRef(false);
-  useEffect(() => {
-    if (restoredRef.current || solution !== null) return;
-    restoredRef.current = true;
-    void (async () => {
-      try {
-        const stored = await ports.contentCache?.get(SELECTED_SOLUTION_KEY);
-        if (typeof stored === "string" && stored !== "") {
-          prevSolutionRef.current = stored;
-          setSolution({
-            name: stored,
-            path: `Solutions/${stored}`,
-            deprecated: false,
-          });
-        }
-      } catch {
-        // No restore - the browser selection works as before.
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The restore of the persisted selection lives BELOW handleSolutionChange -
+  // it now hands a late restore to that one handler rather than writing state
+  // of its own, and the reason is written out there.
   const solutionSelected = solution !== null;
   // Bumped when the solution CHANGES to a different one: it re-keys the
   // solution-dependent sections (samples, gap analysis, rule coverage, pipeline
@@ -473,6 +453,10 @@ export function IntegrateScreen({
   // solution survive a reload.
   const [contentResetKey, setContentResetKey] = useState(0);
   const prevSolutionRef = useRef<string | null>(null);
+  // The last selection the BROWSER reported, boxed so "reported null" (Clear)
+  // is distinguishable from "has not reported yet". Only the restore below
+  // reads it, to tell which of the two async paths got here first.
+  const reportedRef = useRef<{ solution: SolutionRef | null } | null>(null);
 
   // ---- Sample Data section (Unit 11) ------------------------------------
   // The section owns its own store IO and reports the tagged-sample count so
@@ -641,6 +625,7 @@ export function IntegrateScreen({
       const prevName = prevSolutionRef.current;
       const nextName = next?.name ?? null;
       prevSolutionRef.current = nextName;
+      reportedRef.current = { solution: next };
       setSolution(next);
       // Persist across reloads (live 2026-07-13: uploading a new app
       // version reloaded the page, samples survived via their store but
@@ -666,6 +651,62 @@ export function IntegrateScreen({
     },
     [ports.samples, ports.contentCache],
   );
+
+  /**
+   * Restore the persisted selection once on mount - and RE-CHECK AFTER THE
+   * AWAIT, which is the whole point of this effect sitting here rather than
+   * beside the state it sets (review 2026-09-04).
+   *
+   * TWO ASYNC PATHS RACE ON EVERY PIVOT. This read is one; the browser's own
+   * deep-link resolution (index fetch, then resolveSelectedSolution) is the
+   * other. The first version evaluated `solution !== null` BEFORE the await and
+   * wrote unconditionally after it, so the loser of the race still won the
+   * page. Measured with a 200ms delay on this one read: the deep link landed
+   * first, this continuation then overwrote `solution` with the STORED name
+   * while the browser card still showed the deep-linked one - the pack name
+   * read "MS-Sentinel-CiscoASA" beside a card reading "Zscaler" - and the
+   * change branch never ran (remove calls 0, against 1 for the same fixture
+   * resolving immediately). Two solutions named at once, no deletion, no
+   * notice: the silent ordering, and it made the SIEM screen's new warning
+   * true only when the race happened to go the other way.
+   *
+   * A LATE RESTORE IS A PREVIOUS SOLUTION, NOT A CURRENT ONE. So when a
+   * selection has already been reported, this does not write state; it names
+   * the stored solution as the previous one and replays the reported selection
+   * through handleSolutionChange - the ONE place that decides what a change
+   * retires. Both orderings then end in the same state, deletion included.
+   * Pinned both ways in integrate-screen.dom.test.tsx.
+   */
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || solution !== null) return;
+    restoredRef.current = true;
+    void (async () => {
+      try {
+        const stored = await ports.contentCache?.get(SELECTED_SOLUTION_KEY);
+        if (typeof stored !== "string" || stored === "") {
+          return;
+        }
+        const reported = reportedRef.current;
+        if (reported !== null) {
+          if ((reported.solution?.name ?? null) !== stored) {
+            prevSolutionRef.current = stored;
+            handleSolutionChange(reported.solution);
+          }
+          return;
+        }
+        prevSolutionRef.current = stored;
+        setSolution({
+          name: stored,
+          path: `Solutions/${stored}`,
+          deprecated: false,
+        });
+      } catch {
+        // No restore - the browser selection works as before.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The detected format per log type (drives the pipeline preview's serde /
   // timestamp selection). Derived from the tagged samples the section reports.

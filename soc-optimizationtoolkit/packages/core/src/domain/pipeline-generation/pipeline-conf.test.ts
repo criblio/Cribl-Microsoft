@@ -21,6 +21,11 @@ import type { PipelineFieldMapping } from "./models";
 import type { OverflowConfig } from "../field-matcher";
 import type { TableReductionRules } from "./reduction-rules";
 import { parseSampleContent } from "../sample-parsing/parse-sample";
+import {
+  CEF_HEADER_ESCAPE,
+  CEF_HEADER_PATTERN,
+  parseCef,
+} from "../sample-parsing/parsers";
 import { parsePositional } from "../sample-parsing/positional";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "./plan";
@@ -130,6 +135,99 @@ describe("timestamp logic", () => {
 describe("CEF two-step extraction + indexOf(-1) guard", () => {
   const yaml = generatePipelineConf("p", "PaloAlto", "CommonSecurityLog", [], undefined, "cef");
 
+  /** One backslash, from its code point, so no source escaping can lose it. */
+  const BS = String.fromCharCode(92);
+
+  /**
+   * The `add:` entries of the CEF HEADER EVAL only, run in order as Cribl would -
+   * each seeing the fields the earlier ones set.
+   *
+   * Scoped to that one function rather than to the whole conf: the enrich group
+   * adds `Type` too, and evaluating unrelated expressions here would make a
+   * failure in this block mean something else.
+   *
+   * The `\\` unescape is the YAML step: the file carries `\\s` inside a
+   * double-quoted scalar, which a YAML loader hands to Cribl as `\s`.
+   */
+  function runEmittedHeader(rawLine: string): Record<string, unknown> {
+    const block = yaml
+      .split(/^ {2}- id: /m)
+      .find((f) => f.includes("description: Parse CEF header from _raw"));
+    expect(block, "no CEF header eval in the emitted conf").toBeDefined();
+    const adds = [...block!.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    expect(adds.length, "no add entries in the CEF header eval").toBe(9);
+    const event: Record<string, unknown> = {};
+    for (const [, name, raw] of adds) {
+      const expr = (raw ?? "").replace(/\\\\/g, "\\");
+      event[name ?? ""] = new Function(
+        "_raw",
+        "__cefParts",
+        `return (${expr});`,
+      )(rawLine, event["__cefParts"]);
+    }
+    return event;
+  }
+
+  /**
+   * THE INDEPENDENT ORACLE (DBT-98). A character scanner sharing no code with
+   * either the parser or the emitter - no regex, no split - so "both sides agree"
+   * cannot mean "both sides carry the same bug". It is the CEF rule stated
+   * directly: a backslash consumes the next character, an unescaped pipe ends a
+   * field, and the remainder after the seventh separator is the extension,
+   * verbatim. A dangling escape is malformed and yields nothing.
+   */
+  function scanCefHeader(
+    line: string,
+  ): { fields: string[]; extension: string | undefined } | null {
+    const start = line.indexOf("CEF:");
+    if (start < 0) return null;
+    const s = line.slice(start + 4);
+    const fields: string[] = [];
+    let current = "";
+    let i = 0;
+    while (i < s.length) {
+      if (s[i] === BS) {
+        if (i + 1 >= s.length) return null;
+        current += s[i + 1];
+        i += 2;
+        continue;
+      }
+      if (s[i] === "|") {
+        fields.push(current);
+        current = "";
+        i += 1;
+        if (fields.length === 7) return { fields, extension: s.slice(i) };
+        continue;
+      }
+      current += s[i];
+      i += 1;
+    }
+    fields.push(current);
+    if (fields.length !== 7) return null;
+    return { fields, extension: undefined };
+  }
+
+  /** The pack's names for the seven header fields, in header order. */
+  const PACK_HEADER_NAMES = [
+    "CEFVersion",
+    "DeviceVendor",
+    "DeviceProduct",
+    "DeviceVersion",
+    "DeviceEventClassID",
+    "Activity",
+    "LogSeverity",
+  ];
+  /** parseCef's names for the same seven, in the same order. */
+  const PARSER_HEADER_NAMES = [
+    "CEFVersion",
+    "DeviceVendor",
+    "DeviceProduct",
+    "DeviceVersion",
+    "DeviceEventClassID",
+    "Name",
+    "Severity",
+  ];
+
   it("emits the header eval then a serde kvp for the extension", () => {
     expect(yaml).toContain("name: __cefParts");
     expect(yaml).toContain("name: __cefExtension");
@@ -145,7 +243,7 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
   it("guards indexOf('CEF:') so a non-CEF line yields [] not garbage", () => {
     const m = yaml.match(/name: __cefParts\s+value: "(.+)"/);
     expect(m).not.toBeNull();
-    const expr = m![1];
+    const expr = m![1]!.replace(/\\\\/g, "\\");
     expect(expr).toContain("indexOf('CEF:') >= 0 ?");
     // Evaluate the emitted Cribl expression for both cases.
     const evalCef = new Function("_raw", `return (${expr});`) as (
@@ -153,8 +251,108 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
     ) => string[];
     expect(evalCef("plain syslog line, no header")).toEqual([]);
     const parts = evalCef("CEF:0|Palo Alto Networks|PAN-OS|10.1|TRAFFIC|end|3|src=1.2.3.4");
-    expect(parts[0]).toBe("CEF:0");
+    // SLOT 0 IS THE VERSION, not "CEF:0" (DBT-98). The header is matched, not
+    // split, so the `CEF:` prefix is consumed by the anchor and `.slice(1)` drops
+    // the whole-match element - which is why nothing downstream re-strips it.
+    expect(parts[0]).toBe("0");
     expect(parts[1]).toBe("Palo Alto Networks");
+    expect(parts[7]).toBe("src=1.2.3.4");
+    // A PLAIN ARRAY, not a match object. `.slice(1)` is what drops `index`,
+    // `input` and `groups`, so nothing downstream depends on Cribl preserving
+    // properties a match result carries and an array does not. Pinned rather
+    // than asserted in a comment, because it is the reason for the `.slice`.
+    expect(Object.keys(parts)).toEqual([
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+    ]);
+    // A header the pattern cannot read yields [], never a partial fill. Before
+    // DBT-98 this line produced five header fields in the pack and NO record in
+    // the analyzer - the two halves disagreed about the same bytes.
+    expect(evalCef("CEF:0|V|P|1.0|100")).toEqual([]);
+  });
+
+  it("emits sample-parsing's OWN header pattern, so the two cannot drift", () => {
+    // THE ANTI-DRIFT PIN (DBT-98). Not "a regex is present" - the exact source
+    // text of the constant parseCef matches with, recovered by undoing the YAML
+    // escaping rather than by re-running the emitter's escaper, so the pin is
+    // independent of the code that wrote the line.
+    const m = yaml.match(/name: __cefParts\s+value: "(.+)"/);
+    expect(m).not.toBeNull();
+    const expr = m![1]!.replace(/\\\\/g, "\\");
+    expect(expr).toContain(`/${CEF_HEADER_PATTERN.source}/`);
+    const vendor = yaml.match(/name: DeviceVendor\s+value: "(.+)"/);
+    expect(vendor).not.toBeNull();
+    expect(vendor![1]!.replace(/\\\\/g, "\\")).toContain(
+      `/${CEF_HEADER_ESCAPE.source}/g`,
+    );
+  });
+
+  it("agrees with parseCef AND with a scanner, on every escape shape", () => {
+    // THE LOAD-BEARING PIN (DBT-98). The emitted pipeline used to split the
+    // header on `|`, so a `\|` written per the CEF specification shifted every
+    // header field by one AT RUNTIME, in the pack an operator installs. The
+    // analyzer had the same defect, which is the only reason the two agreed.
+    //
+    // VALUES, not names. All seven names are present and correct in the broken
+    // parse too - that is what made this survive - so a name-list or a
+    // toBeDefined assertion here would be worth nothing.
+    const lines = [
+      "CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1",
+      `CEF:0|V${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
+      `CEF:0|V${BS}${BS}|P|1.0|100|worm|5|src=1.1.1.1`,
+      `CEF:0|V${BS}${BS}${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
+      `CEF:0|V|P|1.0|100|worm${BS}|trojan|5|src=1.1.1.1`,
+      `CEF:0|V|P|1.0|100|worm|5${BS}|6|src=1.1.1.1`,
+      `CEF:0|V|P|1.0|100|worm|5|msg=a${BS}|b src=1.1.1.1`,
+      "CEF:0|V|P|1.0|100|worm|5|msg=a|b dst=2.2.2.2",
+      "CEF:0|V|P|1.0|100|worm|5",
+      "CEF:0|V|P|1.0|100|worm|5|",
+      `<134>host1 CEF:0|V${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
+    ];
+
+    for (const line of lines) {
+      const expected = scanCefHeader(line);
+      expect(expected, line).not.toBeNull();
+
+      // 1. the analyzer's record
+      const parsed = parseCef(line)[0];
+      expect(parsed, line).toBeDefined();
+      expect(
+        PARSER_HEADER_NAMES.map((n) => parsed![n]),
+        line,
+      ).toEqual(expected!.fields);
+
+      // 2. the emitted pipeline's fields, run as Cribl would run them
+      const event = runEmittedHeader(line);
+      expect(
+        PACK_HEADER_NAMES.map((n) => event[n]),
+        line,
+      ).toEqual(expected!.fields);
+      expect(event["__cefExtension"], line).toBe(expected!.extension);
+    }
+
+    // The escaped-pipe row, spelled out, because a loop that silently matched
+    // nothing would still pass everything above.
+    const shifted = runEmittedHeader(`CEF:0|V${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`);
+    expect(shifted["DeviceVendor"]).toBe("V|W"); // was `V\`
+    expect(shifted["DeviceProduct"]).toBe("P"); // was `W`
+    expect(shifted["LogSeverity"]).toBe("5"); // was `worm`
+    expect(shifted["__cefExtension"]).toBe("src=1.1.1.1"); // was `5|src=1.1.1.1`
+  });
+
+  it("still passes the Cribl YAML validator with the pattern inlined", () => {
+    // The emitted value is a long line carrying brackets, pipes and backslashes.
+    // The rule that reads `- name:` lines is not idle on this conf - it reads all
+    // nine minted names - so an empty issue list means "every minted name is
+    // addressable", not "nothing was read".
+    expect(checkCriblYaml(yaml, "conf.yml")).toEqual([]);
+    expect(yaml).not.toContain("\t");
   });
 });
 

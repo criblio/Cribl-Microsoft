@@ -169,4 +169,87 @@ describe("resolveSelectedSolution", () => {
     expect(resolveSelectedSolution(SOLUTIONS, null)).toBeNull();
     expect(resolveSelectedSolution(SOLUTIONS, "")).toBeNull();
   });
+
+  /**
+   * DBT-28 defect (1). The resolver stopped at case-insensitive-exact while the
+   * SEARCH BOX beside it already ignored separators, so a handoff naming a
+   * solution that exists under different punctuation resolved to nothing and
+   * was consumed in silence.
+   *
+   * THE FIXTURE IS A REAL FAILING PAIR, not an invented one. The SIEM
+   * knowledge base sends a `cisco_` Splunk macro with no direct entry of its
+   * own to the solution "Cisco ASA" (packages/core .../knowledge-bases.ts
+   * SPLUNK_PREFIX_MAP) and the repo folder is "CiscoASA"; the fuzzy tier that
+   * could have rewritten it never runs on a knowledge-base hit
+   * (applyFuzzySolutionMap returns early unless confidence === "none").
+   * Measured 2026-09-04 against the live Solutions listing: of the 26 distinct
+   * names the knowledge bases carried at that moment, 17 match a folder
+   * exactly, 1 case-insensitively, exactly this 1 only under the collapsing
+   * pass, and 7 match nothing under any rule. The table was being edited that
+   * day (DBT-103) and an earlier read gave 24 / 12 / 1 / 1 / 10; the
+   * collapse-only entry was this same pair in both.
+   *
+   * The pair is HARD-CODED here rather than imported, so this pin keeps
+   * describing the defect class after that row is corrected - the knowledge
+   * bases are hand-maintained and being edited (DBT-103), and 332 of the 574
+   * Solutions folders carry a separator, so the next such name is a question of
+   * when rather than whether.
+   */
+  const PUNCTUATION_INDEX: SolutionRef[] = [
+    { name: "CiscoASA", path: "Solutions/CiscoASA" },
+    { name: "Palo Alto Networks", path: "Solutions/Palo Alto Networks" },
+    { name: "Check Point", path: "Solutions/Check Point" },
+    { name: "Cisco Umbrella", path: "Solutions/Cisco Umbrella" },
+  ];
+
+  it("resolves a name that differs from the index only in separators", () => {
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "Cisco ASA")?.name).toBe(
+      "CiscoASA",
+    );
+    expect(
+      resolveSelectedSolution(PUNCTUATION_INDEX, "PaloAltoNetworks")?.name,
+    ).toBe("Palo Alto Networks");
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "checkpoint")?.name).toBe(
+      "Check Point",
+    );
+  });
+
+  it("uses collapsed EQUALITY, never a collapsed substring", () => {
+    // The whole safety argument for the third pass is that a collapsed name is
+    // an IDENTITY (measured 2026-09-04: 574 Solutions folders, 0 groups sharing
+    // a collapsed form). A substring test would throw that away - "Cisco" would
+    // claim CiscoASA, and "Cisco U" would claim it too while a real
+    // "Cisco Umbrella" sits in the same index. Nothing here may resolve.
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "Cisco")).toBeNull();
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "Cisco A")).toBeNull();
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "CiscoASAExtra")).toBeNull();
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "Palo Alto")).toBeNull();
+  });
+
+  it("does not let an all-punctuation name match anything", () => {
+    // "---" collapses to "", and so would a solution named "---". Matching them
+    // to each other would be an accident rather than a resolution, so the pass
+    // is skipped - the same guard solutionMatchesQuery carries.
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, "---")).toBeNull();
+    expect(resolveSelectedSolution(PUNCTUATION_INDEX, " ")).toBeNull();
+    expect(
+      resolveSelectedSolution([{ name: "-", path: "Solutions/-" }], "---"),
+    ).toBeNull();
+  });
+
+  it("still prefers an EXACT name over a collapsed one", () => {
+    // Ordering matters where two entries collapse to the same form. The live
+    // index has no such pair, but the resolver must not depend on that: an
+    // exact hit is never traded for a collapsed one.
+    const ambiguous: SolutionRef[] = [
+      { name: "CiscoASA", path: "Solutions/CiscoASA" },
+      { name: "Cisco ASA", path: "Solutions/Cisco ASA" },
+    ];
+    expect(resolveSelectedSolution(ambiguous, "Cisco ASA")?.path).toBe(
+      "Solutions/Cisco ASA",
+    );
+    expect(resolveSelectedSolution(ambiguous, "cisco asa")?.path).toBe(
+      "Solutions/Cisco ASA",
+    );
+  });
 });

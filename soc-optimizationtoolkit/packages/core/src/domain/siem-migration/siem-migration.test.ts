@@ -10,12 +10,18 @@
 import { describe, expect, it } from "vitest";
 import {
   MIGRATION_RAW_SEARCH_CAP,
+  QRADAR_EXTENSION_MAP,
+  SOLUTIONS_WITHOUT_SENTINEL_FOLDER,
+  SPLUNK_DATAMODEL_MAP,
+  SPLUNK_MACRO_MAP,
+  SPLUNK_PREFIX_MAP,
   applyFuzzySolutionMap,
   assembleMigrationPlan,
   buildMitreCoverage,
   detectSiemPlatform,
   enrichPlanWithAnalyticRules,
   generateMigrationReport,
+  hasSentinelSolutionFolder,
   identifyDataSources,
   migrationReportFileName,
   normalizeSourceKey,
@@ -23,9 +29,13 @@ import {
   parseQRadarExport,
   parseRfc4180Csv,
   parseSplunkExport,
+  resolveSplunkMacro,
   serializeMigrationPlan,
 } from "./index";
-import type { ParsedRule } from "./index";
+import type { ParsedRule, SolutionTableTarget } from "./index";
+import solutionDirectories from "./solution-directories.fixture.json";
+import { lookupSolutionIngestion } from "../sentinel-content/ingestion-classification";
+import { detectVendorIdentity } from "../vendor-identity/vendor-identity";
 
 function splunkExport(rules: Array<Record<string, unknown>>): string {
   return JSON.stringify({ result: { alertrules: rules } });
@@ -145,9 +155,364 @@ describe("identifyDataSources", () => {
       ].join("\n"),
     );
     const [source] = identifyDataSources(rules, "qradar");
-    expect(source.sentinelSolution).toBe("DNS");
+    // DBT-104: was "DNS", a name no Solutions/ directory carries. Windows
+    // Server DNS is the one that declares DnsEvents.
+    expect(source.sentinelSolution).toBe("Windows Server DNS");
     expect(source.sentinelTable).toBe("DnsEvents");
     expect(source.confidence).toBe("high");
+  });
+});
+
+/**
+ * Every {key -> target} pair across the four knowledge bases, flattened once
+ * so the shape pins below cannot miss a map somebody adds an entry to.
+ */
+const KB_ENTRIES: ReadonlyArray<{
+  map: string;
+  key: string;
+  target: SolutionTableTarget;
+}> = [
+  ...Object.entries(SPLUNK_MACRO_MAP).map(([key, target]) => ({
+    map: "SPLUNK_MACRO_MAP",
+    key,
+    target,
+  })),
+  ...Object.entries(SPLUNK_DATAMODEL_MAP).map(([key, target]) => ({
+    map: "SPLUNK_DATAMODEL_MAP",
+    key,
+    target,
+  })),
+  ...Object.entries(QRADAR_EXTENSION_MAP).map(([key, target]) => ({
+    map: "QRADAR_EXTENSION_MAP",
+    key,
+    target,
+  })),
+  ...SPLUNK_PREFIX_MAP.map(({ prefix, solution, table }) => ({
+    map: "SPLUNK_PREFIX_MAP",
+    key: prefix,
+    target: { solution, table },
+  })),
+];
+
+/**
+ * The set the pivot actually resolves against - every directory under
+ * `Solutions/` - and the ladder it walks: exact, then case-insensitive, then
+ * separator-insensitive (resolveSelectedSolution, browser-state.ts).
+ *
+ * THE LADDER IS RESTATED HERE, NOT IMPORTED, and that is a real seam: core
+ * cannot import ui. So these pins hold WHICH RUNG each knowledge-base name
+ * needs; that the product still OFFERS the rung is browser-state.test.ts's
+ * job. Neither half claims the other's - if the third rung is ever removed
+ * from the product, it is that suite which must fail, and this one that says
+ * which two names would fall over when it does.
+ */
+const SOLUTION_DIRECTORIES: readonly string[] = solutionDirectories.directories;
+
+/** The one separator-collapsing rule, matching ui's collapseForSearch. */
+function collapseName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+type ResolutionRung =
+  | "exact"
+  | "case-insensitive"
+  | "separator-insensitive"
+  | "none";
+
+/** The rung a solution NAME lands on against the directory list, or "none". */
+function resolutionRung(name: string): ResolutionRung {
+  if (SOLUTION_DIRECTORIES.includes(name)) {
+    return "exact";
+  }
+  const lower = name.toLowerCase();
+  if (SOLUTION_DIRECTORIES.some((d) => d.toLowerCase() === lower)) {
+    return "case-insensitive";
+  }
+  const collapsed = collapseName(name);
+  if (
+    collapsed !== "" &&
+    SOLUTION_DIRECTORIES.some((d) => collapseName(d) === collapsed)
+  ) {
+    return "separator-insensitive";
+  }
+  return "none";
+}
+
+describe("DBT-103: an identifier must not resolve to another vendor's solution", () => {
+  it("resolves every f5_ macro AND sourcetype to the F5 solution", () => {
+    // The prefix map is the ONLY f5 knowledge in the base - one rule catching
+    // every f5_ identifier - so pinning one name would pin the lot. These are
+    // pinned anyway because the card names a sourcetype and a macro, and the
+    // Splunk parser feeds BOTH through resolveSplunkMacro.
+    for (const id of ["f5_bigip", "f5_bigip_asm", "f5_asm_syslog", "f5_ltm"]) {
+      expect(resolveSplunkMacro(id)).toEqual({
+        solution: "F5 Networks",
+        table: "CommonSecurityLog",
+      });
+    }
+  });
+
+  it("carries the fix through the parser to the plan, from a sourcetype", () => {
+    const plan = assembleMigrationPlan({
+      rules: parseSplunkExport(
+        splunkExport([
+          { title: "F5 ASM alert", search: 'index=f5 sourcetype=f5_bigip_asm' },
+        ]),
+      ),
+      platform: "splunk",
+      fileName: "splunk.json",
+    });
+    const [ds] = plan.dataSources;
+    expect(ds.name).toBe("f5_bigip_asm");
+    expect(ds.sentinelSolution).toBe("F5 Networks");
+    // The failure this card is about, stated as itself.
+    expect(ds.sentinelSolution).not.toBe("Cisco ASA");
+    expect(ds.sentinelTable).toBe("CommonSecurityLog");
+  });
+
+  it("resolves a zeek_ identifier to Corelight, not to a Windows solution", () => {
+    // The SECOND instance of the same class, found while auditing the maps
+    // for DBT-104: zeek_ (open-source network monitoring) resolved to
+    // "Windows Security Events" / "SecurityEvent". The cross-vendor SHAPE pin
+    // below cannot see it - neither Zeek nor Corelight is one of the 18
+    // curated vendors - so it is pinned by name.
+    for (const id of ["zeek_conn", "zeek_dns", "zeek_notice"]) {
+      expect(resolveSplunkMacro(id), id).toEqual({
+        solution: "Corelight",
+        table: "",
+      });
+    }
+    // Stated as itself, the way the f5_ pin states its own failure.
+    expect(resolveSplunkMacro("zeek_conn")?.solution).not.toBe(
+      "Windows Security Events",
+    );
+    // Corelight is a real address, at the strongest rung - so this fix does
+    // not lean on the separator-insensitive rung the way "Cisco ASA" does.
+    expect(resolutionRung("Corelight")).toBe("exact");
+    // And it is not a dead end dressed up: the pivot keeps `medium` (prefix,
+    // not a direct macro) rather than being capped at `low`.
+    const [ds] = identifyDataSources(
+      parseSplunkExport(splunkExport([{ title: "r", search: "`zeek_conn`" }])),
+      "splunk",
+    );
+    expect(ds.sentinelSolution).toBe("Corelight");
+    expect(ds.confidence).toBe("medium");
+  });
+
+  it("SHAPE: no entry maps one curated vendor's identifier to another's solution", () => {
+    // The cross-vendor guard, so a future data edit cannot reintroduce the
+    // class silently. Both sides are read through the SAME curated list the
+    // pack builder uses for DeviceVendor (domain/vendor-identity): the
+    // identifier with underscores opened out, and the solution name.
+    //
+    // COVERAGE, stated rather than implied: detectVendorIdentity knows 18
+    // vendors, so this sees only the entries whose IDENTIFIER names one of
+    // them - 3 of the 102 entries today. It is a guard against the specific
+    // class (f5_ -> Cisco ASA), NOT a proof that the other 99 are right; a
+    // cross-vendor mapping between two uncurated vendors would pass it.
+    const exercised = KB_ENTRIES.map((e) => ({
+      ...e,
+      keyVendor: detectVendorIdentity(e.key.replace(/_/g, " ")),
+    })).filter((e) => e.target.solution !== "" && e.keyVendor !== null);
+
+    // Anti-vacuity: the entry the card names must be one of the ones seen.
+    expect(exercised.map((e) => e.key)).toContain("f5_");
+    expect(exercised.length).toBeGreaterThanOrEqual(3);
+
+    const crossVendor = exercised
+      .filter(
+        (e) =>
+          detectVendorIdentity(e.target.solution)?.vendor !==
+          e.keyVendor?.vendor,
+      )
+      .map((e) => `${e.map}.${e.key} -> ${e.target.solution}`);
+    expect(crossVendor).toEqual([]);
+  });
+});
+
+describe("DBT-104: a solution name must be one Integrate can land on", () => {
+  /**
+   * THE AUTHORITY IS THE DIRECTORY LIST, NOT THE CLASSIFICATION ASSET. These
+   * pins used to ask `lookupSolutionIngestion` whether a name was known, which
+   * is a different question twice over. That asset holds the 436 solutions
+   * that HAVE a Data Connectors directory - only 434 of which are still
+   * directory names - so it is blind to the ~140 directories carrying no
+   * connector, in the dangerous direction: a name declared absent that IS a
+   * connector-less directory passed, while suppressing a pivot that lands. And
+   * its lookup collapses separators in ONE step, so it could never say which
+   * RUNG a name needs - the thing DBT-28 made load-bearing the same day.
+   *
+   * solution-directories.fixture.json is the 574 names the pivot resolves
+   * against; its `meta` says how it is refreshed and how it ages (stale makes
+   * these pins more permissive, never flaky - and blind to an upstream
+   * deletion, which only a live re-check can see).
+   *
+   * Cost, stated: 16 KB of committed names, refreshed by hand with the one gh
+   * command in that file. Bought: these pins now fail on a name no directory
+   * carries AND on a spacing-only edit that demotes a name to a weaker rung.
+   */
+  const MAPPED_SOLUTIONS: readonly string[] = [
+    ...new Set(KB_ENTRIES.map((e) => e.target.solution).filter((s) => s !== "")),
+  ].sort();
+
+  const namesAtRung = (rung: ResolutionRung): string[] =>
+    MAPPED_SOLUTIONS.filter((s) => resolutionRung(s) === rung);
+
+  it("SHAPE: every mapped solution resolves to a directory, or is declared absent", () => {
+    // Anti-vacuity: an empty or gutted map would satisfy every filter below.
+    expect(MAPPED_SOLUTIONS).toHaveLength(27);
+    expect(namesAtRung("exact").length).toBeGreaterThan(10);
+
+    const undeclaredAndUnresolvable = MAPPED_SOLUTIONS.filter(
+      (s) => resolutionRung(s) === "none" && hasSentinelSolutionFolder(s),
+    );
+    expect(undeclaredAndUnresolvable).toEqual([]);
+  });
+
+  it("SHAPE: nothing is declared absent that a directory actually carries", () => {
+    // The other direction: declaring a real solution absent would suppress a
+    // pivot that works, so the declaration list cannot be used as a dumping
+    // ground either.
+    const declaredButPresent = Object.keys(SOLUTIONS_WITHOUT_SENTINEL_FOLDER)
+      .filter((s) => resolutionRung(s) !== "none")
+      .sort();
+    expect(declaredButPresent).toEqual([]);
+    expect(Object.keys(SOLUTIONS_WITHOUT_SENTINEL_FOLDER)).toHaveLength(7);
+    // Both directions in one statement: the names that resolve to nothing are
+    // EXACTLY the declared ones.
+    expect(namesAtRung("none")).toEqual(
+      Object.keys(SOLUTIONS_WITHOUT_SENTINEL_FOLDER).sort(),
+    );
+  });
+
+  it("SHAPE: pins WHICH rung each name needs, not merely that one exists", () => {
+    // A name that only resolves through a weaker rung is a working pivot with
+    // a dependency, and the dependency has to be visible: 25 of the 27 names
+    // are directory names verbatim, and these two are not.
+    //
+    // This is also the pin that catches a SPACING-ONLY edit. Renaming any
+    // exact name to a separator variant ("Okta Single Sign-On" ->
+    // "OktaSingleSignOn") still resolves - the third rung sees to that, so
+    // asserting it breaks would be a lie - but it drops off the exact rung and
+    // lands in the list below, which fails. Measured 2026-09-04.
+    expect(namesAtRung("case-insensitive")).toEqual([
+      // Directory "Azure kubernetes Service" - upstream's own casing slip.
+      "Azure Kubernetes Service",
+    ]);
+    expect(namesAtRung("separator-insensitive")).toEqual([
+      // Directory "CiscoASA". Resolves ONLY because DBT-28 added the third
+      // rung on 2026-09-04; before that this name reached nothing.
+      "Cisco ASA",
+    ]);
+    expect(namesAtRung("exact")).toHaveLength(18);
+  });
+
+  it("keeps the repointed entries on directories that exist", () => {
+    // The two SHAPE pins above cannot see a regression back onto a name that
+    // is ALSO declared - reverting gws_ to "Google Workspace" passed both,
+    // because "Google Workspace" is legitimately declared for the ambiguous
+    // `google_`. So the four repointed names are pinned by name.
+    const repointed: ReadonlyArray<readonly [string, string]> = [
+      ["gws_login", "GoogleWorkspaceReports"],
+      ["gsuite_admin", "GoogleWorkspaceReports"],
+      ["github_audit", "GitHub"],
+      ["github_enterprise", "GitHub"],
+      [
+        "windows_exchange_iis",
+        "Microsoft Exchange Security - Exchange On-Premises",
+      ],
+      [
+        "msexchange_management",
+        "Microsoft Exchange Security - Exchange On-Premises",
+      ],
+    ];
+    for (const [id, solution] of repointed) {
+      expect(resolveSplunkMacro(id)?.solution, id).toBe(solution);
+      // A repointed name is a name somebody CHOSE, so it gets the strongest
+      // rung - no leaning on case or separator forgiveness.
+      expect(resolutionRung(solution), solution).toBe("exact");
+      // ...and it can actually receive data: the shipped classification only
+      // carries solutions that HAVE a Data Connectors directory, so a null
+      // here would mean the pivot lands on a solution with nothing to ingest
+      // into. This is the one question the directory list cannot answer.
+      expect(lookupSolutionIngestion(solution), solution).not.toBeNull();
+    }
+    expect(QRADAR_EXTENSION_MAP["IBM QRadar DNS Analyzer"].solution).toBe(
+      "Windows Server DNS",
+    );
+  });
+
+  it("leaves only the ambiguous google_ prefix on the declared Google Workspace", () => {
+    // The declaration exists for ONE reason: `google_` covers Workspace and
+    // Google Cloud and the export does not say which. Anything else landing
+    // on that name is a regression borrowing the declaration as cover.
+    expect(
+      KB_ENTRIES.filter((e) => e.target.solution === "Google Workspace").map(
+        (e) => e.key,
+      ),
+    ).toEqual(["google_"]);
+  });
+
+  it("every declaration says what was checked, not just that it failed", () => {
+    for (const [name, reason] of Object.entries(
+      SOLUTIONS_WITHOUT_SENTINEL_FOLDER,
+    )) {
+      expect(reason.length, name).toBeGreaterThan(60);
+      expect(reason, name).toMatch(/directory|directories/i);
+    }
+  });
+
+  it("caps a declared solution at low confidence on the Splunk path", () => {
+    const [ds] = identifyDataSources(
+      parseSplunkExport(splunkExport([{ title: "r", search: "`pingid`" }])),
+      "splunk",
+    );
+    // Still identified - PingID IS the vendor - but not sold as settled.
+    expect(ds.sentinelSolution).toBe("PingID");
+    expect(hasSentinelSolutionFolder("PingID")).toBe(false);
+    expect(ds.confidence).toBe("low");
+    // A neighbour in the same map, whose folder does exist, keeps `high`.
+    const [okta] = identifyDataSources(
+      parseSplunkExport(splunkExport([{ title: "r", search: "`okta`" }])),
+      "splunk",
+    );
+    expect(okta.confidence).toBe("high");
+  });
+
+  it("caps a declared solution at low confidence on the QRadar path", () => {
+    const [ds] = identifyDataSources(
+      parseQRadarExport(
+        [
+          QRADAR_HEADER,
+          "R,EVENT,TRUE,TRUE,,,,,,,,,IBM Security QRadar Reconnaissance Content Extension,Recon",
+        ].join("\n"),
+      ),
+      "qradar",
+    );
+    // "Firewall" is a category the export never narrows; the pivot cannot land.
+    expect(ds.sentinelSolution).toBe("Firewall");
+    expect(ds.confidence).toBe("low");
+  });
+
+  it("leaves a low-confidence dead end alone instead of letting fuzzy re-guess it", () => {
+    // low, not none: applyFuzzySolutionMap only rewrites `none`, and "Firewall"
+    // substring-matches ten real firewall solutions - it would happily promote
+    // a known dead end into an invented live one.
+    const base = identifyDataSources(
+      parseQRadarExport(
+        [
+          QRADAR_HEADER,
+          "R,EVENT,TRUE,TRUE,,,,,,,,,IBM QRadar Data Exfiltration Content Extension,Exfil",
+        ].join("\n"),
+      ),
+      "qradar",
+    );
+    const mapped = applyFuzzySolutionMap(base, [
+      "Azure Firewall",
+      "SonicWall Firewall",
+    ]);
+    expect(mapped[0].sentinelSolution).toBe("Firewall");
+    expect(mapped[0].confidence).toBe("low");
   });
 });
 
