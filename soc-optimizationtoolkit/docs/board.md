@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**80 in the backlog, 1 in progress, 115 done.**
+**82 in the backlog, 0 in progress, 115 done.**
 
 ## By menu item
 
@@ -23,15 +23,16 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 36 | 72 | 6 |
+| Sentinel Integration | 36 | 72 | 7 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
+| Repositories | 1 | 0 | 1 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 8 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 24 | 0 |
 
-Open work totals 81.
+Open work totals 82.
 
 ## Epics and features
 
@@ -116,14 +117,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 3/5 | REL-2, REL-3, REL-4, REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 65% (74/113)
+### `DBT` Quality and technical debt _(enabler)_ - 65% (74/114)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 40/64 | DBT-2, DBT-5*, DBT-6, DBT-7, DBT-36*, DBT-55, DBT-56, DBT-42, DBT-43, DBT-44, DBT-45, DBT-46, DBT-47, DBT-48, DBT-49, DBT-50, DBT-51, DBT-52, DBT-41, DBT-40, DBT-60, DBT-61, DBT-62, DBT-63, DBT-64, DBT-65, DBT-66, DBT-67, DBT-68, DBT-69, DBT-70, DBT-71, DBT-73, DBT-74, DBT-76, DBT-77, DBT-78, DBT-79, DBT-80, DBT-84, DBT-89, DBT-82, DBT-90, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-98, DBT-99, DBT-100, DBT-101, DBT-105, DBT-106, DBT-107, DBT-108, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 11/17 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 11/18 | DBT-3, DBT-9, DBT-14, DBT-15, DBT-28, D-10*, DBT-53, DBT-38, DBT-39, DBT-72, DBT-75, DBT-83, DBT-96, DBT-97, DBT-102, DBT-103, DBT-104, DBT-118* |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 6/10 | DBT-8, DBT-10, DBT-11, DBT-13, DBT-22, DBT-26, DBT-32, DBT-57, DBT-58, DBT-54 |
 | `DBT-F5` Board tooling defects | Cross-cutting | 14/14 | DBT-16, DBT-17, DBT-18, DBT-19, DBT-20, DBT-21, DBT-23, DBT-24, DBT-25, DBT-27, DBT-29, DBT-30, DBT-31, DBT-59 |
@@ -142,12 +143,20 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
+_Nothing here._
+
+---
+
+## Backlog - now (8)
+
+Next to pick up. Nothing blocks these.
+
 - **DBT-28** The solution deep link does not override a stored selection
-  `DBT-F2` `bug` `unconfirmed`
+  `DBT-F2` `bug` `unconfirmed` `blocked by DBT-83`
   FOUND 2026-08-28 driving the dev app. The Select Sentinel Solution card
   advertises `Deep link: #/?solution=1Password`. Navigating the live preview
   to `/apps/a/__local__#/?solution=Palo%20Alto%20Networks` left 1Password
@@ -262,12 +271,39 @@ Started. Anything here with an unfinished dependency is called out on its card.
   nothing and is consumed SILENTLY. It is separable from the channel question
   and could be fixed first. Defect (3) was closed by [[DBT-75]]. Both attempts
   are recoverable only from this session's transcript; neither was committed.
+  EDGE ADDED 2026-09-04 (board audit): this depends on [[DBT-83]] and cannot
+  honestly be worked before it. Candidate cause (1) above - that on the Cribl
+  shell the app runs in an IFRAME and the hash never reaches it - is word for
+  word DBT-83's second question, "can the shipped shell serve one?". Fixing
+  the precedence rule before that is settled risks fixing a feature the shell
+  cannot deliver, or one nobody wants. Moved out of in-progress at the same
+  time: it had been marked in-progress since 2026-08-28 with no commit
+  touching its cause, which makes the In progress column describe work nobody
+  is doing - the inverse of the rule that column exists for.
 
----
-
-## Backlog - now (5)
-
-Next to pick up. Nothing blocks these.
+- **DBT-83** Is a shareable solution deep link wanted, and can the shipped shell serve one?
+  `DBT-F2` `decision` `undecided`
+  [[DBT-75]] removed a chip advertising a URL the shipped shell cannot reach.
+  It removed the FALSE CLAIM without answering whether the feature is wanted,
+  which was the right split - the defect was the advertisement, and the
+  feature question is this card. THE MECHANISM STILL EXISTS and is now pinned
+  on both halves: buildSolutionDeepLink writes the hash, and the mount read
+  consumes it. The SIEM-migration pivot uses it today. So this is not 'build a
+  deep link' - it is 'can an operator be given an ADDRESS to paste', which is
+  the part the shell breaks: on Cribl.Cloud the app runs on a sandboxed origin
+  answering every path with the app, and the address bar belongs to the
+  embedder. ANSWER [[DBT-86]] FIRST. Whether the fragment even reaches the
+  document is measured contradictorily in two places, and the answer changes
+  what can honestly be offered. Options once it is known: advertise nothing
+  (today's state, and defensible); offer a copyable link only when the shell
+  demonstrably preserves it; or ask Cribl whether an app can obtain its own
+  addressable URL. PROMOTED later -> now 2026-09-04 (board audit): it gates
+  [[DBT-28]], which is a `now` bug, and the graph had no edge saying so. NOTE
+  FOR WHOEVER TAKES IT: this card has two halves and they are answered
+  differently. "Can the shipped shell serve one?" is a FACT and is measurable
+  in the Live Preview - navigate the iframed app to a `#/?solution=` URL and
+  see whether the hash reaches it. "Is a shareable deep link wanted?" is a
+  PREFERENCE and belongs to the operator; do not answer it by inference.
 
 - **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
   `GEN-F1` `bug` `settled`
@@ -365,6 +401,50 @@ Next to pick up. Nothing blocks these.
   it. Do the exhaustiveness work first where it is cheap; the individual fixes
   are worth less than the guarantee that the next member added is caught at
   compile time.
+
+- **DBT-118** Repositories advertises Elastic sample fetching the app stopped doing
+  `DBT-F2` `bug` `settled`
+  OPERATOR DIRECTION 2026-09-04: "we should be able to get rid of the elastic
+  github calls. We are no longer using those samples." This is a HONESTY
+  defect before it is a cleanup, which is why it is a bug. Section 3 of the
+  Repositories screen is headed "Elastic integrations sample data" and tells
+  the operator the app fetches "Raw vendor log samples from
+  github.com/elastic/integrations, fetched ON DEMAND per selected solution to
+  drive field mapping and reduction rules". NONE OF THAT STILL HAPPENS.
+  ADR-0003 removed the sample browser and with it every consumer that turned
+  an Elastic file into a mapping; samples now come from paste, upload, a Cribl
+  capture, or a Lake query. The screen describes a data path that was deleted,
+  and an operator reading it would reasonably wait for Elastic samples that
+  are never coming. WHAT IS ACTUALLY LEFT is one connectivity probe. The
+  RemoteSampleSource port's own header already says so - it survived ADR-0003
+  only because "the Repositories screen uses it INDEPENDENTLY of sample
+  acquisition: a connectivity check that lists an Elastic package's test files
+  to prove the proxied GitHub path works". So the port is kept alive by the
+  diagnostic that describes it, and nothing else. MEASURED CONSUMERS, which
+  decide the scope: listElasticTestFiles ONE caller - repositories-screen.tsx
+  checkElastic (the probe itself) listCriblPackSamples ZERO callers - declared
+  in the port, implemented in the adapter, called by nothing. Dead since
+  ADR-0003 and not noticed until now. With the probe gone the whole port has
+  no consumer, so this removes a port rather than a function. TO REMOVE:
+  section 3 and its state in repositories-screen.tsx (checkElastic, the
+  elastic* state, ELASTIC_PROBE_PACKAGE / ELASTIC_PROBE_STREAM, elasticStatus
+  / elasticBadgeClass); ports/remote-sample-source.ts entire, and its
+  ports/index.ts export; sampleSource on UiPorts in ports-context.ts;
+  PlatformRemoteSampleSource, ELASTIC_OWNER_REPO and CRIBLPACKS_OWNER in
+  adapters.ts, and the binding in App.tsx. TO KEEP, and the reason the diff
+  must be read rather than pattern-matched on "github": the SENTINEL CONTENT
+  path uses the SAME two hosts and the same retry helper.
+  githubFetchWithRetry, GITHUB_API, GITHUB_RAW and every SENTINEL_* constant
+  stay. Deleting by grep on "github" would take out solution browsing, content
+  install and the KQL validation tables with it. NO DIAGNOSTIC IS LOST. The
+  Sentinel half of this screen already probes independently through the
+  SentinelContent port (getCommitSha, listSolutions, and the KQL-tables schema
+  probe), so the reachability of api.github.com and raw.githubusercontent.com
+  is still checked - against the repo the app actually reads. The Elastic
+  probe only ever proved a path nothing else used. Done when no source file
+  outside a fixture mentions elastic/integrations, the suite is green, and the
+  Repositories screen has been opened in the Live Preview to confirm the
+  remaining sections still report honestly with one section gone.
 
 ---
 
@@ -998,7 +1078,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (41)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -1412,24 +1492,6 @@ Settled, gated on something above.
   derivable from the script - rather than the surrounding argument. Pinning
   the argument would make every rewording a failure and train people to bypass
   it. Related: [[DBT-92]].
-
-- **DBT-83** Is a shareable solution deep link wanted, and can the shipped shell serve one?
-  `DBT-F2` `decision` `undecided`
-  [[DBT-75]] removed a chip advertising a URL the shipped shell cannot reach.
-  It removed the FALSE CLAIM without answering whether the feature is wanted,
-  which was the right split - the defect was the advertisement, and the
-  feature question is this card. THE MECHANISM STILL EXISTS and is now pinned
-  on both halves: buildSolutionDeepLink writes the hash, and the mount read
-  consumes it. The SIEM-migration pivot uses it today. So this is not 'build a
-  deep link' - it is 'can an operator be given an ADDRESS to paste', which is
-  the part the shell breaks: on Cribl.Cloud the app runs on a sandboxed origin
-  answering every path with the app, and the address bar belongs to the
-  embedder. ANSWER [[DBT-86]] FIRST. Whether the fragment even reaches the
-  document is measured contradictorily in two places, and the answer changes
-  what can honestly be offered. Options once it is known: advertise nothing
-  (today's state, and defensible); offer a copyable link only when the shell
-  demonstrably preserves it; or ask Cribl whether an app can obtain its own
-  addressable URL.
 
 - **DBT-93** check-board does not validate that card ids named in prose exist
   `DBT-F1` `enabler` `settled`
