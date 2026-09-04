@@ -57,7 +57,7 @@ const CONFIG = {
  * target and upload steps, and `initialTarget: "cribl-hosted"` matches the
  * cloud shell - the only shell that wires the section.
  */
-function renderOnAzureStep(section?: ReactNode) {
+function renderOnAzureStep(section?: ReactNode, resources?: ReactNode) {
   return render(
     <PortsProvider ports={PORTS} config={CONFIG}>
       <SetupWizard
@@ -69,6 +69,7 @@ function renderOnAzureStep(section?: ReactNode) {
         installedInLeader
         onGetStarted={() => {}}
         {...(section !== undefined ? { azureConnectSection: section } : {})}
+        {...(resources !== undefined ? { azureResourcesSection: resources } : {})}
       />
     </PortsProvider>,
   );
@@ -124,6 +125,39 @@ describe("SetupWizard - Connect Azure step", () => {
     advanceToAzureStep();
     expect(screen.getByText("connect form")).toBeTruthy();
     expect(screen.getByText(/change request/i)).toBeTruthy();
+  });
+
+  it("RENDERS the resources section too, because the step's own copy promises it", () => {
+    // AZR-17. The step told the operator "Azure roles are granted in the Select
+    // resources and grant permissions section below, after you discover your
+    // subscription" - and rendered only the connect form, so the step ended at
+    // Save and connect and the sentence pointed at nothing. That section is also
+    // where the DEPLOYMENT TARGET pickers live, so the wizard offered no way to
+    // name a Log Analytics workspace at all.
+    //
+    // Reported live 2026-09-04 as "I still do not see any option to select
+    // workspace", after a previous fix had put the pickers in that section
+    // without noticing the wizard never rendered it. The whole suite was green
+    // both before and after that fix, which is why this pin exists.
+    renderOnAzureStep(
+      <div data-testid="azure-connect-slot">connect form</div>,
+      <div data-testid="azure-resources-slot">resources form</div>,
+    );
+    advanceToAzureStep();
+    expect(screen.getByText("resources form")).toBeTruthy();
+  });
+
+  it("renders BOTH sections, in the step that names them", () => {
+    // The two are a pair: credentials identify the app, the resources section
+    // says what it points at. Dropping either leaves the step half-usable in a
+    // way nothing else catches.
+    renderOnAzureStep(
+      <div data-testid="azure-connect-slot">connect form</div>,
+      <div data-testid="azure-resources-slot">resources form</div>,
+    );
+    advanceToAzureStep();
+    expect(screen.getByText("connect form")).toBeTruthy();
+    expect(screen.getByText("resources form")).toBeTruthy();
   });
 
   it("is OPTIONAL - an unwired shell renders the step unchanged", () => {
