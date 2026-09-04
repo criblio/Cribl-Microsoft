@@ -196,7 +196,60 @@ export interface PipelinePlan {
    * is honestly silent rather than claiming a version it does not know.
    */
   toolkitVersion?: string;
+  /**
+   * How the pack is WIRED - the operator's choice, not a detail (GEN-13).
+   *
+   * Omitted means "all-inclusive", which is what every pack built before
+   * 2026-09-04 was and what an existing build record replays as.
+   */
+  packShape?: PackShape;
 }
+
+/**
+ * The two shapes a generated pack can take. They differ in exactly two files,
+ * and the difference decides WHERE THE OPERATOR CAN USE THE PACK.
+ *
+ * Reported, then diffed against a known-good pack the user supplied
+ * (HelloPacks_1.0.0.crbl): an app-built pack could not be selected from the
+ * Routes page pipeline dropdown in the Cribl UI. The cause is structural, not a
+ * naming or install fault, so no amount of reinstalling changes it.
+ *
+ *   "all-inclusive" - every route carries `output: <destinationId>` and the
+ *     pack ships `default/outputs.yml`. The pack is self-contained: the Sentinel
+ *     destination and its secret live inside it and nothing has to exist at
+ *     group level. Cribl will NOT offer such a pack in the group's Routes page
+ *     pipeline dropdown. This is what the guided deploy wires, and the default.
+ *
+ *   "routable" - every route carries `output: default` and NO outputs.yml is
+ *     written, which is exactly what HelloPacks does. The pack IS offered in
+ *     that dropdown and can be dropped into a flow the operator already has.
+ *     The cost is theirs to accept: the Sentinel destination and its secret must
+ *     ALREADY EXIST in the worker group, because the pack no longer carries them.
+ *
+ * WHAT ACTUALLY GATES THE DROPDOWN, established live 2026-09-04 by the operator
+ * and NOT what the first version of this comment claimed. The first draft said
+ * the route's `output:` was the gate. IT IS NOT:
+ *   - the operator set the pack route's destination to Cribl's own "Send to
+ *     Worker Group Routes" option - the UI form of `output: default` - and the
+ *     pack STILL did not appear;
+ *   - they then DELETED the Sentinel destination from the pack, and it appeared
+ *     immediately.
+ * So the gate is the EXISTENCE OF A CONFIGURED DESTINATION inside the pack, and
+ * the route's output does not move it. Their read - that "Send to Worker Group
+ * Routes" is buggy - looks right: Cribl offers a setting meaning "hand events
+ * back to the group" and still withholds the pack from the group's dropdown
+ * while a destination object remains.
+ *
+ * BOTH FILES STILL CHANGE TOGETHER, for a different reason than first written.
+ * Dropping outputs.yml is what earns the dropdown entry; setting `output:
+ * default` is the necessary companion, because a route left naming a
+ * destination that no longer ships would dangle.
+ *
+ * NEITHER IS RIGHT IN GENERAL, which is why this is a choice rather than a fix.
+ * Self-contained is right for "install this and it works"; routable is right for
+ * "I already have a flow and I want this in the middle of it".
+ */
+export type PackShape = "all-inclusive" | "routable";
 
 /** The whole-pack planner input. */
 export interface BuildPipelinePlanInput {
@@ -206,4 +259,6 @@ export interface BuildPipelinePlanInput {
   tables: TablePlanInput[];
   /** See {@link PipelinePlan.toolkitVersion}. Injected by the shell. */
   toolkitVersion?: string;
+  /** See {@link PipelinePlan.packShape}. Chosen by the operator at build time. */
+  packShape?: PackShape;
 }

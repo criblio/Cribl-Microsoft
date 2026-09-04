@@ -253,3 +253,46 @@ export function defaultSentinelDestinationId(table: string): string {
   const sanitized = table.replace(/_CL$/i, "").replace(/[^a-zA-Z0-9]/g, "_");
   return `MS-Sentinel-${sanitized}-dest`;
 }
+
+/** One output as a Cribl group listing reports it. */
+export interface ExistingOutput {
+  id: string;
+  /** The destination's URL, or "" when the listing omitted it. */
+  url: string;
+}
+
+/**
+ * Parse a Cribl `GET /system/outputs` listing into id + url pairs.
+ *
+ * MOVED HERE from onboard-table (GEN-16), where it was a private helper, when
+ * a SECOND caller appeared: the routable-pack prerequisite check reads the same
+ * listing to answer a different question. Copying it would have put two parsers
+ * of one API response in the tree, free to disagree about what counts as an
+ * output - the duplicated-decision shape [[GEN-18]] is already an instance of.
+ *
+ * Tolerant by design, because both callers degrade rather than fail: a body
+ * that is not a `{items: [...]}` envelope, an item that is not an object, and
+ * an item with no usable id are all skipped, and the result is the outputs that
+ * were legible. An empty array therefore means "nothing readable here", which
+ * each caller is responsible for not reporting as "nothing exists".
+ */
+export function parseOutputListing(body: unknown): ExistingOutput[] {
+  const items =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? (body as Record<string, unknown>)["items"]
+      : undefined;
+  if (!Array.isArray(items)) return [];
+  const out: ExistingOutput[] = [];
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) continue;
+    const record = item as Record<string, unknown>;
+    const id = record["id"];
+    if (typeof id === "string" && id !== "") {
+      out.push({
+        id,
+        url: typeof record["url"] === "string" ? (record["url"] as string) : "",
+      });
+    }
+  }
+  return out;
+}

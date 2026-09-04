@@ -142,3 +142,13 @@ export {
   placeholderWarning,
   resolveDestinations,
 } from "./destination-resolution";
+
+// What a ROUTABLE pack needs the worker group to already have (GEN-16). The
+// pack builder cannot create the Sentinel destination - the ingestion secret it
+// would need is write-only and unreadable - so this reports the prerequisite
+// and names Deploy as the step that satisfies it.
+export type {
+  RoutablePrerequisite,
+  RoutablePrerequisiteReport,
+} from "./routable-prerequisites";
+export { checkRoutablePrerequisites } from "./routable-prerequisites";

@@ -56,6 +56,7 @@ export type {
   PlanProvenance,
   TablePlanInput,
   TablePlan,
+  PackShape,
   PipelinePlan,
   BuildPipelinePlanInput,
 } from "./models";

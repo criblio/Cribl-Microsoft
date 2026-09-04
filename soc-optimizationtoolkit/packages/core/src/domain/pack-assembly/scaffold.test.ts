@@ -511,3 +511,40 @@ describe("scaffold - sample ids are unique per pack", () => {
     expect(sampleIds(zscalerTree())).toEqual(sampleIds(zscalerTree()));
   });
 });
+
+describe("pack shape decides the two files that gate where the pack can be used", () => {
+  // GEN-13. A user reported that an app-built pack could not be selected from
+  // the Routes page pipeline dropdown. Diffing against a known-good pack they
+  // supplied (HelloPacks_1.0.0.crbl) narrowed it to two files, and this suite
+  // holds the outputs.yml half - the route-output half is pinned beside it in
+  // pack-shape.test.ts. They are ONE decision in two places, so each is pinned
+  // where it lives and both are asserted for each shape.
+
+  it("ships outputs.yml for an ALL-INCLUSIVE pack, the default and the pre-2026-09-04 behaviour", () => {
+    const tree = scaffoldPack(scaffoldInput());
+    expect(tree.paths()).toContain("default/outputs.yml");
+  });
+
+  it("OMITS outputs.yml for a ROUTABLE pack, exactly as HelloPacks does", () => {
+    // Not an optimisation. A routable pack's routes hand events back with
+    // `output: default`, so a shipped Sentinel destination would be an output
+    // nothing routes to - carrying a secret reference the group may not
+    // resolve. The two files move together or the pack is broken.
+    const plan = buildPipelinePlan({ ...paloPlanInput(), packShape: "routable" });
+    const tree = scaffoldPack(scaffoldInput({ plan }));
+    expect(tree.paths()).not.toContain("default/outputs.yml");
+  });
+
+  it("still writes everything else, so the shape changes ONE file and not the pack", () => {
+    // The guard against over-reach: a routable pack is the same pack, wired
+    // differently. If this fails the shape has started removing pipelines,
+    // samples or breakers, which is not what the operator chose.
+    const plan = buildPipelinePlan({ ...paloPlanInput(), packShape: "routable" });
+    const routable = scaffoldPack(scaffoldInput({ plan }));
+    const inclusive = scaffoldPack(scaffoldInput());
+    const dropped = inclusive
+      .paths()
+      .filter((path) => !routable.paths().includes(path));
+    expect(dropped).toEqual(["default/outputs.yml"]);
+  });
+});

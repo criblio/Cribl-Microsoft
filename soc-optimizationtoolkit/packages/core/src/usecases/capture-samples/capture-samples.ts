@@ -41,15 +41,47 @@ export const SYSTEM_CAPTURE_PATH = "/system/capture";
 export const DEFAULT_MAX_EVENTS = 100;
 export const DEFAULT_DURATION_SECONDS = 10;
 /**
- * The longest capture the TRANSPORT survives (2026-08-20 bug-hunt).
+ * The longest capture window an operator may ask for.
  *
- * A capture holds the response open for its whole duration, and the cloud
- * adapter's fetch gives up at 15s. `durationSeconds` had no ceiling and the
- * panel's input had no max, so asking for 30s ALWAYS failed - with a message
- * blaming the platform bridge for a capture that had run perfectly server-side.
- * 12 leaves headroom for dispatch and the response.
+ * THIS WAS 12 SECONDS AND THE REASON WAS TRUE BUT NOT STRUCTURAL (AZR-18).
+ * The 2026-08-20 bug-hunt found that a capture holds the response open for its
+ * whole duration while the cloud adapter's fetch gave up at 15s, so a 30s
+ * capture ALWAYS failed - and failed by blaming the platform bridge for a
+ * capture that had run perfectly server-side. Capping at 12 made the app honest.
+ * It also made a 10-minute capture impossible, which is what an operator asked
+ * for on 2026-09-04.
+ *
+ * The 15s was never a PLATFORM limit. platform/http.ts says so in its own
+ * header: the locked bridge ignores AbortSignal and a DETACHED bridge never
+ * settles, so "there is no platform timeout to save us" - the client-side race
+ * exists to catch a DEAD bridge, not to bound a legitimately slow call. One
+ * guard for every product API call meant the slowest legitimate call set the
+ * ceiling for all of them.
+ *
+ * So the wait is now stated per request ({@link CriblRequest.timeoutMs}) and
+ * this ceiling is a product decision rather than a transport artifact: ten
+ * minutes, which is what was asked for and long enough that a source with any
+ * traffic will have produced samples.
+ *
+ * NOT VERIFIED ABOVE ~12s AT THE TIME OF THE CHANGE, and said plainly rather
+ * than discovered later: the client no longer gives up, and the platform
+ * imposes no timeout on the product API that this repo has measured - but a
+ * held connection can still be closed by something between the browser and the
+ * leader that nobody here has probed. If a long capture fails, the note the
+ * caller gets names the transport, and that is the thing to measure next.
  */
-export const MAX_DURATION_SECONDS = 12;
+export const MAX_DURATION_SECONDS = 600;
+
+/**
+ * Headroom added to the capture window to get the request's timeout: the
+ * capture runs for `duration`, then the response still has to come back.
+ *
+ * Deliberately generous. Being slightly too patient costs an operator who is
+ * already waiting out their own capture window a few extra seconds; being too
+ * impatient reports a transport failure for a capture that SUCCEEDED, which is
+ * the exact defect this constant exists to stop repeating.
+ */
+export const CAPTURE_TIMEOUT_HEADROOM_MS = 20000;
 /** The API's own ceiling (CaptureParamsReq.maxEvents maximum). */
 export const MAX_EVENTS_LIMIT = 10000;
 
@@ -233,7 +265,14 @@ export async function captureSamples(
     // and the empty-capture note below tells them to "try a longer capture" -
     // advice that would be actively wrong if we had quietly shortened it.
     notes.push(
-      `Capture window adjusted to ${duration}s. The platform bridge gives up on a request after ${MAX_DURATION_SECONDS}s, so a longer capture would fail as a transport timeout even though it ran.`,
+      // The reason CHANGED with the ceiling and the sentence had to change with
+      // it. It used to say the platform bridge gives up after this many seconds,
+      // which was true of the old 12s cap and is not true of this one: the wait
+      // now follows the requested window, so the cap is a product choice about
+      // how long an operator should sit on one screen, not a transport limit.
+      // Leaving the old wording would have been a comment arguing from a premise
+      // its own change removed.
+      `Capture window adjusted to ${duration}s, the longest this app will hold a capture open.`,
     );
   }
 
@@ -260,6 +299,13 @@ export async function captureSamples(
         maxEvents: bounded.value,
         duration,
       },
+      // The wait FOLLOWS the window the operator asked for. Without this the
+      // adapter's short default applied, so the capture window could never
+      // exceed it and the ceiling was 12 seconds - see MAX_DURATION_SECONDS.
+      // Derived rather than a constant, so raising the ceiling cannot leave the
+      // timeout behind and reintroduce "the bridge gave up on a capture that
+      // ran".
+      timeoutMs: duration * 1000 + CAPTURE_TIMEOUT_HEADROOM_MS,
     });
     status = response.status;
     body = response.body;

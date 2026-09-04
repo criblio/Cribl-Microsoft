@@ -60,7 +60,11 @@ import type {
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { IntegrateScreen, dcrInventoryReadNotice } from "./integrate-screen";
+import {
+  IntegrateScreen,
+  dcrInventoryReadNotice,
+  shouldCheckRoutablePrerequisites,
+} from "./integrate-screen";
 
 afterEach(cleanup);
 
@@ -974,5 +978,143 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith("CISCO_ASA");
     });
+  });
+});
+
+/**
+ * GEN-16: the routable pack's worker-group prerequisite.
+ *
+ * Most of this decision is pinned as a pure function in core
+ * (routable-prerequisites.test.ts, mutation-checked six ways). What lives ONLY
+ * here is the GUARD in front of it, and the guard is the half that can produce
+ * a false STATEMENT rather than a missing one - which is why it gets a mount.
+ *
+ * THESE PINS USE THEIR OWN PORTS STUB, and that is the point rather than a
+ * convenience. The file's shared stub fails every Cribl call, so no worker
+ * group is ever selected and the panel cannot render for any reason at all.
+ * Written against it, the first pin below passed with the guard DELETED -
+ * vacuous, asserting only that an unreachable panel was absent. This stub makes
+ * the panel reachable, so the assertion that it stays away is about the guard.
+ */
+const ROUTABLE_OUTPUTS = {
+  status: 200,
+  body: { items: [{ id: "MS-Sentinel-CommonSecurityLog-dest", url: "" }] },
+};
+
+function renderWithGroup(request = vi.fn().mockResolvedValue(ROUTABLE_OUTPUTS)) {
+  const ports = {
+    ...(PORTS as unknown as Record<string, unknown>),
+    cribl: {
+      request,
+      // The screen filters to Stream groups; an undefined product qualifies.
+      listGroups: vi.fn().mockResolvedValue([{ id: "AzureManaged", name: "AzureManaged" }]),
+    },
+  } as unknown as UiPorts;
+  const utils = render(
+    <PortsProvider ports={ports} config={CONFIG}>
+      <IntegrateScreen
+        toolkitVersion="9.9.9-test"
+        scopeCommitted
+        offline={false}
+        onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+        criblDefaults={DEFAULT_CRIBL_OPTIONS}
+      />
+    </PortsProvider>,
+  );
+  return { ...utils, request };
+}
+
+/** Switch the Pack wiring control to the routable shape. */
+async function chooseRoutable(container: HTMLElement) {
+  const wiring = [...container.querySelectorAll("select")].find((sel) =>
+    [...sel.options].some((o) => o.value === "routable"),
+  );
+  expect(wiring).toBeTruthy();
+  await act(async () => {
+    fireEvent.change(wiring as HTMLSelectElement, {
+      target: { value: "routable" },
+    });
+  });
+  expect((wiring as HTMLSelectElement).value).toBe("routable");
+  return wiring as HTMLSelectElement;
+}
+
+describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
+  it("selects a worker group, so the panel these pins forbid is REACHABLE", async () => {
+    // The guard against the vacuity described above. If the screen ever stops
+    // selecting a group from this stub, the two pins below would go back to
+    // asserting the absence of something that could not appear, and would keep
+    // passing while the behaviour they cover rotted. This fails first instead.
+    renderWithGroup();
+    // The screen states its own committed target, which is the observable that
+    // does not depend on how the group picker is built.
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: AzureManaged/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/worker group: \(none selected\)/i)).toBeNull();
+  });
+
+  it("says NOTHING about destinations when there are no tables to check", async () => {
+    // The failure this forbids is a VACUOUS REASSURANCE. With no gap analysis
+    // run there are no destination tables, so the check has nothing to compare;
+    // without the guard the report is trivially satisfied and the panel would
+    // announce that every destination it needs is already present - true only
+    // because it needs none. An operator reading that goes on to build a
+    // routable pack believing the group is ready.
+    const { container, request } = renderWithGroup();
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: AzureManaged/i)).toBeTruthy();
+    });
+    await chooseRoutable(container);
+    await waitFor(() => {
+      expect(screen.queryByText(/Destinations this pack will need/i)).toBeNull();
+    });
+    expect(screen.queryByText(/are already in/i)).toBeNull();
+    // And it does not ASK, either: a listing with nothing to compare it against
+    // is a request per group change that can only produce the claim above.
+    expect(
+      request.mock.calls.filter(
+        (c) => (c[0] as { path?: string })?.path === "/system/outputs",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("names Deploy as what puts the destination in the worker group", async () => {
+    // The whole reported defect was that nothing connected the two actions.
+    // The hint may be reworded; it may not stop naming Deploy, because that is
+    // the only place the operator can act on what this control just told them.
+    const { container } = renderWithGroup();
+    await chooseRoutable(container);
+    const hint = [...container.querySelectorAll(".field-hint")].find((el) =>
+      /must ALREADY EXIST in the worker group/i.test(el.textContent ?? ""),
+    );
+    expect(hint).toBeTruthy();
+    expect(hint?.textContent).toMatch(/Deploy is what puts them there/i);
+  });
+});
+
+describe("shouldCheckRoutablePrerequisites (GEN-16)", () => {
+  // Pinned as a pure function because the mount above can only reach the
+  // no-tables branch; with tables it needs an approved gap analysis. Each case
+  // names the false statement it prevents, because "returns false" is not the
+  // point - not saying a specific wrong thing is.
+  it("runs for a routable pack with a group and tables to check", () => {
+    expect(shouldCheckRoutablePrerequisites("routable", "AzureManaged", 2)).toBe(true);
+  });
+
+  it("does NOT run for an all-inclusive pack, which carries its own destination", () => {
+    // Reporting the group's destination as missing would describe a problem the
+    // operator does not have: the pack ships the destination and its secret.
+    expect(shouldCheckRoutablePrerequisites("all-inclusive", "AzureManaged", 2)).toBe(false);
+  });
+
+  it("does NOT run with no worker group, where 'missing' would be about nowhere", () => {
+    expect(shouldCheckRoutablePrerequisites("routable", "", 2)).toBe(false);
+  });
+
+  it("does NOT run with no tables, where the report is trivially satisfied", () => {
+    // The vacuous reassurance: "all destinations present" is true only because
+    // none is needed, and an operator reads it as the group being ready.
+    expect(shouldCheckRoutablePrerequisites("routable", "AzureManaged", 0)).toBe(false);
   });
 });

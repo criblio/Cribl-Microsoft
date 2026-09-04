@@ -490,7 +490,12 @@ export class PlatformCriblClient implements CriblClient {
       init.headers = { 'Content-Type': 'application/json' };
       init.body = JSON.stringify(opts.body);
     }
-    const res = await fetchWithTimeout(url, init);
+    // The caller's wait when it stated one, otherwise fetchWithTimeout's own
+    // short default. Passing `undefined` through is deliberate rather than
+    // defaulting here: the default lives in ONE place, and an adapter that
+    // silently substituted its own would be a second opinion about how long a
+    // hung bridge may hang.
+    const res = await fetchWithTimeout(url, init, opts.timeoutMs);
     return { status: res.status, body: await readPortBody(res) };
   }
 
