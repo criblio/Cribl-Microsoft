@@ -8,6 +8,75 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.4
+
+**AWS VPC Flow Logs are read, and the pack built from them extracts what the
+screen showed.** A user uploaded a 22-line VPC Flow sample and got no events:
+the format is whitespace-positional, `SampleFormat` had no positional member, so
+detection fell through to `unknown` and nothing parsed - while the app's own
+catalog advertised the source as supported. Positional parsing now names the v2
+columns when it recognises the shape and numbers them `field1..fieldN` when it
+does not, which is the honest answer for a format that keeps its schema outside
+the file.
+
+That fix left a second half open, and it is the one that would have cost an
+operator the most: `pipeline-conf.ts` had never been taught about positional
+either, so the generated pack's extract step ran Cribl's JSON serde over a
+whitespace line and extracted nothing. The app showed success at every screen and
+handed over a pack that could not reproduce any of it. The pipeline now splits
+`_raw` itself and assigns the same names the parser produced - the case where the
+app mints the runtime name, so parse and pack agree by construction.
+
+**A Cribl capture of a positional log unwraps to the events, not the envelope.**
+Reported with a live capture off an S3 feed: uploading it gave 100 events and 13
+fields, and the 13 were `__criblEventType`, `__channel`, `cribl_breaker` and the
+rest of the Cribl wrapper, with an empty error list. The capture unwrap exists
+and is first-class; it declines when it cannot identify the inner format, and its
+detector had no positional branch. Same file now yields the 14 VPC columns. The
+app's own capture path shared the detector and is fixed with it.
+
+**Field names are no longer silently truncated, collided, or overwritten.**
+`src-ip=1.1.1.1 dst-ip=2.2.2.2` parsed to a single field `ip` - the prefixes
+discarded and the two fields collapsed onto one, so one value was lost with no
+error. CEF was worse: its extension parser truncated the key AND swallowed the
+pairs that followed into the previous value. Both key classes are widened, with
+the escape rules, empty values and syslog prefixes each pinned.
+
+**A CEF header written to the spec is read to the spec.** `CEF:0|V\|W|P|...`
+escapes the pipe exactly as CEF requires; the parser split on it anyway and every
+header field shifted by one, silently, since all seven names were still present.
+The parser and the generated pack now share one escape-consuming pattern, so they
+cannot disagree.
+
+**Names Cribl cannot address are reported at the sample, and refused at the
+build.** A hyphen fails loudly in Cribl; a dot is worse, because `a.b` is a valid
+accessor for a nested field, so a rename addressing it silently does nothing and
+reports success. The sample screen now names such fields when it reads them, and
+pack generation refuses them on a rename - including names containing whitespace,
+which the validator's line matcher could not previously see.
+
+**A log type that cannot be routed says so, and says what does work.** Routes are
+evaluated before the pipeline extracts, so for CSV, whitespace-positional and
+syslog the field names shown in the app do not exist yet at route time. Those log
+types were getting filters in which every disjunct was false - a dead route that
+previewed clean. They now get a placeholder and an explanation that points at the
+raw line instead of sending the operator to collect more samples, which could
+never have helped.
+
+**The SIEM migration knowledge base no longer points two vendors at the wrong
+solution.** Every `f5_` sourcetype resolved to Cisco ASA, and `zeek_` to Windows
+Security Events, with the same confidence as every correct mapping. Solutions
+that name no Sentinel folder are now declared rather than offering a pivot that
+cannot complete.
+
+**The pivot into Sentinel Integration says that it discards samples.** It reaches
+the same branch the Clear button does, and Clear has carried that warning since
+1.11; this button was presented as navigation and said nothing.
+
+The solution deep-link chip is gone: it advertised a URL the shipped shell cannot
+serve, so an operator who copied it got nothing. The mechanism behind it is
+unchanged and still carries the SIEM pivot.
+
 ## 1.12.3
 
 **A rebuilt pack no longer inherits the previous build's pipelines.** Building a
