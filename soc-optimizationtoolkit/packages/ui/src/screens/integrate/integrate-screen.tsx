@@ -76,6 +76,8 @@ import {
   onboardBatch,
   SENTINEL_SECRET_PLACEHOLDER,
   assemblePack,
+  checkRoutablePrerequisites,
+  parseOutputListing,
   cefIdentityFindings,
   effectiveCefIdentity,
   emptyCapabilitySet,
@@ -112,6 +114,7 @@ import type {
   CapabilityContext,
   CapabilityFallbackKind,
   CapabilitySet,
+  RoutablePrerequisiteReport,
 } from "@soc/core";
 import type {
   ContentItem,
@@ -269,6 +272,29 @@ export function exportArchiveName(workspaceName: string, jobId: string): string 
  * needs an approved gap analysis to reach, which no mount-level test has.
  * exportArchiveName above sets the precedent for a pure helper living here.
  */
+/**
+ * Whether the routable-pack prerequisite check should read the worker group
+ * (GEN-16). Exported for its pins, following the precedent dcrInventoryReadNotice
+ * set in this file: the condition lives in a component whose state no test can
+ * reach - it needs an approved gap analysis - so a mount can only ever cover the
+ * branches that survive with NO tables, and this one has three.
+ *
+ * Each `false` prevents a DIFFERENT false statement, which is why it is one
+ * function rather than three inline conditions:
+ *   - not routable: an all-inclusive pack CARRIES its destination, so reporting
+ *     the group's as missing describes a problem the operator does not have;
+ *   - no group: there is nothing to read, and "missing" would be about nowhere;
+ *   - no tables: the report would be trivially satisfied and announce that every
+ *     destination is present - true only because none is needed.
+ */
+export function shouldCheckRoutablePrerequisites(
+  packShape: PackShape,
+  groupId: string,
+  detectedTableCount: number,
+): boolean {
+  return packShape === "routable" && groupId !== "" && detectedTableCount > 0;
+}
+
 export function dcrInventoryReadNotice(input: {
   count: number;
   resourceGroup: string;
@@ -796,6 +822,68 @@ export function IntegrateScreen({
     return [...set];
   }, [groupId, multiGroup, extraGroups]);
   const packTargetKey = packTargetGroups.join(",");
+
+  // GEN-16. A ROUTABLE pack ships no destination and hands its events back to
+  // the worker group, so the Sentinel destination has to be there already. The
+  // pack builder cannot create it - that needs the ingestion secret, which is
+  // write-only in the platform's KV and can never be read back - so the group
+  // is READ and the prerequisite reported instead.
+  //
+  // It runs on its own rather than behind a button, deliberately. The whole
+  // defect being closed is that nothing told the operator about the dependency;
+  // a check they have to know to click repeats it. It never blocks the build:
+  // building before deploying, or for a group to be populated later, is a
+  // legitimate thing to do, so this only ever informs.
+  const [routableCheck, setRoutableCheck] = useState<
+    | { state: "loading" }
+    | { state: "failed"; error: string }
+    | { state: "done"; report: RoutablePrerequisiteReport }
+    | null
+  >(null);
+  const detectedTableKey = detectedTables.join(",");
+  useEffect(() => {
+    if (!shouldCheckRoutablePrerequisites(packShape, groupId, detectedTables.length)) {
+      setRoutableCheck(null);
+      return;
+    }
+    let cancelled = false;
+    setRoutableCheck({ state: "loading" });
+    void (async () => {
+      try {
+        const res = await ports.cribl.request({
+          method: "GET",
+          path: "/system/outputs",
+          groupId,
+        });
+        if (cancelled) return;
+        if (res.status < 200 || res.status >= 300) {
+          // A non-2xx is NOT an empty group. Saying "nothing configured" here
+          // would invent a fact out of a failed read - the same mistake the DCR
+          // inventory standard exists to prevent.
+          setRoutableCheck({
+            state: "failed",
+            error: `Cribl returned HTTP ${String(res.status)} listing the group's destinations.`,
+          });
+          return;
+        }
+        setRoutableCheck({
+          state: "done",
+          report: checkRoutablePrerequisites(
+            detectedTables,
+            parseOutputListing(res.body).map((o) => o.id),
+          ),
+        });
+      } catch (err) {
+        if (!cancelled) setRoutableCheck({ state: "failed", error: String(err) });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // detectedTableKey stands in for detectedTables: a new array with the same
+    // names must not re-issue the request on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packShape, groupId, detectedTableKey, ports.cribl]);
 
   // Any change to the pack name or target groups invalidates a prior
   // conflict check and its overwrite acknowledgment.
@@ -2328,9 +2416,73 @@ export function IntegrateScreen({
         <span className="field-hint">
           {packShape === "all-inclusive"
             ? "The pack ships the Sentinel destination and its secret, so it works on install and nothing has to exist in the worker group first. It will NOT appear in the pipeline dropdown on the Cribl Routes page: verified 2026-09-04, a pack holding a destination is withheld from that list, and changing its routes to Send to Worker Group Routes does not change that. This is what Build and install pack wires for you."
-            : "No destination ships inside the pack and every route hands events back, so the pack DOES appear in the pipeline dropdown on the Cribl Routes page and can be dropped into a flow you already have. The Sentinel destination and its secret must ALREADY EXIST in the worker group - this pack does not carry them."}
+            : "No destination ships inside the pack and every route hands events back, so the pack DOES appear in the pipeline dropdown on the Cribl Routes page and can be dropped into a flow you already have. The Sentinel destination and its secret must ALREADY EXIST in the worker group - this pack does not carry them. Deploy is what puts them there: it creates the destination in the worker group, not in the pack, so a table you have deployed is a table this pack can send."}
         </span>
       </label>
+      {/* GEN-16. The dependency a routable pack creates, checked rather than
+          described. Never blocks the build - see the effect that fills this. */}
+      {routableCheck !== null && (
+        <div className="discovery-result">
+          <span className="field-label">
+            Destinations this pack will need in {groupId}
+          </span>
+          {routableCheck.state === "loading" && (
+            <p className="panel-desc">Reading the worker group's destinations...</p>
+          )}
+          {routableCheck.state === "failed" && (
+            <p className="panel-desc">
+              Could not read the worker group's destinations:{" "}
+              {routableCheck.error} This says nothing either way about whether
+              they are there - build if you know they are, and check the Routes
+              page if you do not.
+            </p>
+          )}
+          {routableCheck.state === "done" &&
+            routableCheck.report.missing.length === 0 && (
+              <p className="panel-desc">
+                All {routableCheck.report.entries.length} destination
+                {routableCheck.report.entries.length === 1 ? " is" : "s are"}{" "}
+                already in {groupId}:{" "}
+                {routableCheck.report.entries
+                  .map((e) => e.foundId)
+                  .join(", ")}
+                . This pack can hand its events straight back.
+              </p>
+            )}
+          {routableCheck.state === "done" &&
+            routableCheck.report.missing.length > 0 && (
+              <>
+                <p className="panel-desc">
+                  {routableCheck.report.listingWasEmpty
+                    ? `${groupId} reported no destinations at all, so all `
+                    : `${String(routableCheck.report.missing.length)} of ${String(routableCheck.report.entries.length)} `}
+                  destination
+                  {routableCheck.report.missing.length === 1 ? "" : "s"} this
+                  pack routes to
+                  {routableCheck.report.missing.length === 1 ? " is" : " are"}{" "}
+                  not in {groupId} under the name Deploy would use. Events
+                  routed to a destination that is not there go nowhere, so
+                  either run Deploy for{" "}
+                  {routableCheck.report.missing
+                    .map((m) => m.sentinelTable)
+                    .join(", ")}{" "}
+                  against this group - that is the step that creates them - or
+                  point the group's routes at destinations you already have
+                  under other names, which this check cannot recognise.
+                </p>
+                <pre className="result">
+                  {routableCheck.report.entries
+                    .map((e) =>
+                      e.foundId === null
+                        ? `MISSING  ${e.sentinelTable}  (expected ${e.expectedId})`
+                        : `present  ${e.sentinelTable}  ${e.foundId}`,
+                    )
+                    .join("\n")}
+                </pre>
+              </>
+            )}
+        </div>
+      )}
       <div className="discovery-result">
         <span className="field-label">Deploy targets and overwrite check</span>
         <p className="panel-desc">

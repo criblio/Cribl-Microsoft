@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**78 in the backlog, 1 in progress, 114 done.**
+**80 in the backlog, 1 in progress, 115 done.**
 
 ## By menu item
 
@@ -23,15 +23,15 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 35 | 71 | 6 |
+| Sentinel Integration | 36 | 72 | 6 |
 | DCR Automation | 3 | 10 | 0 |
 | Pack Maintenance | 4 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 8 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 24 | 0 |
+| Cross-cutting | 8 | 24 | 0 |
 
-Open work totals 79.
+Open work totals 81.
 
 ## Epics and features
 
@@ -76,13 +76,13 @@ Measured gaps where the app reports a confident wrong answer
 | `HON-F2` Unverified empty inventories | Sentinel Integration | 3/3 | HON-1, HON-2, D-3 |
 | `HON-F3` Guid-column aftermath, made visible | Sentinel Integration | 4/4 | HON-3, HON-8*, HON-4, D-11 |
 
-### `GEN` Pipeline and pack generation - 47% (7/15)
+### `GEN` Pipeline and pack generation - 44% (8/18)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 7/15 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9, GEN-10, GEN-11, GEN-12, GEN-13, GEN-14, GEN-15 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 8/18 | GEN-1, GEN-2, GEN-3, GEN-4, GEN-5, GEN-6, GEN-7, GEN-8, GEN-9, GEN-10, GEN-11, GEN-12, GEN-13, GEN-14, GEN-15, GEN-16, GEN-17*, GEN-18 |
 
 ### `PK` Pack maintenance parity - 25% (1/4)
 
@@ -368,7 +368,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (33)
+## Backlog - next (34)
 
 Settled and unblocked, sequenced behind now.
 
@@ -967,9 +967,38 @@ Settled and unblocked, sequenced behind now.
   but the only durable way to set the shape, and the Pack wiring hint should
   say so.
 
+- **GEN-18** Two functions build the Sentinel destination id and they sanitize differently
+  `GEN-F1` `bug` `settled`
+  Not now because: Not `now` because it is LATENT rather than live: the two
+  agree for every table name made only of letters, digits and underscore,
+  which is what Azure native tables and _CL custom tables are in practice, and
+  no reachable path producing a divergent name has been demonstrated. It is
+  filed as a bug rather than a chore because when it does diverge it produces
+  a WRONG ID SILENTLY, not an error. Promote it the moment a table name
+  carrying a hyphen, dot or space is shown to reach either function.
+  FOUND while settling [[GEN-16]], by comparing the id the pack writes against
+  the id Deploy creates: - domain/sentinel-destination
+  defaultSentinelDestinationId (used by Deploy, onboard-table step 6)
+  MS-Sentinel-${table.replace(/_CL$/i,'').replace(/[^a-zA-Z0-9]/g,'_')}-dest -
+  domain/pipeline-generation/naming destinationId (used by the pack's routes
+  and outputs.yml) MS-Sentinel-${table.replace(/_CL$/i,'')}-dest Only the
+  first sanitizes. Measured over seven table names, three diverge: My-App_CL
+  -> MS-Sentinel-My_App-dest vs MS-Sentinel-My-App-dest My.App_CL ->
+  MS-Sentinel-My_App-dest vs MS-Sentinel-My.App-dest Zscaler Web_CL ->
+  MS-Sentinel-Zscaler_Web-dest vs MS-Sentinel-Zscaler Web-dest The four
+  alphanumeric names agree, which is why this has never been seen. This is the
+  audit's duplicated-decision shape: one rule, two implementations, able to
+  disagree. Two distinct consequences if a divergent name ever reaches them -
+  an all-inclusive pack would emit an id containing a space, which is unlikely
+  to be a legal Cribl output id at all; and [[GEN-16]]'s prerequisite check
+  would compare the pack's id against the group's and report a destination
+  missing that is sitting right there under the sanitized name. The fix is one
+  function, and the sanitizing one is the one to keep - it is the version
+  whose output has to survive as a real Cribl object id.
+
 ---
 
-## Backlog - later (40)
+## Backlog - later (41)
 
 Settled, gated on something above.
 
@@ -1499,9 +1528,21 @@ Settled, gated on something above.
   be ancestor-styled is the measurement that says whether teaching the check
   about descendant selectors is worth the complexity.
 
+- **GEN-17** PackShape collides with the older packShapeSummary, which means something else
+  `GEN-F1` `enabler` `settled`
+  [[GEN-13]] introduced the type `PackShape` = all-inclusive | routable,
+  meaning HOW THE PACK IS WIRED. The codebase already had `packShapeSummary`,
+  which describes the pack's FILE LAYOUT - what directories and files it
+  contains. Two unrelated meanings of 'shape' now sit in the same subsystem,
+  and the older one is the one a reader meets first. Nothing is broken; this
+  is a naming hazard, which is why it is `later` rather than a bug. The cost
+  lands on the next person who greps 'shape' in pack-assembly and has to work
+  out which of two answers they got. Renaming one is cheap now and gets
+  steadily less cheap as either spreads.
+
 ---
 
-## Done (114)
+## Done (115)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5440,3 +5481,40 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   did - but nobody has checked whether the guided deploy path still functions
   afterwards, or whether a pack route can name a GROUP-level destination. That
   is [[GEN-15]].
+
+- **GEN-16** A routable pack never says the group destination comes from Deploy
+  `GEN-F1` `story` `settled` `verified: both`
+  FOLLOWS [[GEN-13]], which gave the operator the routable shape. A routable
+  pack ships NO outputs.yml and every route hands events back with `output:
+  default`, so the Sentinel destination has to exist in the WORKER GROUP. The
+  operator asked the exact right question: does choosing routable make the app
+  create that destination in the group instead of the pack? THE FIRST ANSWER
+  WRITTEN ON THIS CARD WAS WRONG and is corrected here. It said the app never
+  creates a group-level destination. It does: onboard-table (the Deploy
+  action) step 6 POSTs /system/outputs in groupId context - group scope, no
+  /p/ pack prefix - with a collision-and-reuse scan in front of it. So Deploy
+  already creates exactly the thing a routable pack needs. THE REAL GAP is
+  that the two are separate actions and nothing connects them. Pack build does
+  not run Deploy, Deploy does not build a pack, and the routable control says
+  nothing about the dependency it creates. An operator can pick routable,
+  build, install, and find a pack whose routes hand events to a group that has
+  nowhere to send them. TRIGGER OR SURFACE - settled, and not by preference.
+  The pack builder CANNOT create the destination: it needs the DCR
+  immutableId, the ingestion endpoint, and the ingestion client SECRET, and
+  that secret is transient by design because the platform's encrypted KV is
+  write-only and can never be read back. Building a create path at pack-build
+  time would mean re-collecting a secret the operator already gave Deploy. So
+  the fix is to SURFACE the prerequisite: at build time, list the group's
+  outputs and say which of the pack's tables have no destination there yet,
+  naming Deploy as the step that creates them. It must not block the build -
+  an operator may legitimately build before deploying, or for a group they
+  will populate later. The check has to compare against the id DEPLOY REALLY
+  CREATES, which is not always the id the pack would have used - see
+  [[GEN-18]]. VERIFIED LIVE 2026-09-04 in the Live Preview against worker
+  group "default": with the AWS VPC Flow Logs solution analyzed to
+  CommonSecurityLog and the wiring set to Routable, the panel read the group
+  and reported "All 1 destination is already in default:
+  MS-Sentinel-CommonSecurityLog-dest" - a real match against the output an
+  earlier Deploy created. Before the gap analysis was run the panel was
+  correctly ABSENT rather than claiming zero destinations were needed, which
+  is the guard doing its job in the product.

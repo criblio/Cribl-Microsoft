@@ -86,6 +86,7 @@ import {
 import {
   buildSentinelDestination,
   defaultSentinelDestinationId,
+  parseOutputListing,
 } from "../../domain/sentinel-destination";
 import {
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
@@ -290,27 +291,6 @@ export interface OnboardTableOutcome {
   commitVersion: string | null;
 }
 
-/** Parse a Cribl outputs listing into id + url pairs. */
-function listExistingOutputs(body: unknown): Array<{ id: string; url: string }> {
-  const items =
-    typeof body === "object" && body !== null && !Array.isArray(body)
-      ? (body as Record<string, unknown>)["items"]
-      : undefined;
-  if (!Array.isArray(items)) return [];
-  const out: Array<{ id: string; url: string }> = [];
-  for (const item of items) {
-    if (typeof item !== "object" || item === null) continue;
-    const record = item as Record<string, unknown>;
-    const id = record["id"];
-    if (typeof id === "string" && id !== "") {
-      out.push({
-        id,
-        url: typeof record["url"] === "string" ? (record["url"] as string) : "",
-      });
-    }
-  }
-  return out;
-}
 
 /** One existing DCR from the resource-group listing. */
 interface ExistingDcr {
@@ -927,7 +907,7 @@ export async function onboardTable(
         groupId: input.groupId,
       });
       if (is2xx(listResponse.status)) {
-        const outputs = listExistingOutputs(listResponse.body);
+        const outputs = parseOutputListing(listResponse.body);
         const existing = outputs.find(
           (o) => o.id.toLowerCase() === destinationId.toLowerCase(),
         );
