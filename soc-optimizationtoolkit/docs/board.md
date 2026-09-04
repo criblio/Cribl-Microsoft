@@ -11,7 +11,7 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-**74 in the backlog, 0 in progress, 102 done.**
+**67 in the backlog, 7 in progress, 102 done.**
 
 ## By menu item
 
@@ -142,17 +142,9 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (7)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-_Nothing here._
-
----
-
-## Backlog - now (7)
-
-Next to pick up. Nothing blocks these.
 
 - **DBT-28** The solution deep link does not override a stored selection
   `DBT-F2` `bug` `unconfirmed`
@@ -286,25 +278,6 @@ Next to pick up. Nothing blocks these.
   pack it generates, which is the shape [[GEN-6]] just closed - fix both or
   neither.
 
-- **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
-  `GEN-F1` `bug` `settled`
-  FOUND during [[GEN-6]] review. A VPC Flow v2 sample is recognised, so the
-  parser names `start` and `end` - the epoch seconds AWS records for the flow
-  window - and the generated pipeline extracts them correctly. But nothing
-  maps either to TimeGenerated, so every event lands in Sentinel stamped with
-  when Cribl ingested it. WHY THIS IS `now` DESPITE NOTHING BEING BROKEN ON
-  SCREEN: it is silent and it is unrecoverable after the fact. Flow logs are
-  batched to S3 and collected on a delay, so the two timestamps can differ by
-  many minutes; a hunt over the ingestion timestamp finds the wrong window and
-  the operator has no way to see that from the data. This is the same class
-  the toolkit exists to prevent - a confident wrong answer - landed in the
-  customer's workspace rather than on a screen. NOT YET ESTABLISHED, and it
-  decides the fix: whether `start` or `end` is the right stamp for a flow
-  record, and whether the mapping belongs in the pack (an Eval writing
-  TimeGenerated) or in the DCR transform. Read what the guid work settled
-  about type promotion in transformKql before choosing - the same argument
-  about who does the conversion applies.
-
 - **DBT-100** check-classnames is wired to nothing: 36 findings sit in the tree and every build is green
   `DBT-F1` `bug` `settled`
   FOUND while closing [[DBT-90]] and VERIFIED INDEPENDENTLY by two agents.
@@ -360,6 +333,22 @@ Next to pick up. Nothing blocks these.
   should be re-taken rather than trusted. See also [[DBT-104]], found in the
   same sweep.
 
+- **DBT-104** Ten of the 24 SIEM knowledge-base solutions name no Sentinel Solutions folder
+  `DBT-F2` `bug` `settled`
+  Not now because: It fails in the honest direction, which is what separates
+  it from [[DBT-103]]. A solution with no named Sentinel folder points the
+  operator nowhere, and nowhere is visibly nothing; an f5_ sourcetype pointing
+  at Cisco ASA looks like an answer. Ten of 24 is a gap worth closing, but the
+  operator can see it, so it queues behind the mapping that lies.
+  MEASURED during the [[DBT-28]] investigation against the live Solutions
+  index: 10 of the 24 solutions in the SIEM migration knowledge base name no
+  Sentinel Solutions folder at all, so the pivot into Integrate has nothing to
+  land on. Those are also the ten most likely to reach the unresolved-handoff
+  path, which is what made them visible. Establish for each whether a folder
+  exists under a different name (in which case it is a mapping gap) or
+  genuinely does not exist (in which case the knowledge base should say so
+  rather than offering a pivot that cannot complete).
+
 - **GEN-8** Syslog, CEF and LEEF packs get route filters that can never match, same as positional did
   `GEN-F1` `bug` `settled`
   FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, and it is the defect [[GEN-6]]
@@ -400,7 +389,32 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (28)
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
+
+- **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
+  `GEN-F1` `bug` `settled`
+  FOUND during [[GEN-6]] review. A VPC Flow v2 sample is recognised, so the
+  parser names `start` and `end` - the epoch seconds AWS records for the flow
+  window - and the generated pipeline extracts them correctly. But nothing
+  maps either to TimeGenerated, so every event lands in Sentinel stamped with
+  when Cribl ingested it. WHY THIS IS `now` DESPITE NOTHING BEING BROKEN ON
+  SCREEN: it is silent and it is unrecoverable after the fact. Flow logs are
+  batched to S3 and collected on a delay, so the two timestamps can differ by
+  many minutes; a hunt over the ingestion timestamp finds the wrong window and
+  the operator has no way to see that from the data. This is the same class
+  the toolkit exists to prevent - a confident wrong answer - landed in the
+  customer's workspace rather than on a screen. NOT YET ESTABLISHED, and it
+  decides the fix: whether `start` or `end` is the right stamp for a flow
+  record, and whether the mapping belongs in the pack (an Eval writing
+  TimeGenerated) or in the DCR transform. Read what the guid work settled
+  about type promotion in transformKql before choosing - the same argument
+  about who does the conversion applies.
+
+---
+
+## Backlog - next (27)
 
 Settled and unblocked, sequenced behind now.
 
@@ -859,22 +873,6 @@ Settled and unblocked, sequenced behind now.
   narrow: assert the script EXISTS, not that it passes. Running them would
   make check-docs a second CI and it would be turned off. Related: [[DBT-95]]
   (backticked paths carrying a :line suffix defeat the existing path check).
-
-- **DBT-104** Ten of the 24 SIEM knowledge-base solutions name no Sentinel Solutions folder
-  `DBT-F2` `bug` `settled`
-  Not now because: It fails in the honest direction, which is what separates
-  it from [[DBT-103]]. A solution with no named Sentinel folder points the
-  operator nowhere, and nowhere is visibly nothing; an f5_ sourcetype pointing
-  at Cisco ASA looks like an answer. Ten of 24 is a gap worth closing, but the
-  operator can see it, so it queues behind the mapping that lies.
-  MEASURED during the [[DBT-28]] investigation against the live Solutions
-  index: 10 of the 24 solutions in the SIEM migration knowledge base name no
-  Sentinel Solutions folder at all, so the pivot into Integrate has nothing to
-  land on. Those are also the ten most likely to reach the unresolved-handoff
-  path, which is what made them visible. Establish for each whether a folder
-  exists under a different name (in which case it is a mapping gap) or
-  genuinely does not exist (in which case the knowledge base should say so
-  rather than offering a pivot that cannot complete).
 
 - **DBT-105** A fuzz corpus must be calibrated against the defect before its zero means anything
   `DBT-F1` `enabler` `settled`
