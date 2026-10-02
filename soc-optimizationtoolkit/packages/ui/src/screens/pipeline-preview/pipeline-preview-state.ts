@@ -324,7 +324,7 @@ export function normalizeSourceFormat(format: string | undefined): string {
  * Distinct from undefined, which means no sample at all - normalizeSourceFormat
  * maps all three to "json", so this is the only place the difference survives.
  */
-export function isUndetectedFormat(format: string | undefined): boolean {
+function isUndetectedFormat(format: string | undefined): boolean {
   return format === "" || format === "unknown";
 }
 

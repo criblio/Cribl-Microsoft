@@ -58,6 +58,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   DEFAULT_GAP_PROFILE,
+  FIELD_EXAMPLE_MAX_CHARS,
   collectGapReports,
   createBundledSchemaCatalog,
   createSchemaLadder,
@@ -1274,7 +1275,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Example Value
-                          <InfoTip text="The first value seen for this field in your sample, so you can check the mapping by eye - an IP landing in a user-name column is wrong at a glance. Long values are shortened; hover the cell for the full value. -- means the sample had no value for the field." />
+                          <InfoTip text={`The first value seen for this field in your sample, so you can check the mapping by eye - an IP landing in a user-name column is wrong at a glance. Long values are shortened; hover the cell for the full value. -- means no example was captured: the sample had no value for the field, or every value was ${FIELD_EXAMPLE_MAX_CHARS} characters or longer.`} />
                         </th>
                         <th>
                           Dest Field

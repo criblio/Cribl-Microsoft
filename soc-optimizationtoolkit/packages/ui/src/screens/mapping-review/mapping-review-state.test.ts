@@ -860,11 +860,16 @@ describe("formatExampleValue (DBT-122, the Example Value column)", () => {
     expect(formatExampleValue(exact).text).toBe(exact);
   });
 
-  it("renders a dash for a field the sample carried no value for", () => {
+  it("renders a dash for a field with no example, without claiming the sample had no value", () => {
+    // collectFields keeps no example of 200+ characters, so a field holding
+    // only long values (command lines, URLs) arrives here undefined too. The
+    // tip says what is known rather than "no value" (audit follow-up, DBT-122).
     expect(formatExampleValue(undefined)).toEqual({
       kind: "none",
       text: "--",
-      title: "No value for this field in the sample",
+      title:
+        "No example captured: the sample had no value for this field, or " +
+        "every value was 200 characters or longer",
     });
   });
 
