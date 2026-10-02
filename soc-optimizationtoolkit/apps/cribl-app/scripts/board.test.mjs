@@ -19,6 +19,8 @@ import {
   blockers,
   boardWarnings,
   danglingLinks,
+  knownIds,
+  LINK,
   renderBoard,
   validateBoard,
 } from './board.mjs';
@@ -799,24 +801,63 @@ describe('DBT-120 - [[links]] that name nothing on this board', () => {
     expect(md).not.toContain('no longer shows');
   });
 
-  it('agrees with an independent count over the real docs/board.json', () => {
-    const data = JSON.parse(
-      readFileSync(new URL('../../../docs/board.json', import.meta.url), 'utf8'),
-    );
+  /**
+   * An oracle that shares nothing with board.mjs but the field list: it finds
+   * `[[...]]` tokens with indexOf rather than LINK, and decides "is this an id"
+   * by characters rather than by regex. Architecture audit 2026-10-02 (DBT-120
+   * follow-up): the previous oracle copied LINK word for word, so a drift in
+   * the shape rule moved both sides together and the pin still passed.
+   */
+  const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-';
+  const looksLikeId = (t) =>
+    t.includes('-') &&
+    [...t].every((c) => ID_CHARS.includes(c)) &&
+    '0123456789'.includes(t[t.length - 1]);
+  const oracleDangling = (data) => {
     const known = new Set([
       ...data.stories.map((s) => s.id),
       ...(data.features ?? []).map((f) => f.id),
     ]);
-    let expected = 0;
+    const out = [];
     for (const s of data.stories) {
-      for (const text of [s.title, s.detail, s.priorityWhy]) {
-        for (const m of String(text ?? '').matchAll(/\[\[([A-Z]+-[A-Z]?\d+)\]\]/g)) {
-          if (!known.has(m[1])) expected += 1;
+      for (const field of ['title', 'detail', 'priorityWhy']) {
+        const text = String(s[field] ?? '');
+        let at = text.indexOf('[[');
+        while (at !== -1) {
+          const end = text.indexOf(']]', at + 2);
+          if (end === -1) break;
+          const token = text.slice(at + 2, end);
+          if (looksLikeId(token) && !known.has(token)) out.push({ from: s.id, field, target: token });
+          at = text.indexOf('[[', end + 2);
         }
       }
     }
+    return out;
+  };
 
-    expect(expected).toBeGreaterThan(0);
-    expect(danglingLinks(data)).toHaveLength(expected);
+  it('the oracle itself finds what a synthetic board plants', () => {
+    // Moved here from the live-data pin: asserting the REAL board has dangling
+    // links would fail CI on the day the last one is fixed.
+    expect(oracleDangling(linked())).toEqual([
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+    ]);
+  });
+
+  it('agrees with an independent oracle over the real docs/board.json', () => {
+    const data = JSON.parse(
+      readFileSync(new URL('../../../docs/board.json', import.meta.url), 'utf8'),
+    );
+
+    expect(danglingLinks(data)).toEqual(oracleDangling(data));
+  });
+
+  it('exports the link shape and the known-id set the HTML board resolves against', () => {
+    const data = board([story({ id: 'REL-1' }), story({ id: 'AZR-S1' })]);
+
+    expect([...knownIds(data)].sort()).toEqual(['AZR-S1', 'REL-1', 'REL-F1']);
+    expect(
+      [...'[[REL-1]] [[DBT-F4]] [[AZR-S1]] [[link]] [[CARD-ID]] [[rel-1]]'.matchAll(LINK)].map((m) => m[1]),
+    ).toEqual(['REL-1', 'DBT-F4', 'AZR-S1']);
   });
 });

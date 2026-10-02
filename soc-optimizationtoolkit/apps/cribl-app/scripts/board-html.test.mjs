@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { columnsFrom, renderBoardHtml } from './board-html.mjs';
-import { STATUSES } from './board.mjs';
+import { STATUSES, danglingLinks } from './board.mjs';
 
 const story = (over) => ({
   id: 'REL-1',
@@ -361,5 +361,36 @@ describe('DBT-120 - a [[link]] to a card not on the page is not an anchor', () =
     ]);
     expect(html.match(/<span class="xref-gone"[^>]*>GONE-7<\/span>/g)).toHaveLength(1);
     expect(html).not.toContain('href="#card-GONE-7"');
+  });
+
+  // DBT-120 follow-up (architecture audit 2026-10-02): richText matched ANY
+  // `[[...]]` and resolved it against stories only, while check-board's
+  // danglingLinks matches id-shaped links and knows features too. So a link to
+  // a feature rendered struck through as "not on this board", and prose ABOUT
+  // links lost its brackets and rendered as a gone card - both of which
+  // check-board considered fine. Both now share LINK and knownIds.
+  it('agrees with danglingLinks: feature links resolve and link-shaped prose stays text', () => {
+    const data = {
+      ...board([
+        story({
+          id: 'REL-1',
+          feature: 'REL-F1',
+          detail: 'see [[REL-F1]], [[GONE-7]] and prose about [[link]] and [[CARD-ID]] syntax',
+        }),
+      ]),
+      features: [{ id: 'REL-F1', epic: 'REL', title: 'Feature one' }],
+    };
+    const html = renderBoardHtml(data, '2026-10-02');
+
+    expect(html.match(/<a class="xref" href="#card-[^"]*">[^<]*<\/a>/g)).toEqual([
+      '<a class="xref" href="#card-REL-F1">REL-F1</a>',
+    ]);
+    // The anchor has somewhere to land: the feature card carries the id.
+    expect(html.match(/id="card-REL-F1"/g)).toHaveLength(1);
+    expect(html.match(/<span class="xref-gone"[^>]*>[^<]*<\/span>/g)).toEqual([
+      '<span class="xref-gone" title="Not on this board - see backlog.md or the git history of board.json">GONE-7</span>',
+    ]);
+    expect(danglingLinks(data).map((d) => d.target)).toEqual(['GONE-7']);
+    expect(html).toContain('prose about [[link]] and [[CARD-ID]] syntax');
   });
 });

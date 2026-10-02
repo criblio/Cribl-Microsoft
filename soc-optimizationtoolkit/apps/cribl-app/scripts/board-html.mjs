@@ -10,7 +10,17 @@
 //
 // Pure: takes data, returns a string. The server does the IO.
 
-import { blockers, MENUS, MENU_LABELS, PLANNED_MENUS, PRIORITIES, STATUSES, menuOf } from './board.mjs';
+import {
+  blockers,
+  knownIds,
+  LINK,
+  MENUS,
+  MENU_LABELS,
+  PLANNED_MENUS,
+  PRIORITIES,
+  STATUSES,
+  menuOf,
+} from './board.mjs';
 
 /** Display names; the LIST of columns is not ours to decide. */
 const COLUMN_TITLES = {
@@ -94,15 +104,22 @@ function esc(s) {
  * then re-introduce only these three, so nothing in the data can inject markup.
  *
  * DBT-120: a `[[link]]` becomes an anchor only when its card is ON this page
- * (`byId`). A pruned card used to render as `#card-X` pointing nowhere; now it
+ * (`known`). A pruned card used to render as `#card-X` pointing nowhere; now it
  * is marked text that says so on hover.
+ *
+ * What counts as a link (LINK) and what it resolves to (knownIds - stories AND
+ * features) come from board.mjs, so this page and check-board's danglingLinks
+ * agree (DBT-120 follow-up, architecture audit 2026-10-02). Prose ABOUT links,
+ * such as `[[link]]`, is not id-shaped and stays plain text with its brackets.
+ *
+ * @param {Set<string>} known
  */
-function richText(text, byId) {
+function richText(text, known) {
   return esc(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[\[([^\]]+)\]\]/g, (_, id) =>
-      byId.has(id)
+    .replace(LINK, (_, id) =>
+      known.has(id)
         ? `<a class="xref" href="#card-${id}">${id}</a>`
         : `<span class="xref-gone" title="Not on this board - see backlog.md or the git history of board.json">${id}</span>`,
     );
@@ -211,7 +228,9 @@ function featureCard(feature, data) {
   ).length;
   const complete = isComplete(kids);
   return [
-    `<article class="card feature-card${complete ? ' complete' : ''}" data-epic="${esc(feature.epic)}"`,
+    // id: a `[[DBT-F4]]` link resolves (knownIds), so it needs a target (DBT-120).
+    `<article class="card feature-card${complete ? ' complete' : ''}" id="card-${esc(feature.id)}"`,
+    ` data-epic="${esc(feature.epic)}"`,
     ` data-complete="${complete ? 'yes' : 'no'}"`,
     ` data-text="${esc(`${feature.id} ${feature.title} ${feature.epic}`.toLowerCase())}">`,
     `<header><span class="id">${esc(feature.id)}</span>`,
@@ -252,7 +271,7 @@ function menuChip(menu, isOverride) {
   );
 }
 
-function card(story, byId, menu) {
+function card(story, byId, menu, known) {
   const blocked = blockers(story, byId);
   const tags = [
     tag(`type-${story.type}`, story.type, GLOSSARY.type[story.type]),
@@ -277,7 +296,7 @@ function card(story, byId, menu) {
       ? ''
       : [
           `<div class="decision${d.chosen ? ' answered' : ''}">`,
-          `<p class="q">${richText(d.question, byId)}</p>`,
+          `<p class="q">${richText(d.question, known)}</p>`,
           ...(d.options ?? []).map(
             (o) =>
               `<label class="opt${o.key === d.chosen ? ' picked' : ''}">` +
@@ -286,7 +305,7 @@ function card(story, byId, menu) {
               `<span class="opt-label">${esc(o.label)}</span>` +
               ((o.detail ?? '').trim() === ''
                 ? ''
-                : `<span class="opt-detail">${richText(o.detail, byId)}</span>`) +
+                : `<span class="opt-detail">${richText(o.detail, known)}</span>`) +
               `</label>`,
           ),
           // Says out loud what a click does, so nobody reads it as "decided".
@@ -305,7 +324,7 @@ function card(story, byId, menu) {
   const whyBlock =
     why === ''
       ? ''
-      : `<p class="why"><span class="why-label">Not now because</span> ${richText(why, byId)}</p>`;
+      : `<p class="why"><span class="why-label">Not now because</span> ${richText(why, known)}</p>`;
   return [
     `<article class="card${blocked.length ? ' is-blocked' : ''}" id="card-${esc(story.id)}"`,
     ` data-epic="${esc(story.epic)}" data-type="${esc(story.type)}"`,
@@ -322,16 +341,16 @@ function card(story, byId, menu) {
     decisionBlock,
     detail === ''
       ? ''
-      : `<details><summary>detail</summary><p>${richText(detail, byId)}</p></details>`,
+      : `<details><summary>detail</summary><p>${richText(detail, known)}</p></details>`,
     `</article>`,
   ].join('');
 }
 
-function lane(label, items, byId, featureById) {
+function lane(label, items, byId, featureById, known) {
   if (items.length === 0) return '';
   return (
     `<div class="lane"><h4>${esc(label)} <span class="count">${items.length}</span></h4>` +
-    items.map((s) => card(s, byId, menuOf(s, featureById))).join('') +
+    items.map((s) => card(s, byId, menuOf(s, featureById), known)).join('') +
     `</div>`
   );
 }
@@ -350,6 +369,7 @@ export function renderBoardHtml(data, today, findings = []) {
   const stories = data.stories ?? [];
   const byId = new Map(stories.map((s) => [s.id, s]));
   const featureById = new Map((data.features ?? []).map((f) => [f.id, f]));
+  const known = knownIds(data);
   const count = (f) => stories.filter(f).length;
 
   const columns = COLUMNS.map((col) => {
@@ -359,12 +379,12 @@ export function renderBoardHtml(data, today, findings = []) {
       // Priority only means something inside the backlog; elsewhere it is
       // absent by design, so lanes would be a column of one empty heading.
       body = PRIORITIES.map((p) =>
-        lane(p, inCol.filter((s) => s.priority === p), byId, featureById),
+        lane(p, inCol.filter((s) => s.priority === p), byId, featureById, known),
       ).join('');
       const noPriority = inCol.filter((s) => !PRIORITIES.includes(s.priority));
-      body += lane('unprioritised', noPriority, byId, featureById);
+      body += lane('unprioritised', noPriority, byId, featureById, known);
     } else {
-      body = inCol.map((s) => card(s, byId, menuOf(s, featureById))).join('');
+      body = inCol.map((s) => card(s, byId, menuOf(s, featureById), known)).join('');
     }
     return (
       `<section class="col" data-status="${esc(col.status)}">` +
