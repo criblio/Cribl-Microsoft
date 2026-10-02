@@ -44,6 +44,30 @@
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto.
  */
 
+// The file, not the entra-diagnostics barrel: entra-categories.ts imports
+// nothing, so this edge cannot become a cycle.
+import {
+  ENTRA_PROFILES,
+  ENTRA_PROFILE_CATEGORIES,
+  type EntraProfile,
+} from "../entra-diagnostics/entra-categories";
+
+/**
+ * The Entra profile details the legacy `resource-coverage.json` carried, kept
+ * verbatim so a stored Standard or HighVolume still means what it meant.
+ *
+ * AZR-13 (backlog.md 18i, chosen: derive). The profile LIST used to be
+ * hand-kept here as Standard and HighVolume while entra-diagnostics knew three,
+ * so `decodeSelection` treated a stored SecurityOnly as stale and silently
+ * reverted it to Standard. The list now comes from {@link ENTRA_PROFILES}, the
+ * one authority; a profile with no legacy detail is described by its
+ * categories instead of by invented prose.
+ */
+const LEGACY_ENTRA_PROFILE_DETAIL: Partial<Record<EntraProfile, string>> = {
+  Standard: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers",
+  HighVolume: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
+};
+
 /**
  * How a source is turned on. Verbatim from `resource-coverage.json`'s `method`
  * values, and per backlog.md#6 these ARE the screen's section keys.
@@ -228,13 +252,11 @@ export const COVERAGE_CATALOG: readonly CoverageItem[] = [
     resourceCount: null,
     subSelection: {
       kind: "profile",
-      options: [
-        { key: "Standard", detail: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers" },
-        {
-          key: "HighVolume",
-          detail: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
-        },
-      ],
+      // Derived, not hand-listed (AZR-13): see LEGACY_ENTRA_PROFILE_DETAIL.
+      options: ENTRA_PROFILES.map((key) => ({
+        key,
+        detail: LEGACY_ENTRA_PROFILE_DETAIL[key] ?? ENTRA_PROFILE_CATEGORIES[key].join(", "),
+      })),
       defaultSelected: ["Standard"],
       multi: false,
     },
