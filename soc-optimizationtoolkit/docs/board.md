@@ -16,7 +16,7 @@ Cards done through 1.12.7 were removed on 2026-09-04; their reasoning is in
 `backlog.md` and their full text in the git history of `board.json`. A link
 that resolves to nothing here is a pruned card, not a typo.
 
-**70 in the backlog, 12 in progress, 0 done.**
+**64 in the backlog, 18 in progress, 0 done.**
 
 ## By menu item
 
@@ -28,14 +28,14 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 35 | 0 | 10 |
+| Sentinel Integration | 35 | 0 | 14 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 1 | 0 | 1 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 13 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 9 | 0 | 1 |
+| Cross-cutting | 9 | 0 | 2 |
 
 Open work totals 82.
 
@@ -134,7 +134,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (12)
+## In progress (18)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -188,6 +188,216 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
     [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
 
+- **DBT-14** Stop the solution list swallowing the mouse wheel
+  `DBT-F2` `bug` `settled`
+  Found live 2026-08-27: with the pointer over the list, the wheel moves
+  neither the list nor the page - the pointer must leave the list before
+  anything scrolls. Five of eight results were reachable. This is the
+  reproduction the old nested-scrolling question never had, which is what
+  turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
+  13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events
+  do not reach the app at all through the Cribl shell iframe - scrolling over
+  the list, over the page heading, and over the outer margin all moved
+  nothing. So automation cannot distinguish "the list swallows the wheel" from
+  "the wheel never arrived", and an automated run would either report a false
+  confirmation or a false all-clear. This card stays on the HUMAN reproduction
+  that filed it. Whoever fixes it should verify by hand for the same reason.
+  STOP CONDITION LIKELY MET - static evidence 2026-09-02, gathered before wave
+  3 to avoid implementing blind. The scout named a stop: if the list freezes
+  while it still has ROOM to scroll, then overscroll-behavior is not the cause
+  and neither proposed option fixes it. Three things point that way. (1)
+  overscroll-behavior:contain governs scroll CHAINING AT THE BOUNDARY - it
+  does not prevent an element scrolling internally while it has room, so it
+  cannot by itself explain a list that will not move. (2) The card reports
+  five of EIGHT results reachable, which is a list that has room and is not
+  moving. (3) There is NO wheel handler anywhere in solution-browser - grep
+  for onWheel/wheel/preventDefault returns nothing - so no JS is swallowing
+  the event and the cause is CSS or the iframe. The rule at styles.css
+  .solution-browser-list carries max-height 420px plus overflow-y auto, and
+  its own comment records why contain was added on 2026-08-03: three nested
+  scroll regions, and reaching the END of the list handed the wheel to the
+  page mid-search. That is a BOUNDARY problem, which is a different symptom
+  from the one this card reports. NOT PROVEN - this is static reasoning and
+  the wheel cannot be tested by reading CSS. What it establishes is that
+  implementing either option (a) or (b) blind would likely fix nothing.
+  RE-SCOUT WITH A LIVE MEASUREMENT FIRST: does the list scroll at all with the
+  pointer over it, and does the behaviour differ between a filtered short list
+  and the full one. RE-VERIFIED 2026-10-02 (bug sweep: an independent
+  reproducer and an adversarial skeptic per card, then a judge): REAL,
+  confidence high. Both investigators say the defect exists. They disagree on
+  whether `overscroll-behavior: contain` causes it, which is the question the
+  card's 2026-09-02 note left open. I re-ran the reproducer's probe (headless
+  Chrome, repo styles.css, list inside an iframe, trusted CDP mouseWheel
+  events) and got the same numbers. With 8 rows the list is 279px tall
+  (clientHeight == scrollHeight, under the 420px cap). With `contain`, three
+  wheel events moved neither the list nor the page (0/0). With `contain`
+  removed, the page scrolled 300px. In Chrome, an overflow:auto box with
+  overscroll-behavior:contain that CORRECTIONS: Replace the 2026-09-02 'STOP
+  CONDITION LIKELY MET' paragraph. Measured 2026-10-02 in headless Chrome with
+  trusted CDP wheel events inside an iframe: 8 rows render at about 279px,
+  under the 420px cap, so the list cannot scroll. On a box that does not
+  overflow, overscroll-behavior:contain still blocks the wheel from passing to
+  the page (list 0, page 0). Without contain the page scrolls 300px. So
+  contain IS the cause, and the rows that could not be reached were below the
+  iframe fold, not inside the list. The card says browser automation cannot
+  re-test this. That is true only of wheel input through the Cribl shell.
+  Trusted CDP wheel input against the stylesheet does reproduce it. Update the
+  line BLOCKED ON OPERATOR DECISION: The card itself leaves (a) versus (b)
+  open. (a) keeps the 420px scrolling list and applies
+  overscroll-behavior:contain only while it overflows, measured in JS
+  (recommended; the probe shows it fixes the reported case and keeps the
+  2026-08-03 end-of-list protection). (b) drops the 420px cap so the page owns
+  the only scroll. That is pure CSS and removes the nested scroll region, but
+  a long unfiltered list then pushes everything below it far down the page.
+  Which one? OPERATOR DECIDED 2026-10-02: option (a) - keep the 420px
+  scrolling list and apply overscroll-behavior:contain ONLY while the list
+  actually overflows, measured in JS.
+
+- **DBT-58** Two pins encode opposite policies for naming the excluded subscription
+  `DBT-F4` `bug` `undecided`
+  FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220`
+  forbids the word "subscription" ANYWHERE in the workbook infoTip, while
+  `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the
+  subscription beside its exclusion. Both landed in the same fix, and they
+  encode opposite policies for the same fact - so the next person to make the
+  infoTip say what the summary says will be failing a test that looks
+  deliberate. THE UNDERLYING QUESTION IS REAL: naming an excluded source helps
+  an operator answer "why isn't my deployed workbook here?", which is the
+  argument the summary pin won on; the infoTip pin was written to stop the OLD
+  false promise coming back, and it over-reached by banning the word rather
+  than the promise. Narrow the infoTip pin to forbid the CLAIM (that deployed
+  workbooks are folded in) rather than the noun, then decide once whether both
+  surfaces name the exclusion. RE-VERIFIED 2026-10-02 (bug sweep: an
+  independent reproducer and an adversarial skeptic per card, then a judge):
+  REAL, confidence high. Both investigators found the defect is real, and I
+  confirmed it against current code. The two reports do not actually disagree.
+  The reproducer shows that no single string passes both pins. The skeptic
+  shows that nothing fails today, so the conflict is latent; its "reproduced:
+  false" refers to the absence of a current failure, not to a refutation. Here
+  are the two pins: CORRECTIONS: The card is accurate and its line references
+  still hold. One addition: line 219 of the same infoTip test
+  (`not.toContain("deployed in your subscription")`) would also reject the
+  honest exclusion clause "workbooks already deployed in your subscription are
+  not analyzed". So line 220 is not the only pin to narrow; lines 219 and 220
+  both need replacing with a claim-based check. BLOCKED ON OPERATOR DECISION:
+  Should the Integrate wizard's workbook-coverage infoTip also name the
+  excluded source the way the empty-workbook summary line does? Options: (A)
+  Yes - append 'workbooks already deployed in your subscription are not
+  analyzed' to the infoTip, so both surfaces answer 'why isn't my deployed
+  workbook here?' (recommended; it matches the summary pin's reasoning). (B)
+  No - the infoTip keeps 'solution repo only', and only the summary line names
+  the exclusion. Step 1's narrowed pin allows either. OPERATOR DECIDED
+  2026-10-02: option (A) - name the exclusion in BOTH surfaces: append that
+  workbooks already deployed in your subscription are not analyzed to the
+  workbook-coverage infoTip, and reconcile the two pins to that single policy.
+
+- **GEN-5** checkCriblYaml never sees an unaddressable field name unless the matcher renames it
+  `GEN-F1` `bug` `settled`
+  MEASURED through the real chain (parseSampleContent -> matchSampleToSchema
+  -> buildPipelinePlan -> generatePipelineConfForPlan -> checkCriblYaml)
+  during the final whole-diff review of [[DBT-78]], not reasoned about.
+  checkCriblYaml only ever inspects a name that LANDS ON a
+  name:/currentName:/newName: line. An UNMATCHED field never emits one - it
+  appears only in the cleanup eval's `remove:` list - and a KEPT field emits
+  no rename either. So: a JSON sample keyed `aws.account` and `src_ip` against
+  SrcIpAddr/TimeGenerated builds with 0 issues, and integrate-screen's `if
+  (!preview.valid)` guard never fires; the same holds for `src-ip` and
+  `vendor-thing` left unmatched; a sample keyed `a.b` matched to a column also
+  named `a.b` takes action `keep` - 0 issues; and the rule DOES work when the
+  name is renamed: the same hyphenated sample matched to
+  SrcIpAddr/DstIpAddr/AccountId produces 3 issues. So an awkward vendor name
+  is refused only if it is RENAMED, and its ORDINARY fate - no matching
+  destination column - builds clean. WHY THIS IS NOT SIMPLY 'ADD THE CHECK':
+  an unmatched field is dropped, so an unaddressable name among dropped fields
+  may be harmless. The question this card has to answer first is whether the
+  cleanup eval's `remove:` list is itself accessor-parsed by Cribl - if it is,
+  an unaddressable name there fails at runtime too and the gap is real rather
+  than cosmetic. NOT MEASURED; it needs a live Cribl. Establish it before
+  building. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and
+  an adversarial skeptic per card, then a judge): REAL, confidence high. Both
+  reports agree on the mechanics, and so does my own reading of the code.
+  checkCriblYaml's accessor rule only reads name:/currentName:/newName: lines,
+  and only inside a block for which isAccessorNameBlock returns true. That
+  function accepts conf->add and conf->rename only. An unmatched field appears
+  in the conf only as a bullet under conf->remove. A kept field
+  (match-fields.ts sets action "keep" only when src.name === dst.name) emits
+  no conf line at all. Neither one reaches the rule. pipeline-preview-state.ts
+  computes valid as totalYamlIssues === 0, so the build guard at
+  integrate-screen.ts CORRECTIONS: 1) The priorityWhy is stale. It ranks GEN-5
+  below [[GEN-4]] because closing GEN-4 "is genuinely the earlier work", but
+  GEN-4 is closed and pruned from board.json, and its whitespace rule has
+  shipped in checkCriblYaml. The priority argument has to be rewritten around
+  the one real remaining reason, the unmeasured remove-list behaviour, or the
+  card promoted to `now`. 2) Split the card into two legs. KEPT leg: there is
+  no conf line to inspect, so a YAML-level rule can never see it. It needs a
+  plan-level check and NO live Cribl. DROP leg: gated on the live measurement
+  of whether Cribl's Eval `remove:` glob list accessor-parses its entries. 3)
+  Name the four "SHIPS ..." pins in packages/core/src/do BLOCKED ON OPERATOR
+  DECISION: For the DROP leg (an unmatched source field whose name is not a
+  valid Cribl accessor, present only in the cleanup eval's `remove:` list),
+  what should the build do? Options: (A) Measure first. Run one Eval on a live
+  Cribl with remove: ['aws.account','Source IP','src-ip'] and decide from the
+  result: block only if Cribl errors or misremoves. (B) Block now,
+  conservatively. Treat it like a rename and refuse the build. This risks
+  blocking most real vendor samples over a drop that may be harmless. (C) Warn
+  without blocking. Add a separate non-blocking warnings channel on the
+  preview naming each such field, and leave preview.valid unchanged. (D)
+  Accept and close. Rely on the existing DBT-78 parse note at sample-choice
+  time, rewrite the SHIPS pins as intended behaviour, and record the decision
+  in an ADR. Leg 1 (kept/coerced) does not depend on this answer and can
+  proceed now. OPERATOR DECIDED 2026-10-02: for the DROP leg, MEASURE FIRST on
+  live Cribl (being done separately by the operator session) - DO NOT
+  implement any drop-leg behaviour now. Implement ONLY leg 1 (kept/coerced
+  fields with unaddressable names), which does not depend on the measurement.
+
+- **DBT-84** parseKvLine still truncates keys on \w+, and widening it re-keys every stored sample
+  `DBT-F1` `bug` `settled`
+  DELIBERATELY LEFT DIVERGENT by [[DBT-79]], and documented on both functions
+  so the next reader does not merge them by reflex - the first attempt left
+  splitting.ts still telling the reader the two parsers agree, which review
+  caught. MEASURED: `src-ip=1.1.1.1 action=A` yields parseKv
+  ['src-ip','action'] and parseKvLine ['ip','action']. The two now disagree on
+  ordinary input. parseKvLine's truncation is what makes format discrimination
+  work today, for the reason in priorityWhy. The eventual fix is ordered, and
+  the ordering is the whole content of this card: (1) add hyphenated aliases
+  to DISCRIMINATOR_FIELDS so discrimination stops depending on the truncation,
+  (2) then widen the key class. Reversing those two silently re-keys stored
+  samples. A quote-aware tokenizer would let the two paths collapse into one
+  for real; parseKv's regex could not be replaced by the fallback's
+  whitespace-split-plus-indexOf loop because splitting on whitespace cuts
+  `msg=\"login ok\"` in half, which is pinned. RE-VERIFIED 2026-10-02 (bug
+  sweep: an independent reproducer and an adversarial skeptic per card, then a
+  judge): REAL, confidence high. Both investigators reproduced the defect and
+  agree on it, and I confirmed it again myself. parseKvLine
+  (packages/core/src/domain/sample-parsing/splitting.ts:69-78) still uses
+  `/(\w+)=.../`. No commit has touched that regex since the file was created
+  (c11dd4a, per the skeptic's pickaxe). The divergence is pinned on purpose as
+  a hazard to fix later, not as the behaviour anyone wants
+  (kv-keys.test.ts:353-384). CORRECTIONS: 1. Replace "format DISCRIMINATION"
+  and "change which parser is chosen" with "log-type GROUPING". parseKvLine
+  only feeds selectDiscriminatorField in splitSamplesByLogType
+  (splitting.ts:157). Changing it changes the group names, which are the
+  uppercased discriminator values, and therefore the stored sample ids
+  `${source}:${logType}`. It never changes the format or the parser. 2. Add
+  the harm that exists today. Truncated keys collide and the last one wins.
+  `log-type=TRAFFIC sub-type=end` groups by the SUBTYPE ('END'), and the
+  result depends on pair order. `src-ip=.. dst-ip=.. action=..` collapses to 2
+  keys and fails the >=3 gate (splitting.ts:118), so the sample falls back to
+  the single fallbac BLOCKED ON OPERATOR DECISION: Fixing the collision
+  changes the log-type key of some already-stored samples. Which policy? (A)
+  Accept the re-key: fix as planned, and add a release-notes line that
+  captures containing colliding hyphenated keys will regroup and should be
+  re-captured. (B) Migrate: on load, map the old ids to the new ones (only
+  feasible where the old id can be recomputed from stored raw events). (C)
+  Keep the old grouping for existing samples and apply the new behaviour only
+  to new captures. Also: when both `type=` and `log-type=` are present on one
+  line, which wins? (i) the exact `type` key, or (ii) the vendor's `log-type`.
+  OPERATOR DECIDED 2026-10-02: (A) accept the re-key and add a release-notes
+  line (docs/release-notes.md, under an Unreleased heading if there is no
+  current one - follow the file convention) saying captures containing
+  colliding hyphenated keys will regroup and should be re-captured; and (i)
+  when both type= and log-type= appear on one line, the exact type key wins.
+
 - **DBT-92** The release-drift script carried a stale version literal
   `DBT-F1` `bug` `settled`
   The file that exists to catch stale version literals contained one. Found
@@ -240,6 +450,96 @@ Started. Anything here with an unfinished dependency is called out on its card.
   stories" (the count after the #181/#182 prune). Change "survives ... only as
   prose" to "has only ever existed as prose": WIN-5 was never a card id and
   was already a phantom when the board was first committed (ff7ba8e).
+
+- **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
+  `GEN-F1` `bug` `settled`
+  FOUND during [[GEN-6]] review. A VPC Flow v2 sample is recognised, so the
+  parser names `start` and `end` - the epoch seconds AWS records for the flow
+  window - and the generated pipeline extracts them correctly. But nothing
+  maps either to TimeGenerated, so every event lands in Sentinel stamped with
+  when Cribl ingested it. WHY THIS IS `now` DESPITE NOTHING BEING BROKEN ON
+  SCREEN: it is silent and it is unrecoverable after the fact. Flow logs are
+  batched to S3 and collected on a delay, so the two timestamps can differ by
+  many minutes; a hunt over the ingestion timestamp finds the wrong window and
+  the operator has no way to see that from the data. This is the same class
+  the toolkit exists to prevent - a confident wrong answer - landed in the
+  customer's workspace rather than on a screen. NOT YET ESTABLISHED, and it
+  decides the fix: whether `start` or `end` is the right stamp for a flow
+  record, and whether the mapping belongs in the pack (an Eval writing
+  TimeGenerated) or in the DCR transform. Read what the guid work settled
+  about type promotion in transformKql before choosing - the same argument
+  about who does the conversion applies. RE-VERIFIED 2026-10-02 (bug sweep: an
+  independent reproducer and an adversarial skeptic per card, then a judge):
+  REAL, confidence high. The two reports agree on every material point, and I
+  confirmed each one against current code. I also re-ran the reproducer's
+  asserting probe, gen7-repro.test.ts, and it passed at HEAD. CORRECTIONS:
+  Three corrections: 1. The mechanism is more specific than "nothing maps
+  either". detectTimestampField (pipeline-conf.ts) falls back to the literal
+  "TimeGenerated", so auto_timestamp reads a field the event does not have and
+  `defaultTime: now` sets `_time` to the current time. The cleanup drop list
+  then removes `_time`, and DEFAULT_TRANSFORM_KQL "source" adds nothing. A fix
+  that only corrects srcField would still not deliver TimeGenerated. 2.
+  `start` and `end` do ship, renamed to the Start/End columns, so the flow
+  window is not strictly invisible. However, those columns are declared
+  `datetime` and are sent as epoch-second strings with no conversion, so they
+  may land null or wrong. This is unv BLOCKED ON OPERATOR DECISION: Two
+  choices are needed: 1. Which flow time becomes TimeGenerated for VPC Flow
+  records? Options: (A) `start`, the first packet in the aggregation window,
+  which matches how most hunts frame a flow; (B) `end`, which is closer to
+  when AWS emitted the record. 2. Where does the epoch-to-datetime conversion
+  live? Options: (P) a pack Eval writing ISO strings for TimeGenerated, Start
+  and End, which keeps transformKql 'source'; (D) the DCR transformKql,
+  following the ADR 0004 toguid precedent, which requires parser and
+  type-declaration changes. OPERATOR DECIDED 2026-10-02: TimeGenerated = the
+  flow START time; the epoch-to-datetime conversion lives in a PACK Eval that
+  writes ISO strings for TimeGenerated, Start and End, keeping transformKql as
+  source.
+
+- **DBT-106** VPC_FLOW_V2_AWS_NAMES is exported, never consumed, and its comment claims a display that does not exist
+  `DBT-F1` `bug` `settled`
+  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, dead-code check. MEASURED: a
+  repo-wide grep over packages and apps for VPC_FLOW_V2_AWS_NAMES returns
+  exactly two hits - its definition at positional.ts:75 and its re-export at
+  sample-parsing/index.ts:154. Nothing imports it. No test reads it either.
+  Its own comment says it exists 'so the mapping table can show an operator
+  the name they will recognise from the AWS documentation'. No mapping table
+  reads it, so that display does not happen - the comment describes behaviour
+  the product does not have, which is the class this repo treats as a defect
+  rather than a nit. The DISTINCTION it records is real and load-bearing, and
+  must not be lost with the constant: AWS documents these fields with HYPHENS
+  (account-id, interface-id, log-status), Cribl parses a rename's currentName
+  as an accessor path, and account-id reads as account minus id. [[DBT-77]]
+  chose underscored names for exactly that reason and that reasoning is also
+  written at the constant. TWO HONEST ROUTES, and the choice is a product
+  question rather than a cleanup: wire it into the mapping table so an
+  operator sees the AWS spelling beside ours - which is what DBT-77 intended
+  and would help anyone comparing against AWS's docs - or delete the constant
+  and keep the reasoning as a comment on VPC_FLOW_V2_FIELDS. Do not just
+  delete both; the hyphen trap is the thing worth keeping. RE-VERIFIED
+  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
+  per card, then a judge): REAL, confidence high. The two reports agree, and
+  my own check confirms them. VPC_FLOW_V2_AWS_NAMES is defined at
+  positional.ts:75. Its only other occurrence in packages/ and apps/ is the
+  re-export at sample-parsing/index.ts:161. No source file, test or UI
+  component reads it. Its JSDoc (positional.ts:57-58) says it is "kept so the
+  mapping table can show an operator the name they will recognise from the AWS
+  documentation", but no mapping table reads it, so the comment describes
+  behaviour the product does not have. Neither report was wrong. Both noted
+  the card's stale line number for the re-export (:154, now :161). Th
+  CORRECTIONS: Re-export is at
+  packages/core/src/domain/sample-parsing/index.ts:161 (not :154). Also note
+  that the constant reaches the core package's public API via `export *` in
+  packages/core/src/index.ts, so deletion changes the export surface (no
+  consumer exists). BLOCKED ON OPERATOR DECISION: The card leaves this open.
+  Should the AWS spelling of VPC Flow v2 fields be shown to operators? (A)
+  Wire it in: the mapping table shows the AWS name (account-id) beside the
+  parsed name (account_id) for VPC Flow v2 samples, which is what DBT-77
+  intended. (B) Delete VPC_FLOW_V2_AWS_NAMES and move the hyphen-trap
+  reasoning onto VPC_FLOW_V2_FIELDS's JSDoc. Either way the hyphen-trap
+  explanation must survive. OPERATOR DECIDED 2026-10-02: option (A) WIRE IT IN
+  - the mapping table shows the AWS spelling (e.g. account-id) beside the
+  parsed name (account_id) for VPC Flow v2 samples, as DBT-77 intended. The
+  hyphen-trap explanation must survive.
 
 - **GEN-11** An undetected sample reaches the router as `json` and gets a filter that cannot match
   `GEN-F1` `bug` `settled`
@@ -599,54 +899,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (0)
 
 Next to pick up. Nothing blocks these.
 
-- **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
-  `GEN-F1` `bug` `settled`
-  FOUND during [[GEN-6]] review. A VPC Flow v2 sample is recognised, so the
-  parser names `start` and `end` - the epoch seconds AWS records for the flow
-  window - and the generated pipeline extracts them correctly. But nothing
-  maps either to TimeGenerated, so every event lands in Sentinel stamped with
-  when Cribl ingested it. WHY THIS IS `now` DESPITE NOTHING BEING BROKEN ON
-  SCREEN: it is silent and it is unrecoverable after the fact. Flow logs are
-  batched to S3 and collected on a delay, so the two timestamps can differ by
-  many minutes; a hunt over the ingestion timestamp finds the wrong window and
-  the operator has no way to see that from the data. This is the same class
-  the toolkit exists to prevent - a confident wrong answer - landed in the
-  customer's workspace rather than on a screen. NOT YET ESTABLISHED, and it
-  decides the fix: whether `start` or `end` is the right stamp for a flow
-  record, and whether the mapping belongs in the pack (an Eval writing
-  TimeGenerated) or in the DCR transform. Read what the guid work settled
-  about type promotion in transformKql before choosing - the same argument
-  about who does the conversion applies. RE-VERIFIED 2026-10-02 (bug sweep: an
-  independent reproducer and an adversarial skeptic per card, then a judge):
-  REAL, confidence high. The two reports agree on every material point, and I
-  confirmed each one against current code. I also re-ran the reproducer's
-  asserting probe, gen7-repro.test.ts, and it passed at HEAD. CORRECTIONS:
-  Three corrections: 1. The mechanism is more specific than "nothing maps
-  either". detectTimestampField (pipeline-conf.ts) falls back to the literal
-  "TimeGenerated", so auto_timestamp reads a field the event does not have and
-  `defaultTime: now` sets `_time` to the current time. The cleanup drop list
-  then removes `_time`, and DEFAULT_TRANSFORM_KQL "source" adds nothing. A fix
-  that only corrects srcField would still not deliver TimeGenerated. 2.
-  `start` and `end` do ship, renamed to the Start/End columns, so the flow
-  window is not strictly invisible. However, those columns are declared
-  `datetime` and are sent as epoch-second strings with no conversion, so they
-  may land null or wrong. This is unv BLOCKED ON OPERATOR DECISION: Two
-  choices are needed: 1. Which flow time becomes TimeGenerated for VPC Flow
-  records? Options: (A) `start`, the first packet in the aggregation window,
-  which matches how most hunts frame a flow; (B) `end`, which is closer to
-  when AWS emitted the record. 2. Where does the epoch-to-datetime conversion
-  live? Options: (P) a pack Eval writing ISO strings for TimeGenerated, Start
-  and End, which keeps transformKql 'source'; (D) the DCR transformKql,
-  following the ADR 0004 toguid precedent, which requires parser and
-  type-declaration changes.
+_Nothing here._
 
 ---
 
-## Backlog - next (29)
+## Backlog - next (26)
 
 Settled and unblocked, sequenced behind now.
 
@@ -756,79 +1017,6 @@ Settled and unblocked, sequenced behind now.
   Azure-requiring items flag 'not connected' with 'Connect Azure to use this',
   screenshot, Delete - with the only real cost being re-entering the client
   secret afterwards. Nothing about that half is blocked.
-
-- **DBT-14** Stop the solution list swallowing the mouse wheel
-  `DBT-F2` `bug` `settled`
-  Not now because: Held at next 2026-09-01 because the fix is a TRADE-OFF, not
-  a correction, and picking the wrong side reintroduces a bug this repo
-  already fixed. `overscroll-behavior: contain` (styles.css:2954-2958) is
-  load-bearing for the case it was added for on 2026-08-03, so deleting it
-  trades this defect for that one. The two real options are (a) apply
-  `contain` only while the list is actually scrollable, which needs a measured
-  class toggle rather than pure CSS, or (b) drop the 420px cap and let the
-  page own the scroll. Nothing is lost or misreported while it waits - the
-  list stays usable with the scrollbar - and choosing between (a) and (b) is
-  worth more than shipping either quickly.
-  Found live 2026-08-27: with the pointer over the list, the wheel moves
-  neither the list nor the page - the pointer must leave the list before
-  anything scrolls. Five of eight results were reachable. This is the
-  reproduction the old nested-scrolling question never had, which is what
-  turns it from an annoyance into a bug. *bug, SETTLED. `backlog.md` item
-  13d.* NOT RE-TESTABLE BY BROWSER AUTOMATION (tried 2026-08-28): wheel events
-  do not reach the app at all through the Cribl shell iframe - scrolling over
-  the list, over the page heading, and over the outer margin all moved
-  nothing. So automation cannot distinguish "the list swallows the wheel" from
-  "the wheel never arrived", and an automated run would either report a false
-  confirmation or a false all-clear. This card stays on the HUMAN reproduction
-  that filed it. Whoever fixes it should verify by hand for the same reason.
-  STOP CONDITION LIKELY MET - static evidence 2026-09-02, gathered before wave
-  3 to avoid implementing blind. The scout named a stop: if the list freezes
-  while it still has ROOM to scroll, then overscroll-behavior is not the cause
-  and neither proposed option fixes it. Three things point that way. (1)
-  overscroll-behavior:contain governs scroll CHAINING AT THE BOUNDARY - it
-  does not prevent an element scrolling internally while it has room, so it
-  cannot by itself explain a list that will not move. (2) The card reports
-  five of EIGHT results reachable, which is a list that has room and is not
-  moving. (3) There is NO wheel handler anywhere in solution-browser - grep
-  for onWheel/wheel/preventDefault returns nothing - so no JS is swallowing
-  the event and the cause is CSS or the iframe. The rule at styles.css
-  .solution-browser-list carries max-height 420px plus overflow-y auto, and
-  its own comment records why contain was added on 2026-08-03: three nested
-  scroll regions, and reaching the END of the list handed the wheel to the
-  page mid-search. That is a BOUNDARY problem, which is a different symptom
-  from the one this card reports. NOT PROVEN - this is static reasoning and
-  the wheel cannot be tested by reading CSS. What it establishes is that
-  implementing either option (a) or (b) blind would likely fix nothing.
-  RE-SCOUT WITH A LIVE MEASUREMENT FIRST: does the list scroll at all with the
-  pointer over it, and does the behaviour differ between a filtered short list
-  and the full one. RE-VERIFIED 2026-10-02 (bug sweep: an independent
-  reproducer and an adversarial skeptic per card, then a judge): REAL,
-  confidence high. Both investigators say the defect exists. They disagree on
-  whether `overscroll-behavior: contain` causes it, which is the question the
-  card's 2026-09-02 note left open. I re-ran the reproducer's probe (headless
-  Chrome, repo styles.css, list inside an iframe, trusted CDP mouseWheel
-  events) and got the same numbers. With 8 rows the list is 279px tall
-  (clientHeight == scrollHeight, under the 420px cap). With `contain`, three
-  wheel events moved neither the list nor the page (0/0). With `contain`
-  removed, the page scrolled 300px. In Chrome, an overflow:auto box with
-  overscroll-behavior:contain that CORRECTIONS: Replace the 2026-09-02 'STOP
-  CONDITION LIKELY MET' paragraph. Measured 2026-10-02 in headless Chrome with
-  trusted CDP wheel events inside an iframe: 8 rows render at about 279px,
-  under the 420px cap, so the list cannot scroll. On a box that does not
-  overflow, overscroll-behavior:contain still blocks the wheel from passing to
-  the page (list 0, page 0). Without contain the page scrolls 300px. So
-  contain IS the cause, and the rows that could not be reached were below the
-  iframe fold, not inside the list. The card says browser automation cannot
-  re-test this. That is true only of wheel input through the Cribl shell.
-  Trusted CDP wheel input against the stylesheet does reproduce it. Update the
-  line BLOCKED ON OPERATOR DECISION: The card itself leaves (a) versus (b)
-  open. (a) keeps the 420px scrolling list and applies
-  overscroll-behavior:contain only while it overflows, measured in JS
-  (recommended; the probe shows it fixes the reported case and keeps the
-  2026-08-03 end-of-list protection). (b) drops the 420px cap so the page owns
-  the only scroll. That is pure CSS and removes the nested scroll region, but
-  a long unfiltered list then pushes everything below it far down the page.
-  Which one?
 
 - **D-10** `DBT` Setup wizard header promises three phases while the stepper shows one
   `DBT-F2` `decision` `settled`
@@ -947,125 +1135,6 @@ Settled and unblocked, sequenced behind now.
   the next ARM call added outside a try block reopens the failure and nothing
   fails when it does.
 
-- **GEN-5** checkCriblYaml never sees an unaddressable field name unless the matcher renames it
-  `GEN-F1` `bug` `settled`
-  Not now because: Ranked below [[GEN-4]] on evidence, not on comfort. Both
-  are holes in the same rule, and this one is WIDER - but it is also the one
-  where the operator is not left blind: on the unmatched path the DBT-78 parse
-  note fires at sample-choice time and names the field, several screens before
-  a pack is built. GEN-4's whitespace case is the worse position, because
-  there the operator gets a note AND a clean build on a rename that will fail
-  in Cribl. The deciding factor is that closing GEN-4 needs the
-  group-name/field-name distinction built first, and that same distinction is
-  a prerequisite here, so GEN-4 is genuinely the earlier work rather than
-  merely the smaller.
-  MEASURED through the real chain (parseSampleContent -> matchSampleToSchema
-  -> buildPipelinePlan -> generatePipelineConfForPlan -> checkCriblYaml)
-  during the final whole-diff review of [[DBT-78]], not reasoned about.
-  checkCriblYaml only ever inspects a name that LANDS ON a
-  name:/currentName:/newName: line. An UNMATCHED field never emits one - it
-  appears only in the cleanup eval's `remove:` list - and a KEPT field emits
-  no rename either. So: a JSON sample keyed `aws.account` and `src_ip` against
-  SrcIpAddr/TimeGenerated builds with 0 issues, and integrate-screen's `if
-  (!preview.valid)` guard never fires; the same holds for `src-ip` and
-  `vendor-thing` left unmatched; a sample keyed `a.b` matched to a column also
-  named `a.b` takes action `keep` - 0 issues; and the rule DOES work when the
-  name is renamed: the same hyphenated sample matched to
-  SrcIpAddr/DstIpAddr/AccountId produces 3 issues. So an awkward vendor name
-  is refused only if it is RENAMED, and its ORDINARY fate - no matching
-  destination column - builds clean. WHY THIS IS NOT SIMPLY 'ADD THE CHECK':
-  an unmatched field is dropped, so an unaddressable name among dropped fields
-  may be harmless. The question this card has to answer first is whether the
-  cleanup eval's `remove:` list is itself accessor-parsed by Cribl - if it is,
-  an unaddressable name there fails at runtime too and the gap is real rather
-  than cosmetic. NOT MEASURED; it needs a live Cribl. Establish it before
-  building. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and
-  an adversarial skeptic per card, then a judge): REAL, confidence high. Both
-  reports agree on the mechanics, and so does my own reading of the code.
-  checkCriblYaml's accessor rule only reads name:/currentName:/newName: lines,
-  and only inside a block for which isAccessorNameBlock returns true. That
-  function accepts conf->add and conf->rename only. An unmatched field appears
-  in the conf only as a bullet under conf->remove. A kept field
-  (match-fields.ts sets action "keep" only when src.name === dst.name) emits
-  no conf line at all. Neither one reaches the rule. pipeline-preview-state.ts
-  computes valid as totalYamlIssues === 0, so the build guard at
-  integrate-screen.ts CORRECTIONS: 1) The priorityWhy is stale. It ranks GEN-5
-  below [[GEN-4]] because closing GEN-4 "is genuinely the earlier work", but
-  GEN-4 is closed and pruned from board.json, and its whitespace rule has
-  shipped in checkCriblYaml. The priority argument has to be rewritten around
-  the one real remaining reason, the unmeasured remove-list behaviour, or the
-  card promoted to `now`. 2) Split the card into two legs. KEPT leg: there is
-  no conf line to inspect, so a YAML-level rule can never see it. It needs a
-  plan-level check and NO live Cribl. DROP leg: gated on the live measurement
-  of whether Cribl's Eval `remove:` glob list accessor-parses its entries. 3)
-  Name the four "SHIPS ..." pins in packages/core/src/do BLOCKED ON OPERATOR
-  DECISION: For the DROP leg (an unmatched source field whose name is not a
-  valid Cribl accessor, present only in the cleanup eval's `remove:` list),
-  what should the build do? Options: (A) Measure first. Run one Eval on a live
-  Cribl with remove: ['aws.account','Source IP','src-ip'] and decide from the
-  result: block only if Cribl errors or misremoves. (B) Block now,
-  conservatively. Treat it like a rename and refuse the build. This risks
-  blocking most real vendor samples over a drop that may be harmless. (C) Warn
-  without blocking. Add a separate non-blocking warnings channel on the
-  preview naming each such field, and leave preview.valid unchanged. (D)
-  Accept and close. Rely on the existing DBT-78 parse note at sample-choice
-  time, rewrite the SHIPS pins as intended behaviour, and record the decision
-  in an ADR. Leg 1 (kept/coerced) does not depend on this answer and can
-  proceed now.
-
-- **DBT-84** parseKvLine still truncates keys on \w+, and widening it re-keys every stored sample
-  `DBT-F1` `bug` `settled`
-  Not now because: The truncation is real but currently LOAD-BEARING, so
-  fixing it in the wrong order breaks more than it repairs. parseKvLine feeds
-  format DISCRIMINATION, and DISCRIMINATOR_FIELDS holds word-only spellings
-  ('type') that hyphenated vendor keys ('log-type') truncate INTO. Measured:
-  `log-type=TRAFFIC action=A` yields ['type','action'] and 'type' is what
-  selects the format. So today's split works BY ACCIDENT, and widening the key
-  class first would silently re-key every stored sample and change which
-  parser is chosen. The required ordering is hyphenated aliases into
-  DISCRIMINATOR_FIELDS FIRST, key class second - never the reverse. That
-  ordering is why this is sequenced work rather than urgent work.
-  DELIBERATELY LEFT DIVERGENT by [[DBT-79]], and documented on both functions
-  so the next reader does not merge them by reflex - the first attempt left
-  splitting.ts still telling the reader the two parsers agree, which review
-  caught. MEASURED: `src-ip=1.1.1.1 action=A` yields parseKv
-  ['src-ip','action'] and parseKvLine ['ip','action']. The two now disagree on
-  ordinary input. parseKvLine's truncation is what makes format discrimination
-  work today, for the reason in priorityWhy. The eventual fix is ordered, and
-  the ordering is the whole content of this card: (1) add hyphenated aliases
-  to DISCRIMINATOR_FIELDS so discrimination stops depending on the truncation,
-  (2) then widen the key class. Reversing those two silently re-keys stored
-  samples. A quote-aware tokenizer would let the two paths collapse into one
-  for real; parseKv's regex could not be replaced by the fallback's
-  whitespace-split-plus-indexOf loop because splitting on whitespace cuts
-  `msg=\"login ok\"` in half, which is pinned. RE-VERIFIED 2026-10-02 (bug
-  sweep: an independent reproducer and an adversarial skeptic per card, then a
-  judge): REAL, confidence high. Both investigators reproduced the defect and
-  agree on it, and I confirmed it again myself. parseKvLine
-  (packages/core/src/domain/sample-parsing/splitting.ts:69-78) still uses
-  `/(\w+)=.../`. No commit has touched that regex since the file was created
-  (c11dd4a, per the skeptic's pickaxe). The divergence is pinned on purpose as
-  a hazard to fix later, not as the behaviour anyone wants
-  (kv-keys.test.ts:353-384). CORRECTIONS: 1. Replace "format DISCRIMINATION"
-  and "change which parser is chosen" with "log-type GROUPING". parseKvLine
-  only feeds selectDiscriminatorField in splitSamplesByLogType
-  (splitting.ts:157). Changing it changes the group names, which are the
-  uppercased discriminator values, and therefore the stored sample ids
-  `${source}:${logType}`. It never changes the format or the parser. 2. Add
-  the harm that exists today. Truncated keys collide and the last one wins.
-  `log-type=TRAFFIC sub-type=end` groups by the SUBTYPE ('END'), and the
-  result depends on pair order. `src-ip=.. dst-ip=.. action=..` collapses to 2
-  keys and fails the >=3 gate (splitting.ts:118), so the sample falls back to
-  the single fallbac BLOCKED ON OPERATOR DECISION: Fixing the collision
-  changes the log-type key of some already-stored samples. Which policy? (A)
-  Accept the re-key: fix as planned, and add a release-notes line that
-  captures containing colliding hyphenated keys will regroup and should be
-  re-captured. (B) Migrate: on load, map the old ids to the new ones (only
-  feasible where the old id can be recomputed from stored raw events). (C)
-  Keep the old grouping for existing samples and apply the new behaviour only
-  to new captures. Also: when both `type=` and `log-type=` are present on one
-  line, which wins? (i) the exact `type` key, or (ii) the vendor's `log-type`.
-
 - **DBT-82** package.mjs should regenerate the lock it invalidates, retiring a manual release step
   `DBT-F1` `enabler` `settled`
   [[DBT-76]] added a fifth version claim to check-release-drift and, in doing
@@ -1173,7 +1242,10 @@ Settled and unblocked, sequenced behind now.
   (1) no, keep to the ArcSight spec (`\\`, `\=`, `\n`, `\r` only); (2) yes,
   accept it leniently because some vendors escape pipes in the extension too.
   A further sub-question: should `\n` and `\r` become real control characters
-  in a Sentinel string column, or stay literal?
+  in a Sentinel string column, or stay literal? OPERATOR DECIDED 2026-10-02:
+  live-check Cribl kvp on the escape cases first; expand only ArcSight-spec
+  escapes (\, =, , ) with / becoming real control characters; add a pack eval
+  step only if kvp does not expand them.
 
 - **DBT-101** Nothing checks that an npm script named in a document actually resolves
   `DBT-F1` `enabler` `settled`
@@ -1295,7 +1367,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (40)
+## Backlog - later (38)
 
 Settled, gated on something above.
 
@@ -1611,44 +1683,6 @@ Settled, gated on something above.
   effort - but the card can no longer be read as 'wait for data to arrive',
   because the data arrived a month ago.
 
-- **DBT-58** Two pins encode opposite policies for naming the excluded subscription
-  `DBT-F4` `bug` `undecided`
-  Not now because: Two pins disagreeing about copy. No product behaviour is
-  wrong; the cost is the next person meeting a confusing test failure, and the
-  card already records which of the two over-reached.
-  FOUND 2026-08-31 by the reviewer of [[DBT-54]]. `integrate-arc.test.ts:220`
-  forbids the word "subscription" ANYWHERE in the workbook infoTip, while
-  `rule-coverage-state.test.ts:391-393` REQUIRES the summary line to name the
-  subscription beside its exclusion. Both landed in the same fix, and they
-  encode opposite policies for the same fact - so the next person to make the
-  infoTip say what the summary says will be failing a test that looks
-  deliberate. THE UNDERLYING QUESTION IS REAL: naming an excluded source helps
-  an operator answer "why isn't my deployed workbook here?", which is the
-  argument the summary pin won on; the infoTip pin was written to stop the OLD
-  false promise coming back, and it over-reached by banning the word rather
-  than the promise. Narrow the infoTip pin to forbid the CLAIM (that deployed
-  workbooks are folded in) rather than the noun, then decide once whether both
-  surfaces name the exclusion. RE-VERIFIED 2026-10-02 (bug sweep: an
-  independent reproducer and an adversarial skeptic per card, then a judge):
-  REAL, confidence high. Both investigators found the defect is real, and I
-  confirmed it against current code. The two reports do not actually disagree.
-  The reproducer shows that no single string passes both pins. The skeptic
-  shows that nothing fails today, so the conflict is latent; its "reproduced:
-  false" refers to the absence of a current failure, not to a refutation. Here
-  are the two pins: CORRECTIONS: The card is accurate and its line references
-  still hold. One addition: line 219 of the same infoTip test
-  (`not.toContain("deployed in your subscription")`) would also reject the
-  honest exclusion clause "workbooks already deployed in your subscription are
-  not analyzed". So line 220 is not the only pin to narrow; lines 219 and 220
-  both need replacing with a claim-based check. BLOCKED ON OPERATOR DECISION:
-  Should the Integrate wizard's workbook-coverage infoTip also name the
-  excluded source the way the empty-workbook summary line does? Options: (A)
-  Yes - append 'workbooks already deployed in your subscription are not
-  analyzed' to the infoTip, so both surfaces answer 'why isn't my deployed
-  workbook here?' (recommended; it matches the summary pin's reasoning). (B)
-  No - the infoTip keeps 'solution repo only', and only the summary line names
-  the exclusion. Step 1's narrowed pin allows either.
-
 - **DBT-89** A non-syslog prefix welded to the first KV key lands in the field name
   `DBT-F1` `bug` `settled`
   Not now because: It is NOT SILENT, which is what separates it from every
@@ -1697,7 +1731,9 @@ Settled, gated on something above.
   now, without measuring, and also generate a pipeline step that strips the
   same prefix before kvp, so the preview and the runtime agree by
   construction. (3) Accept as is. Rely on the DBT-78 accessor note and close
-  the card as won't-fix.
+  the card as won't-fix. OPERATOR DECIDED 2026-10-02: measure Cribl kvp serde
+  behaviour on the probe lines in a live worker first, then make parseKv match
+  it.
 
 - **DBT-88** Nothing fails when a document stops describing the release-drift check accurately
   `DBT-F1` `enabler` `settled`
@@ -1773,55 +1809,6 @@ Settled, gated on something above.
   rather than as its own PR. Do it at the same time as GEN-8 if that lands,
   since GEN-8 decides whether the concept is 'column order' or something
   wider.
-
-- **DBT-106** VPC_FLOW_V2_AWS_NAMES is exported, never consumed, and its comment claims a display that does not exist
-  `DBT-F1` `bug` `settled`
-  Not now because: Nothing is broken and nothing is silent to an OPERATOR -
-  the parser's chosen names are correct and addressable, and the AWS spellings
-  are recoverable from AWS's own docs. What is wrong is a comment claiming a
-  behaviour the product does not have, which misleads the next reader rather
-  than the user. That is a real defect by this repo's rules and a small one by
-  consequence.
-  FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, dead-code check. MEASURED: a
-  repo-wide grep over packages and apps for VPC_FLOW_V2_AWS_NAMES returns
-  exactly two hits - its definition at positional.ts:75 and its re-export at
-  sample-parsing/index.ts:154. Nothing imports it. No test reads it either.
-  Its own comment says it exists 'so the mapping table can show an operator
-  the name they will recognise from the AWS documentation'. No mapping table
-  reads it, so that display does not happen - the comment describes behaviour
-  the product does not have, which is the class this repo treats as a defect
-  rather than a nit. The DISTINCTION it records is real and load-bearing, and
-  must not be lost with the constant: AWS documents these fields with HYPHENS
-  (account-id, interface-id, log-status), Cribl parses a rename's currentName
-  as an accessor path, and account-id reads as account minus id. [[DBT-77]]
-  chose underscored names for exactly that reason and that reasoning is also
-  written at the constant. TWO HONEST ROUTES, and the choice is a product
-  question rather than a cleanup: wire it into the mapping table so an
-  operator sees the AWS spelling beside ours - which is what DBT-77 intended
-  and would help anyone comparing against AWS's docs - or delete the constant
-  and keep the reasoning as a comment on VPC_FLOW_V2_FIELDS. Do not just
-  delete both; the hyphen trap is the thing worth keeping. RE-VERIFIED
-  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
-  per card, then a judge): REAL, confidence high. The two reports agree, and
-  my own check confirms them. VPC_FLOW_V2_AWS_NAMES is defined at
-  positional.ts:75. Its only other occurrence in packages/ and apps/ is the
-  re-export at sample-parsing/index.ts:161. No source file, test or UI
-  component reads it. Its JSDoc (positional.ts:57-58) says it is "kept so the
-  mapping table can show an operator the name they will recognise from the AWS
-  documentation", but no mapping table reads it, so the comment describes
-  behaviour the product does not have. Neither report was wrong. Both noted
-  the card's stale line number for the re-export (:154, now :161). Th
-  CORRECTIONS: Re-export is at
-  packages/core/src/domain/sample-parsing/index.ts:161 (not :154). Also note
-  that the constant reaches the core package's public API via `export *` in
-  packages/core/src/index.ts, so deletion changes the export surface (no
-  consumer exists). BLOCKED ON OPERATOR DECISION: The card leaves this open.
-  Should the AWS spelling of VPC Flow v2 fields be shown to operators? (A)
-  Wire it in: the mapping table shows the AWS name (account-id) beside the
-  parsed name (account_id) for VPC Flow v2 samples, which is what DBT-77
-  intended. (B) Delete VPC_FLOW_V2_AWS_NAMES and move the hyphen-trap
-  reasoning onto VPC_FLOW_V2_FIELDS's JSDoc. Either way the hyphen-trap
-  explanation must survive.
 
 - **DBT-115** check-classnames cannot see descendant selectors, so some findings are false
   `DBT-F1` `enabler` `settled`
