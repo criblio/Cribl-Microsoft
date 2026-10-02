@@ -116,6 +116,15 @@ function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
 // ---------------------------------------------------------------------------
 
 describe("INTEGRATE_SECTIONS metadata", () => {
+  // DBT-118: the Add Sample Data tip promised a Browse Samples action that
+  // pulled events from the Sentinel and Elastic repositories. ADR 0003 deleted
+  // that browser, so the tip described a source the operator cannot use.
+  it("Add Sample Data names no deleted sample source", () => {
+    const tip = integrateSection("sample-data").infoTip;
+    expect(tip.match(/Browse Samples/g)).toBeNull();
+    expect(tip.match(/Elastic/g)).toBeNull();
+  });
+
   it("has nine sections numbered 1..9 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9,

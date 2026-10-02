@@ -62,7 +62,6 @@ import type {
   Logger,
   PackBuildRecord,
   PackScaffoldInput,
-  RemoteSampleSource,
   SecretsStore,
   SentinelContent,
   TaggedSampleStore,
@@ -167,18 +166,6 @@ export interface UiPorts {
    * result so it is fetched at most once per upstream commit.
    */
   contentCache?: ContentCache;
-  /**
-   * OPTIONAL seam over the two sibling GitHub repos the SentinelContent port
-   * cannot address (elastic/integrations, criblpacks/*), bound by each shell
-   * over the same api.github.com + raw.githubusercontent.com hosts.
-   *
-   * Its original consumer - the Browse Samples modal's elastic and cribl tiers -
-   * was deleted with the sample browser (ADR 0003). What kept the port alive is
-   * the REPOSITORIES screen, which lists an Elastic package's test files as a
-   * connectivity check that the proxied GitHub path works. Absent = that check
-   * is not offered; nothing else depends on it.
-   */
-  sampleSource?: RemoteSampleSource;
   /**
    * OPTIONAL GitHub PAT lifecycle manager (porting-plan Unit 14). The
    * Repositories settings page validates-then-stores a PAT through it and reads
