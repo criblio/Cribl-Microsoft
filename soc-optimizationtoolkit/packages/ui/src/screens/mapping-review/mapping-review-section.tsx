@@ -72,6 +72,7 @@ import {
   vendorLabelEnrichments,
   vendorMappingsForSolution,
   vendorPacksForSolution,
+  vpcFlowV2AwsName,
 } from "@soc/core";
 import type {
   CefIdentityFinding,
@@ -1022,6 +1023,11 @@ export function MappingReviewSection({
         const effective = effectiveMappings(review, report);
         const mappings = sortedMappings(effective);
         const unmapped = unmappedDestColumns(report, effective);
+        // DBT-106: the format the sample behind this table was parsed as, so a
+        // VPC Flow v2 row can show AWS's spelling (account-id) beside ours.
+        const sampleFormat = samples.find(
+          (s) => s.logType === report.logType,
+        )?.format;
         const query = (mappingSearch[report.logType] ?? "")
           .trim()
           .toLowerCase();
@@ -1286,13 +1292,28 @@ export function MappingReviewSection({
                     <tbody>
                       {shownMappings.map((m) => {
                         const ruleField = isRuleField(m.dest, ruleFields);
+                        // Display only - the parsed name stays the pipeline's
+                        // accessor; a hyphenated one breaks it at runtime.
+                        const awsName =
+                          sampleFormat === undefined
+                            ? null
+                            : vpcFlowV2AwsName(sampleFormat, m.source);
                         return (
                           <tr
                             key={m.source}
+                            data-source={m.source}
                             className={`mapping-row mapping-row-${m.action}`}
                           >
                             <td title={m.description}>
                               {m.source}
+                              {awsName !== null && (
+                                <span
+                                  className="mapping-aws-name"
+                                  title={`AWS documents this field as ${awsName}. It is parsed as ${m.source} because Cribl reads a hyphen in a field name as subtraction.`}
+                                >
+                                  {awsName}
+                                </span>
+                              )}
                               {ruleField && (
                                 <span
                                   className="rule-badge"

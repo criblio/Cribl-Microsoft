@@ -157,9 +157,12 @@ export {
 // DBT-77/DBT-78: the positional field order, exported so pipeline-generation
 // can emit the SAME names the analyzer produced. One source of truth - a second
 // copy of the order would drift and silently name the wrong column.
+// DBT-106: vpcFlowV2AwsName is exported for the mapping review, which shows
+// AWS's hyphenated spelling beside the parsed name - for display only.
 export {
   VPC_FLOW_V2_AWS_NAMES,
   VPC_FLOW_V2_FIELDS,
+  vpcFlowV2AwsName,
   isVpcFlowV2,
   looksPositional,
   parsePositional,

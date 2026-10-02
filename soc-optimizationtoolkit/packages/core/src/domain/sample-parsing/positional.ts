@@ -27,6 +27,8 @@
  * honest: we read your events and we do not know what the columns are.
  */
 
+import type { SampleFormat } from "./models";
+
 /** One positional line, split and named. */
 export interface PositionalRecord {
   readonly [field: string]: string;
@@ -55,8 +57,11 @@ export const VPC_FLOW_V2_FIELDS: readonly string[] = Object.freeze([
 ]);
 
 /**
- * AWS's own spelling, kept so the mapping table can show an operator the name
- * they will recognise from the AWS documentation.
+ * AWS's own spelling, which the DCR Gap Analysis Field Mappings table shows
+ * beside the parsed name so an operator can match a row to the AWS
+ * documentation. Read through {@link vpcFlowV2AwsName}; the consumer is
+ * ui/screens/mapping-review/mapping-review-section.tsx (DBT-106 - this comment
+ * claimed that display for weeks before anything rendered it).
  *
  * WHY THE TWO DIFFER, and it is not cosmetic. AWS writes `account-id`,
  * `interface-id` and `log-status` with HYPHENS. Cribl parses a rename's
@@ -78,6 +83,30 @@ export const VPC_FLOW_V2_AWS_NAMES: Readonly<Record<string, string>> =
     interface_id: "interface-id",
     log_status: "log-status",
   });
+
+/**
+ * The AWS spelling to DISPLAY beside a parsed field, or null when there is none
+ * (DBT-106).
+ *
+ * Gated on the sample's format, not just the name: `account_id` means AWS's
+ * `account-id` only when the positional parser minted it from a recognised v2
+ * line. An unrecognised positional file is named `field1..fieldN`, so it never
+ * matches; a JSON or CSV sample that carries its own `account_id` is somebody
+ * else's field, and an AWS label on it would be a confident wrong answer.
+ *
+ * DISPLAY ONLY. The returned name must never reach a rename's `currentName` -
+ * that is the accessor-path failure documented on VPC_FLOW_V2_AWS_NAMES.
+ */
+export function vpcFlowV2AwsName(
+  format: SampleFormat,
+  field: string,
+): string | null {
+  if (format !== "positional") return null;
+  if (!Object.prototype.hasOwnProperty.call(VPC_FLOW_V2_AWS_NAMES, field)) {
+    return null;
+  }
+  return VPC_FLOW_V2_AWS_NAMES[field] ?? null;
+}
 
 /**
  * VPC Flow's `log-status` vocabulary - a closed set, and the strongest single
