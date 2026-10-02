@@ -655,6 +655,18 @@ export function generatePipelineConf(
   if (sourceFormat === "cef" && timestampField === "TimeGenerated") {
     timestampField = "rt";
   }
+  // GEN-7. A RECOGNISED VPC Flow v2 source carries its flow window in `start`
+  // and `end` (epoch seconds), and no detection candidate matches either, so it
+  // fell back to the literal "TimeGenerated" - a field no event has - and every
+  // event was stamped with INGESTION time. Keyed on positionalColumns, the
+  // parser's own verdict, so an unrecognised field1..fieldN source is untouched.
+  const vpcFlowStamp =
+    sourceFormat === "positional" &&
+    timestampField === "TimeGenerated" &&
+    positionalColumns(fields).some((c) => c.name === "start");
+  if (vpcFlowStamp) {
+    timestampField = "start";
+  }
 
   // Step 1 (extract group): Parse fields from _raw.
   //
@@ -1025,6 +1037,50 @@ export function generatePipelineConf(
         "    conf:",
         "      rename:",
         ...entries,
+      ].join("\n"),
+    );
+  }
+
+  // Step 3a1 (enrich group): GEN-7 VPC Flow flow-time stamp.
+  //
+  // OPERATOR DECISION 2026-10-02: TimeGenerated is the flow START, and the
+  // epoch-to-datetime conversion lives HERE, in the pack, not in the DCR
+  // transform (which stays `source` - see DEFAULT_TRANSFORM_KQL). Without this
+  // step nothing wrote TimeGenerated: auto_timestamp's _time is removed in
+  // cleanup, so Azure stamped every flow with ingestion time, minutes off and
+  // unrecoverable once ingested. Start and End are converted in the same step
+  // because they are declared datetime and were shipping as raw epoch strings.
+  //
+  // Placed AFTER the rename so it reads whatever name `start`/`end` now carry.
+  // ORDER INSIDE THE EVAL MATTERS: TimeGenerated is computed from the epoch
+  // value BEFORE Start is overwritten with its ISO form. A non-numeric value
+  // (the '-' a SKIPDATA row can carry) yields undefined - the field is left
+  // unset - rather than the string 'Invalid Date'.
+  if (vpcFlowStamp) {
+    const renamedName = (source: string): string =>
+      vendorRenames.find((m) => m.sourceName === source)?.destName ??
+      presetRenames.find((f) => f.source === source)?.target ??
+      source;
+    const epochToIso = (name: string): string =>
+      `(${name} != null && String(${name}).trim() !== '' && isFinite(${name})) ? new Date(Number(${name}) * 1000).toISOString() : undefined`;
+    const startName = renamedName("start");
+    const endName = renamedName("end");
+    functions.push(
+      [
+        "  - id: eval",
+        '    filter: "true"',
+        "    disabled: false",
+        "    conf:",
+        "      add:",
+        "        - name: TimeGenerated",
+        `          value: "${epochToIso(startName)}"`,
+        `        - name: ${startName}`,
+        `          value: "${epochToIso(startName)}"`,
+        `        - name: ${endName}`,
+        `          value: "${epochToIso(endName)}"`,
+        "      remove: []",
+        "    description: Convert VPC Flow epoch start/end to ISO-8601 and stamp TimeGenerated from the flow start",
+        "    groupId: enrich",
       ].join("\n"),
     );
   }
