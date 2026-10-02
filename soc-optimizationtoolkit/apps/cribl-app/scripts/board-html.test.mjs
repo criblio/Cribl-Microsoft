@@ -163,7 +163,9 @@ describe('renderBoardHtml', () => {
 
   it('renders code spans and card links inside detail', () => {
     const html = renderBoardHtml(
-      board([story({ detail: 'see `install-pack.ts` and [[REL-2]]' })]),
+      // REL-2 is on the board: since DBT-120 a link only anchors when its card
+      // is on the page, and this fixture used to link to a card that was not.
+      board([story({ detail: 'see `install-pack.ts` and [[REL-2]]' }), story({ id: 'REL-2' })]),
       '2026-08-27',
     );
 
@@ -336,5 +338,28 @@ describe('DBT-30 - a grouping at 100% collapses, and is never given a status', (
 
     expect(Object.keys(data.epics[0])).not.toContain('status');
     expect(Object.keys(data.features[0])).not.toContain('status');
+  });
+});
+
+/**
+ * DBT-120: the kanban linked every `[[X]]` to `#card-X` without asking whether
+ * that card is on the page, so a link to a pruned card was an anchor that went
+ * nowhere. An unresolved link renders as marked text instead.
+ */
+describe('DBT-120 - a [[link]] to a card not on the page is not an anchor', () => {
+  it('anchors a link to a card on the page and marks one that is not', () => {
+    const html = renderBoardHtml(
+      board([
+        story({ id: 'REL-1', detail: 'see [[REL-2]] and [[GONE-7]]' }),
+        story({ id: 'REL-2' }),
+      ]),
+      '2026-10-02',
+    );
+
+    expect(html.match(/<a class="xref" href="#card-[^"]*">/g)).toEqual([
+      '<a class="xref" href="#card-REL-2">',
+    ]);
+    expect(html.match(/<span class="xref-gone"[^>]*>GONE-7<\/span>/g)).toHaveLength(1);
+    expect(html).not.toContain('href="#card-GONE-7"');
   });
 });

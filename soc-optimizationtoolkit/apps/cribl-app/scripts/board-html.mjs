@@ -92,12 +92,20 @@ function esc(s) {
  * **bold** and [[links]] to other cards. Rendering it as raw text would show
  * the punctuation; rendering it as markdown would mean a parser. Escape first,
  * then re-introduce only these three, so nothing in the data can inject markup.
+ *
+ * DBT-120: a `[[link]]` becomes an anchor only when its card is ON this page
+ * (`byId`). A pruned card used to render as `#card-X` pointing nowhere; now it
+ * is marked text that says so on hover.
  */
-function richText(text) {
+function richText(text, byId) {
   return esc(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[\[([^\]]+)\]\]/g, '<a class="xref" href="#card-$1">$1</a>');
+    .replace(/\[\[([^\]]+)\]\]/g, (_, id) =>
+      byId.has(id)
+        ? `<a class="xref" href="#card-${id}">${id}</a>`
+        : `<span class="xref-gone" title="Not on this board - see backlog.md or the git history of board.json">${id}</span>`,
+    );
 }
 
 /**
@@ -269,7 +277,7 @@ function card(story, byId, menu) {
       ? ''
       : [
           `<div class="decision${d.chosen ? ' answered' : ''}">`,
-          `<p class="q">${richText(d.question)}</p>`,
+          `<p class="q">${richText(d.question, byId)}</p>`,
           ...(d.options ?? []).map(
             (o) =>
               `<label class="opt${o.key === d.chosen ? ' picked' : ''}">` +
@@ -278,7 +286,7 @@ function card(story, byId, menu) {
               `<span class="opt-label">${esc(o.label)}</span>` +
               ((o.detail ?? '').trim() === ''
                 ? ''
-                : `<span class="opt-detail">${richText(o.detail)}</span>`) +
+                : `<span class="opt-detail">${richText(o.detail, byId)}</span>`) +
               `</label>`,
           ),
           // Says out loud what a click does, so nobody reads it as "decided".
@@ -297,7 +305,7 @@ function card(story, byId, menu) {
   const whyBlock =
     why === ''
       ? ''
-      : `<p class="why"><span class="why-label">Not now because</span> ${richText(why)}</p>`;
+      : `<p class="why"><span class="why-label">Not now because</span> ${richText(why, byId)}</p>`;
   return [
     `<article class="card${blocked.length ? ' is-blocked' : ''}" id="card-${esc(story.id)}"`,
     ` data-epic="${esc(story.epic)}" data-type="${esc(story.type)}"`,
@@ -314,7 +322,7 @@ function card(story, byId, menu) {
     decisionBlock,
     detail === ''
       ? ''
-      : `<details><summary>detail</summary><p>${richText(detail)}</p></details>`,
+      : `<details><summary>detail</summary><p>${richText(detail, byId)}</p></details>`,
     `</article>`,
   ].join('');
 }
@@ -477,6 +485,7 @@ summary{cursor:pointer;color:var(--dim);font-size:11px;text-transform:uppercase;
 details p{margin:6px 0 0;color:#c3d2e2;font-size:12.5px;white-space:pre-wrap}
 code{background:#0c131b;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px}
 a.xref{color:var(--accent)}
+.xref-gone{color:var(--dim);text-decoration:line-through dotted}
 .findings{margin:12px 20px;padding:10px 14px;border:1px solid #7a4b12;background:#2a1d0c;border-radius:8px;color:#ffcf8a}
 .findings ul{margin:6px 0 0;padding-left:18px}
 .hide{display:none}
