@@ -11,11 +11,11 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-61 `[[links]]` on this board name 29 card(s) it no longer shows. Their
+62 `[[links]]` on this board name 29 card(s) it no longer shows. Their
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**64 in the backlog, 19 in progress, 0 done.**
+**64 in the backlog, 7 in progress, 12 done.**
 
 ## By menu item
 
@@ -27,16 +27,16 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 36 | 0 | 15 |
+| Sentinel Integration | 27 | 9 | 6 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
-| Repositories | 1 | 0 | 1 |
+| Repositories | 0 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
-| Azure Native Source Onboarding (planned) | 13 | 0 | 1 |
+| Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 9 | 0 | 2 |
+| Cross-cutting | 8 | 1 | 1 |
 
-Open work totals 83.
+Open work totals 71.
 
 ## Epics and features
 
@@ -45,14 +45,14 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 0% (0/13)
+### `AZR` Azure native source onboarding - 8% (1/13)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding (planned) | 0/2 | AZR-4, AZR-5 |
-| `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding (planned) | 0/2 | AZR-13, AZR-3 |
+| `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding (planned) | 1/2 | AZR-13, AZR-3 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding (planned) | 0/1 | AZR-6 |
 | `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding (planned) | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding (planned) | 0/1 | AZR-8 |
@@ -78,13 +78,13 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 0/2 | HON-6, D-1 |
 
-### `GEN` Pipeline and pack generation - 0% (0/10)
+### `GEN` Pipeline and pack generation - 30% (3/10)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 0/10 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 3/10 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
@@ -110,16 +110,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 0% (0/41)
+### `DBT` Quality and technical debt _(enabler)_ - 20% (8/41)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 0/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-122 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 6/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 1/6 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-122 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 0/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 1/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -133,59 +133,9 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (19)
+## In progress (7)
 
 Started. Anything here with an unfinished dependency is called out on its card.
-
-- **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
-  `AZR-F3` `bug` `settled`
-  FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
-  merged, as a DUPLICATED DECISION: two modules define what Entra profiles
-  exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
-  (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId
-  subSelection has two. REPRODUCED, not theorised: storing SecurityOnly
-  through `decodeSelection` yields `subSelections.entraId = ["Standard"]` with
-  `dropped = ["entraId.SecurityOnly"]`. So the one profile an operator cannot
-  keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is
-  REPORTED in `dropped` rather than lost silently - that mechanism works as
-  built - but nothing reads `dropped` yet and the choice still reverts. Worth
-  recording exactly how the rationale failed: the entra-categories docblock
-  says "the coverage catalog keeps offering the two it always did, because
-  changing what a stored selection MEANS is a separate act". The first half is
-  right - Standard and HighVolume keep their meaning. The second half does not
-  follow from it: declining to make a THIRD value storable is not the same
-  act, and nothing checked whether it was. PARKED 2026-08-28: moved back out
-  of in-progress when the focus shifted to the Sentinel Integration
-  content/pack path. The decision on it is still open and still real. DECIDED:
-  the catalog derives its profile list from entra-diagnostics; ENTRA_PROFILES
-  becomes the single authority. Accepts a WEAKENED provenance pin on purpose -
-  from "equals the legacy two" to "contains the legacy two, plus SecurityOnly"
-  - because the old pin asserted a fact AZR-2 had already made false
-  deliberately. Reasoning in backlog.md section 18i, which is why this can
-  settle. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and an
-  adversarial skeptic per card, then a judge): PARTIALLY-REAL, confidence
-  high. The two reports agree on everything that matters, and I confirmed
-  their shared points by reading the code. The duplicated decision is real and
-  nothing has fixed it. ENTRA_PROFILES in entra-categories.ts lists
-  SecurityOnly, Standard and HighVolume. The entraId subSelection in
-  coverage-catalog.ts hand-lists only Standard and HighVolume. decodeSelection
-  builds its valid set from the catalog options, so a stored "SecurityOnly" is
-  pushed to dropped as "entraId.SecurityOnly" and the item falls back to
-  defaultSelected ["Standard"]. Both investigators reproduced this with
-  independent probes, and git l CORRECTIONS: Title: replace "is offered but
-  cannot be stored" with wording that makes the defect latent, for example
-  "Coverage catalog cannot store SecurityOnly - decodeSelection reverts it to
-  Standard (latent: no screen consumes it yet)". Detail: add that, as of
-  2026-10-02, no code in packages/ui or apps/cribl-app imports coverage-model
-  or entra-diagnostics, so no operator can reach this today. priorityWhy:
-  remove "the card is also still undecided"; decision.chosen = derive
-  (backlog.md 18i).
-  DECISION: The coverage catalog is a VERBATIM port of resource-coverage.json,
-  whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately
-  added SecurityOnly. Where should the profile list live?
-    [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
-    [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
-    [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
 
 - **DBT-14** Stop the solution list swallowing the mouse wheel
   `DBT-F2` `bug` `settled`
@@ -397,59 +347,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   colliding hyphenated keys will regroup and should be re-captured; and (i)
   when both type= and log-type= appear on one line, the exact type key wins.
 
-- **DBT-92** The release-drift script carried a stale version literal
-  `DBT-F1` `bug` `settled`
-  The file that exists to catch stale version literals contained one. Found
-  and corrected while closing [[DBT-76]]; the card is for the recurrence, not
-  the instance. The narrow question: should the script hold its OWN example
-  strings to the same standard it holds the four tracked documents to - either
-  by deriving them, or by pinning them. Deriving is better than pinning if it
-  is possible, because a pinned literal is a second copy that can drift, which
-  is the same argument [[DBT-73]] settled for the vendored spec. RE-VERIFIED
-  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
-  per card, then a judge): PARTIALLY-REAL, confidence high. The two reports
-  agree on the facts and differ only on how to label them. Both are right
-  about the instance. The stale literal (the BACKLOG_CURRENT comment naming
-  1.12.0 while backlog.md said 1.12.3) was replaced in 0aa6917 (#173) with the
-  placeholder "**X.Y.Z IS CURRENT (date).**". The script now makes no claim
-  about the current version, 1.12.7. Every other X.Y.Z in the file is either
-  dated history (lines 3-6, 19, 28, 145-147) or a fixed example of ordering or
-  prefix matching (118, 200, 208-209), and none of those can go stale. The
-  real check passes, and the 16 pins pass. The card asks for a g CORRECTIONS:
-  1) The detail says the script holds "the four tracked documents" to the
-  standard. The header (check-release-drift.mjs:11) now says FIVE ERRORS and
-  ONE WARNING, and the held files are package.json, package-lock.json,
-  release/, release-notes.md and backlog.md; update the count. 2) [[DBT-76]]
-  and [[DBT-73]] no longer exist in board.json (pruned in #181), so replace
-  them with commit refs (0aa6917 / #173 for the fix). 3) Name the fix commit
-  in the detail: 0aa6917 (#173) replaced the literal with an "X.Y.Z IS CURRENT
-  (date)" placeholder. That answers the card's "derive vs pin" question with
-  derive, so only a negative guard is left. 4) Optionally retype the card from
-  bug to enabler. Its own priorit
-
-- **DBT-87** DBT-1's detail names WIN-5, which is not a card id, and omits DBT-4
-  `DBT-F1` `bug` `settled`
-  FOUND while writing the [[DBT-73]] provenance pins, which nearly propagated
-  it into a load-bearing failure message. DBT-1's detail says it blocks 'AZR-7
-  and WIN-5'. THERE IS NO STORY WITH ID WIN-5: the WIN epic is WIN-1, WIN-2
-  and WIN-3, and 'WIN-5' survives across all 145 stories only as prose -
-  inside DBT-1's own detail and inside D-5's title. The cards that actually
-  declare `dependsOn: [\"DBT-1\"]` are AZR-7 (later) and DBT-4 (NEXT). So the
-  sentence names one phantom and omits the real, higher-priority dependent.
-  Fix the detail to match the dependency edges. The general version is
-  [[DBT-93]]. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and
-  an adversarial skeptic per card, then a judge): REAL, confidence high. The
-  two reports agree, and I re-checked the board myself. DBT-1's detail
-  (docs/board.json:425) still says "Blocks AZR-7 and WIN-5". No story has the
-  id WIN-5: board.json now holds 82 stories, and the WIN epic is only WIN-1 to
-  WIN-3. The only cards whose dependsOn names DBT-1 are AZR-7 (priority later,
-  backlog) and DBT-4 (priority next, backlog). So the prose names one card
-  that does not exist and leaves out the real dependent with the higher
-  priority. CORRECTIONS: Change "across all 145 stories" to "across all 82
-  stories" (the count after the #181/#182 prune). Change "survives ... only as
-  prose" to "has only ever existed as prose": WIN-5 was never a card id and
-  was already a phantom when the board was first committed (ff7ba8e).
-
 - **GEN-7** A recognised VPC Flow pack stamps every event with the ingestion time, not the flow time
   `GEN-F1` `bug` `settled`
   FOUND during [[GEN-6]] review. A VPC Flow v2 sample is recognised, so the
@@ -539,362 +436,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   - the mapping table shows the AWS spelling (e.g. account-id) beside the
   parsed name (account_id) for VPC Flow v2 samples, as DBT-77 intended. The
   hyphen-trap explanation must survive.
-
-- **GEN-11** An undetected sample reaches the router as `json` and gets a filter that cannot match
-  `GEN-F1` `bug` `settled`
-  MEASURED during [[GEN-8]] through the real chain. normalizeSourceFormat
-  (pipeline-preview-state.ts:303) erases 'unknown' into 'json' BEFORE the
-  planner sees it, so the undetected-format gap ships under 'json' - not under
-  the name every comment and card had been keyed on. With planFormat 'json':
-  CEF content AUTH vs TRAFFIC gives 0/2 own events; RFC 3164 syslog 0/2;
-  headerless PAN-OS CSV 0/2. Calibration was taken - the same harness returns
-  2/2 for content whose names really are in the text - so the zeros mean the
-  filter is dead rather than the harness being blind. All three still produce
-  a filter, so each log type counts as neither placeholder nor unreachable and
-  the pack previews CLEAN. WORSE THAN THE POSITIONAL CASE:
-  route-value-discriminator.ts:396 suppresses the _raw fallback for json and
-  ndjson, so the emitted filter is a BARE field test with no second disjunct
-  at all. The hard part is that 'json' is a real format that routes fine when
-  the names ARE in the text, so this cannot be fixed by excluding json. The
-  signal has to survive normalizeSourceFormat - either carry detection
-  confidence alongside the format, or decide the question where the sample is
-  still available. RE-VERIFIED 2026-10-02 (bug sweep: an independent
-  reproducer and an adversarial skeptic per card, then a judge): REAL,
-  confidence high. Both investigators reproduced the defect through the real
-  product chain, and they agree on every material point. I re-read the code
-  and it confirms them. normalizeSourceFormat
-  (pipeline-preview-state.ts:310-315) still turns "unknown"/""/undefined into
-  "json". reportToPlanInput (:396) passes that to the planner.
-  buildPipelinePlan (plan.ts:337-341) hands table.sourceFormat to
-  deriveValueDiscriminator. The guard at route-value-discriminator.ts:396
-  (`format !== "json" && format !== "ndjson"`) then drops the _raw disjunct,
-  so the emitted filter is a bare parsed-field test such as `_2 === 'TRAFFIC'`
-  CORRECTIONS: Line reference: normalizeSourceFormat is at
-  pipeline-preview-state.ts:310 and its call site in reportToPlanInput is :396
-  (the card's :303 is stale). Examples: the CEF AUTH vs TRAFFIC and RFC 3164
-  syslog measurements are not reachable in the product. They come from a
-  harness that forces parseByFormat(...,'unknown') and skips detection. Real
-  detection returns cef and syslog, and both get correct __UNSET__
-  placeholders. The reachable shapes are content that detectLenient returns
-  'unknown' for but the try-each fallback parses: headerless comma-delimited
-  rows that miss the PAN-OS fingerprint (filter `_2 === 'TRAFFIC'`, 0/2),
-  header CSV with 3 or fewer columns (`type === 'TRAFFIC'`, 0/3), and key=
-
-- **DBT-109** A syslog-wrapped line whose CEF header cannot be read becomes a phantom event
-  `DBT-F1` `bug` `settled`
-  FOUND during [[DBT-98]] and confirmed PRE-EXISTING rather than caused by it
-  - measured against HEAD's own code, a short header already produced this.
-  DBT-98 widened the set of lines that reach it. parseCef sets _syslogHeader
-  when the CEF marker is not at position 0, and pushes the record when it has
-  ANY key - so a header-match failure never reaches the emptiness guard. A
-  bare unreadable line yields no record and no raw event; a SYSLOG-WRAPPED one
-  yields a record whose only field is _syslogHeader, plus a raw event. THE
-  PHANTOM IS THE WORSE HALF because it keeps the count looking right: on a
-  4-line sample, eventCount 4, rawEvents 4, errors [], the full field list
-  present - because parseSampleContent UNIONS field names across records, so
-  the three good records supply every name the phantom lacks. The phantom also
-  occupies a slot in the pack's sample file. CEF over syslog is the standard
-  transport shape, so this is not an edge case. Both spellings are pinned;
-  what is missing is any way for the operator to learn it happened.
-  RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and an
-  adversarial skeptic per card, then a judge): REAL, confidence high. The two
-  reports agree on every point, and I confirmed them against current code. In
-  parseCef (packages/core/src/domain/sample-parsing/parsers.ts),
-  CEF_HEADER_PATTERN.exec(cefPart) gives null for a header with a dangling
-  trailing backslash and for a short header. All seven header fields are
-  assigned only inside `if (header !== null)`. `record["_syslogHeader"]` is
-  assigned whenever `cefStart > 0`, outside that branch, and the push (plus
-  `sourceLines?.push(line)`) only requires the record to have at least one
-  key. So a syslog-wrapped line with an unreadable header survives as a shell
-  whose only k CORRECTIONS: The card says "what is missing is any way for the
-  operator to learn it happened". A route for that already exists:
-  ParsedSample.errors carries non-fatal notes (the DBT-77 positionalNote,
-  parse-sample.ts:445-448), and the UI shows them as "Parse notes". The card
-  should also say that the PHANTOM and MASKS pins in cef-header.test.ts
-  (306-363) encode the defective output and must be inverted by the fix. The
-  bare-form drop at the test just above them (bare line -> [] with no raw
-  event) is also silent today and should get the same note.
-
-- **DBT-110** The pack's independent CEF oracle encodes a rule the parser no longer follows
-  `DBT-F1` `bug` `settled`
-  FOUND by review of [[DBT-98]]. pipeline-conf.test.ts drives an
-  anti-collusion oracle - a second implementation, deliberately independent,
-  so 'parser and pack agree' cannot mean 'both carry the same bug'. That is
-  the right design and it is why the CEF work could be trusted. But the oracle
-  was not updated when the header unescape narrowed to the two characters CEF
-  defines, so it now encodes the WIDE rule. Worse, the load-bearing agreement
-  loop did not fail: none of its eleven lines carries a lone backslash, so the
-  corpus cannot express the disagreement it exists to catch. That is the
-  calibration failure this session has now hit four times ([[DBT-105]]): a
-  corpus reporting agreement while blind to the case. Fix the oracle AND add a
-  line that carries a lone backslash, then confirm the loop FAILS before the
-  oracle is corrected. RE-VERIFIED 2026-10-02 (bug sweep: an independent
-  reproducer and an adversarial skeptic per card, then a judge): REAL,
-  confidence high. Both reports agree, and I confirmed the defect against
-  current code. scanCefHeader in pipeline-conf.test.ts is meant to be the
-  independent oracle, but it still applies the wide rule. Its docblock says "a
-  backslash consumes the next character", and the code does `current += s[i +
-  1]; i += 2`. The parser and the emitted pack both unescape with
-  CEF_HEADER_ESCAPE = /\\([\\|])/g, which handles only `\\` and `\|`. Every
-  backslash in the agreement loop's 11-line corpus is followed by `|` or `\`,
-  so the loop passes while the oracle and the parser disagree. The
-  reproducer's probe shows the disagreement CORRECTIONS: The [[DBT-98]] link
-  dangles because the board prune removed the card, so cite it by commit or
-  backlog.md section instead. Mention that cef-header.test.ts already pins the
-  parser's lone-backslash behaviour; what is missing is coverage of that
-  behaviour through the oracle and agreement loop. Add that the
-  parsers.ts:858-860 claim ('0 of 200000 lines against the character scanner')
-  does not match the scanner in the repo and needs rewording or re-measuring.
-
-- **DBT-116** Nine more consumers enumerate SampleFormat and silently mishandle a missing member
-  `DBT-F1` `bug` `settled`
-  FOUND BY THE SWEEP [[DBT-108]] demanded, which is the point: three
-  user-visible defects had already come from one root cause ([[DBT-77]] added
-  positional to SampleFormat, [[GEN-6]] found pipeline-conf.ts untaught,
-  DBT-108 found the capture detector untaught) and nobody had asked how many
-  more there were. TWELVE sites enumerate the union; NINE fail SILENTLY on a
-  member they do not handle - a confident wrong answer rather than an error.
-  Measured, not read, wherever the reviewer could reach the code:
-  pipeline-conf.ts generatePipelineConf is missing syslog in its extract-group
-  ladder, and generateFallbackReductionConf maps cef and leef to kvp but has
-  nothing for syslog. route-discriminator.ts is missing ndjson.
-  pipeline-preview-section.tsx is missing positional AND syslog in two places
-  - only csv is named. splitting.ts hasNamedFields returns false for a VPC v2
-  capture whose columns ARE named, measured on the reported file own lines.
-  models.ts carries a comment listing the members that omits positional and
-  unknown. detectStrict can never return ndjson, csv or positional at all. THE
-  STRUCTURAL ANSWER IS WORTH MORE THAN THE LIST, and the sweep was asked to
-  cost it: TypeScript can make this class impossible rather than findable,
-  with a never-typed default on a switch over the union. Read the sweep report
-  before choosing - some sites are ladders rather than switches and would have
-  to be restructured first, and a site that DEFAULTS correctly does not need
-  it. Do the exhaustiveness work first where it is cheap; the individual fixes
-  are worth less than the guarantee that the next member added is caught at
-  compile time. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer
-  and an adversarial skeptic per card, then a judge): REAL, confidence high.
-  The two investigators agree on every fact. They differ only in the label:
-  the reproducer said "yes" and the skeptic said "partially". I re-read the
-  disputed sites and both are right on the facts. CORRECTIONS: The site count
-  is high. There are four live silent sites: - pipeline-conf
-  generatePipelineConf, for syslog - pipeline-conf
-  generateFallbackReductionConf, for syslog - route-discriminator rawToken,
-  for ndjson - pipeline-preview-section filterExample plus the CSV hint, for
-  positional and syslog Two sites are latent with no production caller: -
-  splitting.ts hasNamedFields, where only tests and the barrel re-export use
-  it - format-detection.ts detectStrict, where only tests pass mode 'strict'
-  models.ts is a stale doc comment, not a consumer. The ndjson route filter
-  degrades rather than breaks, because it still ORs `field !== undefined`. The
-  exhaustiveness remedy needs signature narrowing fir
-
-- **DBT-117** hasNamedFields says a recognised VPC Flow capture has no named fields
-  `DBT-F1` `bug` `settled`
-  MEASURED during the [[DBT-108]] sweep on the reported file own 100 VPC Flow
-  v2 lines: hasNamedFields(lines, positional) returns FALSE, although
-  isVpcFlowV2 recognises the shape and the columns carry real names (srcaddr,
-  dstaddr, account_id). splitting.ts has no positional branch so it falls off
-  the end to return false. Same root cause as DBT-108 and part of [[DBT-116]]
-  class, filed separately because it is the one site with no caller - which is
-  also why it survived three waves unnoticed. RE-VERIFIED 2026-10-02 (bug
-  sweep: an independent reproducer and an adversarial skeptic per card, then a
-  judge): REAL, confidence high. The two reports agree, and I confirmed the
-  defect by reading the current code. hasNamedFields in
-  packages/core/src/domain/sample-parsing/splitting.ts has branches for cef,
-  leef, kv, json, ndjson, csv, syslog and unknown. It has none for
-  "positional", which is a valid SampleFormat member. A positional input
-  therefore falls through to the final `return false`, including a capture
-  that isVpcFlowV2 recognises and that parsePositional names correctly
-  (srcaddr, dstaddr, account_id). Both investigators reproduced this with
-  synthetic VPC v2 lines, by separate routes (tsx and vitest). CORRECTIONS:
-  None needed for the substance. The '100 VPC Flow v2 lines' file is not in
-  the repo, so both investigators reproduced the defect with synthetic v2
-  lines on the same code path. Optionally add the current location
-  (splitting.ts:220-257) and note that the gap was inherited from the legacy
-  port and not introduced by it.
-
-- **GEN-14** Every app-built pack ships the unedited Cribl README template
-  `GEN-F1` `bug` `settled`
-  SEEN IN THE LIVE UI 2026-09-04 while investigating [[GEN-13]]:
-  ms-sentinel-aws-vpc Pack Settings -> README is the stock Cribl scaffold,
-  verbatim - "Pack Name", "This is a paragraph that describes what this Pack
-  enables your target audience to accomplish", "Example benefit, with
-  formatted monospaced text", and a Deployment section reading "configure the
-  [Source|Destination|Dataset] by ____". The app knows everything the README
-  should say - it has the solution name, the log types, the destination table,
-  the DCR, and the vendor - and writes none of it. An operator opening the
-  pack sees placeholder text where the deployment instructions should be. The
-  Deployment section is the one that matters, and it is also where [[GEN-13]]
-  answer belongs: if the pack stays all-inclusive, this is where to say how it
-  is wired and why it does not appear in the Routes dropdown. RE-VERIFIED
-  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
-  per card, then a judge): REAL, confidence high. The two reports agree on
-  every point, and I confirmed it against current code. scaffoldPack
-  (packages/core/src/domain/pack-assembly/scaffold.ts:214) is the only
-  Integrate pack assembler. Its tree.set calls write package.json,
-  default/pack.yml, default/breakers.yml, the data/samples files,
-  default/samples.yml, the per-table pipeline confs,
-  default/pipelines/route.yml, the lookups and, only when the shape is not
-  routable, default/outputs.yml. None of them writes README.md.
-  assembleFlowLogPack (packages/core/src/domain/labs/lab-flowlog-pack.ts:170)
-  writes six files and no README either. The only CORRECTIONS: Fix the
-  mechanism in the title and detail. The app writes no README.md into the
-  pack: neither scaffoldPack nor assembleFlowLogPack emits one. The stock
-  Cribl scaffold text appears because the file is missing, which is inferred
-  from the live sighting. Suggested title: "App-built packs ship no README, so
-  Cribl shows its placeholder template". Note that the gap covers both pack
-  shapes (all-inclusive and routable) and the Labs flow-log pack. The README's
-  Deployment section should branch on PipelinePlan.packShape (added in #179
-  for GEN-13).
-
-- **GEN-18** Two functions build the Sentinel destination id and they sanitize differently
-  `GEN-F1` `bug` `settled`
-  FOUND while settling [[GEN-16]], by comparing the id the pack writes against
-  the id Deploy creates: - domain/sentinel-destination
-  defaultSentinelDestinationId (used by Deploy, onboard-table step 6)
-  MS-Sentinel-${table.replace(/_CL$/i,'').replace(/[^a-zA-Z0-9]/g,'_')}-dest -
-  domain/pipeline-generation/naming destinationId (used by the pack's routes
-  and outputs.yml) MS-Sentinel-${table.replace(/_CL$/i,'')}-dest Only the
-  first sanitizes. Measured over seven table names, three diverge: My-App_CL
-  -> MS-Sentinel-My_App-dest vs MS-Sentinel-My-App-dest My.App_CL ->
-  MS-Sentinel-My_App-dest vs MS-Sentinel-My.App-dest Zscaler Web_CL ->
-  MS-Sentinel-Zscaler_Web-dest vs MS-Sentinel-Zscaler Web-dest The four
-  alphanumeric names agree, which is why this has never been seen. This is the
-  audit's duplicated-decision shape: one rule, two implementations, able to
-  disagree. Two distinct consequences if a divergent name ever reaches them -
-  an all-inclusive pack would emit an id containing a space, which is unlikely
-  to be a legal Cribl output id at all; and [[GEN-16]]'s prerequisite check
-  would compare the pack's id against the group's and report a destination
-  missing that is sitting right there under the sanitized name. The fix is one
-  function, and the sanitizing one is the one to keep - it is the version
-  whose output has to survive as a real Cribl object id. RE-VERIFIED
-  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
-  per card, then a judge): PARTIALLY-REAL, confidence high. The two reports
-  agree on everything that matters, and I confirmed their points by reading
-  the current code. The core claim holds. naming.ts destinationId only strips
-  _CL. defaultSentinelDestinationId also maps [^a-zA-Z0-9] to "_". The pack
-  plan (plan.ts:296) uses the first, and Deploy (onboard-table.ts:895) uses
-  the second. My-App_CL, My.App_CL and "Zscaler Web_CL" get different ids from
-  the two. The card's first consequence is still live in the code: for such a
-  name, an all-inclusive pack writes an unsanitized id into outputs.yml
-  (scaffold.ts:199) and route outputs (route-yml.ts:107). The sec CORRECTIONS:
-  Mark the second consequence (GEN-16's prerequisite check reports a false
-  missing) as already mitigated by 0039d00 (#179): routable-prerequisites.ts
-  now accepts either id. Add the third implementation, option-forms.ts
-  destinationIdFromOptions, which uses the same sanitizing rule with a
-  configurable prefix and suffix. Narrow the consumers of the unsanitized id.
-  Since the routable shape arrived, routable packs emit `output: default`
-  (route-yml.ts:107), so the unsanitized id reaches only outputs.yml
-  (scaffold.ts:199) and the routes of all-inclusive packs. Note that
-  routable-prerequisites.test.ts:84-85 currently pins the divergence and must
-  be flipped by the fix.
-
-- **DBT-118** Repositories advertises Elastic sample fetching the app stopped doing
-  `DBT-F2` `bug` `settled`
-  OPERATOR DIRECTION 2026-09-04: "we should be able to get rid of the elastic
-  github calls. We are no longer using those samples." This is a HONESTY
-  defect before it is a cleanup, which is why it is a bug. Section 3 of the
-  Repositories screen is headed "Elastic integrations sample data" and tells
-  the operator the app fetches "Raw vendor log samples from
-  github.com/elastic/integrations, fetched ON DEMAND per selected solution to
-  drive field mapping and reduction rules". NONE OF THAT STILL HAPPENS.
-  ADR-0003 removed the sample browser and with it every consumer that turned
-  an Elastic file into a mapping; samples now come from paste, upload, a Cribl
-  capture, or a Lake query. The screen describes a data path that was deleted,
-  and an operator reading it would reasonably wait for Elastic samples that
-  are never coming. WHAT IS ACTUALLY LEFT is one connectivity probe. The
-  RemoteSampleSource port's own header already says so - it survived ADR-0003
-  only because "the Repositories screen uses it INDEPENDENTLY of sample
-  acquisition: a connectivity check that lists an Elastic package's test files
-  to prove the proxied GitHub path works". So the port is kept alive by the
-  diagnostic that describes it, and nothing else. MEASURED CONSUMERS, which
-  decide the scope: listElasticTestFiles ONE caller - repositories-screen.tsx
-  checkElastic (the probe itself) listCriblPackSamples ZERO callers - declared
-  in the port, implemented in the adapter, called by nothing. Dead since
-  ADR-0003 and not noticed until now. With the probe gone the whole port has
-  no consumer, so this removes a port rather than a function. TO REMOVE:
-  section 3 and its state in repositories-screen.tsx (checkElastic, the
-  elastic* state, ELASTIC_PROBE_PACKAGE / ELASTIC_PROBE_STREAM, elasticStatus
-  / elasticBadgeClass); ports/remote-sample-source.ts entire, and its
-  ports/index.ts export; sampleSource on UiPorts in ports-context.ts;
-  PlatformRemoteSampleSource, ELASTIC_OWNER_REPO and CRIBLPACKS_OWNER in
-  adapters.ts, and the binding in App.tsx. TO KEEP, and the reason the diff
-  must be read rather than pattern-matched on "github": the SENTINEL CONTENT
-  path uses the SAME two hosts and the same retry helper.
-  githubFetchWithRetry, GITHUB_API, GITHUB_RAW and every SENTINEL_* constant
-  stay. Deleting by grep on "github" would take out solution browsing, content
-  install and the KQL validation tables with it. NO DIAGNOSTIC IS LOST. The
-  Sentinel half of this screen already probes independently through the
-  SentinelContent port (getCommitSha, listSolutions, and the KQL-tables schema
-  probe), so the reachability of api.github.com and raw.githubusercontent.com
-  is still checked - against the repo the app actually reads. The Elastic
-  probe only ever proved a path nothing else used. Done when no source file
-  outside a fixture mentions elastic/integrations, the suite is green, and the
-  Repositories screen has been opened in the Live Preview to confirm the
-  remaining sections still report honestly with one section gone. RE-VERIFIED
-  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
-  per card, then a judge): REAL, confidence high. Both reports say the defect
-  exists, and I checked the code myself to confirm it. The two reports do not
-  contradict each other. They add different corrections, and I verified all of
-  them. When ports.sampleSource is bound, the Repositories screen renders
-  section 3, "Elastic integrations sample data". Its copy says raw vendor
-  samples are "fetched ON DEMAND per selected solution to drive field mapping
-  and reduction rules". After a successful probe the status line says "Vendor
-  samples are fetched on demand when you browse a solution." The cloud shell
-  always binds sampleSource, in makeCloudPorts. No CORRECTIONS: (a) The
-  RemoteSampleSource binding is not in App.tsx. It is in
-  apps/cribl-app/src/platform/adapters.ts: the makeCloudPorts binding
-  `sampleSource: new PlatformRemoteSampleSource()` and the `sampleSource:
-  RemoteSampleSource` field on the CloudPorts interface. Remove both, plus the
-  RemoteSampleSource import at adapters.ts:17. (b) Add to the removal list:
-  ELASTIC_BRANCH and CRIBLPACKS_BRANCH in adapters.ts, and the `sampleSource
-  !== undefined ? 4 : 3` badge ternary on the schema section of
-  repositories-screen.tsx, which becomes a constant 3. (c) The same stale
-  claim also appears outside this screen. In
-  packages/core/src/domain/integrate-arc/integrate-arc.ts, the section-2 ("Add
-  Sample Data") inf
-
-- **DBT-120** check-board validates everything about a card except its [[links]]
-  `DBT-F4` `bug` `settled`
-  FOUND 2026-09-04 by the architecture audit, immediately after the prune that
-  caused it, which is the only reason it was caught at all. MEASURED on the
-  pruned board: 60 `[[CARD-ID]]` links across surviving cards name 29 cards
-  that are no longer on the board. `check-board` passed green through all of
-  it, because it validates ids, menus, feature membership, priorities,
-  `verified` values and the rendered file - and never looks inside card prose.
-  THIS IS THE RELEASE-DRIFT SHAPE AGAIN, and that precedent is why it is filed
-  rather than shrugged off. check-release-drift held four claims to the
-  version and read only one of them, and the other two decayed TWICE while it
-  stayed green. A checker that validates the structured fields and ignores the
-  prose is the same bet: it reports health over the half it can see.
-  MITIGATED, NOT FIXED, on the day: `board.mjs` now emits a header paragraph
-  saying a `[[link]]` may name a pruned card and where to find it. That keeps
-  a reader from reading a dead link as a typo, and it is honest about the
-  current board. It does nothing for the next prune, and it hardcodes "through
-  1.12.7" and a date - so the note itself is the kind of hand-maintained claim
-  this repo has now watched decay twice. THE FIX is a check-board pass that
-  resolves every `[[CARD-ID]]` against the live card set. WHAT IT SHOULD DO IS
-  THE REAL DECISION and is worth more than the parsing: a dangling link is NOT
-  an error - pruning is deliberate and the target is preserved in backlog.md
-  and git history - so failing on it would make the check something people
-  disable. A WARNING with a count, printed the way the drift check prints its
-  commit-count warning, states the size of the decay without blocking anyone.
-  Consider also having it rewrite the header count from the measurement
-  instead of the hardcoded sentence added above, which would retire the
-  hand-maintained claim rather than adding one. RE-VERIFIED 2026-10-02 (bug
-  sweep: an independent reproducer and an adversarial skeptic per card, then a
-  judge): REAL, confidence high. Both investigators found the defect and both
-  reproduced it, and the code agrees with them. `validateBoard`
-  (apps/cribl-app/scripts/board.mjs:490) checks the structured fields and
-  resolves `dependsOn`. It never reads the `[[ID]]` links in title, detail or
-  priorityWhy. `main()` passes green on a board where dozens of those links
-  name cards that are not on it. CORRECTIONS: Update the measured counts. On
-  2026-10-02 there are 66 dangling links (61 in detail, 4 in priorityWhy, 1 in
-  title) naming about 34 ids, not 60 links to 29 cards. "Printed the way the
-  drift check prints its commit-count warning" refers to
-  check-release-drift.mjs. check-board itself has no warning tier, because
-  every finding is fatal at board.mjs:812, so the fix has to add one. Some
-  unresolved targets, such as D-2, may never have been cards. Say "not on this
-  board", not "pruned". The live kanban (board-html.mjs richText) also renders
-  these links as dead #card-X anchors.
 
 - **DBT-122** Field Mappings table shows an example value from the sample
   `DBT-F2` `story` `settled`
@@ -1510,8 +1051,8 @@ Settled, gated on something above.
 - **DBT-1** Pin how the REST collector is modelled in the vendored spec
   `DBT-F3` `enabler` `settled`
   `InputRest` has no schema under that name; it is likely `InputCollection`
-  with a collector conf. Blocks AZR-7 and WIN-5. `backlog.md#10`. ANSWERED
-  2026-08-31 by grooming, straight out of
+  with a collector conf. Blocks [[AZR-7]] and [[DBT-4]]. `backlog.md#10`.
+  ANSWERED 2026-08-31 by grooming, straight out of
   packages/core/assets/cribl-openapi.json - the card's own hypothesis is
   confirmed. `InputRest` DOES NOT EXIST as a schema name. The REST collector
   is `RestCollectorConf` (with `CollectorRest`), carried as an
@@ -1876,8 +1417,785 @@ Settled, gated on something above.
 
 ---
 
-## Done (0)
+## Done (12)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
-_Nothing here._
+- **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
+  `AZR-F3` `bug` `settled` `verified: pins`
+  FOUND by the architecture audit 2026-08-28 (ninth), one commit after AZR-2
+  merged, as a DUPLICATED DECISION: two modules define what Entra profiles
+  exist and they disagree. `entra-diagnostics.ENTRA_PROFILES` has three
+  (SecurityOnly, Standard, HighVolume); the `coverage-catalog` entraId
+  subSelection has two. REPRODUCED, not theorised: storing SecurityOnly
+  through `decodeSelection` yields `subSelections.entraId = ["Standard"]` with
+  `dropped = ["entraId.SecurityOnly"]`. So the one profile an operator cannot
+  keep is precisely the one AZR-2 added by resolving the LOG-07 drift. It is
+  REPORTED in `dropped` rather than lost silently - that mechanism works as
+  built - but nothing reads `dropped` yet and the choice still reverts. Worth
+  recording exactly how the rationale failed: the entra-categories docblock
+  says "the coverage catalog keeps offering the two it always did, because
+  changing what a stored selection MEANS is a separate act". The first half is
+  right - Standard and HighVolume keep their meaning. The second half does not
+  follow from it: declining to make a THIRD value storable is not the same
+  act, and nothing checked whether it was. PARKED 2026-08-28: moved back out
+  of in-progress when the focus shifted to the Sentinel Integration
+  content/pack path. The decision on it is still open and still real. DECIDED:
+  the catalog derives its profile list from entra-diagnostics; ENTRA_PROFILES
+  becomes the single authority. Accepts a WEAKENED provenance pin on purpose -
+  from "equals the legacy two" to "contains the legacy two, plus SecurityOnly"
+  - because the old pin asserted a fact AZR-2 had already made false
+  deliberately. Reasoning in backlog.md section 18i, which is why this can
+  settle. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and an
+  adversarial skeptic per card, then a judge): PARTIALLY-REAL, confidence
+  high. The two reports agree on everything that matters, and I confirmed
+  their shared points by reading the code. The duplicated decision is real and
+  nothing has fixed it. ENTRA_PROFILES in entra-categories.ts lists
+  SecurityOnly, Standard and HighVolume. The entraId subSelection in
+  coverage-catalog.ts hand-lists only Standard and HighVolume. decodeSelection
+  builds its valid set from the catalog options, so a stored "SecurityOnly" is
+  pushed to dropped as "entraId.SecurityOnly" and the item falls back to
+  defaultSelected ["Standard"]. Both investigators reproduced this with
+  independent probes, and git l CORRECTIONS: Title: replace "is offered but
+  cannot be stored" with wording that makes the defect latent, for example
+  "Coverage catalog cannot store SecurityOnly - decodeSelection reverts it to
+  Standard (latent: no screen consumes it yet)". Detail: add that, as of
+  2026-10-02, no code in packages/ui or apps/cribl-app imports coverage-model
+  or entra-diagnostics, so no operator can reach this today. priorityWhy:
+  remove "the card is also still undecided"; decision.chosen = derive
+  (backlog.md 18i). FIXED 2026-10-02 (bug sweep, branch fix/sweep-azr-13
+  51bdeee): I followed the recorded "derive" decision (backlog 18i). In
+  coverage-catalog.ts, the entraId subSelection.options list is no longer
+  written out by hand. It is now built from ENTRA_PROFILES, imported directly
+  from entra-diagnostics/entra-categories.ts rather than the barrel; that file
+  imports nothing, so no cycle is possible. A local
+  LEGACY_ENTRA_PROFILE_DETAIL map keeps the Standard and HighVolume detail
+  strings word for word. SecurityOnly's detail is its six categories joined
+  with ", ". defaultSelected stays ["Standard"] and multi stays false. As a
+  result, a stored SecurityOnly now survives decodeSelection instead of being
+  dropped and reverted to Standard. I rewrote the entra-categories.ts docblock
+  that said the catalog keeps only two profiles. I weakened the provenance pin
+  as 18i specifies and renamed it to "keeps the legacy two Entra profiles,
+  plus SecurityOnly from AZR-2". The plan h Failing-first: Ran against the
+  unfixed code with `npx vitest run src/domain/coverage-model`: 4 failed | 29
+  passed (33). Failing tests: - "keeps the legacy two Entra profiles, plus
+  SecurityOnly from AZR-2" - "takes the Entra profile list from ENTRA_PROFILES
+  - one authority, not two (AZR-13)" - "describes SecurityOn Mutation check:
+  Each mutation was applied by a script that restored the file afterwards. -
+  M1, options hand-listed again as ["Standard","HighVolume"]: 4 failed. These
+  were the provenance pin, the single-authority pin, the detail value pin and
+  the SecurityOnly round-trip. - M2, ENTRA_PROFILES filtered to drop Securi
+  Adversarial review approved; reviewer confirmed the new tests fail with the
+  source change reverted. LEFT OUT: Board updates were left out on purpose,
+  per instructions: moving the card to in-progress, closing it with verified:
+  pins, and the card corrections. Those corrections are a latent-defect title,
+  a note in the detail, and replacing the stale priorityWhy, which still says
+  the card is undecided. All of these are applied centrally.
+  DECISION: The coverage catalog is a VERBATIM port of resource-coverage.json,
+  whose `_profileOptions` has only Standard and HighVolume. AZR-2 deliberately
+  added SecurityOnly. Where should the profile list live?
+    [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
+    [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
+    [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
+
+- **DBT-92** The release-drift script carried a stale version literal
+  `DBT-F1` `bug` `settled` `verified: pins`
+  The file that exists to catch stale version literals contained one. Found
+  and corrected while closing [[DBT-76]]; the card is for the recurrence, not
+  the instance. The narrow question: should the script hold its OWN example
+  strings to the same standard it holds the four tracked documents to - either
+  by deriving them, or by pinning them. Deriving is better than pinning if it
+  is possible, because a pinned literal is a second copy that can drift, which
+  is the same argument [[DBT-73]] settled for the vendored spec. RE-VERIFIED
+  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
+  per card, then a judge): PARTIALLY-REAL, confidence high. The two reports
+  agree on the facts and differ only on how to label them. Both are right
+  about the instance. The stale literal (the BACKLOG_CURRENT comment naming
+  1.12.0 while backlog.md said 1.12.3) was replaced in 0aa6917 (#173) with the
+  placeholder "**X.Y.Z IS CURRENT (date).**". The script now makes no claim
+  about the current version, 1.12.7. Every other X.Y.Z in the file is either
+  dated history (lines 3-6, 19, 28, 145-147) or a fixed example of ordering or
+  prefix matching (118, 200, 208-209), and none of those can go stale. The
+  real check passes, and the 16 pins pass. The card asks for a g CORRECTIONS:
+  1) The detail says the script holds "the four tracked documents" to the
+  standard. The header (check-release-drift.mjs:11) now says FIVE ERRORS and
+  ONE WARNING, and the held files are package.json, package-lock.json,
+  release/, release-notes.md and backlog.md; update the count. 2) [[DBT-76]]
+  and [[DBT-73]] no longer exist in board.json (pruned in #181), so replace
+  them with commit refs (0aa6917 / #173 for the fix). 3) Name the fix commit
+  in the detail: 0aa6917 (#173) replaced the literal with an "X.Y.Z IS CURRENT
+  (date)" placeholder. That answers the card's "derive vs pin" question with
+  derive, so only a negative guard is left. 4) Optionally retype the card from
+  bug to enabler. Its own priorit FIXED 2026-10-02 (bug sweep, branch
+  fix/sweep-dbt-92 79c37ff): The stale literal itself had already been fixed
+  in 0aa6917 (#173), where the comment was changed to an X.Y.Z placeholder, so
+  this change only adds the guard against it coming back, as the plan said.
+  check-release-drift.mjs now exports BACKLOG_CURRENT, with a comment that
+  cites DBT-92. A new describe block in check-release-drift.test.mjs, 'the
+  script holds itself to its own rule', reads the script's own source. It
+  asserts that the source has no concrete '**N.N.N IS CURRENT' match, using
+  the same regex the check applies to backlog.md (shared, not copied), with
+  toEqual([]) so a failure names the offending text. It also asserts that
+  exactly 2 '**X.Y.Z IS CURRENT' placeholders remain: the one in the comment
+  and the one in the error message. Following the plan, this is not a blanket
+  N.N.N scan, because the dated history in the header is meant to stay. I
+  found no detail in the plan that the cod Failing-first: Against the unfixed
+  script, where BACKLOG_CURRENT was not exported, the new self-check pin
+  failed with a TypeError on BACKLOG_CURRENT.source (1 failed, 17 passed).
+  With the export added and line 56 changed back to the original stale
+  '"**1.12.0 IS CURRENT (2026-08-25).**"', both new pins failed (2 fa Mutation
+  check: (a) Deleted the placeholder comment line (line 56): 'still documents
+  the placeholder shape...' failed with 1 instead of 2 (1 failed, 17 passed).
+  (b) Made the exported BACKLOG_CURRENT unmatchable (/\*\*~(...)/): 11
+  existing evaluateReleaseDrift pins failed, which shows the guard and the
+  check share o Adversarial review approved; reviewer confirmed the new tests
+  fail with the source change reverted. LEFT OUT: I did not edit board.json,
+  because the board is updated centrally. The card corrections (the stale
+  DBT-76/DBT-73 links, 'four tracked documents' now five, naming 0aa6917, an
+  optional retype to enabler) and closing the card with verified: pins are
+  left to whoever updates the board centrally. I did not fold in DBT-88's
+  optional claim-count pin for the header's 'FIVE ERRORS and ONE WARNING'.
+  That is DBT-88's own card, and the plan said to link it rather than absorb
+  it.
+
+- **DBT-87** DBT-1's detail names WIN-5, which is not a card id, and omits DBT-4
+  `DBT-F1` `bug` `settled` `verified: none`
+  FOUND while writing the [[DBT-73]] provenance pins, which nearly propagated
+  it into a load-bearing failure message. DBT-1's detail says it blocks 'AZR-7
+  and WIN-5'. THERE IS NO STORY WITH ID WIN-5: the WIN epic is WIN-1, WIN-2
+  and WIN-3, and 'WIN-5' survives across all 145 stories only as prose -
+  inside DBT-1's own detail and inside D-5's title. The cards that actually
+  declare `dependsOn: [\"DBT-1\"]` are AZR-7 (later) and DBT-4 (NEXT). So the
+  sentence names one phantom and omits the real, higher-priority dependent.
+  Fix the detail to match the dependency edges. The general version is
+  [[DBT-93]]. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and
+  an adversarial skeptic per card, then a judge): REAL, confidence high. The
+  two reports agree, and I re-checked the board myself. DBT-1's detail
+  (docs/board.json:425) still says "Blocks AZR-7 and WIN-5". No story has the
+  id WIN-5: board.json now holds 82 stories, and the WIN epic is only WIN-1 to
+  WIN-3. The only cards whose dependsOn names DBT-1 are AZR-7 (priority later,
+  backlog) and DBT-4 (priority next, backlog). So the prose names one card
+  that does not exist and leaves out the real dependent with the higher
+  priority. CORRECTIONS: Change "across all 145 stories" to "across all 82
+  stories" (the count after the #181/#182 prune). Change "survives ... only as
+  prose" to "has only ever existed as prose": WIN-5 was never a card id and
+  was already a phantom when the board was first committed (ff7ba8e). FIXED
+  2026-10-02 (bug sweep): DBT-1 now reads Blocks [[AZR-7]] and [[DBT-4]].
+  Board prose only, so verified none.
+
+- **GEN-11** An undetected sample reaches the router as `json` and gets a filter that cannot match
+  `GEN-F1` `bug` `settled` `verified: pins`
+  MEASURED during [[GEN-8]] through the real chain. normalizeSourceFormat
+  (pipeline-preview-state.ts:303) erases 'unknown' into 'json' BEFORE the
+  planner sees it, so the undetected-format gap ships under 'json' - not under
+  the name every comment and card had been keyed on. With planFormat 'json':
+  CEF content AUTH vs TRAFFIC gives 0/2 own events; RFC 3164 syslog 0/2;
+  headerless PAN-OS CSV 0/2. Calibration was taken - the same harness returns
+  2/2 for content whose names really are in the text - so the zeros mean the
+  filter is dead rather than the harness being blind. All three still produce
+  a filter, so each log type counts as neither placeholder nor unreachable and
+  the pack previews CLEAN. WORSE THAN THE POSITIONAL CASE:
+  route-value-discriminator.ts:396 suppresses the _raw fallback for json and
+  ndjson, so the emitted filter is a BARE field test with no second disjunct
+  at all. The hard part is that 'json' is a real format that routes fine when
+  the names ARE in the text, so this cannot be fixed by excluding json. The
+  signal has to survive normalizeSourceFormat - either carry detection
+  confidence alongside the format, or decide the question where the sample is
+  still available. RE-VERIFIED 2026-10-02 (bug sweep: an independent
+  reproducer and an adversarial skeptic per card, then a judge): REAL,
+  confidence high. Both investigators reproduced the defect through the real
+  product chain, and they agree on every material point. I re-read the code
+  and it confirms them. normalizeSourceFormat
+  (pipeline-preview-state.ts:310-315) still turns "unknown"/""/undefined into
+  "json". reportToPlanInput (:396) passes that to the planner.
+  buildPipelinePlan (plan.ts:337-341) hands table.sourceFormat to
+  deriveValueDiscriminator. The guard at route-value-discriminator.ts:396
+  (`format !== "json" && format !== "ndjson"`) then drops the _raw disjunct,
+  so the emitted filter is a bare parsed-field test such as `_2 === 'TRAFFIC'`
+  CORRECTIONS: Line reference: normalizeSourceFormat is at
+  pipeline-preview-state.ts:310 and its call site in reportToPlanInput is :396
+  (the card's :303 is stale). Examples: the CEF AUTH vs TRAFFIC and RFC 3164
+  syslog measurements are not reachable in the product. They come from a
+  harness that forces parseByFormat(...,'unknown') and skips detection. Real
+  detection returns cef and syslog, and both get correct __UNSET__
+  placeholders. The reachable shapes are content that detectLenient returns
+  'unknown' for but the try-each fallback parses: headerless comma-delimited
+  rows that miss the PAN-OS fingerprint (filter `_2 === 'TRAFFIC'`, 0/2),
+  header CSV with 3 or fewer columns (`type === 'TRAFFIC'`, 0/3), and key=
+  FIXED 2026-10-02 (bug sweep, branch fix/sweep-gen-11 66bf9cc): Undetected
+  samples now get a placeholder route instead of a filter that can never
+  match. TablePlanInput (models.ts) has a new optional formatDetected flag.
+  reportToPlanInput sets it to false when the sample format is "unknown" or ""
+  (via a new isUndetectedFormat helper). It leaves the flag unset for
+  undefined, which means no sample at all. normalizeSourceFormat is unchanged.
+  In buildPipelinePlan, a log type with formatDetected === false skips both
+  deriveValueDiscriminator and deriveRouteDiscriminator. It falls through to
+  the existing placeholder branch, so the preview now lists it in
+  placeholderLogTypes. Explicit routing.routeCondition (such as accepted
+  overrides) still wins, and detected json/ndjson routing is untouched. I
+  rewrote the "MEASURES the json gap" pin in route-placeholder.test.ts to run
+  real detection (parseSampleContent asserting "unknown"). It now uses the
+  reachable shapes Failing-first: Run against the unfixed code.
+  pipeline-preview-state.test.ts had 2 failures. "derivePipelinePreview -
+  undetected sample formats (GEN-11) > placeholders headerless delimited rows
+  instead of shipping `_2 === 'TRAFFIC'`" failed with expected [] to deeply
+  equal ['THREAT','TRAFFIC'], after first passing Mutation check: (a) Replaced
+  the plan.ts guard with `const derive = true`. Failing: plan.test "emits the
+  placeholder instead when detection returned unknown", route-placeholder.test
+  "MEASURES the json gap, calibrates the harness, and shows the plan closes
+  it", and both UI GEN-11 preview tests (headerless and kv). ( Adversarial
+  review approved; reviewer confirmed the new tests fail with the source
+  change reverted. LEFT OUT: I did not do the optional follow-up the plan
+  names: checking a derived filter against the sample's own raw lines to
+  rescue the 2-pair kv case. That case now gets a placeholder rather than a
+  filter. It is noted in the route-placeholder.ts prose. The board card was
+  not edited, per instructions, and its corrections (stale line reference,
+  unreachable CEF/syslog examples) still need to be applied centrally.
+
+- **DBT-109** A syslog-wrapped line whose CEF header cannot be read becomes a phantom event
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND during [[DBT-98]] and confirmed PRE-EXISTING rather than caused by it
+  - measured against HEAD's own code, a short header already produced this.
+  DBT-98 widened the set of lines that reach it. parseCef sets _syslogHeader
+  when the CEF marker is not at position 0, and pushes the record when it has
+  ANY key - so a header-match failure never reaches the emptiness guard. A
+  bare unreadable line yields no record and no raw event; a SYSLOG-WRAPPED one
+  yields a record whose only field is _syslogHeader, plus a raw event. THE
+  PHANTOM IS THE WORSE HALF because it keeps the count looking right: on a
+  4-line sample, eventCount 4, rawEvents 4, errors [], the full field list
+  present - because parseSampleContent UNIONS field names across records, so
+  the three good records supply every name the phantom lacks. The phantom also
+  occupies a slot in the pack's sample file. CEF over syslog is the standard
+  transport shape, so this is not an edge case. Both spellings are pinned;
+  what is missing is any way for the operator to learn it happened.
+  RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer and an
+  adversarial skeptic per card, then a judge): REAL, confidence high. The two
+  reports agree on every point, and I confirmed them against current code. In
+  parseCef (packages/core/src/domain/sample-parsing/parsers.ts),
+  CEF_HEADER_PATTERN.exec(cefPart) gives null for a header with a dangling
+  trailing backslash and for a short header. All seven header fields are
+  assigned only inside `if (header !== null)`. `record["_syslogHeader"]` is
+  assigned whenever `cefStart > 0`, outside that branch, and the push (plus
+  `sourceLines?.push(line)`) only requires the record to have at least one
+  key. So a syslog-wrapped line with an unreadable header survives as a shell
+  whose only k CORRECTIONS: The card says "what is missing is any way for the
+  operator to learn it happened". A route for that already exists:
+  ParsedSample.errors carries non-fatal notes (the DBT-77 positionalNote,
+  parse-sample.ts:445-448), and the UI shows them as "Parse notes". The card
+  should also say that the PHANTOM and MASKS pins in cef-header.test.ts
+  (306-363) encode the defective output and must be inverted by the fix. The
+  bare-form drop at the test just above them (bare line -> [] with no raw
+  event) is also silent today and should get the same note. FIXED 2026-10-02
+  (bug sweep, branch fix/sweep-dbt-109 1f37829): parseCef now pushes a record,
+  and its source line, only when CEF_HEADER_PATTERN matched (`if (header !==
+  null)`). Before this, a syslog-wrapped line with an unreadable header (a
+  dangling trailing backslash, or a short header) survived as a shell holding
+  only `_syslogHeader`, and that shell counted as an event and as a raw event.
+  I removed the old any-key guard because it could no longer fire, and rewrote
+  the COST 1 doc block, the measurement-rows note and the inline comment. I
+  added a pure exported helper, unreadableCefHeaderNote(text), in parsers.ts.
+  It uses the same test parseCef uses and returns a singular or plural
+  sentence, or null when nothing was dropped. parseSampleContent pushes that
+  sentence into errors (the UI shows these as 'Parse notes') when the format
+  is cef, for the bare form too, which was already dropped but without any
+  message. One detail beyond the plan: unwrapCapture Failing-first: I ran
+  cef-header.test.ts against the unfixed code: 5 failed, 14 passed. (a) 'drops
+  a syslog-wrapped line whose header is unreadable, same as the bare form
+  (DBT-109)' failed with: expected [ { _syslogHeader: '<134>host1' } ] to
+  deeply equal []. (b) 'SAYS the line was dropped end to end, and the count
+  Mutation check: M1: reverting the push guard to `Object.keys(record).length
+  > 0` made (a), (b) and (e) fail. M2: removing errors.push(note) made (b),
+  (c) and (e) fail with: expected [] to deeply equal [note]. M3: removing `if
+  (dropped === 0) return null` made (d) fail, along with the helper
+  null-at-zero test and th Adversarial review approved; reviewer confirmed the
+  new tests fail with the source change reverted. LEFT OUT: Plan step 4 was to
+  update the board card. I did not do it, because the task said the board is
+  updated centrally; DBT-109 should close with verified: pins. I did not
+  re-run the 20000-line corpus for the measurement row in the doc comment. The
+  updated row says the wrapped set now drops the same lines 'by construction
+  (not re-measured on this corpus)'. I did not export unreadableCefHeaderNote
+  from the sample-parsing index.ts, since no consumer outside the module needs
+  it.
+
+- **DBT-110** The pack's independent CEF oracle encodes a rule the parser no longer follows
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND by review of [[DBT-98]]. pipeline-conf.test.ts drives an
+  anti-collusion oracle - a second implementation, deliberately independent,
+  so 'parser and pack agree' cannot mean 'both carry the same bug'. That is
+  the right design and it is why the CEF work could be trusted. But the oracle
+  was not updated when the header unescape narrowed to the two characters CEF
+  defines, so it now encodes the WIDE rule. Worse, the load-bearing agreement
+  loop did not fail: none of its eleven lines carries a lone backslash, so the
+  corpus cannot express the disagreement it exists to catch. That is the
+  calibration failure this session has now hit four times ([[DBT-105]]): a
+  corpus reporting agreement while blind to the case. Fix the oracle AND add a
+  line that carries a lone backslash, then confirm the loop FAILS before the
+  oracle is corrected. RE-VERIFIED 2026-10-02 (bug sweep: an independent
+  reproducer and an adversarial skeptic per card, then a judge): REAL,
+  confidence high. Both reports agree, and I confirmed the defect against
+  current code. scanCefHeader in pipeline-conf.test.ts is meant to be the
+  independent oracle, but it still applies the wide rule. Its docblock says "a
+  backslash consumes the next character", and the code does `current += s[i +
+  1]; i += 2`. The parser and the emitted pack both unescape with
+  CEF_HEADER_ESCAPE = /\\([\\|])/g, which handles only `\\` and `\|`. Every
+  backslash in the agreement loop's 11-line corpus is followed by `|` or `\`,
+  so the loop passes while the oracle and the parser disagree. The
+  reproducer's probe shows the disagreement CORRECTIONS: The [[DBT-98]] link
+  dangles because the board prune removed the card, so cite it by commit or
+  backlog.md section instead. Mention that cef-header.test.ts already pins the
+  parser's lone-backslash behaviour; what is missing is coverage of that
+  behaviour through the oracle and agreement loop. Add that the
+  parsers.ts:858-860 claim ('0 of 200000 lines against the character scanner')
+  does not match the scanner in the repo and needs rewording or re-measuring.
+  FIXED 2026-10-02 (bug sweep, branch fix/sweep-dbt-110 a29097b):
+  scanCefHeader is the independent CEF oracle in pipeline-conf.test.ts. It
+  still used the wide rule, where a backslash consumes any next character,
+  while parseCef and the emitted pack use the narrow CEF_HEADER_ESCAPE, which
+  only unescapes \\ and \|. The agreement loop could not see this because none
+  of its rows had a backslash before any other character. I added two
+  lone-backslash rows to the loop: a Windows path in the header with a
+  verbatim extension, and `V\x\\\|W`. I also added an exact-value assertion
+  that checks the Windows-path row through all three readings (oracle, parser
+  and pack). The oracle is now narrow: it keeps a lone backslash and steps
+  over only that backslash, and a dangling backslash still returns null. It is
+  still a regex-free character scanner and imports nothing from parsers.ts. In
+  the parsers.ts docblock I replaced the unreproducible "0 of 200000 against
+  the characte Failing-first: I added the new rows before fixing the oracle.
+  The test "CEF two-step extraction + indexOf(-1) guard > agrees with parseCef
+  AND with a scanner, on every escape shape" FAILED on the row
+  `CEF:0|Acme|C:\Program Files\Acme|1.0|100|worm|5|path=C:\Program Files\Acme
+  fname=a\b`. The diff showed Expected (o Mutation check: (a) Widening
+  CEF_HEADER_ESCAPE in parsers.ts to /\\([\s\S])/g made the agreement test
+  fail on the Windows-path row: 1 failed, 39 passed. The parser assertion
+  comes first in the loop, so it is the one reported. The pack inlines the
+  same .source. (b) Reverting the oracle so every backslash consumes th
+  Adversarial review approved; reviewer confirmed the new tests fail with the
+  source change reverted. LEFT OUT: The plan listed
+  soc-optimizationtoolkit/docs/board.json, including the cardCorrections about
+  the dangling [[DBT-98]] link and the cef-header.test.ts note. I did not edit
+  it because the task forbids board edits and the board is updated centrally.
+  I did not re-measure the 200000-line figure because the corpus is not in the
+  repo. Instead I reworded the docblock so it no longer relies on that figure.
+
+- **DBT-116** Nine more consumers enumerate SampleFormat and silently mishandle a missing member
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND BY THE SWEEP [[DBT-108]] demanded, which is the point: three
+  user-visible defects had already come from one root cause ([[DBT-77]] added
+  positional to SampleFormat, [[GEN-6]] found pipeline-conf.ts untaught,
+  DBT-108 found the capture detector untaught) and nobody had asked how many
+  more there were. TWELVE sites enumerate the union; NINE fail SILENTLY on a
+  member they do not handle - a confident wrong answer rather than an error.
+  Measured, not read, wherever the reviewer could reach the code:
+  pipeline-conf.ts generatePipelineConf is missing syslog in its extract-group
+  ladder, and generateFallbackReductionConf maps cef and leef to kvp but has
+  nothing for syslog. route-discriminator.ts is missing ndjson.
+  pipeline-preview-section.tsx is missing positional AND syslog in two places
+  - only csv is named. splitting.ts hasNamedFields returns false for a VPC v2
+  capture whose columns ARE named, measured on the reported file own lines.
+  models.ts carries a comment listing the members that omits positional and
+  unknown. detectStrict can never return ndjson, csv or positional at all. THE
+  STRUCTURAL ANSWER IS WORTH MORE THAN THE LIST, and the sweep was asked to
+  cost it: TypeScript can make this class impossible rather than findable,
+  with a never-typed default on a switch over the union. Read the sweep report
+  before choosing - some sites are ladders rather than switches and would have
+  to be restructured first, and a site that DEFAULTS correctly does not need
+  it. Do the exhaustiveness work first where it is cheap; the individual fixes
+  are worth less than the guarantee that the next member added is caught at
+  compile time. RE-VERIFIED 2026-10-02 (bug sweep: an independent reproducer
+  and an adversarial skeptic per card, then a judge): REAL, confidence high.
+  The two investigators agree on every fact. They differ only in the label:
+  the reproducer said "yes" and the skeptic said "partially". I re-read the
+  disputed sites and both are right on the facts. CORRECTIONS: The site count
+  is high. There are four live silent sites: - pipeline-conf
+  generatePipelineConf, for syslog - pipeline-conf
+  generateFallbackReductionConf, for syslog - route-discriminator rawToken,
+  for ndjson - pipeline-preview-section filterExample plus the CSV hint, for
+  positional and syslog Two sites are latent with no production caller: -
+  splitting.ts hasNamedFields, where only tests and the barrel re-export use
+  it - format-detection.ts detectStrict, where only tests pass mode 'strict'
+  models.ts is a stale doc comment, not a consumer. The ndjson route filter
+  degrades rather than breaks, because it still ORs `field !== undefined`. The
+  exhaustiveness remedy needs signature narrowing fir FIXED 2026-10-02 (bug
+  sweep, branch fix/sweep-dbt-116 98e9b97): I fixed the four live silent
+  sites. First, generatePipelineConf and generateFallbackReductionConf no
+  longer give syslog a JSON serde: both now call one switch,
+  extractionFor(SampleFormat), and syslog gets its own extraction eval.
+  Second, route-discriminator rawToken is now a switch, and ndjson gets the
+  quoted-key token like json. Third, pipeline-preview-section's filter example
+  and the "reach the route unparsed" note now use core's
+  formatCanDiscriminate, so positional and syslog operators see them too, not
+  only csv. For the structural half, sample-parsing/models.ts gains
+  SAMPLE_FORMATS, isSampleFormat, toSampleFormat and assertNeverFormat, and
+  the stale comment there is fixed. Every switch ends in a never-typed
+  default, and SAMPLE_FORMATS has a compile-time completeness check, so adding
+  a union member (tried with "xml") fails typecheck at all three decision
+  sites. Where the plan was wron Failing-first: Against unfixed code: -
+  pipeline-conf.test.ts "syslog extraction (DBT-116)" had 4 failures: - "emits
+  a syslog extraction and NO json serde in the transformation conf" ->
+  expected [ 'type: json' ] to have a length of +0 but got 1 - "agrees with
+  parseSyslog on every line shape it handles" and "emi Mutation check: Each
+  mutation was applied by script and the files restored afterwards: 1. Moved
+  ndjson to the key=value arm of rawToken: route-discriminator NDJSON test
+  failed (1 failed). 2. Made extractionFor return "json" for syslog: 4 syslog
+  tests in pipeline-conf.test.ts failed. 3. Reverted the UI gates to `f =
+  Adversarial review approved; reviewer confirmed the new tests fail with the
+  source change reverted. LEFT OUT: Plan item 5, the latent sites, was not
+  done: - hasNamedFields (splitting.ts) is tracked by its own card, DBT-117. I
+  left it so I would not collide with that card or pre-empt its keep-or-delete
+  decision. - detectStrict (format-detection.ts) was neither documented nor
+  deleted. It has no production caller, and deleting exported API is better
+  done as its own change. The type-level @ts-expect-error test (testPlan e)
+  was replaced by the typecheck mutation runs described above. An
+  @ts-expect-error over a private function would need extractionFor to be
+  exported just for the test. The syslog extracti
+
+- **DBT-117** hasNamedFields says a recognised VPC Flow capture has no named fields
+  `DBT-F1` `bug` `settled` `verified: pins`
+  MEASURED during the [[DBT-108]] sweep on the reported file own 100 VPC Flow
+  v2 lines: hasNamedFields(lines, positional) returns FALSE, although
+  isVpcFlowV2 recognises the shape and the columns carry real names (srcaddr,
+  dstaddr, account_id). splitting.ts has no positional branch so it falls off
+  the end to return false. Same root cause as DBT-108 and part of [[DBT-116]]
+  class, filed separately because it is the one site with no caller - which is
+  also why it survived three waves unnoticed. RE-VERIFIED 2026-10-02 (bug
+  sweep: an independent reproducer and an adversarial skeptic per card, then a
+  judge): REAL, confidence high. The two reports agree, and I confirmed the
+  defect by reading the current code. hasNamedFields in
+  packages/core/src/domain/sample-parsing/splitting.ts has branches for cef,
+  leef, kv, json, ndjson, csv, syslog and unknown. It has none for
+  "positional", which is a valid SampleFormat member. A positional input
+  therefore falls through to the final `return false`, including a capture
+  that isVpcFlowV2 recognises and that parsePositional names correctly
+  (srcaddr, dstaddr, account_id). Both investigators reproduced this with
+  synthetic VPC v2 lines, by separate routes (tsx and vitest). CORRECTIONS:
+  None needed for the substance. The '100 VPC Flow v2 lines' file is not in
+  the repo, so both investigators reproduced the defect with synthetic v2
+  lines on the same code path. Optionally add the current location
+  (splitting.ts:220-257) and note that the gap was inherited from the legacy
+  port and not introduced by it. FIXED 2026-10-02 (bug sweep, branch
+  fix/sweep-dbt-117 a06ef25): hasNamedFields in splitting.ts had no branch for
+  the "positional" format. A VPC Flow v2 capture fell through to `return
+  false`, even though parsePositional names its columns (srcaddr, dstaddr,
+  account_id). I took the plan's preferred long-term shape: a new exported
+  `positionalHasNamedFields(lines)` in positional.ts drops blank lines the way
+  parsePositional does, then runs isVpcFlowV2 over every remaining line.
+  parsePositional and the new `format === "positional"` branch in
+  hasNamedFields both call it, so the decision has one owner. positional.ts
+  has no imports, so there is no cycle. positionalNote still calls isVpcFlowV2
+  directly on lines it has already trimmed and filtered, which gives the same
+  result, so I left it alone. The new helper is not added to the index.ts
+  barrel because nothing outside the module needs it. The doc comments on both
+  functions now describe the positional rule and Failing-first: In
+  splitting.test.ts, run against the unfixed code: 18 tests, 2 failed.
+  "hasNamedFields > positional qualifies for a recognised VPC Flow v2 capture,
+  agreeing with parsePositional" failed with "expected false to be true //
+  Object.is equality". "hasNamedFields > positional skips blank lines the way
+  pa Mutation check: (1) I disabled the positional branch in hasNamedFields.
+  The true-case test and the blank-line test both failed ("expected false to
+  be true"). (2) I made positionalHasNamedFields check only the first
+  non-blank line (.slice(0,1)). The "does NOT qualify unless every line is VPC
+  v2" test failed ("expect Adversarial review approved; reviewer confirmed the
+  new tests fail with the source change reverted. LEFT OUT: I did not edit the
+  board, as instructed. If DBT-116 introduces a broader shared named-fields
+  predicate, it should absorb positionalHasNamedFields rather than adding a
+  second copy.
+
+- **GEN-14** Every app-built pack ships the unedited Cribl README template
+  `GEN-F1` `bug` `settled` `verified: pins`
+  SEEN IN THE LIVE UI 2026-09-04 while investigating [[GEN-13]]:
+  ms-sentinel-aws-vpc Pack Settings -> README is the stock Cribl scaffold,
+  verbatim - "Pack Name", "This is a paragraph that describes what this Pack
+  enables your target audience to accomplish", "Example benefit, with
+  formatted monospaced text", and a Deployment section reading "configure the
+  [Source|Destination|Dataset] by ____". The app knows everything the README
+  should say - it has the solution name, the log types, the destination table,
+  the DCR, and the vendor - and writes none of it. An operator opening the
+  pack sees placeholder text where the deployment instructions should be. The
+  Deployment section is the one that matters, and it is also where [[GEN-13]]
+  answer belongs: if the pack stays all-inclusive, this is where to say how it
+  is wired and why it does not appear in the Routes dropdown. RE-VERIFIED
+  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
+  per card, then a judge): REAL, confidence high. The two reports agree on
+  every point, and I confirmed it against current code. scaffoldPack
+  (packages/core/src/domain/pack-assembly/scaffold.ts:214) is the only
+  Integrate pack assembler. Its tree.set calls write package.json,
+  default/pack.yml, default/breakers.yml, the data/samples files,
+  default/samples.yml, the per-table pipeline confs,
+  default/pipelines/route.yml, the lookups and, only when the shape is not
+  routable, default/outputs.yml. None of them writes README.md.
+  assembleFlowLogPack (packages/core/src/domain/labs/lab-flowlog-pack.ts:170)
+  writes six files and no README either. The only CORRECTIONS: Fix the
+  mechanism in the title and detail. The app writes no README.md into the
+  pack: neither scaffoldPack nor assembleFlowLogPack emits one. The stock
+  Cribl scaffold text appears because the file is missing, which is inferred
+  from the live sighting. Suggested title: "App-built packs ship no README, so
+  Cribl shows its placeholder template". Note that the gap covers both pack
+  shapes (all-inclusive and routable) and the Labs flow-log pack. The README's
+  Deployment section should branch on PipelinePlan.packShape (added in #179
+  for GEN-13). FIXED 2026-10-02 (bug sweep, branch fix/sweep-gen-14 1dccb92):
+  The bug was confirmed as the judge described it. App-built packs contained
+  no README.md at all, so Cribl showed its own placeholder template; the app
+  was never shipping that template itself. I added a pure
+  generatePackReadme(plan) in pack-assembly/readme.ts. Its heading is
+  buildPackageJson's displayName, so the two cannot disagree. It also writes a
+  description naming the solution and its tables, a "What this pack contains"
+  table with one row per TablePlan, and a Deployment section that branches on
+  plan.packShape: routable, or all-inclusive when packShape is missing. The
+  footer reads "Built by {packAuthor}, pack version {version}". The README
+  never includes a DCR id, ingestion endpoint, tenant id or client id.
+  scaffoldPack writes the README at the pack root, and the barrel exports it.
+  The Labs flow-log pack gets a static FLOWLOG_README_MD that names its job,
+  breaker, pipeline, route and s Failing-first: Ran against the unfixed code:
+  npx vitest run scaffold.test.ts lab-flowlog-pack.test.ts gave "Failed Tests
+  10". All 8 tests in the new suite "every built pack ships its own README.md
+  (GEN-14)" failed: writes README.md at the pack root, names the
+  solution/every table/one row per table plan, carries no Mutation check: A
+  node script applied each mutation in turn, ran scaffold.test.ts, and
+  restored the file afterwards. (1) Deleting tree.set("README.md") failed all
+  8 GEN-14 tests. (2) Swapping the branch to packShape !== "routable" failed
+  the ALL-INCLUSIVE and ROUTABLE wiring tests. (3) Changing the row loop to
+  plan Adversarial review approved; reviewer confirmed the new tests fail with
+  the source change reverted. LEFT OUT: Plan step 4, the live confirmation in
+  the Live Preview that Pack Settings -> README renders the root README.md,
+  was not done because live Cribl calls were out of scope. The card should
+  record verified: pins until someone checks it live. I did not touch the
+  board.json card status or its title correction, since the board is updated
+  centrally. The suggested new title is "App-built packs ship no README, so
+  Cribl shows its placeholder template". The judge's risk 2 does not apply: no
+  build-record or maintenance code diffs the tree. Even so, the first rebuild
+  of an existing pack will now contain one
+
+- **GEN-18** Two functions build the Sentinel destination id and they sanitize differently
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND while settling [[GEN-16]], by comparing the id the pack writes against
+  the id Deploy creates: - domain/sentinel-destination
+  defaultSentinelDestinationId (used by Deploy, onboard-table step 6)
+  MS-Sentinel-${table.replace(/_CL$/i,'').replace(/[^a-zA-Z0-9]/g,'_')}-dest -
+  domain/pipeline-generation/naming destinationId (used by the pack's routes
+  and outputs.yml) MS-Sentinel-${table.replace(/_CL$/i,'')}-dest Only the
+  first sanitizes. Measured over seven table names, three diverge: My-App_CL
+  -> MS-Sentinel-My_App-dest vs MS-Sentinel-My-App-dest My.App_CL ->
+  MS-Sentinel-My_App-dest vs MS-Sentinel-My.App-dest Zscaler Web_CL ->
+  MS-Sentinel-Zscaler_Web-dest vs MS-Sentinel-Zscaler Web-dest The four
+  alphanumeric names agree, which is why this has never been seen. This is the
+  audit's duplicated-decision shape: one rule, two implementations, able to
+  disagree. Two distinct consequences if a divergent name ever reaches them -
+  an all-inclusive pack would emit an id containing a space, which is unlikely
+  to be a legal Cribl output id at all; and [[GEN-16]]'s prerequisite check
+  would compare the pack's id against the group's and report a destination
+  missing that is sitting right there under the sanitized name. The fix is one
+  function, and the sanitizing one is the one to keep - it is the version
+  whose output has to survive as a real Cribl object id. RE-VERIFIED
+  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
+  per card, then a judge): PARTIALLY-REAL, confidence high. The two reports
+  agree on everything that matters, and I confirmed their points by reading
+  the current code. The core claim holds. naming.ts destinationId only strips
+  _CL. defaultSentinelDestinationId also maps [^a-zA-Z0-9] to "_". The pack
+  plan (plan.ts:296) uses the first, and Deploy (onboard-table.ts:895) uses
+  the second. My-App_CL, My.App_CL and "Zscaler Web_CL" get different ids from
+  the two. The card's first consequence is still live in the code: for such a
+  name, an all-inclusive pack writes an unsanitized id into outputs.yml
+  (scaffold.ts:199) and route outputs (route-yml.ts:107). The sec CORRECTIONS:
+  Mark the second consequence (GEN-16's prerequisite check reports a false
+  missing) as already mitigated by 0039d00 (#179): routable-prerequisites.ts
+  now accepts either id. Add the third implementation, option-forms.ts
+  destinationIdFromOptions, which uses the same sanitizing rule with a
+  configurable prefix and suffix. Narrow the consumers of the unsanitized id.
+  Since the routable shape arrived, routable packs emit `output: default`
+  (route-yml.ts:107), so the unsanitized id reaches only outputs.yml
+  (scaffold.ts:199) and the routes of all-inclusive packs. Note that
+  routable-prerequisites.test.ts:84-85 currently pins the divergence and must
+  be flipped by the fix. FIXED 2026-10-02 (bug sweep, branch fix/sweep-gen-18
+  7ea0f43): Three functions built the Sentinel destination id, and the pack
+  generator's version (naming.destinationId) only stripped _CL. That let an
+  all-inclusive pack write an outputs.yml id and route outputs that Deploy
+  never creates for any table name containing a hyphen, dot or space. The
+  sanitizing rule now exists in exactly one place: a new exported
+  sanitizeDestinationTable in sentinel-destination.
+  defaultSentinelDestinationId and option-forms destinationIdFromOptions both
+  call it, which removes the third copy, and naming.destinationId delegates to
+  defaultSentinelDestinationId. The plan gave a choice of direction, and this
+  one creates no import cycle because sentinel-destination has no imports. The
+  routable-prerequisites check now matches only expectedId, as the plan said.
+  I dropped the packId field (nothing outside the test read it) and removed
+  the 'WHY TWO IDS' header. I also flipped the te Failing-first: Against the
+  unfixed code, 8 new tests failed. naming.test.ts: 'My-App_CL ->
+  MS-Sentinel-My_App-dest' gave "expected 'MS-Sentinel-My-App-dest' to be
+  'MS-Sentinel-My_App-dest'". The same kind of failure came from My.App_CL
+  ('MS-Sentinel-My.App-dest') and Zscaler Web_CL ('MS-Sentinel-Zscaler
+  Web-dest') Mutation check: M1: I put the unsanitized template back in
+  naming.destinationId. 6 tests failed: naming had 3 exact-value failures plus
+  the parity test, and scaffold had both outputs.yml and route.yml tests fail.
+  M2: I put the dual-id fallback back into checkRoutablePrerequisites,
+  matching the unsanitized id as wel Adversarial review approved; reviewer
+  confirmed the new tests fail with the source change reverted. LEFT OUT: I
+  did not make the board card corrections the judge proposed in
+  cardCorrections. These were: marking the GEN-16 false-missing consequence as
+  mitigated, and adding option-forms as the third implementation. The task
+  forbids editing board.json, and the board is updated centrally.
+
+- **DBT-118** Repositories advertises Elastic sample fetching the app stopped doing
+  `DBT-F2` `bug` `settled` `verified: pins`
+  OPERATOR DIRECTION 2026-09-04: "we should be able to get rid of the elastic
+  github calls. We are no longer using those samples." This is a HONESTY
+  defect before it is a cleanup, which is why it is a bug. Section 3 of the
+  Repositories screen is headed "Elastic integrations sample data" and tells
+  the operator the app fetches "Raw vendor log samples from
+  github.com/elastic/integrations, fetched ON DEMAND per selected solution to
+  drive field mapping and reduction rules". NONE OF THAT STILL HAPPENS.
+  ADR-0003 removed the sample browser and with it every consumer that turned
+  an Elastic file into a mapping; samples now come from paste, upload, a Cribl
+  capture, or a Lake query. The screen describes a data path that was deleted,
+  and an operator reading it would reasonably wait for Elastic samples that
+  are never coming. WHAT IS ACTUALLY LEFT is one connectivity probe. The
+  RemoteSampleSource port's own header already says so - it survived ADR-0003
+  only because "the Repositories screen uses it INDEPENDENTLY of sample
+  acquisition: a connectivity check that lists an Elastic package's test files
+  to prove the proxied GitHub path works". So the port is kept alive by the
+  diagnostic that describes it, and nothing else. MEASURED CONSUMERS, which
+  decide the scope: listElasticTestFiles ONE caller - repositories-screen.tsx
+  checkElastic (the probe itself) listCriblPackSamples ZERO callers - declared
+  in the port, implemented in the adapter, called by nothing. Dead since
+  ADR-0003 and not noticed until now. With the probe gone the whole port has
+  no consumer, so this removes a port rather than a function. TO REMOVE:
+  section 3 and its state in repositories-screen.tsx (checkElastic, the
+  elastic* state, ELASTIC_PROBE_PACKAGE / ELASTIC_PROBE_STREAM, elasticStatus
+  / elasticBadgeClass); ports/remote-sample-source.ts entire, and its
+  ports/index.ts export; sampleSource on UiPorts in ports-context.ts;
+  PlatformRemoteSampleSource, ELASTIC_OWNER_REPO and CRIBLPACKS_OWNER in
+  adapters.ts, and the binding in App.tsx. TO KEEP, and the reason the diff
+  must be read rather than pattern-matched on "github": the SENTINEL CONTENT
+  path uses the SAME two hosts and the same retry helper.
+  githubFetchWithRetry, GITHUB_API, GITHUB_RAW and every SENTINEL_* constant
+  stay. Deleting by grep on "github" would take out solution browsing, content
+  install and the KQL validation tables with it. NO DIAGNOSTIC IS LOST. The
+  Sentinel half of this screen already probes independently through the
+  SentinelContent port (getCommitSha, listSolutions, and the KQL-tables schema
+  probe), so the reachability of api.github.com and raw.githubusercontent.com
+  is still checked - against the repo the app actually reads. The Elastic
+  probe only ever proved a path nothing else used. Done when no source file
+  outside a fixture mentions elastic/integrations, the suite is green, and the
+  Repositories screen has been opened in the Live Preview to confirm the
+  remaining sections still report honestly with one section gone. RE-VERIFIED
+  2026-10-02 (bug sweep: an independent reproducer and an adversarial skeptic
+  per card, then a judge): REAL, confidence high. Both reports say the defect
+  exists, and I checked the code myself to confirm it. The two reports do not
+  contradict each other. They add different corrections, and I verified all of
+  them. When ports.sampleSource is bound, the Repositories screen renders
+  section 3, "Elastic integrations sample data". Its copy says raw vendor
+  samples are "fetched ON DEMAND per selected solution to drive field mapping
+  and reduction rules". After a successful probe the status line says "Vendor
+  samples are fetched on demand when you browse a solution." The cloud shell
+  always binds sampleSource, in makeCloudPorts. No CORRECTIONS: (a) The
+  RemoteSampleSource binding is not in App.tsx. It is in
+  apps/cribl-app/src/platform/adapters.ts: the makeCloudPorts binding
+  `sampleSource: new PlatformRemoteSampleSource()` and the `sampleSource:
+  RemoteSampleSource` field on the CloudPorts interface. Remove both, plus the
+  RemoteSampleSource import at adapters.ts:17. (b) Add to the removal list:
+  ELASTIC_BRANCH and CRIBLPACKS_BRANCH in adapters.ts, and the `sampleSource
+  !== undefined ? 4 : 3` badge ternary on the schema section of
+  repositories-screen.tsx, which becomes a constant 3. (c) The same stale
+  claim also appears outside this screen. In
+  packages/core/src/domain/integrate-arc/integrate-arc.ts, the section-2 ("Add
+  Sample Data") inf FIXED 2026-10-02 (bug sweep, branch fix/sweep-dbt-118
+  6367038): I removed the Repositories section 3, "Elastic integrations sample
+  data", along with its state, checkElastic, the ELASTIC_PROBE_* constants,
+  elasticStatus and elasticBadgeClass. The schema-tables badge is now a
+  constant 3. The RemoteSampleSource port had no consumers left, so I deleted
+  it entirely: the core file and its export in ports/index.ts, the
+  UiPorts.sampleSource field and its doc comment, which also gets rid of the
+  stale Browse Samples comment, and in adapters.ts PlatformRemoteSampleSource,
+  the ELASTIC_*/CRIBLPACKS_* constants, isElasticSampleFile, the CloudPorts
+  field and the makeCloudPorts binding. I kept githubFetchWithRetry,
+  GITHUB_API/RAW and the SENTINEL_* constants. As the judge corrected, the
+  binding lived in adapters.ts, not App.tsx. No policies or proxies entries
+  referenced elastic or criblpacks, so there was nothing to remove there. I
+  removed the false Browse Samples s Failing-first: Run against the unfixed
+  code, repositories-screen.dom.test.tsx failed 3/3. (a) "carries none of the
+  deleted Elastic sample-fetch copy" found 1 occurrence of
+  elastic/integrations. (b) "renders exactly three numbered sections" got an
+  extra ['3','Elastic integrations sample data'] and ['4','Schema tabl
+  Mutation check: (1) I injected the text "samples fetched ON DEMAND" into the
+  screen, and the copy test went red. (2) I set the schema badge back to 4,
+  and the exact section-list test went red. (3) I re-added "Browse Samples" to
+  the integrate-arc infoTip, and the core infoTip test went red. (4) I made
+  checkConnectio Adversarial review approved; reviewer confirmed the new tests
+  fail with the source change reverted. LEFT OUT: I did not edit
+  docs/board.json, either for the card corrections or to close the card,
+  because the task says the board is updated centrally. I also did not verify
+  in the Live Preview (/apps/a/__local__), since the task forbids live calls.
+  Closing with verified: both still needs that live check. Until then, pins is
+  the honest value.
+
+- **DBT-120** check-board validates everything about a card except its [[links]]
+  `DBT-F4` `bug` `settled` `verified: pins`
+  FOUND 2026-09-04 by the architecture audit, immediately after the prune that
+  caused it, which is the only reason it was caught at all. MEASURED on the
+  pruned board: 60 `[[CARD-ID]]` links across surviving cards name 29 cards
+  that are no longer on the board. `check-board` passed green through all of
+  it, because it validates ids, menus, feature membership, priorities,
+  `verified` values and the rendered file - and never looks inside card prose.
+  THIS IS THE RELEASE-DRIFT SHAPE AGAIN, and that precedent is why it is filed
+  rather than shrugged off. check-release-drift held four claims to the
+  version and read only one of them, and the other two decayed TWICE while it
+  stayed green. A checker that validates the structured fields and ignores the
+  prose is the same bet: it reports health over the half it can see.
+  MITIGATED, NOT FIXED, on the day: `board.mjs` now emits a header paragraph
+  saying a `[[link]]` may name a pruned card and where to find it. That keeps
+  a reader from reading a dead link as a typo, and it is honest about the
+  current board. It does nothing for the next prune, and it hardcodes "through
+  1.12.7" and a date - so the note itself is the kind of hand-maintained claim
+  this repo has now watched decay twice. THE FIX is a check-board pass that
+  resolves every `[[CARD-ID]]` against the live card set. WHAT IT SHOULD DO IS
+  THE REAL DECISION and is worth more than the parsing: a dangling link is NOT
+  an error - pruning is deliberate and the target is preserved in backlog.md
+  and git history - so failing on it would make the check something people
+  disable. A WARNING with a count, printed the way the drift check prints its
+  commit-count warning, states the size of the decay without blocking anyone.
+  Consider also having it rewrite the header count from the measurement
+  instead of the hardcoded sentence added above, which would retire the
+  hand-maintained claim rather than adding one. RE-VERIFIED 2026-10-02 (bug
+  sweep: an independent reproducer and an adversarial skeptic per card, then a
+  judge): REAL, confidence high. Both investigators found the defect and both
+  reproduced it, and the code agrees with them. `validateBoard`
+  (apps/cribl-app/scripts/board.mjs:490) checks the structured fields and
+  resolves `dependsOn`. It never reads the `[[ID]]` links in title, detail or
+  priorityWhy. `main()` passes green on a board where dozens of those links
+  name cards that are not on it. CORRECTIONS: Update the measured counts. On
+  2026-10-02 there are 66 dangling links (61 in detail, 4 in priorityWhy, 1 in
+  title) naming about 34 ids, not 60 links to 29 cards. "Printed the way the
+  drift check prints its commit-count warning" refers to
+  check-release-drift.mjs. check-board itself has no warning tier, because
+  every finding is fatal at board.mjs:812, so the fix has to add one. Some
+  unresolved targets, such as D-2, may never have been cards. Say "not on this
+  board", not "pruned". The live kanban (board-html.mjs richText) also renders
+  these links as dead #card-X anchors. FIXED 2026-10-02 (bug sweep, branch
+  fix/sweep-dbt-120 8962ee6): I added `danglingLinks(data)` and
+  `boardWarnings(data)` to board.mjs. `danglingLinks` scans each card's title,
+  detail and priorityWhy for `[[id]]` links, checks them against the story ids
+  and feature ids, and keeps repeated links. `main()` prints the result as a
+  warning on both render and `--check` (`::warning::` under GitHub Actions)
+  and never sets the exit code, so a dangling link cannot fail check-board. I
+  replaced the hardcoded board.md header ("through 1.12.7 ... 2026-09-04")
+  with a count computed from that same scan. The header is left out when the
+  count is zero. I regenerated board.md. In the live kanban (board-html.mjs),
+  `richText` now turns a link into an anchor only when its card is on the
+  page. A link that resolves to nothing renders as a marked `xref-gone` span
+  instead of a dead `#card-X` anchor. Two places where I departed from the
+  plan: - The plan's regex `[A-Z]+-F?\d+` Failing-first: Before the fix, 7 of
+  the 9 new tests in board.test.mjs (describe "DBT-120 - [[links]] that name
+  nothing on this board") failed: - "reports each dangling link, keeps
+  repeats, resolves real cards and skips non-id prose", "scans the title and
+  priorityWhy as well as the detail", "resolves links to featu Mutation check:
+  A scripted harness applied each mutation, ran board.test.mjs and
+  board-html.test.mjs, and restored the file afterwards (git status confirmed
+  it was clean). Each mutation turned at least one test red: 1. Dropped
+  priorityWhy from LINKED_FIELDS: "scans the title and priorityWhy" and
+  "agrees with an ind Adversarial review approved; reviewer confirmed the new
+  tests fail with the source change reverted. LEFT OUT: I did not touch
+  board.json and did not move the card; the board is updated centrally. The
+  regenerated board.md header now carries a live count ("60 `[[links]]` on
+  this board name 29 card(s)"), so board.md has to be regenerated whenever
+  card prose adds or removes a dangling link, including after the central
+  board.json update. That is expected, because `--check` compares the
+  regenerated text.
