@@ -48,14 +48,14 @@ describe("checkRoutablePrerequisites", () => {
     expect(r.entries[0]?.foundId).toBe("ms-sentinel-commonsecuritylog-DEST");
   });
 
-  describe("the two id conventions (GEN-18) - EITHER satisfies the check", () => {
-    // defaultSentinelDestinationId maps non-alphanumerics to "_"; the pack's
-    // destinationId does not. For "My-App_CL" that is MS-Sentinel-My_App-dest
-    // against MS-Sentinel-My-App-dest. Whichever the group holds, the table IS
-    // covered, and reporting it missing would send the operator to create a
-    // duplicate of a destination they already have.
+  describe("ONE id per table (GEN-18)", () => {
+    // This block used to accept EITHER of two ids, because the pack generator
+    // and Deploy sanitized table names differently: for "My-App_CL" the pack
+    // said MS-Sentinel-My-App-dest and Deploy created MS-Sentinel-My_App-dest.
+    // GEN-18 made the sanitizing rule the only one, so the pack now targets
+    // exactly the id Deploy creates and the check matches that id alone.
 
-    it("accepts the id DEPLOY creates for a divergent table name", () => {
+    it("accepts the id DEPLOY creates for a table name with a hyphen", () => {
       const r = checkRoutablePrerequisites(
         ["My-App_CL"],
         ["MS-Sentinel-My_App-dest"],
@@ -64,30 +64,27 @@ describe("checkRoutablePrerequisites", () => {
       expect(r.entries[0]?.foundId).toBe("MS-Sentinel-My_App-dest");
     });
 
-    it("accepts the id the PACK would use for a divergent table name", () => {
+    it("reports MISSING when the group holds only the unsanitized id", () => {
+      // The pack routes to MS-Sentinel-My_App-dest. An output under the old,
+      // unsanitized spelling is not what the pack sends to, so counting it as
+      // coverage would hide a destination the routes cannot reach.
       const r = checkRoutablePrerequisites(
         ["My-App_CL"],
         ["MS-Sentinel-My-App-dest"],
       );
-      expect(r.missing).toHaveLength(0);
-      expect(r.entries[0]?.foundId).toBe("MS-Sentinel-My-App-dest");
+      expect(r.missing).toHaveLength(1);
+      expect(r.missing[0]?.expectedId).toBe("MS-Sentinel-My_App-dest");
+      expect(r.missing[0]?.foundId).toBeNull();
     });
 
-    it("carries BOTH ids on the entry, and they really do differ here", () => {
-      // Guards the pins above against passing vacuously: if the two functions
-      // were ever unified, the two cases above would become one case tested
-      // twice and would stop covering what they claim to. This fails loudly at
-      // that moment, and the fix is to collapse this describe block - see
-      // GEN-18, whose resolution is exactly that.
+    it("carries exactly the keys of one id, with no second pack id", () => {
       const [entry] = checkRoutablePrerequisites(["My-App_CL"], []).entries;
+      expect(Object.keys(entry ?? {}).sort()).toEqual([
+        "expectedId",
+        "foundId",
+        "sentinelTable",
+      ]);
       expect(entry?.expectedId).toBe("MS-Sentinel-My_App-dest");
-      expect(entry?.packId).toBe("MS-Sentinel-My-App-dest");
-      expect(entry?.expectedId).not.toBe(entry?.packId);
-    });
-
-    it("leaves the two identical for an ordinary table name", () => {
-      const [entry] = checkRoutablePrerequisites(["AWSVPCFlow"], []).entries;
-      expect(entry?.expectedId).toBe(entry?.packId);
     });
   });
 

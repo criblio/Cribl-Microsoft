@@ -43,6 +43,7 @@
  */
 
 import { parseResourceId } from "../azure-resource-id";
+import { sanitizeDestinationTable } from "../sentinel-destination";
 
 // ---------------------------------------------------------------------------
 // Typed option shapes and defaults
@@ -763,16 +764,15 @@ export function applyOptionsPatch(
 
 /**
  * Compose a Cribl destination id from the configured prefix/suffix and a
- * table name. The table sanitization is the PINNED legacy rule shared with
- * sentinel-destination's defaultSentinelDestinationId (strip one trailing
- * "_CL" case-insensitively, then map every non-alphanumeric character to
- * "_"); with {@link DEFAULT_CRIBL_OPTIONS} this reproduces that function
- * exactly - a test pins the two against each other so they cannot drift.
+ * table name. The table part comes from sentinel-destination's
+ * sanitizeDestinationTable - the ONE copy of the rule since [[GEN-18]], which
+ * removed the copy that used to live here - so with
+ * {@link DEFAULT_CRIBL_OPTIONS} this reproduces defaultSentinelDestinationId
+ * exactly, and a test still pins the two against each other.
  */
 export function destinationIdFromOptions(
   table: string,
   options: CriblOptions,
 ): string {
-  const sanitized = table.replace(/_CL$/i, "").replace(/[^a-zA-Z0-9]/g, "_");
-  return `${options.destinationPrefix}${sanitized}${options.destinationSuffix}`;
+  return `${options.destinationPrefix}${sanitizeDestinationTable(table)}${options.destinationSuffix}`;
 }

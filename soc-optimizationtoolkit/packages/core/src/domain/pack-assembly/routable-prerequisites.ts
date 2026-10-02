@@ -23,32 +23,26 @@
  * creates it, and never block the build - building a pack before deploying, or
  * for a group that will be populated later, is a legitimate thing to do.
  *
- * WHY TWO IDS ARE ACCEPTED PER TABLE. The id Deploy creates and the id the pack
- * generator would use come from two different functions that sanitize
- * differently ([[GEN-18]]): only Deploy's maps non-alphanumerics to "_". They
- * agree for every letters-digits-underscore table name, which is what Sentinel
- * tables are in practice, and diverge for a name carrying a hyphen, dot or
- * space. Matching EITHER means this check cannot report a false "missing" while
- * that divergence stands, and it costs nothing once the two are unified.
+ * ONE ID PER TABLE. This check used to accept either of two ids, because the
+ * pack generator and Deploy sanitized table names differently. [[GEN-18]] made
+ * the sanitizing rule the only one, so the id Deploy creates IS the id the pack
+ * targets, and that is the only id matched here.
  *
  * Pure: no IO, no clock. The caller does the listing.
  */
 
 import { defaultSentinelDestinationId } from "../sentinel-destination";
-import { destinationId as packDestinationId } from "../pipeline-generation/naming";
 
 /** Whether one table's Sentinel destination is already in the worker group. */
 export interface RoutablePrerequisite {
   /** The Sentinel table this pack routes to. */
   sentinelTable: string;
   /**
-   * The id DEPLOY would create for this table - the one to name in guidance,
-   * because it is the one the operator will actually end up with.
+   * The id DEPLOY would create for this table - which is also the id the pack
+   * targets since GEN-18 - so the one to name in guidance.
    */
   expectedId: string;
-  /** The id the PACK generator would use. Equal to expectedId unless GEN-18 bites. */
-  packId: string;
-  /** The output found in the group, or null when neither id matched. */
+  /** The output found in the group, or null when expectedId did not match. */
   foundId: string | null;
 }
 
@@ -93,10 +87,8 @@ export function checkRoutablePrerequisites(
     seen.add(sentinelTable);
 
     const expectedId = defaultSentinelDestinationId(sentinelTable);
-    const packId = packDestinationId(sentinelTable);
-    const foundId =
-      have.get(expectedId.toLowerCase()) ?? have.get(packId.toLowerCase()) ?? null;
-    entries.push({ sentinelTable, expectedId, packId, foundId });
+    const foundId = have.get(expectedId.toLowerCase()) ?? null;
+    entries.push({ sentinelTable, expectedId, foundId });
   }
 
   return {
