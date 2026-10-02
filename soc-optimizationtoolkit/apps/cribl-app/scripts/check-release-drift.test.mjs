@@ -2,8 +2,10 @@
 // these cases can be stated without a repo, a git history or a tarball - the
 // facts are the argument.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { evaluateReleaseDrift } from './check-release-drift.mjs';
+import { BACKLOG_CURRENT, evaluateReleaseDrift } from './check-release-drift.mjs';
 
 const CONSISTENT = {
   manifestVersion: '1.12.0',
@@ -220,5 +222,36 @@ describe('evaluateReleaseDrift', () => {
     expect(result.errors.filter((e) => e.includes('release-notes.md'))).toHaveLength(1);
     expect(result.errors.filter((e) => e.includes('backlog.md'))).toHaveLength(1);
     expect(result.warnings).toHaveLength(1);
+  });
+});
+
+// DBT-92: the file that exists because version literals in prose decay once
+// carried one of its own - the BACKLOG_CURRENT comment named 1.12.0 while the
+// backlog said 1.12.3 (corrected in 0aa6917, #173). The fix there was to DERIVE:
+// the comment now shows the shape "X.Y.Z", which has no version to go stale.
+// What was missing is anything stopping a concrete version creeping back in, so
+// this reads the script's own source with the SAME regex the check applies to
+// backlog.md. Deliberately not a blanket N.N.N scan: the dated history in the
+// header (1.5.4, 1.11.11, 1.12.3 ...) and the sort examples are meant to stay.
+describe('the script holds itself to its own rule', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./check-release-drift.mjs', import.meta.url)),
+    'utf8',
+  );
+
+  it('states no concrete "N.N.N IS CURRENT" version in its own source', () => {
+    // Shared regex, not a copy: a copy could be loosened here while the real
+    // check stays strict, and the guard would stop meaning anything.
+    // If this fails, write the example as "**X.Y.Z IS CURRENT" instead.
+    const matches = source.match(new RegExp(BACKLOG_CURRENT.source, 'g')) ?? [];
+
+    expect(matches).toEqual([]);
+  });
+
+  it('still documents the placeholder shape in both places that show it', () => {
+    // A count, not an existence check: the comment above BACKLOG_CURRENT and the
+    // error raised when backlog.md stops stating a version. Deleting either one
+    // (rather than rewording it) is how the shape gets lost.
+    expect(source.match(/\*\*X\.Y\.Z IS CURRENT/g)).toHaveLength(2);
   });
 });
