@@ -494,9 +494,28 @@ function hierarchyFindings(data, sections) {
  * `[[link]]` - is not mistaken for one. The optional letter before the number
  * covers feature ids (DBT-F4) and spikes (AZR-S1); a pattern written for
  * `X-F?N` alone would have reported every link to a spike as dangling.
+ *
+ * Exported so board-html's richText uses THIS pattern (DBT-120 follow-up,
+ * architecture audit 2026-10-02): it used to match any `[[...]]`, so the two
+ * tools disagreed about what a link is. Global, so use it only with matchAll
+ * or replace - both reset lastIndex; test/exec would carry state between calls.
  */
-const LINK = /\[\[([A-Z]+-[A-Z]?\d+)\]\]/g;
+export const LINK = /\[\[([A-Z]+-[A-Z]?\d+)\]\]/g;
 const LINKED_FIELDS = ['title', 'detail', 'priorityWhy'];
+
+/**
+ * Every id a `[[link]]` may resolve to: stories AND features (DBT-120). One
+ * definition shared by danglingLinks and the HTML board, which used to resolve
+ * against stories only and so marked every feature link as gone.
+ *
+ * @returns {Set<string>}
+ */
+export function knownIds(data) {
+  return new Set([
+    ...(data.stories ?? []).map((s) => s.id),
+    ...(data.features ?? []).map((f) => f.id),
+  ]);
+}
 
 /**
  * Every `[[link]]` in a card's title, detail or priorityWhy that names nothing
@@ -511,10 +530,7 @@ const LINKED_FIELDS = ['title', 'detail', 'priorityWhy'];
  * @returns {{from: string, field: string, target: string}[]}
  */
 export function danglingLinks(data) {
-  const known = new Set([
-    ...(data.stories ?? []).map((s) => s.id),
-    ...(data.features ?? []).map((f) => f.id),
-  ]);
+  const known = knownIds(data);
   const out = [];
   for (const s of data.stories ?? []) {
     for (const field of LINKED_FIELDS) {
