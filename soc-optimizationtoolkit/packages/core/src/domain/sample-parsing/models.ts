@@ -12,9 +12,12 @@
  * Redesign notes vs the legacy sample-parser.ts shapes:
  * - 'xml' is DROPPED from the format union. Legacy detected 'xml' but never
  *   had an xml parser (the parseContent switch fell through to the try-each
- *   default), so xml was a detect-only quirk with no capability behind it. The
- *   Unit 11 format list (CEF/LEEF/CSV/KV/JSON/NDJSON/syslog) is authoritative;
+ *   default), so xml was a detect-only quirk with no capability behind it.
  *   xml-looking content resolves to 'unknown'. Pinned by format-detection tests.
+ *   The authoritative member list is the {@link SampleFormat} union itself (and
+ *   SAMPLE_FORMATS, which the compiler holds to it) - not a list in prose. This
+ *   comment used to name the Unit 11 seven as authoritative and went stale the
+ *   day positional joined (DBT-116).
  * - DiscoveredField gains `types` (the distinct observed types feeding the
  *   merge lattice) alongside the single merged `type`; `sampleValues` is
  *   renamed to `examples`.
@@ -39,6 +42,63 @@ export type SampleFormat =
   // shape is recognised, field1..fieldN when it is not.
   | "positional"
   | "unknown";
+
+/**
+ * Every {@link SampleFormat}, as a value (DBT-116).
+ *
+ * `satisfies` checks that each entry IS a member; the `_everyFormatListed`
+ * check below checks the other direction, that no member is missing. Both are
+ * compile-time, so adding a member to the union fails typecheck here until it
+ * is listed - and fails it again in every switch that ends in
+ * {@link assertNeverFormat}.
+ */
+export const SAMPLE_FORMATS = [
+  "json",
+  "ndjson",
+  "csv",
+  "kv",
+  "cef",
+  "leef",
+  "syslog",
+  "positional",
+  "unknown",
+] as const satisfies readonly SampleFormat[];
+
+// Compile-time only: errors if SampleFormat gains a member SAMPLE_FORMATS lacks.
+const _everyFormatListed: readonly (typeof SAMPLE_FORMATS)[number][] =
+  [] as SampleFormat[];
+void _everyFormatListed;
+
+/** Whether a free string (a stored or caller-supplied format) is a member. */
+export function isSampleFormat(s: string): s is SampleFormat {
+  return (SAMPLE_FORMATS as readonly string[]).includes(s);
+}
+
+/**
+ * Narrow a format arriving as a plain string to the union, so the decision
+ * sites downstream can switch over it exhaustively. A string that is not a
+ * member - absent, misspelled, or stored by an older build - becomes "unknown",
+ * which every such site treats as it treated an unmatched string before: the
+ * trailing default of the ladder it replaced.
+ */
+export function toSampleFormat(s: string | undefined): SampleFormat {
+  return s !== undefined && isSampleFormat(s) ? s : "unknown";
+}
+
+/**
+ * The `default:` arm of a switch over {@link SampleFormat} (DBT-116).
+ *
+ * WHY THIS EXISTS. Three user-visible defects came from one root cause before
+ * anyone counted the rest: a member was added to the union (positional, DBT-77)
+ * and every consumer written as an if/ternary LADDER kept compiling and handed
+ * the new member to its trailing default - a JSON serde, a key=value token, a
+ * field-test example - which is a confident wrong answer rather than an error.
+ * A switch whose default passes the format here cannot compile while any member
+ * is unhandled, so the next member added is found by `tsc`, not by an operator.
+ */
+export function assertNeverFormat(format: never): never {
+  throw new Error(`Unhandled sample format: ${String(format)}`);
+}
 
 /**
  * The Azure/KQL-flavored value types the inference lattice produces. These are

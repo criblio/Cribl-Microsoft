@@ -25,6 +25,12 @@ export {
   isPositionalFieldName,
   isOverflowFieldName,
   overflowFieldName,
+  // DBT-116: the union as a value, its guard, and the never-typed default that
+  // makes a switch over it exhaustive.
+  SAMPLE_FORMATS,
+  isSampleFormat,
+  toSampleFormat,
+  assertNeverFormat,
 } from "./models";
 
 export type { CappedTaggedSample } from "./cap-bytes";
@@ -54,6 +60,10 @@ export {
 // pipeline must reach the seven header fields the same way, and a second copy of
 // an escape rule drifts. The pack emits `.source` verbatim - see pipeline-conf.ts.
 export { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+// DBT-116: the two syslog line patterns, for the same reason - the generated
+// pipeline's syslog extraction emits their `.source`, so the names the parser
+// mints and the names the installed pack mints cannot drift apart.
+export { SYSLOG_RFC3164_PATTERN, SYSLOG_RFC5424_PATTERN } from "./parsers";
 
 export type { ParseSampleOptions } from "./parse-sample";
 export {

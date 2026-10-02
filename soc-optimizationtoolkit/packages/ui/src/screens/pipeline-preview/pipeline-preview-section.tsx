@@ -21,6 +21,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { formatCanDiscriminate } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import {
   derivePipelinePreview,
@@ -73,11 +74,23 @@ export interface PipelinePreviewSectionProps {
  * Found by validating CSV route derivation 2026-08-17. Every CSV log type in a
  * multi-log-type pack placeholders by construction, so this hint is the ONLY
  * guidance a CSV vendor's operator ever gets.
+ *
+ * DBT-116: CSV was only ever one of them. Which formats cannot route on a
+ * parsed field is core's formatCanDiscriminate to say - positional names its
+ * columns from a position and syslog from a regex capture, both after the route
+ * has run - and this gated on `=== "csv"` alone, so those operators were shown
+ * `event_type === 'dns'` here. Asked, not restated, so a fourth such format
+ * gets the right example without anyone remembering this screen. The CSV
+ * example stays CSV-shaped; the others get a substring test, which is true of
+ * any line.
  */
 function filterExample(format: string | undefined): string {
+  if (format === undefined || formatCanDiscriminate(format)) {
+    return "event_type === 'dns'";
+  }
   return format === "csv"
     ? "_raw.startsWith('login,')"
-    : "event_type === 'dns'";
+    : "_raw.indexOf('login') !== -1";
 }
 
 /** The count summary line under a reduction rule group. */
@@ -258,9 +271,13 @@ export function PipelinePreviewSection({
             Write a filter for the rest
             <InfoTip text="Nothing in these samples is shaped like a discriminator for these log types - no field is constant within one and different across the others - so there is nothing to suggest. Write an expression that identifies the log type, the same JavaScript Cribl route filters use. It goes into the pack's route.yml exactly as typed. Leave any of them blank and that log type ships with a placeholder filter you can still edit in Cribl's Routes tab later." />
           </span>
-          {[...formatByLogType.values()].some((f) => f === "csv") && (
+          {/* DBT-116: gated on core's rule, not on csv alone - see filterExample. */}
+          {[...formatByLogType.values()].some(
+            (f) => !formatCanDiscriminate(f),
+          ) && (
             <span className="field-hint">
-              CSV events reach the route unparsed, so a field test like
+              CSV, positional and syslog events reach the route unparsed, so a
+              field test like
               {" "}<code>action === &apos;Allowed&apos;</code>{" "}
               is undefined there however the pipeline maps it later. Match on{" "}
               <code>_raw</code> instead.

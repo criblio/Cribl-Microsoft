@@ -1250,6 +1250,31 @@ export function parseLeef(
 }
 
 /**
+ * The RFC 3164 syslog line, as parseSyslog reads it. Groups, in order:
+ * 1 PRI (optional), 2 TIMESTAMP, 3 HOSTNAME, 4 program, 5 PID (optional),
+ * 6 message.
+ *
+ * EXPORTED, NOT RE-SPELLED (DBT-116), on the CEF_HEADER_PATTERN precedent: the
+ * generated pipeline's syslog extraction emits this `.source` verbatim, so the
+ * names the analyzer showed and the names the installed pack mints come off the
+ * same characters. Before DBT-116 the pipeline had no syslog extraction at all -
+ * a syslog sample got a JSON serde - so the two did not merely drift, they never
+ * met. Non-global on purpose: `String.prototype.match` on a /g regex returns the
+ * matches rather than the groups.
+ */
+export const SYSLOG_RFC3164_PATTERN =
+  /^(?:<(\d+)>)?(\w{3}\s+\d+\s+\d+:\d+:\d+)\s+(\S+)\s+(\S+?)(?:\[(\d+)\])?:\s*(.*)/;
+
+/**
+ * The RFC 5424 syslog line, as parseSyslog reads it. Groups, in order:
+ * 1 PRI, 2 VERSION, 3 TIMESTAMP, 4 HOSTNAME, 5 APP-NAME, 6 PROCID, 7 MSGID,
+ * 8 the rest. Consulted only when {@link SYSLOG_RFC3164_PATTERN} did not match.
+ * Exported for the same reason as that pattern.
+ */
+export const SYSLOG_RFC5424_PATTERN =
+  /^<(\d+)>(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)/;
+
+/**
  * Parse RFC 3164 / RFC 5424 syslog lines. Verbatim from legacy, except for the
  * `\r?\n` split - see the CRLF note on {@link parseCef}. The parsed FIELDS were
  * already safe here (`.` cannot match `\r`, so `Message` stopped short of it),
@@ -1265,9 +1290,7 @@ export function parseSyslog(
   for (const line of content.trim().split(/\r?\n/).filter(Boolean)) {
     {
       const record: Record<string, unknown> = { _raw: line };
-      const rfc3164 = line.match(
-        /^(?:<(\d+)>)?(\w{3}\s+\d+\s+\d+:\d+:\d+)\s+(\S+)\s+(\S+?)(?:\[(\d+)\])?:\s*(.*)/,
-      );
+      const rfc3164 = line.match(SYSLOG_RFC3164_PATTERN);
       if (rfc3164) {
         if (rfc3164[1]) {
           record["Priority"] = parseInt(rfc3164[1], 10);
@@ -1285,9 +1308,7 @@ export function parseSyslog(
           record["Severity"] = pri % 8;
         }
       }
-      const rfc5424 = line.match(
-        /^<(\d+)>(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)/,
-      );
+      const rfc5424 = line.match(SYSLOG_RFC5424_PATTERN);
       if (rfc5424 && !rfc3164) {
         record["Priority"] = parseInt(rfc5424[1], 10);
         record["Version"] = parseInt(rfc5424[2], 10);

@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildCefIdentityOverrideFn,
   generatePipelineConf,
+  generateFallbackReductionConf,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
   positionalColumns,
@@ -24,7 +25,10 @@ import { parseSampleContent } from "../sample-parsing/parse-sample";
 import {
   CEF_HEADER_ESCAPE,
   CEF_HEADER_PATTERN,
+  SYSLOG_RFC3164_PATTERN,
+  SYSLOG_RFC5424_PATTERN,
   parseCef,
+  parseSyslog,
 } from "../sample-parsing/parsers";
 import { parsePositional } from "../sample-parsing/positional";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
@@ -940,5 +944,164 @@ describe("positional extraction (GEN-6)", () => {
       expect(positionalColumns([])).toEqual([]);
       expect(positionalColumns([f("wat"), f("field0")])).toEqual([]);
     });
+  });
+});
+
+/**
+ * DBT-116: syslog extraction. Until this block a syslog sample fell to the
+ * trailing else of the extract ladder and got `serde type: json` over a syslog
+ * line - "Parse JSON from _raw" - which extracts nothing, so every name the
+ * parser minted (Hostname, Program, Message ...) was undefined in the installed
+ * pipeline while the preview reported success. The fallback reduction conf had
+ * the same hole in its own ladder.
+ *
+ * The oracle is parseSyslog itself: the emitted eval, YAML-unescaped and run as
+ * Cribl would, must reproduce the parser's record field for field.
+ */
+describe("syslog extraction (DBT-116)", () => {
+  const RFC3164_PRI =
+    "<34>Oct 11 22:14:15 host1 sshd[123]: Failed password for root";
+  const RFC3164_BARE = "Oct 11 22:14:16 host2 CRON: (root) CMD (run-parts)";
+  const RFC5424 =
+    "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 An application event";
+  const NOT_SYSLOG = "just some text that is not syslog";
+
+  /** The syslog eval of a conf: one function, found by its description. */
+  function syslogBlock(conf: string): string {
+    const blocks = conf
+      .split(/^ {2}- id: /m)
+      .filter((f) => f.includes("description: Parse syslog from _raw"));
+    expect(blocks, "expected exactly one syslog extraction eval").toHaveLength(1);
+    return blocks[0] ?? "";
+  }
+
+  /**
+   * Run the block's `add` entries in order, each seeing the earlier ones, then
+   * its `remove:` list. The `\\` unescape is the YAML step, as for CEF above.
+   */
+  function runSyslog(block: string, rawLine: string): Record<string, unknown> {
+    const adds = [...block.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    const event: Record<string, unknown> = { _raw: rawLine };
+    for (const [, name, raw] of adds) {
+      const expr = (raw ?? "").replace(/\\\\/g, "\\");
+      const value: unknown = new Function(
+        "_raw",
+        "__sys3164",
+        "__sys5424",
+        `return (${expr});`,
+      )(rawLine, event["__sys3164"], event["__sys5424"]);
+      // Cribl does not set a field whose eval value is undefined.
+      if (value !== undefined) event[name ?? ""] = value;
+    }
+    delete event["__sys3164"];
+    delete event["__sys5424"];
+    return event;
+  }
+
+  function parserRecord(line: string): Record<string, unknown> {
+    return parseSyslog(line)[0] ?? { _raw: line };
+  }
+
+  const fields: PipelineFieldMapping[] = [
+    "Timestamp",
+    "Hostname",
+    "Program",
+    "Message",
+  ].map((source) => ({ source, target: source, type: "string", action: "keep" }));
+
+  it("emits a syslog extraction and NO json serde in the transformation conf", () => {
+    const conf = generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog");
+    expect(conf.match(/type: json/g) ?? []).toHaveLength(0);
+    expect(conf).not.toContain("Parse JSON from _raw");
+    const block = syslogBlock(conf);
+    expect(block).toContain("groupId: extract");
+    // Exactly the names the parser can mint, plus the two scratch slots.
+    const names = [...block.matchAll(/^ +- name: (\S+)$/gm)].map((m) => m[1]);
+    expect(names).toEqual([
+      "__sys3164",
+      "__sys5424",
+      "Priority",
+      "Version",
+      "Timestamp",
+      "Hostname",
+      "Program",
+      "PID",
+      "AppName",
+      "ProcID",
+      "MsgID",
+      "Message",
+      "Facility",
+      "Severity",
+    ]);
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("agrees with parseSyslog on every line shape it handles", () => {
+    const block = syslogBlock(
+      generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog"),
+    );
+    for (const line of [RFC3164_PRI, RFC3164_BARE, RFC5424, NOT_SYSLOG]) {
+      expect(runSyslog(block, line), line).toEqual(parserRecord(line));
+    }
+    // Asserted so the parity above is not vacuous: the 3164 line really does
+    // carry all eight names, and the 5424 line its own.
+    expect(Object.keys(runSyslog(block, RFC3164_PRI)).sort()).toEqual([
+      "Facility",
+      "Hostname",
+      "Message",
+      "PID",
+      "Priority",
+      "Program",
+      "Severity",
+      "Timestamp",
+      "_raw",
+    ]);
+    expect(runSyslog(block, RFC5424)["MsgID"]).toBe("ID47");
+  });
+
+  it("emits sample-parsing's OWN syslog patterns, so the two cannot drift", () => {
+    const block = syslogBlock(
+      generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog"),
+    ).replace(/\\\\/g, "\\");
+    expect(block).toContain(`/${SYSLOG_RFC3164_PATTERN.source}/`);
+    expect(block).toContain(`/${SYSLOG_RFC5424_PATTERN.source}/`);
+  });
+
+  it("gives the FALLBACK REDUCTION pipeline the same extraction, not a JSON serde", () => {
+    const reduction = generateFallbackReductionConf("Sol", "Syslog", "syslog");
+    expect(reduction.match(/type: json/g) ?? []).toHaveLength(0);
+    const block = syslogBlock(reduction);
+    expect(block).toContain("groupId: triage");
+    expect(runSyslog(block, RFC3164_PRI)).toEqual(parserRecord(RFC3164_PRI));
+    expect(checkCriblYaml(reduction, "conf.yml")).toEqual([]);
+  });
+
+  it("leaves every other format's serde exactly as it was", () => {
+    // The switch that replaced the two ladders must not move any other format.
+    const serde = (fmt: string | undefined) =>
+      (generatePipelineConf("p", "Sol", "T", [], undefined, fmt).match(
+        /^ {6}type: (\S+)$/m,
+      ) ?? [])[1];
+    expect(serde("json")).toBe("json");
+    expect(serde("ndjson")).toBe("json");
+    expect(serde("unknown")).toBe("json");
+    expect(serde(undefined)).toBe("json");
+    expect(serde("not-a-format")).toBe("json");
+    expect(serde("kv")).toBe("kvp");
+    expect(serde("leef")).toBe("kvp");
+    expect(serde("csv")).toBe("csv");
+    const fallback = (fmt: string | undefined) =>
+      (generateFallbackReductionConf("Sol", "T", fmt).match(
+        /^ {6}type: (\S+)$/m,
+      ) ?? [])[1];
+    expect(fallback("json")).toBe("json");
+    expect(fallback("ndjson")).toBe("json");
+    expect(fallback("unknown")).toBe("json");
+    expect(fallback(undefined)).toBe("json");
+    expect(fallback("not-a-format")).toBe("json");
+    expect(fallback("csv")).toBe("csv");
+    expect(fallback("kv")).toBe("kvp");
+    expect(fallback("cef")).toBe("kvp");
+    expect(fallback("leef")).toBe("kvp");
   });
 });
