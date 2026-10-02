@@ -3528,6 +3528,13 @@ button.journey-step-main:hover .journey-step-label {
   border: 1px solid var(--warn-border);
   vertical-align: middle;
 }
+/* DBT-106: AWS's own spelling of a VPC Flow v2 field, beside the parsed name. */
+.mapping-aws-name {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
 .rule-badge-missing {
   color: var(--error-strong);
   background: var(--error-bg);
