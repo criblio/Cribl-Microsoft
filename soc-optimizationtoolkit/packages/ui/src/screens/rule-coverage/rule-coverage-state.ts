@@ -28,6 +28,7 @@
 
 import {
   analyticRuleToContentItem,
+  analyzeContentCoverage,
   parseRuleUploadFile,
   unionSchemaColumns,
 } from "@soc/core";
@@ -186,6 +187,44 @@ export function customRuleCount(customItems: readonly ContentItem[]): number {
  */
 export function ruleFieldSet(summary: CoverageSummary): ReadonlySet<string> {
   return new Set(summary.ruleReferencedFields.map((f) => f.toLowerCase()));
+}
+
+/**
+ * The RULE-badge set straight from the GAP ANALYSIS, with no coverage run
+ * (DBT-121). The badges used to light only after the Rule Coverage section's
+ * own Analyze button, so clicking Analyze on the DCR gap analysis tagged
+ * nothing and the feature read as missing on an installed app. This derives
+ * the same contract from the analytic rules already fetched at solution
+ * selection and the destination columns the gap reports carry, through the
+ * SAME analyzer - so it is recomputed every time a gap analysis completes.
+ *
+ * Alert rules only: workbook fields are not rules. Availability is irrelevant
+ * to the badge (covered and missing both count), so none is passed. Returns
+ * undefined while there is nothing to tag, matching ruleFieldSet's "not yet".
+ */
+export function ruleFieldsFromGapReports(
+  items: readonly ContentItem[],
+  reports: readonly GapReport[],
+): ReadonlySet<string> | undefined {
+  const rules = items.filter((item) => item.type === "alert-rule");
+  if (rules.length === 0 || reports.length === 0) {
+    return undefined;
+  }
+  const schemaUnion = reports.flatMap((r) => r.destSchema.map((c) => c.name));
+  return ruleFieldSet(
+    analyzeContentCoverage({ items: rules, availableFields: [], schemaUnion })
+      .summary,
+  );
+}
+
+/** Union of two optional RULE-badge sets; undefined only when both are. */
+export function unionRuleFields(
+  a: ReadonlySet<string> | undefined,
+  b: ReadonlySet<string> | undefined,
+): ReadonlySet<string> | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return new Set([...a, ...b]);
 }
 
 // ---------------------------------------------------------------------------
@@ -463,7 +502,8 @@ export const CUSTOM_BADGE_LABEL = "CUSTOM";
 export const RULE_COVERAGE_IDLE_NOTE =
   "Analyze rule and workbook coverage to see which fields your detection rules " +
   "and workbooks need from the mapped destination schema. Rule coverage is " +
-  "informational - it lights the RULE badges above but never blocks a deploy.";
+  "informational and never blocks a deploy. The RULE badges above light from " +
+  "the DCR Gap Analysis itself; custom rules uploaded here add to them.";
 
 /** The reason coverage cannot run yet (no Gap Analysis reports to derive availability from). */
 export const RULE_COVERAGE_NO_REPORTS_NOTE =

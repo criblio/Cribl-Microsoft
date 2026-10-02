@@ -176,6 +176,10 @@ import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
 import type { SampleArrivalEvent } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
+import {
+  ruleFieldsFromGapReports,
+  unionRuleFields,
+} from "../rule-coverage/rule-coverage-state";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
@@ -586,7 +590,7 @@ export function IntegrateScreen({
   // (the kept Unit 18 ruleReferencedFields contract) back UP so the Gap
   // Analysis mapping table lights its RULE badges. Informational only - it
   // never participates in the deploy gate.
-  const [ruleFields, setRuleFields] = useState<ReadonlySet<string>>();
+  const [coverageRuleFields, setRuleFields] = useState<ReadonlySet<string>>();
 
   // CONTENT-FIRST ORDER (2026-07-12): each coverage instance reports what
   // its content REQUIRES; merged here and fed to the mapping review's
@@ -974,6 +978,18 @@ export function IntegrateScreen({
   // and parses them - nothing is fetched twice. Until they do, the view reads
   // 'unknown' and gates nothing.
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  // RULE badges light on EVERY gap analysis (DBT-121), not only after the
+  // Rule Coverage section's own Analyze click: derived from the rules already
+  // fetched at solution selection plus the reports' destination columns, and
+  // unioned with whatever the coverage section reports (custom uploads).
+  const ruleFields = useMemo(
+    () =>
+      unionRuleFields(
+        ruleFieldsFromGapReports(contentItems, gapReports),
+        coverageRuleFields,
+      ),
+    [contentItems, gapReports, coverageRuleFields],
+  );
   // Corrected DeviceVendor/DeviceProduct per logType. Keyed by logType because
   // one solution can send several feeds whose headers differ - a single override
   // would silently rewrite the ones that were already right.
