@@ -48,11 +48,14 @@
  * is how a wrong answer acquires credibility.
  *
  * WHAT THIS NOTE MUST NOT PROMISE: that pack generation stops these names. It
- * stops ONE FATE of them - a field the matcher RENAMES - and that is not the
- * ordinary fate of an awkward vendor name. `checkCriblYaml` only ever reads a
- * name that lands on a `name:`/`currentName:`/`newName:` line UNDER a
- * function's `conf: -> add:`/`rename:`, and a rename is the only thing that
- * puts a VENDOR name on one.
+ * stops TWO FATES of them - a field the matcher RENAMES, and (since GEN-5's
+ * kept leg, 2026-10-02) a field KEPT under its own spelling - and neither is
+ * the ordinary fate of an awkward vendor name, which is to be DROPPED.
+ * `checkCriblYaml` only ever reads a name that lands on a
+ * `name:`/`currentName:`/`newName:` line UNDER a function's
+ * `conf: -> add:`/`rename:`, and a rename is the only thing that puts a VENDOR
+ * name on one; a kept name is refused instead from the plan, by
+ * checkPlanFieldAccessors in pipeline-generation/plan-accessor-check.ts.
  *
  * THE AXIS OF THIS GAP IS THE FATE, NOT THE CHARACTER CLASS, which is the part
  * of this note worth carrying forward. GEN-4 widened the class on 2026-09-03 -
@@ -84,6 +87,11 @@
  * moved: the RENAMED one read 0 issues and shipped until GEN-4 taught the rule
  * to see a value containing a space. The unmatched and kept ones did not move
  * and CANNOT be moved by any character class - there is no line to read.
+ *
+ * THE KEPT ROW IS REFUSED SINCE 2026-10-02 (GEN-5, kept leg) - still 0 YAML
+ * issues, because there is still no line, but checkPlanFieldAccessors reads
+ * the name off the plan and the preview adds 1 issue per such field, so the
+ * build goes invalid. The UNMATCHED row still ships.
  *
  * THE REDUCTION CONF the same plan emits (generateReductionConfForPlan) agrees,
  * but only after you account for which of its TWO shapes you asked for, and the
@@ -117,8 +125,9 @@
  * pipeline-generation/cribl-yaml-validator.ts.
  *
  * So the refusal is conditional on the FATE OF THE FIELD, not on the name: an
- * awkward name the schema has a column for AND spells differently is refused,
- * and the same name with no column - every vendor field the destination table
+ * awkward name the schema has a column for is refused (renamed by the YAML
+ * rule, kept by the plan check), and the same name with no column - every
+ * vendor field the destination table
  * has no home for, which is the whole reason a gap analysis exists - builds
  * clean with this note as its only warning. The note therefore states the FACT
  * (not an accessor, fix it upstream) and claims no safety net - a note
@@ -132,10 +141,13 @@
  * collected the three group headers above. It has pins in
  * cribl-yaml-validator.test.ts and the asymmetry pin in this file's test.
  *
- * The unmatched/kept one is OPEN, and no character class can close it - there
- * is no line to read. It needs the validator to read names the conf does not
- * present as identifiers (`remove:` bullets), which is a NEW rule, and it needs
- * a LIVE Cribl measurement of what a glob list does with an unaddressable name.
+ * The unmatched/kept one is HALF closed. Its KEPT leg is refused from the plan
+ * (checkPlanFieldAccessors, GEN-5, 2026-10-02), since a kept field has no line
+ * for any YAML rule to read. Its UNMATCHED (drop) leg is OPEN, and no character
+ * class can close it either. It needs the validator to read names the conf
+ * does not present as identifiers (`remove:` bullets), which is a NEW rule,
+ * and it needs a LIVE Cribl measurement of what a glob list does with an
+ * unaddressable name.
  * Guessing that and pinning the guess is how a wrong answer acquires
  * credibility, which is the same reason DBT-78 declined to invent an escape
  * syntax.
@@ -188,14 +200,15 @@ const MAX_LISTED = 5;
  *            currentName: account-id`. Anyone reasoning from "it only gives a
  *            line number" is reasoning from a false premise.
  *   WHETHER. Whether there is a build refusal to be early to at all depends on
- *            the field's FATE, and of the fates measured only one produces one:
- *            a RENAMED field. A name with no destination column and a name kept
- *            as-is both build clean, whatever characters they contain (see the
- *            header's table). For those this note is the ONLY warning that will
- *            ever exist. A name containing WHITESPACE was in that list until
- *            2026-09-03 and is not any more - on a rename line GEN-4 refuses it
- *            - but whitespace was never what decided it, the fate was, so the
- *            note's job is unchanged.
+ *            the field's FATE, and of the fates measured two produce one: a
+ *            RENAMED field, and since GEN-5's kept leg (2026-10-02) a field
+ *            KEPT as-is. A name with no destination column still builds clean,
+ *            whatever characters it contains (see the header's table). For
+ *            that fate - the common one - this note is the ONLY warning that
+ *            will ever exist. A name containing WHITESPACE was in that list
+ *            until 2026-09-03 and is not any more - on a rename line GEN-4
+ *            refuses it - but whitespace was never what decided it, the fate
+ *            was, so the note's job is unchanged.
  *
  * So the wording stops at what is true of every case: these are not accessors,
  * and the fix is upstream. It must not tell the operator the build will catch

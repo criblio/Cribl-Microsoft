@@ -91,6 +91,8 @@ export type { LogTypeFieldValues } from "./route-value-discriminator";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";
+// GEN-5 kept leg: the names a kept field carries but no conf line presents.
+export { checkPlanFieldAccessors } from "./plan-accessor-check";
 
 // HON-5: WHY a log type will need a hand-written filter. CSV is structural -
 // no amount of extra sampling can separate positional rows - so it gets its
