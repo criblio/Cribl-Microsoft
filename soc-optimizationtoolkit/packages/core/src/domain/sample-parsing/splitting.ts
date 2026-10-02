@@ -25,6 +25,7 @@
 
 import type { SampleFormat, SplitSample } from "./models";
 import { selectDiscriminatorField } from "./discriminators";
+import { positionalHasNamedFields } from "./positional";
 import {
   PANOS_LOG_TYPES,
   isPanosFormat,
@@ -216,6 +217,12 @@ export function splitSampleId(source: string, logType: string): string {
  * CEF/LEEF/KV always qualify; JSON/NDJSON qualify unless > half the keys are
  * numeric indices; CSV qualifies when the first line is mostly identifiers;
  * syslog qualifies for PAN-OS CSV, embedded `key=value`, or embedded CEF.
+ *
+ * POSITIONAL (DBT-117, added after the port - legacy had no positional format,
+ * so the DBT-77 member fell off the end to `false` even for a VPC Flow v2
+ * capture parsePositional names). It qualifies exactly when parsePositional
+ * would name the columns, via the shared `positionalHasNamedFields`: blank
+ * lines dropped, then EVERY line checked, unlike the first-line rules above.
  */
 export function hasNamedFields(
   rawEvents: readonly string[],
@@ -253,6 +260,8 @@ export function hasNamedFields(
     if (first.includes("CEF:")) return true;
     return false;
   }
+
+  if (format === "positional") return positionalHasNamedFields(rawEvents);
 
   return false;
 }

@@ -191,6 +191,22 @@ export function looksPositional(lines: readonly string[]): boolean {
 }
 
 /**
+ * Will {@link parsePositional} NAME these lines' columns, or number them?
+ *
+ * The ONE owner of that decision (DBT-117). `hasNamedFields` in splitting.ts
+ * had no positional branch and answered `false` for a capture this module
+ * names srcaddr/dstaddr/account_id - the same "named fields decided twice"
+ * class as DBT-108/DBT-116. Both sites now call this, so they cannot disagree.
+ *
+ * Blank lines are dropped first, exactly as parsePositional drops them, and
+ * the check is then all-or-nothing over EVERY remaining line (isVpcFlowV2),
+ * because naming is decided per capture, not per line.
+ */
+export function positionalHasNamedFields(lines: readonly string[]): boolean {
+  return isVpcFlowV2(lines.filter((l) => l.trim() !== ""));
+}
+
+/**
  * Parse positional lines into records, naming the columns when the shape is
  * recognised and numbering them when it is not.
  *
@@ -223,7 +239,7 @@ export function parsePositional(
   const lines = content.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return [];
 
-  const named = isVpcFlowV2(lines);
+  const named = positionalHasNamedFields(lines);
   return lines.map((line) => {
     const parts = splitPositional(line);
     const record: Record<string, string> = {};
