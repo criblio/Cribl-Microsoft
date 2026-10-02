@@ -319,6 +319,43 @@ describe("derivePipelinePreview (real generation)", () => {
   });
 });
 
+describe("derivePipelinePreview refuses a kept unaddressable name (GEN-5)", () => {
+  // A field kept under its own spelling appears on no conf line, so
+  // checkCriblYaml cannot see it; the preview must still go invalid, because
+  // valid is the only thing the integrate screen's build guard reads.
+  function keptPreview(name: string) {
+    return derivePipelinePreview({
+      solutionName: "T",
+      packName: "p",
+      reports: [
+        report({
+          tableName: "TestTable_CL",
+          logType: "TestTable_CL",
+          fieldMappings: [mapping({ source: name, dest: name, action: "keep" })],
+          destSchema: [{ name, type: "string" }],
+        }),
+      ],
+      approved: true,
+    });
+  }
+
+  it("goes invalid with exactly one issue naming the field", () => {
+    const view = keptPreview("Source IP");
+    expect(view.tables[0].transformConf).not.toContain("Source IP");
+    expect(view.totalYamlIssues).toBe(1);
+    expect(view.valid).toBe(false);
+    expect(view.tables[0].yamlIssues).toHaveLength(1);
+    expect(view.tables[0].yamlIssues[0]).toContain('field name "Source IP"');
+    expect(view.routeYmlIssues).toEqual([]);
+  });
+
+  it("stays valid for a kept bare identifier", () => {
+    const view = keptPreview("SourceIP");
+    expect(view.totalYamlIssues).toBe(0);
+    expect(view.valid).toBe(true);
+  });
+});
+
 describe("derivePipelinePreview reflects reviewer edits", () => {
   it("uses the overridden mappings in the generated pipeline", () => {
     const base = report({

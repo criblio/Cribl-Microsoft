@@ -42,6 +42,7 @@ import {
   unreachableLogTypes as coreUnreachableLogTypes,
   placeholderLogTypes as corePlaceholderLogTypes,
   checkCriblYaml,
+  checkPlanFieldAccessors,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
   generateRouteYml,
@@ -133,7 +134,11 @@ export interface PipelinePreviewTable {
   functions: PipelineFunctionLine[];
   /** The reduction rules with reasons (keep, then drop, then suppress). */
   reductionRules: ReductionRuleView[];
-  /** checkCriblYaml issues over this table's transform + reduction conf. */
+  /**
+   * checkCriblYaml issues over this table's transform + reduction conf, plus
+   * the plan-level accessor issues no conf line can carry (GEN-5: a field kept
+   * under an unaddressable name of its own).
+   */
   yamlIssues: string[];
 }
 
@@ -590,6 +595,12 @@ export function derivePipelinePreview(
         reductionConf,
         `${table.reductionPipelineId}/conf.yml`,
       ),
+      // GEN-5 (kept leg): a field kept under its own spelling is on no conf
+      // line, so checkCriblYaml cannot refuse an unaddressable one. Counted
+      // here so `valid` - the integrate screen's only build guard - goes
+      // false exactly as it does for an unaddressable RENAMED field. Once per
+      // table, not per conf: it is a fact about the plan both confs share.
+      ...checkPlanFieldAccessors(table),
     ];
     totalYamlIssues += yamlIssues.length;
     return {

@@ -83,8 +83,9 @@ import { isCriblAccessorSafe } from "../sample-parsing";
  * it: block-style mappings and sequences, indented with spaces, which is all
  * these emitters produce (a tab is refused outright by the rule above). It is
  * exported because it is the primitive the REMAINING hole in the accessor rule
- * needs - GEN-5 has to read `remove:` bullets, which this already reports as
- * `[..., "conf", "remove"]`.
+ * needs - GEN-5's drop leg has to read `remove:` bullets, which this already
+ * reports as `[..., "conf", "remove"]`. (Its kept leg needed no scan at all:
+ * a kept name is on no line, and is refused from the plan instead.)
  *
  * `lines` is expected to be already split AND line-ending normalised;
  * {@link checkCriblYaml} does both in one place so this and the rules read the
@@ -355,7 +356,7 @@ export function checkCriblYaml(content: string, fileName: string): string[] {
     // as far as a rename line is the MATCHER'S decision, not this rule's. Paired
     // with SrcIpAddr the same name is not similar enough, takes action `drop`,
     // and leaves no rename line for anything here to inspect. That is GEN-5's
-    // hole, and it is unmoved by this change.
+    // DROP leg, and it is unmoved by this change.
     //
     // WIDENING THE CLASS ALONE DOES NOT WORK, which is why the block check came
     // first rather than instead. Measured 2026-09-03 by running a `[^'"].*`
@@ -393,7 +394,8 @@ export function checkCriblYaml(content: string, fileName: string): string[] {
     // KNOWN GAP - THIS RULE STILL REACHES LESS THAN ITS MESSAGE IMPLIES, in one
     // way rather than the two recorded here before. The remaining one is not in
     // the imported predicate and not in the line matcher; it is that the conf
-    // never presents the name.
+    // never presents the name. Since GEN-5's kept leg (2026-10-02) the product
+    // gap is narrower than this rule's: only a DROPPED name still ships.
     //
     // GAP - THE ONLY SOURCE FIELD THIS RULE EVER SEES IS A RENAMED ONE. It
     // reads names off `name:`/`currentName:`/`newName:` lines, and a rename is
@@ -415,32 +417,44 @@ export function checkCriblYaml(content: string, fileName: string): string[] {
     //   src-ip and vendor-thing, both unmatched           -> 0 issues  ships
     //   a.b matched to a column also named a.b (keep)     -> 0 issues  ships
     //
-    // So an awkward vendor name is refused only when the matcher RENAMES it,
-    // which needs a destination column AND a different spelling - the LAST row
-    // above had a column and still shipped, because a.b needed no rename.
-    // Closing this means checking names the conf does not present as
-    // identifiers - `remove:` bullets - which is a NEW rule, not a wider class
-    // here, and it has to decide what a drop of an unaddressable name even means
-    // (the remove is a glob list, not an accessor). {@link enclosingBlockPath}
-    // is the half of that work this change already did: a `remove:` bullet
-    // arrives as `[..., "conf", "remove"]`, so the rule can be pointed at it
-    // without another scan. What it still needs is a LIVE Cribl measurement of
-    // what a glob list does with an unaddressable name, which is why it is not
-    // done here.
+    // So an awkward vendor name is refused HERE only when the matcher RENAMES
+    // it, which needs a destination column AND a different spelling - the LAST
+    // row above had a column and still read 0, because a.b needed no rename.
+    //
+    // THE KEPT ROW IS CLOSED, BUT NOT BY THIS RULE (GEN-5 kept leg,
+    // 2026-10-02). A kept field has no line here to read and never will, so
+    // checkPlanFieldAccessors (plan-accessor-check.ts) reads its name off the
+    // PLAN instead, and pipeline-preview-state.ts adds those issues to this
+    // rule's, so the preview goes invalid exactly as for an unaddressable
+    // rename. The last row above still reads 0 from THIS function - by design.
+    //
+    // THE REMAINING GAP IS THE DROP LEG - the two unmatched rows. Closing it
+    // means checking names the conf does not present as identifiers -
+    // `remove:` bullets - which is a NEW rule, not a wider class here, and it
+    // has to decide what a drop of an unaddressable name even means (the
+    // remove is a glob list, not an accessor). {@link enclosingBlockPath} is
+    // the half of that work already done: a `remove:` bullet arrives as
+    // `[..., "conf", "remove"]`, so the rule can be pointed at it without
+    // another scan. What it still needs is a LIVE Cribl measurement of what a
+    // glob list does with an unaddressable name - the operator decided
+    // 2026-10-02 to measure that before building anything - which is why it is
+    // not done here.
     //
     // BOTH GAPS ARE ON CARDS, and they are different cards. Checked against
-    // docs/board.json 2026-09-04: GEN-5 carries the unmatched/kept hole, still
-    // open, with the chain measurement behind it; GEN-4 carried the whitespace
-    // hole that this rule now closes. An earlier draft of this sentence read
-    // "THAT GAP IS ON A CARD, and this one no longer is", which was false in
-    // both halves - it denied a card that exists, two lines before naming it.
-    // (DBT-78, the older card, is about the ESCAPE SYNTAX question - what Cribl
-    // accepts for a non-identifier path - and is about neither.)
+    // docs/board.json 2026-09-04: GEN-5 carries the unmatched/kept hole (its
+    // kept leg closed 2026-10-02, its drop leg still open), with the chain
+    // measurement behind it; GEN-4 carried the whitespace hole that this rule
+    // now closes. An earlier draft of this sentence read "THAT GAP IS ON A
+    // CARD, and this one no longer is", which was false in both halves - it
+    // denied a card that exists, two lines before naming it. (DBT-78, the
+    // older card, is about the ESCAPE SYNTAX question - what Cribl accepts for
+    // a non-identifier path - and is about neither.)
     //
-    // While GEN-5 is open, the DBT-78 parse note is the only warning an
-    // unmatched or a kept name gets. A SPACED name on a rename line is no
-    // longer in that list - this rule refuses it - so the note's wording is now
-    // narrower than what the build catches; see unaddressableFieldNote in
+    // While GEN-5's drop leg is open, the DBT-78 parse note is the only
+    // warning an unmatched name gets. A SPACED name on a rename line, and any
+    // unaddressable name kept under its own spelling, are no longer in that
+    // list - they are refused - so the note's wording is now narrower than
+    // what the build catches; see unaddressableFieldNote in
     // sample-parsing/accessor-names.ts.
     //
     // THE ` *$` TAIL IS SAFE ONLY BECAUSE THE SPLIT ABOVE NORMALISED THE LINE
