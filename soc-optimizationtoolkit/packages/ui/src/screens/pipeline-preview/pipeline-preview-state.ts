@@ -20,9 +20,14 @@
  *   3. surfaces the reduction rules (keep/drop/suppress) WITH their reasons for
  *      display - straight off the plan's reductionRules (the reduction KB reason
  *      strings are display content);
- *   4. runs the core {@link checkCriblYaml} validator over every emitted YAML and
- *      surfaces any issues HONESTLY (task item 3): a well-formed plan produces
- *      zero issues, so a non-empty list is the honest "something is off" signal.
+ *   4. runs the pipeline validation over every table and surfaces any issues
+ *      HONESTLY (task item 3): the core {@link checkCriblYaml} validator over
+ *      every emitted YAML, plus {@link checkPlanFieldAccessors} over each plan
+ *      (GEN-5: a source field the conf reads by its own spelling but no conf
+ *      line names, so no YAML rule can refuse it). A non-empty list is the
+ *      honest "this pack would not work" signal - and since GEN-5 an ordinary
+ *      operator sample can produce one (a field named `Source IP` kept against
+ *      a same-named column), so it is not a generator fault by definition.
  *
  * BOUNDARY (Unit 17 depends-on note): this consumes typed results; it never calls
  * the field matcher, gap analysis, or vendor research. The only core functions it
@@ -120,6 +125,14 @@ export interface PipelinePreviewTable {
   destinationId: string;
   streamName: string;
   sourceFormat: string;
+  /**
+   * False when a sample WAS supplied but its format was not detected (GEN-11).
+   * sourceFormat is already normalised to "json" by then, so this is the only
+   * way the screen can treat the log type as the planner does - unparsed at
+   * route time, not routable on a parsed field. True for a detected format
+   * and for no sample at all, matching the planner's `formatDetected !== false`.
+   */
+  formatDetected: boolean;
   routeCondition: string;
   provenance: PlanProvenance;
   /** How many field decisions the plan resolved for this table. */
@@ -282,9 +295,17 @@ export interface PipelinePreviewView {
   routeYml: string;
   /** checkCriblYaml issues over route.yml. */
   routeYmlIssues: string[];
-  /** Total checkCriblYaml issues across every emitted YAML (0 = clean). */
+  /**
+   * Total pipeline validation issues (0 = clean): checkCriblYaml over every
+   * emitted YAML, plus checkPlanFieldAccessors over each table's plan (GEN-5).
+   * The name predates the plan check and is kept so callers need not move.
+   */
   totalYamlIssues: number;
-  /** Every emitted YAML passed the Cribl validator (the honest green signal). */
+  /**
+   * No pipeline validation issue anywhere - neither a Cribl YAML loader
+   * finding nor a plan field-name finding (the honest green signal, and the
+   * integrate screen's only build guard).
+   */
   valid: boolean;
   /**
    * Log types whose routes cannot receive events, in route order.
@@ -602,7 +623,7 @@ export function derivePipelinePreview(
   });
 
   let totalYamlIssues = 0;
-  const tables: PipelinePreviewTable[] = plan.tables.map((table) => {
+  const tables: PipelinePreviewTable[] = plan.tables.map((table, i) => {
     const transformConf = generatePipelineConfForPlan(table, plan.solutionName);
     const reductionConf = generateReductionConfForPlan(table, plan.solutionName);
     const yamlIssues = [
@@ -627,6 +648,13 @@ export function derivePipelinePreview(
       destinationId: table.destinationId,
       streamName: table.streamName,
       sourceFormat: table.sourceFormat,
+      // GEN-11 audit follow-up: index-aligned with planTables, the same
+      // alignment buildPipelinePlan relies on when it reads formatDetected.
+      formatDetected: !isUndetectedFormat(
+        planTables[i] === undefined
+          ? undefined
+          : inputs.sampleFormats?.[planTables[i].logType],
+      ),
       routeCondition: table.routeCondition,
       provenance: table.provenance,
       fieldCount: table.fields.length,
