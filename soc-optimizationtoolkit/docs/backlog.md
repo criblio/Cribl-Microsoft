@@ -2725,3 +2725,41 @@ There is one non-platform path that would also unblock it, worth recording
 because it existed once: an ADR 0001 style shell whose own document is the
 address bar. The chip worked there, which is why it was true when it shipped and
 false after ADR 0002.
+
+## 21. Bug sweep: eight decisions answered - 2026-10-02
+
+Every open bug card was re-verified on 2026-10-02 by an independent reproducer
+and an adversarial skeptic, then judged. None was refuted (17 real, 3 partially
+real). Eight fixes needed a policy choice first; the operator answered all eight
+in one sitting. The reasoning that decided each, and what it rules out:
+
+- **DBT-14 - contain overscroll only while the list overflows.** Rejected:
+  dropping the 420px cap. That removes the nested scroll region but a long
+  unfiltered solution list then pushes every later section far down the page.
+  Measuring overflow in JS keeps the 2026-08-03 end-of-list protection where it
+  is needed and returns the wheel to the page where it is not.
+- **DBT-58 - name the excluded subscription workbooks on both surfaces.** The
+  info tip and the empty-workbook summary now say the same thing. Rejected:
+  summary only. "Why isn't my deployed workbook here?" is asked from either
+  place, and two surfaces with two policies is what the card was about.
+- **DBT-106 - wire the AWS spellings in, do not delete them.** The mapping table
+  shows `account-id` beside the parsed `account_id` for VPC Flow v2 samples, as
+  DBT-77 intended. Rejected: deleting the unused table. The operator reads AWS's
+  documentation by AWS's names; the hyphen-trap reasoning still survives on the
+  constant.
+- **GEN-7 - TimeGenerated is the flow START, converted in a pack Eval.** Start
+  is how a hunt frames a flow. A pack Eval keeps the DCR transform `source`.
+  Rejected: `end` (closer to emission, further from the event), and converting
+  in the DCR transformKql (ADR 0004 precedent, but needs parser and type
+  changes for no operator-visible gain).
+- **DBT-84 - accept the re-key, and the exact `type` key wins.** Some stored
+  samples regroup; a release-notes line tells the operator to re-capture.
+  Rejected: an on-load migration (only possible where old ids can be recomputed
+  from raw events) and grandfathering old captures (two behaviours forever).
+- **DBT-89, DBT-99, and GEN-5's drop leg - measure Cribl first.** Each makes the
+  app's preview agree with what Cribl does at runtime, and the app should copy
+  Cribl rather than guess at it. Each needs one unsaved pipeline preview on a
+  live worker (kvp on a welded prefix; kvp on `\=` `\` `\|` `\n`; an Eval
+  removing `aws.account`, `Source IP`, `src-ip`). DBT-99 is also bounded:
+  expand only the ArcSight-spec escapes, with `\n`/`\r` becoming real control
+  characters. GEN-5's leg 1 (kept and coerced fields) did not wait on this.
