@@ -209,6 +209,8 @@ across destination tables instead of consolidating.
 > - Two more modules had live consumers off the browse path and were rehomed, not
 >   deleted: `RemoteSampleSource` (used by the Repositories screen) to `ports/`,
 >   and `matchSolutionName` (used by `analyze-samples`) to `domain/sentinel-content`.
+>   `RemoteSampleSource` was then deleted 2026-10-02 (DBT-118) when its last
+>   consumer, the Repositories Elastic probe, was removed.
 > - `plannedTagged` was NOT kept. Its three references are all inside
 >   `loadBrowsed`, which was the modal's Load handler.
 > - `browseSampleId` is now `splitSampleId`; `splitting.ts` lives in

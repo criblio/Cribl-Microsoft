@@ -688,6 +688,8 @@ actually ran: all three profiles ship, with members taken verbatim from
 compare, the same provenance approach AZR-0 used. The coverage catalog keeps
 offering the two profiles it always did, because changing what an existing
 stored selection MEANS is a separate act from making a third preset available.
+(Superseded 2026-10-02 by AZR-13, section 18i: the catalog now derives all
+three from `ENTRA_PROFILES`.)
 
 **The two consequences ride their categories.** The 5-10x warning sits on
 `NonInteractiveUserSignInLogs` itself, and only two of fifteen categories carry
