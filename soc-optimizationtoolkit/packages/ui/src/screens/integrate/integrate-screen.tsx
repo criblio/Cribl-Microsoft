@@ -868,9 +868,12 @@ export function IntegrateScreen({
         }
         setRoutableCheck({
           state: "done",
+          // GEN-18 follow-through: the same criblDefaults Deploy names the
+          // destination from, or this reports a non-default-named one missing.
           report: checkRoutablePrerequisites(
             detectedTables,
             parseOutputListing(res.body).map((o) => o.id),
+            criblDefaults,
           ),
         });
       } catch (err) {
@@ -883,7 +886,7 @@ export function IntegrateScreen({
     // detectedTableKey stands in for detectedTables: a new array with the same
     // names must not re-issue the request on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packShape, groupId, detectedTableKey, ports.cribl]);
+  }, [packShape, groupId, detectedTableKey, ports.cribl, criblDefaults]);
 
   // Any change to the pack name or target groups invalidates a prior
   // conflict check and its overwrite acknowledgment.
@@ -1082,6 +1085,9 @@ export function IntegrateScreen({
       approved: mappingsApproved,
       toolkitVersion,
       packShape,
+      // GEN-18 follow-through: the criblDefaults Deploy names the destination
+      // from, so the pack routes to the id Deploy creates.
+      destinationNaming: criblDefaults ?? null,
     }),
     [
       solution?.name,
@@ -1095,6 +1101,7 @@ export function IntegrateScreen({
       mappingsApproved,
       toolkitVersion,
       packShape,
+      criblDefaults,
     ],
   );
   // What the solution's OWN analytic rules compare these fields against, per

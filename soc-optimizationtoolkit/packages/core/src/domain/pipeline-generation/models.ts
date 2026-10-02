@@ -22,6 +22,7 @@
 import type { CefIdentityOverride } from "../cef-identity";
 import type { MatchResult, OverflowConfig, VendorMapping } from "../field-matcher";
 import type { DcrGapAnalysis, TableRoutingInfo } from "../gap-analysis";
+import type { DestinationNaming } from "../option-forms";
 import type { TableReductionRules } from "./reduction-rules";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
 
@@ -169,7 +170,10 @@ export interface TablePlan {
   pipelineName: string;
   /** `Reduction_{vendorPrefix}_{suffix}` - reduction pipeline id/dir. */
   reductionPipelineId: string;
-  /** `MS-Sentinel-{Table}-dest`. */
+  /**
+   * `{prefix}{Table}{suffix}` from the plan's destinationNaming, else the
+   * default `MS-Sentinel-{Table}-dest` (see naming.destinationId).
+   */
   destinationId: string;
   /** `Custom-{Table}`. */
   streamName: string;
@@ -277,4 +281,10 @@ export interface BuildPipelinePlanInput {
   toolkitVersion?: string;
   /** See {@link PipelinePlan.packShape}. Chosen by the operator at build time. */
   packShape?: PackShape;
+  /**
+   * The operator's destination prefix/suffix (CriblOptions), so every
+   * TablePlan.destinationId is the id Deploy creates ([[GEN-18]]
+   * follow-through). Omitted means the default "MS-Sentinel-"/"-dest" naming.
+   */
+  destinationNaming?: DestinationNaming;
 }

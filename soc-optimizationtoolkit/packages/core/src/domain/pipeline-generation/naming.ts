@@ -23,6 +23,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { destinationIdFromOptions } from "../option-forms";
+import type { DestinationNaming } from "../option-forms";
 import { defaultSentinelDestinationId } from "../sentinel-destination";
 
 /**
@@ -138,15 +140,30 @@ export function passthroughRouteId(
  * `_CL` suffix stripped (compatibility contract, section 3 item 3) and every
  * non-alphanumeric mapped to "_".
  *
- * DELEGATES to defaultSentinelDestinationId, the id Deploy creates ([[GEN-18]]).
- * This used to only strip `_CL`, so for "My-App_CL" the pack's outputs.yml and
- * routes named MS-Sentinel-My-App-dest while Deploy created
- * MS-Sentinel-My_App-dest - and for a name with a space, an id that is not a
- * usable Cribl output id at all. Kept as a named export so the pack's naming
- * still reads from this module, but it holds no rule of its own.
+ * DELEGATES - it holds no rule of its own ([[GEN-18]]). This used to only strip
+ * `_CL`, so for "My-App_CL" the pack's outputs.yml and routes named
+ * MS-Sentinel-My-App-dest while Deploy created MS-Sentinel-My_App-dest - and
+ * for a name with a space, an id that is not a usable Cribl output id at all.
+ *
+ * WHAT HOLDS, exactly: Deploy names the destination
+ * destinationIdFromOptions(table, operator's CriblOptions). With `naming`
+ * passed (the integrate screen threads its criblDefaults through the plan),
+ * this is that same call, so the pack targets the id Deploy creates for any
+ * prefix/suffix. Without it, this is defaultSentinelDestinationId - which
+ * equals Deploy's id only under the default "MS-Sentinel-"/"-dest" options.
+ * The GEN-18 follow-through closed that gap for the integrate screen; before
+ * it, a non-default prefix/suffix split the two silently. Neither path can
+ * follow Deploy's collision rename (an id taken by an output pointing
+ * elsewhere gets a -N suffix) - the pack build takes a renamed id from the
+ * session's deploy outcome where it has one.
  */
-export function destinationId(sentinelTable: string): string {
-  return defaultSentinelDestinationId(sentinelTable);
+export function destinationId(
+  sentinelTable: string,
+  naming?: DestinationNaming,
+): string {
+  return naming === undefined
+    ? defaultSentinelDestinationId(sentinelTable)
+    : destinationIdFromOptions(sentinelTable, naming);
 }
 
 /**

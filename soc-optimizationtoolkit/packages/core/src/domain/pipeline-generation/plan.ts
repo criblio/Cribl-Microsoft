@@ -293,7 +293,7 @@ export function buildPipelinePlan(
       suffix,
       pipelineName: pipelineName(vendorPrefix, suffix),
       reductionPipelineId: reductionPipelineId(vendorPrefix, suffix),
-      destinationId: destinationId(t.sentinelTable),
+      destinationId: destinationId(t.sentinelTable, input.destinationNaming),
       streamName: streamName(t.sentinelTable),
       fields,
       overflowConfig,

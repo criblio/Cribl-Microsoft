@@ -88,6 +88,16 @@ export interface CriblOptions {
   workerGroup: string;
 }
 
+/**
+ * The two CriblOptions fields that name a Sentinel destination. Narrowed so the
+ * pack planner and the routable check can take the naming without the rest of
+ * the options ([[GEN-18]] follow-through).
+ */
+export type DestinationNaming = Pick<
+  CriblOptions,
+  "destinationPrefix" | "destinationSuffix"
+>;
+
 /** Everything the options store persists, one section per form. */
 export interface AppOptions {
   operation: OperationOptions;
@@ -769,10 +779,15 @@ export function applyOptionsPatch(
  * removed the copy that used to live here - so with
  * {@link DEFAULT_CRIBL_OPTIONS} this reproduces defaultSentinelDestinationId
  * exactly, and a test still pins the two against each other.
+ *
+ * THE id for a table whenever the operator's options are known: Deploy is
+ * handed it, and since the [[GEN-18]] follow-through the pack plan
+ * (buildPipelinePlan's destinationNaming) and the routable prerequisite check
+ * compose through it too, so a non-default prefix/suffix no longer splits them.
  */
 export function destinationIdFromOptions(
   table: string,
-  options: CriblOptions,
+  options: DestinationNaming,
 ): string {
   return `${options.destinationPrefix}${sanitizeDestinationTable(table)}${options.destinationSuffix}`;
 }

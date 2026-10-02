@@ -216,6 +216,43 @@ describe("per-logType overflow collision resolved (Cloudflare)", () => {
   });
 });
 
+describe("destination id follows the operator's naming (GEN-18 follow-through)", () => {
+  // Deploy creates the destination under the stored CriblOptions prefix/suffix.
+  // The plan's destinationId feeds outputs.yml, the routes and the README, so
+  // it must be that same id - not the fixed MS-Sentinel-...-dest default.
+  const keep = (name: string): PipelineFieldMapping => ({
+    source: name,
+    target: name,
+    type: "string",
+    action: "keep",
+  });
+  const tables: TablePlanInput[] = [
+    { sentinelTable: "SecurityEvent", logType: "SecurityEvent", presetFields: [keep("a")] },
+    { sentinelTable: "My-App_CL", logType: "App", presetFields: [keep("b")] },
+  ];
+
+  it("uses destinationNaming when supplied", () => {
+    const plan = buildPipelinePlan({
+      solutionName: "Example",
+      packName: "example",
+      tables,
+      destinationNaming: { destinationPrefix: "Sentinel-", destinationSuffix: "-out" },
+    });
+    expect(plan.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-SecurityEvent-out",
+      "Sentinel-My_App-out",
+    ]);
+  });
+
+  it("keeps the default id when no naming is supplied", () => {
+    const plan = buildPipelinePlan({ solutionName: "Example", packName: "example", tables });
+    expect(plan.tables.map((t) => t.destinationId)).toEqual([
+      "MS-Sentinel-SecurityEvent-dest",
+      "MS-Sentinel-My_App-dest",
+    ]);
+  });
+});
+
 describe("reduction rules resolution", () => {
   it("looks up the KB by (table, solution) when not supplied", () => {
     const plan = buildPipelinePlan({

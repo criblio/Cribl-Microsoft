@@ -25,21 +25,35 @@
  *
  * ONE ID PER TABLE. This check used to accept either of two ids, because the
  * pack generator and Deploy sanitized table names differently. [[GEN-18]] made
- * the sanitizing rule the only one, so the id Deploy creates IS the id the pack
- * targets, and that is the only id matched here.
+ * the sanitizing rule the only one, and that is the only id matched here.
+ *
+ * WHICH id, exactly. Deploy names the destination
+ * destinationIdFromOptions(table, operator's CriblOptions). GEN-18 alone left
+ * this check on the fixed "MS-Sentinel-"/"-dest" default, so an operator with
+ * prefix "Sentinel-" deployed Sentinel-SecurityEvent-dest and was told
+ * MS-Sentinel-SecurityEvent-dest was missing. The GEN-18 follow-through takes
+ * the naming as an argument: passed (the integrate screen passes its
+ * criblDefaults, the same object its Deploy and pack plan use), the id matched
+ * is the one Deploy creates; omitted, it is the default naming, which equals
+ * Deploy's id only when the operator kept the default prefix/suffix. Deploy's
+ * collision rename (a -N suffix when the id is taken by an output pointing
+ * elsewhere) is not modelled - an output found under the expected id counts as
+ * present, matching what Deploy's reuse scan would find.
  *
  * Pure: no IO, no clock. The caller does the listing.
  */
 
-import { defaultSentinelDestinationId } from "../sentinel-destination";
+import type { DestinationNaming } from "../option-forms";
+import { destinationId } from "../pipeline-generation";
 
 /** Whether one table's Sentinel destination is already in the worker group. */
 export interface RoutablePrerequisite {
   /** The Sentinel table this pack routes to. */
   sentinelTable: string;
   /**
-   * The id DEPLOY would create for this table - which is also the id the pack
-   * targets since GEN-18 - so the one to name in guidance.
+   * The id DEPLOY would create for this table under the naming passed in (the
+   * default naming when none was) - the one to name in guidance. The pack
+   * plan composes the same id from the same naming (GEN-18 follow-through).
    */
   expectedId: string;
   /** The output found in the group, or null when expectedId did not match. */
@@ -69,10 +83,14 @@ export interface RoutablePrerequisiteReport {
  * Comparison is case-insensitive, matching the reuse scan in onboard-table step
  * 6 - the two must agree about whether an id is taken, or Deploy would create a
  * second destination this check had just reported as present.
+ *
+ * `naming` is the operator's destination prefix/suffix - pass the same
+ * CriblOptions Deploy is given, or the expected id is the default one.
  */
 export function checkRoutablePrerequisites(
   sentinelTables: readonly string[],
   existingOutputIds: readonly string[],
+  naming?: DestinationNaming,
 ): RoutablePrerequisiteReport {
   const have = new Map<string, string>();
   for (const id of existingOutputIds) have.set(id.toLowerCase(), id);
@@ -86,7 +104,9 @@ export function checkRoutablePrerequisites(
     if (seen.has(sentinelTable)) continue;
     seen.add(sentinelTable);
 
-    const expectedId = defaultSentinelDestinationId(sentinelTable);
+    // The pack plan's own naming function, so the check and the pack cannot
+    // compose the id two ways again.
+    const expectedId = destinationId(sentinelTable, naming);
     const foundId = have.get(expectedId.toLowerCase()) ?? null;
     entries.push({ sentinelTable, expectedId, foundId });
   }

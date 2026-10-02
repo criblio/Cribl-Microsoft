@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CRIBL_OPTIONS, destinationIdFromOptions } from "../option-forms";
 import { checkRoutablePrerequisites } from "./routable-prerequisites";
 
 describe("checkRoutablePrerequisites", () => {
@@ -52,8 +53,9 @@ describe("checkRoutablePrerequisites", () => {
     // This block used to accept EITHER of two ids, because the pack generator
     // and Deploy sanitized table names differently: for "My-App_CL" the pack
     // said MS-Sentinel-My-App-dest and Deploy created MS-Sentinel-My_App-dest.
-    // GEN-18 made the sanitizing rule the only one, so the pack now targets
-    // exactly the id Deploy creates and the check matches that id alone.
+    // GEN-18 made the sanitizing rule the only one, so under the default
+    // naming the pack targets exactly the id Deploy creates and the check
+    // matches that id alone. Non-default naming is the block below.
 
     it("accepts the id DEPLOY creates for a table name with a hyphen", () => {
       const r = checkRoutablePrerequisites(
@@ -85,6 +87,66 @@ describe("checkRoutablePrerequisites", () => {
         "sentinelTable",
       ]);
       expect(entry?.expectedId).toBe("MS-Sentinel-My_App-dest");
+    });
+  });
+
+  describe("the operator's destination prefix/suffix (GEN-18 follow-through)", () => {
+    // Deploy names the destination from the stored CriblOptions prefix/suffix
+    // (destinationIdFromOptions). This check used the fixed default, so an
+    // operator with prefix "Sentinel-" deployed Sentinel-SecurityEvent-dest and
+    // was then told MS-Sentinel-SecurityEvent-dest was missing - a warning
+    // about an id nothing would ever create.
+    const NAMING = { destinationPrefix: "Sentinel-", destinationSuffix: "-out" };
+
+    it("matches the id Deploy creates under a non-default prefix/suffix", () => {
+      const r = checkRoutablePrerequisites(
+        ["SecurityEvent", "My-App_CL"],
+        ["Sentinel-SecurityEvent-out", "Sentinel-My_App-out"],
+        NAMING,
+      );
+      expect(r.missing).toHaveLength(0);
+      expect(r.entries.map((e) => e.foundId)).toEqual([
+        "Sentinel-SecurityEvent-out",
+        "Sentinel-My_App-out",
+      ]);
+    });
+
+    it("names the OPTIONS id as missing, not the default one", () => {
+      // A group holding only the default-named output is not covered: the pack
+      // and Deploy both use the operator's naming, so the default id is a
+      // destination nothing routes to.
+      const r = checkRoutablePrerequisites(
+        ["SecurityEvent"],
+        ["MS-Sentinel-SecurityEvent-dest"],
+        NAMING,
+      );
+      expect(r.missing).toHaveLength(1);
+      expect(r.missing[0]?.expectedId).toBe("Sentinel-SecurityEvent-out");
+      expect(r.missing[0]?.foundId).toBeNull();
+    });
+
+    it("expects exactly destinationIdFromOptions - the id Deploy is handed", () => {
+      const tables = ["SecurityEvent", "My-App_CL", "Zscaler Web_CL"];
+      const expected = checkRoutablePrerequisites(tables, [], NAMING).entries.map(
+        (e) => e.expectedId,
+      );
+      expect(expected).toEqual(
+        tables.map((t) => destinationIdFromOptions(t, NAMING)),
+      );
+      expect(expected).toEqual([
+        "Sentinel-SecurityEvent-out",
+        "Sentinel-My_App-out",
+        "Sentinel-Zscaler_Web-out",
+      ]);
+    });
+
+    it("omitted naming is the default options, id for id", () => {
+      const tables = ["SecurityEvent", "My-App_CL"];
+      expect(
+        checkRoutablePrerequisites(tables, []).entries.map((e) => e.expectedId),
+      ).toEqual(
+        tables.map((t) => destinationIdFromOptions(t, DEFAULT_CRIBL_OPTIONS)),
+      );
     });
   });
 

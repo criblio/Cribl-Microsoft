@@ -341,6 +341,31 @@ describe("derivePipelinePreview (real generation)", () => {
   });
 });
 
+describe("derivePipelinePreview - destination naming (GEN-18 follow-through)", () => {
+  // The preview and the pack build both derive from these inputs, and Deploy
+  // names the destination from the operator's prefix/suffix. A preview (and so
+  // a pack) on the fixed default would route to an id Deploy never created.
+  it("names the destination from the operator's prefix/suffix", () => {
+    const view = derivePipelinePreview({
+      ...approvedInputs(),
+      destinationNaming: { destinationPrefix: "Sentinel-", destinationSuffix: "-out" },
+    });
+    expect(view.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-CommonSecurityLog-out",
+    ]);
+    expect(view.plan?.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-CommonSecurityLog-out",
+    ]);
+  });
+
+  it("null naming keeps the default id", () => {
+    const view = derivePipelinePreview({ ...approvedInputs(), destinationNaming: null });
+    expect(view.tables.map((t) => t.destinationId)).toEqual([
+      "MS-Sentinel-CommonSecurityLog-dest",
+    ]);
+  });
+});
+
 describe("derivePipelinePreview refuses a kept unaddressable name (GEN-5)", () => {
   // A field kept under its own spelling appears on no conf line, so
   // checkCriblYaml cannot see it; the preview must still go invalid, because
