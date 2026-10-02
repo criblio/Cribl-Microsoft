@@ -33,48 +33,86 @@ import {
 
 /**
  * Quick KV parser for discriminator detection (NOT full field parsing). Ported
- * verbatim from legacy `parseKvLine`: strips a syslog priority prefix, then
- * pulls `key=value` and `key="quoted value"` pairs.
+ * from legacy `parseKvLine`: strips a syslog priority prefix, then pulls
+ * `key=value` and `key="quoted value"` pairs.
  *
  * Sibling to `parseKv` in ./parsers since the rehome (ADR 0003), and kept
- * separate on purpose - see that function's note.
+ * separate on purpose - see that function's note. The two AGREE ON KEYS again
+ * as of DBT-84: the key is the whole token before the `=`, with the same class
+ * and the same left-boundary rule as parseKv's KV_PAIR, and the same leading
+ * grouping punctuation comes off. The VALUE handling stays this probe's own
+ * (whitespace-terminated, or a quoted run), because a discriminator value never
+ * needs parseKv's comma-tolerant value class.
  *
- * THEY DISAGREE, as of DBT-79, and this is the place someone checking the
- * divergence looks - so it is written here rather than only on `parseKv`. That
- * function's key class was widened to the whole token before the `=`; this one
- * still truncates on `\w+`. Measured:
+ * WHY THIS USED TO TRUNCATE, AND WHAT REPLACED THE TRUNCATION. Until DBT-84 the
+ * key class was `\w+`, which cut `src-ip` to `ip` and `log-type` to `type`. Half
+ * of that was load-bearing by accident - `type` is on DISCRIMINATOR_FIELDS, so a
+ * PAN-OS-style `log-type=TRAFFIC` selected through it - and half was harm:
+ * truncated keys COLLIDED, last one winning. Measured before the fix:
  *
- *   "src-ip=1.1.1.1 action=A"
- *     parseKv     -> ["src-ip", "action"]
- *     parseKvLine -> ["ip",     "action"]
+ *   "log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2"
+ *     parseKvLine -> { type: "end", ip: "2" }
  *
- * THE TRUNCATION IS LOAD-BEARING HERE, which is why it was not fixed at the same
- * time. This function exists to find a DISCRIMINATOR, and `DISCRIMINATOR_FIELDS`
- * holds word-only spellings (`type`, `subtype`, `action`, `category`,
- * `logType`, ...) that hyphenated vendor keys truncate straight INTO. Measured:
- *
- *   "log-type=TRAFFIC src-ip=1.1.1.1 action=A"
- *     parseKvLine -> ["type", "ip", "action"]
- *
- * `type` is the second entry in the list and in its high-confidence prefix, so
- * a single distinct value selects it - today's split works BY ACCIDENT. Give
- * this function the correct key `log-type`, which is in no list, and the field
- * stops matching, the split falls back, and every stored sample is re-keyed
- * (a log type is the tagged-sample store's KEY, see the DETERMINISM note above).
- *
- * So the ORDER of the eventual fix is fixed: teach `DISCRIMINATOR_FIELDS` the
- * hyphenated aliases FIRST, then widen the key here - never the reverse. That
- * sequencing is on the card requested with DBT-79, not a drive-by.
+ * So the SUBTYPE overwrote the log type (and which one won depended on pair
+ * order), and four real pairs counted as two, failing the splitter's >= 3 gate
+ * and dropping the whole sample into the fallback group. The load-bearing half
+ * now lives in {@link SPLITTER_DISCRIMINATOR_ALIASES}, applied by the splitter
+ * after this returns; this function only reports what the line says.
  */
 export function parseKvLine(line: string): Record<string, string> {
   const fields: Record<string, string> = {};
   const cleaned = line.replace(/^<\d+>/, "");
-  const re = /(\w+)=(?:"([^"]*)"|(\S*))/g;
+  // Key: parseKv's KV_PAIR key class and left boundary (a key starts at the
+  // line start or after whitespace, `=`, `,` or `"`), so a value such as
+  // `a=b=c` does not grow a phantom key out of its own middle.
+  const re = /(?<![^\s=,"])([^\s=,"]+)=(?:"([^"]*)"|(\S*))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cleaned)) !== null) {
-    fields[m[1]] = m[2] !== undefined ? m[2] : m[3];
+    // Same leading-grouping strip as parseKv (`[src-ip=1` names `src-ip`); an
+    // empty remainder was pure punctuation, with no field to lose.
+    const key = m[1].replace(/^[([{<]+/, "");
+    if (key === "") continue;
+    fields[key] = m[2] !== undefined ? m[2] : m[3];
   }
   return fields;
+}
+
+/**
+ * Vendor key spellings the splitter reads AS a DISCRIMINATOR_FIELDS entry
+ * (DBT-84). Each maps a full key to the spelling `\w+` used to truncate it to,
+ * or to the list entry it plainly means, so a sample that was split correctly
+ * before keys were widened keeps its log-type names - a log type is the
+ * tagged-sample store's KEY (see the DETERMINISM note above).
+ *
+ * SPLITTER-LOCAL ON PURPOSE. DISCRIMINATOR_FIELDS is shared: query-lake-samples
+ * interpolates its entries unquoted into KQL as plain identifiers (a hyphenated
+ * `isnotempty(log-type)` parses as a subtraction), and route-discriminator,
+ * capture-filter and expected-log-types read it too. Adding `log-type` there
+ * would change Lake queries, routes and capture filters through a back door.
+ * Every TARGET here must be a member of that list; a test holds it.
+ *
+ * An alias never overwrites an exact key: a line carrying both `type=` and
+ * `log-type=` selects on `type` (operator decision on DBT-84, 2026-10-02).
+ */
+export const SPLITTER_DISCRIMINATOR_ALIASES: Readonly<Record<string, string>> =
+  Object.freeze({
+    "log-type": "type", // PAN-OS / generic primary
+    "sub-type": "subtype", // PAN-OS secondary
+    "event-type": "eventType", // generic; `\w+` used to cut it to `type`
+  });
+
+/**
+ * The record the discriminator selector sees for one KV line: every real pair,
+ * plus each aliased spelling the line does NOT already carry exactly.
+ */
+function withDiscriminatorAliases(
+  fields: Record<string, string>,
+): Record<string, string> {
+  const record: Record<string, string> = { ...fields };
+  for (const [from, to] of Object.entries(SPLITTER_DISCRIMINATOR_ALIASES)) {
+    if (from in fields && !(to in fields)) record[to] = fields[from];
+  }
+  return record;
 }
 
 /** Sanitize a discriminator value into a log-type name (legacy cleanup). */
@@ -115,8 +153,10 @@ export function splitSamplesByLogType(
     } catch {
       if (/\w+=/.test(raw)) {
         const kvFields = parseKvLine(raw);
+        // The gate counts the line's REAL pairs, before aliasing adds any
+        // (DBT-84) - an alias is a second name for a pair, not another pair.
         if (Object.keys(kvFields).length >= 3) {
-          eventObjects.push(kvFields);
+          eventObjects.push(withDiscriminatorAliases(kvFields));
         }
       }
     }

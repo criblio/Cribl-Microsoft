@@ -350,36 +350,39 @@ describe("parseKv key capture (DBT-79)", () => {
     expect(elapsed).toBeLessThan(1000);
   }, 30_000);
 
-  it("leaves the splitter's probe truncating, on purpose and in this order", () => {
-    // A CHARACTERIZATION PIN ON A DIVERGENCE, not on a behaviour anyone wants.
-    // `parseKv` and `parseKvLine` used to agree; since DBT-79 they do not, and
-    // the comment on each says so. This makes the claim checkable, because a
-    // comment about two functions rots the moment someone edits one of them.
-    expect(Object.keys(parseKv("src-ip=1.1.1.1 action=A")[0])).toEqual([
+  it("agrees with the splitter's probe on keys, and aliases outside the shared list", () => {
+    // WAS a characterization pin on a DIVERGENCE (DBT-79 widened parseKv and
+    // left parseKvLine truncating on `\w+`, because the truncation happened to
+    // turn `log-type` into the listed `type`). DBT-84 closed it in the order
+    // that pin demanded - the discriminator spelling first, the key class
+    // second - except the aliases went into a SPLITTER-LOCAL table rather than
+    // DISCRIMINATOR_FIELDS, which other features interpolate as identifiers.
+    // This makes the agreement checkable, because a comment about two
+    // functions rots the moment someone edits one of them.
+    for (const line of [
+      "src-ip=1.1.1.1 action=A",
+      "log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2",
+      '<190>date=2019-05-10 type="traffic" [src-ip=10.0.0.1',
+    ]) {
+      expect(Object.keys(parseKvLine(line))).toEqual(
+        Object.keys(parseKv(line)[0]),
+      );
+    }
+    expect(Object.keys(parseKvLine("src-ip=1.1.1.1 action=A"))).toEqual([
       "src-ip",
       "action",
     ]);
-    expect(Object.keys(parseKvLine("src-ip=1.1.1.1 action=A"))).toEqual([
-      "ip",
-      "action",
-    ]);
+    // The quoted value stays whole in the probe as well.
+    expect(parseKvLine('user=admin msg="login ok" ip=1.2.3.4')).toEqual({
+      user: "admin",
+      msg: "login ok",
+      ip: "1.2.3.4",
+    });
 
-    // WHY THE TRUNCATION STAYS. The probe exists to pick a DISCRIMINATOR, and
-    // the truncated spelling is the one on the list: `log-type` truncates to
-    // `type`, which is in the high-confidence prefix, so a single distinct
-    // value selects it. Today's split works BY ACCIDENT.
-    expect(Object.keys(parseKvLine("log-type=TRAFFIC action=A"))).toContain(
-      "type",
-    );
+    // The shared list still holds only plain identifiers, so the full key is
+    // NOT on it - selection reaches `type` through the splitter's alias table.
     expect(DISCRIMINATOR_FIELDS).toContain("type");
-    // The correct key is in NO list, which is the whole hazard: widen the probe
-    // and this field stops selecting, the split falls back, and every stored
-    // sample is re-keyed - a log type is the tagged-sample store's key.
     expect(DISCRIMINATOR_FIELDS).not.toContain("log-type");
-
-    // SO WHEN THIS PIN FAILS, read the order before "fixing" it: hyphenated
-    // aliases go into DISCRIMINATOR_FIELDS FIRST, the probe's key class second.
-    // Reversing that silently re-keys an operator's samples.
   });
 
   it("reports four fields end to end, and says the names are unaddressable", () => {

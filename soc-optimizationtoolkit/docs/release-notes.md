@@ -8,6 +8,29 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## Unreleased
+
+**Captures with hyphenated keys now split by their real log type, and some will
+regroup (DBT-84).** The capture splitter read `key=value` lines with a key class
+that stopped at the first hyphen, so `log-type`, `sub-type` and `src-ip` became
+`type`, `type` and `ip`. Keys that truncated to the same name collided and the
+last one won: `log-type=TRAFFIC sub-type=end` grouped by the SUBTYPE (`END`),
+which one won depended on the order the pairs were written in, and a line such
+as `src-ip=.. dst-ip=.. action=..` counted as two pairs instead of three and
+sent the whole capture to the single fallback group. Keys are now read whole,
+and `log-type`, `sub-type` and `event-type` are read as the discriminators they
+used to truncate to, so a capture whose keys never collided keeps its names.
+When a line carries both `type=` and `log-type=`, the exact `type` wins.
+
+**Re-capture affected samples.** A log type is the tagged-sample store's key, so
+a capture that contained colliding hyphenated keys - one that was grouped under
+a subtype, or that came back as one undifferentiated group - will split
+differently now, under new names. Samples stored under the old names stay
+where they are and are not migrated; capture those sources again to get the
+corrected groups.
+
+---
+
 ## 1.12.7
 
 **A pack can now be wired either way, and the routable way says what it needs.**

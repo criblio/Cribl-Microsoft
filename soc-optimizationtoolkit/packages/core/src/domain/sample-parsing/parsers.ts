@@ -455,14 +455,13 @@ const KV_SYSLOG_PRI = /^\s*<\d+>/;
  * this function's change budget, and re-keying an operator's stored samples is
  * silent. If you touch one, do not assume the other should follow.
  *
- * THEY NOW DISAGREE, which they did not before, and the divergence is chosen
- * rather than overlooked. `parseKvLine` still truncates keys on `\w+`. Fixing it
- * too would change which field the splitter SELECTS as a discriminator: a vendor
- * emitting `log-type=TRAFFIC` currently truncates to `type`, which is the second
- * entry in DISCRIMINATOR_FIELDS, so today's split works by accident and a
- * correct key (`log-type`, in no list) would stop matching and re-key every
- * stored sample. That is exactly the blast radius the note above warns about, so
- * it is a separate card, not a drive-by.
+ * THEY AGREE ON KEYS, and a pin in kv-keys.test.ts holds it. They disagreed
+ * between DBT-79 (which widened this key class) and DBT-84 (which widened that
+ * one): `parseKvLine`'s `\w+` truncation was turning `log-type` into the listed
+ * discriminator `type` by accident. That spelling now comes from the splitter's
+ * own SPLITTER_DISCRIMINATOR_ALIASES, applied AFTER `parseKvLine` returns, so
+ * nothing here needs to know about discriminators - and nothing here should be
+ * changed to make the splitter's selection come out a particular way.
  */
 export function parseKv(
   content: string,

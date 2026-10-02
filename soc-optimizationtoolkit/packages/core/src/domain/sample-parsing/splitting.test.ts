@@ -7,7 +7,9 @@ import {
   splitSampleId,
   convertPanosSplitAtLoad,
   parseKvLine,
+  SPLITTER_DISCRIMINATOR_ALIASES,
 } from "./splitting";
+import { DISCRIMINATOR_FIELDS } from "./discriminators";
 
 describe("splitSamplesByLogType", () => {
   it("splits JSON events by a discriminator, uppercasing the log type", () => {
@@ -135,5 +137,110 @@ describe("splitSampleId + parseKvLine", () => {
     expect(parseKvLine('<190>date=2019-05-10 type="traffic" srcip=10.0.0.1')).toEqual(
       { date: "2019-05-10", type: "traffic", srcip: "10.0.0.1" },
     );
+  });
+});
+
+describe("KV splitting on full keys (DBT-84)", () => {
+  // Under the `\w+` key class, hyphenated keys TRUNCATED and then COLLIDED:
+  // `log-type` and `sub-type` both became `type`, last one winning, and
+  // `src-ip`/`dst-ip` both became `ip`. So the subtype silently overwrote the
+  // log type, the result depended on pair order, and a line with three real
+  // pairs could count as two and fail the >= 3 gate - dropping the whole
+  // sample into the fallback group.
+  const panos = (logType: string, subType: string, order: "log-first" | "sub-first") =>
+    order === "log-first"
+      ? `log-type=${logType} sub-type=${subType} src-ip=1 dst-ip=2`
+      : `sub-type=${subType} log-type=${logType} src-ip=1 dst-ip=2`;
+
+  it("keeps the whole key, so hyphenated keys no longer collide", () => {
+    expect(parseKvLine("log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2")).toEqual({
+      "log-type": "TRAFFIC",
+      "sub-type": "end",
+      "src-ip": "1",
+      "dst-ip": "2",
+    });
+  });
+
+  it("groups by the LOG TYPE, not by the subtype that used to overwrite it", () => {
+    const raw = [
+      panos("TRAFFIC", "end", "log-first"),
+      panos("THREAT", "url", "log-first"),
+      panos("TRAFFIC", "start", "log-first"),
+    ];
+    const splits = splitSamplesByLogType(raw, "fb", "kv");
+    expect(splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["TRAFFIC", 2],
+      ["THREAT", 1],
+    ]);
+    expect(splits[0].rawEvents).toEqual([raw[0], raw[2]]);
+  });
+
+  it("does not depend on the order the pairs are written in", () => {
+    const raw = [
+      panos("TRAFFIC", "end", "sub-first"),
+      panos("THREAT", "url", "sub-first"),
+      panos("TRAFFIC", "start", "sub-first"),
+    ];
+    expect(
+      splitSamplesByLogType(raw, "fb", "kv").map((s) => [s.logType, s.eventCount]),
+    ).toEqual([
+      ["TRAFFIC", 2],
+      ["THREAT", 1],
+    ]);
+  });
+
+  it("counts real pairs at the >= 3 gate, not collapsed keys", () => {
+    const splits = splitSamplesByLogType(
+      ["src-ip=1 dst-ip=2 action=A", "src-ip=1 dst-ip=2 action=B"],
+      "fb",
+      "kv",
+    );
+    expect(splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+  });
+
+  it("does not re-key the samples the truncation used to name correctly", () => {
+    // The case that worked BY ACCIDENT before: `log-type` truncated to `type`.
+    // The splitter-local alias keeps it selecting through `type`.
+    expect(
+      splitSamplesByLogType(
+        ["log-type=TRAFFIC srcip=1 action=A", "log-type=THREAT srcip=2 action=B"],
+        "fb",
+        "kv",
+      ).map((s) => s.logType),
+    ).toEqual(["TRAFFIC", "THREAT"]);
+    // ONE distinct value still selects, because the alias target `type` sits in
+    // the high-confidence prefix. Without the alias this falls back to "fb".
+    expect(
+      splitSamplesByLogType(["log-type=TRAFFIC a=1 b=2"], "fb", "kv").map(
+        (s) => s.logType,
+      ),
+    ).toEqual(["TRAFFIC"]);
+  });
+
+  it("lets an exact `type=` beat an aliased `log-type=`, in either order", () => {
+    // Operator decision 2026-10-02 (DBT-84): the exact key wins.
+    for (const line of ["type=x log-type=TRAFFIC a=1", "log-type=TRAFFIC type=x a=1"]) {
+      expect(splitSamplesByLogType([line], "fb", "kv").map((s) => s.logType)).toEqual([
+        "X",
+      ]);
+    }
+  });
+
+  it("aliases only INTO the shared list, whose entries stay plain identifiers", () => {
+    // The alias table lives in the splitter, NOT in DISCRIMINATOR_FIELDS:
+    // query-lake-samples interpolates those names unquoted into KQL, so a
+    // hyphenated entry there would parse `isnotempty(log-type)` as subtraction.
+    expect(SPLITTER_DISCRIMINATOR_ALIASES).toEqual({
+      "log-type": "type",
+      "sub-type": "subtype",
+      "event-type": "eventType",
+    });
+    for (const target of Object.values(SPLITTER_DISCRIMINATOR_ALIASES)) {
+      expect(DISCRIMINATOR_FIELDS).toContain(target);
+    }
+    expect(DISCRIMINATOR_FIELDS.filter((f) => /[^A-Za-z0-9_]/.test(f))).toEqual([]);
   });
 });
