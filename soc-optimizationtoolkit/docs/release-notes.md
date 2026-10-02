@@ -31,9 +31,11 @@ still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
 source field kept under its own name - because the destination has a column
 spelled the same - was never checked, so a name like `Source IP` or `aws.account`
 built cleanly and then read as nothing at runtime. The preview now reports it
-and the build is blocked, the same as an unaddressable rename already was. A
-field that is only dropped is not checked yet; that waits on a live Cribl
-measurement.
+and the build is blocked, the same as an unaddressable rename already was. The
+same now holds for a field read as the input of a base64 decode. A field that is
+only dropped is not checked yet; that waits on a live Cribl measurement. The
+build refusal now reads "pipeline validation found N issue(s)", because the
+count includes these field-name checks as well as the Cribl YAML loader's.
 
 **Dotted keys regroup too.** A dot cut a key the same way a hyphen did, so
 `event.type` used to be read as `type` and split the capture by it. Dotted keys
@@ -79,15 +81,19 @@ outputs that Deploy never creates. The pack now uses Deploy's rule, so for
 those table names the destination id in `outputs.yml` and in every route output
 CHANGES on rebuild - for `My-App_CL`, from `MS-Sentinel-My-App-dest` to
 `MS-Sentinel-My_App-dest`.
-A routable pack's prerequisite check now expects that one id. Table names made
-only of letters, digits and underscores are unaffected.
+A routable pack's prerequisite check now expects that one id. The pack and that
+check also now apply your Cribl destination prefix and suffix, as Deploy always
+did; before, they used the default naming whatever you had set. Table names made
+only of letters, digits and underscores, with default prefix and suffix, are
+unaffected.
 
 **An undetected sample gets a placeholder route, not a filter that cannot match
 (GEN-11).** A sample whose format was not detected was routed as JSON, and the
 log type got a filter on a parsed field that no unparsed event at route time
 carries; the preview still read valid. Such a log type now gets a placeholder
-route, and the preview reports it. Detected JSON and NDJSON routing, and route
-conditions set by hand, are unchanged.
+route, and the preview reports it, offering a `_raw` filter example and saying
+which formats reach the route unparsed. Detected JSON and NDJSON routing, and
+route conditions set by hand, are unchanged.
 
 **Every built pack ships a README (GEN-14).** App-built packs carried no
 `README.md`, so Cribl's Pack Settings showed its own unedited placeholder
@@ -98,8 +104,9 @@ fixed README of its own.
 
 **Unreadable CEF lines are dropped and reported (DBT-109).** A syslog-wrapped
 line whose CEF header could not be read (a dangling trailing backslash, or
-fewer than seven header fields) used to be kept as an empty event, counted in
-the sample's event total and shipped in the pack's sample file. It is now
+fewer than seven header fields) used to be kept as an event carrying only its
+syslog header, counted in the sample's event total and shipped in the pack's
+sample file. It is now
 dropped, and the sample shows a parse note counting the lines that were
 skipped. Event counts for affected CEF samples go down.
 

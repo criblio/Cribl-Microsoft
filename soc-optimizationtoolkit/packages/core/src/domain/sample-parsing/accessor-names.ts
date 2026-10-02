@@ -191,8 +191,8 @@ const MAX_LISTED = 5;
  *
  *   WHEN.    The operator picks the file in section 2 of the Integrate page,
  *            Add Sample Data; where checkCriblYaml does refuse the name it
- *            refuses seven sections later, in section 9 ("Cannot build: Cribl
- *            YAML validation found N issue(s)"). This note lands in section 2,
+ *            refuses seven sections later, in section 9 ("Cannot build: pipeline
+ *            validation found N issue(s)"). This note lands in section 2,
  *            while that file is still in hand. NOT because the build message is
  *            unclear: measured, it quotes the offending NAME right after its
  *            `Line N:` prefix and echoes the source line back - `Line 4: field
