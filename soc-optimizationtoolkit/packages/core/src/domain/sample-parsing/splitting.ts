@@ -24,6 +24,7 @@
  */
 
 import type { SampleFormat, SplitSample } from "./models";
+import { assertNeverFormat } from "./models";
 import { selectDiscriminatorField } from "./discriminators";
 import { positionalHasNamedFields } from "./positional";
 import {
@@ -316,7 +317,10 @@ export function hasNamedFields(
 
   if (format === "positional") return positionalHasNamedFields(rawEvents);
 
-  return false;
+  // Unreachable while the ladder covers the union. A member added later fails
+  // typecheck here instead of quietly answering false, as positional did before
+  // DBT-117 (audit follow-up to DBT-116).
+  return assertNeverFormat(format);
 }
 
 /**

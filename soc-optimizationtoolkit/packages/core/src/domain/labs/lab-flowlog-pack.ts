@@ -157,7 +157,7 @@ routes:
  * names the job, pipeline and secret, and never the operator's storage account,
  * tenant or client id, which live in jobs.yml.
  */
-export const FLOWLOG_README_MD = `# Azure vNet Flow Logs
+const FLOWLOG_README_MD = `# Azure vNet Flow Logs
 
 Collects Azure virtual network flow logs from blob storage and flattens each
 flow tuple into its own event. Built by the SOC Optimization Toolkit Labs screen.

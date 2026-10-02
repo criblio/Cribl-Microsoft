@@ -26,7 +26,12 @@
  * Timestamp logic (candidate list, CrowdStrike eval-first + backup
  * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map, the
  * `Type=<table>` enrichment, the fixed cleanup field list, and escapeYamlFilter
- * ordering are all verbatim.
+ * ordering are all verbatim - with ONE timestamp exception, added 2026-10-02
+ * (GEN-7, operator decision): a RECOGNISED VPC Flow v2 positional source gets
+ * its timestamp field overridden to `start` beside the CEF `rt` override, and a
+ * Step 3a1 enrich eval that stamps TimeGenerated from `start` and converts the
+ * Start/End epoch seconds to ISO. Legacy stamped nothing there, so every flow
+ * took ingestion time. See vpcFlowStamp.
  *
  * PINNED STEP ORDER (contract, section 3 item 12): REDUCTION runs BEFORE RENAME
  * so its filters see RAW vendor field names. Reordering silently breaks every KB

@@ -123,8 +123,11 @@ export interface TablePlanInput {
    */
   identityOverride?: CefIdentityOverride;
   /**
-   * Sample format detected by the caller (Unit 11): cef | leef | csv | kv | json
-   * | ndjson | syslog. Drives serde selection + timestamp logic. Defaults json.
+   * Sample format detected by the caller: a SampleFormat string, narrowed by
+   * toSampleFormat (see extractionFor). The member list lives in the
+   * SampleFormat union, not here - this comment used to name seven and went
+   * stale when positional joined (audit follow-up to DBT-116). Drives serde
+   * selection + timestamp logic. Defaults json.
    */
   sourceFormat?: string;
   /**

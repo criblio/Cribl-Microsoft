@@ -36,6 +36,7 @@
  */
 
 import type { GapFieldMapping, GapReport, GapReportStat } from "@soc/core";
+import { FIELD_EXAMPLE_MAX_CHARS } from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
 // ---------------------------------------------------------------------------
@@ -297,9 +298,17 @@ export function fieldMappingsLabel(
  */
 export const EXAMPLE_VALUE_MAX_CHARS = 80;
 
+/** The Example Value tip for a field with no captured example. */
+const NO_EXAMPLE_TITLE =
+  "No example captured: the sample had no value for this field, or every " +
+  `value was ${FIELD_EXAMPLE_MAX_CHARS} characters or longer`;
+
 /** One rendered Example Value cell: what to print, and what the tip says. */
 export interface ExampleValueCell {
-  /** "none" = the sample had no value; "empty" = it had the empty string. */
+  /**
+   * "none" = no example was captured (no value, or every value was at least
+   * FIELD_EXAMPLE_MAX_CHARS long); "empty" = it had the empty string.
+   */
   kind: "value" | "empty" | "none";
   text: string;
   title: string;
@@ -312,13 +321,18 @@ export interface ExampleValueCell {
  * operator is checking for. Line breaks and tabs are escaped in the cell text
  * only (so a row stays one line); the title keeps the raw value. An empty
  * string and a missing value are different facts and render differently.
+ *
+ * A missing value is NOT proof the sample had none: collectFields keeps no
+ * example of FIELD_EXAMPLE_MAX_CHARS or more, so a field holding only long
+ * values (command lines, URLs, JSON blobs) arrives undefined too. The tip says
+ * both, rather than "no value" (audit follow-up to DBT-122).
  */
 export function formatExampleValue(value: string | undefined): ExampleValueCell {
   if (value === undefined) {
     return {
       kind: "none",
       text: "--",
-      title: "No value for this field in the sample",
+      title: NO_EXAMPLE_TITLE,
     };
   }
   if (value === "") {

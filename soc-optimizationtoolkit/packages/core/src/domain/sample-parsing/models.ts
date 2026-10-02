@@ -272,3 +272,12 @@ export function isOverflowFieldName(name: string): boolean {
  * per field. Legacy default was 3.
  */
 export const MAX_FIELD_EXAMPLES = 3;
+
+/**
+ * The length at which a value stops being kept as an example: collectFields
+ * keeps only values SHORTER than this. A field whose every value is this long
+ * therefore has no example while occurring in every record, so a screen that
+ * shows "no example" names this cap instead of claiming the field had no value
+ * (audit follow-up to DBT-122). Legacy value, unchanged.
+ */
+export const FIELD_EXAMPLE_MAX_CHARS = 200;

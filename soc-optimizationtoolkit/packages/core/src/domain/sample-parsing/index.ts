@@ -17,6 +17,7 @@ export type {
 export {
   RAW_EVENTS_CAP,
   MAX_FIELD_EXAMPLES,
+  FIELD_EXAMPLE_MAX_CHARS,
   // THE ONE NAME FOR AN UNNAMED COLUMN. Exported because the UI's interactive
   // column mapper has to speak it too: a position the operator has not named
   // must round-trip as positional, and re-testing /^_\d+$/ in the renderer is
@@ -25,10 +26,9 @@ export {
   isPositionalFieldName,
   isOverflowFieldName,
   overflowFieldName,
-  // DBT-116: the union as a value, its guard, and the never-typed default that
-  // makes a switch over it exhaustive.
-  SAMPLE_FORMATS,
-  isSampleFormat,
+  // DBT-116: the narrowing guard and the never-typed default that makes a
+  // switch over the union exhaustive. SAMPLE_FORMATS and isSampleFormat stay
+  // module-internal (models.ts and its test) until something outside needs them.
   toSampleFormat,
   assertNeverFormat,
 } from "./models";

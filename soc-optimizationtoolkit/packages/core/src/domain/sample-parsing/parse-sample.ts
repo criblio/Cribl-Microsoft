@@ -10,6 +10,7 @@
 
 import {
   MAX_FIELD_EXAMPLES,
+  FIELD_EXAMPLE_MAX_CHARS,
   RAW_EVENTS_CAP,
   type DiscoveredField,
   type FieldType,
@@ -123,7 +124,7 @@ export function collectFields(
       ) {
         const str =
           typeof value === "object" ? JSON.stringify(value) : String(value);
-        if (str.length < 200) {
+        if (str.length < FIELD_EXAMPLE_MAX_CHARS) {
           field.examples.add(str);
         }
       }
