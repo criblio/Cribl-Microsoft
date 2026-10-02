@@ -13,7 +13,11 @@
  *     positional map (now sourced from Unit 12's canonical PANOS_CSV_HEADERS
  *     dictionary instead of the legacy hard-coded subset) or a generic serde;
  *   - JSON/KV: serde json/kvp.
- * ONE format is NOT legacy knowledge and was added 2026-09-03 (GEN-6):
+ * TWO formats are NOT legacy knowledge. SYSLOG was added 2026-10-02 (DBT-116):
+ * an eval that matches sample-parsing's own RFC 3164 / RFC 5424 patterns and
+ * names the groups as parseSyslog does - see syslogExtractFunction. Before it,
+ * syslog fell to the same trailing JSON serde positional once did. The other,
+ * added 2026-09-03 (GEN-6):
  *   - POSITIONAL: an eval that splits _raw on runs of whitespace and assigns
  *     the SAME column names sample-parsing/positional.ts produced. Before it,
  *     a positional sample fell to the trailing else and got a JSON serde over
@@ -54,8 +58,13 @@ import {
   CEF_HEADER_ESCAPE,
   CEF_HEADER_PATTERN,
   PANOS_CSV_HEADERS,
+  SYSLOG_RFC3164_PATTERN,
+  SYSLOG_RFC5424_PATTERN,
   VPC_FLOW_V2_FIELDS,
+  assertNeverFormat,
+  toSampleFormat,
 } from "../sample-parsing";
+import type { SampleFormat } from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
 import { CEF_IDENTITY_FIELDS, overrideValueFor } from "../cef-identity";
 import type { CefIdentityOverride } from "../cef-identity";
@@ -423,6 +432,152 @@ function positionalExtractFunctions(
   ];
 }
 
+/** The extraction kinds that are a plain serde over `_raw` (the trailing else). */
+type SerdeExtraction = "json" | "kvp";
+
+/**
+ * How a pipeline pulls fields out of `_raw`, by sample format.
+ */
+type Extraction =
+  | "cef"
+  | "leef"
+  | "csv"
+  | "positional"
+  | "syslog"
+  | SerdeExtraction;
+
+/**
+ * THE one decision about how a format is extracted (DBT-116), asked by both the
+ * transformation conf and the fallback reduction conf.
+ *
+ * A SWITCH WITH A NEVER-TYPED DEFAULT, deliberately, and that is the structural
+ * half of the fix. Both confs used to decide this in if/ternary ladders over a
+ * plain string, and a ladder compiles happily when the union grows: positional
+ * (DBT-77) reached the trailing JSON serde that way until GEN-6, and syslog was
+ * still reaching it when DBT-116 counted. Adding a SampleFormat member now fails
+ * typecheck HERE until someone decides how it is extracted.
+ *
+ * `unknown` maps to json explicitly - the behaviour it always had, now stated.
+ * ndjson is one JSON object per line, so the json serde reads it as it is.
+ */
+function extractionFor(format: SampleFormat): Extraction {
+  switch (format) {
+    case "cef":
+      return "cef";
+    case "leef":
+      return "leef";
+    case "csv":
+      return "csv";
+    case "positional":
+      return "positional";
+    case "syslog":
+      return "syslog";
+    case "kv":
+      return "kvp";
+    case "json":
+    case "ndjson":
+    case "unknown":
+      return "json";
+    default:
+      return assertNeverFormat(format);
+  }
+}
+
+/** The never-typed default for a switch over {@link Extraction}. */
+function assertNeverExtraction(extraction: never): never {
+  throw new Error(`Unhandled extraction: ${String(extraction)}`);
+}
+
+/**
+ * The extraction eval for a syslog source (DBT-116).
+ *
+ * WHY THIS BRANCH EXISTS. Without it a syslog sample fell to the trailing else
+ * and got `serde type: json` - "Parse JSON from _raw" - over a syslog line. A
+ * syslog line is not JSON, so the step extracted NOTHING, and every name the
+ * analyzer had shown (Hostname, Program, Message ...) and the mappings were
+ * built on was undefined in the installed pipeline. GEN-6's failure, one format
+ * over, and the reason the extraction has to REPRODUCE the parse.
+ *
+ * AN EVAL, NOT regex_extract, although the remediation plan proposed the
+ * latter. This emitter already avoids regex_extract for CEF ("conf differences
+ * across Cribl versions", see the file header), and an eval lets the emitted
+ * expressions mirror parseSyslog line for line: the parser tries RFC 3164
+ * first and RFC 5424 only when that failed, parses Priority/PID/Version as
+ * integers, and derives Facility and Severity from a 3164 PRI. A capture-group
+ * extraction would leave the numbers as strings and could not derive the two.
+ *
+ * THE PATTERNS ARE IMPORTED, on the cefHeaderAdds precedent: sample-parsing's
+ * own SYSLOG_RFC3164_PATTERN / SYSLOG_RFC5424_PATTERN are emitted by `.source`,
+ * so the parse and the pipeline reach each field through the same characters.
+ * The pin is an equality with the constants and a parity run against
+ * parseSyslog (pipeline-conf.test.ts), NOT a live Cribl run.
+ *
+ * `.slice(0)` turns a match into a PLAIN array and a miss into `[]` - the
+ * `__cefParts` precedent - so nothing downstream depends on Cribl preserving a
+ * match array's `index`/`input`/`groups`. A field whose value is undefined is
+ * not set, so a line neither pattern matches carries only `_raw`, exactly as
+ * parseSyslog leaves it.
+ */
+function syslogExtractFunction(groupId: string): string {
+  const raw = "(_raw || '')";
+  const is3164 = "__sys3164.length > 0";
+  const is5424 = "__sys5424.length > 0";
+  const int = (expr: string) => `parseInt(${expr}, 10)`;
+  /** One field, read from whichever pattern matched, else undefined. */
+  const pick = (from3164: string | null, from5424: string | null): string => {
+    const tail =
+      from5424 === null ? "undefined" : `(${is5424} ? ${from5424} : undefined)`;
+    return from3164 === null ? tail : `${is3164} ? ${from3164} : ${tail}`;
+  };
+  const pri3164 = "__sys3164[1]";
+  const entries: Array<[string, string]> = [
+    [
+      "__sys3164",
+      `(${raw}.match(/${SYSLOG_RFC3164_PATTERN.source}/) || []).slice(0)`,
+    ],
+    [
+      "__sys5424",
+      `${is3164} ? [] : (${raw}.match(/${SYSLOG_RFC5424_PATTERN.source}/) || []).slice(0)`,
+    ],
+    // The 3164 PRI is optional; parseSyslog sets Priority only when present.
+    [
+      "Priority",
+      pick(`(${pri3164} ? ${int(pri3164)} : undefined)`, int("__sys5424[1]")),
+    ],
+    ["Version", pick(null, int("__sys5424[2]"))],
+    ["Timestamp", pick("__sys3164[2]", "__sys5424[3]")],
+    ["Hostname", pick("__sys3164[3]", "__sys5424[4]")],
+    ["Program", pick("__sys3164[4]", null)],
+    ["PID", pick(`(__sys3164[5] ? ${int("__sys3164[5]")} : undefined)`, null)],
+    ["AppName", pick(null, "__sys5424[5]")],
+    ["ProcID", pick(null, "__sys5424[6]")],
+    ["MsgID", pick(null, "__sys5424[7]")],
+    ["Message", pick("__sys3164[6]", "__sys5424[8]")],
+    // parseSyslog derives these from a 3164 PRI only, never from a 5424 one.
+    [
+      "Facility",
+      pick(`(${pri3164} ? Math.floor(${int(pri3164)} / 8) : undefined)`, null),
+    ],
+    ["Severity", pick(`(${pri3164} ? ${int(pri3164)} % 8 : undefined)`, null)],
+  ];
+  return [
+    "  - id: eval",
+    '    filter: "true"',
+    "    disabled: false",
+    "    conf:",
+    "      add:",
+    ...entries.map(
+      ([name, expr]) =>
+        `        - name: ${name}\n          value: "${escapeYamlFilter(expr)}"`,
+    ),
+    "      remove:",
+    "        - __sys3164",
+    "        - __sys5424",
+    "    description: Parse syslog from _raw",
+    `    groupId: ${groupId}`,
+  ].join("\n");
+}
+
 /**
  * Generate the transformation pipeline conf.yml. Groups: Field Extraction,
  * (Volume Reduction), Enrich & Classify, (Overflow Collection), Sentinel
@@ -501,8 +656,16 @@ export function generatePipelineConf(
     timestampField = "rt";
   }
 
-  // Step 1 (extract group): Parse fields from _raw
-  if (sourceFormat === "cef") {
+  // Step 1 (extract group): Parse fields from _raw.
+  //
+  // DBT-116: the ladder branches on extractionFor's answer, not on the raw
+  // string, so the trailing else is reachable ONLY by the serde kinds - the
+  // `const serdeType: SerdeExtraction = extraction` there fails to compile if a
+  // kind is ever added without a branch above it. It used to be the landing
+  // place for ANY format nobody had taught it, which is how syslog got a JSON
+  // serde.
+  const extraction = extractionFor(toSampleFormat(sourceFormat));
+  if (extraction === "cef") {
     // CEF two-step extraction: (1) eval to parse the pipe-delimited header
     // (avoids regex_extract conf differences across Cribl versions); (2) serde
     // kvp for the extension key=value pairs. The __cefParts value GUARDS the
@@ -553,7 +716,7 @@ export function generatePipelineConf(
         "    groupId: extract",
       ].join("\n"),
     );
-  } else if (sourceFormat === "leef") {
+  } else if (extraction === "leef") {
     // LEEF: serde kvp with a tab delimiter
     functions.push(
       [
@@ -570,7 +733,7 @@ export function generatePipelineConf(
         "    groupId: extract",
       ].join("\n"),
     );
-  } else if (sourceFormat === "csv") {
+  } else if (extraction === "csv") {
     // CSV: strip the syslog prefix, split on comma, assign positional names.
     const isPanOS =
       solutionName.toLowerCase().includes("paloalto") ||
@@ -648,12 +811,16 @@ export function generatePipelineConf(
         ].join("\n"),
       );
     }
-  } else if (sourceFormat === "positional") {
+  } else if (extraction === "positional") {
     // GEN-6. See positionalExtractFunctions - this branch is the whole fix, and
     // its absence is why a positional sample used to be handed to a JSON serde.
     functions.push(...positionalExtractFunctions(positionalColumns(fields), "extract"));
+  } else if (extraction === "syslog") {
+    // DBT-116. The same defect GEN-6 closed for positional, one format over:
+    // see syslogExtractFunction.
+    functions.push(syslogExtractFunction("extract"));
   } else {
-    const serdeType = sourceFormat === "kv" ? "kvp" : "json";
+    const serdeType: SerdeExtraction = extraction;
     const serdeDesc =
       serdeType === "json"
         ? "Parse JSON from _raw"
@@ -1185,12 +1352,13 @@ export function generateReductionConfForPlan(
 
 /**
  * A no-op reduction pipeline emitted when no rules match the table/vendor.
- * Ported verbatim from legacy generateFallbackReductionConf, with ONE change:
- * a positional source gets the GEN-6 split-and-name extraction instead of a
- * serde, because its whole purpose is to let a hand-written drop filter read a
- * field, and a JSON serde over a whitespace-positional line produces none.
+ * Ported verbatim from legacy generateFallbackReductionConf, with TWO changes:
+ * a positional source gets the GEN-6 split-and-name extraction, and a syslog
+ * source the DBT-116 regex extraction, instead of a serde - because its whole
+ * purpose is to let a hand-written drop filter read a field, and a JSON serde
+ * over a whitespace-positional or syslog line produces none.
  * `fields` is optional so the legacy 3-argument call still compiles and still
- * behaves identically for every non-positional format.
+ * behaves identically for every other format.
  */
 export function generateFallbackReductionConf(
   solutionName: string,
@@ -1198,33 +1366,51 @@ export function generateFallbackReductionConf(
   sourceFormat?: string,
   fields: readonly PipelineFieldMapping[] = [],
 ): string {
-  const serdeType =
-    sourceFormat === "csv"
-      ? "csv"
-      : sourceFormat === "kv" ||
-          sourceFormat === "cef" ||
-          sourceFormat === "leef"
-        ? "kvp"
-        : "json";
-  const triage =
-    sourceFormat === "positional"
-      ? positionalExtractFunctions(positionalColumns(fields), "triage")
-      : [
-          [
-            "  - id: serde",
-            '    filter: "true"',
-            "    disabled: false",
-            "    conf:",
-            "      mode: extract",
-            `      type: ${serdeType}`,
-            "      srcField: _raw",
-            ...(serdeType === "kvp"
-              ? ['      delimChar: " "', '      pairDelim: "="']
-              : []),
-            `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
-            "    groupId: triage",
-          ].join("\n"),
-        ];
+  // DBT-116: the same extractionFor the transformation conf asks, so the two
+  // confs a pack ships cannot disagree about a format again. This was its own
+  // ladder - csv, then kv/cef/leef, then json for everything else - and syslog
+  // fell to the json. The kvp mapping for cef and leef (space delimiter, no
+  // header eval) is the legacy fallback's and is kept: this triage serde only
+  // has to make fields visible to a hand-written filter.
+  const extraction = extractionFor(toSampleFormat(sourceFormat));
+  const triageSerde = (serdeType: "csv" | "kvp" | "json"): string[] => [
+    [
+      "  - id: serde",
+      '    filter: "true"',
+      "    disabled: false",
+      "    conf:",
+      "      mode: extract",
+      `      type: ${serdeType}`,
+      "      srcField: _raw",
+      ...(serdeType === "kvp"
+        ? ['      delimChar: " "', '      pairDelim: "="']
+        : []),
+      `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
+      "    groupId: triage",
+    ].join("\n"),
+  ];
+  let triage: string[];
+  switch (extraction) {
+    case "positional":
+      triage = positionalExtractFunctions(positionalColumns(fields), "triage");
+      break;
+    case "syslog":
+      triage = [syslogExtractFunction("triage")];
+      break;
+    case "csv":
+      triage = triageSerde("csv");
+      break;
+    case "cef":
+    case "leef":
+    case "kvp":
+      triage = triageSerde("kvp");
+      break;
+    case "json":
+      triage = triageSerde("json");
+      break;
+    default:
+      return assertNeverExtraction(extraction);
+  }
   return [
     `# Reduction Pipeline: ${solutionName} - ${tableName}`,
     "#",

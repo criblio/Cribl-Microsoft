@@ -2,11 +2,47 @@ import { describe, expect, it } from "vitest";
 
 import { parseCsvWithHeaders } from "./csv-headers";
 import {
+  SAMPLE_FORMATS,
   isOverflowFieldName,
   isPositionalFieldName,
+  isSampleFormat,
   overflowFieldName,
   positionalFieldName,
+  toSampleFormat,
 } from "./models";
+
+/**
+ * DBT-116: the string boundary. Every consumer that switches over SampleFormat
+ * receives the format as a plain string first, and toSampleFormat is where a
+ * string that is no member becomes "unknown" - the arm that reproduces what the
+ * old ladders' trailing default did with it.
+ */
+describe("SampleFormat narrowing", () => {
+  it("lists exactly the nine members", () => {
+    expect([...SAMPLE_FORMATS]).toEqual([
+      "json",
+      "ndjson",
+      "csv",
+      "kv",
+      "cef",
+      "leef",
+      "syslog",
+      "positional",
+      "unknown",
+    ]);
+  });
+
+  it("passes members through and turns anything else into unknown", () => {
+    for (const f of SAMPLE_FORMATS) expect(toSampleFormat(f)).toBe(f);
+    expect(toSampleFormat(undefined)).toBe("unknown");
+    expect(toSampleFormat("")).toBe("unknown");
+    expect(toSampleFormat("xml")).toBe("unknown");
+    // Exact match, as every ladder it replaced compared: "CEF" was never cef.
+    expect(toSampleFormat("CEF")).toBe("unknown");
+    expect(isSampleFormat("syslog")).toBe(true);
+    expect(isSampleFormat("Syslog")).toBe(false);
+  });
+});
 
 /**
  * THE TWO NAMES FOR A COLUMN THE OPERATOR DID NOT NAME, and why they are not

@@ -14,7 +14,7 @@
  *     that already parsed the event - only when the name is a valid bare
  *     JS identifier;
  *   - a raw-content token (`_raw.indexOf(...) !== -1`) shaped by the
- *     sample format: `"field"` (quoted key) for JSON, `field=` for
+ *     sample format: `"field"` (quoted key) for JSON and NDJSON, `field=` for
  *     key-value shapes (CEF/KV/LEEF).
  * A NAME THE PIPELINE MINTS CANNOT BE TESTED HERE, because the route runs
  * first. Whole formats are like that - csv and positional name their fields
@@ -34,6 +34,8 @@
 
 import { fieldPresence } from "./route-value-discriminator";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
+import { assertNeverFormat, toSampleFormat } from "../sample-parsing";
+import type { SampleFormat } from "../sample-parsing";
 import {
   formatCanDiscriminate,
   isMintedHeaderField,
@@ -47,13 +49,40 @@ function jsString(value: string): string {
   return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
-/** The raw-content token that betrays a field's presence, by sample format. */
-function rawToken(field: string, format: string): string {
-  if (format === "json") {
-    return `"${field}"`;
+/**
+ * The raw-content token that betrays a field's presence, by sample format.
+ *
+ * A SWITCH WITH A NEVER-TYPED DEFAULT (DBT-116). This was `format === "json"`
+ * and a fallback to `field=`, so ndjson - one JSON object per line, its keys
+ * quoted in `_raw` exactly like json's - got the key=value token, which never
+ * occurs in a JSON line. The term was false for every event and the filter rode
+ * on its presence disjunct alone, while the sibling value discriminator already
+ * treated the two alike. A new SampleFormat member now fails typecheck here.
+ *
+ * csv, positional and syslog never reach this - deriveRouteDiscriminator
+ * returns null for them first, via formatCanDiscriminate - so their arm keeps
+ * the old fallback rather than inventing a token for a path that cannot run.
+ * `unknown` keeps it too: a string that is no member at all arrives as
+ * `unknown` through toSampleFormat, and it got `field=` before.
+ */
+function rawToken(field: string, format: SampleFormat): string {
+  switch (format) {
+    case "json":
+    case "ndjson":
+      return `"${field}"`;
+    // Key-value shapes carry `field=`.
+    case "cef":
+    case "kv":
+    case "leef":
+      return `${field}=`;
+    case "csv":
+    case "positional":
+    case "syslog":
+    case "unknown":
+      return `${field}=`;
+    default:
+      return assertNeverFormat(format);
   }
-  // Key-value shapes (cef, kv, leef, conf-style) carry `field=`.
-  return `${field}=`;
 }
 
 /** How many unique fields one filter tests (redundancy tolerates variance). */
@@ -163,13 +192,16 @@ export function deriveRouteDiscriminator(
   // to the real field's 18.
   unique.sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
 
+  // Narrowed once, at the string boundary: TablePlan carries the format as a
+  // plain string, and rawToken switches over the union.
+  const sampleFormat = toSampleFormat(format);
   const terms: string[] = [];
   for (const field of unique.slice(0, DISCRIMINATOR_FIELD_CAP)) {
     if (IDENTIFIER.test(field)) {
       terms.push(`${field} !== undefined`);
     }
     terms.push(
-      `(typeof _raw === 'string' && _raw.indexOf(${jsString(rawToken(field, format))}) !== -1)`,
+      `(typeof _raw === 'string' && _raw.indexOf(${jsString(rawToken(field, sampleFormat))}) !== -1)`,
     );
   }
   return terms.join(" || ");

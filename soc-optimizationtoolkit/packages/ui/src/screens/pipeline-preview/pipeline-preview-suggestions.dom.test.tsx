@@ -311,4 +311,23 @@ describe("PipelinePreviewSection - CSV cannot be filtered on parsed fields", () 
     expect(input.getAttribute("placeholder")).toContain("event_type ===");
     expect(screen.queryByText(/reach the route unparsed/)).toBeNull();
   });
+
+  // DBT-116. CSV was only one of the formats core's formatCanDiscriminate says
+  // cannot route on a parsed field: positional names its columns from a
+  // POSITION and syslog from a REGEX CAPTURE, both after the route has run. The
+  // screen gated on `f === "csv"` alone, so those operators were handed the
+  // very field-test example the CSV note exists to warn against, and no note.
+  for (const format of ["positional", "syslog"]) {
+    it(`offers a _raw example and the unparsed note for ${format}`, () => {
+      renderCsv(format);
+      const input = screen.getByLabelText("Route filter for Allowed");
+      expect(input.getAttribute("placeholder")).toBe(
+        "_raw.indexOf('login') !== -1",
+      );
+      const note = screen.getByText(/reach the route unparsed/).textContent;
+      expect(note).toContain(
+        "CSV, positional and syslog events reach the route unparsed",
+      );
+    });
+  }
 });
