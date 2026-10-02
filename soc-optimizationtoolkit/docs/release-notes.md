@@ -17,10 +17,12 @@ that stopped at the first hyphen, so `log-type`, `sub-type` and `src-ip` became
 last one won: `log-type=TRAFFIC sub-type=end` grouped by the SUBTYPE (`END`),
 which one won depended on the order the pairs were written in, and a line such
 as `src-ip=.. dst-ip=.. action=..` counted as two pairs instead of three and
-sent the whole capture to the single fallback group. Keys are now read whole,
-and `log-type`, `sub-type` and `event-type` are read as the discriminators they
-used to truncate to, so a capture whose hyphenated keys never collided keeps
-its names.
+sent the whole capture to the single fallback group. Keys are now read whole.
+Three hyphenated keys are aliased to a discriminator: `log-type` to `type`
+(what it used to truncate to), `sub-type` to `subtype` and `event-type` to
+`eventType` (both used to truncate to `type`). Any other hyphenated key that
+used to truncate onto a discriminator no longer does, so a capture grouped only
+by such a key now lands in the single fallback group - re-capture it.
 When a line carries both `type=` and `log-type=`, the exact `type` wins. A
 CEF or LEEF header, a `prog:` tag or a `[timestamp]` in front of the first pair
 still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
