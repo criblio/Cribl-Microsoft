@@ -2104,28 +2104,29 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   constant 3. The RemoteSampleSource port had no consumers left, so I deleted
   it entirely: the core file and its export in ports/index.ts, the
   UiPorts.sampleSource field and its doc comment, which also gets rid of the
-  stale Browse Samples comment, and in adapters.ts PlatformRemoteSampleSource,
-  the ELASTIC_*/CRIBLPACKS_* constants, isElasticSampleFile, the CloudPorts
-  field and the makeCloudPorts binding. I kept githubFetchWithRetry,
-  GITHUB_API/RAW and the SENTINEL_* constants. As the judge corrected, the
-  binding lived in adapters.ts, not App.tsx. No policies or proxies entries
-  referenced elastic or criblpacks, so there was nothing to remove there. I
-  removed the false Browse Samples s Failing-first: Run against the unfixed
-  code, repositories-screen.dom.test.tsx failed 3/3. (a) "carries none of the
+  stale retired sample-browser comment, and in adapters.ts
+  PlatformRemoteSampleSource, the ELASTIC_*/CRIBLPACKS_* constants,
+  isElasticSampleFile, the CloudPorts field and the makeCloudPorts binding. I
+  kept githubFetchWithRetry, GITHUB_API/RAW and the SENTINEL_* constants. As
+  the judge corrected, the binding lived in adapters.ts, not App.tsx. No
+  policies or proxies entries referenced elastic or criblpacks, so there was
+  nothing to remove there. I removed the false retired sample-browser s
+  Failing-first: Run against the unfixed code,
+  repositories-screen.dom.test.tsx failed 3/3. (a) "carries none of the
   deleted Elastic sample-fetch copy" found 1 occurrence of
   elastic/integrations. (b) "renders exactly three numbered sections" got an
   extra ['3','Elastic integrations sample data'] and ['4','Schema tabl
   Mutation check: (1) I injected the text "samples fetched ON DEMAND" into the
   screen, and the copy test went red. (2) I set the schema badge back to 4,
-  and the exact section-list test went red. (3) I re-added "Browse Samples" to
-  the integrate-arc infoTip, and the core infoTip test went red. (4) I made
-  checkConnectio Adversarial review approved; reviewer confirmed the new tests
-  fail with the source change reverted. LEFT OUT: I did not edit
-  docs/board.json, either for the card corrections or to close the card,
-  because the task says the board is updated centrally. I also did not verify
-  in the Live Preview (/apps/a/__local__), since the task forbids live calls.
-  Closing with verified: both still needs that live check. Until then, pins is
-  the honest value.
+  and the exact section-list test went red. (3) I re-added "retired
+  sample-browser" to the integrate-arc infoTip, and the core infoTip test went
+  red. (4) I made checkConnectio Adversarial review approved; reviewer
+  confirmed the new tests fail with the source change reverted. LEFT OUT: I
+  did not edit docs/board.json, either for the card corrections or to close
+  the card, because the task says the board is updated centrally. I also did
+  not verify in the Live Preview (/apps/a/__local__), since the task forbids
+  live calls. Closing with verified: both still needs that live check. Until
+  then, pins is the honest value.
 
 - **DBT-120** check-board validates everything about a card except its [[links]]
   `DBT-F4` `bug` `settled` `verified: pins`
