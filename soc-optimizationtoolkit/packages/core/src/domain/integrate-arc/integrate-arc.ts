@@ -152,10 +152,12 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "its log type, or upload one or more files. The format is detected from " +
       "the content (Cribl capture events are unwrapped to their inner _raw), " +
       "and the discovered fields drive the gap analysis and pipeline " +
-      "generation. Browse Samples pulls representative events for the " +
-      "selected solution from the Sentinel and Elastic repositories, so you " +
-      "can start without your own capture. Each unique log type becomes its " +
-      "own routes and pipelines in the pack.",
+      "generation. A Cribl source capture or a Lake dataset query works too, " +
+      "so you can start from live data without exporting a file. Each unique " +
+      "log type becomes its own routes and pipelines in the pack.",
+    // DBT-118: this tip used to promise a Browse Samples action pulling events
+    // from the Sentinel and Elastic repositories. ADR 0003 deleted that
+    // browser; the sources named above are the ones the section really offers.
     requires: "none",
     built: true,
   },
