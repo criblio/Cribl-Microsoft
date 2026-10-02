@@ -391,6 +391,15 @@ describe("coverageSummaryLine", () => {
     expect(line).toContain(
       "workbooks already deployed in your subscription are not analyzed",
     );
+    // DBT-58: the SAME fragment rule the workbook-coverage infoTip pin in
+    // integrate-arc.test.ts applies, so the two surfaces encode one policy -
+    // every fragment naming the subscription also states its exclusion.
+    const offending = line
+      .split(/[.;]/)
+      .filter((fragment) => /subscription/i.test(fragment))
+      .filter((fragment) => !/\bnot (analyzed|read|enumerated)\b/i.test(fragment))
+      .map((fragment) => fragment.trim());
+    expect(offending).toEqual([]);
   });
 });
 
