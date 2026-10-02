@@ -49,6 +49,76 @@ names. Samples stored under the old names stay
 where they are and are not migrated; capture those sources again to get the
 corrected groups.
 
+**Rebuild packs to pick up the changes below.** Each one changes what a newly
+built pack contains. A pack built and installed before this release keeps its
+old output until it is rebuilt and reinstalled.
+
+**VPC Flow packs stamp TimeGenerated from the flow start (GEN-7).** A
+recognised VPC Flow v2 pack looked for a timestamp field no event carries, so
+Azure stamped every flow with its ingestion time, and `Start` and `End` shipped
+as raw epoch-second strings into datetime columns. The pack now carries an Eval
+that sets TimeGenerated from the flow start and rewrites `Start` and `End` as
+ISO-8601; a non-numeric value such as `-` leaves the field unset. The DCR
+transform is unchanged. Flow events from a rebuilt pack will carry a different
+TimeGenerated than the same flows did before.
+
+**Syslog packs parse syslog instead of JSON (DBT-116).** A syslog pack's
+pipeline, and its fallback reduction pipeline, were generated with a JSON serde,
+so every field the sample parser had read (Hostname, Program, Message ...) was
+undefined in the installed pipeline. Both now extract RFC 3164 and RFC 5424
+with an Eval built from the sample parser's own patterns, including integer
+Priority, PID and Version. The route filter for an NDJSON log type now looks
+for a token a JSON line actually contains, where it used to look for a
+`key=value` token.
+
+**The pack's Sentinel destination id now matches the one Deploy creates
+(GEN-18).** For a table name with a hyphen, dot or space, the pack generator
+only stripped `_CL`, while Deploy also replaced every non-alphanumeric
+character with `_`. A pack for such a table wrote an `outputs.yml` id and route
+outputs that Deploy never creates. The pack now uses Deploy's rule, so for
+those table names the destination id in `outputs.yml` and in every route output
+CHANGES on rebuild - for `My-App_CL`, from `MS-Sentinel-My-App-dest` to
+`MS-Sentinel-My_App-dest`.
+A routable pack's prerequisite check now expects that one id. Table names made
+only of letters, digits and underscores are unaffected.
+
+**An undetected sample gets a placeholder route, not a filter that cannot match
+(GEN-11).** A sample whose format was not detected was routed as JSON, and the
+log type got a filter on a parsed field that no unparsed event at route time
+carries; the preview still read valid. Such a log type now gets a placeholder
+route, and the preview reports it. Detected JSON and NDJSON routing, and route
+conditions set by hand, are unchanged.
+
+**Every built pack ships a README (GEN-14).** App-built packs carried no
+`README.md`, so Cribl's Pack Settings showed its own unedited placeholder
+template. Each pack now ships one naming the solution, its tables, one row per
+log type (table, pipelines, destination, stream) and how the pack is wired; it
+carries no DCR id, endpoint, tenant or client id. The Labs flow-log pack ships a
+fixed README of its own.
+
+**Unreadable CEF lines are dropped and reported (DBT-109).** A syslog-wrapped
+line whose CEF header could not be read (a dangling trailing backslash, or
+fewer than seven header fields) used to be kept as an empty event, counted in
+the sample's event total and shipped in the pack's sample file. It is now
+dropped, and the sample shows a parse note counting the lines that were
+skipped. Event counts for affected CEF samples go down.
+
+**Smaller fixes.**
+- AZR-13: the coverage catalog derives its Entra profile options from the
+  three profiles the app knows, so a stored SecurityOnly selection is kept
+  rather than silently reverted to Standard. No screen reads that catalog yet.
+- DBT-118: Repositories no longer shows the Elastic sample section, which
+  described a fetch the app stopped doing and spent GitHub calls on a probe;
+  the Add Sample Data tip now names capture and Lake query.
+- DBT-14: the solution list only holds the mouse wheel while it actually
+  scrolls, so a short list no longer stops the page from scrolling.
+- DBT-58: the workbook-coverage tip now says that workbooks already deployed
+  in your subscription are not analyzed.
+- DBT-106: DCR Gap Analysis shows AWS's own hyphenated spelling beside each VPC
+  Flow v2 field. Display only - the pipeline still uses the parsed name.
+- DBT-122: the DCR Gap Analysis Field Mappings table has an Example Value
+  column showing the first value seen for each source field.
+
 ---
 
 ## 1.12.7

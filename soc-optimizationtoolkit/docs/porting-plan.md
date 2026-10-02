@@ -242,7 +242,9 @@ Phase 2 exit check (roadmap): DirectNative/DirectCustom/DCE/PrivateLink parity w
 > precedence, the elastic cascade, ENG-41 synthesis, the ENG-42 filename scorer,
 > and the browse modal. Survived, rehomed: the splitter and `hasNamedFields`
 > (now `domain/sample-parsing/splitting.ts`), `matchSolutionName` (now
-> `domain/sentinel-content`), and `RemoteSampleSource` (now `ports/`).
+> `domain/sentinel-content`), and `RemoteSampleSource` (now `ports/`, then
+> deleted 2026-10-02 (DBT-118) when its last consumer, the Repositories Elastic
+> probe, was removed).
 > Original-raw-line preservation survived too, but as a fix to
 > `parseSampleContent` covering every intake path rather than this unit's
 > per-file trick. See [sample-acquisition-plan.md](sample-acquisition-plan.md).
