@@ -860,8 +860,14 @@ export const CEF_HEADER_PATTERN = new RegExp(
  *
  * The same bytes, in the same event, read two different ways with nothing said -
  * and the half that lost them is the one an operator maps to a destination
- * column. Measured on the DBT-98 corpus against the character scanner described
- * below: the wide class disagreed on 140005 of 200000 lines, this one on 0.
+ * column. The 2026-09-04 measurement on the DBT-98 corpus reported the wide
+ * class disagreeing with a character scanner on 140005 of 200000 lines and this
+ * one on 0, but the scanner checked into pipeline-conf.test.ts still applied the
+ * WIDE rule until DBT-110, so that figure is not reproducible from the repo and
+ * is not relied on. What holds the narrow class now is the agreement loop in
+ * pipeline-conf.test.ts: its oracle states the narrow rule, and its lone-
+ * backslash rows (the Windows path above among them) fail if this class is
+ * widened again, in both the parser and the emitted pack.
  *
  * THE PATTERN'S WIDE CLASS IS A DIFFERENT ARGUMENT AND DOES NOT REACH HERE.
  * {@link CEF_HEADER_PATTERN} consumes `\\[\s\S]` so that a backslash before a

@@ -172,9 +172,19 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
    * THE INDEPENDENT ORACLE (DBT-98). A character scanner sharing no code with
    * either the parser or the emitter - no regex, no split - so "both sides agree"
    * cannot mean "both sides carry the same bug". It is the CEF rule stated
-   * directly: a backslash consumes the next character, an unescaped pipe ends a
-   * field, and the remainder after the seventh separator is the extension,
-   * verbatim. A dangling escape is malformed and yields nothing.
+   * directly: a backslash escapes ONLY `\` and `|`, any other backslash is
+   * literal text, an unescaped pipe ends a field, and the remainder after the
+   * seventh separator is the extension, verbatim. A dangling escape is malformed
+   * and yields nothing.
+   *
+   * NARROW, LIKE THE SPEC (DBT-110). This scanner used to let a backslash
+   * consume ANY next character - the wide rule CEF_HEADER_ESCAPE was narrowed
+   * away from - so the oracle deleted the backslashes of a Windows path the
+   * parser and the pack both keep. Nothing caught it because no row in the
+   * agreement loop had a backslash before anything but `|` or `\`. A lone
+   * backslash is kept and only it is stepped over, so the character after it is
+   * read normally; that is equivalent to keeping both and stepping two, since
+   * the only characters special in a header are the two escaped ones.
    */
   function scanCefHeader(
     line: string,
@@ -188,8 +198,13 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
     while (i < s.length) {
       if (s[i] === BS) {
         if (i + 1 >= s.length) return null;
-        current += s[i + 1];
-        i += 2;
+        if (s[i + 1] === BS || s[i + 1] === "|") {
+          current += s[i + 1];
+          i += 2;
+          continue;
+        }
+        current += BS;
+        i += 1;
         continue;
       }
       if (s[i] === "|") {
@@ -314,6 +329,13 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
       "CEF:0|V|P|1.0|100|worm|5",
       "CEF:0|V|P|1.0|100|worm|5|",
       `<134>host1 CEF:0|V${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
+      // LONE BACKSLASHES (DBT-110). Every row above puts a backslash before `|`
+      // or `\`, so a parser that deleted every OTHER backslash - the wide unescape
+      // class CEF_HEADER_ESCAPE was narrowed away from - passed this loop. These
+      // two rows are the shape that tells the rules apart: a Windows path in the
+      // header (extension verbatim), and a lone backslash next to both escapes.
+      `CEF:0|Acme|C:${BS}Program Files${BS}Acme|1.0|100|worm|5|path=C:${BS}Program Files${BS}Acme fname=a${BS}b`,
+      `CEF:0|V${BS}x${BS}${BS}${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
     ];
 
     for (const line of lines) {
@@ -343,6 +365,19 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
     expect(shifted["DeviceVendor"]).toBe("V|W"); // was `V\`
     expect(shifted["DeviceProduct"]).toBe("P"); // was `W`
     expect(shifted["LogSeverity"]).toBe("5"); // was `worm`
+
+    // The Windows-path row, spelled out for the same reason (DBT-110): all three
+    // readings, as exact values, so the lone-backslash case stays visible even if
+    // the loop's corpus is edited. The wide unescape read "C:Program FilesAcme".
+    const winPath = `CEF:0|Acme|C:${BS}Program Files${BS}Acme|1.0|100|worm|5|path=C:${BS}Program Files${BS}Acme fname=a${BS}b`;
+    const winProduct = `C:${BS}Program Files${BS}Acme`;
+    expect(scanCefHeader(winPath)!.fields[2]).toBe(winProduct);
+    expect(parseCef(winPath)[0]!["DeviceProduct"]).toBe(winProduct);
+    const winEvent = runEmittedHeader(winPath);
+    expect(winEvent["DeviceProduct"]).toBe(winProduct);
+    expect(winEvent["__cefExtension"]).toBe(
+      `path=C:${BS}Program Files${BS}Acme fname=a${BS}b`,
+    );
     expect(shifted["__cefExtension"]).toBe("src=1.1.1.1"); // was `5|src=1.1.1.1`
   });
 
