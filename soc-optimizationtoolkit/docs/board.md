@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**64 in the backlog, 2 in progress, 17 done.**
+**65 in the backlog, 0 in progress, 18 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 23 | 13 | 2 |
+| Sentinel Integration | 22 | 14 | 1 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -36,7 +36,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 2 | 0 |
 
-Open work totals 66.
+Open work totals 65.
 
 ## Epics and features
 
@@ -110,13 +110,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 29% (12/41)
+### `DBT` Quality and technical debt _(enabler)_ - 32% (13/41)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 7/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 8/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/6 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-122 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 2/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
@@ -133,9 +133,17 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (0)
 
 Started. Anything here with an unfinished dependency is called out on its card.
+
+_Nothing here._
+
+---
+
+## Backlog - now (1)
+
+Next to pick up. Nothing blocks these.
 
 - **GEN-5** checkCriblYaml never sees an unaddressable field name unless the matcher renames it
   `GEN-F1` `bug` `settled`
@@ -195,65 +203,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   live Cribl (being done separately by the operator session) - DO NOT
   implement any drop-leg behaviour now. Implement ONLY leg 1 (kept/coerced
   fields with unaddressable names), which does not depend on the measurement.
-
-- **DBT-84** parseKvLine still truncates keys on \w+, and widening it re-keys every stored sample
-  `DBT-F1` `bug` `settled`
-  DELIBERATELY LEFT DIVERGENT by [[DBT-79]], and documented on both functions
-  so the next reader does not merge them by reflex - the first attempt left
-  splitting.ts still telling the reader the two parsers agree, which review
-  caught. MEASURED: `src-ip=1.1.1.1 action=A` yields parseKv
-  ['src-ip','action'] and parseKvLine ['ip','action']. The two now disagree on
-  ordinary input. parseKvLine's truncation is what makes format discrimination
-  work today, for the reason in priorityWhy. The eventual fix is ordered, and
-  the ordering is the whole content of this card: (1) add hyphenated aliases
-  to DISCRIMINATOR_FIELDS so discrimination stops depending on the truncation,
-  (2) then widen the key class. Reversing those two silently re-keys stored
-  samples. A quote-aware tokenizer would let the two paths collapse into one
-  for real; parseKv's regex could not be replaced by the fallback's
-  whitespace-split-plus-indexOf loop because splitting on whitespace cuts
-  `msg=\"login ok\"` in half, which is pinned. RE-VERIFIED 2026-10-02 (bug
-  sweep: an independent reproducer and an adversarial skeptic per card, then a
-  judge): REAL, confidence high. Both investigators reproduced the defect and
-  agree on it, and I confirmed it again myself. parseKvLine
-  (packages/core/src/domain/sample-parsing/splitting.ts:69-78) still uses
-  `/(\w+)=.../`. No commit has touched that regex since the file was created
-  (c11dd4a, per the skeptic's pickaxe). The divergence is pinned on purpose as
-  a hazard to fix later, not as the behaviour anyone wants
-  (kv-keys.test.ts:353-384). CORRECTIONS: 1. Replace "format DISCRIMINATION"
-  and "change which parser is chosen" with "log-type GROUPING". parseKvLine
-  only feeds selectDiscriminatorField in splitSamplesByLogType
-  (splitting.ts:157). Changing it changes the group names, which are the
-  uppercased discriminator values, and therefore the stored sample ids
-  `${source}:${logType}`. It never changes the format or the parser. 2. Add
-  the harm that exists today. Truncated keys collide and the last one wins.
-  `log-type=TRAFFIC sub-type=end` groups by the SUBTYPE ('END'), and the
-  result depends on pair order. `src-ip=.. dst-ip=.. action=..` collapses to 2
-  keys and fails the >=3 gate (splitting.ts:118), so the sample falls back to
-  the single fallbac BLOCKED ON OPERATOR DECISION: Fixing the collision
-  changes the log-type key of some already-stored samples. Which policy? (A)
-  Accept the re-key: fix as planned, and add a release-notes line that
-  captures containing colliding hyphenated keys will regroup and should be
-  re-captured. (B) Migrate: on load, map the old ids to the new ones (only
-  feasible where the old id can be recomputed from stored raw events). (C)
-  Keep the old grouping for existing samples and apply the new behaviour only
-  to new captures. Also: when both `type=` and `log-type=` are present on one
-  line, which wins? (i) the exact `type` key, or (ii) the vendor's `log-type`.
-  OPERATOR DECIDED 2026-10-02: (A) accept the re-key and add a release-notes
-  line (docs/release-notes.md, under an Unreleased heading if there is no
-  current one - follow the file convention) saying captures containing
-  colliding hyphenated keys will regroup and should be re-captured; and (i)
-  when both type= and log-type= appear on one line, the exact type key wins.
-  IN REVIEW 2026-10-02: merged on fix/bug-sweep-2026-10-02 (e67bb15 + repair
-  2e68dea after a first review raised a major: header text welding into keys).
-  A second independent review is running; the card closes only after it.
-
----
-
-## Backlog - now (0)
-
-Next to pick up. Nothing blocks these.
-
-_Nothing here._
+  LEG 1 DONE 2026-10-02 (fix/sweep-gen-5 7ad4c6d, adversarially reviewed,
+  tests shown to bite): checkPlanFieldAccessors reads kept, self-renamed and
+  inexpressibly-coerced field names off the PLAN (they are on no conf line)
+  and adds them to the preview issues, so preview.valid goes false and the
+  build blocks. Release note added. STILL OPEN: the DROP leg, waiting on the
+  live Cribl measurement the operator chose (an Eval removing aws.account,
+  Source IP, src-ip). Reviewer minors carried: the plan check ignores
+  vendor-mapping filters (can double-count, never under-blocks); no single
+  test runs bytes-to-preview.valid.
 
 ---
 
@@ -1212,7 +1170,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (17)
+## Done (18)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1455,6 +1413,61 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   updated centrally; the card can close with verified: pins. The commit ends
   with the Claude-Session trailer line that the harness attribution reminder
   requires, placed after the Co-Authored-By line. I did not push.
+
+- **DBT-84** parseKvLine still truncates keys on \w+, and widening it re-keys every stored sample
+  `DBT-F1` `bug` `settled` `verified: pins`
+  DELIBERATELY LEFT DIVERGENT by [[DBT-79]], and documented on both functions
+  so the next reader does not merge them by reflex - the first attempt left
+  splitting.ts still telling the reader the two parsers agree, which review
+  caught. MEASURED: `src-ip=1.1.1.1 action=A` yields parseKv
+  ['src-ip','action'] and parseKvLine ['ip','action']. The two now disagree on
+  ordinary input. parseKvLine's truncation is what makes format discrimination
+  work today, for the reason in priorityWhy. The eventual fix is ordered, and
+  the ordering is the whole content of this card: (1) add hyphenated aliases
+  to DISCRIMINATOR_FIELDS so discrimination stops depending on the truncation,
+  (2) then widen the key class. Reversing those two silently re-keys stored
+  samples. A quote-aware tokenizer would let the two paths collapse into one
+  for real; parseKv's regex could not be replaced by the fallback's
+  whitespace-split-plus-indexOf loop because splitting on whitespace cuts
+  `msg=\"login ok\"` in half, which is pinned. RE-VERIFIED 2026-10-02 (bug
+  sweep: an independent reproducer and an adversarial skeptic per card, then a
+  judge): REAL, confidence high. Both investigators reproduced the defect and
+  agree on it, and I confirmed it again myself. parseKvLine
+  (packages/core/src/domain/sample-parsing/splitting.ts:69-78) still uses
+  `/(\w+)=.../`. No commit has touched that regex since the file was created
+  (c11dd4a, per the skeptic's pickaxe). The divergence is pinned on purpose as
+  a hazard to fix later, not as the behaviour anyone wants
+  (kv-keys.test.ts:353-384). CORRECTIONS: 1. Replace "format DISCRIMINATION"
+  and "change which parser is chosen" with "log-type GROUPING". parseKvLine
+  only feeds selectDiscriminatorField in splitSamplesByLogType
+  (splitting.ts:157). Changing it changes the group names, which are the
+  uppercased discriminator values, and therefore the stored sample ids
+  `${source}:${logType}`. It never changes the format or the parser. 2. Add
+  the harm that exists today. Truncated keys collide and the last one wins.
+  `log-type=TRAFFIC sub-type=end` groups by the SUBTYPE ('END'), and the
+  result depends on pair order. `src-ip=.. dst-ip=.. action=..` collapses to 2
+  keys and fails the >=3 gate (splitting.ts:118), so the sample falls back to
+  the single fallbac BLOCKED ON OPERATOR DECISION: Fixing the collision
+  changes the log-type key of some already-stored samples. Which policy? (A)
+  Accept the re-key: fix as planned, and add a release-notes line that
+  captures containing colliding hyphenated keys will regroup and should be
+  re-captured. (B) Migrate: on load, map the old ids to the new ones (only
+  feasible where the old id can be recomputed from stored raw events). (C)
+  Keep the old grouping for existing samples and apply the new behaviour only
+  to new captures. Also: when both `type=` and `log-type=` are present on one
+  line, which wins? (i) the exact `type` key, or (ii) the vendor's `log-type`.
+  OPERATOR DECIDED 2026-10-02: (A) accept the re-key and add a release-notes
+  line (docs/release-notes.md, under an Unreleased heading if there is no
+  current one - follow the file convention) saying captures containing
+  colliding hyphenated keys will regroup and should be re-captured; and (i)
+  when both type= and log-type= appear on one line, the exact type key wins.
+  IN REVIEW 2026-10-02: merged on fix/bug-sweep-2026-10-02 (e67bb15 + repair
+  2e68dea after a first review raised a major: header text welding into keys).
+  A second independent review is running; the card closes only after it.
+  CLOSED 2026-10-02: second independent review approved (header probes: CEF,
+  LEEF, RFC3164 with and without the space, PAN-OS-like in both pair orders,
+  RFC5424 envelope; 28-shape regression scan against the pre-fix splitter).
+  Its two findings were release-note overclaims, corrected in the same sweep.
 
 - **DBT-92** The release-drift script carried a stale version literal
   `DBT-F1` `bug` `settled` `verified: pins`
