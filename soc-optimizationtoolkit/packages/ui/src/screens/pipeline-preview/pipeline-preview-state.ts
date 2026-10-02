@@ -49,6 +49,7 @@ import {
 } from "@soc/core";
 import type {
   CefIdentityOverride,
+  DestinationNaming,
   GapFieldMapping,
   GapReport,
   LogTypeFieldValues,
@@ -200,6 +201,14 @@ export interface PipelinePreviewInputs {
    * was, so an unset preview renders exactly as it always did.
    */
   packShape?: PackShape;
+  /**
+   * The operator's destination prefix/suffix - the SAME CriblOptions the
+   * integrate screen hands Deploy - so the previewed and built pack target the
+   * id Deploy creates ([[GEN-18]] follow-through). Null or omitted means the
+   * default "MS-Sentinel-"/"-dest" naming. Nullable rather than only optional
+   * so {@link FullContentPlan} still makes the composition site say which.
+   */
+  destinationNaming?: DestinationNaming | null;
   /** The Unit 18 gap reports (typed input, already computed). */
   reports: GapReport[];
   /**
@@ -588,6 +597,11 @@ export function derivePipelinePreview(
     // taken before the option existed renders the all-inclusive default rather
     // than a shape nobody picked.
     ...(inputs.packShape !== undefined ? { packShape: inputs.packShape } : {}),
+    // GEN-18 follow-through: the destination id the pack targets comes from
+    // the operator's naming, as Deploy's does.
+    ...(inputs.destinationNaming != null
+      ? { destinationNaming: inputs.destinationNaming }
+      : {}),
     tables: planTables.map((r) =>
       reportToPlanInput(
         r,
