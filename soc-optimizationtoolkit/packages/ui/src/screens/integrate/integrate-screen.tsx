@@ -1347,7 +1347,8 @@ export function IntegrateScreen({
       const packVersion = nextPackVersion(installedPackVersions(deployed, name));
 
       // 2. Resolve the plan from the SAME object the pipeline preview renders,
-      // including the Cribl YAML validation (an invalid plan never ships).
+      // including the pipeline validation - Cribl YAML plus the GEN-5 plan
+      // field-name check (an invalid plan never ships).
       // Only packName and version differ - a build ships an incremented
       // version. Every content decision is spread from contentPlanInputs
       // rather than re-listed here, because when it WAS re-listed the two
@@ -1363,7 +1364,7 @@ export function IntegrateScreen({
       }
       if (!preview.valid) {
         push(
-          `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
+          `Cannot build: pipeline validation found ${preview.totalYamlIssues} ` +
             "issue(s) - see the pipeline preview in section 3.",
         );
         return null;

@@ -378,6 +378,31 @@ describe("derivePipelinePreview refuses a kept unaddressable name (GEN-5)", () =
   });
 });
 
+describe("derivePipelinePreview carries formatDetected to each table (GEN-11)", () => {
+  // The preview's filter example and unparsed-route hint have to treat an
+  // undetected sample the way the planner does (GEN-11), and sourceFormat has
+  // already been normalised to "json" by then - so the fact rides on the table.
+  function detectedFor(fmt: string | undefined) {
+    const view = derivePipelinePreview({
+      solutionName: "T",
+      packName: "p",
+      reports: [report({ logType: "X" })],
+      ...(fmt === undefined ? {} : { sampleFormats: { X: fmt } }),
+      approved: true,
+    });
+    const t = view.tables[0];
+    return t === undefined ? "no table" : [t.sourceFormat, t.formatDetected];
+  }
+
+  it("is false only for a supplied sample whose format was not detected", () => {
+    expect(detectedFor("unknown")).toEqual(["json", false]);
+    expect(detectedFor("")).toEqual(["json", false]);
+    expect(detectedFor(undefined)).toEqual(["json", true]);
+    expect(detectedFor("json")).toEqual(["json", true]);
+    expect(detectedFor("csv")).toEqual(["csv", true]);
+  });
+});
+
 describe("derivePipelinePreview reflects reviewer edits", () => {
   it("uses the overridden mappings in the generated pipeline", () => {
     const base = report({

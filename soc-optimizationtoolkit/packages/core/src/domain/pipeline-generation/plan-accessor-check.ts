@@ -24,6 +24,14 @@
  *     CAN express writes `- name: <field>` under the enrich eval's `add:`,
  *     which checkCriblYaml already refuses - reporting that one here too would
  *     count one field twice, so it is skipped.
+ *   - `decode` with a target (GEN-5 audit follow-up, 2026-10-02): the source
+ *     is read as `C.Decode.base64(<source>)` inside a VALUE expression and
+ *     otherwise appears only as a `remove:` bullet. The `name:` line that eval
+ *     writes carries the TARGET, so the source is presented nowhere. Measured
+ *     before this branch existed: `b64.url` and `b64-url` each gave 0 YAML
+ *     issues and 0 plan issues. A decode with an empty target is skipped by
+ *     the emitter's decodeFields filter (nothing reads it), so it is skipped
+ *     here too.
  * A rename onto a DIFFERENT name is presented on a `currentName:` line and is
  * checkCriblYaml's to refuse, also skipped here.
  *
@@ -45,8 +53,10 @@ import { buildCoercionExpr } from "./pipeline-conf";
  * conf line presenting that spelling to checkCriblYaml's accessor rule.
  * Mirrors the emitter's choices in pipeline-conf.ts (presetRenames skips a
  * self-rename; presetCoercions writes a line only when buildCoercionExpr
- * returns an expression) - the pins in accessor-names.test.ts drive both
- * through the real emitter so a drift between the two shows up as a count.
+ * returns an expression; decodeFields reads only a decode with a target) -
+ * the pins in accessor-names.test.ts and plan-accessor-check.test.ts drive
+ * both through the real emitter so a drift between the two shows up as a
+ * count.
  */
 function isReadUnpresented(f: PipelineFieldMapping): boolean {
   if (f.action === "keep") return true;
@@ -54,13 +64,32 @@ function isReadUnpresented(f: PipelineFieldMapping): boolean {
   if (f.action === "coerce") {
     return buildCoercionExpr(f.target || f.source, "string", f.type) === null;
   }
+  if (f.action === "decode") return f.target !== "";
   return false;
 }
 
 /**
- * Return one issue per kept / self-renamed / unexpressed-coerce field of
- * `table` whose source name Cribl cannot build a property accessor for (empty
- * = clean). Wording parallels checkCriblYaml's accessor message, so the two
+ * How the conf reads `f` without naming it - the tail of the issue. A decode
+ * is not "kept", so it gets its own wording (GEN-5 audit follow-up): the fix
+ * there is upstream, since the field's job is to be consumed by the decode.
+ */
+function howItIsRead(f: PipelineFieldMapping): string {
+  if (f.action === "decode") {
+    return (
+      `It is read as the input of the base64 decode into ${f.target}, and no ` +
+      `conf line names it; rename it upstream to an addressable name instead.`
+    );
+  }
+  return (
+    `It is kept under its own spelling, so no conf line names it; map it to ` +
+    `a column with an addressable name instead.`
+  );
+}
+
+/**
+ * Return one issue per kept / self-renamed / unexpressed-coerce / decoded
+ * field of `table` whose source name Cribl cannot build a property accessor
+ * for (empty = clean). Wording parallels checkCriblYaml's accessor message, so the two
  * read as the same refusal in the preview's issue list.
  */
 export function checkPlanFieldAccessors(table: TablePlan): string[] {
@@ -75,8 +104,7 @@ export function checkPlanFieldAccessors(table: TablePlan): string[] {
       `${where}: field name "${f.source}" (${f.action}) is not a valid Cribl ` +
         `property accessor - Cribl will fail to build an accessor for it at ` +
         `runtime (or, for a dotted name, silently address a nested field that ` +
-        `does not exist). It is kept under its own spelling, so no conf line ` +
-        `names it; map it to a column with an addressable name instead.`,
+        `does not exist). ${howItIsRead(f)}`,
     );
   }
   return issues;

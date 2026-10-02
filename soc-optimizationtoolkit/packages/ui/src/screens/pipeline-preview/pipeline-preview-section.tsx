@@ -83,14 +83,66 @@ export interface PipelinePreviewSectionProps {
  * gets the right example without anyone remembering this screen. The CSV
  * example stays CSV-shaped; the others get a substring test, which is true of
  * any line.
+ *
+ * GEN-11 audit follow-up: an UNDETECTED sample is unparsed too. Its
+ * sourceFormat is normalizeSourceFormat's "json" default, which
+ * formatCanDiscriminate accepts, so asking about the format alone handed
+ * `event_type === 'dns'` to exactly the log types the planner placeholders
+ * because no parsed-field filter can be trusted for them.
  */
-function filterExample(format: string | undefined): string {
-  if (format === undefined || formatCanDiscriminate(format)) {
+function filterExample(route: RouteFormat | undefined): string {
+  if (route === undefined || !reachesRouteUnparsed(route)) {
     return "event_type === 'dns'";
   }
-  return format === "csv"
+  return route.detected && route.format === "csv"
     ? "_raw.startsWith('login,')"
     : "_raw.indexOf('login') !== -1";
+}
+
+/** What the route-filter guidance needs to know about one log type's events. */
+interface RouteFormat {
+  /** The plan's (normalised) source format. */
+  format: string;
+  /** False when the sample's format was not detected (GEN-11). */
+  detected: boolean;
+}
+
+/**
+ * Whether this log type's events reach the route with no parsed fields - the
+ * one question both filterExample and the unparsed note ask, answered the way
+ * the planner answers it (GEN-11: an undetected sample is never routed on a
+ * parsed field) and otherwise by core's formatCanDiscriminate (DBT-116).
+ */
+function reachesRouteUnparsed(route: RouteFormat): boolean {
+  return !route.detected || !formatCanDiscriminate(route.format);
+}
+
+/** How the unparsed note names a format (an undetected one has no name). */
+function unparsedFormatLabel(route: RouteFormat): string {
+  if (!route.detected) return "undetected-format";
+  return route.format === "csv" ? "CSV" : route.format;
+}
+
+/**
+ * The unparsed note's subject, built from the formats ACTUALLY on screen in
+ * first-seen order: "CSV", "CSV and syslog", "CSV, positional and syslog".
+ * Audit follow-up (DBT-116): this was the literal "CSV, positional and syslog"
+ * while the gate beside it asked core, so a fourth such format would have been
+ * shown under three wrong names - the restated list DBT-116 set out to remove.
+ * Empty when nothing on screen reaches the route unparsed.
+ */
+function unparsedFormatsPhrase(routes: Iterable<RouteFormat>): string {
+  const labels: string[] = [];
+  for (const r of routes) {
+    if (!reachesRouteUnparsed(r)) continue;
+    const label = unparsedFormatLabel(r);
+    if (!labels.includes(label)) labels.push(label);
+  }
+  const last = labels.pop();
+  if (last === undefined) return "";
+  const joined =
+    labels.length === 0 ? last : `${labels.join(", ")} and ${last}`;
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 /** The count summary line under a reduction rule group. */
@@ -177,9 +229,13 @@ export function PipelinePreviewSection({
   // firewall-BLOCKED both send action="Blocked", so no single field separates
   // them and only a human can say what does.
   const unsuggested = view.placeholderLogTypes;
-  const formatByLogType = new Map(
-    view.tables.map((t) => [t.logType, t.sourceFormat]),
+  const formatByLogType = new Map<string, RouteFormat>(
+    view.tables.map((t) => [
+      t.logType,
+      { format: t.sourceFormat, detected: t.formatDetected },
+    ]),
   );
+  const unparsedFormats = unparsedFormatsPhrase(formatByLogType.values());
 
   // Draft text per log type. Deliberately NOT lifted to the caller: a filter
   // being typed is not a decision yet, and the plan must not re-derive on every
@@ -206,17 +262,25 @@ export function PipelinePreviewSection({
       {/* Honest validator signal (task item 3). */}
       {view.valid ? (
         <div className="pipeline-preview-valid pipeline-preview-valid-ok">
-          Cribl YAML validation passed - every generated conf.yml and route.yml
-          is accepted by the Cribl loader.
+          Pipeline validation passed - every generated conf.yml and route.yml
+          is accepted by the Cribl loader, and every field the plan reads by
+          its own name is one Cribl can address.
           <InfoTip text="Each generated YAML file is checked against the Cribl loader's known acceptance rules (no multiline/quoted descriptions, no tabs, filter: not condition:, unquoted field names). Zero issues means the generated pack would load cleanly." />
         </div>
       ) : (
         <div className="pipeline-preview-valid pipeline-preview-valid-bad">
+          {/*
+            GEN-5 audit follow-up: the count includes checkPlanFieldAccessors,
+            and an ordinary sample (a field named `Source IP` kept against a
+            same-named column) reaches it - so this neither calls every issue a
+            YAML-loader finding nor says one "should not happen", which told
+            the operator the generator was broken when the name was the cause.
+          */}
           <strong>
-            Cribl YAML validation found {view.totalYamlIssues} issue(s).
+            Pipeline validation found {view.totalYamlIssues} issue(s).
           </strong>{" "}
-          This should not happen for well-formed input; the exact messages are
-          shown with each file below.
+          They include the Cribl YAML loader checks and the plan&apos;s
+          field-name checks; the exact messages are shown with each file below.
         </div>
       )}
 
@@ -271,12 +335,12 @@ export function PipelinePreviewSection({
             Write a filter for the rest
             <InfoTip text="Nothing in these samples is shaped like a discriminator for these log types - no field is constant within one and different across the others - so there is nothing to suggest. Write an expression that identifies the log type, the same JavaScript Cribl route filters use. It goes into the pack's route.yml exactly as typed. Leave any of them blank and that log type ships with a placeholder filter you can still edit in Cribl's Routes tab later." />
           </span>
-          {/* DBT-116: gated on core's rule, not on csv alone - see filterExample. */}
-          {[...formatByLogType.values()].some(
-            (f) => !formatCanDiscriminate(f),
-          ) && (
+          {/* DBT-116: gated on core's rule, not on csv alone - see filterExample.
+              Audit follow-up: the subject names the formats present, and an
+              undetected sample counts (GEN-11) - see unparsedFormatsPhrase. */}
+          {unparsedFormats !== "" && (
             <span className="field-hint">
-              CSV, positional and syslog events reach the route unparsed, so a
+              {unparsedFormats} events reach the route unparsed, so a
               field test like
               {" "}<code>action === &apos;Allowed&apos;</code>{" "}
               is undefined there however the pipeline maps it later. Match on{" "}
