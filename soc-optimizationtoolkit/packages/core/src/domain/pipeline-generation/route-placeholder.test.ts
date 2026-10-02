@@ -27,17 +27,19 @@
 //              routable. Measured: AUTH vs TRAFFIC on one extension schema got
 //              `DeviceEventClassID === 'AUTH'` (0 of 2), while the same corpus
 //              differing on `act` got `act === 'Allowed'` (2 of 2).
-//   json       the string an UNDETECTED sample actually becomes, and the gap
-//              GEN-8 leaves open. This line said "unknown" until 2026-09-04,
-//              which is a name the product never delivers here:
-//              normalizeSourceFormat erases "unknown" to "json" before the plan
-//              input is built, so the planner and both discriminators only ever
-//              see "json". Measured with planFormat "json" - CEF content got
-//              `DeviceEventClassID === 'AUTH'` (0 of 2 own events), RFC 3164
-//              syslog got `Program === 'sshd'` (0 of 2), headerless PAN-OS CSV
-//              got `_2 === 'TRAFFIC'` (0 of 2), each a FILTER, so each pack
-//              previewed clean. Calibrated on the same harness: JSON content
-//              whose names really are in the text matched 2 of 2.
+//   json       the string an UNDETECTED sample actually becomes, the gap GEN-8
+//              left open and GEN-11 closed. normalizeSourceFormat erases
+//              "unknown" to "json" before the plan input is built, so the
+//              discriminators only ever see "json". Measured through REAL
+//              detection: headerless delimited rows got `_2 === 'TRAFFIC'`, a
+//              3-column header CSV and two-pair key=value lines got `type ===
+//              'TRAFFIC'` - 0 of their own events each, all previewing clean.
+//              GEN-11 carries `formatDetected: false` past the normalisation and
+//              the planner placeholders those log types instead. (The CEF and
+//              syslog numbers this line used to quote came from a harness that
+//              forced "unknown"; real detection classifies that content.)
+//              Calibrated on the same harness: JSON content whose names really
+//              are in the text matched 2 of 2.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -52,8 +54,11 @@ import {
   deriveValueDiscriminator,
   fieldValuesFromRecords,
 } from "./route-value-discriminator";
+import type { LogTypeFieldValues } from "./route-value-discriminator";
+import { buildPipelinePlan } from "./plan";
 // Reached across domains ON PURPOSE - see the parser-agreement pins below.
 import { parseByFormat } from "../sample-parsing/parsers";
+import { parseSampleContent } from "../sample-parsing/parse-sample";
 
 describe("formatCanDiscriminate", () => {
   it("says the formats with NO usable names cannot, and the rest can", () => {
@@ -295,26 +300,30 @@ describe("isMintedHeaderField", () => {
   });
 
   /**
-   * ...AND THE GAP ITSELF, MEASURED rather than described.
+   * ...AND THE GAP ITSELF, MEASURED rather than described - and CLOSED at plan
+   * level by GEN-11.
    *
-   * The prose above and in route-placeholder.ts quotes three filters and three
-   * zeros. Prose rots; this runs the chain an undetected sample really takes -
-   * parseByFormat's try-each fallback over the CONTENT, fieldValuesFromRecords,
-   * the value path at planFormat "json" - and evaluates the emitted filter
-   * against an unparsed route-time event carrying only `_raw`.
+   * This runs the chain an undetected sample really takes - parseSampleContent's
+   * REAL detection (which must answer "unknown", asserted per case), the
+   * try-each fallback that still parses the content, fieldValuesFromRecords, the
+   * value path at planFormat "json" - and evaluates the derived filter against
+   * an unparsed route-time event carrying only `_raw`.
    *
-   * THIS PINS A DEFECT, deliberately and loudly. Every case below produces a
-   * FILTER, so the log type counts as neither a placeholder nor unreachable and
-   * the pack previews CLEAN while matching none of its own events. When GEN-8's
-   * remaining half lands, these expectations SHOULD fail - that is the point:
-   * whoever fixes it has to come here and correct the numbers the docs quote,
-   * rather than leaving three stale measurements behind.
+   * WHAT CHANGED WITH GEN-11. The discriminator alone still derives a dead,
+   * bare filter for these shapes, and that is pinned below so the measurement
+   * stays honest. What no longer happens is that filter SHIPPING:
+   * reportToPlanInput now marks the sample `formatDetected: false`, and
+   * buildPipelinePlan then derives nothing and placeholders the log type, which
+   * the last half of this test asserts. The cases are the shapes that really
+   * reach the product as "unknown". Until GEN-11 this pin used CEF and RFC 3164
+   * syslog content with a FORCED "unknown"; real detection classifies both
+   * correctly (and both already placeholder), so those were harness-only.
    *
    * THE CALIBRATION CASE IS NOT OPTIONAL. A zero from a harness that cannot
    * return true is indistinguishable from a zero from a blind one, so the last
    * case feeds content whose names really ARE in the text and requires 2 of 2.
    */
-  it("MEASURES the json gap, and calibrates the harness that measures it", () => {
+  it("MEASURES the json gap, calibrates the harness, and shows the plan closes it", () => {
     // A route-time event: `_raw` is the whole line and EVERY other name is
     // undefined, which is the fact the whole module turns on. The proxy is what
     // makes an unmentioned name resolve to undefined instead of throwing, so a
@@ -328,24 +337,36 @@ describe("isMintedHeaderField", () => {
         )(raw),
       );
 
+    type Measured = {
+      detected: string;
+      filter: string | null;
+      own: number;
+      ev: LogTypeFieldValues;
+    };
     const run = (
       lines: Readonly<Record<string, string[]>>,
-    ): Record<string, { filter: string | null; own: number }> => {
-      const evidence = Object.entries(lines).map(([name, ls]) => ({
-        name,
-        ls,
-        // "unknown" is the DETECTED format - the try-each fallback picks the
-        // parser from the content, exactly as the samples screen does.
-        ev: fieldValuesFromRecords(name, parseByFormat(ls.join("\n"), "unknown")),
-      }));
-      const out: Record<string, { filter: string | null; own: number }> = {};
-      for (const { name, ls, ev } of evidence) {
+    ): Record<string, Measured> => {
+      const evidence = Object.entries(lines).map(([name, ls]) => {
+        // REAL detection, as the samples screen runs it - not a forced
+        // "unknown", which is what made the old CEF and syslog cases unreal.
+        const parsed = parseSampleContent(ls.join("\n"));
+        return {
+          name,
+          ls,
+          detected: parsed.format,
+          ev: fieldValuesFromRecords(name, parsed.records),
+        };
+      });
+      const out: Record<string, Measured> = {};
+      for (const { name, ls, detected, ev } of evidence) {
         const sibs = evidence.filter((e) => e.name !== name).map((e) => e.ev);
         // planFormat "json", because that is what normalizeSourceFormat hands
         // the planner for a sample whose format was never detected.
         const filter = deriveValueDiscriminator(ev, sibs, "json");
         out[name] = {
+          detected,
           filter,
+          ev,
           own:
             filter === null
               ? 0
@@ -355,55 +376,67 @@ describe("isMintedHeaderField", () => {
       return out;
     };
 
-    const cef = run({
-      AUTH: [
-        "CEF:0|Vend|Prod|1.0|AUTH|Auth event|3|act=Allowed src=1.1.1.1",
-        "CEF:0|Vend|Prod|1.0|AUTH|Auth event|3|act=Allowed src=1.1.1.5",
-      ],
-      TRAFFIC: [
-        "CEF:0|Vend|Prod|1.0|TRAFFIC|Traffic event|3|act=Blocked src=1.1.1.3",
-        "CEF:0|Vend|Prod|1.0|TRAFFIC|Traffic event|3|act=Blocked src=1.1.1.7",
-      ],
+    // The three shapes detectLenient gives up on while the try-each fallback
+    // still parses them - the ones that really reach the planner as "unknown".
+    const headerless = run({
+      TRAFFIC: ["fw01,10.0.0.1,TRAFFIC,allow,443", "fw01,10.0.0.3,TRAFFIC,allow,8443"],
+      THREAT: ["fw01,10.0.0.2,THREAT,deny,80", "fw01,10.0.0.4,THREAT,deny,22"],
     });
-    expect(cef["AUTH"].filter).toBe("DeviceEventClassID === 'AUTH'");
-    expect(cef["AUTH"].own).toBe(0);
+    expect(headerless["TRAFFIC"].detected).toBe("unknown");
+    expect(headerless["TRAFFIC"].filter).toBe("_2 === 'TRAFFIC'");
+    expect(headerless["TRAFFIC"].own).toBe(0);
 
-    const syslog = run({
-      sshd: [
-        "Oct 11 22:14:15 host1 sshd[1234]: Failed password for root",
-        "Oct 11 22:14:20 host1 sshd[1235]: Failed password for admin",
-      ],
-      CRON: [
-        "Oct 11 22:15:01 host1 CRON[2001]: (root) CMD (run-parts)",
-        "Oct 11 22:16:01 host1 CRON[2002]: (root) CMD (run-parts)",
-      ],
+    const narrowCsv = run({
+      TRAFFIC: ["type,src,dst", "TRAFFIC,1.1.1.1,2.2.2.2", "TRAFFIC,1.1.1.3,2.2.2.4"],
+      THREAT: ["type,src,dst", "THREAT,1.1.1.5,2.2.2.6", "THREAT,1.1.1.7,2.2.2.8"],
     });
-    expect(syslog["sshd"].filter).toBe("Program === 'sshd'");
-    expect(syslog["sshd"].own).toBe(0);
+    expect(narrowCsv["TRAFFIC"].detected).toBe("unknown");
+    expect(narrowCsv["TRAFFIC"].filter).toBe("type === 'TRAFFIC'");
+    expect(narrowCsv["TRAFFIC"].own).toBe(0);
 
-    const csv = run({
-      TRAFFIC: [
-        "2026/09/04 10:00:00,001801000000,TRAFFIC,start,2026/09/04 10:00:01,10.0.0.1",
-        "2026/09/04 10:00:02,001801000000,TRAFFIC,start,2026/09/04 10:00:03,10.0.0.2",
-      ],
-      THREAT: [
-        "2026/09/04 11:00:00,001801000000,THREAT,vulnerability,2026/09/04 11:00:01,10.0.0.9",
-        "2026/09/04 11:00:02,001801000000,THREAT,vulnerability,2026/09/04 11:00:03,10.0.0.8",
-      ],
+    // `type=TRAFFIC` IS in the raw text here. The filter is dead only because
+    // the json branch suppresses the `_raw` disjunct - so "the names are not
+    // in the text" was never the whole cause.
+    const shortKv = run({
+      TRAFFIC: ["type=TRAFFIC src=1.1.1.1", "type=TRAFFIC src=1.1.1.2"],
+      THREAT: ["type=THREAT src=2.2.2.1", "type=THREAT src=2.2.2.2"],
     });
-    expect(csv["TRAFFIC"].filter).toBe("_2 === 'TRAFFIC'");
-    expect(csv["TRAFFIC"].own).toBe(0);
+    expect(shortKv["TRAFFIC"].detected).toBe("unknown");
+    expect(shortKv["TRAFFIC"].filter).toBe("type === 'TRAFFIC'");
+    expect(shortKv["TRAFFIC"].own).toBe(0);
 
-    // A BARE FIELD TEST, with no `_raw` disjunct at all - worse than the dead
-    // second term the other formats at least emit. deriveValueDiscriminator
+    // A BARE FIELD TEST, with no `_raw` disjunct at all. deriveValueDiscriminator
     // suppresses the raw fallback for json and ndjson, because a bare value
     // token would match anywhere in a JSON document.
-    for (const c of [cef["AUTH"], syslog["sshd"], csv["TRAFFIC"]]) {
+    for (const c of [headerless["TRAFFIC"], narrowCsv["TRAFFIC"], shortKv["TRAFFIC"]]) {
       expect(c.filter).not.toContain("_raw");
+    }
+
+    // GEN-11: THE PLAN NO LONGER SHIPS THOSE FILTERS. The same evidence, handed
+    // to the planner the way reportToPlanInput hands an undetected sample
+    // ("json" plus formatDetected:false), yields placeholders - which the
+    // preview reports - instead of three dead filters that previewed clean.
+    for (const measured of [headerless, narrowCsv, shortKv]) {
+      const plan = buildPipelinePlan({
+        solutionName: "Vendor",
+        packName: "vendor-sentinel",
+        tables: Object.entries(measured).map(([logType, m]) => ({
+          sentinelTable: "CommonSecurityLog",
+          logType,
+          sourceFormat: "json",
+          formatDetected: false,
+          sampleFieldValues: m.ev,
+        })),
+      });
+      expect(plan.tables.map((t) => t.routeCondition)).toEqual([
+        placeholderRouteFilter("TRAFFIC"),
+        placeholderRouteFilter("THREAT"),
+      ]);
     }
 
     // CALIBRATION. The same harness, on content whose names really are in the
     // text, must return TRUE - otherwise the three zeros above prove nothing.
+    // This content IS detected (as ndjson), so it is not a GEN-11 case.
     const calibration = run({
       AUTH: ['{"authField":"a","common":"1"}', '{"authField":"b","common":"2"}'],
       TRAFFIC: [
@@ -414,6 +447,7 @@ describe("isMintedHeaderField", () => {
     // The value path declines (no value NAMES the log type), so the presence
     // path is what a real JSON pack routes on - and it puts the quoted key in
     // the raw term, which IS in the text.
+    expect(calibration["AUTH"].detected).toBe("ndjson");
     expect(calibration["AUTH"].filter).toBeNull();
     const presence = deriveRouteDiscriminator(
       ["authField", "common"],

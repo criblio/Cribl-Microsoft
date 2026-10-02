@@ -315,6 +315,15 @@ export function normalizeSourceFormat(format: string | undefined): string {
 }
 
 /**
+ * True when a sample WAS supplied but its format was not detected (GEN-11).
+ * Distinct from undefined, which means no sample at all - normalizeSourceFormat
+ * maps all three to "json", so this is the only place the difference survives.
+ */
+export function isUndetectedFormat(format: string | undefined): boolean {
+  return format === "" || format === "unknown";
+}
+
+/**
  * The effective mapping rows for a report: the reviewer's edits when present,
  * otherwise the report's own mappings (mirrors mapping-review effectiveMappings).
  */
@@ -394,6 +403,13 @@ export function reportToPlanInput(
     // schema and cannot be told apart by which fields exist.
     ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
+    // GEN-11: normalizeSourceFormat erases "unknown" into "json", so the fact
+    // that detection gave up has to ride alongside or the planner routes on a
+    // format the content never had. Undefined (no sample supplied) stays unset
+    // and keeps presence-only routing.
+    ...(isUndetectedFormat(sampleFormats?.[report.logType])
+      ? { formatDetected: false }
+      : {}),
     // User-added constants ride the planner's vendorMappings channel: the
     // conf emitter's enrich branch turns each into an Eval add of
     // `destName = '<description>'` (the Unit 15 shape, user-supplied here).

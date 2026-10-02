@@ -213,16 +213,15 @@ const MINTED_HEADER_FIELDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
  *   cef      the HEADER names are minted and the EXTENSION pairs are genuinely
  *   leef     in the text, so these formats stay routable and lose only the
  *            headers - a per-FIELD answer, {@link isMintedHeaderField}.
- *   json     the string an UNDETECTED sample arrives as, and so the real
- *            carrier of the remaining gap. `normalizeSourceFormat`
+ *   json     the string an UNDETECTED sample arrives as. `normalizeSourceFormat`
  *            (pipeline-preview-state.ts) erases "unknown" to "json" before the
  *            plan input is built, so neither this predicate nor either
  *            discriminator is ever handed "unknown" - only csvRoutingWarning
  *            is, from the samples screen, which passes the DETECTED format.
  *            Whether such a sample's names are minted depends on the CONTENT,
  *            and "json" cannot say, because a real JSON document's names ARE in
- *            its text. See {@link isMintedHeaderField} for the measurements and
- *            for what stays open.
+ *            its text. GEN-11 answers it OUTSIDE this predicate, at plan level:
+ *            see {@link isMintedHeaderField}.
  */
 export function formatCanDiscriminate(format: string): boolean {
   const f = format.toLowerCase();
@@ -273,27 +272,36 @@ export function formatCanDiscriminate(format: string): boolean {
  * this surface - csvRoutingWarning, from the samples screen, which is handed the
  * DETECTED format.
  *
- * MEASURED THROUGH THE REAL CHAIN with planFormat = "json" (2026-09-04):
- * parseByFormat's try-each fallback over the content, fieldValuesFromRecords,
- * the value path, then the emitted filter evaluated against an unparsed
- * route-time event carrying only `_raw`. Two log types, two events each, all
- * four parsed in every case:
+ * MEASURED THROUGH THE REAL CHAIN with planFormat = "json" (re-measured for
+ * GEN-11 through parseSampleContent's REAL detection, which answers "unknown"
+ * for each of these while the try-each fallback still parses them), then
+ * fieldValuesFromRecords, the value path, and the derived filter evaluated
+ * against an unparsed route-time event carrying only `_raw`. Two log types,
+ * two events each:
  *
- *   CEF content, AUTH vs TRAFFIC      `DeviceEventClassID === 'AUTH'`   0 of 2
- *   RFC 3164 syslog, sshd vs CRON     `Program === 'sshd'`              0 of 2
- *   headerless PAN-OS CSV             `_2 === 'TRAFFIC'`                0 of 2
+ *   headerless delimited rows          `_2 === 'TRAFFIC'`     0 of 2
+ *   3-column header CSV                `type === 'TRAFFIC'`   0 of 2
+ *   key=value, two pairs per line      `type === 'TRAFFIC'`   0 of 2
+ *
+ * The last is in the raw text (`type=TRAFFIC`), so it is dead only because for
+ * json and ndjson deriveValueDiscriminator suppresses the `_raw` fallback
+ * outright (a bare value token would match anywhere in a JSON document): the
+ * derived filter is a BARE field test with no second disjunct at all. The CEF
+ * and RFC 3164 syslog figures this comment used to quote came from a harness
+ * that FORCED "unknown"; real detection classifies that content as cef and
+ * syslog, and both already placeholder correctly.
  *
  * CALIBRATION, and the reason those zeros mean anything: the same harness on
  * JSON content whose names really ARE in the text emitted `authField !==
  * undefined || (typeof _raw === 'string' && _raw.indexOf('"authField"') !== -1)`
  * and matched 2 of 2. It can return true.
  *
- * All three produced a FILTER, so each log type counted as neither a placeholder
- * nor unreachable and the pack previewed clean - GEN-8's exact failure, and this
- * fix does not touch it. Worse than a dead disjunct, in fact: for json and
- * ndjson deriveValueDiscriminator suppresses the `_raw` fallback outright (a
- * bare value token would match anywhere in a JSON document), so what ships is a
- * BARE field test with no second disjunct at all.
+ * CLOSED AT PLAN LEVEL BY GEN-11. Each of those used to ship as a FILTER, so the
+ * log type counted as neither a placeholder nor unreachable and the pack
+ * previewed clean. reportToPlanInput now sets `formatDetected: false` for a
+ * sample whose detection returned "unknown", and buildPipelinePlan then derives
+ * nothing for it and emits the placeholder, which the preview reports. Detected
+ * json keeps its value and presence filters untouched.
  *
  * WHY THIS PREDICATE STILL CANNOT ANSWER IT, re-argued on the corrected premise.
  * The signature DOES receive the string that carries the gap, so "the format
@@ -301,11 +309,11 @@ export function formatCanDiscriminate(format: string): boolean {
  * receives is "json", and json is a format whose names genuinely are in the
  * text: a JSON document carrying `Name`, `Severity` or `Timestamp` is ordinary,
  * and applying the CEF or LEEF sets to "json" would delete real routing from
- * every genuine JSON pack in order to rescue the undetected ones. The fix is
- * unchanged - key the exclusion on the parser that actually RAN rather than on
- * the declared format - and it still needs the effective format carried out of
- * sample-parsing and through plan.ts, which is a change to neither of the two
- * functions this predicate serves.
+ * every genuine JSON pack in order to rescue the undetected ones. That is why
+ * GEN-11 carries the "not detected" signal through plan.ts instead of teaching
+ * it to this predicate. Rescuing a filter that WOULD work (the two-pair kv case,
+ * by verifying it against the sample's own raw lines) is a possible refinement;
+ * until then those log types placeholder, which is honest rather than silent.
  */
 export function isMintedHeaderField(field: string, format: string): boolean {
   const minted = MINTED_HEADER_FIELDS.get(format.toLowerCase());
