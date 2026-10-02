@@ -2,6 +2,7 @@ export {
   buildSentinelDestination,
   defaultSentinelDestinationId,
   rewriteIngestionEndpoint,
+  sanitizeDestinationTable,
   SentinelDestinationError,
   HANDLER_CONTROL_HOST_FRAGMENT,
   parseOutputListing,

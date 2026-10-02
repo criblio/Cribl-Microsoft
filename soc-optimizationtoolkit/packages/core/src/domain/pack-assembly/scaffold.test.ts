@@ -548,3 +548,42 @@ describe("pack shape decides the two files that gate where the pack can be used"
     expect(dropped).toEqual(["default/outputs.yml"]);
   });
 });
+
+describe("the destination id a pack writes is the one Deploy creates (GEN-18)", () => {
+  // A table name with a hyphen used to reach outputs.yml and every route's
+  // `output:` unsanitized (MS-Sentinel-My-App-dest) while Deploy created
+  // MS-Sentinel-My_App-dest - an all-inclusive pack routing to an output id the
+  // operator's group would never hold under that name. Asserted on the EMITTED
+  // YAML, not on the plan, because the YAML is what Cribl reads.
+  const plan = buildPipelinePlan({
+    solutionName: "MyVendor",
+    packName: "myvendor-sentinel",
+    version: "1.0.0",
+    packShape: "all-inclusive",
+    tables: [{ sentinelTable: "My-App_CL", logType: "events", sourceFormat: "json" }],
+  });
+  const tree = scaffoldPack({ plan, builtAtMs: 1_700_000_000_000 });
+
+  it("names the sanitized id as the ONE output in outputs.yml", () => {
+    const outputs = tree.get("default/outputs.yml") as string;
+    const ids = outputs
+      .split("\n")
+      .filter((l) => /^ {2}\S.*:$/.test(l))
+      .map((l) => l.trim().slice(0, -1));
+    expect(ids).toEqual(["MS-Sentinel-My_App-dest"]);
+  });
+
+  it("points every route at that same id", () => {
+    const routes = tree.get("default/pipelines/route.yml") as string;
+    const outputs = routes
+      .split("\n")
+      .filter((l) => l.startsWith("    output: "))
+      .map((l) => l.slice("    output: ".length));
+    // One passthrough route plus one reduction route when reduction rules
+    // resolved for the table - counted from the plan, so the count is the
+    // emitter's actual output rather than a guess at it.
+    const expectedRoutes = plan.tables[0]?.reductionRules !== null ? 2 : 1;
+    expect(outputs).toHaveLength(expectedRoutes);
+    expect(outputs).toEqual(Array(expectedRoutes).fill("MS-Sentinel-My_App-dest"));
+  });
+});

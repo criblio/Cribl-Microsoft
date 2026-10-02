@@ -23,6 +23,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import { defaultSentinelDestinationId } from "../sentinel-destination";
+
 /**
  * The short vendor prefix used for pack naming, pipeline names, and sample
  * filenames. Verbatim from pack-builder.ts 1664-1673: strip noise words, keep
@@ -133,10 +135,18 @@ export function passthroughRouteId(
 
 /**
  * The Sentinel destination id for a table: `MS-Sentinel-{Table}-dest` with any
- * `_CL` suffix stripped (compatibility contract, section 3 item 3).
+ * `_CL` suffix stripped (compatibility contract, section 3 item 3) and every
+ * non-alphanumeric mapped to "_".
+ *
+ * DELEGATES to defaultSentinelDestinationId, the id Deploy creates ([[GEN-18]]).
+ * This used to only strip `_CL`, so for "My-App_CL" the pack's outputs.yml and
+ * routes named MS-Sentinel-My-App-dest while Deploy created
+ * MS-Sentinel-My_App-dest - and for a name with a space, an id that is not a
+ * usable Cribl output id at all. Kept as a named export so the pack's naming
+ * still reads from this module, but it holds no rule of its own.
  */
 export function destinationId(sentinelTable: string): string {
-  return `MS-Sentinel-${sentinelTable.replace(/_CL$/i, "")}-dest`;
+  return defaultSentinelDestinationId(sentinelTable);
 }
 
 /**
