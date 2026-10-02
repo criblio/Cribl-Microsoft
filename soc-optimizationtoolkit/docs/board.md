@@ -11,10 +11,9 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-A `[[CARD-ID]]` link may name a card that has been PRUNED from this board.
-Cards done through 1.12.7 were removed on 2026-09-04; their reasoning is in
-`backlog.md` and their full text in the git history of `board.json`. A link
-that resolves to nothing here is a pruned card, not a typo.
+60 `[[links]]` on this board name 29 card(s) it no longer shows. Their
+reasoning is in `backlog.md` and their full text in the git history of
+`board.json`; a link that resolves to nothing here is not a typo.
 
 **64 in the backlog, 18 in progress, 0 done.**
 

@@ -11,11 +11,14 @@
 // three epics" and nothing checked it; it stayed a sentence a reader had to
 // notice.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   applyDecision,
   backlogSectionIds,
   blockers,
+  boardWarnings,
+  danglingLinks,
   renderBoard,
   validateBoard,
 } from './board.mjs';
@@ -713,5 +716,107 @@ describe('validateBoard - an answered decision owes a citation', () => {
 
   it('ignores stories with no decision block at all', () => {
     expect(validateBoard(board([story({ detail: 'no decision, no citation' })]))).toEqual([]);
+  });
+});
+
+/**
+ * DBT-120: check-board validated every structured field of a card and never
+ * looked inside its prose. Pruning done cards on 2026-09-04 left 60 `[[links]]`
+ * naming cards no longer on the board, and by 2026-10-02 it was 66 - all while
+ * the check stayed green. A dangling link is a WARNING, not an error: pruning is
+ * deliberate and the target survives in backlog.md and git history, so failing
+ * on it would only make the check something people disable.
+ */
+describe('DBT-120 - [[links]] that name nothing on this board', () => {
+  const linked = (over = {}) =>
+    board([
+      story({
+        id: 'REL-1',
+        detail: 'see [[REL-2]] and [[GONE-7]] and [[GONE-7]] and the literal `[[CARD-ID]]`',
+        ...over,
+      }),
+      story({ id: 'REL-2' }),
+    ]);
+
+  it('reports each dangling link, keeps repeats, resolves real cards and skips non-id prose', () => {
+    expect(danglingLinks(linked())).toEqual([
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+    ]);
+  });
+
+  it('scans the title and priorityWhy as well as the detail', () => {
+    const data = linked({
+      title: 'Follows [[OLD-3]]',
+      detail: '',
+      priorityWhy: 'Held back behind [[OLD-4]].',
+    });
+
+    expect(danglingLinks(data)).toEqual([
+      { from: 'REL-1', field: 'title', target: 'OLD-3' },
+      { from: 'REL-1', field: 'priorityWhy', target: 'OLD-4' },
+    ]);
+  });
+
+  it('resolves links to features and to spike-shaped ids', () => {
+    // AZR-S1 is a real story id on the board; a regex written for `X-F?N` only
+    // would have reported a link to it as dangling.
+    const data = board([
+      story({ id: 'REL-1', detail: '[[REL-F1]] [[AZR-S1]] [[REL-S9]]' }),
+      story({ id: 'AZR-S1' }),
+    ]);
+
+    expect(danglingLinks(data)).toEqual([{ from: 'REL-1', field: 'detail', target: 'REL-S9' }]);
+  });
+
+  it('is NOT a validation finding, so it can never fail check-board', () => {
+    expect(validateBoard(linked())).toEqual([]);
+  });
+
+  it('summarises as exactly one warning carrying the counts', () => {
+    const w = boardWarnings(linked());
+
+    expect(w).toHaveLength(1);
+    expect(w[0]).toContain('2 [[link]](s) in 1 card(s) name 1 id(s) not on this board');
+    expect(w[0]).toContain('GONE-7');
+  });
+
+  it('warns about nothing on a board whose links all resolve', () => {
+    expect(boardWarnings(board([story({ detail: 'see [[REL-1]]' })]))).toEqual([]);
+  });
+
+  it('computes the header note from the measurement instead of a hardcoded prune', () => {
+    const md = renderBoard(linked(), '2026-10-02');
+
+    expect(md).toContain('2 `[[links]]` on this board name 1 card(s) it no longer shows');
+    expect(md).not.toContain('1.12.7');
+    expect(md).not.toContain('2026-09-04');
+  });
+
+  it('omits the header note when every link resolves', () => {
+    const md = renderBoard(board([story({ detail: 'see [[REL-1]]' })]), '2026-10-02');
+
+    expect(md).not.toContain('no longer shows');
+  });
+
+  it('agrees with an independent count over the real docs/board.json', () => {
+    const data = JSON.parse(
+      readFileSync(new URL('../../../docs/board.json', import.meta.url), 'utf8'),
+    );
+    const known = new Set([
+      ...data.stories.map((s) => s.id),
+      ...(data.features ?? []).map((f) => f.id),
+    ]);
+    let expected = 0;
+    for (const s of data.stories) {
+      for (const text of [s.title, s.detail, s.priorityWhy]) {
+        for (const m of String(text ?? '').matchAll(/\[\[([A-Z]+-[A-Z]?\d+)\]\]/g)) {
+          if (!known.has(m[1])) expected += 1;
+        }
+      }
+    }
+
+    expect(expected).toBeGreaterThan(0);
+    expect(danglingLinks(data)).toHaveLength(expected);
   });
 });
