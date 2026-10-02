@@ -37,12 +37,24 @@ import {
  * `key=value` and `key="quoted value"` pairs.
  *
  * Sibling to `parseKv` in ./parsers since the rehome (ADR 0003), and kept
- * separate on purpose - see that function's note. The two AGREE ON KEYS again
- * as of DBT-84: the key is the whole token before the `=`, with the same class
- * and the same left-boundary rule as parseKv's KV_PAIR, and the same leading
- * grouping punctuation comes off. The VALUE handling stays this probe's own
- * (whitespace-terminated, or a quoted run), because a discriminator value never
- * needs parseKv's comma-tolerant value class.
+ * separate on purpose - see that function's note. As of DBT-84 the two AGREE
+ * ON ORDINARY VENDOR KEYS - word characters, hyphens and dots, read whole - but
+ * NOT on parseKv's full key class, and that difference is deliberate:
+ *
+ *   KEY CLASS `[\w.-]+`, LEFT BOUNDARY "not preceded by one of those". parseKv
+ *   reads a body whose header was already split off; this probe sees the RAW
+ *   line, CEF/LEEF `|` header, `prog:` tag, `[timestamp]` and all. The first cut
+ *   of DBT-84 copied parseKv's `[^\s=,"]+` and glued the header onto the first
+ *   key (`...|5|cat=X` -> `CEF:0|...|5|cat`), so a capture whose discriminator
+ *   was the first extension key fell back to one group - a regression on lines
+ *   `\w+` had always split correctly (review finding, 2026-10-02). With this
+ *   class any other punctuation is a boundary, exactly as it was under `\w+`,
+ *   and the only thing that changed is that `-` and `.` no longer cut a key.
+ *   The lookbehind keeps the scan linear (see parseKv's timing note).
+ *
+ * The VALUE handling stays this probe's own (whitespace-terminated, or a quoted
+ * run), because a discriminator value never needs parseKv's comma-tolerant
+ * value class.
  *
  * WHY THIS USED TO TRUNCATE, AND WHAT REPLACED THE TRUNCATION. Until DBT-84 the
  * key class was `\w+`, which cut `src-ip` to `ip` and `log-type` to `type`. Half
@@ -58,21 +70,22 @@ import {
  * and dropping the whole sample into the fallback group. The load-bearing half
  * now lives in {@link SPLITTER_DISCRIMINATOR_ALIASES}, applied by the splitter
  * after this returns; this function only reports what the line says.
+ *
+ * Dotted keys are read whole for the same reason (`src.ip`/`dst.ip` collided
+ * onto `ip`), and are NOT aliased: `event.type` used to truncate into `type`
+ * and no longer does, a regroup the release notes name.
  */
 export function parseKvLine(line: string): Record<string, string> {
   const fields: Record<string, string> = {};
   const cleaned = line.replace(/^<\d+>/, "");
-  // Key: parseKv's KV_PAIR key class and left boundary (a key starts at the
-  // line start or after whitespace, `=`, `,` or `"`), so a value such as
-  // `a=b=c` does not grow a phantom key out of its own middle.
-  const re = /(?<![^\s=,"])([^\s=,"]+)=(?:"([^"]*)"|(\S*))/g;
+  // Key: a whole run of word characters, `-` and `.`, starting where the
+  // previous character is NOT one of those - so `|`, `:`, `]`, `[`, `"` and
+  // whitespace all end a header and begin a key (DBT-84 review), while
+  // `src-ip` and `event.type` stay whole.
+  const re = /(?<![\w.-])([\w.-]+)=(?:"([^"]*)"|(\S*))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cleaned)) !== null) {
-    // Same leading-grouping strip as parseKv (`[src-ip=1` names `src-ip`); an
-    // empty remainder was pure punctuation, with no field to lose.
-    const key = m[1].replace(/^[([{<]+/, "");
-    if (key === "") continue;
-    fields[key] = m[2] !== undefined ? m[2] : m[3];
+    fields[m[1]] = m[2] !== undefined ? m[2] : m[3];
   }
   return fields;
 }

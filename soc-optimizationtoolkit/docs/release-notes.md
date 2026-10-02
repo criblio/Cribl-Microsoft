@@ -19,13 +19,23 @@ which one won depended on the order the pairs were written in, and a line such
 as `src-ip=.. dst-ip=.. action=..` counted as two pairs instead of three and
 sent the whole capture to the single fallback group. Keys are now read whole,
 and `log-type`, `sub-type` and `event-type` are read as the discriminators they
-used to truncate to, so a capture whose keys never collided keeps its names.
-When a line carries both `type=` and `log-type=`, the exact `type` wins.
+used to truncate to, so a capture whose hyphenated keys never collided keeps
+its names.
+When a line carries both `type=` and `log-type=`, the exact `type` wins. A
+CEF or LEEF header, a `prog:` tag or a `[timestamp]` in front of the first pair
+still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
+
+**Dotted keys regroup too.** A dot cut a key the same way a hyphen did, so
+`event.type` used to be read as `type` and split the capture by it. Dotted keys
+are now read whole and are NOT treated as `type`, so a capture that was grouped
+through a dotted key such as `event.type` comes back as one group (or under a
+different discriminator) and should be re-captured like the hyphenated case.
 
 **Re-capture affected samples.** A log type is the tagged-sample store's key, so
-a capture that contained colliding hyphenated keys - one that was grouped under
-a subtype, or that came back as one undifferentiated group - will split
-differently now, under new names. Samples stored under the old names stay
+a capture that contained colliding hyphenated or dotted keys - one that was
+grouped under a subtype, or that came back as one undifferentiated group - or
+that was grouped through a dotted key, will split differently now, under new
+names. Samples stored under the old names stay
 where they are and are not migrated; capture those sources again to get the
 corrected groups.
 

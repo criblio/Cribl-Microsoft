@@ -10,6 +10,7 @@ import {
   SPLITTER_DISCRIMINATOR_ALIASES,
 } from "./splitting";
 import { DISCRIMINATOR_FIELDS } from "./discriminators";
+import type { SampleFormat } from "./models";
 
 describe("splitSamplesByLogType", () => {
   it("splits JSON events by a discriminator, uppercasing the log type", () => {
@@ -242,5 +243,86 @@ describe("KV splitting on full keys (DBT-84)", () => {
       expect(DISCRIMINATOR_FIELDS).toContain(target);
     }
     expect(DISCRIMINATOR_FIELDS.filter((f) => /[^A-Za-z0-9_]/.test(f))).toEqual([]);
+  });
+
+  it("does not weld a CEF/LEEF or syslog header onto the first key", () => {
+    // REVIEW FINDING on DBT-84's first cut, measured before this pin existed.
+    // The first cut copied parseKv's key class `[^\s=,"]+` and its left
+    // boundary, but this probe receives RAW lines that still carry a header -
+    // CEF/LEEF `|` fields, a `prog:` syslog tag - and neither `|` nor `:` was a
+    // boundary. So the header was glued onto the first key:
+    //   "...|Blocked|5|cat=TRAFFIC ..." -> key "CEF:0|Acme|...|5|cat"
+    // and when that first pair WAS the discriminator the capture fell back to
+    // one group. Under `\w+` (before DBT-84) these lines split correctly, so the
+    // widening regressed captures that never had a collision to fix.
+    expect(
+      Object.keys(
+        parseKvLine(
+          "<14>Oct 2 fw CEF:0|Acme|FW|1.0|100|Blocked|5|cat=TRAFFIC src=1 dst=2",
+        ),
+      ),
+    ).toEqual(["cat", "src", "dst"]);
+    expect(
+      Object.keys(parseKvLine("LEEF:1.0|Acme|FW|1.0|100|devTime=1 src=1 dst=2")),
+    ).toEqual(["devTime", "src", "dst"]);
+    expect(Object.keys(parseKvLine("host app:type=A a=1 b=2"))).toEqual([
+      "type",
+      "a",
+      "b",
+    ]);
+    // A bracketed timestamp welded to the first key is the same shape.
+    expect(Object.keys(parseKvLine("[2024-01-01]type=A a=1 b=2"))).toEqual([
+      "type",
+      "a",
+      "b",
+    ]);
+
+    // End to end: the discriminator is the FIRST extension key in each shape.
+    const grouped = (raw: string[], format: SampleFormat) =>
+      splitSamplesByLogType(raw, "fb", format).map((s) => [s.logType, s.eventCount]);
+    expect(
+      grouped(
+        [
+          "CEF:0|Acme|FW|1|1|n|5|category=A src=1 dst=2",
+          "CEF:0|Acme|FW|1|1|n|5|category=B src=1 dst=2",
+        ],
+        "cef",
+      ),
+    ).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+    expect(
+      grouped(["host app:type=A a=1 b=2", "host app:type=B a=1 b=2"], "kv"),
+    ).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+    // Hyphenated keys after a header stay whole, so the DBT-84 fix still holds
+    // there: the log type wins over the subtype.
+    expect(
+      grouped(
+        [
+          "CEF:0|V|P|1|1|n|5|log-type=TRAFFIC sub-type=end src-ip=1",
+          "CEF:0|V|P|1|1|n|5|log-type=THREAT sub-type=url src-ip=1",
+        ],
+        "cef",
+      ),
+    ).toEqual([
+      ["TRAFFIC", 1],
+      ["THREAT", 1],
+    ]);
+  });
+
+  it("reads a dotted key whole, so it no longer truncates into the list", () => {
+    // DOCUMENTED REGROUP, not a defect: `\w+` cut `event.type` to `type`, which
+    // selected by accident exactly as `log-type` did. The dotted key is read
+    // whole - `src.ip`/`dst.ip` collided the same way hyphens did - and it is
+    // NOT aliased, so such a capture regroups (release notes, DBT-84).
+    expect(parseKvLine("event.type=A src.ip=1 dst.ip=2")).toEqual({
+      "event.type": "A",
+      "src.ip": "1",
+      "dst.ip": "2",
+    });
   });
 });

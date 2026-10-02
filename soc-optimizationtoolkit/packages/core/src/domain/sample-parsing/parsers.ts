@@ -455,7 +455,11 @@ const KV_SYSLOG_PRI = /^\s*<\d+>/;
  * this function's change budget, and re-keying an operator's stored samples is
  * silent. If you touch one, do not assume the other should follow.
  *
- * THEY AGREE ON KEYS, and a pin in kv-keys.test.ts holds it. They disagreed
+ * THEY AGREE ON ORDINARY VENDOR KEYS (word characters, `-`, `.`), and a pin in
+ * kv-keys.test.ts holds it - but `parseKvLine` uses a NARROWER class than
+ * KV_PAIR on purpose, because it sees raw lines with a CEF/LEEF `|` or `prog:`
+ * header still attached and KV_PAIR's class glued that header onto the first
+ * key (DBT-84 review). That pin also records where they differ. They disagreed
  * between DBT-79 (which widened this key class) and DBT-84 (which widened that
  * one): `parseKvLine`'s `\w+` truncation was turning `log-type` into the listed
  * discriminator `type` by accident. That spelling now comes from the splitter's

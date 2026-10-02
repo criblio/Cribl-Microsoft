@@ -359,6 +359,12 @@ describe("parseKv key capture (DBT-79)", () => {
     // DISCRIMINATOR_FIELDS, which other features interpolate as identifiers.
     // This makes the agreement checkable, because a comment about two
     // functions rots the moment someone edits one of them.
+    //
+    // The agreement is on ORDINARY vendor keys (word characters, `-`, `.`),
+    // not on parseKv's whole key class: the probe sees raw lines with a
+    // CEF/LEEF `|` or `prog:` header still on them, and parseKv's class glued
+    // that header onto the first key (DBT-84 review). The divergence is pinned
+    // below so it is a decision on record rather than a drift.
     for (const line of [
       "src-ip=1.1.1.1 action=A",
       "log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2",
@@ -371,6 +377,14 @@ describe("parseKv key capture (DBT-79)", () => {
     expect(Object.keys(parseKvLine("src-ip=1.1.1.1 action=A"))).toEqual([
       "src-ip",
       "action",
+    ]);
+    // WHERE THEY DIFFER, deliberately: a `:` (or `|`) inside a token is part
+    // of parseKv's key and a boundary for the probe.
+    expect(Object.keys(parseKv("a:b=1 c:b=2 d=3")[0])).toEqual(["a:b", "c:b", "d"]);
+    expect(Object.keys(parseKvLine("app:type=A src=1 dst=2"))).toEqual([
+      "type",
+      "src",
+      "dst",
     ]);
     // The quoted value stays whole in the probe as well.
     expect(parseKvLine('user=admin msg="login ok" ip=1.2.3.4')).toEqual({
