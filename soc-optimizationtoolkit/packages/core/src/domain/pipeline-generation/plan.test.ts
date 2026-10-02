@@ -629,3 +629,72 @@ describe("planner invariant - no overlapping catch-alls survive", () => {
     expect(unreachableLogTypes(plan)).toEqual([]);
   });
 });
+
+describe("an undetected sample format placeholders its route (GEN-11)", () => {
+  // Values that DO name their log type, so with formatDetected omitted the
+  // value path emits a filter - and the only thing that can turn it into a
+  // placeholder is the formatDetected:false guard this pins.
+  const planWith = (formatDetected: boolean | undefined) =>
+    buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: ["TRAFFIC", "THREAT"].map(
+        (logType) =>
+          ({
+            sentinelTable: "CommonSecurityLog",
+            logType,
+            sourceFormat: "json",
+            ...(formatDetected !== undefined ? { formatDetected } : {}),
+            presetFields: [
+              { source: "type", target: "Activity", type: "string", action: "rename" },
+            ],
+            sampleFieldValues: {
+              logType,
+              eventCount: 2,
+              values: { type: [logType, logType] },
+            },
+          }) as TablePlanInput,
+      ),
+    });
+
+  it("routes on the value when the format was detected (or not said)", () => {
+    expect(planWith(undefined).tables.map((t) => t.routeCondition)).toEqual([
+      "type === 'TRAFFIC'",
+      "type === 'THREAT'",
+    ]);
+  });
+
+  it("emits the placeholder instead when detection returned unknown", () => {
+    expect(planWith(false).tables.map((t) => t.routeCondition)).toEqual([
+      "__UNSET__ === 'TRAFFIC'",
+      "__UNSET__ === 'THREAT'",
+    ]);
+  });
+
+  it("still honours an explicit route condition for an undetected sample", () => {
+    // The guard decides only what the planner DERIVES. A filter the caller
+    // supplied - an accepted suggestion, a report's own condition - stands.
+    const plan = buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: ["TRAFFIC", "THREAT"].map(
+        (logType) =>
+          ({
+            sentinelTable: "CommonSecurityLog",
+            logType,
+            sourceFormat: "json",
+            formatDetected: false,
+            routing: {
+              tableName: "CommonSecurityLog",
+              outputStream: "",
+              routeCondition: `_raw.includes('${logType}')`,
+            },
+          }) as TablePlanInput,
+      ),
+    });
+    expect(plan.tables.map((t) => t.routeCondition)).toEqual([
+      "_raw.includes('TRAFFIC')",
+      "_raw.includes('THREAT')",
+    ]);
+  });
+});

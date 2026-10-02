@@ -127,6 +127,22 @@ export interface TablePlanInput {
    */
   sourceFormat?: string;
   /**
+   * False when sample detection returned "unknown" (GEN-11): `sourceFormat` is
+   * then a serde DEFAULT ("json"), not evidence about the content.
+   *
+   * It has to travel separately because the default erases the signal. For
+   * json and ndjson the value discriminator drops its `_raw` disjunct, so an
+   * undetected sample that the try-each fallback still parsed - headerless
+   * delimited rows, a 3-column CSV, two-pair key=value lines - got a BARE
+   * parsed-field filter (`_2 === 'TRAFFIC'`) that no unparsed route-time event
+   * can satisfy, and the pack previewed clean. With this false the planner
+   * derives nothing and placeholders the log type, which the operator is told.
+   *
+   * Omitted means "detected, or no sample at all" and keeps the old behaviour;
+   * an explicit routing.routeCondition still wins either way.
+   */
+  formatDetected?: boolean;
+  /**
    * Raw source fields for the passthrough branch (used only when no match and no
    * schema were available - keep everything as-is).
    */
