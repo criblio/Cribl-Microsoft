@@ -16,7 +16,7 @@ import {
   type ParsedSample,
   type SampleFormat,
 } from "./models";
-import { parseByFormat } from "./parsers";
+import { parseByFormat, unreadableCefHeaderNote } from "./parsers";
 import { positionalNote } from "./positional";
 import { unaddressableFieldNote } from "./accessor-names";
 import { detectCaptureInnerFormat, detectSampleFormat } from "./format-detection";
@@ -448,6 +448,20 @@ export function parseSampleContent(
     if (note !== null) errors.push(note);
   }
 
+  // DBT-109: a CEF line whose header could not be read is DROPPED, bare or
+  // syslog-wrapped, and the operator is told how many - the count, the raw
+  // events and the unioned field list all look complete without it. Same
+  // placement and same source rule as the positional note above, and for the
+  // same reason: on a capture `content` is the wrapper JSON, where a dangling
+  // backslash is JSON-escaped into something that reads as a legal header, so
+  // the note must count the `_raw` text parseCef was actually given. NOT
+  // `sourceLines` either - parseCef pushes only the lines it KEPT, so the
+  // dropped ones are exactly what that list cannot show.
+  if (format === "cef") {
+    const note = unreadableCefHeaderNote(unwrapped.innerText ?? content);
+    if (note !== null) errors.push(note);
+  }
+
   const fields = collectFields(records);
   const timestampField = guessTimestampField(fields);
   const rawEvents = rawEventsFor(records, sourceLines);
@@ -527,6 +541,11 @@ function rawEventsFor(
  * was the format that lost the most. Returned only when they pair 1:1 with the
  * inner records; `sourceLines` is undefined whenever the caller should keep
  * whatever it already had.
+ *
+ * `innerText` (DBT-109) is the exact text the inner parse read - the `_raw`
+ * values joined by newlines - and is set only on a successful unwrap. A note
+ * that counts what the inner parser DROPPED needs it: `sourceLines` holds only
+ * the lines that were kept, and the caller's `content` is the wrapper JSON.
  */
 export function unwrapCapture(
   records: Array<Record<string, unknown>>,
@@ -535,6 +554,7 @@ export function unwrapCapture(
   records: Array<Record<string, unknown>>;
   format: SampleFormat;
   sourceLines?: string[];
+  innerText?: string;
 } {
   const isWrapper =
     (format === "ndjson" || format === "json") &&
@@ -558,8 +578,9 @@ export function unwrapCapture(
 
   let innerRecords: Array<Record<string, unknown>> = [];
   const innerLines: string[] = [];
+  const innerText = rawValues.join("\n");
   try {
-    innerRecords = parseByFormat(rawValues.join("\n"), innerFormat, innerLines);
+    innerRecords = parseByFormat(innerText, innerFormat, innerLines);
   } catch {
     // Inner parse threw; fall back to the outer parse (silent).
     return { records, format };
@@ -574,7 +595,12 @@ export function unwrapCapture(
         : rawValues.length === innerRecords.length
           ? rawValues
           : [];
-    return { records: innerRecords, format: innerFormat, sourceLines: lines };
+    return {
+      records: innerRecords,
+      format: innerFormat,
+      sourceLines: lines,
+      innerText,
+    };
   }
   return { records, format };
 }
