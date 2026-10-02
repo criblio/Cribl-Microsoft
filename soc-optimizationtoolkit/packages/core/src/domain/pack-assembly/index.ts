@@ -74,6 +74,9 @@ export {
   streamtagsFromPackage,
 } from "./package-json";
 
+// The pack's root README.md (GEN-14) - Cribl shows a placeholder template without one
+export { generatePackReadme } from "./readme";
+
 // 7. The pure ustar/.crbl builder (the packaging-correctness heart)
 export type { TarFileEntry, ParsedTarEntry } from "./tar";
 export {

@@ -19,7 +19,8 @@
  * LAYOUT (section 3 item 5): `default/` holds pack.yml, breakers.yml,
  * outputs.yml, samples.yml, lookups.yml, pipelines/route.yml, and
  * pipelines/{Name}/conf.yml; `data/` holds sample JSON and lookup CSVs;
- * lookups.yml is at `default/`, NEVER `data/lookups/`. No report/side files are
+ * lookups.yml is at `default/`, NEVER `data/lookups/`; README.md (GEN-14) and
+ * package.json sit at the pack root. No report/side files are
  * written into the tree (the legacy gap-analysis .txt leak is designed out; the
  * tar builder also guards it).
  *
@@ -57,6 +58,7 @@ import {
 import { serializeSentinelOutputsYml } from "./outputs-yml";
 import { buildPackageJson, renderPackageJson } from "./package-json";
 import { PackTree } from "./pack-tree";
+import { generatePackReadme } from "./readme";
 import {
   generateSampleFile,
   generateSamplesYml,
@@ -217,6 +219,9 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
 
   // Manifest + static pack files.
   tree.set("package.json", renderPackageJson(buildPackageJson(plan)));
+  // GEN-14: at the pack ROOT, not default/. Without it Cribl shows its own
+  // placeholder template in Pack Settings -> README.
+  tree.set("README.md", generatePackReadme(plan));
   tree.set("default/pack.yml", "allowGlobalAccess: true\n");
   tree.set("default/breakers.yml", generateBreakersYml(plan.solutionName));
 

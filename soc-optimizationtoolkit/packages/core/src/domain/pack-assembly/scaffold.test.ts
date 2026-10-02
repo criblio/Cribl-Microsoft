@@ -587,3 +587,140 @@ describe("the destination id a pack writes is the one Deploy creates (GEN-18)", 
     expect(outputs).toEqual(Array(expectedRoutes).fill("MS-Sentinel-My_App-dest"));
   });
 });
+
+describe("every built pack ships its own README.md (GEN-14)", () => {
+  // Seen live 2026-09-04: Pack Settings -> README on an app-built pack showed
+  // Cribl's stock scaffold text ("This is a paragraph that describes...",
+  // "configure the [Source|Destination|Dataset] by ____"). The app wrote NO
+  // README at all, so Cribl filled the gap with its template. The app knows
+  // the solution, the tables and the wiring, so it writes them down.
+
+  /** Two DISTINCT tables, so a renderer that only reads tables[0] is caught. */
+  function twoTablePlanInput(): BuildPipelinePlanInput {
+    return {
+      ...paloPlanInput(),
+      tables: [
+        ...paloPlanInput().tables,
+        {
+          sentinelTable: "Syslog",
+          logType: "SYSTEM",
+          sourceFormat: "json",
+          presetFields: [],
+        },
+      ],
+    };
+  }
+
+  function readme(tree: ReturnType<typeof scaffoldPack>): string {
+    const content = tree.get("README.md");
+    expect(typeof content).toBe("string");
+    return content as string;
+  }
+
+  /** The rows of the "What this pack contains" table, header and rule excluded. */
+  function contentRows(text: string): string[] {
+    const section = text.split("## What this pack contains")[1]?.split("\n## ")[0] ?? "";
+    return section.split("\n").filter((line) => line.startsWith("|")).slice(2);
+  }
+
+  const ALL_INCLUSIVE_MARK = "It does NOT appear in the pipeline dropdown on the Cribl Routes page";
+  const ROUTABLE_MARK = "must ALREADY EXIST in the worker group";
+
+  it("writes README.md at the pack root", () => {
+    const tree = scaffoldPack(scaffoldInput());
+    expect(tree.has("README.md")).toBe(true);
+    expect(tree.has("default/README.md")).toBe(false);
+  });
+
+  it("names the solution, every table, and one row per table plan", () => {
+    const plan = buildPipelinePlan(twoTablePlanInput());
+    expect(plan.tables).toHaveLength(2);
+    const text = readme(scaffoldPack(scaffoldInput({ plan })));
+    // The manifest's displayName (vendorPrefix keeps two words), so the two agree.
+    expect(text.split("\n")[0]).toBe("# PaloAlto PAN Sentinel");
+    expect(text).toContain(plan.solutionName);
+    const rows = contentRows(text);
+    expect(rows).toHaveLength(plan.tables.length);
+    plan.tables.forEach((table, i) => {
+      expect(rows[i]).toBe(
+        `| ${table.logType} | ${table.sentinelTable} | ${table.pipelineName} | ` +
+          `${table.reductionPipelineId} | ${table.destinationId} | ${table.streamName} |`,
+      );
+    });
+  });
+
+  it("carries none of Cribl's placeholder template text", () => {
+    const text = readme(scaffoldPack(scaffoldInput()));
+    expect(text).not.toContain("This is a paragraph");
+    expect(text).not.toContain("[Source|Destination|Dataset]");
+    expect(text).not.toContain("____");
+  });
+
+  it("explains the ALL-INCLUSIVE wiring, both when chosen and when omitted", () => {
+    const omitted = readme(scaffoldPack(scaffoldInput()));
+    const chosen = readme(
+      scaffoldPack(
+        scaffoldInput({
+          plan: buildPipelinePlan({ ...paloPlanInput(), packShape: "all-inclusive" }),
+        }),
+      ),
+    );
+    expect(chosen).toBe(omitted);
+    expect(omitted).toContain(ALL_INCLUSIVE_MARK);
+    expect(omitted).toContain("default/outputs.yml");
+    expect(omitted).not.toContain(ROUTABLE_MARK);
+  });
+
+  it("explains the ROUTABLE wiring and names the destinations the group must hold", () => {
+    const plan = buildPipelinePlan({ ...twoTablePlanInput(), packShape: "routable" });
+    const text = readme(scaffoldPack(scaffoldInput({ plan })));
+    expect(text).toContain(ROUTABLE_MARK);
+    expect(text).not.toContain(ALL_INCLUSIVE_MARK);
+    const deployment = text.split("## Deployment")[1] ?? "";
+    const listed = deployment.split("\n").filter((line) => line.startsWith("- "));
+    expect(listed).toEqual(
+      plan.tables.map((t) => `- ${t.destinationId} (stream ${t.streamName})`),
+    );
+  });
+
+  it("never carries DCR values or identities from a real destination", () => {
+    const plan = buildPipelinePlan(paloPlanInput());
+    const text = readme(
+      scaffoldPack(
+        scaffoldInput({
+          plan,
+          tableInputs: plan.tables.map((table) => ({
+            destination: {
+              id: table.destinationId,
+              dcrImmutableId: "dcr-22222222222222222222222222222222",
+              ingestionEndpoint: "https://secret-dce.ingest.monitor.azure.com",
+              streamName: table.streamName,
+              tenantId: "tenant-real-value",
+              ingestionClientId: "client-real-value",
+            },
+          })),
+        }),
+      ),
+    );
+    expect(text).not.toContain("dcr-22222222222222222222222222222222");
+    expect(text).not.toContain("secret-dce");
+    expect(text).not.toContain("tenant-real-value");
+    expect(text).not.toContain("client-real-value");
+  });
+
+  it("stamps the pack version and what built it", () => {
+    const plan = buildPipelinePlan({ ...paloPlanInput(), toolkitVersion: "1.12.7" });
+    const text = readme(scaffoldPack(scaffoldInput({ plan })));
+    expect(text.trimEnd().split("\n").pop()).toBe(
+      "Built by Cribl SOC Toolkit 1.12.7, pack version 1.0.0.",
+    );
+  });
+
+  it("ships README.md at the root of the .crbl archive", () => {
+    const built = assemblePack(scaffoldInput());
+    const names = parseUstarTar(ungzipStored(built.crbl))
+      .filter((e) => !e.isDir)
+      .map((e) => e.path);
+    expect(names.filter((n) => n.endsWith("README.md"))).toEqual(["README.md"]);
+  });
+});
