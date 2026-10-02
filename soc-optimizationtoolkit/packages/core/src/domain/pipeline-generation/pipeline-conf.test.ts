@@ -29,6 +29,7 @@ import {
 import { parsePositional } from "../sample-parsing/positional";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "./plan";
+import { resolveSchemaFromCatalog } from "../field-matcher/bundled-schema-catalog";
 
 const fdrFields: PipelineFieldMapping[] = [
   { source: "event_simpleName", target: "event_simpleName", type: "string", action: "keep" },
@@ -720,7 +721,16 @@ describe("positional extraction (GEN-6)", () => {
     conf: string,
     rawLine: string,
   ): Record<string, unknown> {
-    const adds = [...conf.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    // Only the extraction function's adds (the one minting __posParts). GEN-7
+    // added a later enrich-group Eval over the renamed Start/End, which is not
+    // extraction and reads fields this harness does not supply.
+    const extraction = conf
+      .split(/\n(?=  - id: )/)
+      .filter((b) => b.includes("- name: __posParts"))
+      .join("\n");
+    const adds = [
+      ...extraction.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm),
+    ];
     expect(
       adds.length,
       "no add entries found in the emitted conf",
@@ -905,5 +915,165 @@ describe("positional extraction (GEN-6)", () => {
       expect(positionalColumns([])).toEqual([]);
       expect(positionalColumns([f("wat"), f("field0")])).toEqual([]);
     });
+  });
+});
+
+/**
+ * GEN-7 - a recognised VPC Flow pack must stamp TimeGenerated with the FLOW
+ * time, not the ingestion time.
+ *
+ * THE DEFECT. detectTimestampField has no candidate matching any VPC column, so
+ * it fell back to the literal "TimeGenerated"; auto_timestamp then read a field
+ * no event carries and `defaultTime: now` stamped _time with the current time;
+ * cleanup dropped _time anyway; and the DCR transform is `source`, so nothing
+ * wrote TimeGenerated and Azure filled it with INGESTION time. Flow logs reach
+ * S3 in batches, so that is minutes off - silently, and unrecoverable once
+ * ingested. Start and End meanwhile shipped as raw epoch-second strings into
+ * columns declared datetime.
+ *
+ * OPERATOR DECISION 2026-10-02: TimeGenerated = the flow START time, and the
+ * epoch-to-datetime conversion lives in a PACK Eval writing ISO strings for
+ * TimeGenerated, Start and End (transformKql stays `source`).
+ *
+ * The pins run the REAL chain against the BUNDLED AWSVPCFlow schema, and
+ * evaluate the emitted Eval expressions as JavaScript, so a wrong field, a
+ * wrong unit (ms vs s) or a start/end swap all fail on a value, not a shape.
+ */
+describe("VPC Flow TimeGenerated from the flow start (GEN-7)", () => {
+  // start=1700000000 (2023-11-14T22:13:20Z), end=1700000060 - one minute apart,
+  // so a start/end swap is a 60-second error the assertions can see.
+  const VPC_V2 = [
+    "2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1700000000 1700000060 ACCEPT OK",
+    "2 123456789010 eni-1235b8ca123456789 172.31.9.69 172.31.9.12 49761 3389 6 20 4249 1700000000 1700000060 REJECT OK",
+  ].join("\n");
+
+  function vpcConf(content: string = VPC_V2): string {
+    const parsed = parseSampleContent(content, { sourceName: "flow.log" });
+    const schema = resolveSchemaFromCatalog("AWSVPCFlow");
+    if (schema === null) throw new Error("AWSVPCFlow missing from the bundled catalog");
+    const match = matchSampleToSchema(
+      parsed.fields.map((f) => ({
+        name: f.name,
+        type: f.type,
+        sampleValues: f.examples,
+      })),
+      schema,
+    );
+    const plan = buildPipelinePlan({
+      solutionName: "AWS VPC Flow Logs",
+      packName: "cribl-aws-vpc-flow",
+      tables: [
+        {
+          sentinelTable: "AWSVPCFlow",
+          matchResult: match,
+          sourceFormat: parsed.format,
+        },
+      ],
+    });
+    const table = plan.tables[0];
+    if (table === undefined) throw new Error("planner produced no table");
+    return generatePipelineConfForPlan(table, "AWS VPC Flow Logs");
+  }
+
+  /** The `- name: X\n value: "..."` adds of the ONE function with this description. */
+  function evalAdds(conf: string, description: string): [string, string][] {
+    const blocks = conf.split(/\n(?=  - id: )/);
+    const hits = blocks.filter((b) => b.includes(`description: ${description}`));
+    expect(hits, `functions described "${description}"`).toHaveLength(1);
+    return [...(hits[0] ?? "").matchAll(/- name: (\S+)\n +value: "(.*)"$/gm)].map(
+      ([, n, v]) => [n ?? "", (v ?? "").replace(/\\\\/g, "\\")],
+    );
+  }
+
+  /** Run adds in order, each seeing the fields the earlier ones set, as Cribl does. */
+  function runAdds(
+    adds: [string, string][],
+    start: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const event: Record<string, unknown> = { ...start };
+    for (const [name, expr] of adds) {
+      const keys = Object.keys(event);
+      event[name] = new Function(...keys, `return (${expr});`)(
+        ...keys.map((k) => event[k]),
+      );
+    }
+    return event;
+  }
+
+  const DESC = "Convert VPC Flow epoch start/end to ISO-8601 and stamp TimeGenerated from the flow start";
+
+  it("writes TimeGenerated exactly once, from the flow START", () => {
+    const conf = vpcConf();
+    expect(conf.match(/- name: TimeGenerated\n/g)).toHaveLength(1);
+    expect(evalAdds(conf, DESC)).toEqual([
+      [
+        "TimeGenerated",
+        "(Start != null && String(Start).trim() !== '' && isFinite(Start)) ? new Date(Number(Start) * 1000).toISOString() : undefined",
+      ],
+      [
+        "Start",
+        "(Start != null && String(Start).trim() !== '' && isFinite(Start)) ? new Date(Number(Start) * 1000).toISOString() : undefined",
+      ],
+      [
+        "End",
+        "(End != null && String(End).trim() !== '' && isFinite(End)) ? new Date(Number(End) * 1000).toISOString() : undefined",
+      ],
+    ]);
+  });
+
+  it("points auto_timestamp at `start`, not at a TimeGenerated no event carries", () => {
+    const conf = vpcConf();
+    expect([...conf.matchAll(/srcField: (\S+)\n +dstField: _time/g)].map((m) => m[1])).toEqual([
+      "start",
+    ]);
+  });
+
+  it("produces the flow times as ISO strings, start and end not swapped", () => {
+    const event = runAdds(evalAdds(vpcConf(), DESC), {
+      Start: "1700000000",
+      End: "1700000060",
+    });
+    expect(event).toEqual({
+      TimeGenerated: "2023-11-14T22:13:20.000Z",
+      Start: "2023-11-14T22:13:20.000Z",
+      End: "2023-11-14T22:14:20.000Z",
+    });
+  });
+
+  it("leaves the fields unset, never 'Invalid Date', when start/end are '-'", () => {
+    const event = runAdds(evalAdds(vpcConf(), DESC), { Start: "-", End: "-" });
+    expect(event).toEqual({
+      TimeGenerated: undefined,
+      Start: undefined,
+      End: undefined,
+    });
+  });
+
+  it("runs AFTER the rename, so it reads the renamed Start/End", () => {
+    const conf = vpcConf();
+    const rename = conf.indexOf("newName: Start");
+    const stamp = conf.indexOf(`description: ${DESC}`);
+    expect(rename).toBeGreaterThan(-1);
+    expect(stamp).toBeGreaterThan(rename);
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("does not catch an UNRECOGNISED positional source", () => {
+    // field1..fieldN carry no known time column; a VPC branch that fired here
+    // would invent one.
+    const conf = generatePipelineConf(
+      "p",
+      "Acme",
+      "Acme_CL",
+      [
+        { source: "field1", target: "field1", type: "string", action: "keep" },
+        { source: "field2", target: "field2", type: "string", action: "keep" },
+      ],
+      undefined,
+      "positional",
+    );
+    expect(conf).not.toContain("- name: TimeGenerated");
+    expect(conf).not.toContain(DESC);
+    expect(conf).toContain("srcField: TimeGenerated");
   });
 });
