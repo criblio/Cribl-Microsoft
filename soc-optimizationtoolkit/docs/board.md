@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**65 in the backlog, 0 in progress, 18 done.**
+**67 in the backlog, 0 in progress, 18 done.**
 
 ## By menu item
 
@@ -27,16 +27,16 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 22 | 14 | 1 |
+| Sentinel Integration | 23 | 14 | 1 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 2 | 0 |
+| Cross-cutting | 8 | 2 | 0 |
 
-Open work totals 65.
+Open work totals 67.
 
 ## Epics and features
 
@@ -110,16 +110,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 32% (13/41)
+### `DBT` Quality and technical debt _(enabler)_ - 30% (13/43)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 8/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 8/25 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 3/6 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-122 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 2/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 2/7 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -211,11 +211,15 @@ Next to pick up. Nothing blocks these.
   live Cribl measurement the operator chose (an Eval removing aws.account,
   Source IP, src-ip). Reviewer minors carried: the plan check ignores
   vendor-mapping filters (can double-count, never under-blocks); no single
-  test runs bytes-to-preview.valid.
+  test runs bytes-to-preview.valid. AUDIT FOLLOW-UP 2026-10-02
+  (fix/audit-preview 093e41a): the architecture audit found the plan check
+  skipped the DECODE action, so an unaddressable base64-decode source
+  (b64.url) still built. Fixed and pinned; the build message now says pipeline
+  validation, since it counts plan checks as well as YAML.
 
 ---
 
-## Backlog - next (26)
+## Backlog - next (27)
 
 Settled and unblocked, sequenced behind now.
 
@@ -673,9 +677,26 @@ Settled and unblocked, sequenced behind now.
   but the only durable way to set the shape, and the Pack wiring hint should
   say so.
 
+- **DBT-123** Three operator-visible call sites the bug sweep changed have no pin
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-02 by the adversarial reviews of the architecture-audit
+  follow-ups. Each is correct today and pinned at the core or state level, but
+  the WIRING in the screen is not, so deleting it passes typecheck and every
+  suite: 1. integrate-screen passes criblDefaults as the third argument to
+  checkRoutablePrerequisites (GEN-18 follow-up). Drop it and the
+  stale-destination warning returns for non-default prefix/suffix. 2. the
+  integrate-screen build refusal text "Cannot build: pipeline validation found
+  N issue(s)" (GEN-5 follow-up) - the banner has an exact-text DOM pin, the
+  build message does not. 3. the Example Value column InfoTip in
+  mapping-review-section.tsx (DBT-122) - only the cell title constant is
+  pinned. Also noted, not a defect: criblDefaults is now in the routable
+  effect deps, so a parent that rebuilds that object every render would
+  re-fetch GET /system/outputs. FIX: a DOM test per site asserting the exact
+  argument/text, mutation-checked.
+
 ---
 
-## Backlog - later (38)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -1167,6 +1188,17 @@ Settled, gated on something above.
   Cribl release notes either mechanism, or if the app is ever hosted somewhere
   its own document is the address bar - the local-app shell ADR 0001 shipped
   was exactly that, and the chip worked there.
+
+- **DBT-124** check-board does not scan decision questions and option details for dangling links
+  `DBT-F4` `enabler` `settled`
+  FOUND 2026-10-02 reviewing the DBT-120 follow-up (fix/audit-board 6f591f6).
+  board.mjs and board-html.mjs now share one LINK pattern and knownIds(), so
+  they agree on what a link is - but richText renders [[links]] in
+  decision.question and option.detail too, while danglingLinks only scans
+  title, detail and priorityWhy. A dangling link written in a decision would
+  show as gone on the kanban while check-board stays silent. FIX: add the
+  decision fields to LINKED_FIELDS and pin it with a planted fixture. Later
+  because no decision on the board currently carries a link.
 
 ---
 
@@ -2152,7 +2184,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   did not make the board card corrections the judge proposed in
   cardCorrections. These were: marking the GEN-16 false-missing consequence as
   mitigated, and adding option-forms as the third implementation. The task
-  forbids editing board.json, and the board is updated centrally.
+  forbids editing board.json, and the board is updated centrally. AUDIT
+  FOLLOW-UP 2026-10-02 (fix/audit-destid 839e274): the sweep had unified only
+  the SANITIZING. Deploy built the id from the operator prefix/suffix
+  (destinationIdFromOptions) while the pack plan and
+  checkRoutablePrerequisites used the fixed default, and the new comments
+  claimed they agreed. The pack plan and the routable check now take the same
+  criblDefaults Deploy uses. Pinned in core; the integrate-screen call site is
+  not pinned (see DBT-123).
 
 - **DBT-118** Repositories advertises Elastic sample fetching the app stopped doing
   `DBT-F2` `bug` `settled` `verified: pins`
