@@ -11,11 +11,11 @@ two cannot disagree.
 alternatives. This board holds only what is a unit of work, what state it is
 in, and what it waits on.
 
-60 `[[links]]` on this board name 29 card(s) it no longer shows. Their
+61 `[[links]]` on this board name 29 card(s) it no longer shows. Their
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**64 in the backlog, 18 in progress, 0 done.**
+**64 in the backlog, 19 in progress, 0 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 35 | 0 | 14 |
+| Sentinel Integration | 36 | 0 | 15 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 1 | 0 | 1 |
@@ -36,7 +36,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 9 | 0 | 2 |
 
-Open work totals 82.
+Open work totals 83.
 
 ## Epics and features
 
@@ -110,14 +110,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 0% (0/40)
+### `DBT` Quality and technical debt _(enabler)_ - 0% (0/41)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 0/24 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 0/5 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118* |
+| `DBT-F2` Copy and UX | Sentinel Integration | 0/6 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-122 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 0/6 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (18)
+## In progress (19)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -895,6 +895,21 @@ Started. Anything here with an unfinished dependency is called out on its card.
   unresolved targets, such as D-2, may never have been cards. Say "not on this
   board", not "pruned". The live kanban (board-html.mjs richText) also renders
   these links as dead #card-X anchors.
+
+- **DBT-122** Field Mappings table shows an example value from the sample
+  `DBT-F2` `story` `settled`
+  OPERATOR REQUEST 2026-10-02: the DCR Gap Analysis Field Mappings table
+  (packages/ui/src/screens/mapping-review/mapping-review-section.tsx, the
+  per-log-type table with Source Field / Type / Dest Field / Type / Confidence
+  / Action) should show an EXAMPLE VALUE for each field taken from the sample
+  data. GapFieldMapping rows already carry an optional sampleValue (populated
+  by core field-matcher match-fields.ts from the sample examples) - confirm it
+  is populated for matched AND overflow rows on the path the screen uses; if
+  any row kind drops it, fix that in core with a pin. WHY: an operator
+  approving a mapping is judging names alone today. SourceIP -> SourceIP looks
+  right whatever is in it; seeing 10.1.2.3 beside it (or a hostname) is what
+  tells them the mapping is right. The value is already on every row - this is
+  display, not new data.
 
 ---
 
