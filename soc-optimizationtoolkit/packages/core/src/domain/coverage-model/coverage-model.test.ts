@@ -32,6 +32,7 @@ import {
   selectedItemIds,
 } from "./coverage-selection";
 import { deployPlan } from "../onboarding-selection";
+import { ENTRA_PROFILES, ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LEGACY_PATH = join(
@@ -146,12 +147,41 @@ describe("COVERAGE_CATALOG - ported, not invented", () => {
     ]);
   });
 
-  it("keeps the Entra profile options verbatim", () => {
+  it("keeps the legacy two Entra profiles, plus SecurityOnly from AZR-2", () => {
+    // AZR-13 / backlog.md 18i (chosen: derive). This pin used to say the ported
+    // keys EQUAL the legacy `_profileOptions`; it is weakened on purpose. The
+    // legacy two still have to survive, and the only addition allowed is the
+    // third preset AZR-2 took from the script. Anything else is invention.
     const src = legacy();
     const legacyProfiles = at(src, "scriptBasedDeployment.entraId")?.["_profileOptions"];
-    const ported = coverageItem("entraId")?.subSelection?.options.map((o) => o.key);
+    const ported = coverageItem("entraId")?.subSelection?.options.map((o) => o.key) ?? [];
 
-    expect(ported).toEqual(legacyProfiles);
+    expect(ported.filter((k) => k !== "SecurityOnly")).toEqual(legacyProfiles);
+    expect(ported).toEqual([...ENTRA_PROFILES]);
+  });
+
+  it("takes the Entra profile list from ENTRA_PROFILES - one authority, not two (AZR-13)", () => {
+    // Two hand-kept lists drifted: entra-diagnostics knew three profiles, the
+    // catalog two, so a stored SecurityOnly was silently reverted to Standard.
+    const options = coverageItem("entraId")?.subSelection?.options ?? [];
+
+    expect(options.map((o) => o.key)).toEqual(["SecurityOnly", "Standard", "HighVolume"]);
+    expect(options.map((o) => o.key)).toEqual([...ENTRA_PROFILES]);
+  });
+
+  it("describes SecurityOnly by its categories and leaves the legacy details untouched", () => {
+    const detail = Object.fromEntries(
+      (coverageItem("entraId")?.subSelection?.options ?? []).map((o) => [o.key, o.detail]),
+    );
+
+    expect(detail).toEqual({
+      SecurityOnly: ENTRA_PROFILE_CATEGORIES.SecurityOnly.join(", "),
+      Standard: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers",
+      HighVolume: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
+    });
+    expect(detail["SecurityOnly"]).toBe(
+      "AuditLogs, SignInLogs, RiskyUsers, UserRiskEvents, RiskyServicePrincipals, ServicePrincipalRiskEvents",
+    );
   });
 
   it("ports the notSupported block entry for entry - none missing, none invented", () => {
@@ -296,6 +326,28 @@ describe("decodeSelection - a KV value outlives the code that wrote it", () => {
 
     expect(selection.subSelections["communityPolicyInitiative"]).toEqual(["All"]);
     expect(dropped).toContain("communityPolicyInitiative.Atlantis");
+  });
+
+  it("keeps a stored SecurityOnly Entra profile instead of reverting it to Standard (AZR-13)", () => {
+    const original = {
+      ...defaultSelection(),
+      enabled: ["entraId"],
+      subSelections: { ...defaultSelection().subSelections, entraId: ["SecurityOnly"] },
+    };
+    const { selection, dropped, usedDefaults } = decodeSelection(encodeSelection(original));
+
+    expect(selection.subSelections["entraId"]).toEqual(["SecurityOnly"]);
+    expect(dropped).toEqual([]);
+    expect(usedDefaults).toBe(false);
+  });
+
+  it("still falls back to Standard for an Entra profile no list knows", () => {
+    const { selection, dropped } = decodeSelection(
+      JSON.stringify({ enabled: ["entraId"], subSelections: { entraId: ["Bogus"] } }),
+    );
+
+    expect(selection.subSelections["entraId"]).toEqual(["Standard"]);
+    expect(dropped).toEqual(["entraId.Bogus"]);
   });
 
   it("keeps the valid half of a partly-stale sub-selection", () => {
