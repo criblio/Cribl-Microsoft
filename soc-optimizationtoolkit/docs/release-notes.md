@@ -27,6 +27,14 @@ When a line carries both `type=` and `log-type=`, the exact `type` wins. A
 CEF or LEEF header, a `prog:` tag or a `[timestamp]` in front of the first pair
 still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
 
+**A pack that keeps a field Cribl cannot address no longer builds (GEN-5).** A
+source field kept under its own name - because the destination has a column
+spelled the same - was never checked, so a name like `Source IP` or `aws.account`
+built cleanly and then read as nothing at runtime. The preview now reports it
+and the build is blocked, the same as an unaddressable rename already was. A
+field that is only dropped is not checked yet; that waits on a live Cribl
+measurement.
+
 **Dotted keys regroup too.** A dot cut a key the same way a hyphen did, so
 `event.type` used to be read as `type` and split the capture by it. Dotted keys
 are now read whole and are NOT treated as `type`, so a capture that was grouped
