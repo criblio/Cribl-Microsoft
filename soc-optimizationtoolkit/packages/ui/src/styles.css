@@ -3481,6 +3481,23 @@ button.journey-step-main:hover .journey-step-label {
 .mapping-row-unmapped {
   opacity: 0.7;
 }
+/* DBT-122: the Example Value column. `pre` keeps leading/trailing spaces
+   visible (the formatter never trims) without wrapping; the max width plus
+   ellipsis keeps a long value from widening the table - the full value is in
+   the cell title. */
+.mapping-example-value {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mapping-example-value-none,
+.mapping-example-value-empty {
+  color: var(--text-faint);
+}
 .mapping-unmapped-head td {
   font-weight: 700;
   font-size: 11px;

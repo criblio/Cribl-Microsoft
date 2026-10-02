@@ -116,6 +116,7 @@ import {
   deriveMappingReviewGate,
   effectiveMappings,
   fieldMappingsLabel,
+  formatExampleValue,
   isApproved,
   isModified,
   isRuleField,
@@ -1266,6 +1267,10 @@ export function MappingReviewSection({
                           <InfoTip text="The data type detected from the sample values (string, int, real, boolean, dynamic)." />
                         </th>
                         <th>
+                          Example Value
+                          <InfoTip text="The first value seen for this field in your sample, so you can check the mapping by eye - an IP landing in a user-name column is wrong at a glance. Long values are shortened; hover the cell for the full value. -- means the sample had no value for the field." />
+                        </th>
+                        <th>
                           Dest Field
                           <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to." />
                         </th>
@@ -1286,6 +1291,10 @@ export function MappingReviewSection({
                     <tbody>
                       {shownMappings.map((m) => {
                         const ruleField = isRuleField(m.dest, ruleFields);
+                        // DBT-122: the row's own sample value, formatted in
+                        // the pure state module (truncation, escaping, and
+                        // the empty-vs-missing distinction live there).
+                        const example = formatExampleValue(m.sampleValue);
                         return (
                           <tr
                             key={m.source}
@@ -1303,6 +1312,12 @@ export function MappingReviewSection({
                               )}
                             </td>
                             <td className="match-field-type">{m.sourceType}</td>
+                            <td
+                              className={`mapping-example-value mapping-example-value-${example.kind}`}
+                              title={example.title}
+                            >
+                              {example.text}
+                            </td>
                             <td>
                               <select
                                 className="mapping-select"
@@ -1359,7 +1374,7 @@ export function MappingReviewSection({
                       })}
                       {shownUnmapped.length > 0 && (
                         <tr className="mapping-unmapped-head">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             Unmapped Destination Fields ({shownUnmapped.length})
                             <InfoTip text="These destination schema columns have no corresponding field in your sample data. They will be empty in Sentinel unless populated by a DCR transformation or added to your source data." />
                           </td>
@@ -1372,6 +1387,7 @@ export function MappingReviewSection({
                             key={`unmapped-${d.name}`}
                             className="mapping-row mapping-row-unmapped"
                           >
+                            <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
                             <td>

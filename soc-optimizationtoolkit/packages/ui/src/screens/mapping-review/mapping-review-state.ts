@@ -290,6 +290,52 @@ export function fieldMappingsLabel(
 }
 
 /**
+ * DBT-122: the longest Example Value the Field Mappings table prints before
+ * shortening it. CSS also ellipsizes the cell at its max width; this cap keeps
+ * a multi-kilobyte value (a command line, a JSON blob) out of the table text
+ * entirely. The FULL value always stays in the cell's title.
+ */
+export const EXAMPLE_VALUE_MAX_CHARS = 80;
+
+/** One rendered Example Value cell: what to print, and what the tip says. */
+export interface ExampleValueCell {
+  /** "none" = the sample had no value; "empty" = it had the empty string. */
+  kind: "value" | "empty" | "none";
+  text: string;
+  title: string;
+}
+
+/**
+ * Format a mapping row's `sampleValue` (the FIRST value seen for the field in
+ * the sample) for the Example Value column (DBT-122). Never trims - leading or
+ * trailing whitespace is part of the value and is exactly the kind of thing the
+ * operator is checking for. Line breaks and tabs are escaped in the cell text
+ * only (so a row stays one line); the title keeps the raw value. An empty
+ * string and a missing value are different facts and render differently.
+ */
+export function formatExampleValue(value: string | undefined): ExampleValueCell {
+  if (value === undefined) {
+    return {
+      kind: "none",
+      text: "--",
+      title: "No value for this field in the sample",
+    };
+  }
+  if (value === "") {
+    return { kind: "empty", text: '""', title: "Empty string in the sample" };
+  }
+  const escaped = value
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  const text =
+    escaped.length > EXAMPLE_VALUE_MAX_CHARS
+      ? `${escaped.slice(0, EXAMPLE_VALUE_MAX_CHARS - 3)}...`
+      : escaped;
+  return { kind: "value", text, title: value };
+}
+
+/**
  * RULE-badge lookup: a field is a rule field only when it is in the supplied
  * set. LIVE wiring: RuleCoverageSection computes the referenced-field set and
  * reports it via onRuleFieldsChange; the integrate screen threads it into the
