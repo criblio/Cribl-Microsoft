@@ -62,7 +62,12 @@ const TGZ_VERSION = /^soc-optimizationtoolkit-(\d+\.\d+\.\d+)\.tgz$/;
 // Prose rather than a machine field on purpose - it is read by people far more
 // often than by this script - so the script reads the prose. Keep the shape if
 // you reword around it.
-const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
+//
+// Exported for DBT-92: the pins read THIS file's own source with this regex, so
+// a concrete version written back into the comment above fails a test instead of
+// waiting to be noticed. Exporting it, rather than copying the pattern into the
+// test, keeps the guard and the check on one definition.
+export const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
 
 // Source that changes what the packaged app DOES. Docs are excluded: a doc-only
 // commit landing after a release is not a stale release, and warning about it
