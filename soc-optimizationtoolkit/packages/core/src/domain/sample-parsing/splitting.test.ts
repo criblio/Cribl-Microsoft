@@ -8,6 +8,7 @@ import {
   convertPanosSplitAtLoad,
   parseKvLine,
 } from "./splitting";
+import { parsePositional } from "./positional";
 
 describe("splitSamplesByLogType", () => {
   it("splits JSON events by a discriminator, uppercasing the log type", () => {
@@ -104,6 +105,61 @@ describe("hasNamedFields", () => {
     expect(hasNamedFields(["<134>Jan 1 host app: raw text only"], "syslog")).toBe(
       false,
     );
+  });
+
+  // DBT-117: `positional` had no branch, so a capture isVpcFlowV2 recognises -
+  // and parsePositional names srcaddr/dstaddr/account_id - fell off the end to
+  // `false`. The rule checks EVERY line, unlike the first-line branches above,
+  // because parsePositional's naming decision is per capture and the two must
+  // agree on it.
+  const VPC_V2 = [
+    "2 123456789012 eni-0a1b2c3d 10.0.0.5 10.0.1.9 443 49152 6 10 840 1700000000 1700000060 ACCEPT OK",
+    "2 123456789012 eni-0a1b2c3d 10.0.0.7 10.0.1.2 22 51000 6 3 180 1700000000 1700000060 REJECT OK",
+    "2 123456789012 eni-0a1b2c3d - - - - - - - 1700000000 1700000060 - NODATA",
+  ];
+
+  it("positional qualifies for a recognised VPC Flow v2 capture, agreeing with parsePositional", () => {
+    expect(hasNamedFields(VPC_V2, "positional")).toBe(true);
+    const records = parsePositional(VPC_V2.join("\n"));
+    expect(records).toHaveLength(3);
+    expect(Object.keys(records[0])).toEqual([
+      "version",
+      "account_id",
+      "interface_id",
+      "srcaddr",
+      "dstaddr",
+      "srcport",
+      "dstport",
+      "protocol",
+      "packets",
+      "bytes",
+      "start",
+      "end",
+      "action",
+      "log_status",
+    ]);
+  });
+
+  it("positional skips blank lines the way parsePositional does", () => {
+    const withBlank = [VPC_V2[0], "", "   ", VPC_V2[1]];
+    expect(hasNamedFields(withBlank, "positional")).toBe(true);
+    expect(Object.keys(parsePositional(withBlank.join("\n"))[0])[3]).toBe(
+      "srcaddr",
+    );
+  });
+
+  it("positional does NOT qualify unless every line is VPC v2", () => {
+    // 13 fields: one short of v2, so the columns stay field1..field13.
+    const thirteen = [
+      "2 123456789012 eni-0a1b2c3d 10.0.0.5 10.0.1.9 443 49152 6 10 840 1700000000 1700000060 ACCEPT",
+    ];
+    expect(hasNamedFields(thirteen, "positional")).toBe(false);
+    // A v2 line FIRST plus one that is not: pins the all-lines rule, which is
+    // what parsePositional applies (its keys here are field1..).
+    const mixed = [VPC_V2[0], "3 a b c d e f g h i j k l m"];
+    expect(hasNamedFields(mixed, "positional")).toBe(false);
+    expect(Object.keys(parsePositional(mixed.join("\n"))[0])[0]).toBe("field1");
+    expect(hasNamedFields([], "positional")).toBe(false);
   });
 });
 
