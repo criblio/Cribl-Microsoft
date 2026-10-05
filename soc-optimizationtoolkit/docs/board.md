@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**69 in the backlog, 1 in progress, 23 done.**
+**69 in the backlog, 2 in progress, 23 done.**
 
 ## By menu item
 
@@ -34,9 +34,9 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 10 | 3 | 0 |
+| Cross-cutting | 11 | 3 | 1 |
 
-Open work totals 70.
+Open work totals 71.
 
 ## Epics and features
 
@@ -110,7 +110,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 35% (18/51)
+### `DBT` Quality and technical debt _(enabler)_ - 35% (18/52)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -119,7 +119,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 9/26 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 3/10 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 3/11 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (2)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -161,6 +161,19 @@ Started. Anything here with an unfinished dependency is called out on its card.
   units in visible text or tips - mutation-checked with the very date it
   removed. Seen live section by section. Left IN PROGRESS for the operator to
   review the result before it closes.
+
+- **DBT-132** Prepare the repository move: the app stands alone, and the extraction is rehearsed
+  `DBT-F4` `enabler` `settled`
+  STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test
+  fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core
+  provenance pins read from deprecated/ (coverage-model and entra-diagnostics)
+  as frozen fixtures inside the app. (2) Write the git filter-repo extraction
+  and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore,
+  .gitattributes, the CI workflow, the .claude hooks) per the decisions in
+  docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch
+  directory and run install, typecheck, the full suite and every check-*
+  there. Creating the criblio repository, and pushing to it, stay the
+  operator.
 
 ---
 
@@ -718,7 +731,7 @@ Settled and unblocked, sequenced behind now.
   argument/text, mutation-checked.
 
 - **DBT-130** Move the app to its own repository
-  `DBT-F4` `story` `settled` `blocked by DBT-131`
+  `DBT-F4` `story` `settled` `blocked by DBT-131, DBT-132`
   OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of
   criblio/Cribl-Microsoft into a new repository. The plan and the full
   inventory are docs/repo-migration-plan.md. WHAT IS KNOWN: the shipped app is
@@ -745,7 +758,9 @@ Settled and unblocked, sequenced behind now.
   new app version - is its own spike, [[DBT-131]]; the release pipeline waits
   on it. The other open items (issue transfer, shared hooks, the old
   repository tarball, branch protection) are choices made while doing the
-  move.
+  move. SPLIT 2026-10-05: the preparation that does not wait on the
+  Marketplace question is [[DBT-132]]; this card is the move itself plus the
+  release pipeline.
   DECISION: Keep soc-optimizationtoolkit/ as a subdirectory in the new
   repository, or flatten it to the root?
     [x] `keep-subdirectory` Keep the subdirectory - Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed.

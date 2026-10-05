@@ -1336,15 +1336,16 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "story",
-      "status": "in-progress",
+      "status": "backlog",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "DBT-129",
-        "DBT-131"
+        "DBT-131",
+        "DBT-132"
       ],
       "title": "Move the app to its own repository",
-      "detail": "OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of criblio/Cribl-Microsoft into a new repository. The plan and the full inventory are docs/repo-migration-plan.md.\n\nWHAT IS KNOWN: the shipped app is self-contained; the build and checks are not (two core tests and the schema-asset extractor read files outside the app, the docs gate walks the parent folder, CI, hooks and three git-history checks assume the soc-optimizationtoolkit/ prefix). A history-preserving extraction with git filter-repo is viable and can drop 51 old tarballs from history. Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository: Cribl's published docs link it.\n\nUNDECIDED - the decisions in the plan, the two that shape everything else first: the new repo's name and owner, and whether the app keeps its soc-optimizationtoolkit/ subdirectory or is flattened to the repo root.\n\nDECIDED 2026-10-05 (operator): keep the soc-optimizationtoolkit/ subdirectory; the criblio org owns the new repository; it holds ONLY the app and what it strictly needs, for publishing to the Cribl Marketplace - no DCR ARM templates, no deprecated tree; releases are triggered by a version change through a CI pipeline with approvals that publishes to the Cribl Marketplace. Recorded in docs/repo-migration-plan.md (Decided) and backlog.md section 22.\nSTILL UNDECIDED: issue transfer and bug triage, shared hooks, what the old repository keeps of the tarball, branch protection - and how the Cribl Marketplace accepts a new version, which the release pipeline needs before it can be written.\nThe one real unknown - how the Cribl Marketplace takes a new app version - is its own spike, [[DBT-131]]; the release pipeline waits on it. The other open items (issue transfer, shared hooks, the old repository tarball, branch protection) are choices made while doing the move.\n\nSTARTED 2026-10-05 (operator: prepare the move; keep the two legacy test fixtures). Preparing on chore/prepare-repo-move: vendor the two legacy JSON files the core provenance pins read, write the filter-repo extraction script and the new-repository root files, and rehearse the extraction locally with the full gate run inside it. Creating the criblio repository stays the operator.",
+      "detail": "OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of criblio/Cribl-Microsoft into a new repository. The plan and the full inventory are docs/repo-migration-plan.md.\n\nWHAT IS KNOWN: the shipped app is self-contained; the build and checks are not (two core tests and the schema-asset extractor read files outside the app, the docs gate walks the parent folder, CI, hooks and three git-history checks assume the soc-optimizationtoolkit/ prefix). A history-preserving extraction with git filter-repo is viable and can drop 51 old tarballs from history. Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository: Cribl's published docs link it.\n\nUNDECIDED - the decisions in the plan, the two that shape everything else first: the new repo's name and owner, and whether the app keeps its soc-optimizationtoolkit/ subdirectory or is flattened to the repo root.\n\nDECIDED 2026-10-05 (operator): keep the soc-optimizationtoolkit/ subdirectory; the criblio org owns the new repository; it holds ONLY the app and what it strictly needs, for publishing to the Cribl Marketplace - no DCR ARM templates, no deprecated tree; releases are triggered by a version change through a CI pipeline with approvals that publishes to the Cribl Marketplace. Recorded in docs/repo-migration-plan.md (Decided) and backlog.md section 22.\nSTILL UNDECIDED: issue transfer and bug triage, shared hooks, what the old repository keeps of the tarball, branch protection - and how the Cribl Marketplace accepts a new version, which the release pipeline needs before it can be written.\nThe one real unknown - how the Cribl Marketplace takes a new app version - is its own spike, [[DBT-131]]; the release pipeline waits on it. The other open items (issue transfer, shared hooks, the old repository tarball, branch protection) are choices made while doing the move.\n\nSPLIT 2026-10-05: the preparation that does not wait on the Marketplace question is [[DBT-132]]; this card is the move itself plus the release pipeline.",
       "decision": {
         "question": "Keep soc-optimizationtoolkit/ as a subdirectory in the new repository, or flatten it to the root?",
         "options": [
@@ -1373,6 +1374,20 @@
       "dependsOn": [],
       "title": "Find how the Cribl Marketplace accepts a new app version",
       "detail": "OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the new repository to trigger a CI pipeline, with approvals, that publishes the new app version to the Cribl Marketplace. Nothing in this repository says how the Marketplace takes a version - a publish API, an upload to a partner portal, a pull from a GitHub release, or a submission reviewed by Cribl. Find out (Cribl App Platform docs, the Marketplace team), and record what credential the pipeline needs, what artifact it sends (the .tgz from npm run package), and what approval Cribl itself applies, before the pipeline is designed."
+    },
+    {
+      "id": "DBT-132",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "enabler",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-129"
+      ],
+      "title": "Prepare the repository move: the app stands alone, and the extraction is rehearsed",
+      "detail": "STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core provenance pins read from deprecated/ (coverage-model and entra-diagnostics) as frozen fixtures inside the app. (2) Write the git filter-repo extraction and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore, .gitattributes, the CI workflow, the .claude hooks) per the decisions in docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch directory and run install, typecheck, the full suite and every check-* there. Creating the criblio repository, and pushing to it, stay the operator."
     }
   ],
   "features": [
