@@ -1317,6 +1317,18 @@
       "title": "Tagged samples and the solution selection were deleted with no Clear click",
       "detail": "OBSERVED 2026-10-05 in the Live Preview while building DBT-127: after a reload, Sentinel Integration showed no solution selected and Add Sample Data read No samples tagged yet. Minutes earlier the same page held PaloAlto-PAN-OS with two tagged samples (TRAFFIC 50 events, THREAT 50 events) and a completed gap analysis. Lab data, re-acquirable from the PaloAlto Lake bench - but deleted.\n\nWHAT IS KNOWN: only three code paths remove samples - the per-sample Remove button, rename, and the change branch of integrate-screen handleSolutionChange (previous solution non-null, next different). Neither of the first two was clicked. The selection key was ALSO blanked, which handleSolutionChange does on the same call (it persists nextName ?? \"\" before deciding whether to delete) - so the change branch ran with previous = PaloAlto-PAN-OS and next = null. The browser reports null only from its Clear button (solution-browser clearSelection), and every click in the session was checked against its screenshot: none landed on Clear.\n\nUNSETTLED - the trigger. Candidates, neither confirmed: (1) React Fast Refresh remounting the page or its sections mid-edit while the restore effect raced the browser (the page was hot-reloaded dozens of times that day, twice mid-edit); (2) a second Live Preview tab, left open from earlier, acting on the same KV-backed sample store. Both look dev-only, which is exactly why it must not be assumed: the late-restore replay in the integrate-screen restore effect turns a reported null into a delete, so any path that reports null at the wrong moment deletes the operator's work.\n\nHARDENING TO CONSIDER regardless of the trigger: delete samples only on an explicit operator action that carries intent (the Clear click, picking a different solution), never from a replay or a remount; and persist the selection key only after that decision, so a spurious null cannot both blank the selection and delete the samples in one step.\n\nCLOSED 2026-10-05 - NOT A DEFECT. The operator deleted the PaloAlto samples themselves during the same testing; the app did what a Clear does. No hardening wanted for now (operator direction). Kept as a record because the analysis above - one explicit-intent path deletes samples, and it also blanks the saved selection - is still true and is the place to start if it ever recurs without an operator action.",
       "verified": "none"
+    },
+    {
+      "id": "DBT-129",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Docs current before the app moves to its own repository",
+      "detail": "OPERATOR REQUEST 2026-10-05: review the repository documentation so everything is up to date, ahead of migrating the app to a new repository.\n\nSCOPE: every non-deprecated markdown file (root entry docs, the toolkit README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog, release notes, the Zscaler lab doc), plus the repo tooling that documents itself (.claude hooks and skills, .github workflows). Each claim is checked against the code; stale ones are corrected, and history stays history (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of everything that couples the app to THIS repository - paths outside soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks, and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the move can be planned."
     }
   ],
   "features": [
