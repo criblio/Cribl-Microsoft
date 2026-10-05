@@ -79,6 +79,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InfoTip } from "../../components/info-tip";
 import {
   csvRoutingWarning,
   detectVendorIdentity,
@@ -100,6 +101,7 @@ import {
   upsertSample,
   validateLogType,
   validateRename,
+  splitNoteLead,
 } from "./sample-intake-state";
 import { CsvHeaderDialog } from "./csv-header-dialog";
 import {
@@ -515,14 +517,6 @@ export function SampleIntakeSection({
 
   return (
     <div className="sample-intake">
-      <p className="panel-desc">
-        Provide representative events per log type. Paste a sample and name its
-        log type, or upload one or more files. The format is detected from the
-        content - Cribl capture events are unwrapped to their inner _raw - and
-        the discovered fields drive the gap analysis and pipeline generation.
-        Samples are optional for the native-table deploy below; they enrich the
-        content-driven flow.
-      </p>
 
       {/* Paste + name + upload: one intake block (paste on the left, the log-type
           name and the Add Sample / Upload Files actions grouped), matching the
@@ -530,7 +524,10 @@ export function SampleIntakeSection({
           (works in both shells) but is visually hidden and driven by the ghost
           Upload Files button, so both actions read as buttons. */}
       <div className="sample-intake-input">
-        <span className="field-label">Paste a sample</span>
+        <span className="field-label">
+          Paste a sample{" "}
+          <InfoTip text="Representative events for one log type. The format is detected from the content (a Cribl capture is unwrapped to its inner _raw), and the fields found drive the gap analysis and the generated pipelines. Samples are optional for a native-table deploy." />
+        </span>
         <textarea
           className="sample-paste"
           value={pasteText}
@@ -583,13 +580,9 @@ export function SampleIntakeSection({
           >
             Upload Files
           </button>
+          <InfoTip text="Upload one or more files instead of pasting. Each file's log type is detected from its name and content; rename it on the sample afterwards." />
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
-        <span className="field-hint">
-          Upload one or more files instead of pasting: the log type is
-          auto-detected from each filename and content; rename it on the chip
-          afterwards.
-        </span>
         {uploadError !== "" && <pre className="result">{uploadError}</pre>}
       </div>
 
@@ -794,8 +787,18 @@ export function SampleIntakeSection({
                       sample.format,
                       samples.length - 1,
                     );
-                    return warning === null ? null : (
-                      <p className="field-hint sample-chip-routing">{warning}</p>
+                    if (warning === null) return null;
+                    const { lead, more } = splitNoteLead(warning);
+                    return (
+                      <p className="field-hint sample-chip-routing">
+                        {lead}
+                        {more && (
+                          <>
+                            {" "}
+                            <InfoTip text={warning} />
+                          </>
+                        )}
+                      </p>
                     );
                   })()}
                 {isRenaming && renameError !== "" && (
@@ -924,7 +927,17 @@ function SampleChipColumnOrder({
   ) {
     return null;
   }
+  // The first sentence on the card, the whole note behind the (i) (DBT-125).
+  const { lead, more } = splitNoteLead(notice);
   return (
-    <p className="field-hint sample-chip-provenance">Column names: {notice}</p>
+    <p className="field-hint sample-chip-provenance">
+      Column names: {lead}
+      {more && (
+        <>
+          {" "}
+          <InfoTip text={notice} />
+        </>
+      )}
+    </p>
   );
 }

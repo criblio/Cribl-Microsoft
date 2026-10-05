@@ -16,6 +16,7 @@
  */
 
 import type { LogTypeRecommendation as Recommendation } from "./sample-coverage-state";
+import { InfoTip } from "../../components/info-tip";
 import { evidenceLabel } from "./sample-coverage-state";
 // The picker's formatter, reused rather than reproduced: "the shortest honest
 // unit, deliberately coarse - a hint, never an accounting figure" is exactly the
@@ -76,7 +77,11 @@ export function LogTypeRecommendation({
 
   return (
     <div className="log-type-recommendation" data-status={status}>
-      <span className="field-label">Log types this solution needs</span>
+      <span className="field-label">
+        Log types this solution needs{" "}
+        {/* The caveat qualifies a claim, so it exists only once there is one. */}
+        {entries.length > 0 && <InfoTip text="A minimum, not a catalog. Entries from content miss rules that filter a whole table and ASIM-normalized rules, which name no log type. Entries from vendor documentation say what the vendor emits, not what this solution needs. Provide anything else your environment sends." />}
+      </span>
       <p className="panel-desc">{headline}</p>
 
       {entries.length > 0 && (
@@ -145,8 +150,8 @@ export function LogTypeRecommendation({
       {unreferenced.length > 0 && (
         <div className="log-type-unreferenced">
           <p className="field-hint">
-            Also provided, referenced by no detection (fine - a vendor emits
-            more than any one solution detects on):
+            Also provided, referenced by no detection:{" "}
+            <InfoTip text="Nothing to fix - a vendor emits more than any one solution detects on." />
           </p>
           {/* A LIST, not prose, because these now carry volumes and rank by
               them - the busiest log type nothing consumes sits at the top on
@@ -173,34 +178,26 @@ export function LogTypeRecommendation({
           is actually on screen, so nothing is qualified into existence. */}
       {hasVolume && volumeWindow !== undefined && (
         <p className="field-hint">
-          Volumes counted in the Lake dataset over {volumeWindow.earliest} to{" "}
-          {volumeWindow.latest}, and describe what your environment sends - not
-          what this solution needs.
+          Volumes: Lake dataset, {volumeWindow.earliest} to{" "}
+          {volumeWindow.latest}.{" "}
+          <InfoTip
+            text={
+              "What your environment sends, not what this solution needs." +
+              (hasEstimate
+                ? " Byte figures are estimates: the mean size of the events sampled for each log type, multiplied by its count."
+                : "")
+            }
+          />
           {/* WHAT the estimate is, stated wherever it renders. A byte figure
               beside a counted one reads as equally measured unless it is said
               otherwise, and this one is a mean from a few hundred sampled
               events multiplied by a count covering the whole window. Shown only
               when an estimate is actually on screen. */}
-          {hasEstimate && (
-            <>
-              {" "}
-              Byte figures are estimates: the mean size of the events sampled
-              for each log type, multiplied by its count.
-            </>
-          )}
         </p>
       )}
 
       {/* The limit, stated where the claim is made rather than in a doc nobody
           opens. Only shown once there is a claim to qualify. */}
-      {entries.length > 0 && (
-        <p className="field-hint">
-          A minimum, not a catalog. Content-derived entries miss rules that
-          filter a whole table and ASIM-normalized rules, which name no log
-          type; vendor-derived entries say what the vendor emits, not what this
-          solution needs. Provide anything else your environment sends.
-        </p>
-      )}
     </div>
   );
 }

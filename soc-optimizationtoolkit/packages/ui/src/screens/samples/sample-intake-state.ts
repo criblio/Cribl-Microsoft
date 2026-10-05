@@ -361,3 +361,26 @@ export function reKeyByLogType<T>(
   }
   return result;
 }
+
+/**
+ * A note split into the sentence a sample card shows and the full text behind
+ * its (i) (DBT-125). The domain builds these notes as complete sentences for
+ * every surface that reads them - the pipeline preview and the build log keep
+ * the whole text - so the card takes its lead here rather than asking the
+ * domain for a second, shorter copy that could drift from the first.
+ *
+ * The lead is the first sentence: up to the first period, question or
+ * exclamation mark that is followed by whitespace and an upper-case letter or a
+ * digit. A period inside "e.g." or a number, or one not followed by a new
+ * sentence, does not end it. `more` is false when the note is one sentence, so
+ * a card shows no (i) that would only repeat what is already on screen.
+ */
+export function splitNoteLead(text: string): { lead: string; more: boolean } {
+  const trimmed = text.trim();
+  const end = /[.?!](?=\s+[A-Z0-9])/.exec(trimmed);
+  if (end === null) {
+    return { lead: trimmed, more: false };
+  }
+  const lead = trimmed.slice(0, end.index + 1);
+  return { lead, more: lead.length < trimmed.length };
+}

@@ -157,6 +157,7 @@ import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
+  PACK_SHAPE_TIP,
   packShapeSummary,
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
@@ -2182,7 +2183,9 @@ export function IntegrateScreen({
         * that is only true down here: the pack-shape consequence and the
         * acknowledgement that arms the build. */}
       <div className="sample-coverage">
-        <p className="field-hint">{packShapeSummary(samples.length)}</p>
+        <p className="field-hint">
+          {packShapeSummary(samples.length)} <InfoTip text={PACK_SHAPE_TIP} />
+        </p>
         <p
           className={
             sampleCoverageView.verdict === "gaps"
@@ -2251,8 +2254,7 @@ export function IntegrateScreen({
         <summary className="pipeline-preview-summary">
           Pipeline preview
           <span className="field-hint pipeline-preview-summary-hint">
-            the exact pipelines, reduction rules, and routes a build would
-            generate - expand to review
+            what a build would generate
           </span>
         </summary>
         <PipelinePreviewSection
@@ -2368,7 +2370,10 @@ export function IntegrateScreen({
   const criblConfigBody = (
     <div className="form-grid">
       <label className="field">
-        <span className="field-label">Cribl worker group</span>
+        <span className="field-label">
+          Cribl worker group{" "}
+          <InfoTip text="The worker group that runs the pipelines. Prefilled from your saved Options when that group is in the live list." />
+        </span>
         {groups !== null ? (
           <SearchableSelect
             options={groups.map((g) => ({
@@ -2393,13 +2398,12 @@ export function IntegrateScreen({
             Retry loading groups
           </button>
         )}
-        <span className="field-hint">
-          The worker group that will run the pipelines. Prefilled from your
-          saved Options when that group exists in the live list.
-        </span>
       </label>
       <label className="field">
-        <span className="field-label">Pack name</span>
+        <span className="field-label">
+          Pack name{" "}
+          <InfoTip text="The pack Build and install pack creates from the approved Gap Analysis mappings. Prefilled from your destination prefix plus the solution, so each solution gets its own pack. Your edit is never overwritten." />
+        </span>
         <input
           type="text"
           value={packName}
@@ -2410,13 +2414,6 @@ export function IntegrateScreen({
           autoComplete="off"
           spellCheck={false}
         />
-        <span className="field-hint">
-          The pack that will be built and installed by Build and install pack
-          below (from the approved Gap Analysis mappings). Prefilled from the
-          destination prefix in Options plus the selected solution, so each
-          solution gets its own pack; editable, and an edit is never
-          overwritten.
-        </span>
       </label>
       {/* GEN-13. Reported after a pack installed fine and then could not be
           picked from the Cribl Routes page dropdown. The cause is structural -
@@ -2425,7 +2422,16 @@ export function IntegrateScreen({
           choice rather than a fix. The wording names the consequence for each,
           because "all-inclusive" and "routable" mean nothing on their own. */}
       <label className="field">
-        <span className="field-label">Pack wiring</span>
+        <span className="field-label">
+          Pack wiring{" "}
+          <InfoTip
+            text={
+              packShape === "all-inclusive"
+                ? "Self-contained: the pack ships the Sentinel destination and its secret, so it works on install with nothing set up first. Cribl does not offer a pack that holds a destination in the Routes page pipeline list. This is what Build and install pack wires for you."
+                : "Routable: no destination ships in the pack and every route hands events back, so it appears in the Routes page pipeline list and drops into a flow you already have. The Sentinel destination must already exist in the worker group - Deploy is what creates it there."
+            }
+          />
+        </span>
         <select
           value={packShape}
           onChange={(e) => setPackShape(e.target.value as PackShape)}
@@ -2437,11 +2443,6 @@ export function IntegrateScreen({
             Routable - selectable from the Cribl Routes page
           </option>
         </select>
-        <span className="field-hint">
-          {packShape === "all-inclusive"
-            ? "The pack ships the Sentinel destination and its secret, so it works on install and nothing has to exist in the worker group first. It will NOT appear in the pipeline dropdown on the Cribl Routes page: verified 2026-09-04, a pack holding a destination is withheld from that list, and changing its routes to Send to Worker Group Routes does not change that. This is what Build and install pack wires for you."
-            : "No destination ships inside the pack and every route hands events back, so the pack DOES appear in the pipeline dropdown on the Cribl Routes page and can be dropped into a flow you already have. The Sentinel destination and its secret must ALREADY EXIST in the worker group - this pack does not carry them. Deploy is what puts them there: it creates the destination in the worker group, not in the pack, so a table you have deployed is a table this pack can send."}
-        </span>
       </label>
       {/* GEN-16. The dependency a routable pack creates, checked rather than
           described. Never blocks the build - see the effect that fills this. */}
@@ -2508,13 +2509,10 @@ export function IntegrateScreen({
         </div>
       )}
       <div className="discovery-result">
-        <span className="field-label">Deploy targets and overwrite check</span>
-        <p className="panel-desc">
-          The pack deploys to the primary worker group above. Optionally fan it
-          out to additional groups, then check whether the name is already in
-          use before building - a matching pack is overwritten, so the check
-          must be acknowledged first.
-        </p>
+        <span className="field-label">
+          Deploy targets and overwrite check{" "}
+          <InfoTip text="The pack deploys to the worker group above, and optionally to more. A pack with the same name is overwritten, so check for one before building and acknowledge any match." />
+        </span>
         <label className="integrate-check">
           <input
             type="checkbox"
@@ -2762,13 +2760,10 @@ export function IntegrateScreen({
           deploy stopping before every write, so nothing is fabricated. */}
       {deployOffers.length > 0 && (
         <div className="integrate-subsection">
-          <span className="field-label">Take these to someone who can</span>
-          <p className="panel-desc">
-            Deploy above stays available - the audit reports access, it does
-            not gate anything, and Azure's own refusal is the real gate. These
-            are the artifacts for the writes this connection was measured to
-            lack. One export run produces all of them and changes nothing.
-          </p>
+          <span className="field-label">
+            Take these to someone who can{" "}
+            <InfoTip text="The artifacts for the writes this connection was measured to lack. One export run produces all of them and changes nothing. Deploy stays available: the access audit never gates it - Azure's own refusal is the real gate." />
+          </span>
           {deployOffers.map((offer) => (
             <FallbackNotice
               key={offer.kind}
@@ -2826,21 +2821,19 @@ export function IntegrateScreen({
         </div>
       )}
       <p className="panel-desc">
-        What a green run proves: the DCR provisioned and the Cribl destination
-        exists. It does NOT validate data flow - that requires a source
-        actually sending events through the destination. Before events ingest,
-        the ingestion identity needs the Monitoring Metrics Publisher role on
-        the deployed DCR (see the Azure Resources section above).
+        A green run proves the DCR and the Cribl destination exist, not that
+        data flows.{" "}
+        <InfoTip text="Data flow needs a source actually sending events through the destination. Before events ingest, the ingestion identity also needs the Monitoring Metrics Publisher role on the deployed DCR - granted in Select Azure Resources." />
       </p>
       <RecentRuns refreshToken={historyToken} />
       {canWireSource(deployCompleted, mode) && (
         <div className="integrate-subsection">
-          <span className="field-label">Source wiring</span>
+          <span className="field-label">
+            Source wiring{" "}
+            <InfoTip text="Creates the Sentinel route (and, on Cribl.Cloud, an optional non-final Cribl Lake route above it), commits, and deploys to the worker group. Each action can be re-run on its own." />
+          </span>
           <p className="panel-desc">
-            The destination is live - now connect a Cribl source to it. This
-            creates the Sentinel route (and an optional non-final Cribl Lake
-            route above it, cloud only), commits, and deploys to the worker
-            group. Each action below is independently re-runnable.
+            The destination is live - connect a Cribl source to it.
           </p>
           <WiringSection
             deployCompleted={deployCompleted}
