@@ -2,6 +2,13 @@
 
 Status: Record - a survey of the legacy toolkits, 2026-08-17. Superseded sections carry their own notes.
 
+> Annotation 2026-10-05: Source paths are relative to the ORIGINAL Cribl-Microsoft
+> repository at the time of the survey. The legacy trees
+> (Cribl-Microsoft_IntegrationSolution/, the Azure PowerShell trees,
+> SOC-OptimizationToolkit_v1/) moved under deprecated/ on 2026-07-13 (see
+> deprecated/README.md); Azure/CustomDeploymentTemplates/DCR-Templates/ stayed at
+> the root. None of these paths exist in the standalone toolkit repository.
+
 Generated 2026-07-01 by a 14-agent parallel audit of every subsystem, for planning the integration of existing repository capabilities into the Cribl App Platform app in `soc-optimizationtoolkit/`. Total: 299 cataloged features (267 primary + 32 from the v1 prior-analysis cross-check).
 
 ## How to read this catalog
@@ -85,9 +92,9 @@ This section is the entry point for the review. It groups the 267 primary featur
 - Platform confirmation: Cribl Apps (Preview) run only on Cribl.Cloud leaders (docs.cribl.io/apps). See "Cribl.Cloud runtime implications" below.
 - Onboarding requirements added (user decision): the setup wizard must obtain informed consent before storing Azure credentials in the Cribl KV store (with a no-storage device-code alternative), and must state the app registration permissions required per enabled capability. See "Onboarding requirements" below.
 - Redesign-first principle adopted (user decision): the legacy codebase is a capability reference, not an implementation specification. See "Redesign-first principle" below; it governs how every verdict in this catalog is read.
-- Dual-target delivery required (user decision): Cribl Apps run only on Cribl.Cloud, but customer-managed (on-prem) Cribl customers need this capability too. The product ships as TWO targets from ONE shared codebase - the Cribl-hosted app and a local app - plus a locally run onboarding GUI that guides users through setting up either option. End goal: consolidate everything and archive the old codebase. See "Proposed architecture: dual-target" below.
+- Dual-target delivery required (user decision): Cribl Apps run only on Cribl.Cloud, but customer-managed (on-prem) Cribl customers need this capability too. The product ships as TWO targets from ONE shared codebase - the Cribl-hosted app and a local app - plus a locally run onboarding GUI that guides users through setting up either option. End goal: consolidate everything and archive the old codebase. See "Proposed architecture: dual-target" below. (Annotation 2026-10-05: superseded by ADR-0002, 2026-08-17 - the local target was dropped and apps/cribl-app is the only shell.)
 - Scope cuts (user decision, 2026-07-01): AWS and LDAP scenarios are dropped entirely. AWS-* features remain cataloged for reference only; lookups use Microsoft Graph exclusively on both targets, with no local LDAP adapter.
-- Local shell and restructure confirmed (user decision, 2026-07-01): Node host + browser for the local app (open question 8), and the scaffold moves into an npm-workspaces layout as apps/cribl-app (open question 9, executed same day).
+- Local shell and restructure confirmed (user decision, 2026-07-01): Node host + browser for the local app (open question 8), and the scaffold moves into an npm-workspaces layout as apps/cribl-app (open question 9, executed same day). (Annotation 2026-10-05: the local shell was later dropped by ADR-0002, 2026-08-17; see the note under "Proposed architecture: dual-target".)
 - Review complete (2026-07-01): all nine open questions resolved (see Open questions section). Tier 1 = onboarding thread as a walking skeleton; drift = on-demand cloud + scheduled local; air-gap accepted as designed; UnifiedLab first with mandatory TTL. Implementation roadmap: docs/roadmap.md.
 
 ### Redesign-first principle
@@ -298,6 +305,8 @@ The local app doubles as the entry point for both targets, so there is one artif
 
 Strangler-fig confirmed (resolves open question 6): the old trees stay untouched and runnable throughout the build. As each feature domain reaches parity in BOTH targets, its legacy source is marked superseded in this catalog. End state: tag the repo (legacy-final), then remove Cribl-Microsoft_IntegrationSolution/, the Azure PowerShell trees, and SOC-OptimizationToolkit_v1/ from main - git history and the tag preserve them permanently. The DCR template library and schema assets migrate into packages/core assets before archival so nothing load-bearing lives in the archived trees.
 
+(Annotation 2026-10-05: the legacy trees were moved under deprecated/ on 2026-07-13 rather than removed from main, and the dual-target parity condition lapsed with ADR-0002.)
+
 ### Internal structure of the shared code
 
 The earlier single-app layout survives as the internal shape of the shared packages (domain becomes packages/core, api becomes the per-shell adapters, features/components become packages/ui, store becomes the JobStore/SecretsStore ports):
@@ -325,14 +334,14 @@ Rules carried into the workspace layout: every outbound call goes through a port
 ## Open questions for the review
 
 1. RESOLVED (2026-07-01): the onboarding thread (source to validated data flow) is Tier 1, built as a walking-skeleton vertical slice; governance follows in Tier 2.
-2. RESOLVED (2026-07-01): one shared drift-check implementation - on-demand in the Cribl-hosted app, additionally scheduled by the local app's Node host. The GitHub Actions flow retires with the legacy archive.
+2. RESOLVED (2026-07-01): one shared drift-check implementation - on-demand in the Cribl-hosted app, additionally scheduled by the local app's Node host. The GitHub Actions flow retires with the legacy archive. (Annotation 2026-10-05: the local app was dropped by ADR-0002, 2026-08-17, so only the on-demand Cribl-hosted check remains.)
 3. RESOLVED (2026-07-01): LDAP is dropped; lookups use Microsoft Graph exclusively on both targets.
 4. RESOLVED (2026-07-01): AWS is out of scope entirely; AWS-* features remain cataloged for reference only.
 5. Air-gapped support: are browser downloads of generated artifacts (packs, templates, scripts) an acceptable replacement for the Electron export folder? Feasibility (2026-07-01): the generation logic is pure client-side TS (pack tarballs, ARM templates, scripts, configs can all be assembled in-browser and bundled), and the core generation path needs no external fetches because template/schema assets ship inside the app pack. One mechanical verification is needed early: confirm the platform's sandboxed iframe permits Blob downloads (spike in the first milestone). Fallbacks if it does not: create packs in Cribl via the product API and export them through Cribl's own UI, or render artifacts as copyable text. Note the app itself always needs Cribl.Cloud; air-gapped mode means generating and downloading artifacts on the connected side, then carrying them across the gap, exactly as the Electron export folder works today. Dual-target update: the local app can run entirely inside the isolated network beside a customer-managed leader, which is the stronger air-gap answer; download-and-carry remains the Cloud-target story. RESOLVED (2026-07-01): accepted as designed; the iframe Blob-download spike remains a first-milestone task.
 6. RESOLVED (2026-07-01): the old trees stay untouched as fallback until both targets reach parity, then the repo is tagged and the legacy trees are removed from main (see Consolidation and archival plan).
 7. RESOLVED (2026-07-01): UnifiedLab ships first (superset profile, directly supports validating the onboarding thread); the TTL self-destruct is MANDATORY for every app-provisioned lab.
-8. RESOLVED (2026-07-01): Node host + browser confirmed for the local shell, launched from source (EDR-friendly, reuses the web-mode pattern ENG-49).
-9. RESOLVED (2026-07-01): approved and executed; the scaffold now lives at apps/cribl-app inside the npm-workspaces layout (packages/core, packages/ui, apps/cribl-app, apps/local-app).
+8. RESOLVED (2026-07-01): Node host + browser confirmed for the local shell, launched from source (EDR-friendly, reuses the web-mode pattern ENG-49). (Annotation 2026-10-05: the local shell was later dropped by ADR-0002, 2026-08-17.)
+9. RESOLVED (2026-07-01): approved and executed; the scaffold now lives at apps/cribl-app inside the npm-workspaces layout (packages/core, packages/ui, apps/cribl-app, apps/local-app). (Annotation 2026-10-05: apps/local-app was removed by ADR-0002, 2026-08-17; apps/cribl-app is the only shell.)
 
 <!-- END REVIEW-GUIDE -->
 
@@ -831,8 +840,9 @@ Reader-noted gaps: 1) The React renderer (src/renderer, ~pages like SentinelInte
 
 ### ENG-19. Tiered sample resolver
 
-> SUPERSEDED 2026-08-18 by ADR-0003, for this entry and for ENG-20, ENG-42, and
-> ENG-41's Tier 3: the tiered resolver and its browse modal were ported (porting
+> SUPERSEDED 2026-08-18 by ADR-0003, for this entry and for ENG-20 (whose
+> Elastic connectivity probe lingered until DBT-118, 2026-09-04), ENG-42,
+> ENG-41's Tier 3, and the UI half of the mechanism, GUI-06 (a) and (b): the tiered resolver and its browse modal were ported (porting
 > plan Unit 16), shipped, and then DELETED. The portability notes in this
 > cluster are kept as the record of what the legacy mechanism was; they are no
 > longer a port instruction. Samples now come from the operator - a Cribl Lake
@@ -1154,6 +1164,11 @@ Reader-noted gaps: All business logic the renderer drives lives outside this sub
 
 ### GUI-04. Content repositories setup (GitHub PAT, Sentinel/Elastic fetch, EDR blocklist)
 
+> SUPERSEDED IN PART: the Elastic sample fetch (part 3) was removed with the
+> sample resolver (ADR-0003, 2026-08-18), and its last remnant, the Repositories
+> connectivity probe and the RemoteSampleSource port, was removed in DBT-118
+> (2026-09-04). The GitHub PAT and Sentinel content parts survive.
+
 - Source: `Cribl-Microsoft_IntegrationSolution/src/renderer/pages/RepoSetup.tsx` | Maturity: production | Category: infra-tooling | Verdict: **needs-redesign**
 - Wizard step and standalone page that (1) saves/validates/clears a GitHub PAT (with in-app fine-grained-token creation walkthrough), (2) fetches the Azure-Sentinel repo content (~2500 files, solutions/rules/parsers/connectors) via the GitHub REST API with phase text and structured progress bars, (3) fetches Elastic Integrations test-pipeline sample data (~20+ vendors), and (4) manages an EDR blocklist of Sentinel solutions (built-in / auto-detected / user entries with reasons) with per-solution retry to unblock.
 - In/Out: In: GitHub PAT, fetch/refresh/retry clicks. Out: local mirrored Sentinel solution content + Elastic samples, solution/package counts, blocklist state.
@@ -1169,6 +1184,11 @@ Reader-noted gaps: All business logic the renderer drives lives outside this sub
 - Portability: Solution listing is a GitHub API directory read -- ports with api.github.com in proxies.yml. UI and search are direct.
 
 ### GUI-06. Sample data loading suite
+
+> SUPERSEDED IN PART 2026-08-18 by ADR-0003 (see the note at ENG-19): parts (a)
+> Sentinel-repo auto-load and (b) the browse modal were ported in Unit 16 and
+> then deleted. Parts (c) upload and (d) paste survive, along with a Cribl Lake
+> query and a filtered capture.
 
 - Source: `Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SentinelIntegration.tsx` | Maturity: production | Category: pipeline-generation | Verdict: **needs-redesign**
 - Section 2: load vendor sample events by (a) auto-load from the Sentinel repo with pre-ingested (post-ingestion schema) samples detected and skipped with explanatory warnings, (b) browse modal over the multi-tier sample resolver (sentinel-repo + elastic tiers, previews, multi-select, tier summary), (c) multi-file upload with log-type auto-detection from filename keywords or sourcetype field, (d) paste raw events with a manual log type. Samples are tagged per solution/log type, original formats (CEF/LEEF/KV) preserved across re-parse to NDJSON, log types renamable inline (drives pipeline/route naming), samples expandable to view fields.
@@ -1298,7 +1318,7 @@ Reader-noted gaps: All business logic the renderer drives lives outside this sub
 
 ### GUI-22. SIEM migration analysis and report export
 
-- STATUS: SHIPPED 2026-07-14 (Unit 26) as `@soc/ui` SiemMigrationScreen in BOTH shells: plan persists across navigation (siem-migration-plan~v1), pivot via the preserved solution deep link, HTML (not Markdown) report via ArtifactSink.
+- STATUS: SHIPPED 2026-07-14 (Unit 26) as `@soc/ui` SiemMigrationScreen in BOTH shells (the local shell was later dropped by ADR-0002, 2026-08-17; apps/cribl-app is the only shell): plan persists across navigation (siem-migration-plan~v1), pivot via the preserved solution deep link, HTML (not Markdown) report via ArtifactSink.
 - Source: `Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SiemMigration.tsx` | Maturity: production | Category: reporting | Verdict: **needs-redesign**
 - Upload a Splunk detection-rule JSON export or QRadar CSV (platform auto-detected by extension); the parsed MigrationPlan shows total/enabled rules and building blocks, data sources grouped by mapped Sentinel solution with confidence badges and per-group rule counts, unmapped sources, MITRE ATT&CK tactic coverage tiles, matched Sentinel analytics rules per solution with severity/tactics, a Configure button deep-linking each solution into the Sentinel Integration workflow, and a Download Migration Report action producing a Markdown report in Downloads.
 - In/Out: In: Splunk JSON / QRadar CSV export file. Out: MigrationPlan (dataSources, mappings, MITRE coverage, Sentinel rule matches), Markdown report file, deep-link handoff.
