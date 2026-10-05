@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**67 in the backlog, 2 in progress, 22 done.**
+**68 in the backlog, 1 in progress, 23 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 9 | 2 | 1 |
+| Cross-cutting | 9 | 3 | 0 |
 
 Open work totals 69.
 
@@ -110,7 +110,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 35% (17/49)
+### `DBT` Quality and technical debt _(enabler)_ - 36% (18/50)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -119,7 +119,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 9/26 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 2/8 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 3/9 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -161,21 +161,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   units in visible text or tips - mutation-checked with the very date it
   removed. Seen live section by section. Left IN PROGRESS for the operator to
   review the result before it closes.
-
-- **DBT-129** Docs current before the app moves to its own repository
-  `DBT-F4` `story` `settled`
-  OPERATOR REQUEST 2026-10-05: review the repository documentation so
-  everything is up to date, ahead of migrating the app to a new repository.
-  SCOPE: every non-deprecated markdown file (root entry docs, the toolkit
-  README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog,
-  release notes, the Zscaler lab doc), plus the repo tooling that documents
-  itself (.claude hooks and skills, .github workflows). Each claim is checked
-  against the code; stale ones are corrected, and history stays history
-  (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of
-  everything that couples the app to THIS repository - paths outside
-  soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks,
-  and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the
-  move can be planned.
 
 ---
 
@@ -257,7 +242,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (27)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -731,6 +716,26 @@ Settled and unblocked, sequenced behind now.
   effect deps, so a parent that rebuilds that object every render would
   re-fetch GET /system/outputs. FIX: a DOM test per site asserting the exact
   argument/text, mutation-checked.
+
+- **DBT-130** Move the app to its own repository
+  `DBT-F4` `story` `undecided`
+  OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of
+  criblio/Cribl-Microsoft into a new repository. The plan and the full
+  inventory are docs/repo-migration-plan.md. WHAT IS KNOWN: the shipped app is
+  self-contained; the build and checks are not (two core tests and the
+  schema-asset extractor read files outside the app, the docs gate walks the
+  parent folder, CI, hooks and three git-history checks assume the
+  soc-optimizationtoolkit/ prefix). A history-preserving extraction with git
+  filter-repo is viable and can drop 51 old tarballs from history.
+  Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository:
+  Cribl's published docs link it. UNDECIDED - the decisions in the plan, the
+  two that shape everything else first: the new repo's name and owner, and
+  whether the app keeps its soc-optimizationtoolkit/ subdirectory or is
+  flattened to the repo root.
+  DECISION (unanswered): Keep soc-optimizationtoolkit/ as a subdirectory in
+  the new repository, or flatten it to the root?
+    [ ] `keep-subdirectory` Keep the subdirectory - Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed.
+    [ ] `flatten` Flatten to the repo root - Cleaner layout, but every path retarget in the inventory (CI, hooks, board-freshness and its pins, release drift, check-docs) must change in the same commit.
 
 ---
 
@@ -1240,7 +1245,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (22)
+## Done (23)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2555,3 +2560,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   explicit-intent path deletes samples, and it also blanks the saved selection
   - is still true and is the place to start if it ever recurs without an
   operator action.
+
+- **DBT-129** Docs current before the app moves to its own repository
+  `DBT-F4` `story` `settled` `verified: none`
+  OPERATOR REQUEST 2026-10-05: review the repository documentation so
+  everything is up to date, ahead of migrating the app to a new repository.
+  SCOPE: every non-deprecated markdown file (root entry docs, the toolkit
+  README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog,
+  release notes, the Zscaler lab doc), plus the repo tooling that documents
+  itself (.claude hooks and skills, .github workflows). Each claim is checked
+  against the code; stale ones are corrected, and history stays history
+  (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of
+  everything that couples the app to THIS repository - paths outside
+  soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks,
+  and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the
+  move can be planned. DONE 2026-10-05. Eight doc groups reviewed against the
+  code by a reviewer each and challenged by a skeptic each: 105 findings, none
+  refuted; fixed per group and merged (about 34 files). Records were annotated
+  or re-statused, not rewritten. The root CLAUDE.md now leads with the toolkit
+  (workspaces, commands, Node 22, CI gates) and fences the PowerShell material
+  under a deprecated heading; CONTRIBUTORS, README, QUICK_START, the CONTEXT
+  files, ADRs, plans, the feature catalog and the tooling docs were brought to
+  date. check-docs, check-release and the full suite pass. verified: none
+  because this is prose; the checks hold its paths and statuses, not its
+  sentences. The coupling inventory is docs/repo-migration-plan.md (Proposed):
+  31 items, 10 needing a decision, carried by [[DBT-130]].

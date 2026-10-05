@@ -1323,12 +1323,42 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "story",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "Docs current before the app moves to its own repository",
-      "detail": "OPERATOR REQUEST 2026-10-05: review the repository documentation so everything is up to date, ahead of migrating the app to a new repository.\n\nSCOPE: every non-deprecated markdown file (root entry docs, the toolkit README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog, release notes, the Zscaler lab doc), plus the repo tooling that documents itself (.claude hooks and skills, .github workflows). Each claim is checked against the code; stale ones are corrected, and history stays history (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of everything that couples the app to THIS repository - paths outside soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks, and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the move can be planned."
+      "detail": "OPERATOR REQUEST 2026-10-05: review the repository documentation so everything is up to date, ahead of migrating the app to a new repository.\n\nSCOPE: every non-deprecated markdown file (root entry docs, the toolkit README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog, release notes, the Zscaler lab doc), plus the repo tooling that documents itself (.claude hooks and skills, .github workflows). Each claim is checked against the code; stale ones are corrected, and history stays history (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of everything that couples the app to THIS repository - paths outside soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks, and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the move can be planned.\n\nDONE 2026-10-05. Eight doc groups reviewed against the code by a reviewer each and challenged by a skeptic each: 105 findings, none refuted; fixed per group and merged (about 34 files). Records were annotated or re-statused, not rewritten. The root CLAUDE.md now leads with the toolkit (workspaces, commands, Node 22, CI gates) and fences the PowerShell material under a deprecated heading; CONTRIBUTORS, README, QUICK_START, the CONTEXT files, ADRs, plans, the feature catalog and the tooling docs were brought to date. check-docs, check-release and the full suite pass. verified: none because this is prose; the checks hold its paths and statuses, not its sentences.\nThe coupling inventory is docs/repo-migration-plan.md (Proposed): 31 items, 10 needing a decision, carried by [[DBT-130]].",
+      "verified": "none"
+    },
+    {
+      "id": "DBT-130",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "undecided",
+      "dependsOn": [
+        "DBT-129"
+      ],
+      "title": "Move the app to its own repository",
+      "detail": "OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of criblio/Cribl-Microsoft into a new repository. The plan and the full inventory are docs/repo-migration-plan.md.\n\nWHAT IS KNOWN: the shipped app is self-contained; the build and checks are not (two core tests and the schema-asset extractor read files outside the app, the docs gate walks the parent folder, CI, hooks and three git-history checks assume the soc-optimizationtoolkit/ prefix). A history-preserving extraction with git filter-repo is viable and can drop 51 old tarballs from history. Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository: Cribl's published docs link it.\n\nUNDECIDED - the decisions in the plan, the two that shape everything else first: the new repo's name and owner, and whether the app keeps its soc-optimizationtoolkit/ subdirectory or is flattened to the repo root.",
+      "decision": {
+        "question": "Keep soc-optimizationtoolkit/ as a subdirectory in the new repository, or flatten it to the root?",
+        "options": [
+          {
+            "key": "keep-subdirectory",
+            "label": "Keep the subdirectory",
+            "detail": "Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed."
+          },
+          {
+            "key": "flatten",
+            "label": "Flatten to the repo root",
+            "detail": "Cleaner layout, but every path retarget in the inventory (CI, hooks, board-freshness and its pins, release drift, check-docs) must change in the same commit."
+          }
+        ]
+      }
     }
   ],
   "features": [
