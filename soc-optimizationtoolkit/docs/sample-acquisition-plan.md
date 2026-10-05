@@ -44,7 +44,8 @@ Written 2026-08-18 by a planning session, from a live read of the code.
 > detections, shipped workbooks, and the vendor's own documentation, each
 > labelled. See the second **[SUPERSEDED]** block under Phase 2; it also records
 > the one command that has to be run to populate the generated half of the
-> vendor tier, which ships empty.
+> vendor tier, which ships empty [since populated - 157 packs, commit df3ad5e;
+> see the SUPERSEDED note under Phase 2].
 >
 > Phase 0's answers are in **[sample-acquisition-phase0.md](sample-acquisition-phase0.md)**
 > and they change four things written below. Read that document before finishing

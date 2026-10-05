@@ -12,6 +12,12 @@ says so:
   not clickable.** `FallbackNotice` has exactly one production render site
   (`screens/preflight/rbac-preflight-panel.tsx`) and it is rendered WITHOUT
   `onProduce`, so no button appears. Every `onProduce` in the repo is in a test.
+  [BUILT by 2026-08-31, backlog.md section 16 (D-2/HON-7): the Integrate
+  deploy, Batch Deploy, DCR Automation and both Tables-tab offers pass
+  `onProduce` (five of the six production render sites); only
+  `rbac-preflight-panel.tsx`'s notice remains button-less. Not the only place
+  either: backlog.md sections 1 and 16 also carry these follow-ons. - noted
+  2026-10-05]
 - **The audit's age has no home and there is no manual re-check**; neither has a
   production consumer.
 
