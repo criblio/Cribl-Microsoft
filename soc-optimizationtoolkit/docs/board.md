@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**69 in the backlog, 1 in progress, 24 done.**
+**68 in the backlog, 2 in progress, 24 done.**
 
 ## By menu item
 
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (2)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -161,6 +161,18 @@ Started. Anything here with an unfinished dependency is called out on its card.
   units in visible text or tips - mutation-checked with the very date it
   removed. Seen live section by section. Left IN PROGRESS for the operator to
   review the result before it closes.
+
+- **DBT-131** Find how the Cribl Marketplace accepts a new app version
+  `DBT-F4` `spike` `unconfirmed`
+  OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the
+  new repository to trigger a CI pipeline, with approvals, that publishes the
+  new app version to the Cribl Marketplace. Nothing in this repository says
+  how the Marketplace takes a version - a publish API, an upload to a partner
+  portal, a pull from a GitHub release, or a submission reviewed by Cribl.
+  Find out (Cribl App Platform docs, the Marketplace team), and record what
+  credential the pipeline needs, what artifact it sends (the .tgz from npm run
+  package), and what approval Cribl itself applies, before the pipeline is
+  designed.
 
 ---
 
@@ -242,7 +254,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (29)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -752,18 +764,6 @@ Settled and unblocked, sequenced behind now.
   repository, or flatten it to the root?
     [x] `keep-subdirectory` Keep the subdirectory - Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed.
     [ ] `flatten` Flatten to the repo root - Cleaner layout, but every path retarget in the inventory (CI, hooks, board-freshness and its pins, release drift, check-docs) must change in the same commit.
-
-- **DBT-131** Find how the Cribl Marketplace accepts a new app version
-  `DBT-F4` `spike` `unconfirmed`
-  OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the
-  new repository to trigger a CI pipeline, with approvals, that publishes the
-  new app version to the Cribl Marketplace. Nothing in this repository says
-  how the Marketplace takes a version - a publish API, an upload to a partner
-  portal, a pull from a GitHub release, or a submission reviewed by Cribl.
-  Find out (Cribl App Platform docs, the Marketplace team), and record what
-  credential the pipeline needs, what artifact it sends (the .tgz from npm run
-  package), and what approval Cribl itself applies, before the pipeline is
-  designed.
 
 ---
 

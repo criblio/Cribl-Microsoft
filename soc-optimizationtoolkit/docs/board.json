@@ -1368,7 +1368,7 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "spike",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "unconfirmed",
       "dependsOn": [],
