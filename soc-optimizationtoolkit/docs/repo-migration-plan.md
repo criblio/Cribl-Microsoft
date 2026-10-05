@@ -57,6 +57,22 @@ The operator answered the four decisions that shape the rest:
 Still open: rows 4 (issues and bug triage), 5 (shared hooks), what the old
 repository keeps of the tarball, and branch protection.
 
+## Rehearsed 2026-10-05
+
+The extraction is scripted in `scripts/repo-move/` ([[DBT-132]]) and was run
+end to end against this repository into a scratch directory: 863 commits kept,
+the pack 6.4 MiB (from 34.4 MiB), 918 tracked files, one tarball. Inside the
+extract, with nothing from outside the app present, every CI gate passed - npm
+ci, lint, typecheck, the full suite (5,294 tests; the two frozen-fixture
+equality pins skip, as designed, because their originals are absent), build,
+check-listings, check-classnames, check-release, check-docs (after 178 pointers
+into the old repository became links) and check-board. check-board-freshness
+needs an origin to diff against and runs once the repository is pushed.
+
+Two defects in the scripts were found by the rehearsal and fixed before this was
+written: re-adding the tarball into a release/ directory the filter had emptied,
+and the four Living backlog lines check-docs failed.
+
 ## Decisions needed first
 
 | # | Where | Decision |

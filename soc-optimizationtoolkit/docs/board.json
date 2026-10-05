@@ -1380,14 +1380,15 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [
         "DBT-129"
       ],
       "title": "Prepare the repository move: the app stands alone, and the extraction is rehearsed",
-      "detail": "STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core provenance pins read from deprecated/ (coverage-model and entra-diagnostics) as frozen fixtures inside the app. (2) Write the git filter-repo extraction and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore, .gitattributes, the CI workflow, the .claude hooks) per the decisions in docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch directory and run install, typecheck, the full suite and every check-* there. Creating the criblio repository, and pushing to it, stay the operator."
+      "detail": "STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core provenance pins read from deprecated/ (coverage-model and entra-diagnostics) as frozen fixtures inside the app. (2) Write the git filter-repo extraction and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore, .gitattributes, the CI workflow, the .claude hooks) per the decisions in docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch directory and run install, typecheck, the full suite and every check-* there. Creating the criblio repository, and pushing to it, stay the operator.\n\nDONE 2026-10-05. (1) The two legacy files are frozen copies inside the app; the provenance pins read them, and an equality pin holds each to its original while the original exists (mutation-checked). (2) scripts/repo-move/: extract.sh (clone, filter-repo, setup commit) and postprocess.mjs (root files, CLAUDE.md composed from this repository's binding sections, QUICK_START links made absolute, schema extractor removed, doc pointers into the old repository turned into links), with a README of the operator steps. (3) Rehearsed end to end into a scratch directory: 863 commits, 6.4 MiB, every CI gate green inside the extract with nothing from outside the app. verified: live because the evidence is that real run, not unit pins - the scripts have none. Two script defects the rehearsal found were fixed first.",
+      "verified": "live"
     }
   ],
   "features": [

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**69 in the backlog, 2 in progress, 23 done.**
+**69 in the backlog, 1 in progress, 24 done.**
 
 ## By menu item
 
@@ -34,9 +34,9 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 11 | 3 | 1 |
+| Cross-cutting | 10 | 4 | 0 |
 
-Open work totals 71.
+Open work totals 70.
 
 ## Epics and features
 
@@ -110,7 +110,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 35% (18/52)
+### `DBT` Quality and technical debt _(enabler)_ - 37% (19/52)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -119,7 +119,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 9/26 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 3/11 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 4/11 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (2)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -161,19 +161,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   units in visible text or tips - mutation-checked with the very date it
   removed. Seen live section by section. Left IN PROGRESS for the operator to
   review the result before it closes.
-
-- **DBT-132** Prepare the repository move: the app stands alone, and the extraction is rehearsed
-  `DBT-F4` `enabler` `settled`
-  STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test
-  fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core
-  provenance pins read from deprecated/ (coverage-model and entra-diagnostics)
-  as frozen fixtures inside the app. (2) Write the git filter-repo extraction
-  and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore,
-  .gitattributes, the CI workflow, the .claude hooks) per the decisions in
-  docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch
-  directory and run install, typecheck, the full suite and every check-*
-  there. Creating the criblio repository, and pushing to it, stay the
-  operator.
 
 ---
 
@@ -731,7 +718,7 @@ Settled and unblocked, sequenced behind now.
   argument/text, mutation-checked.
 
 - **DBT-130** Move the app to its own repository
-  `DBT-F4` `story` `settled` `blocked by DBT-131, DBT-132`
+  `DBT-F4` `story` `settled` `blocked by DBT-131`
   OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of
   criblio/Cribl-Microsoft into a new repository. The plan and the full
   inventory are docs/repo-migration-plan.md. WHAT IS KNOWN: the shipped app is
@@ -1286,7 +1273,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (23)
+## Done (24)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2626,3 +2613,27 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   because this is prose; the checks hold its paths and statuses, not its
   sentences. The coupling inventory is docs/repo-migration-plan.md (Proposed):
   31 items, 10 needing a decision, carried by [[DBT-130]].
+
+- **DBT-132** Prepare the repository move: the app stands alone, and the extraction is rehearsed
+  `DBT-F4` `enabler` `settled` `verified: live`
+  STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test
+  fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core
+  provenance pins read from deprecated/ (coverage-model and entra-diagnostics)
+  as frozen fixtures inside the app. (2) Write the git filter-repo extraction
+  and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore,
+  .gitattributes, the CI workflow, the .claude hooks) per the decisions in
+  docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch
+  directory and run install, typecheck, the full suite and every check-*
+  there. Creating the criblio repository, and pushing to it, stay the
+  operator. DONE 2026-10-05. (1) The two legacy files are frozen copies inside
+  the app; the provenance pins read them, and an equality pin holds each to
+  its original while the original exists (mutation-checked). (2)
+  scripts/repo-move/: extract.sh (clone, filter-repo, setup commit) and
+  postprocess.mjs (root files, CLAUDE.md composed from this repository's
+  binding sections, QUICK_START links made absolute, schema extractor removed,
+  doc pointers into the old repository turned into links), with a README of
+  the operator steps. (3) Rehearsed end to end into a scratch directory: 863
+  commits, 6.4 MiB, every CI gate green inside the extract with nothing from
+  outside the app. verified: live because the evidence is that real run, not
+  unit pins - the scripts have none. Two script defects the rehearsal found
+  were fixed first.
