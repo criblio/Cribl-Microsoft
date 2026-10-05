@@ -57,6 +57,37 @@ The operator answered the four decisions that shape the rest:
 Still open: rows 4 (issues and bug triage), 5 (shared hooks), what the old
 repository keeps of the tarball, and branch protection.
 
+## Rehearsed 2026-10-05
+
+The extraction is scripted in `scripts/repo-move/` ([[DBT-132]]) and was run
+end to end against this repository into a scratch directory: 863 commits kept,
+the pack 6.4 MiB (from 34.4 MiB), 918 tracked files, one tarball. Inside the
+extract, with nothing from outside the app present, every CI gate passed - npm
+ci, lint, typecheck, the full suite (5,294 tests; the two frozen-fixture
+equality pins skip, as designed, because their originals are absent), build,
+check-listings, check-classnames, check-release, check-docs (after 178 pointers
+into the old repository became links) and check-board. check-board-freshness
+needs an origin to diff against and runs once the repository is pushed.
+
+Two defects in the scripts were found by the rehearsal and fixed before this was
+written: re-adding the tarball into a release/ directory the filter had emptied,
+and the four Living backlog lines check-docs failed.
+
+## How a version reaches the Cribl Marketplace - answered 2026-10-05
+
+[[DBT-131]]. Cribl's published docs describe one path: sign in to
+packs.cribl.io with Google, upload the `.tgz` from `npm run package` on the
+Apps publishing page, accept the Developer Terms, and wait for Cribl's review -
+the App is unlisted until Cribl approves it. There is no documented publish API
+or CLI, and nothing on how a new version of a listed App is published.
+
+So the version-triggered pipeline the operator wants can automate everything up
+to the artifact - build, every gate, an approval, the `.tgz` attached to a
+release - and the submission itself is a manual upload, unless the Marketplace
+team offers an API the docs do not describe. Submission also requires a
+`Tags.products` array in `package.json`, a README.md with eleven named sections
+inside the package, and no high or critical vulnerabilities ([[DBT-133]]).
+
 ## Decisions needed first
 
 | # | Where | Decision |

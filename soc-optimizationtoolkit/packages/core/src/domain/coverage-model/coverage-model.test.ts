@@ -10,7 +10,7 @@
 // the shipped module, and the architecture audit exempts *.test.ts explicitly.
 // The shipped catalog is a TS constant with no IO in it.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -35,19 +35,15 @@ import { deployPlan } from "../onboarding-selection";
 import { ENTRA_PROFILES, ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LEGACY_PATH = join(
+// A FROZEN COPY inside the app (DBT-132): the app is moving to its own
+// repository, which will not carry deprecated/. The copy is byte-for-byte the
+// file this catalog was ported from; the pin below holds the two equal for as
+// long as the original exists beside it.
+const LEGACY_PATH = join(HERE, "legacy", "resource-coverage.json");
+const ORIGINAL_PATH = join(
   HERE,
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "deprecated",
-  "Azure",
-  "Azure-LogCollection",
-  "core",
-  "resource-coverage.json",
+  "..", "..", "..", "..", "..", "..",
+  "deprecated", "Azure", "Azure-LogCollection", "core", "resource-coverage.json",
 );
 
 /**
@@ -71,6 +67,14 @@ function legacy(): Record<string, unknown> {
   }
   return JSON.parse(text) as Record<string, unknown>;
 }
+
+describe("the frozen legacy copy (DBT-132)", () => {
+  // Runs only where the original still exists (this repository); skipped, and
+  // shown as skipped, once the app lives without deprecated/.
+  it.runIf(existsSync(ORIGINAL_PATH))("is byte-for-byte the ported-from file", () => {
+    expect(readFileSync(LEGACY_PATH, "utf8")).toBe(readFileSync(ORIGINAL_PATH, "utf8"));
+  });
+});
 
 /** Walk a dotted path like `scriptBasedDeployment.entraId`. */
 function at(root: unknown, path: string): Record<string, unknown> | undefined {

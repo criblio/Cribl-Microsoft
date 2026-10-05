@@ -1,0 +1,48 @@
+# The new repository's .gitignore (installed as /.gitignore by extract.sh).
+# Taken from the rules of criblio/Cribl-Microsoft that apply to the app; the
+# PowerShell, Electron and DCR-Automation rules stayed behind with that code.
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+soc-optimizationtoolkit/apps/cribl-app/build/
+
+# Logs and temporary files
+*.log
+logs/
+**/logs/
+!soc-optimizationtoolkit/packages/ui/src/screens/logs/
+*.tmp
+*.temp
+*.cache
+*.bak
+*.orig
+*.rej
+
+# Local and personal files
+.env
+.env.*
+notes.txt
+scratch.*
+todo.txt
+personal-*
+*api-key*
+*connection-string*
+
+# Editors and OS
+.vscode/
+.vs/
+.idea/
+*.code-workspace
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+
+# Claude Code: the project hooks and skills are shared; personal settings are not
+.claude/settings.local.json
+.claude/worktrees/

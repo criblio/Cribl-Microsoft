@@ -10,7 +10,7 @@
 // and the directory-role precondition is modelled as UNMEASURABLE rather than
 // as merely unmeasured.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -34,11 +34,21 @@ import {
 } from "./entra-diagnostic-setting";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_PATH = join(
+// A FROZEN COPY inside the app (DBT-132) - see the matching note in
+// coverage-model.test.ts. The pin below holds it equal to the original while
+// the original exists.
+const SCRIPT_PATH = join(HERE, "legacy", "Deploy-EntraIDDiagnostics.ps1");
+const ORIGINAL_PATH = join(
   HERE,
   "..", "..", "..", "..", "..", "..",
   "deprecated", "Azure", "Azure-LogCollection", "core", "Deploy-EntraIDDiagnostics.ps1",
 );
+
+describe("the frozen legacy copy (DBT-132)", () => {
+  it.runIf(existsSync(ORIGINAL_PATH))("is byte-for-byte the ported-from script", () => {
+    expect(readFileSync(SCRIPT_PATH, "utf8")).toBe(readFileSync(ORIGINAL_PATH, "utf8"));
+  });
+});
 
 /** The script this was ported from. Fails loudly if it is gone - see AZR-0. */
 function script(): string {
