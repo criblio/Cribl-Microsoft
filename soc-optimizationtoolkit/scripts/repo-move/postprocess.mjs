@@ -16,7 +16,7 @@
 // Every edit asserts the text it replaces, so a source that has moved on fails
 // the extraction loudly instead of producing a half-edited repository.
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -146,6 +146,33 @@ write(
   ),
 );
 
+// --- doc pointers into the old repository -------------------------------------
+// The app's docs name paths under deprecated/, Azure/ and KnowledgeArticles/ -
+// mostly where a feature was ported from. Those stay in criblio/Cribl-Microsoft,
+// and check-docs rightly fails a Living doc that names a path nobody can open.
+// Each such backticked path that does not exist here becomes a plain link to the
+// same path in the old repository: the reader still gets there, and the text no
+// longer claims the file is in this checkout. Paths that DO exist are left alone.
+const OUTSIDE = /`((?:deprecated|Azure|KnowledgeArticles)\/[A-Za-z0-9._/-]+)`/g;
+let rewritten = 0;
+function walkMarkdown(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".git") continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) walkMarkdown(full);
+    else if (entry.name.endsWith(".md")) {
+      const before = read(full);
+      const after = before.replace(OUTSIDE, (match, path) => {
+        if (existsSync(join(out, path))) return match;
+        rewritten++;
+        return `[criblio/Cribl-Microsoft ${path}](${OLD}/tree/main/${path})`;
+      });
+      if (after !== before) write(full, after);
+    }
+  }
+}
+walkMarkdown(join(out, APP));
+
 // --- CI, without the schema step -------------------------------------------
 const ci = read(join(stage, ".github/workflows/soc-toolkit-ci.yml"));
 const schemaStep =
@@ -156,4 +183,6 @@ const schemaStep =
   "        run: npm run check-schema-asset --workspace apps/cribl-app\n\n";
 write(join(out, ".github/workflows/soc-toolkit-ci.yml"), replaceOnce(ci, schemaStep, "", "soc-toolkit-ci.yml"));
 
-console.log(`postprocess: root written, schema extractor removed (source ${sourceHead.slice(0, 7)})`);
+console.log(
+  `postprocess: root written, schema extractor removed, ${rewritten} doc pointer(s) into the old repository (source ${sourceHead.slice(0, 7)})`,
+);
