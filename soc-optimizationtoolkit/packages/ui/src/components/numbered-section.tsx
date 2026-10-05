@@ -56,6 +56,20 @@ export interface NumberedSectionProps {
    * body regardless of what is passed here.
    */
   children?: ReactNode;
+  /**
+   * DBT-127: the page may own the collapsed state, so a "Done - next" button
+   * and the readiness-footer pills can fold and open sections. Omitted, the
+   * section keeps its own state exactly as before.
+   */
+  collapsed?: boolean;
+  /** Told whenever the header, Expand or Collapse changes the state. */
+  onCollapsedChange?: (collapsed: boolean) => void;
+  /** One line shown in the header while collapsed - what was chosen here. */
+  summary?: string;
+  /** Renders "Done - next" at the foot of the body; the page decides what it does. */
+  onDone?: () => void;
+  /** DOM id, so the page can scroll a section into view. */
+  anchorId?: string;
 }
 
 export function NumberedSection({
@@ -65,6 +79,11 @@ export function NumberedSection({
   infoTip,
   reason,
   children,
+  collapsed: collapsedProp,
+  onCollapsedChange,
+  summary,
+  onDone,
+  anchorId,
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
@@ -72,11 +91,20 @@ export function NumberedSection({
   // completed). Manual toggle - never auto-collapses, so a section cannot
   // vanish mid-edit when a gate flips. Header click or the chevron toggles;
   // coming-soon sections have no body to collapse.
-  const [collapsed, setCollapsed] = useState(false);
+  const [ownCollapsed, setOwnCollapsed] = useState(false);
+  const collapsed = collapsedProp ?? ownCollapsed;
+  const setCollapsed = (next: boolean | ((c: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(collapsed) : next;
+    if (collapsedProp === undefined) {
+      setOwnCollapsed(value);
+    }
+    onCollapsedChange?.(value);
+  };
   const collapsible = !comingSoon;
   const bodyHidden = collapsible && collapsed;
   return (
     <section
+      {...(anchorId !== undefined ? { id: anchorId } : {})}
       className={`numbered-section numbered-section-${status}${bodyHidden ? " numbered-section-collapsed" : ""}`}
     >
       <div
@@ -111,6 +139,9 @@ export function NumberedSection({
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
         </span>
+        {bodyHidden && summary !== undefined && summary !== "" && (
+          <span className="numbered-section-summary">{summary}</span>
+        )}
         {collapsible && collapsed && (
           <button
             className="numbered-section-collapse"
@@ -145,20 +176,30 @@ export function NumberedSection({
             <p className="numbered-section-blocked-reason">{reason}</p>
           )}
           <div className="numbered-section-body">{children}</div>
-          {collapsible && (
-            // Collapse lives at the BOTTOM of the expanded body (user
-            // direction 2026-07-13): a section is finished at its end, so
-            // that is where the put-it-away control belongs. Expand stays
-            // in the header - a collapsed section has no visible bottom.
-            <button
-              className="numbered-section-collapse numbered-section-collapse-bottom"
-              aria-expanded={true}
-              aria-label={`Collapse ${title}`}
-              onClick={() => setCollapsed(true)}
-            >
-              Collapse
-            </button>
-          )}
+          <div className="numbered-section-foot">
+            {onDone !== undefined && (
+              <button
+                className="next-action-button numbered-section-done"
+                onClick={onDone}
+              >
+                Done - next
+              </button>
+            )}
+            {collapsible && (
+              // Collapse lives at the BOTTOM of the expanded body (user
+              // direction 2026-07-13): a section is finished at its end, so
+              // that is where the put-it-away control belongs. Expand stays
+              // in the header - a collapsed section has no visible bottom.
+              <button
+                className="numbered-section-collapse numbered-section-collapse-bottom"
+                aria-expanded={true}
+                aria-label={`Collapse ${title}`}
+                onClick={() => setCollapsed(true)}
+              >
+                Collapse
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>

@@ -43,13 +43,13 @@ export const MODE_CHOICES: readonly ModeChoice[] = Object.freeze([
     mode: "lake-query",
     label: "Query a Cribl Lake dataset",
     detail:
-      "Data you already retain, so it can show every log type present rather than whatever arrives during a short window. Needs a Cribl Search group to run the query.",
+      "Every log type you already retain. Needs a Cribl Search group.",
   },
   {
     mode: "live-capture",
     label: "Capture from a live source",
     detail:
-      "A bounded capture off a configured source, filtered to the log types you want. Immediate, but it only sees what flows while it runs.",
+      "Immediate, but sees only what flows while the capture runs.",
   },
 ]);
 
@@ -245,7 +245,7 @@ export function derivePickerView(input: PickerViewInput): PickerView {
       ...base,
       status: "awaiting-mode",
       headline:
-        "Choose where your samples come from. Nothing is loaded until you pick one.",
+        "Nothing loads until you pick one.",
     };
   }
 

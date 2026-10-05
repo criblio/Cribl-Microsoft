@@ -48,21 +48,22 @@ export const PIPELINES_PER_LOG_TYPE = 2;
  */
 export function packShapeSummary(sampleCount: number): string {
   if (sampleCount === 0) {
-    return (
-      "No samples tagged yet. Each unique log type you add becomes its own pair of " +
-      "routes and pipelines in the pack - with none, the pack has nothing to route."
-    );
+    return "No samples tagged yet - the pack has nothing to route.";
   }
   const routes = sampleCount * ROUTES_PER_LOG_TYPE;
   const pipelines = sampleCount * PIPELINES_PER_LOG_TYPE;
   const types = sampleCount === 1 ? "log type" : "log types";
-  return (
-    `${sampleCount} ${types} tagged, so the pack will carry ${routes} routes and ` +
-    `${pipelines} pipelines (a reduction and a transform pair per log type), plus ` +
-    `one sample file each. A log type with no sample gets no route, so its events ` +
-    `arrive unshaped.`
-  );
+  return `${sampleCount} ${types} tagged: the pack will carry ${routes} routes and ${pipelines} pipelines.`;
 }
+
+/**
+ * How the counts above are made, for the (i) beside them (DBT-125). Static, so
+ * it lives beside the function whose arithmetic it describes.
+ */
+export const PACK_SHAPE_TIP =
+  "Each unique log type becomes a reduction and a transform pipeline, a route " +
+  "for each, and one sample file. A log type with no sample gets no route, so " +
+  "its events arrive unshaped.";
 
 /** How the derived comparison should read, given what is known. */
 export type CoverageVerdict =
@@ -149,9 +150,8 @@ export function deriveSampleCoverageView(
   return {
     verdict: "gaps",
     headline:
-      `${missing.length} ${label} referenced by this solution's detections still have ` +
-      "no sample. Each one you add becomes another route and pipeline pair; " +
-      "continuing without them means those events are never shaped.",
+      `${missing.length} ${label} referenced by this solution's detections ` +
+      "have no sample - those events are never shaped.",
     missing,
     unreferenced,
     requiresAck: true,
@@ -236,17 +236,20 @@ export interface RecommendedLogType {
   estimatedBytes?: number;
 }
 
-/** Operator-facing name for an evidence tier. */
-export function evidenceLabel(evidence: LogTypeEvidence): string {
-  switch (evidence) {
-    case "detection":
-      return "a shipped detection filters on it";
-    case "workbook":
-      return "a shipped workbook queries it";
-    case "vendor":
-      return "the vendor documents this feed";
-  }
+/**
+ * The compact row noun (DBT-125): "3 detections", "1 workbook". The full
+ * meaning of each evidence kind - EVIDENCE_LEGEND, below - is said once, in the tip on
+ * the list heading, instead of on every one of up to a few dozen rows.
+ */
+export function evidenceCount(evidence: "detection" | "workbook", n: number): string {
+  return `${n} ${evidence}${n === 1 ? "" : "s"}`;
 }
+
+/** What each row kind means, for the (i) on the list heading. */
+export const EVIDENCE_LEGEND =
+  "Each row names the field a shipped detection filters on, or a shipped " +
+  "workbook queries, and how many do. Rows marked vendor docs come from the " +
+  "vendor's documentation of what it emits, not from this solution.";
 
 export interface LogTypeRecommendation {
   status: RecommendationStatus;
@@ -271,6 +274,11 @@ export interface LogTypeRecommendation {
 }
 
 /** Join names as prose: "A", "A and B", "A, B and C". */
+/** "1 log type" / "13 log types". */
+function logTypes(n: number): string {
+  return `${n} log type${n === 1 ? "" : "s"}`;
+}
+
 export function joinNames(names: readonly string[]): string {
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
@@ -379,33 +387,42 @@ export function deriveLogTypeRecommendation(
   // vendor documentation must not read as "your solution needs these" - it is
   // the fallback for a solution that told us nothing, and saying otherwise
   // would dress a catalog up as a requirement.
+  //
+  // COUNTS, not names (DBT-125): the list directly below names every log type
+  // with its provided state, so a headline that named them all again was the
+  // same fact twice. The headline keeps what the list cannot say at a glance -
+  // whose claim it is, and how many are covered.
   const fromContent = entries.filter((e) => e.evidence !== "vendor");
+  const vendorCount = entries.length - fromContent.length;
+  const vendor = entries.find((e) => e.vendor !== undefined)?.vendor ?? "the vendor";
   const lead =
     fromContent.length === 0
-      ? `This solution ships no detections that name a log type. ${entries[0].vendor ?? "The vendor"} documents ${joinNames(entries.map((e) => e.value))}.`
-      : `This solution's content needs ${joinNames(fromContent.map((e) => e.value))}.`;
+      ? `This solution's detections name no log type; ${vendor} documents ${logTypes(entries.length)}.`
+      : `${logTypes(fromContent.length)} referenced by this solution's content` +
+        (vendorCount > 0 ? `, ${vendorCount} more documented by ${vendor}` : "") +
+        ".";
 
-  const have = entries.filter((e) => e.provided).map((e) => e.value);
+  const have = entries.filter((e) => e.provided).length;
 
-  if (have.length === 0) {
+  if (have === 0) {
     return withWindow({
       status: "none-provided",
-      headline: `${lead} You have provided none of them yet.`,
+      headline: `${lead} None provided yet.`,
       entries,
       unreferenced,
     });
   }
-  if (have.length < entries.length) {
+  if (have < entries.length) {
     return withWindow({
       status: "partial",
-      headline: `${lead} You have provided ${joinNames(have)}.`,
+      headline: `${lead} ${have} provided.`,
       entries,
       unreferenced,
     });
   }
   return withWindow({
     status: "covered",
-    headline: `${lead} You have provided all of them.`,
+    headline: `${lead} All provided.`,
     entries,
     unreferenced,
   });

@@ -87,16 +87,16 @@ describe("LogTypeRecommendation", () => {
       [],
     );
     const first = container.querySelector(".log-type-recommendation-list li");
-    expect(first?.textContent).toContain("type");
-    expect(first?.textContent).toContain("a shipped detection filters on it");
-    expect(first?.textContent).toContain("2 items");
+    // Compact since DBT-125: the field and the count stay on the row; what a
+    // "detection" row means is said once, in the heading tip.
+    expect(first?.textContent).toContain("type - 2 detections");
   });
 
   it("uses the singular for a single referencing item", () => {
     const { container } = renderFor(['T | where type == "TRAFFIC"'], []);
     const row = container.querySelector(".log-type-recommendation-list li");
-    expect(row?.textContent).toContain("1 item");
-    expect(row?.textContent).not.toContain("1 items");
+    expect(row?.textContent).toContain("1 detection");
+    expect(row?.textContent).not.toContain("1 detections");
   });
 
   it("is ADVISORY: renders no button, no input and no gate", () => {
@@ -176,9 +176,9 @@ describe("LogTypeRecommendation", () => {
     // requirement, and saying otherwise would send an operator collecting data
     // their content never mentions.
     const { container } = renderFor([], [], true, "Zscaler");
-    expect(container.textContent).toContain("ships no detections that name a log type");
+    expect(container.textContent).toContain("detections name no log type");
     expect(container.textContent).toContain("Zscaler documents");
-    expect(container.textContent).not.toContain("This solution's content needs");
+    expect(container.textContent).not.toContain("referenced by this solution's content");
   });
 
   it("labels each row with WHICH tier vouched for it", () => {
@@ -193,7 +193,7 @@ describe("LogTypeRecommendation", () => {
     expect(
       container.querySelectorAll(".log-type-evidence-vendor").length,
     ).toBeGreaterThan(0);
-    expect(container.textContent).toContain("the vendor documents this feed");
+    expect(container.textContent).toContain("Palo Alto Networks docs");
   });
 
   it("reports unreferenced samples neutrally, never as something to fix", () => {
@@ -242,14 +242,14 @@ describe("LogTypeRecommendation - measured volume (plan Phase 5)", () => {
 
   it("says over what window, but only once a number is on screen", () => {
     const bare = renderFor([THREE_TYPES], []);
-    expect(bare.container.textContent).not.toContain("Volumes counted");
+    expect(bare.container.textContent).not.toContain("Volumes: Lake dataset");
     cleanup();
 
     const { container } = renderFor([THREE_TYPES], [], true, "", {
       volumes: [{ logType: "TRAFFIC", eventCount: 4 }],
       window: WINDOW,
     });
-    expect(container.textContent).toContain("Volumes counted");
+    expect(container.textContent).toContain("Volumes: Lake dataset");
     expect(container.textContent).toContain("-24h");
     expect(container.textContent).toContain("now");
   });
@@ -262,7 +262,7 @@ describe("LogTypeRecommendation - measured volume (plan Phase 5)", () => {
       window: WINDOW,
     });
 
-    expect(container.textContent).not.toContain("Volumes counted");
+    expect(container.textContent).not.toContain("Volumes: Lake dataset");
   });
 
   // The BYTE ESTIMATE (plan Phase 5, last item). A count alone cannot be

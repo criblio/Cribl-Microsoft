@@ -3,6 +3,7 @@ export {
   canDeploy,
   canDeployContentPath,
   deriveReadinessPills,
+  sectionForPill,
   deriveSectionStatus,
   deriveSectionStatuses,
   integrateSection,

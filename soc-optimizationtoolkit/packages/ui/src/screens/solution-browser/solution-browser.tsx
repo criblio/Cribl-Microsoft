@@ -31,6 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { InfoTip } from "../../components/info-tip";
 import {
   DELIVERY_FIT_NOT_FETCHED,
   DELIVERY_FIT_UNMEASURED_LABEL,
@@ -832,10 +833,9 @@ export function SolutionBrowser({
               The three sections still do not share a verb: samples are
               DELETED and unrecoverable, mapping and coverage only empty. */}
           <span className="field-hint">
-            Every section below is scoped to this solution. Clearing it deletes
-            the samples you acquired for it and empties the mapping and coverage
-            sections - it is how you pick another solution, so do that only when
-            you are done with this one.
+            Clearing deletes this solution's samples and empties its mapping
+            and coverage.{" "}
+            <InfoTip text="Every section below is scoped to the selected solution. Clearing is how you pick another one, so do it only when you are done with this one." />
           </span>
         </div>
       ) : (

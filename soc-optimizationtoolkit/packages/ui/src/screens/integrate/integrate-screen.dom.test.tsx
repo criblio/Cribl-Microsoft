@@ -1086,10 +1086,10 @@ describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
     const { container } = renderWithGroup();
     await chooseRoutable(container);
     const hint = [...container.querySelectorAll(".field-hint")].find((el) =>
-      /must ALREADY EXIST in the worker group/i.test(el.textContent ?? ""),
+      /must already exist in the worker group/i.test(el.textContent ?? ""),
     );
     expect(hint).toBeTruthy();
-    expect(hint?.textContent).toMatch(/Deploy is what puts them there/i);
+    expect(hint?.textContent).toMatch(/Deploy is what puts it there/i);
   });
 });
 
@@ -1116,5 +1116,48 @@ describe("shouldCheckRoutablePrerequisites (GEN-16)", () => {
     // The vacuous reassurance: "all destinations present" is true only because
     // none is needed, and an operator reads it as the group being ready.
     expect(shouldCheckRoutablePrerequisites("routable", "AzureManaged", 0)).toBe(false);
+  });
+});
+
+describe("IntegrateScreen - fold as you go (DBT-127)", () => {
+  // The pieces are pinned where they live (sectionForPill in core, the
+  // summary in integrate-screen-state, the frame in numbered-section). This
+  // pins the WIRING the screen owns - the part that, deleted, would leave every
+  // piece green and the page inert.
+  function scrolledTo(): string[] {
+    return (Element.prototype.scrollIntoView as unknown as ReturnType<typeof vi.fn>).mock.contexts.map(
+      (el) => (el as Element).id,
+    );
+  }
+
+  it("Done folds the section to its summary and scrolls to the next one", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = renderScreen();
+    const sections = [...container.querySelectorAll<HTMLElement>("section[id^='integrate-section-']")];
+    expect(sections[0]?.id).toBe("integrate-section-solution");
+    const nextId = sections[1]?.id;
+    expect(nextId).toBe("integrate-section-sample-data");
+
+    const done = sections[0]!.querySelector<HTMLButtonElement>(".numbered-section-done")!;
+    fireEvent.click(done);
+
+    expect(sections[0]!.querySelector(".numbered-section-summary")?.textContent).toBe(
+      "no solution selected",
+    );
+    await waitFor(() => expect(scrolledTo()).toEqual([nextId]));
+  });
+
+  it("a footer pill opens its section and scrolls to it", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = renderScreen();
+    const solution = container.querySelector<HTMLElement>("#integrate-section-solution")!;
+    fireEvent.click(solution.querySelector<HTMLButtonElement>(".numbered-section-done")!);
+    expect(solution.querySelector(".numbered-section-summary")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to Solution" }));
+    expect(solution.querySelector(".numbered-section-summary")).toBeNull();
+    await waitFor(() =>
+      expect(scrolledTo().at(-1)).toBe("integrate-section-solution"),
+    );
   });
 });

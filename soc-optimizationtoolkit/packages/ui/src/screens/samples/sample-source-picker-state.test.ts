@@ -51,7 +51,7 @@ describe("MODE_CHOICES", () => {
     expect(MODE_CHOICES.map((c) => c.mode)).toEqual(["lake-query", "live-capture"]);
     // Lake's limit is needing Search; capture's is only seeing what flows.
     expect(MODE_CHOICES[0].detail).toContain("Search group");
-    expect(MODE_CHOICES[1].detail).toContain("only sees what flows");
+    expect(MODE_CHOICES[1].detail).toContain("sees only what flows");
   });
 });
 
@@ -161,7 +161,7 @@ describe("derivePickerView - the states", () => {
   it("AWAITING-MODE once the workspace is reachable but no mode is chosen", () => {
     const view = at({});
     expect(view.status).toBe("awaiting-mode");
-    expect(view.headline).toContain("Nothing is loaded until you pick one");
+    expect(view.headline).toBe("Nothing loads until you pick one.");
     expect(view.options).toEqual([]);
     // No claim about either surface has been made.
     expect(view.headline).not.toContain("no Lake datasets");

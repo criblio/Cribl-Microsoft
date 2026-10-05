@@ -471,7 +471,20 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
     const controls = [
       ...card.querySelectorAll("button, a, input, [role='button']"),
     ].map((el) => (el.textContent ?? "").trim());
-    expect(controls).toEqual(["Clear selection"]);
+    // DBT-125 added one control: the (i) beside the Clear warning. It opens
+    // a tip and does nothing with the address - its whole text is inside the
+    // card's textContent, which the scans above already hold to no "?solution="
+    // and no "deep link", and its only attributes are role/tabindex/aria.
+    expect(controls).toEqual(["Clear selection", "i"]);
+    const tipIcon = card.querySelector(".info-tip-icon");
+    expect(tipIcon?.getAttribute("role")).toBe("button");
+    expect(tipIcon?.getAttributeNames().sort()).toEqual([
+      "aria-expanded",
+      "aria-label",
+      "class",
+      "role",
+      "tabindex",
+    ]);
   });
 
   /**

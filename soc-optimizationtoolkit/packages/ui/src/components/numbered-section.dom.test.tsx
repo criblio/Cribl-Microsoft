@@ -69,7 +69,10 @@ describe("NumberedSection collapse", () => {
 
     const collapse = getByRole("button", { name: "Collapse Run DCR Gap Analysis" });
     expect(collapse.closest(".numbered-section-head")).toBeNull();
-    expect(collapse.previousElementSibling?.className).toBe("numbered-section-body");
+    // DBT-127 put Collapse in a foot row beside Done - next; the row itself
+    // still comes straight after the body.
+    const foot = collapse.closest(".numbered-section-foot");
+    expect(foot?.previousElementSibling?.className).toBe("numbered-section-body");
     // No Expand affordance while expanded.
     expect(queryByRole("button", { name: "Expand Run DCR Gap Analysis" })).toBeNull();
 
@@ -80,5 +83,62 @@ describe("NumberedSection collapse", () => {
     expect(
       queryByRole("button", { name: "Collapse Run DCR Gap Analysis" }),
     ).toBeNull();
+  });
+});
+
+describe("NumberedSection driven by the page (DBT-127)", () => {
+  function Driven({ onDone }: { onDone: () => void }) {
+    const [collapsed, setCollapsed] = useState(false);
+    return (
+      <NumberedSection
+        number={1}
+        title="Select Sentinel Solution"
+        status="complete"
+        infoTip="tip"
+        anchorId="integrate-section-solution"
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+        summary="PaloAlto-PAN-OS"
+        onDone={() => {
+          setCollapsed(true);
+          onDone();
+        }}
+      >
+        <StatefulChild />
+      </NumberedSection>
+    );
+  }
+
+  it("Done collapses to a one-line summary and keeps the body mounted", () => {
+    let done = 0;
+    const { container, getByText, getByRole } = render(<Driven onDone={() => done++} />);
+    fireEvent.click(getByText("count:0"));
+    fireEvent.click(getByRole("button", { name: "Done - next" }));
+
+    expect(done).toBe(1);
+    const summary = container.querySelector(".numbered-section-summary");
+    expect(summary?.textContent).toBe("PaloAlto-PAN-OS");
+    // Hidden, not unmounted: the click count survives.
+    const body = getByText("count:1").closest("[hidden]");
+    expect(body).not.toBeNull();
+  });
+
+  it("Expand reports back to the page that owns the state", () => {
+    const { container, getByRole } = render(<Driven onDone={() => undefined} />);
+    fireEvent.click(getByRole("button", { name: "Done - next" }));
+    fireEvent.click(getByRole("button", { name: "Expand Select Sentinel Solution" }));
+    expect(container.querySelector(".numbered-section-summary")).toBeNull();
+    expect(container.querySelector("[hidden]")).toBeNull();
+  });
+
+  it("carries the anchor the footer pills scroll to", () => {
+    const { container } = render(<Driven onDone={() => undefined} />);
+    expect(container.querySelector("section")?.id).toBe("integrate-section-solution");
+  });
+
+  it("shows no summary and no Done button when the page does not drive it", () => {
+    const { container, queryByRole } = renderSection();
+    expect(queryByRole("button", { name: "Done - next" })).toBeNull();
+    expect(container.querySelector(".numbered-section-summary")).toBeNull();
   });
 });

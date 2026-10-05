@@ -1738,10 +1738,8 @@ function App() {
       <header className="harness-header">
         <h1 className="harness-title">Sentinel Integration</h1>
         <p className="harness-subtitle">
-          The single-page integration flow: solution browser, sample data,
-          Azure resources, Cribl configuration, gap analysis, rule and
-          workbook coverage, and the operable deploy on one page, with deploy
-          readiness always visible.
+          Take a Sentinel solution from sample data to a deployed Cribl pack
+          and Data Collection Rule.
         </p>
       </header>
       {secretNotice !== null && (

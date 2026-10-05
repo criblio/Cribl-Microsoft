@@ -679,6 +679,9 @@ export function RuleCoverageSection({
                 : "Analyze workbook coverage"
               : "Re-analyze coverage"}
         </button>
+        {/* What the analysis does, behind the (i) beside the button that runs
+            it, rather than as a paragraph under every idle section (DBT-125). */}
+        <InfoTip text={RULE_COVERAGE_IDLE_NOTE} />
         {onDropUnneededFields !== undefined && report !== null && (
           <>
             <button
@@ -757,9 +760,7 @@ export function RuleCoverageSection({
         </div>
       )}
 
-      {report === null ? (
-        <p className="field-hint">{RULE_COVERAGE_IDLE_NOTE}</p>
-      ) : (
+      {report === null ? null : (
         <div className="coverage-sections">
           {showRules && ruleSection !== null && (
             <div className="coverage-section">
