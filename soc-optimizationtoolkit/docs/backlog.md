@@ -688,6 +688,8 @@ actually ran: all three profiles ship, with members taken verbatim from
 compare, the same provenance approach AZR-0 used. The coverage catalog keeps
 offering the two profiles it always did, because changing what an existing
 stored selection MEANS is a separate act from making a third preset available.
+(Superseded 2026-10-02 by AZR-13, section 18i: the catalog now derives all
+three from `ENTRA_PROFILES`.)
 
 **The two consequences ride their categories.** The 5-10x warning sits on
 `NonInteractiveUserSignInLogs` itself, and only two of fifteen categories carry
@@ -1274,14 +1276,16 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.7 IS CURRENT (2026-09-04).**
-`release/soc-optimizationtoolkit-1.12.7.tgz` - the operator chooses how a pack is
-wired, and the routable choice reports what the worker group must already have;
-a capture window may now run to its full 600 seconds. On top of 1.12.6's wizard
+**1.12.8 IS CURRENT (2026-10-05).**
+`release/soc-optimizationtoolkit-1.12.8.tgz` - the 2026-10-02 bug sweep: nineteen
+cards closed after every open bug was re-verified, the Field Mappings table
+showing an example value per field (DBT-122), and RULE badges lighting on every
+DCR gap analysis (DBT-121). On top of 1.12.7's operator-chosen pack wiring and
+600-second capture window, 1.12.6's wizard
 workspace picker, 1.12.5's ungated deployment target, 1.12.3's replacing pack
 rebuild, 1.12.1's guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.7.
+file at 1.4.0 and now current through 1.12.8.
 
 The two sub-claims above were rewritten on 2026-09-04 having decayed AGAIN - they
 named the 1.12.3 tarball and 1.12.3 notes while `release/` held 1.12.6. That is
@@ -2725,3 +2729,41 @@ There is one non-platform path that would also unblock it, worth recording
 because it existed once: an ADR 0001 style shell whose own document is the
 address bar. The chip worked there, which is why it was true when it shipped and
 false after ADR 0002.
+
+## 21. Bug sweep: eight decisions answered - 2026-10-02
+
+Every open bug card was re-verified on 2026-10-02 by an independent reproducer
+and an adversarial skeptic, then judged. None was refuted (17 real, 3 partially
+real). Eight fixes needed a policy choice first; the operator answered all eight
+in one sitting. The reasoning that decided each, and what it rules out:
+
+- **DBT-14 - contain overscroll only while the list overflows.** Rejected:
+  dropping the 420px cap. That removes the nested scroll region but a long
+  unfiltered solution list then pushes every later section far down the page.
+  Measuring overflow in JS keeps the 2026-08-03 end-of-list protection where it
+  is needed and returns the wheel to the page where it is not.
+- **DBT-58 - name the excluded subscription workbooks on both surfaces.** The
+  info tip and the empty-workbook summary now say the same thing. Rejected:
+  summary only. "Why isn't my deployed workbook here?" is asked from either
+  place, and two surfaces with two policies is what the card was about.
+- **DBT-106 - wire the AWS spellings in, do not delete them.** The mapping table
+  shows `account-id` beside the parsed `account_id` for VPC Flow v2 samples, as
+  DBT-77 intended. Rejected: deleting the unused table. The operator reads AWS's
+  documentation by AWS's names; the hyphen-trap reasoning still survives on the
+  constant.
+- **GEN-7 - TimeGenerated is the flow START, converted in a pack Eval.** Start
+  is how a hunt frames a flow. A pack Eval keeps the DCR transform `source`.
+  Rejected: `end` (closer to emission, further from the event), and converting
+  in the DCR transformKql (ADR 0004 precedent, but needs parser and type
+  changes for no operator-visible gain).
+- **DBT-84 - accept the re-key, and the exact `type` key wins.** Some stored
+  samples regroup; a release-notes line tells the operator to re-capture.
+  Rejected: an on-load migration (only possible where old ids can be recomputed
+  from raw events) and grandfathering old captures (two behaviours forever).
+- **DBT-89, DBT-99, and GEN-5's drop leg - measure Cribl first.** Each makes the
+  app's preview agree with what Cribl does at runtime, and the app should copy
+  Cribl rather than guess at it. Each needs one unsaved pipeline preview on a
+  live worker (kvp on a welded prefix; kvp on `\=` `\` `\|` `\n`; an Eval
+  removing `aws.account`, `Source IP`, `src-ip`). DBT-99 is also bounded:
+  expand only the ArcSight-spec escapes, with `\n`/`\r` becoming real control
+  characters. GEN-5's leg 1 (kept and coerced fields) did not wait on this.

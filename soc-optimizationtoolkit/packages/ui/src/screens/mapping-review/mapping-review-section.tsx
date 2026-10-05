@@ -58,6 +58,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   DEFAULT_GAP_PROFILE,
+  FIELD_EXAMPLE_MAX_CHARS,
   collectGapReports,
   createBundledSchemaCatalog,
   createSchemaLadder,
@@ -72,6 +73,7 @@ import {
   vendorLabelEnrichments,
   vendorMappingsForSolution,
   vendorPacksForSolution,
+  vpcFlowV2AwsName,
 } from "@soc/core";
 import type {
   CefIdentityFinding,
@@ -116,6 +118,7 @@ import {
   deriveMappingReviewGate,
   effectiveMappings,
   fieldMappingsLabel,
+  formatExampleValue,
   isApproved,
   isModified,
   isRuleField,
@@ -1022,6 +1025,11 @@ export function MappingReviewSection({
         const effective = effectiveMappings(review, report);
         const mappings = sortedMappings(effective);
         const unmapped = unmappedDestColumns(report, effective);
+        // DBT-106: the format the sample behind this table was parsed as, so a
+        // VPC Flow v2 row can show AWS's spelling (account-id) beside ours.
+        const sampleFormat = samples.find(
+          (s) => s.logType === report.logType,
+        )?.format;
         const query = (mappingSearch[report.logType] ?? "")
           .trim()
           .toLowerCase();
@@ -1266,6 +1274,10 @@ export function MappingReviewSection({
                           <InfoTip text="The data type detected from the sample values (string, int, real, boolean, dynamic)." />
                         </th>
                         <th>
+                          Example Value
+                          <InfoTip text={`The first value seen for this field in your sample, so you can check the mapping by eye - an IP landing in a user-name column is wrong at a glance. Long values are shortened; hover the cell for the full value. -- means no example was captured: the sample had no value for the field, or every value was ${FIELD_EXAMPLE_MAX_CHARS} characters or longer.`} />
+                        </th>
+                        <th>
                           Dest Field
                           <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to." />
                         </th>
@@ -1286,13 +1298,32 @@ export function MappingReviewSection({
                     <tbody>
                       {shownMappings.map((m) => {
                         const ruleField = isRuleField(m.dest, ruleFields);
+                        // Display only - the parsed name stays the pipeline's
+                        // accessor; a hyphenated one breaks it at runtime.
+                        const awsName =
+                          sampleFormat === undefined
+                            ? null
+                            : vpcFlowV2AwsName(sampleFormat, m.source);
+                        // DBT-122: the row's own sample value, formatted in
+                        // the pure state module (truncation, escaping, and
+                        // the empty-vs-missing distinction live there).
+                        const example = formatExampleValue(m.sampleValue);
                         return (
                           <tr
                             key={m.source}
+                            data-source={m.source}
                             className={`mapping-row mapping-row-${m.action}`}
                           >
                             <td title={m.description}>
                               {m.source}
+                              {awsName !== null && (
+                                <span
+                                  className="mapping-aws-name"
+                                  title={`AWS documents this field as ${awsName}. It is parsed as ${m.source} because Cribl reads a hyphen in a field name as subtraction.`}
+                                >
+                                  {awsName}
+                                </span>
+                              )}
                               {ruleField && (
                                 <span
                                   className="rule-badge"
@@ -1303,6 +1334,12 @@ export function MappingReviewSection({
                               )}
                             </td>
                             <td className="match-field-type">{m.sourceType}</td>
+                            <td
+                              className={`mapping-example-value mapping-example-value-${example.kind}`}
+                              title={example.title}
+                            >
+                              {example.text}
+                            </td>
                             <td>
                               <select
                                 className="mapping-select"
@@ -1359,7 +1396,7 @@ export function MappingReviewSection({
                       })}
                       {shownUnmapped.length > 0 && (
                         <tr className="mapping-unmapped-head">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             Unmapped Destination Fields ({shownUnmapped.length})
                             <InfoTip text="These destination schema columns have no corresponding field in your sample data. They will be empty in Sentinel unless populated by a DCR transformation or added to your source data." />
                           </td>
@@ -1372,6 +1409,7 @@ export function MappingReviewSection({
                             key={`unmapped-${d.name}`}
                             className="mapping-row mapping-row-unmapped"
                           >
+                            <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
                             <td>

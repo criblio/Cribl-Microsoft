@@ -2951,14 +2951,21 @@ button.journey-step-main:hover .journey-step-label {
   padding: 0;
   max-height: 420px;
   overflow-y: auto;
-  /* This list sits inside a scrolling page which itself sits inside the Cribl
-   * app iframe - three nested scroll regions, so reaching the end of the list
-   * used to hand the wheel to the page and jump the operator somewhere else
-   * mid-search (live review 2026-08-03). `contain` keeps the wheel in the list
-   * until they deliberately move out of it. */
-  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+/* This list sits inside a scrolling page which itself sits inside the Cribl
+ * app iframe - three nested scroll regions, so reaching the end of the list
+ * used to hand the wheel to the page and jump the operator somewhere else
+ * mid-search (live review 2026-08-03). `contain` keeps the wheel in the list
+ * until they deliberately move out of it.
+ * ONLY WHILE IT OVERFLOWS (DBT-14). On a list that fits under the cap, Chrome
+ * still makes the overflow:auto box the wheel target, and contain then stops
+ * the scroll chaining to the page - so neither moves (measured 2026-10-02:
+ * 8 rows at 279px, list 0 / page 0; without contain the page moved 300px).
+ * The --scrollable class is set by a measurement in solution-browser.tsx. */
+.solution-browser-list.solution-browser-list--scrollable {
+  overscroll-behavior: contain;
 }
 .solution-browser-item {
   border-bottom: 1px solid var(--border-subtle);
@@ -3481,6 +3488,23 @@ button.journey-step-main:hover .journey-step-label {
 .mapping-row-unmapped {
   opacity: 0.7;
 }
+/* DBT-122: the Example Value column. `pre` keeps leading/trailing spaces
+   visible (the formatter never trims) without wrapping; the max width plus
+   ellipsis keeps a long value from widening the table - the full value is in
+   the cell title. */
+.mapping-example-value {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mapping-example-value-none,
+.mapping-example-value-empty {
+  color: var(--text-faint);
+}
 .mapping-unmapped-head td {
   font-weight: 700;
   font-size: 11px;
@@ -3520,6 +3544,13 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
   vertical-align: middle;
+}
+/* DBT-106: AWS's own spelling of a VPC Flow v2 field, beside the parsed name. */
+.mapping-aws-name {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 .rule-badge-missing {
   color: var(--error-strong);

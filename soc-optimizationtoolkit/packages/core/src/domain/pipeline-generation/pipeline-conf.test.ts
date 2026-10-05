@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildCefIdentityOverrideFn,
   generatePipelineConf,
+  generateFallbackReductionConf,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
   positionalColumns,
@@ -24,11 +25,15 @@ import { parseSampleContent } from "../sample-parsing/parse-sample";
 import {
   CEF_HEADER_ESCAPE,
   CEF_HEADER_PATTERN,
+  SYSLOG_RFC3164_PATTERN,
+  SYSLOG_RFC5424_PATTERN,
   parseCef,
+  parseSyslog,
 } from "../sample-parsing/parsers";
 import { parsePositional } from "../sample-parsing/positional";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "./plan";
+import { resolveSchemaFromCatalog } from "../field-matcher/bundled-schema-catalog";
 
 const fdrFields: PipelineFieldMapping[] = [
   { source: "event_simpleName", target: "event_simpleName", type: "string", action: "keep" },
@@ -172,9 +177,19 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
    * THE INDEPENDENT ORACLE (DBT-98). A character scanner sharing no code with
    * either the parser or the emitter - no regex, no split - so "both sides agree"
    * cannot mean "both sides carry the same bug". It is the CEF rule stated
-   * directly: a backslash consumes the next character, an unescaped pipe ends a
-   * field, and the remainder after the seventh separator is the extension,
-   * verbatim. A dangling escape is malformed and yields nothing.
+   * directly: a backslash escapes ONLY `\` and `|`, any other backslash is
+   * literal text, an unescaped pipe ends a field, and the remainder after the
+   * seventh separator is the extension, verbatim. A dangling escape is malformed
+   * and yields nothing.
+   *
+   * NARROW, LIKE THE SPEC (DBT-110). This scanner used to let a backslash
+   * consume ANY next character - the wide rule CEF_HEADER_ESCAPE was narrowed
+   * away from - so the oracle deleted the backslashes of a Windows path the
+   * parser and the pack both keep. Nothing caught it because no row in the
+   * agreement loop had a backslash before anything but `|` or `\`. A lone
+   * backslash is kept and only it is stepped over, so the character after it is
+   * read normally; that is equivalent to keeping both and stepping two, since
+   * the only characters special in a header are the two escaped ones.
    */
   function scanCefHeader(
     line: string,
@@ -188,8 +203,13 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
     while (i < s.length) {
       if (s[i] === BS) {
         if (i + 1 >= s.length) return null;
-        current += s[i + 1];
-        i += 2;
+        if (s[i + 1] === BS || s[i + 1] === "|") {
+          current += s[i + 1];
+          i += 2;
+          continue;
+        }
+        current += BS;
+        i += 1;
         continue;
       }
       if (s[i] === "|") {
@@ -314,6 +334,13 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
       "CEF:0|V|P|1.0|100|worm|5",
       "CEF:0|V|P|1.0|100|worm|5|",
       `<134>host1 CEF:0|V${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
+      // LONE BACKSLASHES (DBT-110). Every row above puts a backslash before `|`
+      // or `\`, so a parser that deleted every OTHER backslash - the wide unescape
+      // class CEF_HEADER_ESCAPE was narrowed away from - passed this loop. These
+      // two rows are the shape that tells the rules apart: a Windows path in the
+      // header (extension verbatim), and a lone backslash next to both escapes.
+      `CEF:0|Acme|C:${BS}Program Files${BS}Acme|1.0|100|worm|5|path=C:${BS}Program Files${BS}Acme fname=a${BS}b`,
+      `CEF:0|V${BS}x${BS}${BS}${BS}|W|P|1.0|100|worm|5|src=1.1.1.1`,
     ];
 
     for (const line of lines) {
@@ -343,6 +370,19 @@ describe("CEF two-step extraction + indexOf(-1) guard", () => {
     expect(shifted["DeviceVendor"]).toBe("V|W"); // was `V\`
     expect(shifted["DeviceProduct"]).toBe("P"); // was `W`
     expect(shifted["LogSeverity"]).toBe("5"); // was `worm`
+
+    // The Windows-path row, spelled out for the same reason (DBT-110): all three
+    // readings, as exact values, so the lone-backslash case stays visible even if
+    // the loop's corpus is edited. The wide unescape read "C:Program FilesAcme".
+    const winPath = `CEF:0|Acme|C:${BS}Program Files${BS}Acme|1.0|100|worm|5|path=C:${BS}Program Files${BS}Acme fname=a${BS}b`;
+    const winProduct = `C:${BS}Program Files${BS}Acme`;
+    expect(scanCefHeader(winPath)!.fields[2]).toBe(winProduct);
+    expect(parseCef(winPath)[0]!["DeviceProduct"]).toBe(winProduct);
+    const winEvent = runEmittedHeader(winPath);
+    expect(winEvent["DeviceProduct"]).toBe(winProduct);
+    expect(winEvent["__cefExtension"]).toBe(
+      `path=C:${BS}Program Files${BS}Acme fname=a${BS}b`,
+    );
     expect(shifted["__cefExtension"]).toBe("src=1.1.1.1"); // was `5|src=1.1.1.1`
   });
 
@@ -720,7 +760,16 @@ describe("positional extraction (GEN-6)", () => {
     conf: string,
     rawLine: string,
   ): Record<string, unknown> {
-    const adds = [...conf.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    // Only the extraction function's adds (the one minting __posParts). GEN-7
+    // added a later enrich-group Eval over the renamed Start/End, which is not
+    // extraction and reads fields this harness does not supply.
+    const extraction = conf
+      .split(/\n(?=  - id: )/)
+      .filter((b) => b.includes("- name: __posParts"))
+      .join("\n");
+    const adds = [
+      ...extraction.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm),
+    ];
     expect(
       adds.length,
       "no add entries found in the emitted conf",
@@ -905,5 +954,324 @@ describe("positional extraction (GEN-6)", () => {
       expect(positionalColumns([])).toEqual([]);
       expect(positionalColumns([f("wat"), f("field0")])).toEqual([]);
     });
+  });
+});
+
+/**
+ * DBT-116: syslog extraction. Until this block a syslog sample fell to the
+ * trailing else of the extract ladder and got `serde type: json` over a syslog
+ * line - "Parse JSON from _raw" - which extracts nothing, so every name the
+ * parser minted (Hostname, Program, Message ...) was undefined in the installed
+ * pipeline while the preview reported success. The fallback reduction conf had
+ * the same hole in its own ladder.
+ *
+ * The oracle is parseSyslog itself: the emitted eval, YAML-unescaped and run as
+ * Cribl would, must reproduce the parser's record field for field.
+ */
+describe("syslog extraction (DBT-116)", () => {
+  const RFC3164_PRI =
+    "<34>Oct 11 22:14:15 host1 sshd[123]: Failed password for root";
+  const RFC3164_BARE = "Oct 11 22:14:16 host2 CRON: (root) CMD (run-parts)";
+  const RFC5424 =
+    "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 An application event";
+  const NOT_SYSLOG = "just some text that is not syslog";
+
+  /** The syslog eval of a conf: one function, found by its description. */
+  function syslogBlock(conf: string): string {
+    const blocks = conf
+      .split(/^ {2}- id: /m)
+      .filter((f) => f.includes("description: Parse syslog from _raw"));
+    expect(blocks, "expected exactly one syslog extraction eval").toHaveLength(1);
+    return blocks[0] ?? "";
+  }
+
+  /**
+   * Run the block's `add` entries in order, each seeing the earlier ones, then
+   * its `remove:` list. The `\\` unescape is the YAML step, as for CEF above.
+   */
+  function runSyslog(block: string, rawLine: string): Record<string, unknown> {
+    const adds = [...block.matchAll(/^ +- name: (\S+)\n +value: "(.*)"$/gm)];
+    const event: Record<string, unknown> = { _raw: rawLine };
+    for (const [, name, raw] of adds) {
+      const expr = (raw ?? "").replace(/\\\\/g, "\\");
+      const value: unknown = new Function(
+        "_raw",
+        "__sys3164",
+        "__sys5424",
+        `return (${expr});`,
+      )(rawLine, event["__sys3164"], event["__sys5424"]);
+      // Cribl does not set a field whose eval value is undefined.
+      if (value !== undefined) event[name ?? ""] = value;
+    }
+    delete event["__sys3164"];
+    delete event["__sys5424"];
+    return event;
+  }
+
+  function parserRecord(line: string): Record<string, unknown> {
+    return parseSyslog(line)[0] ?? { _raw: line };
+  }
+
+  const fields: PipelineFieldMapping[] = [
+    "Timestamp",
+    "Hostname",
+    "Program",
+    "Message",
+  ].map((source) => ({ source, target: source, type: "string", action: "keep" }));
+
+  it("emits a syslog extraction and NO json serde in the transformation conf", () => {
+    const conf = generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog");
+    expect(conf.match(/type: json/g) ?? []).toHaveLength(0);
+    expect(conf).not.toContain("Parse JSON from _raw");
+    const block = syslogBlock(conf);
+    expect(block).toContain("groupId: extract");
+    // Exactly the names the parser can mint, plus the two scratch slots.
+    const names = [...block.matchAll(/^ +- name: (\S+)$/gm)].map((m) => m[1]);
+    expect(names).toEqual([
+      "__sys3164",
+      "__sys5424",
+      "Priority",
+      "Version",
+      "Timestamp",
+      "Hostname",
+      "Program",
+      "PID",
+      "AppName",
+      "ProcID",
+      "MsgID",
+      "Message",
+      "Facility",
+      "Severity",
+    ]);
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("agrees with parseSyslog on every line shape it handles", () => {
+    const block = syslogBlock(
+      generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog"),
+    );
+    for (const line of [RFC3164_PRI, RFC3164_BARE, RFC5424, NOT_SYSLOG]) {
+      expect(runSyslog(block, line), line).toEqual(parserRecord(line));
+    }
+    // Asserted so the parity above is not vacuous: the 3164 line really does
+    // carry all eight names, and the 5424 line its own.
+    expect(Object.keys(runSyslog(block, RFC3164_PRI)).sort()).toEqual([
+      "Facility",
+      "Hostname",
+      "Message",
+      "PID",
+      "Priority",
+      "Program",
+      "Severity",
+      "Timestamp",
+      "_raw",
+    ]);
+    expect(runSyslog(block, RFC5424)["MsgID"]).toBe("ID47");
+  });
+
+  it("emits sample-parsing's OWN syslog patterns, so the two cannot drift", () => {
+    const block = syslogBlock(
+      generatePipelineConf("p", "Sol", "Syslog", fields, undefined, "syslog"),
+    ).replace(/\\\\/g, "\\");
+    expect(block).toContain(`/${SYSLOG_RFC3164_PATTERN.source}/`);
+    expect(block).toContain(`/${SYSLOG_RFC5424_PATTERN.source}/`);
+  });
+
+  it("gives the FALLBACK REDUCTION pipeline the same extraction, not a JSON serde", () => {
+    const reduction = generateFallbackReductionConf("Sol", "Syslog", "syslog");
+    expect(reduction.match(/type: json/g) ?? []).toHaveLength(0);
+    const block = syslogBlock(reduction);
+    expect(block).toContain("groupId: triage");
+    expect(runSyslog(block, RFC3164_PRI)).toEqual(parserRecord(RFC3164_PRI));
+    expect(checkCriblYaml(reduction, "conf.yml")).toEqual([]);
+  });
+
+  it("leaves every other format's serde exactly as it was", () => {
+    // The switch that replaced the two ladders must not move any other format.
+    const serde = (fmt: string | undefined) =>
+      (generatePipelineConf("p", "Sol", "T", [], undefined, fmt).match(
+        /^ {6}type: (\S+)$/m,
+      ) ?? [])[1];
+    expect(serde("json")).toBe("json");
+    expect(serde("ndjson")).toBe("json");
+    expect(serde("unknown")).toBe("json");
+    expect(serde(undefined)).toBe("json");
+    expect(serde("not-a-format")).toBe("json");
+    expect(serde("kv")).toBe("kvp");
+    expect(serde("leef")).toBe("kvp");
+    expect(serde("csv")).toBe("csv");
+    const fallback = (fmt: string | undefined) =>
+      (generateFallbackReductionConf("Sol", "T", fmt).match(
+        /^ {6}type: (\S+)$/m,
+      ) ?? [])[1];
+    expect(fallback("json")).toBe("json");
+    expect(fallback("ndjson")).toBe("json");
+    expect(fallback("unknown")).toBe("json");
+    expect(fallback(undefined)).toBe("json");
+    expect(fallback("not-a-format")).toBe("json");
+    expect(fallback("csv")).toBe("csv");
+    expect(fallback("kv")).toBe("kvp");
+    expect(fallback("cef")).toBe("kvp");
+    expect(fallback("leef")).toBe("kvp");
+  });
+});
+
+/**
+ * GEN-7 - a recognised VPC Flow pack must stamp TimeGenerated with the FLOW
+ * time, not the ingestion time.
+ *
+ * THE DEFECT. detectTimestampField has no candidate matching any VPC column, so
+ * it fell back to the literal "TimeGenerated"; auto_timestamp then read a field
+ * no event carries and `defaultTime: now` stamped _time with the current time;
+ * cleanup dropped _time anyway; and the DCR transform is `source`, so nothing
+ * wrote TimeGenerated and Azure filled it with INGESTION time. Flow logs reach
+ * S3 in batches, so that is minutes off - silently, and unrecoverable once
+ * ingested. Start and End meanwhile shipped as raw epoch-second strings into
+ * columns declared datetime.
+ *
+ * OPERATOR DECISION 2026-10-02: TimeGenerated = the flow START time, and the
+ * epoch-to-datetime conversion lives in a PACK Eval writing ISO strings for
+ * TimeGenerated, Start and End (transformKql stays `source`).
+ *
+ * The pins run the REAL chain against the BUNDLED AWSVPCFlow schema, and
+ * evaluate the emitted Eval expressions as JavaScript, so a wrong field, a
+ * wrong unit (ms vs s) or a start/end swap all fail on a value, not a shape.
+ */
+describe("VPC Flow TimeGenerated from the flow start (GEN-7)", () => {
+  // start=1700000000 (2023-11-14T22:13:20Z), end=1700000060 - one minute apart,
+  // so a start/end swap is a 60-second error the assertions can see.
+  const VPC_V2 = [
+    "2 123456789010 eni-1235b8ca123456789 172.31.16.139 172.31.16.21 20641 22 6 20 4249 1700000000 1700000060 ACCEPT OK",
+    "2 123456789010 eni-1235b8ca123456789 172.31.9.69 172.31.9.12 49761 3389 6 20 4249 1700000000 1700000060 REJECT OK",
+  ].join("\n");
+
+  function vpcConf(content: string = VPC_V2): string {
+    const parsed = parseSampleContent(content, { sourceName: "flow.log" });
+    const schema = resolveSchemaFromCatalog("AWSVPCFlow");
+    if (schema === null) throw new Error("AWSVPCFlow missing from the bundled catalog");
+    const match = matchSampleToSchema(
+      parsed.fields.map((f) => ({
+        name: f.name,
+        type: f.type,
+        sampleValues: f.examples,
+      })),
+      schema,
+    );
+    const plan = buildPipelinePlan({
+      solutionName: "AWS VPC Flow Logs",
+      packName: "cribl-aws-vpc-flow",
+      tables: [
+        {
+          sentinelTable: "AWSVPCFlow",
+          matchResult: match,
+          sourceFormat: parsed.format,
+        },
+      ],
+    });
+    const table = plan.tables[0];
+    if (table === undefined) throw new Error("planner produced no table");
+    return generatePipelineConfForPlan(table, "AWS VPC Flow Logs");
+  }
+
+  /** The `- name: X\n value: "..."` adds of the ONE function with this description. */
+  function evalAdds(conf: string, description: string): [string, string][] {
+    const blocks = conf.split(/\n(?=  - id: )/);
+    const hits = blocks.filter((b) => b.includes(`description: ${description}`));
+    expect(hits, `functions described "${description}"`).toHaveLength(1);
+    return [...(hits[0] ?? "").matchAll(/- name: (\S+)\n +value: "(.*)"$/gm)].map(
+      ([, n, v]) => [n ?? "", (v ?? "").replace(/\\\\/g, "\\")],
+    );
+  }
+
+  /** Run adds in order, each seeing the fields the earlier ones set, as Cribl does. */
+  function runAdds(
+    adds: [string, string][],
+    start: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const event: Record<string, unknown> = { ...start };
+    for (const [name, expr] of adds) {
+      const keys = Object.keys(event);
+      event[name] = new Function(...keys, `return (${expr});`)(
+        ...keys.map((k) => event[k]),
+      );
+    }
+    return event;
+  }
+
+  const DESC = "Convert VPC Flow epoch start/end to ISO-8601 and stamp TimeGenerated from the flow start";
+
+  it("writes TimeGenerated exactly once, from the flow START", () => {
+    const conf = vpcConf();
+    expect(conf.match(/- name: TimeGenerated\n/g)).toHaveLength(1);
+    expect(evalAdds(conf, DESC)).toEqual([
+      [
+        "TimeGenerated",
+        "(Start != null && String(Start).trim() !== '' && isFinite(Start)) ? new Date(Number(Start) * 1000).toISOString() : undefined",
+      ],
+      [
+        "Start",
+        "(Start != null && String(Start).trim() !== '' && isFinite(Start)) ? new Date(Number(Start) * 1000).toISOString() : undefined",
+      ],
+      [
+        "End",
+        "(End != null && String(End).trim() !== '' && isFinite(End)) ? new Date(Number(End) * 1000).toISOString() : undefined",
+      ],
+    ]);
+  });
+
+  it("points auto_timestamp at `start`, not at a TimeGenerated no event carries", () => {
+    const conf = vpcConf();
+    expect([...conf.matchAll(/srcField: (\S+)\n +dstField: _time/g)].map((m) => m[1])).toEqual([
+      "start",
+    ]);
+  });
+
+  it("produces the flow times as ISO strings, start and end not swapped", () => {
+    const event = runAdds(evalAdds(vpcConf(), DESC), {
+      Start: "1700000000",
+      End: "1700000060",
+    });
+    expect(event).toEqual({
+      TimeGenerated: "2023-11-14T22:13:20.000Z",
+      Start: "2023-11-14T22:13:20.000Z",
+      End: "2023-11-14T22:14:20.000Z",
+    });
+  });
+
+  it("leaves the fields unset, never 'Invalid Date', when start/end are '-'", () => {
+    const event = runAdds(evalAdds(vpcConf(), DESC), { Start: "-", End: "-" });
+    expect(event).toEqual({
+      TimeGenerated: undefined,
+      Start: undefined,
+      End: undefined,
+    });
+  });
+
+  it("runs AFTER the rename, so it reads the renamed Start/End", () => {
+    const conf = vpcConf();
+    const rename = conf.indexOf("newName: Start");
+    const stamp = conf.indexOf(`description: ${DESC}`);
+    expect(rename).toBeGreaterThan(-1);
+    expect(stamp).toBeGreaterThan(rename);
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+  });
+
+  it("does not catch an UNRECOGNISED positional source", () => {
+    // field1..fieldN carry no known time column; a VPC branch that fired here
+    // would invent one.
+    const conf = generatePipelineConf(
+      "p",
+      "Acme",
+      "Acme_CL",
+      [
+        { source: "field1", target: "field1", type: "string", action: "keep" },
+        { source: "field2", target: "field2", type: "string", action: "keep" },
+      ],
+      undefined,
+      "positional",
+    );
+    expect(conf).not.toContain("- name: TimeGenerated");
+    expect(conf).not.toContain(DESC);
+    expect(conf).toContain("srcField: TimeGenerated");
   });
 });

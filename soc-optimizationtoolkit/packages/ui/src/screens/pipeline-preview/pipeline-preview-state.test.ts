@@ -15,7 +15,11 @@
  * gap reports, so the projection is exercised against actual generated YAML.
  */
 
-import { EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
+import {
+  EMPTY_OVERFLOW_TRIAGE,
+  fieldValuesFromRecords,
+  parseSampleContent,
+} from "@soc/core";
 import { describe, expect, it } from "vitest";
 import type { GapFieldMapping, GapReport } from "@soc/core";
 import {
@@ -156,6 +160,24 @@ describe("normalizeSourceFormat", () => {
     expect(normalizeSourceFormat(undefined)).toBe("json");
     expect(normalizeSourceFormat("cef")).toBe("cef");
     expect(normalizeSourceFormat("csv")).toBe("csv");
+  });
+});
+
+describe("reportToPlanInput formatDetected (GEN-11)", () => {
+  const formatDetectedFor = (fmt: string | undefined) =>
+    reportToPlanInput(
+      report({ logType: "X" }),
+      undefined,
+      fmt === undefined ? undefined : { X: fmt },
+    ).formatDetected;
+
+  it("marks only a SUPPLIED sample whose format was not detected", () => {
+    expect(formatDetectedFor("unknown")).toBe(false);
+    expect(formatDetectedFor("")).toBe(false);
+    // No sample at all is NOT the same claim: presence-only routing stays.
+    expect(formatDetectedFor(undefined)).toBeUndefined();
+    expect(formatDetectedFor("json")).toBeUndefined();
+    expect(formatDetectedFor("cef")).toBeUndefined();
   });
 });
 
@@ -316,6 +338,93 @@ describe("derivePipelinePreview (real generation)", () => {
     expect(view.valid).toBe(true);
     expect(view.tables[0].yamlIssues).toEqual([]);
     expect(view.routeYmlIssues).toEqual([]);
+  });
+});
+
+describe("derivePipelinePreview - destination naming (GEN-18 follow-through)", () => {
+  // The preview and the pack build both derive from these inputs, and Deploy
+  // names the destination from the operator's prefix/suffix. A preview (and so
+  // a pack) on the fixed default would route to an id Deploy never created.
+  it("names the destination from the operator's prefix/suffix", () => {
+    const view = derivePipelinePreview({
+      ...approvedInputs(),
+      destinationNaming: { destinationPrefix: "Sentinel-", destinationSuffix: "-out" },
+    });
+    expect(view.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-CommonSecurityLog-out",
+    ]);
+    expect(view.plan?.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-CommonSecurityLog-out",
+    ]);
+  });
+
+  it("null naming keeps the default id", () => {
+    const view = derivePipelinePreview({ ...approvedInputs(), destinationNaming: null });
+    expect(view.tables.map((t) => t.destinationId)).toEqual([
+      "MS-Sentinel-CommonSecurityLog-dest",
+    ]);
+  });
+});
+
+describe("derivePipelinePreview refuses a kept unaddressable name (GEN-5)", () => {
+  // A field kept under its own spelling appears on no conf line, so
+  // checkCriblYaml cannot see it; the preview must still go invalid, because
+  // valid is the only thing the integrate screen's build guard reads.
+  function keptPreview(name: string) {
+    return derivePipelinePreview({
+      solutionName: "T",
+      packName: "p",
+      reports: [
+        report({
+          tableName: "TestTable_CL",
+          logType: "TestTable_CL",
+          fieldMappings: [mapping({ source: name, dest: name, action: "keep" })],
+          destSchema: [{ name, type: "string" }],
+        }),
+      ],
+      approved: true,
+    });
+  }
+
+  it("goes invalid with exactly one issue naming the field", () => {
+    const view = keptPreview("Source IP");
+    expect(view.tables[0].transformConf).not.toContain("Source IP");
+    expect(view.totalYamlIssues).toBe(1);
+    expect(view.valid).toBe(false);
+    expect(view.tables[0].yamlIssues).toHaveLength(1);
+    expect(view.tables[0].yamlIssues[0]).toContain('field name "Source IP"');
+    expect(view.routeYmlIssues).toEqual([]);
+  });
+
+  it("stays valid for a kept bare identifier", () => {
+    const view = keptPreview("SourceIP");
+    expect(view.totalYamlIssues).toBe(0);
+    expect(view.valid).toBe(true);
+  });
+});
+
+describe("derivePipelinePreview carries formatDetected to each table (GEN-11)", () => {
+  // The preview's filter example and unparsed-route hint have to treat an
+  // undetected sample the way the planner does (GEN-11), and sourceFormat has
+  // already been normalised to "json" by then - so the fact rides on the table.
+  function detectedFor(fmt: string | undefined) {
+    const view = derivePipelinePreview({
+      solutionName: "T",
+      packName: "p",
+      reports: [report({ logType: "X" })],
+      ...(fmt === undefined ? {} : { sampleFormats: { X: fmt } }),
+      approved: true,
+    });
+    const t = view.tables[0];
+    return t === undefined ? "no table" : [t.sourceFormat, t.formatDetected];
+  }
+
+  it("is false only for a supplied sample whose format was not detected", () => {
+    expect(detectedFor("unknown")).toEqual(["json", false]);
+    expect(detectedFor("")).toEqual(["json", false]);
+    expect(detectedFor(undefined)).toEqual(["json", true]);
+    expect(detectedFor("json")).toEqual(["json", true]);
+    expect(detectedFor("csv")).toEqual(["csv", true]);
   });
 });
 
@@ -660,3 +769,119 @@ describe("derivePipelinePreview - accepted route filters", () => {
     expect(v.placeholderLogTypes.sort()).toEqual(["dns", "firewall"]);
   });
 })
+
+/**
+ * GEN-11: an UNDETECTED sample must not ship a filter that cannot match.
+ *
+ * normalizeSourceFormat turns "unknown" into "json" before the planner runs, and
+ * for json the value discriminator suppresses its `_raw` disjunct - so a sample
+ * whose format detection gave up, but whose try-each fallback still parsed it,
+ * used to get a BARE parsed-field test such as `_2 === 'TRAFFIC'`. At route time
+ * an unparsed event carries only `_raw`, so that filter matched none of its own
+ * events, yet it was a filter: neither placeholder nor unreachable, and the
+ * preview read valid. The fix carries `formatDetected: false` past the
+ * normalisation and the planner placeholders the log type instead.
+ *
+ * Driven through the REAL detection path (parseSampleContent), and each fixture
+ * first asserts its detected format really is "unknown" - the harness the old
+ * route-placeholder pin used forced "unknown" on CEF and syslog content that
+ * real detection classifies correctly, which is how the card's examples ended
+ * up describing shapes the product never delivers.
+ */
+describe("derivePipelinePreview - undetected sample formats (GEN-11)", () => {
+  function preview(lines: Readonly<Record<string, string[]>>) {
+    const formats: Record<string, string> = {};
+    const values: Record<string, ReturnType<typeof fieldValuesFromRecords>> = {};
+    for (const [logType, ls] of Object.entries(lines)) {
+      const parsed = parseSampleContent(ls.join("\n"));
+      formats[logType] = parsed.format;
+      values[logType] = fieldValuesFromRecords(logType, parsed.records);
+    }
+    const view = derivePipelinePreview({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      reports: Object.keys(lines).map((logType) =>
+        report({
+          logType,
+          routeCondition: "true",
+          fieldMappings: [mapping({ source: "_2", dest: "Activity" })],
+        }),
+      ),
+      sampleFormats: formats,
+      sampleFieldValues: values,
+      approved: true,
+    });
+    return { formats, view };
+  }
+
+  // A route-time event: `_raw` plus whatever fields the source already parsed.
+  // An unmentioned name resolves to undefined rather than throwing, as in Cribl.
+  const routeTime = (
+    filter: string,
+    raw: string,
+    fields: Record<string, unknown> = {},
+  ): boolean =>
+    Boolean(
+      new Function(
+        "ev",
+        `with (new Proxy(ev, { has: () => true, get: (t, k) => t[k] })) { return (${filter}); }`,
+      )({ ...fields, _raw: raw }),
+    );
+
+  it("placeholders headerless delimited rows instead of shipping `_2 === 'TRAFFIC'`", () => {
+    const { formats, view } = preview({
+      TRAFFIC: ["fw01,10.0.0.1,TRAFFIC,allow,443", "fw01,10.0.0.3,TRAFFIC,allow,8443"],
+      THREAT: ["fw01,10.0.0.2,THREAT,deny,80", "fw01,10.0.0.4,THREAT,deny,22"],
+    });
+    // The fixture really is undetected, or this pins nothing.
+    expect(formats).toEqual({ TRAFFIC: "unknown", THREAT: "unknown" });
+    expect([...view.placeholderLogTypes].sort()).toEqual(["THREAT", "TRAFFIC"]);
+    expect(view.unreachableLogTypes).toEqual([]);
+    const conds = view.tables.map((t) => t.routeCondition);
+    expect(conds).toHaveLength(2);
+    expect(conds).not.toContain("_2 === 'TRAFFIC'");
+    expect(conds).not.toContain("_2 === 'THREAT'");
+    for (const c of conds) expect(c).toContain("__UNSET__");
+  });
+
+  it("placeholders key=value lines too short to be detected as kv", () => {
+    const { formats, view } = preview({
+      TRAFFIC: ["type=TRAFFIC src=1.1.1.1", "type=TRAFFIC src=1.1.1.2"],
+      THREAT: ["type=THREAT src=2.2.2.1", "type=THREAT src=2.2.2.2"],
+    });
+    expect(formats).toEqual({ TRAFFIC: "unknown", THREAT: "unknown" });
+    expect([...view.placeholderLogTypes].sort()).toEqual(["THREAT", "TRAFFIC"]);
+    const conds = view.tables.map((t) => t.routeCondition);
+    expect(conds).toHaveLength(2);
+    for (const c of conds) expect(c).toContain("__UNSET__");
+  });
+
+  it("leaves DETECTED json/ndjson routing untouched (calibration)", () => {
+    // json is a real format whose names ARE on the event, so the fix must not
+    // be "exclude json": a detected JSON sample keeps its value filter.
+    const traffic = [
+      '{"type":"TRAFFIC","src":"1.1.1.1"}',
+      '{"type":"TRAFFIC","src":"1.1.1.2"}',
+    ];
+    const { formats, view } = preview({
+      TRAFFIC: traffic,
+      THREAT: [
+        '{"type":"THREAT","src":"2.2.2.1"}',
+        '{"type":"THREAT","src":"2.2.2.2"}',
+      ],
+    });
+    // Two JSON lines detect as ndjson, which shares json's suppressed-`_raw`
+    // branch in the value discriminator - the same routing this fix must keep.
+    expect(formats).toEqual({ TRAFFIC: "ndjson", THREAT: "ndjson" });
+    expect(view.placeholderLogTypes).toEqual([]);
+    const filter =
+      view.tables.find((t) => t.logType === "TRAFFIC")?.routeCondition ?? "";
+    expect(filter).toBe("type === 'TRAFFIC'");
+    // A JSON source delivers the parsed fields on the event, so 2 of 2 match.
+    expect(
+      traffic.filter((l) =>
+        routeTime(filter, l, JSON.parse(l) as Record<string, unknown>),
+      ).length,
+    ).toBe(2);
+  });
+});

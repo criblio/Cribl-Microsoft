@@ -7,7 +7,11 @@ import {
   splitSampleId,
   convertPanosSplitAtLoad,
   parseKvLine,
+  SPLITTER_DISCRIMINATOR_ALIASES,
 } from "./splitting";
+import { parsePositional } from "./positional";
+import { DISCRIMINATOR_FIELDS } from "./discriminators";
+import type { SampleFormat } from "./models";
 
 describe("splitSamplesByLogType", () => {
   it("splits JSON events by a discriminator, uppercasing the log type", () => {
@@ -105,6 +109,61 @@ describe("hasNamedFields", () => {
       false,
     );
   });
+
+  // DBT-117: `positional` had no branch, so a capture isVpcFlowV2 recognises -
+  // and parsePositional names srcaddr/dstaddr/account_id - fell off the end to
+  // `false`. The rule checks EVERY line, unlike the first-line branches above,
+  // because parsePositional's naming decision is per capture and the two must
+  // agree on it.
+  const VPC_V2 = [
+    "2 123456789012 eni-0a1b2c3d 10.0.0.5 10.0.1.9 443 49152 6 10 840 1700000000 1700000060 ACCEPT OK",
+    "2 123456789012 eni-0a1b2c3d 10.0.0.7 10.0.1.2 22 51000 6 3 180 1700000000 1700000060 REJECT OK",
+    "2 123456789012 eni-0a1b2c3d - - - - - - - 1700000000 1700000060 - NODATA",
+  ];
+
+  it("positional qualifies for a recognised VPC Flow v2 capture, agreeing with parsePositional", () => {
+    expect(hasNamedFields(VPC_V2, "positional")).toBe(true);
+    const records = parsePositional(VPC_V2.join("\n"));
+    expect(records).toHaveLength(3);
+    expect(Object.keys(records[0])).toEqual([
+      "version",
+      "account_id",
+      "interface_id",
+      "srcaddr",
+      "dstaddr",
+      "srcport",
+      "dstport",
+      "protocol",
+      "packets",
+      "bytes",
+      "start",
+      "end",
+      "action",
+      "log_status",
+    ]);
+  });
+
+  it("positional skips blank lines the way parsePositional does", () => {
+    const withBlank = [VPC_V2[0], "", "   ", VPC_V2[1]];
+    expect(hasNamedFields(withBlank, "positional")).toBe(true);
+    expect(Object.keys(parsePositional(withBlank.join("\n"))[0])[3]).toBe(
+      "srcaddr",
+    );
+  });
+
+  it("positional does NOT qualify unless every line is VPC v2", () => {
+    // 13 fields: one short of v2, so the columns stay field1..field13.
+    const thirteen = [
+      "2 123456789012 eni-0a1b2c3d 10.0.0.5 10.0.1.9 443 49152 6 10 840 1700000000 1700000060 ACCEPT",
+    ];
+    expect(hasNamedFields(thirteen, "positional")).toBe(false);
+    // A v2 line FIRST plus one that is not: pins the all-lines rule, which is
+    // what parsePositional applies (its keys here are field1..).
+    const mixed = [VPC_V2[0], "3 a b c d e f g h i j k l m"];
+    expect(hasNamedFields(mixed, "positional")).toBe(false);
+    expect(Object.keys(parsePositional(mixed.join("\n"))[0])[0]).toBe("field1");
+    expect(hasNamedFields([], "positional")).toBe(false);
+  });
 });
 
 describe("PAN-OS load-time conversion", () => {
@@ -135,5 +194,191 @@ describe("splitSampleId + parseKvLine", () => {
     expect(parseKvLine('<190>date=2019-05-10 type="traffic" srcip=10.0.0.1')).toEqual(
       { date: "2019-05-10", type: "traffic", srcip: "10.0.0.1" },
     );
+  });
+});
+
+describe("KV splitting on full keys (DBT-84)", () => {
+  // Under the `\w+` key class, hyphenated keys TRUNCATED and then COLLIDED:
+  // `log-type` and `sub-type` both became `type`, last one winning, and
+  // `src-ip`/`dst-ip` both became `ip`. So the subtype silently overwrote the
+  // log type, the result depended on pair order, and a line with three real
+  // pairs could count as two and fail the >= 3 gate - dropping the whole
+  // sample into the fallback group.
+  const panos = (logType: string, subType: string, order: "log-first" | "sub-first") =>
+    order === "log-first"
+      ? `log-type=${logType} sub-type=${subType} src-ip=1 dst-ip=2`
+      : `sub-type=${subType} log-type=${logType} src-ip=1 dst-ip=2`;
+
+  it("keeps the whole key, so hyphenated keys no longer collide", () => {
+    expect(parseKvLine("log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2")).toEqual({
+      "log-type": "TRAFFIC",
+      "sub-type": "end",
+      "src-ip": "1",
+      "dst-ip": "2",
+    });
+  });
+
+  it("groups by the LOG TYPE, not by the subtype that used to overwrite it", () => {
+    const raw = [
+      panos("TRAFFIC", "end", "log-first"),
+      panos("THREAT", "url", "log-first"),
+      panos("TRAFFIC", "start", "log-first"),
+    ];
+    const splits = splitSamplesByLogType(raw, "fb", "kv");
+    expect(splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["TRAFFIC", 2],
+      ["THREAT", 1],
+    ]);
+    expect(splits[0].rawEvents).toEqual([raw[0], raw[2]]);
+  });
+
+  it("does not depend on the order the pairs are written in", () => {
+    const raw = [
+      panos("TRAFFIC", "end", "sub-first"),
+      panos("THREAT", "url", "sub-first"),
+      panos("TRAFFIC", "start", "sub-first"),
+    ];
+    expect(
+      splitSamplesByLogType(raw, "fb", "kv").map((s) => [s.logType, s.eventCount]),
+    ).toEqual([
+      ["TRAFFIC", 2],
+      ["THREAT", 1],
+    ]);
+  });
+
+  it("counts real pairs at the >= 3 gate, not collapsed keys", () => {
+    const splits = splitSamplesByLogType(
+      ["src-ip=1 dst-ip=2 action=A", "src-ip=1 dst-ip=2 action=B"],
+      "fb",
+      "kv",
+    );
+    expect(splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+  });
+
+  it("does not re-key the samples the truncation used to name correctly", () => {
+    // The case that worked BY ACCIDENT before: `log-type` truncated to `type`.
+    // The splitter-local alias keeps it selecting through `type`.
+    expect(
+      splitSamplesByLogType(
+        ["log-type=TRAFFIC srcip=1 action=A", "log-type=THREAT srcip=2 action=B"],
+        "fb",
+        "kv",
+      ).map((s) => s.logType),
+    ).toEqual(["TRAFFIC", "THREAT"]);
+    // ONE distinct value still selects, because the alias target `type` sits in
+    // the high-confidence prefix. Without the alias this falls back to "fb".
+    expect(
+      splitSamplesByLogType(["log-type=TRAFFIC a=1 b=2"], "fb", "kv").map(
+        (s) => s.logType,
+      ),
+    ).toEqual(["TRAFFIC"]);
+  });
+
+  it("lets an exact `type=` beat an aliased `log-type=`, in either order", () => {
+    // Operator decision 2026-10-02 (DBT-84): the exact key wins.
+    for (const line of ["type=x log-type=TRAFFIC a=1", "log-type=TRAFFIC type=x a=1"]) {
+      expect(splitSamplesByLogType([line], "fb", "kv").map((s) => s.logType)).toEqual([
+        "X",
+      ]);
+    }
+  });
+
+  it("aliases only INTO the shared list, whose entries stay plain identifiers", () => {
+    // The alias table lives in the splitter, NOT in DISCRIMINATOR_FIELDS:
+    // query-lake-samples interpolates those names unquoted into KQL, so a
+    // hyphenated entry there would parse `isnotempty(log-type)` as subtraction.
+    expect(SPLITTER_DISCRIMINATOR_ALIASES).toEqual({
+      "log-type": "type",
+      "sub-type": "subtype",
+      "event-type": "eventType",
+    });
+    for (const target of Object.values(SPLITTER_DISCRIMINATOR_ALIASES)) {
+      expect(DISCRIMINATOR_FIELDS).toContain(target);
+    }
+    expect(DISCRIMINATOR_FIELDS.filter((f) => /[^A-Za-z0-9_]/.test(f))).toEqual([]);
+  });
+
+  it("does not weld a CEF/LEEF or syslog header onto the first key", () => {
+    // REVIEW FINDING on DBT-84's first cut, measured before this pin existed.
+    // The first cut copied parseKv's key class `[^\s=,"]+` and its left
+    // boundary, but this probe receives RAW lines that still carry a header -
+    // CEF/LEEF `|` fields, a `prog:` syslog tag - and neither `|` nor `:` was a
+    // boundary. So the header was glued onto the first key:
+    //   "...|Blocked|5|cat=TRAFFIC ..." -> key "CEF:0|Acme|...|5|cat"
+    // and when that first pair WAS the discriminator the capture fell back to
+    // one group. Under `\w+` (before DBT-84) these lines split correctly, so the
+    // widening regressed captures that never had a collision to fix.
+    expect(
+      Object.keys(
+        parseKvLine(
+          "<14>Oct 2 fw CEF:0|Acme|FW|1.0|100|Blocked|5|cat=TRAFFIC src=1 dst=2",
+        ),
+      ),
+    ).toEqual(["cat", "src", "dst"]);
+    expect(
+      Object.keys(parseKvLine("LEEF:1.0|Acme|FW|1.0|100|devTime=1 src=1 dst=2")),
+    ).toEqual(["devTime", "src", "dst"]);
+    expect(Object.keys(parseKvLine("host app:type=A a=1 b=2"))).toEqual([
+      "type",
+      "a",
+      "b",
+    ]);
+    // A bracketed timestamp welded to the first key is the same shape.
+    expect(Object.keys(parseKvLine("[2024-01-01]type=A a=1 b=2"))).toEqual([
+      "type",
+      "a",
+      "b",
+    ]);
+
+    // End to end: the discriminator is the FIRST extension key in each shape.
+    const grouped = (raw: string[], format: SampleFormat) =>
+      splitSamplesByLogType(raw, "fb", format).map((s) => [s.logType, s.eventCount]);
+    expect(
+      grouped(
+        [
+          "CEF:0|Acme|FW|1|1|n|5|category=A src=1 dst=2",
+          "CEF:0|Acme|FW|1|1|n|5|category=B src=1 dst=2",
+        ],
+        "cef",
+      ),
+    ).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+    expect(
+      grouped(["host app:type=A a=1 b=2", "host app:type=B a=1 b=2"], "kv"),
+    ).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+    // Hyphenated keys after a header stay whole, so the DBT-84 fix still holds
+    // there: the log type wins over the subtype.
+    expect(
+      grouped(
+        [
+          "CEF:0|V|P|1|1|n|5|log-type=TRAFFIC sub-type=end src-ip=1",
+          "CEF:0|V|P|1|1|n|5|log-type=THREAT sub-type=url src-ip=1",
+        ],
+        "cef",
+      ),
+    ).toEqual([
+      ["TRAFFIC", 1],
+      ["THREAT", 1],
+    ]);
+  });
+
+  it("reads a dotted key whole, so it no longer truncates into the list", () => {
+    // DOCUMENTED REGROUP, not a defect: `\w+` cut `event.type` to `type`, which
+    // selected by accident exactly as `log-type` did. The dotted key is read
+    // whole - `src.ip`/`dst.ip` collided the same way hyphens did - and it is
+    // NOT aliased, so such a capture regroups (release notes, DBT-84).
+    expect(parseKvLine("event.type=A src.ip=1 dst.ip=2")).toEqual({
+      "event.type": "A",
+      "src.ip": "1",
+      "dst.ip": "2",
+    });
   });
 });

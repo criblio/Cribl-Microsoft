@@ -37,7 +37,9 @@ import {
   parseCustomRuleUploads,
   resolveSchemaUnion,
   ruleFieldSet,
+  ruleFieldsFromGapReports,
   severityTone,
+  unionRuleFields,
 } from "./rule-coverage-state";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +239,61 @@ describe("ruleFieldSet", () => {
   });
 });
 
+describe("ruleFieldsFromGapReports (DBT-121)", () => {
+  const report = gapReport({
+    tableName: "CommonSecurityLog",
+    fieldMappings: [],
+    destSchema: [
+      { name: "SourceIP", type: "string" },
+      { name: "DestinationPort", type: "int" },
+      { name: "DeviceAction", type: "string" },
+    ],
+  });
+  const rule: ContentItem = {
+    type: "alert-rule",
+    id: "r1",
+    name: "Blocked traffic",
+    queries: [
+      "CommonSecurityLog | where DeviceAction == 'block' | summarize c = count() by SourceIP",
+    ],
+  };
+
+  it("tags the rule-referenced destination columns as soon as a gap report exists, with no coverage run", () => {
+    const set = ruleFieldsFromGapReports([rule], [report]);
+    expect(set !== undefined && [...set].sort()).toEqual(["deviceaction", "sourceip"]);
+  });
+
+  it("never tags a column no rule references, nor a referenced name the schema lacks", () => {
+    const set = ruleFieldsFromGapReports([rule], [report]);
+    expect(set?.has("destinationport")).toBe(false);
+    // `c` is a computed KQL variable - unknown to the schema, never a badge
+    expect(set?.has("c")).toBe(false);
+  });
+
+  it("ignores workbook fields - only rules light RULE badges", () => {
+    const workbook: ContentItem = {
+      type: "workbook",
+      id: "w1",
+      name: "Dashboard",
+      queries: ["CommonSecurityLog | summarize count() by DestinationPort"],
+    };
+    const set = ruleFieldsFromGapReports([rule, workbook], [report]);
+    expect(set?.size).toBe(2);
+    expect(set?.has("destinationport")).toBe(false);
+  });
+
+  it("reports nothing until both rules and gap reports exist", () => {
+    expect(ruleFieldsFromGapReports([rule], [])).toBeUndefined();
+    expect(ruleFieldsFromGapReports([], [report])).toBeUndefined();
+  });
+
+  it("unions with the coverage section's set so custom uploads still tag", () => {
+    const merged = unionRuleFields(new Set(["sourceip"]), new Set(["customfield"]));
+    expect(merged !== undefined && [...merged].sort()).toEqual(["customfield", "sourceip"]);
+    expect(unionRuleFields(undefined, undefined)).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Three-way counts
 // ---------------------------------------------------------------------------
@@ -391,6 +448,15 @@ describe("coverageSummaryLine", () => {
     expect(line).toContain(
       "workbooks already deployed in your subscription are not analyzed",
     );
+    // DBT-58: the SAME fragment rule the workbook-coverage infoTip pin in
+    // integrate-arc.test.ts applies, so the two surfaces encode one policy -
+    // every fragment naming the subscription also states its exclusion.
+    const offending = line
+      .split(/[.;]/)
+      .filter((fragment) => /subscription/i.test(fragment))
+      .filter((fragment) => !/\bnot (analyzed|read|enumerated)\b/i.test(fragment))
+      .map((fragment) => fragment.trim());
+    expect(offending).toEqual([]);
   });
 });
 

@@ -152,10 +152,12 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "its log type, or upload one or more files. The format is detected from " +
       "the content (Cribl capture events are unwrapped to their inner _raw), " +
       "and the discovered fields drive the gap analysis and pipeline " +
-      "generation. Browse Samples pulls representative events for the " +
-      "selected solution from the Sentinel and Elastic repositories, so you " +
-      "can start without your own capture. Each unique log type becomes its " +
-      "own routes and pipelines in the pack.",
+      "generation. A Cribl source capture or a Lake dataset query works too, " +
+      "so you can start from live data without exporting a file. Each unique " +
+      "log type becomes its own routes and pipelines in the pack.",
+    // DBT-118: this tip used to promise a Browse Samples action pulling events
+    // from the Sentinel and Elastic repositories. ADR 0003 deleted that
+    // browser; the sources named above are the ones the section really offers.
     requires: "none",
     built: true,
   },
@@ -218,10 +220,16 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     title: "Review Workbook Coverage",
     infoTip:
       "Workbook coverage: the solution's Sentinel workbooks (read from the " +
-      "solution repo only) scored against your sample fields - fully, " +
+      "solution repo only - workbooks already deployed in your subscription " +
+      "are not analyzed) scored against your sample fields - fully, " +
       "partially, and uncovered counts, per-workbook coverage %, and missing " +
       "fields by frequency. Informational - missing " +
       "fields may leave workbook tiles empty, but it never blocks a deploy.",
+    // DBT-58: the tip NAMES the excluded source, in the same words as the
+    // empty-workbook summary line (coverageSummaryLine in
+    // rule-coverage-state.ts), so both surfaces answer "why isn't my deployed
+    // workbook here?". Naming it is fine; promising it as an input is not.
+    //
     // NO live connection (DBT-54; was "azure"). The infoTip above used to
     // promise workbooks "deployed in your subscription" were folded in, which
     // is what the "azure" requirement was standing on - but the 2026-07-12 user

@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import { deriveRouteDiscriminator } from "./route-discriminator";
+import { detectSampleFormat } from "../sample-parsing";
 
 const others = (...fields: string[]): Array<ReadonlySet<string>> => [
   new Set(fields.map((f) => f.toLowerCase())),
@@ -22,6 +23,26 @@ describe("deriveRouteDiscriminator", () => {
       "requestClientApplication !== undefined || " +
         "(typeof _raw === 'string' && _raw.indexOf('requestClientApplication=') !== -1)",
     );
+  });
+
+  it("quotes NDJSON keys in the raw token too, as JSON (DBT-116)", () => {
+    // ndjson is one JSON object per line, so its keys sit in _raw quoted, just
+    // like json's. rawToken named only "json" and handed ndjson the key=value
+    // token, which never occurs in a JSON line - the term was false for every
+    // event and the filter rode on the presence disjunct alone. The sibling
+    // value discriminator already treated the two alike.
+    const line = '{"event_type":"dns","query_name":"x"}';
+    expect(detectSampleFormat(line)).toBe("ndjson");
+    const filter = deriveRouteDiscriminator(
+      ["query_name"],
+      others("url"),
+      detectSampleFormat(line),
+    );
+    expect(filter).toBe(
+      "query_name !== undefined || " +
+        `(typeof _raw === 'string' && _raw.indexOf('"query_name"') !== -1)`,
+    );
+    expect(filter).not.toContain("query_name=");
   });
 
   it("quotes JSON keys in the raw token", () => {

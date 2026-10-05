@@ -33,6 +33,8 @@ import {
   pendingLabelSeeds,
   assessUnusedOverflow,
   deriveLiveStats,
+  formatExampleValue,
+  EXAMPLE_VALUE_MAX_CHARS,
 } from "./mapping-review-state";
 import type {
   MappingReviewAction,
@@ -829,5 +831,69 @@ describe("autoDropPlan", () => {
     );
 
     expect(plan.drop).toEqual([]);
+  });
+});
+
+describe("formatExampleValue (DBT-122, the Example Value column)", () => {
+  it("shows a short value verbatim with the same full value in the tip", () => {
+    expect(formatExampleValue("81.2.69.192")).toEqual({
+      kind: "value",
+      text: "81.2.69.192",
+      title: "81.2.69.192",
+    });
+  });
+
+  it("caps a long value at EXAMPLE_VALUE_MAX_CHARS and keeps the full value in the tip", () => {
+    // A 200-char path must not stretch the table; the operator still reads the
+    // whole thing on hover, so nothing is hidden, only shortened.
+    const long = "/".concat("a".repeat(199));
+    const cell = formatExampleValue(long);
+    expect(EXAMPLE_VALUE_MAX_CHARS).toBe(80);
+    expect(cell.kind).toBe("value");
+    expect(cell.text).toBe("/".concat("a".repeat(76), "..."));
+    expect(cell.text.length).toBe(80);
+    expect(cell.title).toBe(long);
+  });
+
+  it("does not truncate a value of exactly the cap", () => {
+    const exact = "x".repeat(80);
+    expect(formatExampleValue(exact).text).toBe(exact);
+  });
+
+  it("renders a dash for a field with no example, without claiming the sample had no value", () => {
+    // collectFields keeps no example of 200+ characters, so a field holding
+    // only long values (command lines, URLs) arrives here undefined too. The
+    // tip says what is known rather than "no value" (audit follow-up, DBT-122).
+    expect(formatExampleValue(undefined)).toEqual({
+      kind: "none",
+      text: "--",
+      title:
+        "No example captured: the sample had no value for this field, or " +
+        "every value was 200 characters or longer",
+    });
+  });
+
+  it("names an empty string rather than rendering a blank cell", () => {
+    // ContextData in the CrowdStrike Process corpus is "" - a blank cell would
+    // read as "no value", which is a different fact.
+    expect(formatExampleValue("")).toEqual({
+      kind: "empty",
+      text: '""',
+      title: "Empty string in the sample",
+    });
+  });
+
+  it("keeps leading and trailing whitespace (never trims)", () => {
+    expect(formatExampleValue("  padded ")).toEqual({
+      kind: "value",
+      text: "  padded ",
+      title: "  padded ",
+    });
+  });
+
+  it("escapes line breaks and tabs in the cell so one row stays one line", () => {
+    const cell = formatExampleValue("a\nb\tc\r");
+    expect(cell.text).toBe("a\\nb\\tc\\r");
+    expect(cell.title).toBe("a\nb\tc\r");
   });
 });

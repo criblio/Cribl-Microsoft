@@ -8,6 +8,135 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.8
+
+**Captures with hyphenated keys now split by their real log type, and some will
+regroup (DBT-84).** The capture splitter read `key=value` lines with a key class
+that stopped at the first hyphen, so `log-type`, `sub-type` and `src-ip` became
+`type`, `type` and `ip`. Keys that truncated to the same name collided and the
+last one won: `log-type=TRAFFIC sub-type=end` grouped by the SUBTYPE (`END`),
+which one won depended on the order the pairs were written in, and a line such
+as `src-ip=.. dst-ip=.. action=..` counted as two pairs instead of three and
+sent the whole capture to the single fallback group. Keys are now read whole.
+Three hyphenated keys are aliased to a discriminator: `log-type` to `type`
+(what it used to truncate to), `sub-type` to `subtype` and `event-type` to
+`eventType` (both used to truncate to `type`). Any other hyphenated key that
+used to truncate onto a discriminator no longer does, so a capture grouped only
+by such a key now lands in the single fallback group - re-capture it.
+When a line carries both `type=` and `log-type=`, the exact `type` wins. A
+CEF or LEEF header, a `prog:` tag or a `[timestamp]` in front of the first pair
+still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
+
+**A pack that keeps a field Cribl cannot address no longer builds (GEN-5).** A
+source field kept under its own name - because the destination has a column
+spelled the same - was never checked, so a name like `Source IP` or `aws.account`
+built cleanly and then read as nothing at runtime. The preview now reports it
+and the build is blocked, the same as an unaddressable rename already was. The
+same now holds for a field read as the input of a base64 decode. A field that is
+only dropped is not checked yet; that waits on a live Cribl measurement. The
+build refusal now reads "pipeline validation found N issue(s)", because the
+count includes these field-name checks as well as the Cribl YAML loader's.
+
+**Dotted keys regroup too.** A dot cut a key the same way a hyphen did, so
+`event.type` used to be read as `type` and split the capture by it. Dotted keys
+are now read whole and are NOT treated as `type`, so a capture that was grouped
+through a dotted key such as `event.type` comes back as one group (or under a
+different discriminator) and should be re-captured like the hyphenated case.
+
+**Re-capture affected samples.** A log type is the tagged-sample store's key, so
+a capture that contained colliding hyphenated or dotted keys - one that was
+grouped under a subtype, or that came back as one undifferentiated group - or
+that was grouped through a dotted key, will split differently now, under new
+names. Samples stored under the old names stay
+where they are and are not migrated; capture those sources again to get the
+corrected groups.
+
+**Rebuild packs to pick up the changes below.** Each one changes what a newly
+built pack contains. A pack built and installed before this release keeps its
+old output until it is rebuilt and reinstalled.
+
+**VPC Flow packs stamp TimeGenerated from the flow start (GEN-7).** A
+recognised VPC Flow v2 pack looked for a timestamp field no event carries, so
+Azure stamped every flow with its ingestion time, and `Start` and `End` shipped
+as raw epoch-second strings into datetime columns. The pack now carries an Eval
+that sets TimeGenerated from the flow start and rewrites `Start` and `End` as
+ISO-8601; a non-numeric value such as `-` leaves the field unset. The DCR
+transform is unchanged. Flow events from a rebuilt pack will carry a different
+TimeGenerated than the same flows did before.
+
+**Syslog packs parse syslog instead of JSON (DBT-116).** A syslog pack's
+pipeline, and its fallback reduction pipeline, were generated with a JSON serde,
+so every field the sample parser had read (Hostname, Program, Message ...) was
+undefined in the installed pipeline. Both now extract RFC 3164 and RFC 5424
+with an Eval built from the sample parser's own patterns, including integer
+Priority, PID and Version. The route filter for an NDJSON log type now looks
+for a token a JSON line actually contains, where it used to look for a
+`key=value` token.
+
+**The pack's Sentinel destination id now matches the one Deploy creates
+(GEN-18).** For a table name with a hyphen, dot or space, the pack generator
+only stripped `_CL`, while Deploy also replaced every non-alphanumeric
+character with `_`. A pack for such a table wrote an `outputs.yml` id and route
+outputs that Deploy never creates. The pack now uses Deploy's rule, so for
+those table names the destination id in `outputs.yml` and in every route output
+CHANGES on rebuild - for `My-App_CL`, from `MS-Sentinel-My-App-dest` to
+`MS-Sentinel-My_App-dest`.
+A routable pack's prerequisite check now expects that one id. The pack and that
+check also now apply your Cribl destination prefix and suffix, as Deploy always
+did; before, they used the default naming whatever you had set. Table names made
+only of letters, digits and underscores, with default prefix and suffix, are
+unaffected.
+
+**An undetected sample gets a placeholder route, not a filter that cannot match
+(GEN-11).** A sample whose format was not detected was routed as JSON, and the
+log type got a filter on a parsed field that no unparsed event at route time
+carries; the preview still read valid. Such a log type now gets a placeholder
+route, and the preview reports it, offering a `_raw` filter example and saying
+which formats reach the route unparsed. Detected JSON and NDJSON routing, and
+route conditions set by hand, are unchanged.
+
+**Every built pack ships a README (GEN-14).** App-built packs carried no
+`README.md`, so Cribl's Pack Settings showed its own unedited placeholder
+template. Each pack now ships one naming the solution, its tables, one row per
+log type (table, pipelines, destination, stream) and how the pack is wired; it
+carries no DCR id, endpoint, tenant or client id. The Labs flow-log pack ships a
+fixed README of its own.
+
+**Unreadable CEF lines are dropped and reported (DBT-109).** A syslog-wrapped
+line whose CEF header could not be read (a dangling trailing backslash, or
+fewer than seven header fields) used to be kept as an event carrying only its
+syslog header, counted in the sample's event total and shipped in the pack's
+sample file. It is now
+dropped, and the sample shows a parse note counting the lines that were
+skipped. Event counts for affected CEF samples go down.
+
+**RULE badges appear as soon as the DCR Gap Analysis runs (DBT-121).** The badges
+on the Field Mappings table that mark columns an analytics rule references used
+to appear only after a separate click on Analyze in Rule Coverage, so an
+operator who ran the gap analysis alone saw none and read the feature as
+missing. They now light on every gap analysis, from the solution's rules already
+fetched when it was selected. Rules uploaded in Rule Coverage still add to them.
+The rules come from GitHub; without a GitHub token the fetch can fail silently
+and no badges appear.
+
+**Smaller fixes.**
+- AZR-13: the coverage catalog derives its Entra profile options from the
+  three profiles the app knows, so a stored SecurityOnly selection is kept
+  rather than silently reverted to Standard. No screen reads that catalog yet.
+- DBT-118: Repositories no longer shows the Elastic sample section, which
+  described a fetch the app stopped doing and spent GitHub calls on a probe;
+  the Add Sample Data tip now names capture and Lake query.
+- DBT-14: the solution list only holds the mouse wheel while it actually
+  scrolls, so a short list no longer stops the page from scrolling.
+- DBT-58: the workbook-coverage tip now says that workbooks already deployed
+  in your subscription are not analyzed.
+- DBT-106: DCR Gap Analysis shows AWS's own hyphenated spelling beside each VPC
+  Flow v2 field. Display only - the pipeline still uses the parsed name.
+- DBT-122: the DCR Gap Analysis Field Mappings table has an Example Value
+  column showing the first value seen for each source field.
+
+---
+
 ## 1.12.7
 
 **A pack can now be wired either way, and the routable way says what it needs.**

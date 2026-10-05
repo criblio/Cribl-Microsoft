@@ -151,6 +151,35 @@ routes:
     output: default
 `;
 
+/**
+ * The pack's root README.md (GEN-14). Without one, Cribl shows its stock
+ * "This is a paragraph..." template in Pack Settings. Static on purpose: it
+ * names the job, pipeline and secret, and never the operator's storage account,
+ * tenant or client id, which live in jobs.yml.
+ */
+const FLOWLOG_README_MD = `# Azure vNet Flow Logs
+
+Collects Azure virtual network flow logs from blob storage and flattens each
+flow tuple into its own event. Built by the SOC Optimization Toolkit Labs screen.
+
+## What this pack contains
+
+- Collector job \`${FLOWLOG_JOB_ID}\`: runs hourly at :15 and reads the window
+  from 75 to 15 minutes ago out of the flow-log container in the lab storage
+  account.
+- Event breaker \`Azure_vNet_FlowLogs\`: splits each blob on its \`records\` array.
+- Pipeline \`Azure_vNet_FlowLogs_PreProcessing\`: unrolls flows, flow groups and
+  flow tuples, so each event is one tuple.
+- Route \`default\`: sends everything to the worker group's default output.
+
+## Deployment
+
+The collector authenticates with the Cribl text secret
+\`${FLOWLOG_SECRET_NAME}\`, which must hold the client secret of the app
+registration the lab created. Create that secret in the worker group before the
+first scheduled run, then commit and deploy.
+`;
+
 /** The assembled, installable pack. */
 export interface AssembledFlowLogPack {
   /** The gzip .crbl bytes (deterministic for params + builtAtMs). */
@@ -173,6 +202,7 @@ export function assembleFlowLogPack(
 ): AssembledFlowLogPack {
   const tree = new PackTree();
   tree.set("package.json", FLOWLOG_PACKAGE_JSON);
+  tree.set("README.md", FLOWLOG_README_MD);
   tree.set("default/pack.yml", FLOWLOG_PACK_YML);
   tree.set("default/breakers.yml", FLOWLOG_BREAKERS_YML);
   tree.set("default/jobs.yml", renderFlowLogJobsYml(params));

@@ -11,11 +11,16 @@
 // three epics" and nothing checked it; it stayed a sentence a reader had to
 // notice.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   applyDecision,
   backlogSectionIds,
   blockers,
+  boardWarnings,
+  danglingLinks,
+  knownIds,
+  LINK,
   renderBoard,
   validateBoard,
 } from './board.mjs';
@@ -713,5 +718,146 @@ describe('validateBoard - an answered decision owes a citation', () => {
 
   it('ignores stories with no decision block at all', () => {
     expect(validateBoard(board([story({ detail: 'no decision, no citation' })]))).toEqual([]);
+  });
+});
+
+/**
+ * DBT-120: check-board validated every structured field of a card and never
+ * looked inside its prose. Pruning done cards on 2026-09-04 left 60 `[[links]]`
+ * naming cards no longer on the board, and by 2026-10-02 it was 66 - all while
+ * the check stayed green. A dangling link is a WARNING, not an error: pruning is
+ * deliberate and the target survives in backlog.md and git history, so failing
+ * on it would only make the check something people disable.
+ */
+describe('DBT-120 - [[links]] that name nothing on this board', () => {
+  const linked = (over = {}) =>
+    board([
+      story({
+        id: 'REL-1',
+        detail: 'see [[REL-2]] and [[GONE-7]] and [[GONE-7]] and the literal `[[CARD-ID]]`',
+        ...over,
+      }),
+      story({ id: 'REL-2' }),
+    ]);
+
+  it('reports each dangling link, keeps repeats, resolves real cards and skips non-id prose', () => {
+    expect(danglingLinks(linked())).toEqual([
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+    ]);
+  });
+
+  it('scans the title and priorityWhy as well as the detail', () => {
+    const data = linked({
+      title: 'Follows [[OLD-3]]',
+      detail: '',
+      priorityWhy: 'Held back behind [[OLD-4]].',
+    });
+
+    expect(danglingLinks(data)).toEqual([
+      { from: 'REL-1', field: 'title', target: 'OLD-3' },
+      { from: 'REL-1', field: 'priorityWhy', target: 'OLD-4' },
+    ]);
+  });
+
+  it('resolves links to features and to spike-shaped ids', () => {
+    // AZR-S1 is a real story id on the board; a regex written for `X-F?N` only
+    // would have reported a link to it as dangling.
+    const data = board([
+      story({ id: 'REL-1', detail: '[[REL-F1]] [[AZR-S1]] [[REL-S9]]' }),
+      story({ id: 'AZR-S1' }),
+    ]);
+
+    expect(danglingLinks(data)).toEqual([{ from: 'REL-1', field: 'detail', target: 'REL-S9' }]);
+  });
+
+  it('is NOT a validation finding, so it can never fail check-board', () => {
+    expect(validateBoard(linked())).toEqual([]);
+  });
+
+  it('summarises as exactly one warning carrying the counts', () => {
+    const w = boardWarnings(linked());
+
+    expect(w).toHaveLength(1);
+    expect(w[0]).toContain('2 [[link]](s) in 1 card(s) name 1 id(s) not on this board');
+    expect(w[0]).toContain('GONE-7');
+  });
+
+  it('warns about nothing on a board whose links all resolve', () => {
+    expect(boardWarnings(board([story({ detail: 'see [[REL-1]]' })]))).toEqual([]);
+  });
+
+  it('computes the header note from the measurement instead of a hardcoded prune', () => {
+    const md = renderBoard(linked(), '2026-10-02');
+
+    expect(md).toContain('2 `[[links]]` on this board name 1 card(s) it no longer shows');
+    expect(md).not.toContain('1.12.7');
+    expect(md).not.toContain('2026-09-04');
+  });
+
+  it('omits the header note when every link resolves', () => {
+    const md = renderBoard(board([story({ detail: 'see [[REL-1]]' })]), '2026-10-02');
+
+    expect(md).not.toContain('no longer shows');
+  });
+
+  /**
+   * An oracle that shares nothing with board.mjs but the field list: it finds
+   * `[[...]]` tokens with indexOf rather than LINK, and decides "is this an id"
+   * by characters rather than by regex. Architecture audit 2026-10-02 (DBT-120
+   * follow-up): the previous oracle copied LINK word for word, so a drift in
+   * the shape rule moved both sides together and the pin still passed.
+   */
+  const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-';
+  const looksLikeId = (t) =>
+    t.includes('-') &&
+    [...t].every((c) => ID_CHARS.includes(c)) &&
+    '0123456789'.includes(t[t.length - 1]);
+  const oracleDangling = (data) => {
+    const known = new Set([
+      ...data.stories.map((s) => s.id),
+      ...(data.features ?? []).map((f) => f.id),
+    ]);
+    const out = [];
+    for (const s of data.stories) {
+      for (const field of ['title', 'detail', 'priorityWhy']) {
+        const text = String(s[field] ?? '');
+        let at = text.indexOf('[[');
+        while (at !== -1) {
+          const end = text.indexOf(']]', at + 2);
+          if (end === -1) break;
+          const token = text.slice(at + 2, end);
+          if (looksLikeId(token) && !known.has(token)) out.push({ from: s.id, field, target: token });
+          at = text.indexOf('[[', end + 2);
+        }
+      }
+    }
+    return out;
+  };
+
+  it('the oracle itself finds what a synthetic board plants', () => {
+    // Moved here from the live-data pin: asserting the REAL board has dangling
+    // links would fail CI on the day the last one is fixed.
+    expect(oracleDangling(linked())).toEqual([
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+      { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+    ]);
+  });
+
+  it('agrees with an independent oracle over the real docs/board.json', () => {
+    const data = JSON.parse(
+      readFileSync(new URL('../../../docs/board.json', import.meta.url), 'utf8'),
+    );
+
+    expect(danglingLinks(data)).toEqual(oracleDangling(data));
+  });
+
+  it('exports the link shape and the known-id set the HTML board resolves against', () => {
+    const data = board([story({ id: 'REL-1' }), story({ id: 'AZR-S1' })]);
+
+    expect([...knownIds(data)].sort()).toEqual(['AZR-S1', 'REL-1', 'REL-F1']);
+    expect(
+      [...'[[REL-1]] [[DBT-F4]] [[AZR-S1]] [[link]] [[CARD-ID]] [[rel-1]]'.matchAll(LINK)].map((m) => m[1]),
+    ).toEqual(['REL-1', 'DBT-F4', 'AZR-S1']);
   });
 });

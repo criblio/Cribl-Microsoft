@@ -23,7 +23,14 @@
  * it renders an always-visible unavailable state.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   DELIVERY_FIT_NOT_FETCHED,
   DELIVERY_FIT_UNMEASURED_LABEL,
@@ -84,6 +91,49 @@ export interface SolutionBrowserProps {
    * silently undo Clear selection.
    */
   restoreName?: string | null;
+}
+
+/**
+ * Whether an element currently overflows vertically, i.e. has something of its
+ * own to scroll (DBT-14). Returns a callback ref and the flag.
+ *
+ * It exists for ONE css decision: the browse list carries
+ * `overscroll-behavior: contain` only while it overflows, because on a list
+ * that fits under its 420px cap Chrome still makes it the wheel target and
+ * contain then stops the wheel reaching the page, so nothing scrolls at all.
+ *
+ * A callback ref rather than useRef because the list mounts conditionally
+ * (it is replaced by the selected-solution card), and the effect has to re-run
+ * on the element it is given. `contentKey` re-measures when the CONTENT changes
+ * - a filter changes the row count, and a list already pinned at its cap does
+ * not change size when its rows do, so the ResizeObserver alone would miss a
+ * long list shrinking to a still-long one, or growing past the cap from a box
+ * that never resized. The ResizeObserver covers the rest: the list itself
+ * shrinking under the cap, a window resize, late-loading fonts changing row
+ * heights. No wheel handling anywhere - this only chooses a class.
+ */
+function useOverflowsY<T extends HTMLElement>(
+  contentKey: unknown,
+): [(el: T | null) => void, boolean] {
+  const [el, setEl] = useState<T | null>(null);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    if (el === null) {
+      setOverflows(false);
+      return;
+    }
+    // The +1 absorbs sub-pixel rounding: a box whose content is fractionally
+    // taller than itself has nothing an operator could scroll to.
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, contentKey]);
+  return [setEl, overflows];
 }
 
 // The cap on how many connector files a selected solution decodes for the
@@ -481,6 +531,9 @@ export function SolutionBrowser({
         : filterSolutions(mergedSolutions, { query, hideDeprecated }),
     [mergedSolutions, query, hideDeprecated],
   );
+  // `visible` is the content key: every filter or index change re-measures
+  // (DBT-14). Declared before the early returns below - it is a hook.
+  const [listRef, listScrollable] = useOverflowsY<HTMLUListElement>(visible);
   const selected = useMemo(
     () => resolveSelectedSolution(mergedSolutions ?? [], selectedName),
     [mergedSolutions, selectedName],
@@ -837,7 +890,13 @@ export function SolutionBrowser({
             </span>{" "}
             no connector JSON was read for it
           </p>
-          <ul className="solution-browser-list">
+          <ul
+            ref={listRef}
+            className={
+              "solution-browser-list" +
+              (listScrollable ? " solution-browser-list--scrollable" : "")
+            }
+          >
             {visible.map((solution) => {
               // The list only renders while NOTHING is selected (selecting
               // switches to the selected-solution card), so rows carry no

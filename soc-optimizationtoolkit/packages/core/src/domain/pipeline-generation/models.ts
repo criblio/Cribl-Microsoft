@@ -22,6 +22,7 @@
 import type { CefIdentityOverride } from "../cef-identity";
 import type { MatchResult, OverflowConfig, VendorMapping } from "../field-matcher";
 import type { DcrGapAnalysis, TableRoutingInfo } from "../gap-analysis";
+import type { DestinationNaming } from "../option-forms";
 import type { TableReductionRules } from "./reduction-rules";
 import type { LogTypeFieldValues } from "./route-value-discriminator";
 
@@ -122,10 +123,29 @@ export interface TablePlanInput {
    */
   identityOverride?: CefIdentityOverride;
   /**
-   * Sample format detected by the caller (Unit 11): cef | leef | csv | kv | json
-   * | ndjson | syslog. Drives serde selection + timestamp logic. Defaults json.
+   * Sample format detected by the caller: a SampleFormat string, narrowed by
+   * toSampleFormat (see extractionFor). The member list lives in the
+   * SampleFormat union, not here - this comment used to name seven and went
+   * stale when positional joined (audit follow-up to DBT-116). Drives serde
+   * selection + timestamp logic. Defaults json.
    */
   sourceFormat?: string;
+  /**
+   * False when sample detection returned "unknown" (GEN-11): `sourceFormat` is
+   * then a serde DEFAULT ("json"), not evidence about the content.
+   *
+   * It has to travel separately because the default erases the signal. For
+   * json and ndjson the value discriminator drops its `_raw` disjunct, so an
+   * undetected sample that the try-each fallback still parsed - headerless
+   * delimited rows, a 3-column CSV, two-pair key=value lines - got a BARE
+   * parsed-field filter (`_2 === 'TRAFFIC'`) that no unparsed route-time event
+   * can satisfy, and the pack previewed clean. With this false the planner
+   * derives nothing and placeholders the log type, which the operator is told.
+   *
+   * Omitted means "detected, or no sample at all" and keeps the old behaviour;
+   * an explicit routing.routeCondition still wins either way.
+   */
+  formatDetected?: boolean;
   /**
    * Raw source fields for the passthrough branch (used only when no match and no
    * schema were available - keep everything as-is).
@@ -153,7 +173,10 @@ export interface TablePlan {
   pipelineName: string;
   /** `Reduction_{vendorPrefix}_{suffix}` - reduction pipeline id/dir. */
   reductionPipelineId: string;
-  /** `MS-Sentinel-{Table}-dest`. */
+  /**
+   * `{prefix}{Table}{suffix}` from the plan's destinationNaming, else the
+   * default `MS-Sentinel-{Table}-dest` (see naming.destinationId).
+   */
   destinationId: string;
   /** `Custom-{Table}`. */
   streamName: string;
@@ -261,4 +284,10 @@ export interface BuildPipelinePlanInput {
   toolkitVersion?: string;
   /** See {@link PipelinePlan.packShape}. Chosen by the operator at build time. */
   packShape?: PackShape;
+  /**
+   * The operator's destination prefix/suffix (CriblOptions), so every
+   * TablePlan.destinationId is the id Deploy creates ([[GEN-18]]
+   * follow-through). Omitted means the default "MS-Sentinel-"/"-dest" naming.
+   */
+  destinationNaming?: DestinationNaming;
 }

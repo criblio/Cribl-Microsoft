@@ -21,6 +21,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { FIELD_EXAMPLE_MAX_CHARS } from "./models";
 import { collectFields, guessTimestampField } from "./parse-sample";
 
 describe("guessTimestampField - FortiGate, live 2026-08-26", () => {
@@ -192,5 +193,24 @@ describe("guessTimestampField - the ranking, stated directly", () => {
       { alpha_time: "hello", beta_time: "hello" },
     ]);
     expect(guessTimestampField(fields)).toBe("alpha_time");
+  });
+});
+
+describe("collectFields - the example length cap (audit follow-up to DBT-122)", () => {
+  // The mapping-review Example Value cell names this cap when a field has no
+  // example, because a field whose every value is this long is NOT a field
+  // without values: it occurred in every record and still has no example.
+  it("keeps a value one character under the cap and drops one at the cap", () => {
+    expect(FIELD_EXAMPLE_MAX_CHARS).toBe(200);
+    const fields = collectFields([
+      { short: "a".repeat(199), long: "b".repeat(200) },
+      { short: "c", long: "d".repeat(4096) },
+    ]);
+    const short = fields.find((f) => f.name === "short");
+    const long = fields.find((f) => f.name === "long");
+    expect(short?.examples).toEqual(["a".repeat(199), "c"]);
+    expect(long?.examples).toEqual([]);
+    expect(long?.occurrence).toBe(2);
+    expect(long?.required).toBe(true);
   });
 });

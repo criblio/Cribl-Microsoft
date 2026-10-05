@@ -20,9 +20,14 @@
  *   3. surfaces the reduction rules (keep/drop/suppress) WITH their reasons for
  *      display - straight off the plan's reductionRules (the reduction KB reason
  *      strings are display content);
- *   4. runs the core {@link checkCriblYaml} validator over every emitted YAML and
- *      surfaces any issues HONESTLY (task item 3): a well-formed plan produces
- *      zero issues, so a non-empty list is the honest "something is off" signal.
+ *   4. runs the pipeline validation over every table and surfaces any issues
+ *      HONESTLY (task item 3): the core {@link checkCriblYaml} validator over
+ *      every emitted YAML, plus {@link checkPlanFieldAccessors} over each plan
+ *      (GEN-5: a source field the conf reads by its own spelling but no conf
+ *      line names, so no YAML rule can refuse it). A non-empty list is the
+ *      honest "this pack would not work" signal - and since GEN-5 an ordinary
+ *      operator sample can produce one (a field named `Source IP` kept against
+ *      a same-named column), so it is not a generator fault by definition.
  *
  * BOUNDARY (Unit 17 depends-on note): this consumes typed results; it never calls
  * the field matcher, gap analysis, or vendor research. The only core functions it
@@ -42,12 +47,14 @@ import {
   unreachableLogTypes as coreUnreachableLogTypes,
   placeholderLogTypes as corePlaceholderLogTypes,
   checkCriblYaml,
+  checkPlanFieldAccessors,
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
   generateRouteYml,
 } from "@soc/core";
 import type {
   CefIdentityOverride,
+  DestinationNaming,
   GapFieldMapping,
   GapReport,
   LogTypeFieldValues,
@@ -119,6 +126,14 @@ export interface PipelinePreviewTable {
   destinationId: string;
   streamName: string;
   sourceFormat: string;
+  /**
+   * False when a sample WAS supplied but its format was not detected (GEN-11).
+   * sourceFormat is already normalised to "json" by then, so this is the only
+   * way the screen can treat the log type as the planner does - unparsed at
+   * route time, not routable on a parsed field. True for a detected format
+   * and for no sample at all, matching the planner's `formatDetected !== false`.
+   */
+  formatDetected: boolean;
   routeCondition: string;
   provenance: PlanProvenance;
   /** How many field decisions the plan resolved for this table. */
@@ -133,7 +148,11 @@ export interface PipelinePreviewTable {
   functions: PipelineFunctionLine[];
   /** The reduction rules with reasons (keep, then drop, then suppress). */
   reductionRules: ReductionRuleView[];
-  /** checkCriblYaml issues over this table's transform + reduction conf. */
+  /**
+   * checkCriblYaml issues over this table's transform + reduction conf, plus
+   * the plan-level accessor issues no conf line can carry (GEN-5: a field kept
+   * under an unaddressable name of its own).
+   */
   yamlIssues: string[];
 }
 
@@ -195,6 +214,14 @@ export interface PipelinePreviewInputs {
    * was, so an unset preview renders exactly as it always did.
    */
   packShape?: PackShape;
+  /**
+   * The operator's destination prefix/suffix - the SAME CriblOptions the
+   * integrate screen hands Deploy - so the previewed and built pack target the
+   * id Deploy creates ([[GEN-18]] follow-through). Null or omitted means the
+   * default "MS-Sentinel-"/"-dest" naming. Nullable rather than only optional
+   * so {@link FullContentPlan} still makes the composition site say which.
+   */
+  destinationNaming?: DestinationNaming | null;
   /** The Unit 18 gap reports (typed input, already computed). */
   reports: GapReport[];
   /**
@@ -277,9 +304,17 @@ export interface PipelinePreviewView {
   routeYml: string;
   /** checkCriblYaml issues over route.yml. */
   routeYmlIssues: string[];
-  /** Total checkCriblYaml issues across every emitted YAML (0 = clean). */
+  /**
+   * Total pipeline validation issues (0 = clean): checkCriblYaml over every
+   * emitted YAML, plus checkPlanFieldAccessors over each table's plan (GEN-5).
+   * The name predates the plan check and is kept so callers need not move.
+   */
   totalYamlIssues: number;
-  /** Every emitted YAML passed the Cribl validator (the honest green signal). */
+  /**
+   * No pipeline validation issue anywhere - neither a Cribl YAML loader
+   * finding nor a plan field-name finding (the honest green signal, and the
+   * integrate screen's only build guard).
+   */
   valid: boolean;
   /**
    * Log types whose routes cannot receive events, in route order.
@@ -312,6 +347,15 @@ export function normalizeSourceFormat(format: string | undefined): string {
     return "json";
   }
   return format;
+}
+
+/**
+ * True when a sample WAS supplied but its format was not detected (GEN-11).
+ * Distinct from undefined, which means no sample at all - normalizeSourceFormat
+ * maps all three to "json", so this is the only place the difference survives.
+ */
+function isUndetectedFormat(format: string | undefined): boolean {
+  return format === "" || format === "unknown";
 }
 
 /**
@@ -394,6 +438,13 @@ export function reportToPlanInput(
     // schema and cannot be told apart by which fields exist.
     ...(sampleFieldValues !== undefined ? { sampleFieldValues } : {}),
     sourceFormat: normalizeSourceFormat(sampleFormats?.[report.logType]),
+    // GEN-11: normalizeSourceFormat erases "unknown" into "json", so the fact
+    // that detection gave up has to ride alongside or the planner routes on a
+    // format the content never had. Undefined (no sample supplied) stays unset
+    // and keeps presence-only routing.
+    ...(isUndetectedFormat(sampleFormats?.[report.logType])
+      ? { formatDetected: false }
+      : {}),
     // User-added constants ride the planner's vendorMappings channel: the
     // conf emitter's enrich branch turns each into an Eval add of
     // `destName = '<description>'` (the Unit 15 shape, user-supplied here).
@@ -567,6 +618,11 @@ export function derivePipelinePreview(
     // taken before the option existed renders the all-inclusive default rather
     // than a shape nobody picked.
     ...(inputs.packShape !== undefined ? { packShape: inputs.packShape } : {}),
+    // GEN-18 follow-through: the destination id the pack targets comes from
+    // the operator's naming, as Deploy's does.
+    ...(inputs.destinationNaming != null
+      ? { destinationNaming: inputs.destinationNaming }
+      : {}),
     tables: planTables.map((r) =>
       reportToPlanInput(
         r,
@@ -581,7 +637,7 @@ export function derivePipelinePreview(
   });
 
   let totalYamlIssues = 0;
-  const tables: PipelinePreviewTable[] = plan.tables.map((table) => {
+  const tables: PipelinePreviewTable[] = plan.tables.map((table, i) => {
     const transformConf = generatePipelineConfForPlan(table, plan.solutionName);
     const reductionConf = generateReductionConfForPlan(table, plan.solutionName);
     const yamlIssues = [
@@ -590,6 +646,12 @@ export function derivePipelinePreview(
         reductionConf,
         `${table.reductionPipelineId}/conf.yml`,
       ),
+      // GEN-5 (kept leg): a field kept under its own spelling is on no conf
+      // line, so checkCriblYaml cannot refuse an unaddressable one. Counted
+      // here so `valid` - the integrate screen's only build guard - goes
+      // false exactly as it does for an unaddressable RENAMED field. Once per
+      // table, not per conf: it is a fact about the plan both confs share.
+      ...checkPlanFieldAccessors(table),
     ];
     totalYamlIssues += yamlIssues.length;
     return {
@@ -600,6 +662,13 @@ export function derivePipelinePreview(
       destinationId: table.destinationId,
       streamName: table.streamName,
       sourceFormat: table.sourceFormat,
+      // GEN-11 audit follow-up: index-aligned with planTables, the same
+      // alignment buildPipelinePlan relies on when it reads formatDetected.
+      formatDetected: !isUndetectedFormat(
+        planTables[i] === undefined
+          ? undefined
+          : inputs.sampleFormats?.[planTables[i].logType],
+      ),
       routeCondition: table.routeCondition,
       provenance: table.provenance,
       fieldCount: table.fields.length,

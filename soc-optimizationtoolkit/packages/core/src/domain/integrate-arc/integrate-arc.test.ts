@@ -116,6 +116,15 @@ function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
 // ---------------------------------------------------------------------------
 
 describe("INTEGRATE_SECTIONS metadata", () => {
+  // DBT-118: the Add Sample Data tip promised a Browse Samples action that
+  // pulled events from the Sentinel and Elastic repositories. ADR 0003 deleted
+  // that browser, so the tip described a source the operator cannot use.
+  it("Add Sample Data names no deleted sample source", () => {
+    const tip = integrateSection("sample-data").infoTip;
+    expect(tip.match(/Browse Samples/g)).toBeNull();
+    expect(tip.match(/Elastic/g)).toBeNull();
+  });
+
   it("has nine sections numbered 1..9 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9,
@@ -213,11 +222,33 @@ describe("INTEGRATE_SECTIONS metadata", () => {
   // deployed subscription workbooks are deliberately not enumerated, because a
   // shared subscription carries unrelated dashboards and local copies drift.
   // The copy was inviting an operator to expect a read that never happens.
+  //
+  // DBT-58. The original pin here banned the NOUN "subscription" anywhere in
+  // the tip, while rule-coverage-state.test.ts REQUIRED the empty-workbook
+  // summary line to name the subscription beside its exclusion - opposite
+  // policies for the same fact, so no honest string could satisfy both. The
+  // operator decided (2026-10-02) that BOTH surfaces name the exclusion, so
+  // this pin now forbids the CLAIM rather than the word: the subscription may
+  // appear only in a fragment that also says it is not analyzed. The same
+  // fragment rule is mirrored on the summary line in rule-coverage-state.test.ts.
   it("never promises workbook coverage reads deployed subscription workbooks", () => {
     const tip = integrateSection("workbook-coverage").infoTip;
     expect(tip).toContain("solution repo only");
-    expect(tip).not.toContain("deployed in your subscription");
-    expect(tip.toLowerCase()).not.toContain("subscription");
+    // The old promise was "folds in any deployed in your subscription".
+    expect(tip).not.toMatch(/folds? in/i);
+    // Every fragment naming the subscription must also state its exclusion.
+    // toEqual([]) rather than a length check so a failure names the text.
+    const offending = tip
+      .split(/[.;]/)
+      .filter((fragment) => /subscription/i.test(fragment))
+      .filter((fragment) => !/\bnot (analyzed|read|enumerated)\b/i.test(fragment))
+      .map((fragment) => fragment.trim());
+    expect(offending).toEqual([]);
+    // The operator's decision: the tip names the excluded source, in the
+    // same words as the empty-workbook summary line.
+    expect(tip).toContain(
+      "workbooks already deployed in your subscription are not analyzed",
+    );
   });
 
   it("gives every section a non-empty title and infoTip with no emojis", () => {

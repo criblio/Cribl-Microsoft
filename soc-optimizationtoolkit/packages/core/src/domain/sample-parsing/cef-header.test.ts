@@ -34,10 +34,11 @@
  * WHAT THE FIX COSTS IS PINNED HERE TOO, in three tests, because every one of
  * these is silent and two of them were written down wrongly first:
  *
- *   a DANGLING escape has TWO answers. Bare, the line vanishes and so does its
- *     raw event. SYSLOG-WRAPPED - the standard transport - the record SURVIVES
- *     carrying only `_syslogHeader` and not one of the seven fields, and it
- *     still counts as an event and still reaches the pack's sample file.
+ *   a DANGLING escape drops the line and its raw event. Until DBT-109 it had
+ *     TWO answers: SYSLOG-WRAPPED - the standard transport - the record
+ *     SURVIVED carrying only `_syslogHeader` and not one of the seven fields,
+ *     counted as an event and reached the pack's sample file. Both spellings
+ *     now drop it, and parseSampleContent says so in a parse note.
  *   an UNESCAPED literal backslash before a pipe SHIFTS every field after it and
  *     swallows the extension whole. That is the spec choice working as intended;
  *     it is pinned so it is a decision on the record, not a later discovery.
@@ -55,11 +56,21 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { CEF_HEADER_PATTERN, parseCef } from "./parsers";
+import { CEF_HEADER_PATTERN, parseCef, unreadableCefHeaderNote } from "./parsers";
 import { parseSampleContent } from "./parse-sample";
 
 /** One backslash, built from its code point so no source escaping can lose it. */
 const BS = String.fromCharCode(92);
+
+/**
+ * DBT-109: the parse note for exactly one dropped line, written out in full so
+ * the pins compare the operator-facing sentence rather than calling the helper
+ * that produces it.
+ */
+const NOTE_ONE =
+  "1 line carried a CEF marker but no readable CEF header (seven " +
+  "pipe-separated fields; a trailing backslash escapes nothing) and was left " +
+  "out of the sample.";
 
 /** The seven header fields parseCef lifts out, in header order. */
 const HEADER_FIELDS = [
@@ -292,8 +303,8 @@ describe("parseCef header pipe escape (DBT-98)", () => {
     expect(parseCef("CEF:0|V|P|1.0|100|worm")).toEqual([]);
     // ...and this row is NOT: a DANGLING backslash - an escape with nothing to
     // escape - used to yield a record with Severity `5\`. It is malformed CEF and
-    // it now yields nothing. There is no error channel in this function to make
-    // that loud, which is why it is written down here.
+    // it now yields nothing. This function has no error channel; since DBT-109
+    // parseSampleContent says so in the parse notes (pinned further down).
     expect(parseCef(`CEF:0|V|P|1.0|100|worm|5${BS}`)).toEqual([]);
     // ...and the raw event goes with it, so nothing downstream counts the line.
     const bareLines: string[] = [];
@@ -303,63 +314,133 @@ describe("parseCef header pipe escape (DBT-98)", () => {
     expect(parseCef("just a syslog line")).toEqual([]);
   });
 
-  it("keeps a PHANTOM record when the unreadable header arrives over syslog", () => {
-    // THE SAME MALFORMED HEADER, THE OTHER SPELLING, AND THE WORSE ANSWER. The
-    // row above is true only for a BARE line. `_syslogHeader` is assigned
-    // whenever the line has a prefix - outside the `header !== null` branch - and
-    // the push is guarded on the record having any key at all, so a header that
-    // failed to match never reaches the emptiness guard. The record is KEPT and
-    // carries NOT ONE of the seven header fields.
+  it("drops a syslog-wrapped line whose header is unreadable, same as the bare form (DBT-109)", () => {
+    // THE SAME MALFORMED HEADER, THE OTHER SPELLING. Until DBT-109 this was the
+    // worse answer: `_syslogHeader` is assigned whenever the line has a prefix -
+    // outside the `header !== null` branch - and the push was guarded on the
+    // record having ANY key, so a header that failed to match never reached the
+    // emptiness guard. The record was KEPT carrying not one of the seven header
+    // fields, and its line took a slot in the raw events. The push is now
+    // guarded on the header itself, so both spellings give the same answer.
     const line = `<134>host1 CEF:0|V|P|1.0|100|worm|5${BS}`;
-    const record = one(line);
-    expect(record).toBeDefined();
-    // ITS OWN KEYS, exhaustively. `toBeDefined()` or a header-name lookup would
-    // pass on a full record too; the whole content of this pin is that the list
-    // is this short.
-    expect(Object.keys(record!)).toEqual(["_syslogHeader"]);
-    expect(record!["_syslogHeader"]).toBe("<134>host1");
-    for (const f of HEADER_FIELDS) expect(record![f]).toBeUndefined();
-    // And it occupies a slot in the raw events - the bytes the generated pack is
-    // previewed against and shipped with.
+    expect(parseCef(line)).toEqual([]);
+    // And the raw event goes with it - the bytes the generated pack is previewed
+    // against and shipped with no longer carry a header-less shell.
     const sourceLines: string[] = [];
     parseCef(line, sourceLines);
-    expect(sourceLines).toEqual([line]);
+    expect(sourceLines).toEqual([]);
 
-    // THE MECHANISM PREDATES DBT-98 and this row proves it, so the card that
-    // carries it is not filed against the pipe-escape fix. A SHORT header was
-    // dropped at HEAD too (`parts.length >= 7`), and HEAD had this same pair of
-    // answers for it - measured against HEAD's own code: bare gives `[]`,
-    // syslog-wrapped gives `[{_syslogHeader}]`. The stricter pattern only
-    // widened the set of lines that arrive here; it did not open the door.
+    // A SHORT header behind a prefix had the same shell answer at HEAD, before
+    // DBT-98 (`parts.length >= 7`); it drops too now.
     const short = "<134>host1 CEF:0|V|P|1.0|100|worm";
-    expect(Object.keys(one(short)!)).toEqual(["_syslogHeader"]);
-    expect(parseCef("CEF:0|V|P|1.0|100|worm")).toEqual([]);
+    const shortLines: string[] = [];
+    expect(parseCef(short, shortLines)).toEqual([]);
+    expect(shortLines).toEqual([]);
+
+    // THE CONTROL, so the fix cannot be "drop every wrapped line": a READABLE
+    // header behind the same prefix is kept, with its own keys exhaustively -
+    // seven header fields, the extension, and the prefix.
+    const good = "<134>host1 CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1";
+    const goodLines: string[] = [];
+    const kept = parseCef(good, goodLines);
+    expect(kept).toHaveLength(1);
+    expect(Object.keys(kept[0]!)).toEqual([...HEADER_FIELDS, "src", "_syslogHeader"]);
+    expect(kept[0]!["_syslogHeader"]).toBe("<134>host1");
+    expect(goodLines).toEqual([good]);
   });
 
-  it("MASKS the phantom record end to end - the count and the field list both lie", () => {
-    // WHY THE PIN ABOVE ASSERTS ONE RECORD'S OWN KEYS. parseSampleContent UNIONS
-    // field names across records, so three healthy lines supply every name the
-    // fourth is missing. Nothing an operator is shown says a line was gutted.
-    const sample = [
+  it("SAYS the line was dropped end to end, and the count no longer lies (DBT-109)", () => {
+    // parseSampleContent UNIONS field names across records, so three healthy
+    // lines used to supply every name a gutted fourth was missing: eventCount 4,
+    // rawEvents 4, errors []. Now the line is gone from the count and the raw
+    // events, and the operator is told why in the parse notes.
+    const lines = [
       "<134>host1 CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1 dpt=80",
       "<134>host2 CEF:0|V|P|1.0|100|worm|5|src=2.2.2.2 dpt=81",
       `<134>host3 CEF:0|V|P|1.0|100|worm|5${BS}`,
       "<134>host4 CEF:0|V|P|1.0|100|worm|5|src=4.4.4.4 dpt=83",
-    ].join("\n");
-    const parsed = parseSampleContent(sample, { sourceName: "fw.log" });
+    ];
+    const parsed = parseSampleContent(lines.join("\n"), { sourceName: "fw.log" });
 
     expect(parsed.format).toBe("cef");
-    expect(parsed.eventCount).toBe(4); // four lines in, four events out
-    expect(parsed.rawEvents).toHaveLength(4);
-    expect(parsed.errors).toEqual([]); // and nothing is said
-    expect(parsed.fields.map((f) => f.name)).toEqual([
-      ...HEADER_FIELDS,
-      "src",
-      "dpt",
-      "_syslogHeader",
-    ]);
-    // The record itself, which is the only place the loss is visible.
-    expect(Object.keys(parseCef(sample)[2]!)).toEqual(["_syslogHeader"]);
+    expect(parsed.eventCount).toBe(3);
+    expect(parsed.rawEvents).toHaveLength(3);
+    expect(parsed.rawEvents).toEqual([lines[0], lines[1], lines[3]]);
+    expect(parsed.errors).toEqual([NOTE_ONE]);
+    // Every SURVIVING record's own keys, exhaustively - no shell among them.
+    for (const record of parsed.records) {
+      expect(Object.keys(record)).toEqual([...HEADER_FIELDS, "src", "dpt", "_syslogHeader"]);
+    }
+  });
+
+  it("says the same for the BARE form, which was already dropped but silently (DBT-109)", () => {
+    const lines = [
+      "CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1 dpt=80",
+      "CEF:0|V|P|1.0|100|worm|5|src=2.2.2.2 dpt=81",
+      `CEF:0|V|P|1.0|100|worm|5${BS}`,
+      "CEF:0|V|P|1.0|100|worm|5|src=4.4.4.4 dpt=83",
+    ];
+    const parsed = parseSampleContent(lines.join("\n"), { sourceName: "fw.log" });
+    expect(parsed.format).toBe("cef");
+    expect(parsed.eventCount).toBe(3);
+    expect(parsed.rawEvents).toEqual([lines[0], lines[1], lines[3]]);
+    expect(parsed.errors).toEqual([NOTE_ONE]);
+  });
+
+  it("says NOTHING on a healthy CEF sample - a note on a working parse is noise (DBT-109)", () => {
+    const lines = [
+      "<134>host1 CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1 dpt=80",
+      "CEF:0|V|P|1.0|100|worm|5|src=2.2.2.2 dpt=81",
+      // An escaped pipe and an escaped backslash are READABLE headers, and must
+      // not be counted as unreadable ones.
+      `CEF:0|V${BS}|W|P|1.0|100|worm|5|src=3.3.3.3 dpt=82`,
+      `CEF:0|V${BS}${BS}|P|1.0|100|worm|5|src=4.4.4.4 dpt=83`,
+    ];
+    const parsed = parseSampleContent(lines.join("\n"), { sourceName: "fw.log" });
+    expect(parsed.eventCount).toBe(4);
+    expect(parsed.errors).toEqual([]);
+  });
+
+  it("counts the CAPTURE's vendor lines, not its wrapper JSON (DBT-109)", () => {
+    // THE DBT-108 LESSON. On a Cribl capture `content` is the wrapper JSON, where
+    // the trailing backslash is JSON-escaped to `\\` followed by `"}` - and THAT
+    // reads as a legal CEF header (an escaped backslash). Fed the wrapper, the
+    // note would count 0 and stay silent; fed the unwrapped `_raw` lines it
+    // counts the one malformed line.
+    const raws = [
+      "<134>host1 CEF:0|V|P|1.0|100|worm|5|src=1.1.1.1 dpt=80",
+      "<134>host2 CEF:0|V|P|1.0|100|worm|5|src=2.2.2.2 dpt=81",
+      `<134>host3 CEF:0|V|P|1.0|100|worm|5${BS}`,
+      "<134>host4 CEF:0|V|P|1.0|100|worm|5|src=4.4.4.4 dpt=83",
+    ];
+    const capture = raws
+      .map((raw, i) => JSON.stringify({ _time: i + 1, _raw: raw }))
+      .join("\n");
+    const parsed = parseSampleContent(capture, { sourceName: "capture" });
+    expect(parsed.format).toBe("cef");
+    expect(parsed.eventCount).toBe(3);
+    expect(parsed.rawEvents).toEqual([raws[0], raws[1], raws[3]]);
+    expect(parsed.errors).toEqual([NOTE_ONE]);
+  });
+
+  it("unreadableCefHeaderNote counts exactly, and is null at zero (DBT-109)", () => {
+    expect(unreadableCefHeaderNote("CEF:0|V|P|1.0|100|worm|5|a=b")).toBeNull();
+    // A line with no CEF marker is not a CEF line and is not counted.
+    expect(unreadableCefHeaderNote("just a syslog line")).toBeNull();
+    expect(unreadableCefHeaderNote(`CEF:0|V|P|1.0|100|worm|5${BS}`)).toBe(NOTE_ONE);
+    expect(
+      unreadableCefHeaderNote(
+        [
+          "<134>h CEF:0|V|P|1.0|100|worm",
+          "CEF:0|V|P|1.0|100|worm|5|a=b",
+          `<134>h CEF:0|V|P|1.0|100|worm|5${BS}`,
+        ].join("\r\n"),
+      ),
+    ).toBe(
+      "2 lines carried a CEF marker but no readable CEF header (seven " +
+        "pipe-separated fields; a trailing backslash escapes nothing) and were " +
+        "left out of the sample.",
+    );
   });
 
   it("SHIFTS a non-compliant producer's fields, and that is the recorded decision", () => {

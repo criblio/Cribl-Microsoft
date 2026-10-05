@@ -11,6 +11,8 @@
  * here is counted over the RENDERED rows: every row, one badge, non-empty text.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
@@ -745,5 +747,171 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     });
     expect(notice()).toBeNull();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * DBT-14: the list must only hold the wheel while it can actually scroll.
+ *
+ * `overscroll-behavior: contain` was added 2026-08-03 so that reaching the END
+ * of a long list does not hand the wheel to the page mid-search. But Chrome
+ * still makes an overflow:auto box with `contain` the wheel target when it has
+ * NOTHING to scroll, and contain then stops the scroll chaining to the page -
+ * measured 2026-10-02 with trusted CDP wheel input: 8 rows render at 279px,
+ * under the 420px cap, and three wheel events moved list 0 / page 0. Without
+ * contain the page moved 300px. So contain is applied by a measured class, not
+ * by the bare rule.
+ *
+ * happy-dom does no layout, so scrollHeight/clientHeight are stubbed from the
+ * rendered row count: 35px a row, clientHeight capped at 418 (420 less the
+ * border). That makes a FILTER change the measurement, which is what the
+ * shrink test needs.
+ */
+describe("SolutionBrowser list holds the wheel only while it overflows (DBT-14)", () => {
+  const ROW_PX = 35;
+  const CAP_PX = 418;
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+
+  function contentPx(el: HTMLElement): number {
+    return el.classList.contains("solution-browser-list")
+      ? el.children.length * ROW_PX
+      : 0;
+  }
+
+  beforeEach(() => {
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return contentPx(this);
+      },
+    });
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return Math.min(contentPx(this), CAP_PX);
+      },
+    });
+  });
+
+  afterEach(() => {
+    // The stubs are OWN properties of HTMLElement.prototype, shadowing
+    // whatever happy-dom defines further up the chain, so deleting them
+    // restores it for every other test in the file.
+    delete proto.scrollHeight;
+    delete proto.clientHeight;
+  });
+
+  function contentWith(solutions: SolutionRef[]): SentinelContent {
+    return {
+      async getCommitSha(): Promise<string | null> {
+        return "abcdef012345";
+      },
+      async listSolutions(): Promise<SolutionRef[]> {
+        return solutions;
+      },
+    } as unknown as SentinelContent;
+  }
+
+  async function renderWith(solutions: SolutionRef[]): Promise<HTMLElement> {
+    render(
+      <PortsProvider
+        ports={{ content: contentWith(solutions) } as unknown as UiPorts}
+        config={CONFIG}
+      >
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText(solutions[solutions.length - 1].name)).toBeTruthy();
+    });
+    const list = document.querySelector<HTMLElement>(".solution-browser-list");
+    expect(list).toBeTruthy();
+    return list as HTMLElement;
+  }
+
+  // 8 rows = 280px, the live report's case: under the cap, nothing to scroll.
+  const EIGHT: SolutionRef[] = Array.from({ length: 8 }, (_, i) => ({
+    name: `Short Vendor ${i + 1}`,
+    path: `Solutions/Short Vendor ${i + 1}`,
+  }));
+  // 200 rows = 7000px, the 2026-08-03 case: the list really scrolls.
+  const LONG: SolutionRef[] = Array.from({ length: 200 }, (_, i) => ({
+    name: `Long Vendor ${String(i + 1).padStart(3, "0")}`,
+    path: `Solutions/Long Vendor ${i + 1}`,
+  }));
+
+  it("does NOT mark a list that fits under the cap as scrollable", async () => {
+    const list = await renderWith(EIGHT);
+    expect(list.querySelectorAll(".solution-browser-item").length).toBe(8);
+    expect(document.querySelectorAll(".solution-browser-list--scrollable").length).toBe(0);
+    expect([...list.classList]).toEqual(["solution-browser-list"]);
+  });
+
+  it("marks a list that overflows the cap as scrollable, exactly once", async () => {
+    const list = await renderWith(LONG);
+    expect(list.querySelectorAll(".solution-browser-item").length).toBe(200);
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list--scrollable").length,
+      ).toBe(1);
+    });
+    expect([...list.classList]).toEqual([
+      "solution-browser-list",
+      "solution-browser-list--scrollable",
+    ]);
+  });
+
+  it("drops the class when a filter shrinks a long list under the cap", async () => {
+    const list = await renderWith(LONG);
+    await waitFor(() => {
+      expect([...list.classList]).toEqual([
+        "solution-browser-list",
+        "solution-browser-list--scrollable",
+      ]);
+    });
+    // "Long Vendor 007" matches exactly one row: 35px, nothing to scroll. A
+    // stale class here is DBT-14 coming back after a search.
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), {
+      target: { value: "Long Vendor 007" },
+    });
+    await waitFor(() => {
+      expect(list.querySelectorAll(".solution-browser-item").length).toBe(1);
+    });
+    expect([...list.classList]).toEqual(["solution-browser-list"]);
+    // And back: clearing the search must restore the 2026-08-03 protection.
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), {
+      target: { value: "" },
+    });
+    await waitFor(() => {
+      expect(list.querySelectorAll(".solution-browser-item").length).toBe(200);
+    });
+    expect([...list.classList]).toEqual([
+      "solution-browser-list",
+      "solution-browser-list--scrollable",
+    ]);
+  });
+
+  it("keeps overscroll-behavior off the bare rule and on the scrollable one", () => {
+    // __dirname, not import.meta.url: under happy-dom import.meta.url is not a
+    // file: URL, so the URL form throws before reading anything.
+    const css = readFileSync(resolve(__dirname, "../../styles.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const ruleBodies = (selector: string): string[] => {
+      const bodies: string[] = [];
+      for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = m[1].split(",").map((s) => s.trim());
+        if (selectors.includes(selector)) {
+          bodies.push(m[2]);
+        }
+      }
+      return bodies;
+    };
+    const bare = ruleBodies(".solution-browser-list");
+    expect(bare.length).toBe(1);
+    expect(bare[0].match(/overscroll-behavior/g)).toBeNull();
+    const scrollable = ruleBodies(
+      ".solution-browser-list.solution-browser-list--scrollable",
+    );
+    expect(scrollable.length).toBe(1);
+    expect(scrollable[0].trim()).toBe("overscroll-behavior: contain;");
   });
 });

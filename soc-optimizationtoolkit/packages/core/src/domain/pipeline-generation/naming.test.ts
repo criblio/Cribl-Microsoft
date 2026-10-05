@@ -8,7 +8,14 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { packNameForSolution, vendorPrefixFromSolution } from "./naming";
+import { DEFAULT_CRIBL_OPTIONS, destinationIdFromOptions } from "../option-forms";
+import { defaultSentinelDestinationId } from "../sentinel-destination";
+
+import {
+  destinationId,
+  packNameForSolution,
+  vendorPrefixFromSolution,
+} from "./naming";
 
 describe("packNameForSolution - one pack name per solution", () => {
   // The 2026-08-11 report. Every solution used to prefill the SAME name, so a
@@ -74,5 +81,48 @@ describe("packNameForSolution - one pack name per solution", () => {
     expect(packNameForSolution("MS-Sentinel", "Microsoft Sentinel Solution")).toBe(
       "MS-Sentinel",
     );
+  });
+});
+
+describe("destinationId - ONE id per table across pack, Deploy and options (GEN-18)", () => {
+  // Three functions used to build this id. The pack's (this one) only stripped
+  // _CL; Deploy's defaultSentinelDestinationId and the option-driven
+  // destinationIdFromOptions also mapped every non-alphanumeric to "_". For a
+  // table name carrying a hyphen, dot or space the pack then wrote an output id
+  // Deploy never creates - and, for a space, one that is not a usable Cribl id.
+  // The sanitizing rule won: its output is the one that has to survive as a
+  // real Cribl object id.
+  const CASES: ReadonlyArray<readonly [string, string]> = [
+    ["My-App_CL", "MS-Sentinel-My_App-dest"],
+    ["My.App_CL", "MS-Sentinel-My_App-dest"],
+    ["Zscaler Web_CL", "MS-Sentinel-Zscaler_Web-dest"],
+    // The names that always agreed must not move: these are every real table
+    // the toolkit has shipped a pack for, and changing them would orphan a
+    // destination an operator already deployed.
+    ["SecurityEvent", "MS-Sentinel-SecurityEvent-dest"],
+    ["CommonSecurityLog", "MS-Sentinel-CommonSecurityLog-dest"],
+    ["CloudFlare_CL", "MS-Sentinel-CloudFlare-dest"],
+    ["My_App_CL", "MS-Sentinel-My_App-dest"],
+    // Digits are part of the kept class: a sanitizer narrowed to letters would
+    // turn this into Table_ and still pass every other row.
+    ["Table2_CL", "MS-Sentinel-Table2-dest"],
+  ];
+
+  it.each(CASES)("%s -> %s", (table, expected) => {
+    expect(destinationId(table)).toBe(expected);
+  });
+
+  it("agrees with Deploy and with the default options for every name", () => {
+    // Counted rather than looped-with-expect, so a failure says how many of the
+    // names disagree instead of stopping at the first.
+    const agreeing = CASES.filter(([table]) => {
+      const pack = destinationId(table);
+      return (
+        pack === defaultSentinelDestinationId(table) &&
+        pack === destinationIdFromOptions(table, DEFAULT_CRIBL_OPTIONS)
+      );
+    });
+    expect(agreeing.map(([t]) => t)).toEqual(CASES.map(([t]) => t));
+    expect(agreeing).toHaveLength(8);
   });
 });

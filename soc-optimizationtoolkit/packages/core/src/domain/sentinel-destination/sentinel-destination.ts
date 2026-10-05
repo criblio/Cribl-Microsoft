@@ -243,15 +243,28 @@ export function buildSentinelDestination(
 }
 
 /**
+ * The table part of a Sentinel destination id. Sanitization mirrors the legacy
+ * New-CriblDestinationConfig: strip one trailing "_CL" (case-insensitive,
+ * PowerShell -replace '_CL$'), then map every non-alphanumeric character to "_".
+ *
+ * THE ONLY COPY of this rule ([[GEN-18]]). Three functions used to build the
+ * destination id, and the pack generator's did not sanitize, so for a table
+ * name carrying a hyphen, dot or space the pack wrote an output id Deploy never
+ * creates. defaultSentinelDestinationId, option-forms' destinationIdFromOptions
+ * and pipeline-generation's destinationId now all call this, so they cannot
+ * disagree about what a table's destination is called.
+ */
+export function sanitizeDestinationTable(table: string): string {
+  return table.replace(/_CL$/i, "").replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+/**
  * The legacy destination-id convention: IDprefix + sanitized table +
  * IDsuffix with the shipped cribl-parameters.json defaults ("MS-Sentinel-",
- * "-dest"). Sanitization mirrors New-CriblDestinationConfig: strip one
- * trailing "_CL" (case-insensitive, PowerShell -replace '_CL$'), then map
- * every non-alphanumeric character to "_".
+ * "-dest"). See {@link sanitizeDestinationTable} for the table part.
  */
 export function defaultSentinelDestinationId(table: string): string {
-  const sanitized = table.replace(/_CL$/i, "").replace(/[^a-zA-Z0-9]/g, "_");
-  return `MS-Sentinel-${sanitized}-dest`;
+  return `MS-Sentinel-${sanitizeDestinationTable(table)}-dest`;
 }
 
 /** One output as a Cribl group listing reports it. */
@@ -268,7 +281,8 @@ export interface ExistingOutput {
  * a SECOND caller appeared: the routable-pack prerequisite check reads the same
  * listing to answer a different question. Copying it would have put two parsers
  * of one API response in the tree, free to disagree about what counts as an
- * output - the duplicated-decision shape [[GEN-18]] is already an instance of.
+ * output - the duplicated-decision shape [[GEN-18]] was an instance of (two
+ * destination-id builders that sanitized differently, now one rule).
  *
  * Tolerant by design, because both callers degrade rather than fail: a body
  * that is not a `{items: [...]}` envelope, an item that is not an object, and

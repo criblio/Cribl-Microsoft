@@ -293,7 +293,7 @@ export function buildPipelinePlan(
       suffix,
       pipelineName: pipelineName(vendorPrefix, suffix),
       reductionPipelineId: reductionPipelineId(vendorPrefix, suffix),
-      destinationId: destinationId(t.sentinelTable),
+      destinationId: destinationId(t.sentinelTable, input.destinationNaming),
       streamName: streamName(t.sentinelTable),
       fields,
       overflowConfig,
@@ -329,8 +329,16 @@ export function buildPipelinePlan(
     tables.forEach((table, i) => {
       if (table.routeCondition !== MATCH_ALL_FILTER) return;
 
+      // GEN-11: an UNDETECTED sample's format is the "json" serde default, not
+      // evidence. Both discriminators would trust it - and for json the value
+      // path drops its `_raw` disjunct - so what they derive is a bare parsed-
+      // field test that no unparsed route-time event satisfies, and it previews
+      // clean. Deriving nothing sends the log type to the placeholder below,
+      // which the operator sees. Real json (formatDetected omitted) is untouched.
+      const derive = input.tables[i]?.formatDetected !== false;
+
       const ownValues = sampleValues[i];
-      if (ownValues !== undefined) {
+      if (derive && ownValues !== undefined) {
         const siblingValues = sampleValues.filter(
           (v, j) => j !== i && v !== undefined,
         ) as LogTypeFieldValues[];
@@ -349,12 +357,14 @@ export function buildPipelinePlan(
       // path can tell a characteristic field from one event's identifier. Undefined
       // when the caller supplied no values, which leaves the older, weaker
       // presence-only behaviour rather than dropping routing entirely.
-      const discriminator = deriveRouteDiscriminator(
-        table.fields.map((f) => f.source),
-        sourceSets.filter((_, j) => j !== i),
-        table.sourceFormat,
-        sampleValues[i],
-      );
+      const discriminator = derive
+        ? deriveRouteDiscriminator(
+            table.fields.map((f) => f.source),
+            sourceSets.filter((_, j) => j !== i),
+            table.sourceFormat,
+            sampleValues[i],
+          )
+        : null;
       if (discriminator !== null) {
         table.routeCondition = discriminator;
         return;

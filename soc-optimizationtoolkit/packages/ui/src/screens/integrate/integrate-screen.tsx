@@ -176,6 +176,10 @@ import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
 import type { SampleArrivalEvent } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
+import {
+  ruleFieldsFromGapReports,
+  unionRuleFields,
+} from "../rule-coverage/rule-coverage-state";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
 import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
@@ -586,7 +590,7 @@ export function IntegrateScreen({
   // (the kept Unit 18 ruleReferencedFields contract) back UP so the Gap
   // Analysis mapping table lights its RULE badges. Informational only - it
   // never participates in the deploy gate.
-  const [ruleFields, setRuleFields] = useState<ReadonlySet<string>>();
+  const [coverageRuleFields, setRuleFields] = useState<ReadonlySet<string>>();
 
   // CONTENT-FIRST ORDER (2026-07-12): each coverage instance reports what
   // its content REQUIRES; merged here and fed to the mapping review's
@@ -868,9 +872,12 @@ export function IntegrateScreen({
         }
         setRoutableCheck({
           state: "done",
+          // GEN-18 follow-through: the same criblDefaults Deploy names the
+          // destination from, or this reports a non-default-named one missing.
           report: checkRoutablePrerequisites(
             detectedTables,
             parseOutputListing(res.body).map((o) => o.id),
+            criblDefaults,
           ),
         });
       } catch (err) {
@@ -883,7 +890,7 @@ export function IntegrateScreen({
     // detectedTableKey stands in for detectedTables: a new array with the same
     // names must not re-issue the request on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packShape, groupId, detectedTableKey, ports.cribl]);
+  }, [packShape, groupId, detectedTableKey, ports.cribl, criblDefaults]);
 
   // Any change to the pack name or target groups invalidates a prior
   // conflict check and its overwrite acknowledgment.
@@ -974,6 +981,18 @@ export function IntegrateScreen({
   // and parses them - nothing is fetched twice. Until they do, the view reads
   // 'unknown' and gates nothing.
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  // RULE badges light on EVERY gap analysis (DBT-121), not only after the
+  // Rule Coverage section's own Analyze click: derived from the rules already
+  // fetched at solution selection plus the reports' destination columns, and
+  // unioned with whatever the coverage section reports (custom uploads).
+  const ruleFields = useMemo(
+    () =>
+      unionRuleFields(
+        ruleFieldsFromGapReports(contentItems, gapReports),
+        coverageRuleFields,
+      ),
+    [contentItems, gapReports, coverageRuleFields],
+  );
   // Corrected DeviceVendor/DeviceProduct per logType. Keyed by logType because
   // one solution can send several feeds whose headers differ - a single override
   // would silently rewrite the ones that were already right.
@@ -1082,6 +1101,9 @@ export function IntegrateScreen({
       approved: mappingsApproved,
       toolkitVersion,
       packShape,
+      // GEN-18 follow-through: the criblDefaults Deploy names the destination
+      // from, so the pack routes to the id Deploy creates.
+      destinationNaming: criblDefaults ?? null,
     }),
     [
       solution?.name,
@@ -1095,6 +1117,7 @@ export function IntegrateScreen({
       mappingsApproved,
       toolkitVersion,
       packShape,
+      criblDefaults,
     ],
   );
   // What the solution's OWN analytic rules compare these fields against, per
@@ -1347,7 +1370,8 @@ export function IntegrateScreen({
       const packVersion = nextPackVersion(installedPackVersions(deployed, name));
 
       // 2. Resolve the plan from the SAME object the pipeline preview renders,
-      // including the Cribl YAML validation (an invalid plan never ships).
+      // including the pipeline validation - Cribl YAML plus the GEN-5 plan
+      // field-name check (an invalid plan never ships).
       // Only packName and version differ - a build ships an incremented
       // version. Every content decision is spread from contentPlanInputs
       // rather than re-listed here, because when it WAS re-listed the two
@@ -1363,7 +1387,7 @@ export function IntegrateScreen({
       }
       if (!preview.valid) {
         push(
-          `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
+          `Cannot build: pipeline validation found ${preview.totalYamlIssues} ` +
             "issue(s) - see the pipeline preview in section 3.",
         );
         return null;

@@ -455,14 +455,17 @@ const KV_SYSLOG_PRI = /^\s*<\d+>/;
  * this function's change budget, and re-keying an operator's stored samples is
  * silent. If you touch one, do not assume the other should follow.
  *
- * THEY NOW DISAGREE, which they did not before, and the divergence is chosen
- * rather than overlooked. `parseKvLine` still truncates keys on `\w+`. Fixing it
- * too would change which field the splitter SELECTS as a discriminator: a vendor
- * emitting `log-type=TRAFFIC` currently truncates to `type`, which is the second
- * entry in DISCRIMINATOR_FIELDS, so today's split works by accident and a
- * correct key (`log-type`, in no list) would stop matching and re-key every
- * stored sample. That is exactly the blast radius the note above warns about, so
- * it is a separate card, not a drive-by.
+ * THEY AGREE ON ORDINARY VENDOR KEYS (word characters, `-`, `.`), and a pin in
+ * kv-keys.test.ts holds it - but `parseKvLine` uses a NARROWER class than
+ * KV_PAIR on purpose, because it sees raw lines with a CEF/LEEF `|` or `prog:`
+ * header still attached and KV_PAIR's class glued that header onto the first
+ * key (DBT-84 review). That pin also records where they differ. They disagreed
+ * between DBT-79 (which widened this key class) and DBT-84 (which widened that
+ * one): `parseKvLine`'s `\w+` truncation was turning `log-type` into the listed
+ * discriminator `type` by accident. That spelling now comes from the splitter's
+ * own SPLITTER_DISCRIMINATOR_ALIASES, applied AFTER `parseKvLine` returns, so
+ * nothing here needs to know about discriminators - and nothing here should be
+ * changed to make the splitter's selection come out a particular way.
  */
 export function parseKv(
   content: string,
@@ -860,8 +863,14 @@ export const CEF_HEADER_PATTERN = new RegExp(
  *
  * The same bytes, in the same event, read two different ways with nothing said -
  * and the half that lost them is the one an operator maps to a destination
- * column. Measured on the DBT-98 corpus against the character scanner described
- * below: the wide class disagreed on 140005 of 200000 lines, this one on 0.
+ * column. The 2026-09-04 measurement on the DBT-98 corpus reported the wide
+ * class disagreeing with a character scanner on 140005 of 200000 lines and this
+ * one on 0, but the scanner checked into pipeline-conf.test.ts still applied the
+ * WIDE rule until DBT-110, so that figure is not reproducible from the repo and
+ * is not relied on. What holds the narrow class now is the agreement loop in
+ * pipeline-conf.test.ts: its oracle states the narrow rule, and its lone-
+ * backslash rows (the Windows path above among them) fail if this class is
+ * widened again, in both the parser and the emitted pack.
  *
  * THE PATTERN'S WIDE CLASS IS A DIFFERENT ARGUMENT AND DOES NOT REACH HERE.
  * {@link CEF_HEADER_PATTERN} consumes `\\[\s\S]` so that a backslash before a
@@ -924,40 +933,34 @@ function unescapeCefHeaderField(field: string): string {
  * survives unexpanded - see {@link CEF_EXT_PAIR}), so nothing is unescaped here.
  *
  * WHAT THE FIX COSTS, stated rather than discovered later, and it costs TWO
- * different things on two different shapes. Neither is made loud, because this
- * function has no error channel; writing them down is the whole mitigation.
+ * different things on two different shapes. This function has no error channel;
+ * COST 1 is now made loud one level up (DBT-109), COST 2 is still only written
+ * down here.
  *
- * COST 1 - A DANGLING ESCAPE, AND IT HAS TWO SPELLINGS WITH DIFFERENT ANSWERS.
+ * COST 1 - A DANGLING ESCAPE DROPS THE LINE, IN BOTH SPELLINGS, AND SAYS SO.
  * A header whose last character is a backslash (`...|worm|5\`) is malformed CEF -
- * an escape with nothing to escape - and the pattern cannot read it. What happens
- * next depends entirely on whether a SYSLOG PREFIX sits in front of it, which is
- * the standard transport shape and therefore the one that matters:
+ * an escape with nothing to escape - and the pattern cannot read it. A SHORT
+ * header (fewer than seven fields) cannot be read either. Either way the line
+ * yields no record and no raw event, with or without a SYSLOG PREFIX in front:
  *
- *   CEF:0|V|P|1.0|100|worm|5\               ->  []                 no record,
- *                                               and NO raw event either
- *   <134>host1 CEF:0|V|P|1.0|100|worm|5\    ->  [{_syslogHeader: "<134>host1"}]
- *                                               a record, a raw event, and
- *                                               NOT ONE HEADER FIELD
+ *   CEF:0|V|P|1.0|100|worm|5\               ->  []
+ *   <134>host1 CEF:0|V|P|1.0|100|worm|5\    ->  []
  *
- * The second is the worse half and it is not a special case: `_syslogHeader` is
- * assigned below whenever `cefStart > 0`, OUTSIDE the `header !== null` branch,
- * and the push is guarded on the record having ANY key - so a header that failed
- * to match never reaches the emptiness guard. The line is kept, `sourceLines`
- * keeps it too, and the event is a shell.
+ * UNTIL DBT-109 THE SECOND ROW WAS `[{_syslogHeader: "<134>host1"}]` - a record,
+ * a raw event, and NOT ONE HEADER FIELD. `_syslogHeader` is assigned below
+ * whenever `cefStart > 0`, outside the `header !== null` branch, and the push
+ * was guarded on the record having ANY key, so a header that failed to match
+ * never reached the emptiness guard. That predated DBT-98 (HEAD's
+ * `parts.length >= 7` had the same pair of answers for a short header); the
+ * stricter pattern only widened the set of lines that arrived there. It was
+ * MASKED END TO END: on a 4-line sample whose third line was that shape,
+ * parseSampleContent reported eventCount 4, rawEvents 4, errors [], and the
+ * field union supplied the seven missing names from the other three records.
  *
- * THE SHELL IS NOT DBT-98'S DOING, WHICH IS WHY IT IS FILED SEPARATELY. HEAD
- * dropped a SHORT header as well (`parts.length >= 7`), and measured against
- * HEAD's own code `<134>host1 CEF:0|V|P|1.0|100|worm` already produced
- * `[{_syslogHeader: "<134>host1"}]` and a raw event, while the bare form produced
- * nothing. The stricter pattern only widened the set of lines that arrive here.
- *
- * IT IS MASKED END TO END, which is what makes it worse than the drop it looks
- * like a milder version of. Through parseSampleContent on a 4-line sample whose
- * third line is that shape: eventCount 4, rawEvents 4, errors [], and the seven
- * missing names are supplied by the OTHER THREE RECORDS through the field union -
- * so the field list reads complete while record 2's own keys are
- * `["_syslogHeader"]`. The count looks right, which is why it is pinned by
- * asserting that record's own keys and not the sample's field list.
+ * THE PUSH IS NOW GUARDED ON THE HEADER, and parseSampleContent pushes
+ * {@link unreadableCefHeaderNote} into `errors` (shown as a parse note) whenever
+ * a line carried `CEF:` but no readable header - for the bare form too, which
+ * was dropped before but silently. Pinned in cef-header.test.ts.
  *
  * COST 2 - A NON-COMPLIANT PRODUCER'S UNESCAPED BACKSLASH BEFORE A PIPE SHIFTS
  * EVERY FIELD AFTER IT. HEAD split on that pipe and, by accident, agreed with a
@@ -1016,9 +1019,12 @@ function unescapeCefHeaderField(field: string): string {
  * kept 10020; the 9980 it drops are the ones where that backslash was the last
  * character of the LINE, and in the other 10020 the escape had the following `|`
  * to consume, which is a legal header and the scanner agrees. THE SAME 20000
- * LINES GIVEN A SYSLOG PREFIX: HEAD kept 20000 and this parser kept 20000 too -
- * of which 9980 are the header-less `_syslogHeader` shells of COST 1, counted as
- * events and written into the pack's sample file.
+ * LINES GIVEN A SYSLOG PREFIX: HEAD kept 20000 and, before DBT-109, this parser
+ * kept 20000 too - of which 9980 were the header-less `_syslogHeader` shells of
+ * COST 1, counted as events and written into the pack's sample file. Since
+ * DBT-109 the push is guarded on the header match alone, so by construction the
+ * wrapped set drops the same lines the bare set does (not re-measured on this
+ * corpus), and the parse notes count them.
  *
 
  * THE LINE SPLIT IS `\r?\n`, NOT `\n`, AND THAT WAS A SILENT FIELD LOSS (DBT-80).
@@ -1145,24 +1151,62 @@ export function parseCef(
           }
         }
       }
-      // OUTSIDE the `header !== null` branch ON PURPOSE - the syslog prefix is
-      // the vendor's bytes whether or not the CEF part parsed - and that is also
-      // what makes an UNREADABLE header behave differently depending on the
-      // transport. A bare malformed line adds no key and the guard below drops
-      // it; a syslog-wrapped one gets this key, so the guard passes and the
-      // record survives WITH NO HEADER FIELDS IN IT. See COST 1 in the note
-      // above; both spellings are pinned in cef-header.test.ts, which asserts
-      // this record's OWN keys because the sample's unioned field list hides it.
+      // The syslog prefix is the vendor's bytes, kept beside a readable header.
       if (cefStart > 0) {
         record["_syslogHeader"] = line.slice(0, cefStart).trim();
       }
-      if (Object.keys(record).length > 0) {
+      // GUARDED ON THE HEADER, NOT ON THE RECORD HAVING ANY KEY (DBT-109). The
+      // old any-key guard made an UNREADABLE header behave differently by
+      // transport: a bare line added no key and was dropped, a syslog-wrapped
+      // one got `_syslogHeader` above, passed, and survived as a shell with NOT
+      // ONE header field - counted as an event and written into the pack's
+      // sample file. A matched header always contributes its seven keys, so the
+      // any-key guard has nothing left to catch and is gone rather than kept as
+      // a guard that can never fire. Both spellings now drop the line, and
+      // parseSampleContent says so via {@link unreadableCefHeaderNote}. See
+      // COST 1 in the note above.
+      if (header !== null) {
         out.push(record);
         sourceLines?.push(line);
       }
     }
   }
   return out;
+}
+
+/**
+ * DBT-109: the parse note for CEF lines {@link parseCef} dropped because their
+ * header could not be read, or null when there were none.
+ *
+ * A separate pass rather than a counter threaded out of parseCef, because
+ * parseCef's signature is shared by every line parser through parseByFormat and
+ * a CEF-only out-parameter there would be a second channel for one format. The
+ * test is the SAME one parseCef applies - the line carries `CEF:` and
+ * {@link CEF_HEADER_PATTERN} does not match from there - so the two cannot
+ * disagree about which lines were lost.
+ *
+ * `content` must be the text parseCef actually read. On a Cribl capture that is
+ * the unwrapped `_raw` lines, NOT the wrapper JSON: inside JSON a trailing
+ * backslash is escaped to `\\` and followed by `"}`, which reads as a legal
+ * header (an escaped backslash), so the wrapper counts 0 and the note stays
+ * silent. That is the DBT-108 lesson, pinned in cef-header.test.ts.
+ *
+ * Null at zero, because a note on a working parse is noise.
+ */
+export function unreadableCefHeaderNote(content: string): string | null {
+  let dropped = 0;
+  for (const line of content.trim().split(/\r?\n/)) {
+    const cefStart = line.indexOf("CEF:");
+    if (cefStart < 0) continue;
+    if (CEF_HEADER_PATTERN.exec(line.slice(cefStart)) === null) dropped += 1;
+  }
+  if (dropped === 0) return null;  const subject = dropped === 1 ? "1 line" : `${dropped} lines`;
+  const verb = dropped === 1 ? "was" : "were";
+  return (
+    `${subject} carried a CEF marker but no readable CEF header (seven ` +
+    "pipe-separated fields; a trailing backslash escapes nothing) and " +
+    `${verb} left out of the sample.`
+  );
 }
 
 /**
@@ -1209,6 +1253,31 @@ export function parseLeef(
 }
 
 /**
+ * The RFC 3164 syslog line, as parseSyslog reads it. Groups, in order:
+ * 1 PRI (optional), 2 TIMESTAMP, 3 HOSTNAME, 4 program, 5 PID (optional),
+ * 6 message.
+ *
+ * EXPORTED, NOT RE-SPELLED (DBT-116), on the CEF_HEADER_PATTERN precedent: the
+ * generated pipeline's syslog extraction emits this `.source` verbatim, so the
+ * names the analyzer showed and the names the installed pack mints come off the
+ * same characters. Before DBT-116 the pipeline had no syslog extraction at all -
+ * a syslog sample got a JSON serde - so the two did not merely drift, they never
+ * met. Non-global on purpose: `String.prototype.match` on a /g regex returns the
+ * matches rather than the groups.
+ */
+export const SYSLOG_RFC3164_PATTERN =
+  /^(?:<(\d+)>)?(\w{3}\s+\d+\s+\d+:\d+:\d+)\s+(\S+)\s+(\S+?)(?:\[(\d+)\])?:\s*(.*)/;
+
+/**
+ * The RFC 5424 syslog line, as parseSyslog reads it. Groups, in order:
+ * 1 PRI, 2 VERSION, 3 TIMESTAMP, 4 HOSTNAME, 5 APP-NAME, 6 PROCID, 7 MSGID,
+ * 8 the rest. Consulted only when {@link SYSLOG_RFC3164_PATTERN} did not match.
+ * Exported for the same reason as that pattern.
+ */
+export const SYSLOG_RFC5424_PATTERN =
+  /^<(\d+)>(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)/;
+
+/**
  * Parse RFC 3164 / RFC 5424 syslog lines. Verbatim from legacy, except for the
  * `\r?\n` split - see the CRLF note on {@link parseCef}. The parsed FIELDS were
  * already safe here (`.` cannot match `\r`, so `Message` stopped short of it),
@@ -1224,9 +1293,7 @@ export function parseSyslog(
   for (const line of content.trim().split(/\r?\n/).filter(Boolean)) {
     {
       const record: Record<string, unknown> = { _raw: line };
-      const rfc3164 = line.match(
-        /^(?:<(\d+)>)?(\w{3}\s+\d+\s+\d+:\d+:\d+)\s+(\S+)\s+(\S+?)(?:\[(\d+)\])?:\s*(.*)/,
-      );
+      const rfc3164 = line.match(SYSLOG_RFC3164_PATTERN);
       if (rfc3164) {
         if (rfc3164[1]) {
           record["Priority"] = parseInt(rfc3164[1], 10);
@@ -1244,9 +1311,7 @@ export function parseSyslog(
           record["Severity"] = pri % 8;
         }
       }
-      const rfc5424 = line.match(
-        /^<(\d+)>(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)/,
-      );
+      const rfc5424 = line.match(SYSLOG_RFC5424_PATTERN);
       if (rfc5424 && !rfc3164) {
         record["Priority"] = parseInt(rfc5424[1], 10);
         record["Version"] = parseInt(rfc5424[2], 10);
