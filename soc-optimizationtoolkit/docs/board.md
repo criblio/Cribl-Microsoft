@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**67 in the backlog, 1 in progress, 20 done.**
+**68 in the backlog, 1 in progress, 21 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 24 | 16 | 2 |
+| Sentinel Integration | 25 | 17 | 3 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -36,7 +36,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 2 | 0 |
 
-Open work totals 68.
+Open work totals 69.
 
 ## Epics and features
 
@@ -110,14 +110,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 33% (15/46)
+### `DBT` Quality and technical debt _(enabler)_ - 33% (16/48)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 8/25 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 5/9 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 8/26 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 2/7 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -164,7 +164,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (2)
 
 Next to pick up. Nothing blocks these.
 
@@ -239,6 +239,36 @@ Next to pick up. Nothing blocks these.
   skipped the DECODE action, so an unaddressable base64-decode source
   (b64.url) still built. Fixed and pinned; the build message now says pipeline
   validation, since it counts plan checks as well as YAML.
+
+- **DBT-128** Tagged samples and the solution selection were deleted with no Clear click
+  `DBT-F1` `bug` `settled`
+  OBSERVED 2026-10-05 in the Live Preview while building DBT-127: after a
+  reload, Sentinel Integration showed no solution selected and Add Sample Data
+  read No samples tagged yet. Minutes earlier the same page held
+  PaloAlto-PAN-OS with two tagged samples (TRAFFIC 50 events, THREAT 50
+  events) and a completed gap analysis. Lab data, re-acquirable from the
+  PaloAlto Lake bench - but deleted. WHAT IS KNOWN: only three code paths
+  remove samples - the per-sample Remove button, rename, and the change branch
+  of integrate-screen handleSolutionChange (previous solution non-null, next
+  different). Neither of the first two was clicked. The selection key was ALSO
+  blanked, which handleSolutionChange does on the same call (it persists
+  nextName ?? "" before deciding whether to delete) - so the change branch ran
+  with previous = PaloAlto-PAN-OS and next = null. The browser reports null
+  only from its Clear button (solution-browser clearSelection), and every
+  click in the session was checked against its screenshot: none landed on
+  Clear. UNSETTLED - the trigger. Candidates, neither confirmed: (1) React
+  Fast Refresh remounting the page or its sections mid-edit while the restore
+  effect raced the browser (the page was hot-reloaded dozens of times that
+  day, twice mid-edit); (2) a second Live Preview tab, left open from earlier,
+  acting on the same KV-backed sample store. Both look dev-only, which is
+  exactly why it must not be assumed: the late-restore replay in the
+  integrate-screen restore effect turns a reported null into a delete, so any
+  path that reports null at the wrong moment deletes the operator's work.
+  HARDENING TO CONSIDER regardless of the trigger: delete samples only on an
+  explicit operator action that carries intent (the Clear click, picking a
+  different solution), never from a replay or a remount; and persist the
+  selection key only after that decision, so a spurious null cannot both blank
+  the selection and delete the samples in one step.
 
 ---
 
@@ -1225,7 +1255,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (20)
+## Done (21)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2479,3 +2509,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the checkbox state. LIVE: in the Live Preview a click on the (i) beside the
   Clear-selection note opened the tip and it stayed open after the pointer
   left; Escape closed it.
+
+- **DBT-127** Sentinel Integration: Done collapses a section to a summary, footer pills jump back
+  `DBT-F2` `story` `settled` `verified: both`
+  OPERATOR REQUEST 2026-10-05, reviewing DBT-125: collapse each section as we
+  go through it and approve things, so we can quickly navigate to a previous
+  section without scrolling a ton. DECIDED 2026-10-05 (operator, two options
+  each): - COLLAPSE: an explicit Done - next button per section collapses it
+  to a one-line summary and scrolls to the next. Rejected: auto-collapse on
+  completion, because a section can turn green while the operator is still
+  working in it (the first sample tagged mid-intake) - the reason
+  NumberedSection never auto-collapsed. - NAVIGATE: the readiness footer pills
+  become links - a click expands that section and scrolls to it. Rejected: a
+  separate sticky index (new UI for what the footer already lists). The
+  collapsed body stays MOUNTED (the 2026-07-13 analysis-state pin); the
+  existing Collapse/Expand controls stay. BUILT 2026-10-05: core
+  sectionForPill (the pill-to-section map beside the pills); NumberedSection
+  takes an optional page-owned collapsed state, a one-line summary shown while
+  collapsed, Done - next, and an anchor id; ReadinessFooter pills become
+  buttons when given a handler; integrate-screen-state sectionSummary says
+  what was chosen per section, and says so when nothing was. Every new
+  behaviour mutation-checked. Recent runs (operator direction the same day) is
+  collapsed by default to one line - count and latest run - with a dropdown to
+  any previous run. LIVE: Done - next on Add Sample Data folded it to "no
+  samples" and scrolled to section 3; the Solution footer pill scrolled back
+  to section 1, opened.

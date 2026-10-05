@@ -1989,6 +1989,16 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
   white-space: nowrap;
 }
+/* DBT-127: footer pills are links back to their section. */
+button.readiness-pill {
+  font-family: inherit;
+  cursor: pointer;
+}
+button.readiness-pill:hover,
+button.readiness-pill:focus-visible {
+  border-color: var(--text-dim, #8b9cb8);
+  color: var(--text, #dbe4f0);
+}
 
 .readiness-pill-ok {
   color: var(--ok-strong);
@@ -5449,6 +5459,27 @@ details[open] > summary::before {
 }
 .numbered-section-collapsed .numbered-section-head {
   margin-bottom: 0;
+}
+
+/* DBT-127: a section the operator marked Done shows what was chosen in one
+   line beside its title, and Done - next sits with Collapse at the foot. */
+.numbered-section-summary {
+  color: var(--text-dim, #8b9cb8);
+  font-size: 0.85rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.numbered-section-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.numbered-section-foot .numbered-section-collapse-bottom {
+  margin: 0;
 }
 
 /* DCR update preview chips (2026-07-13, user color semantics): GREEN =

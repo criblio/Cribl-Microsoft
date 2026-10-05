@@ -98,6 +98,7 @@ import {
   rankUnreferencedByVolume,
   deployedGroups,
   deriveSectionStatuses,
+  sectionForPill,
   destinationIdFromOptions,
   identityGateMessage,
   installedPackVersions,
@@ -212,6 +213,7 @@ import {
   defaultPackName,
   deployDisabledReason,
   deriveSectionInputs,
+  sectionSummary,
 } from "./integrate-screen-state";
 import { WiringSection } from "./wiring-section";
 
@@ -244,6 +246,11 @@ const DEPLOY_WRITE_CAPABILITIES: readonly Capability[] = Object.freeze([
 ]);
 
 /** Bare file name for an export archive - deterministic, keyed by the run. */
+/** The DOM id a section scrolls to (DBT-127). */
+function sectionAnchor(id: IntegrateSectionId): string {
+  return `integrate-section-${id}`;
+}
+
 export function exportArchiveName(workspaceName: string, jobId: string): string {
   const part = (value: string): string => {
     const safe = value.replace(/[^A-Za-z0-9._-]/g, "_");
@@ -1675,6 +1682,49 @@ export function IntegrateScreen({
     mappingsApproved,
   });
   const resolved = deriveSectionStatuses(sectionInputs);
+
+  // DBT-127: the page owns which sections are folded, so "Done - next" and
+  // the footer pills can fold and open them. Nothing folds on its own - a
+  // section can turn complete while the operator is still working in it.
+  const [collapsedSections, setCollapsedSections] = useState<
+    ReadonlySet<IntegrateSectionId>
+  >(() => new Set());
+  const setSectionCollapsed = useCallback(
+    (id: IntegrateSectionId, collapsed: boolean) => {
+      setCollapsedSections((prev) => {
+        if (prev.has(id) === collapsed) return prev;
+        const next = new Set(prev);
+        if (collapsed) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    },
+    [],
+  );
+  // Open a section and bring it into view. The scroll waits a frame so it
+  // measures the section after it has expanded.
+  const goToSection = useCallback(
+    (id: IntegrateSectionId) => {
+      setSectionCollapsed(id, false);
+      requestAnimationFrame(() => {
+        document
+          .getElementById(sectionAnchor(id))
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [setSectionCollapsed],
+  );
+  const summaryFacts = {
+    solutionName: solution?.name ?? "",
+    sampleLogTypes: samples.map((s) => s.logType),
+    analyzedLogTypes: gapReports.length,
+    mappingsApproved,
+    scopeCommitted,
+    workspaceName: config.workspaceName,
+    workerGroup: groupId,
+    packName,
+    deployCompleted,
+  };
   // Mode-aware pills (Unit 20): the full pill set with the skipped side's
   // prerequisite hidden. In "full" this is identical to the un-gated set, so
   // the operable native path is unchanged.
@@ -2891,24 +2941,38 @@ export function IntegrateScreen({
        * ("Sentinel Integration") directly above this screen, so a second
        * title and description stacked three names for one page. The route
        * header is the single title. */}
-      {resolved.map(({ section, status, reason }) => (
-        <NumberedSection
-          key={section.id}
-          number={section.number}
-          title={section.title}
-          status={status}
-          infoTip={section.infoTip}
-          reason={reason}
-        >
-          {sectionBody(section.id)}
-        </NumberedSection>
-      ))}
+      {resolved.map(({ section, status, reason }, index) => {
+        const next = resolved
+          .slice(index + 1)
+          .find((r) => r.status !== "coming-soon");
+        return (
+          <NumberedSection
+            key={section.id}
+            number={section.number}
+            title={section.title}
+            status={status}
+            infoTip={section.infoTip}
+            reason={reason}
+            anchorId={sectionAnchor(section.id)}
+            collapsed={collapsedSections.has(section.id)}
+            onCollapsedChange={(c) => setSectionCollapsed(section.id, c)}
+            summary={sectionSummary(section.id, summaryFacts)}
+            onDone={() => {
+              setSectionCollapsed(section.id, true);
+              if (next !== undefined) goToSection(next.section.id);
+            }}
+          >
+            {sectionBody(section.id)}
+          </NumberedSection>
+        );
+      })}
       <ReadinessFooter
         pills={pills}
         canDeploy={deployEverythingDisabledReason === null}
         onDeploy={() => void runDeployEverything()}
         deploying={deploying || packBuilding}
         disabledReason={deployEverythingDisabledReason}
+        onPillClick={(id) => goToSection(sectionForPill(id))}
       />
     </div>
   );

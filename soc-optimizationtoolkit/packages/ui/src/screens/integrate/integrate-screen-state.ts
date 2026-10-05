@@ -34,7 +34,7 @@ import {
   integrateSection,
   packNameForSolution,
 } from "@soc/core";
-import type { CriblOptions, SectionInputs } from "@soc/core";
+import type { CriblOptions, IntegrateSectionId, SectionInputs } from "@soc/core";
 
 /**
  * The native table the deploy section seeds - the one the user validated
@@ -137,4 +137,65 @@ export function deployDisabledReason(inputs: SectionInputs): string | null {
     return null;
   }
   return deriveSectionStatus(integrateSection("deploy"), inputs).reason ?? null;
+}
+
+/** What the page knows, for the one-line summary of a collapsed section. */
+export interface SectionSummaryFacts {
+  solutionName: string;
+  sampleLogTypes: readonly string[];
+  analyzedLogTypes: number;
+  mappingsApproved: boolean;
+  scopeCommitted: boolean;
+  workspaceName: string;
+  workerGroup: string;
+  packName: string;
+  deployCompleted: boolean;
+}
+
+const SUMMARY_NAMES_SHOWN = 3;
+
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * The line a collapsed section shows beside its title (DBT-127): what was
+ * chosen there, so the operator can find an earlier section without opening
+ * it. An unfinished section says so rather than going blank - a blank reads as
+ * "nothing to see" when it means "nothing done". The read-only coverage and
+ * content sections have no choice to summarize and return "".
+ */
+export function sectionSummary(
+  id: IntegrateSectionId,
+  facts: SectionSummaryFacts,
+): string {
+  switch (id) {
+    case "solution":
+      return facts.solutionName !== "" ? facts.solutionName : "no solution selected";
+    case "sample-data": {
+      const types = facts.sampleLogTypes;
+      if (types.length === 0) return "no samples";
+      const shown = types.slice(0, SUMMARY_NAMES_SHOWN).join(", ");
+      const rest = types.length - SUMMARY_NAMES_SHOWN;
+      return `${plural(types.length, "sample")}: ${shown}${rest > 0 ? ` and ${rest} more` : ""}`;
+    }
+    case "gap-analysis":
+      return facts.analyzedLogTypes === 0
+        ? "not analyzed"
+        : `${plural(facts.analyzedLogTypes, "log type")} analyzed - ${
+            facts.mappingsApproved ? "approved" : "not yet approved"
+          }`;
+    case "azure-resources":
+      return facts.scopeCommitted && facts.workspaceName !== ""
+        ? facts.workspaceName
+        : "no target committed";
+    case "cribl-config":
+      return facts.packName !== "" && facts.workerGroup !== ""
+        ? `${facts.packName} in ${facts.workerGroup}`
+        : "not configured";
+    case "deploy":
+      return facts.deployCompleted ? "deployed" : "not deployed yet";
+    default:
+      return "";
+  }
 }

@@ -635,6 +635,26 @@ export interface ReadinessPill {
  * canDeploy honors ONLY the operable three (see its docs) - the Samples and
  * still-not-built pills are visible-but-not-blocking during the MVP transition.
  */
+/**
+ * Where each footer pill is satisfied (DBT-127). The footer pills became links
+ * that open and scroll to that section, so the pill-to-section map is a domain
+ * fact beside the pills it describes - not a table restated in the screen.
+ * Worker Groups and Pack Name are both set in Configure Cribl.
+ */
+const PILL_SECTION: Readonly<Record<IntegratePillId, IntegrateSectionId>> = {
+  solution: "solution",
+  samples: "sample-data",
+  mappings: "gap-analysis",
+  workspace: "azure-resources",
+  "worker-groups": "cribl-config",
+  "pack-name": "cribl-config",
+};
+
+/** The section a readiness pill links to. */
+export function sectionForPill(id: IntegratePillId): IntegrateSectionId {
+  return PILL_SECTION[id];
+}
+
 export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
   return [
     {

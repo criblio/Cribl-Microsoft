@@ -14,7 +14,9 @@ import {
   defaultPackName,
   deployDisabledReason,
   deriveSectionInputs,
+  sectionSummary,
 } from "./integrate-screen-state";
+import type { SectionSummaryFacts } from "./integrate-screen-state";
 
 describe("deriveSectionInputs", () => {
   it("passes solution, scope and deploy flags through and reduces the text fields to booleans", () => {
@@ -170,5 +172,82 @@ describe("deployDisabledReason", () => {
 describe("INTEGRATE_DEFAULT_TABLE", () => {
   it("is the validated native table", () => {
     expect(INTEGRATE_DEFAULT_TABLE).toBe("SecurityEvent");
+  });
+});
+
+describe("sectionSummary (DBT-127)", () => {
+  const facts: SectionSummaryFacts = {
+    solutionName: "PaloAlto-PAN-OS",
+    sampleLogTypes: ["THREAT", "TRAFFIC"],
+    analyzedLogTypes: 2,
+    mappingsApproved: false,
+    scopeCommitted: true,
+    workspaceName: "law-jpederson-eastus",
+    workerGroup: "default",
+    packName: "MS-Sentinel-PaloAlto-PAN",
+    deployCompleted: false,
+  };
+
+  it("says what was chosen in each section, in a few words", () => {
+    expect(
+      Object.fromEntries(
+        (
+          [
+            "solution",
+            "sample-data",
+            "gap-analysis",
+            "azure-resources",
+            "cribl-config",
+            "deploy",
+          ] as const
+        ).map((id) => [id, sectionSummary(id, facts)]),
+      ),
+    ).toEqual({
+      solution: "PaloAlto-PAN-OS",
+      "sample-data": "2 samples: THREAT, TRAFFIC",
+      "gap-analysis": "2 log types analyzed - not yet approved",
+      "azure-resources": "law-jpederson-eastus",
+      "cribl-config": "MS-Sentinel-PaloAlto-PAN in default",
+      deploy: "not deployed yet",
+    });
+  });
+
+  it("states the unfinished case rather than going blank", () => {
+    const empty: SectionSummaryFacts = {
+      solutionName: "",
+      sampleLogTypes: [],
+      analyzedLogTypes: 0,
+      mappingsApproved: false,
+      scopeCommitted: false,
+      workspaceName: "",
+      workerGroup: "",
+      packName: "",
+      deployCompleted: false,
+    };
+    expect(sectionSummary("solution", empty)).toBe("no solution selected");
+    expect(sectionSummary("sample-data", empty)).toBe("no samples");
+    expect(sectionSummary("gap-analysis", empty)).toBe("not analyzed");
+    expect(sectionSummary("azure-resources", empty)).toBe("no target committed");
+    expect(sectionSummary("cribl-config", empty)).toBe("not configured");
+  });
+
+  it("caps a long sample list instead of running off the line", () => {
+    const many = { ...facts, sampleLogTypes: ["a", "b", "c", "d", "e"] };
+    expect(sectionSummary("sample-data", many)).toBe("5 samples: a, b, c and 2 more");
+    expect(sectionSummary("sample-data", { ...facts, sampleLogTypes: ["a"] })).toBe(
+      "1 sample: a",
+    );
+  });
+
+  it("reads approved and deployed once they are", () => {
+    const done = { ...facts, mappingsApproved: true, deployCompleted: true };
+    expect(sectionSummary("gap-analysis", done)).toBe("2 log types analyzed - approved");
+    expect(sectionSummary("deploy", done)).toBe("deployed");
+  });
+
+  it("has nothing to summarize for the read-only coverage and content sections", () => {
+    expect(sectionSummary("rule-coverage", facts)).toBe("");
+    expect(sectionSummary("workbook-coverage", facts)).toBe("");
+    expect(sectionSummary("enable-content", facts)).toBe("");
   });
 });

@@ -26,6 +26,7 @@ import {
   deriveSectionStatus,
   deriveSectionStatuses,
   integrateSection,
+  sectionForPill,
 } from "../../index";
 import type {
   IntegratePillId,
@@ -758,5 +759,26 @@ describe("canDeployContentPath is the additive content-path gate", () => {
         expect(canDeployContentPath(i)).toBe(false);
       }
     }
+  });
+});
+
+describe("sectionForPill (DBT-127)", () => {
+  it("sends every footer pill to the section where it is satisfied", () => {
+    const pills = deriveReadinessPills(inputs());
+    expect(Object.fromEntries(pills.map((p) => [p.id, sectionForPill(p.id)]))).toEqual({
+      solution: "solution",
+      samples: "sample-data",
+      mappings: "gap-analysis",
+      workspace: "azure-resources",
+      "worker-groups": "cribl-config",
+      "pack-name": "cribl-config",
+    });
+  });
+
+  it("names only sections that exist on the page", () => {
+    const ids = new Set(INTEGRATE_SECTIONS.map((s) => s.id));
+    const pills: IntegratePillId[] = deriveReadinessPills(inputs()).map((p) => p.id);
+    expect(pills).toHaveLength(6);
+    expect(pills.filter((p) => !ids.has(sectionForPill(p)))).toEqual([]);
   });
 });

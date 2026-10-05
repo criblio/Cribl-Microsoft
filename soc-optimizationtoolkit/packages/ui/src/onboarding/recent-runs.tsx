@@ -50,13 +50,6 @@ export interface RecentRunsProps {
   detail?: (job: JobRecord) => string;
 }
 
-/**
- * How many runs show before "Show all" (DBT-125). The latest few answer "what
- * happened last time"; a page that printed every run ever recorded put thirty
- * rows under the deploy button.
- */
-export const RECENT_RUNS_SHOWN = 5;
-
 export function RecentRuns({
   refreshToken,
   kind = ONBOARD_TABLE_JOB_KIND,
@@ -67,7 +60,8 @@ export function RecentRuns({
   const { ports } = usePorts();
   const [jobs, setJobs] = useState<JobRecord[] | null>(null);
   const [error, setError] = useState("");
-  const [showAll, setShowAll] = useState(false);
+  // The run whose detail is shown; null means the latest.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -82,35 +76,44 @@ export function RecentRuns({
     void load();
   }, [load, refreshToken]);
 
+  // COLLAPSED BY DEFAULT, one run at a time (operator direction 2026-10-05,
+  // DBT-125). Every run used to render as its own row, so the log grew under
+  // the deploy button with every deploy. The closed line keeps the count and
+  // the latest run, which is what a glance needs; a dropdown reaches the rest.
+  const latest = jobs !== null && jobs.length > 0 ? jobs[0] : undefined;
+  const selected =
+    jobs?.find((job) => job.id === selectedId) ?? latest;
   return (
-    <div className="discovery-result">
-      <span className="field-label">
-        {title}{" "}
+    <details className="discovery-result recent-runs">
+      <summary className="field-label">
+        {title}
+        {jobs === null
+          ? ""
+          : latest === undefined
+            ? " - none recorded yet"
+            : ` (${jobs.length}) - latest: ${label(latest)}`}{" "}
         <InfoTip text="The app's own run log - every recorded run, newest first, kept in this app's storage." />
-      </span>
+      </summary>
       <div className="panel-controls">
+        {jobs !== null && jobs.length > 0 && (
+          <select
+            aria-label="Choose a run"
+            value={selected?.id ?? ""}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {label(job)}
+              </option>
+            ))}
+          </select>
+        )}
         <button className="run-button" onClick={() => void load()}>
           Refresh
         </button>
       </div>
       {error !== "" && <pre className="result">{error}</pre>}
-      {jobs !== null && jobs.length === 0 && (
-        <p className="panel-desc">No runs recorded yet in this app context.</p>
-      )}
-      {jobs !== null &&
-        (showAll ? jobs : jobs.slice(0, RECENT_RUNS_SHOWN)).map((job) => (
-          <details key={job.id}>
-            <summary className="panel-desc">{label(job)}</summary>
-            <pre className="result">{detail(job)}</pre>
-          </details>
-        ))}
-      {jobs !== null && jobs.length > RECENT_RUNS_SHOWN && (
-        <button className="run-button" onClick={() => setShowAll((v) => !v)}>
-          {showAll
-            ? `Show the latest ${RECENT_RUNS_SHOWN}`
-            : `Show all ${jobs.length} runs`}
-        </button>
-      )}
-    </div>
+      {selected !== undefined && <pre className="result">{detail(selected)}</pre>}
+    </details>
   );
 }

@@ -38,6 +38,8 @@ export interface ReadinessFooterProps {
   disabledReason?: string | null;
   /** Button label; defaults to "Deploy". */
   deployLabel?: string;
+  /** DBT-127: makes each pill a button that jumps to the section it needs. */
+  onPillClick?: (id: ReadinessPill["id"]) => void;
 }
 
 export function ReadinessFooter({
@@ -47,6 +49,7 @@ export function ReadinessFooter({
   deploying = false,
   disabledReason = null,
   deployLabel = "Deploy",
+  onPillClick,
 }: ReadinessFooterProps) {
   const disabled = !canDeploy || deploying;
   return (
@@ -56,15 +59,28 @@ export function ReadinessFooter({
       }`}
     >
       <div className="readiness-footer-pills">
-        {pills.map((pill) => (
-          <span
-            key={pill.id}
-            className={`readiness-pill readiness-pill-${pill.state}`}
-            title={pill.hint}
-          >
-            {pill.label}
-          </span>
-        ))}
+        {pills.map((pill) =>
+          onPillClick === undefined ? (
+            <span
+              key={pill.id}
+              className={`readiness-pill readiness-pill-${pill.state}`}
+              title={pill.hint}
+            >
+              {pill.label}
+            </span>
+          ) : (
+            <button
+              key={pill.id}
+              type="button"
+              className={`readiness-pill readiness-pill-${pill.state}`}
+              title={pill.hint}
+              aria-label={`Go to ${pill.label}`}
+              onClick={() => onPillClick(pill.id)}
+            >
+              {pill.label}
+            </button>
+          ),
+        )}
       </div>
       <div className="readiness-footer-action">
         {disabled && disabledReason !== null && (
