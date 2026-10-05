@@ -1520,8 +1520,27 @@ Reader-noted gaps: 1) No Cribl config generation exists in this subsystem despit
 - Depends on: None.
 - Portability: The KQL snippets and interpretation guidance transfer verbatim into the app (queries POST to the Resource Graph REST API; interpretation text becomes in-app help/tooltips and the recommendations panel copy). Rate-limit analysis directly informs how to stay under the platform's 100 req/min proxy budget.
 
+> SUPERSEDED IN PART (note added 2026-10-05, covering this whole EVH section):
+> EVH-03 through EVH-08, together with LOG-16's source-config generator, were
+> ported to the Event Hub Discovery screen (`eventhub-discovery` route):
+> `packages/core/src/domain/eventhub-discovery`,
+> `packages/core/src/usecases/discover-event-hubs` and
+> `packages/ui/src/screens/eventhub-discovery`. The portability notes above
+> record what the legacy toolkit was. For the ported entries they are no longer
+> a port instruction. The legacy source moved to `deprecated/Azure/dev/EventHubDiscovery`
+> on 2026-07-13. Like all of `Azure/dev`, it was git-ignored and never in version
+> control (see the Source-paths note under Coverage notes).
 
 ## vNet Flow Log Discovery (VNF)
+
+> SUPERSEDED IN PART (note added 2026-10-05): VNF-08 through VNF-13 (the
+> AzureFlowLogs pack assets and collector) were ported into the Labs flow-log
+> pack (`packages/core/src/domain/labs/lab-flowlog-pack.ts`,
+> `flowlog-pack-assets.ts`, UI in `packages/ui/src/screens/labs/flowlog-pack-panel.tsx`).
+> Tenant discovery (VNF-01 to VNF-07) was not ported. The tracked canonical copy
+> now lives at `deprecated/Azure/vNetFlowLogs/vNetFlowLogDiscovery`. The git-ignored
+> `Azure/dev/vNetFlowLogDiscovery` and `Azure/dev/Azure_vNet_FlowLogs` trees moved
+> to `deprecated/Azure/dev/` in a local working copy only, and they are not in git.
 
 This subsystem automates onboarding Azure vNet Flow Logs into Cribl Stream: a PowerShell tool that scans an entire Azure tenant for storage accounts containing the insights-logs-flowlogflowevent container and generates per-account Cribl Azure Blob collector configs from a template, plus the companion "AzureFlowLogs" Cribl pack (event breaker, flow-tuple flattening pipeline, Redis dedup pipeline, scheduled collector job, samples, Search dashboard). Azure/vNetFlowLogs/vNetFlowLogDiscovery is the current, git-tracked canonical copy (publicly linked from the pack README); Azure/dev/vNetFlowLogDiscovery is a git-ignored byte-identical working mirror (live credentials in its params file, stale PackReadme backups), and Azure/dev/Azure_vNet_FlowLogs is the git-ignored pack source tree at v0.0.3 (marked Draft). The union of capabilities is small and highly portable: discovery is plain ARM enumeration (needs-proxy), config generation is pure templating that should become direct Cribl API creation, and the pack contents are static Cribl config artifacts.
 
@@ -1649,6 +1668,12 @@ Reader-noted gaps: 1) Despite the subsystem hint, there is NO discovery of flow-
 
 
 ## Azure Log Collection (LOG)
+
+> SUPERSEDED IN PART (note added 2026-10-05): three entries were ported to
+> `packages/core`. LOG-02 went to `domain/coverage-model`, LOG-07 to
+> `domain/entra-diagnostics`, and LOG-16 (the Event Hub source config) to
+> `domain/eventhub-discovery`. The rest were not ported. The legacy source now
+> lives under `deprecated/Azure/Azure-LogCollection`.
 
 Azure-LogCollection (v5.1.0) is a production-grade PowerShell automation suite (~13,200 lines across 1 orchestrator + 10 core scripts) that configures tenant-wide Azure log collection into Event Hubs for Cribl Stream ingestion: it deploys Event Hub namespaces (Centralized or Multi-Region), assigns Microsoft's built-in Audit diagnostic-settings initiative (69 resource types), imports and assigns a 44-policy Community initiative from GitHub, deploys Activity Log/Entra ID/Defender for Cloud export, and guides Defender XDR Streaming API setup with Graph-based license validation. Around the deployments it provides Resource Graph region inventory, policy-conflict and diagnostic-setting-collision detection, compliance gap analysis with JSON reports, bulk policy remediation, precise cleanup, and a Cribl Event Hub source-config generator with secret references. Nearly all functionality is ARM/Graph REST underneath and ports to the Cribl app via proxied fetch, but the file-based config/exports, interactive menu, and two full-tenant per-resource scans require redesign (KV store, wizard UI, Resource Graph queries, and direct Cribl API source/secret creation replacing JSON file handoff).
 
@@ -1808,6 +1833,12 @@ Reader-noted gaps: Referenced-but-missing files: README.md and CLAUDE.md both li
 
 
 ## Cribl Pack Packaging (PKG)
+
+> SUPERSEDED (note added 2026-10-05): `.crbl` assembly is now done by
+> `packages/core/src/domain/pack-assembly`, behind the Pack Maintenance screen
+> (`packs` route). The legacy source moved to `deprecated/Azure/dev/Packs` in a
+> local working copy only. Like all of `Azure/dev`, it was git-ignored and is
+> not in git.
 
 A small, self-contained PowerShell utility (Azure/dev/Packs/Cribl_Pack_Packaging) that packages an existing Cribl pack directory into a .crbl archive: it tars the directory contents, gzips the tar with a .crbl extension, applies a {prefix}{packName}.crbl naming convention read from package.json, and optionally validates and cleans up. It offers an interactive menu plus a non-interactive CLI (Modes: Package, Validate, ViewConfig, SetSource, SetOutput), JSON-file configuration, and a dev/prod flag-file environment switch, but contains no manifest generation, no version bumping, no pack content generators, and no Cribl API upload (import into Stream is manual). Code is working and well documented but lives in the dev tree; dev and prod script copies are identical.
 
@@ -2246,6 +2277,10 @@ Reader-noted gaps: 1) Cribl config generation path is broken end-to-end: Run-AWS
 
 ## Enrichment Lookups (LKP)
 
+> SUPERSEDED (note added 2026-10-05): the `Lookups/` tree moved to `deprecated/Lookups`
+> on 2026-07-13. `deprecated/README.md` names its successor, which is
+> pack-embedded lookups built by the toolkit's pack assembly.
+
 The Lookups subsystem provides enrichment lookup tables for Cribl Stream and currently contains exactly one working tool: a Python CLI (DynamicLookups/ActiveDirectory/main.py, ~425 lines) that queries Active Directory users over LDAP, exports five identity attributes to CSV, and pushes the file to a Cribl.Cloud worker group via REST (upload, create-or-update lookup object, commit, deploy). StaticLookups is an empty placeholder, and the v1.0.0 release notes describe a much larger lookup framework (caching, YAML config, static lookup engine) that has no implementing code. The Cribl-side REST logic ports directly to the app platform; the LDAP leg must be redesigned onto Microsoft Graph since the browser sandbox cannot speak LDAP.
 
 Reader-noted gaps: 1) Refresh mechanism: despite the release notes' 'configurable refresh intervals' and 'background refresh' claims, the only real refresh is externally re-running main.py (cron/Task Scheduler per README); the app will need its own re-sync trigger (manual button or user-initiated polling loop) since the sandbox has no scheduler. 2) StaticLookups is completely empty; actual static lookup datasets may live elsewhere in the repo (e.g. inside pack archives like packs/cloudflare-sentinel_0-5-8.crbl or the SOC-OptimizationToolkit trees), which were outside this subsystem's paths and not cataloged here. 3) The script hard-codes Cribl.Cloud gateway URLs (app.cribl.cloud, workspace 'main'), so on-prem/hybrid leaders and non-main workspaces are unsupported as written; inside the app this constraint disappears. 4) No sample config.ini is committed (gitignored), and the AD attribute list / search filter are hard-coded, so 'configurable field mappings' from the release notes could not be assessed against code. 5) Could not verify the Cribl API endpoint shapes against a live system; the create (POST) vs update (PATCH) and commit-file-list conventions should be revalidated against the current Cribl OpenAPI spec during reimplementation.
@@ -2395,6 +2430,13 @@ Reader-noted gaps: 1) Committed secrets: KnowledgeArticles/O365AppRegistrationFo
 
 
 ## Labs and Test Environments (LAB)
+
+> SUPERSEDED IN PART (note added 2026-10-05): the out-of-scope verdict below was
+> overtaken. LAB-01 through LAB-14 were ported to the Labs screen (`labs` route:
+> `packages/core/src/domain/labs`, `packages/core/src/usecases/provision-lab`,
+> `packages/ui/src/screens/labs`), and LAB-19 was folded into the shared Event Hub
+> source template (the LAB-05/11/19 merge recorded in `domain/labs/lab-cribl.ts`).
+> The legacy sources now live under `deprecated/Azure/Labs`.
 
 The labs subsystem is PowerShell-based Azure test-environment automation: UnifiedLab (a production-ready, 10-phase modular deployer that consolidates six earlier labs into one framework with an 8-preset interactive menu, public/private modes, and TTL self-cleanup) and the older standalone AzureFlowLogLab (v1.0.0, VNet + VPN + flow logs, superseded by UnifiedLab); Dev/HomeLab is an empty placeholder. Nearly everything is lab/test infrastructure (out-of-scope for the Cribl app), but three embedded capabilities are explicitly product-worthy: the Cribl source/destination config generators that turn deployed Azure resources into ready-to-import Cribl configs (both labs), the Event Grid blob-notification wiring that sets up queue-based blob discovery on the Azure side, and the captured vNet flow-log sample data / collector template usable for in-app breaker testing and config seeding.
 
@@ -2852,8 +2894,9 @@ Reader-noted gaps: 1) Apps and adapters in v1 are confirmed stubs: all eight pac
 
 The automated completeness audit did not run (agent quota); the following was verified manually instead:
 
-- `.github/workflows/soc-optimization-toolkit-ci.yml` is CI for the renamed v1 monorepo; its path filters no longer match anything and it is now vestigial. Not a product feature; should be removed or rewritten for the new app.
-- Root `Start-App-Windows.bat` / `Start-App-macOS.sh` launch the Integration Solution Electron app from source (deliberately unpackaged to avoid EDR false positives). Superseded entirely by the Cribl App Platform distribution model.
+- `.github/workflows/soc-optimization-toolkit-ci.yml` is CI for the renamed v1 monorepo; its path filters no longer match anything and it is now vestigial. Not a product feature; should be removed or rewritten for the new app. (Since resolved: the workflow was removed. The app's CI is `.github/workflows/soc-toolkit-ci.yml`.)
+- Root `Start-App-Windows.bat` / `Start-App-macOS.sh` launch the Integration Solution Electron app from source (deliberately unpackaged to avoid EDR false positives). Superseded entirely by the Cribl App Platform distribution model. (Since moved to `deprecated/` on 2026-07-13.)
 - `Cribl-Microsoft_IntegrationSolution/tests/` (unit/DOM test suites) was not cataloged as a feature; its test patterns are relevant to the new app's testing strategy.
 - Generated-output directories (generated-templates, cribl-dcr-configs, eventhub-discovery-results, cribl-destinations, dist) were intentionally excluded.
 - The v1 section (V1-*) intentionally overlaps other sections; it is a cross-check from the abandoned monorepo's own census, not additional scope.
+- Source paths (note added 2026-10-05): every `Source:` path in this catalog is repo-relative as of 2026-07-01 and is kept as written. On 2026-07-13 `Azure/`, `Cribl-Microsoft_IntegrationSolution/`, `Lookups/`, `packs/`, `SOC-OptimizationToolkit_v1/` and the root `Start-App-*` launchers moved under `deprecated/`, so prefix those paths with `deprecated/`. `deprecated/README.md` records the move, and the pre-move layout is tagged `pre-deprecation-2026-07-13`. Paths under `Dev/`, `KnowledgeArticles/`, `README.md` and `QUICK_START.md` did not move. Paths under `Azure/dev/` (EventHubDiscovery, Packs, Azure_vNet_FlowLogs, vNetFlowLogDiscovery, windows-schema-sync) were git-ignored working trees. They were never committed and are not in the tag, so a move to a new repository will not carry them unless someone copies them by hand.
