@@ -70,6 +70,8 @@ git show "HEAD:$TARBALL" > "$STAGE/$TARBALL"
 
 # 3. The setup commit: new root files, the current tarball, and the edits the
 #    "only the app" decision requires.
+# Dropping every tarball also removed release/, which held nothing else.
+mkdir -p "$(dirname "$TARBALL")"
 cp "$STAGE/$TARBALL" "$TARBALL"
 node "$HERE/postprocess.mjs" "$OUT" "$STAGE" "$SOURCE_HEAD"
 rm -rf "$STAGE"
