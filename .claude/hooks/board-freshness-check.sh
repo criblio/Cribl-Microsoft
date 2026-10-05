@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # Stop hook: ask for a board update once enough work has landed without one.
 #
-# Same cadence model as architecture-audit-check.sh, and for the same reason -
-# commit COUNT tracks actual change, where wall-clock fires during a coffee
-# break. Running on Stop means it never interrupts mid-task.
+# Same commit-count cadence as architecture-audit-check.sh, and for the same
+# reason - commit COUNT tracks actual change, where wall-clock fires during a
+# coffee break. Running on Stop means it never interrupts mid-task. One
+# difference: this hook still counts merge commits (no --no-merges below), so a
+# batch of merged branches counts its work twice here where the audit hook does
+# not.
+#
+# Like every hook in this directory it is tracked but registered only in the
+# gitignored .claude/settings.local.json, so a fresh clone never runs it. CI's
+# board-freshness.mjs is the check that travels.
 #
 # No marker file here: the board's own last commit IS the marker, so there is
 # nothing to keep in sync and nothing to seed. Commits that touch only the board
@@ -54,7 +61,7 @@ subjects=$(git log --format='- %s' "${last}..HEAD" -- "${WATCHED[@]}" 2>/dev/nul
   | sed 's/\\/\\\\/g; s/"/\\"/g' \
   | sed ':a;N;$!ba;s/\n/\\n/g')
 
-reason="${count} commits have landed since ${BOARD} was last updated (threshold ${THRESHOLD}).\\n\\n${subjects}\\n\\nUpdate the board now: move what shipped out of Now, promote what is unblocked, and add anything found along the way as a new story with an id, a type, an evidence line, and whether it is SETTLED or UNDECIDED. If a decision got answered, move it off Needs a decision and say what was decided.\\n\\nDetail still belongs in backlog.md - the board only carries what is a unit of work, what state it is in, and what it waits on. If the board is genuinely already current, say so and carry on; this will ask again next time."
+reason="${count} commits have landed since ${BOARD} was last updated (threshold ${THRESHOLD}).\\n\\n${subjects}\\n\\nUpdate the board now by editing soc-optimizationtoolkit/docs/board.json (never board.md - it is generated): set status on what shipped (done, with a verified value of pins, live, both or none) or started (in-progress), promote what is unblocked by adjusting priority, and add anything found along the way as a new story with id, epic, feature, type, priority, settled (settled or undecided), dependsOn and detail. An answered decision records decision.chosen. Then run npm run board && npm run check-board from soc-optimizationtoolkit.\\n\\nDetail still belongs in backlog.md - the board only carries what is a unit of work, what state it is in, and what it waits on. If the board is genuinely already current, say so and carry on; this will ask again next time."
 
 printf '{"decision":"block","reason":"%s","systemMessage":"Board update due: %s commits since it last changed."}\n' \
   "$reason" "$count"

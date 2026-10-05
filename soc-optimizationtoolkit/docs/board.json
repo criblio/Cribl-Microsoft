@@ -1317,6 +1317,62 @@
       "title": "Tagged samples and the solution selection were deleted with no Clear click",
       "detail": "OBSERVED 2026-10-05 in the Live Preview while building DBT-127: after a reload, Sentinel Integration showed no solution selected and Add Sample Data read No samples tagged yet. Minutes earlier the same page held PaloAlto-PAN-OS with two tagged samples (TRAFFIC 50 events, THREAT 50 events) and a completed gap analysis. Lab data, re-acquirable from the PaloAlto Lake bench - but deleted.\n\nWHAT IS KNOWN: only three code paths remove samples - the per-sample Remove button, rename, and the change branch of integrate-screen handleSolutionChange (previous solution non-null, next different). Neither of the first two was clicked. The selection key was ALSO blanked, which handleSolutionChange does on the same call (it persists nextName ?? \"\" before deciding whether to delete) - so the change branch ran with previous = PaloAlto-PAN-OS and next = null. The browser reports null only from its Clear button (solution-browser clearSelection), and every click in the session was checked against its screenshot: none landed on Clear.\n\nUNSETTLED - the trigger. Candidates, neither confirmed: (1) React Fast Refresh remounting the page or its sections mid-edit while the restore effect raced the browser (the page was hot-reloaded dozens of times that day, twice mid-edit); (2) a second Live Preview tab, left open from earlier, acting on the same KV-backed sample store. Both look dev-only, which is exactly why it must not be assumed: the late-restore replay in the integrate-screen restore effect turns a reported null into a delete, so any path that reports null at the wrong moment deletes the operator's work.\n\nHARDENING TO CONSIDER regardless of the trigger: delete samples only on an explicit operator action that carries intent (the Clear click, picking a different solution), never from a replay or a remount; and persist the selection key only after that decision, so a spurious null cannot both blank the selection and delete the samples in one step.\n\nCLOSED 2026-10-05 - NOT A DEFECT. The operator deleted the PaloAlto samples themselves during the same testing; the app did what a Clear does. No hardening wanted for now (operator direction). Kept as a record because the analysis above - one explicit-intent path deletes samples, and it also blanks the saved selection - is still true and is the place to start if it ever recurs without an operator action.",
       "verified": "none"
+    },
+    {
+      "id": "DBT-129",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "story",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Docs current before the app moves to its own repository",
+      "detail": "OPERATOR REQUEST 2026-10-05: review the repository documentation so everything is up to date, ahead of migrating the app to a new repository.\n\nSCOPE: every non-deprecated markdown file (root entry docs, the toolkit README/AGENTS/CONTEXT files, ADRs, plans, the feature catalog, backlog, release notes, the Zscaler lab doc), plus the repo tooling that documents itself (.claude hooks and skills, .github workflows). Each claim is checked against the code; stale ones are corrected, and history stays history (Record-status prose is dated, not rewritten). SEPARATELY, an inventory of everything that couples the app to THIS repository - paths outside soc-optimizationtoolkit/, repo URLs, CI and hooks, git-history-based checks, and inbound links (docs.cribl.io deep-links the DCR-Templates path) - so the move can be planned.\n\nDONE 2026-10-05. Eight doc groups reviewed against the code by a reviewer each and challenged by a skeptic each: 105 findings, none refuted; fixed per group and merged (about 34 files). Records were annotated or re-statused, not rewritten. The root CLAUDE.md now leads with the toolkit (workspaces, commands, Node 22, CI gates) and fences the PowerShell material under a deprecated heading; CONTRIBUTORS, README, QUICK_START, the CONTEXT files, ADRs, plans, the feature catalog and the tooling docs were brought to date. check-docs, check-release and the full suite pass. verified: none because this is prose; the checks hold its paths and statuses, not its sentences.\nThe coupling inventory is docs/repo-migration-plan.md (Proposed): 31 items, 10 needing a decision, carried by [[DBT-130]].",
+      "verified": "none"
+    },
+    {
+      "id": "DBT-130",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-129",
+        "DBT-131"
+      ],
+      "title": "Move the app to its own repository",
+      "detail": "OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of criblio/Cribl-Microsoft into a new repository. The plan and the full inventory are docs/repo-migration-plan.md.\n\nWHAT IS KNOWN: the shipped app is self-contained; the build and checks are not (two core tests and the schema-asset extractor read files outside the app, the docs gate walks the parent folder, CI, hooks and three git-history checks assume the soc-optimizationtoolkit/ prefix). A history-preserving extraction with git filter-repo is viable and can drop 51 old tarballs from history. Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository: Cribl's published docs link it.\n\nUNDECIDED - the decisions in the plan, the two that shape everything else first: the new repo's name and owner, and whether the app keeps its soc-optimizationtoolkit/ subdirectory or is flattened to the repo root.\n\nDECIDED 2026-10-05 (operator): keep the soc-optimizationtoolkit/ subdirectory; the criblio org owns the new repository; it holds ONLY the app and what it strictly needs, for publishing to the Cribl Marketplace - no DCR ARM templates, no deprecated tree; releases are triggered by a version change through a CI pipeline with approvals that publishes to the Cribl Marketplace. Recorded in docs/repo-migration-plan.md (Decided) and backlog.md section 22.\nSTILL UNDECIDED: issue transfer and bug triage, shared hooks, what the old repository keeps of the tarball, branch protection - and how the Cribl Marketplace accepts a new version, which the release pipeline needs before it can be written.\nThe one real unknown - how the Cribl Marketplace takes a new app version - is its own spike, [[DBT-131]]; the release pipeline waits on it. The other open items (issue transfer, shared hooks, the old repository tarball, branch protection) are choices made while doing the move.",
+      "decision": {
+        "question": "Keep soc-optimizationtoolkit/ as a subdirectory in the new repository, or flatten it to the root?",
+        "options": [
+          {
+            "key": "keep-subdirectory",
+            "label": "Keep the subdirectory",
+            "detail": "Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed."
+          },
+          {
+            "key": "flatten",
+            "label": "Flatten to the repo root",
+            "detail": "Cleaner layout, but every path retarget in the inventory (CI, hooks, board-freshness and its pins, release drift, check-docs) must change in the same commit."
+          }
+        ],
+        "chosen": "keep-subdirectory"
+      }
+    },
+    {
+      "id": "DBT-131",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "spike",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "unconfirmed",
+      "dependsOn": [],
+      "title": "Find how the Cribl Marketplace accepts a new app version",
+      "detail": "OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the new repository to trigger a CI pipeline, with approvals, that publishes the new app version to the Cribl Marketplace. Nothing in this repository says how the Marketplace takes a version - a publish API, an upload to a partner portal, a pull from a GitHub release, or a submission reviewed by Cribl. Find out (Cribl App Platform docs, the Marketplace team), and record what credential the pipeline needs, what artifact it sends (the .tgz from npm run package), and what approval Cribl itself applies, before the pipeline is designed."
     }
   ],
   "features": [

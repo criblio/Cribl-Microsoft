@@ -127,6 +127,10 @@ regenerates the declaration, so an update fixes it; nothing sweeps for affected
 DCRs. Operators who deployed before this change and never update keep losing
 those fields, and nothing tells them. That is a gap, and it is the strongest
 argument for doing the deferred `droppedColumns` UI work next.
+**PARTLY ADDRESSED as HON-4** <!--drift-ok--> - the DCR Inventory update preview
+now warns when a deployed declaration is losing guid columns (`guidLossWarning`
+in `update-dcr.ts`, rendered by `dcr-inventory-panel.tsx`) and points at Update.
+Still no sweep: an operator who never opens the preview is not told.
 
 **We diverge from v1 in generated output for these tables.** Any future
 comparison against script-generated templates will differ on guid columns, and
@@ -139,3 +143,7 @@ been deployed to observe the cast working. `toguid()` silently returns null on
 malformed input rather than erroring, so a wrong cast fails the same quiet way
 the drop did. **This belongs in the live-verification suite alongside the
 Cribl beliefs** - see `packages/core/src/testing/live-verify.test.ts`.
+**Row 9 of live-verify.test.ts now exists (DBT-2, run 2026-08-31)** <!--drift-ok-->:
+the TYPE half passed; the VALUE half is still unobserved and is tracked as
+DBT-36 - it needs a DCR that carries the cast plus data through it, and must
+not use TenantId.

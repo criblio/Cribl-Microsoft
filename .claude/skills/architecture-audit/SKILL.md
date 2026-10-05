@@ -13,7 +13,9 @@ Run it against the **branch diff since the last audit** where possible, not the
 whole repo — the point is catching drift as it happens.
 
 ```bash
-# What has changed since the last audit (the hook writes this marker).
+# What has changed since the last audit. This skill writes the marker when it
+# finishes (last step below); the hook only seeds it at HEAD if it is missing.
+# The marker is tracked, so commit it with the audit.
 marker=$(cat .claude/.last-architecture-audit 2>/dev/null || echo "")
 [ -n "$marker" ] && git diff --stat "$marker"..HEAD -- soc-optimizationtoolkit/
 ```
@@ -67,8 +69,8 @@ comment first.
 
 ## 3. Test-pin integrity
 
-CLAUDE.md and the capability plan both say it: **the contract tests ARE the
-specification**. A pin deleted or weakened to make a suite pass is a silent
+capability-model-plan.md and backlog.md section 1 both say it: **the contract
+tests ARE the specification**. A pin deleted or weakened to make a suite pass is a silent
 spec change.
 
 ```bash
