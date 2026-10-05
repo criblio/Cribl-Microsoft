@@ -110,6 +110,15 @@ sample file. It is now
 dropped, and the sample shows a parse note counting the lines that were
 skipped. Event counts for affected CEF samples go down.
 
+**RULE badges appear as soon as the DCR Gap Analysis runs (DBT-121).** The badges
+on the Field Mappings table that mark columns an analytics rule references used
+to appear only after a separate click on Analyze in Rule Coverage, so an
+operator who ran the gap analysis alone saw none and read the feature as
+missing. They now light on every gap analysis, from the solution's rules already
+fetched when it was selected. Rules uploaded in Rule Coverage still add to them.
+The rules come from GitHub; without a GitHub token the fetch can fail silently
+and no badges appear.
+
 **Smaller fixes.**
 - AZR-13: the coverage catalog derives its Entra profile options from the
   three profiles the app knows, so a stored SecurityOnly selection is kept

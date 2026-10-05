@@ -1218,6 +1218,19 @@
       "verified": "pins"
     },
     {
+      "id": "DBT-121",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "RULE badges on the DCR mapping wait for a separate Rule Coverage click",
+      "detail": "REPORTED 2026-10-02: a user installed 1.12.7 from origin and the Sentinel Integration DCR mapping showed no rule tagging. The shipped tarball is byte-identical to the local build and DOES contain the feature - the badge set was only ever reported by the Rule Coverage section after its own Analyze button ran, which itself needs a finished gap analysis. Clicking Analyze on the DCR gap analysis therefore never tagged anything on its own, so the feature reads as missing.\n\nOPERATOR DIRECTION: the gap analysis must not wait on the rule analysis to tag fields, and tagging must run every time Analyze is clicked on the DCR gap analysis.\n\nFIX: derive the RULE-badge field set from the solution analytic rules the integrate screen already fetches at solution selection (no extra request against the proxy budget), intersected with the destination columns of the gap reports, through the same core analyzer the coverage section uses. The coverage section still reports its set (custom uploads included) and the two are unioned.\n\nVERIFIED 2026-10-02. Pins: five cases on ruleFieldsFromGapReports/unionRuleFields in rule-coverage-state.test.ts, mutation-checked (dropping the alert-rule filter fails the workbook case). Live: Live Preview, PaloAlto-PAN-OS, fresh page load, Analyze Samples in section 3 only - TRAFFIC row subtype -> Activity carries the RULE badge while section 4 still reads \"Run the DCR Gap Analysis first\", i.e. Rule Coverage never ran. The section-4 idle note no longer claims coverage is what lights the badges.\n\nSTILL A DEPENDENCY, NOT FIXED HERE: the rules come from GitHub through the githubPat-injected proxy, not from Azure. Without a PAT the shared egress IP rides GitHub anonymous 60 req/hr, and the early fetch swallows a failure silently - so an install with no PAT can still show no badges and no reason.\nFOLDED INTO the bug-sweep PR 2026-10-05 at the operator request for one PR for the whole sweep (was PR #183).",
+      "verified": "both"
+    },
+    {
       "id": "DBT-122",
       "epic": "DBT",
       "feature": "DBT-F2",
