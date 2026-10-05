@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**67 in the backlog, 1 in progress, 19 done.**
+**67 in the backlog, 2 in progress, 19 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 24 | 15 | 2 |
+| Sentinel Integration | 25 | 15 | 3 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -36,7 +36,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 2 | 0 |
 
-Open work totals 68.
+Open work totals 69.
 
 ## Epics and features
 
@@ -110,14 +110,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 31% (14/45)
+### `DBT` Quality and technical debt _(enabler)_ - 30% (14/46)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 8/25 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 4/8 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 4/9 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 2/7 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -133,7 +133,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (1)
+## In progress (2)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -154,6 +154,23 @@ Started. Anything here with an unfinished dependency is called out on its card.
   because they ask the operator to act; no project history (card ids, dates)
   in visible or tip text; a tip names the real field or computation, never
   restates the label.
+
+- **DBT-126** Clicking an (i) closes its own tip, and inside a label it also toggles the field
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-05 while starting DBT-125, which moves prose into InfoTips,
+  many of them inside <label> elements. Measured against claude-kit
+  standards/info-affordances.md and its reference InfoTip: 1. ONE open flag
+  shared by hover, focus and click. A mouse press focuses the icon (open),
+  then the click toggles it (closed) - so clicking the (i) closes the tip the
+  hover had just opened, and on touch a tap opens and shuts in one gesture. 2.
+  The click calls stopPropagation but NOT preventDefault, so an (i) inside a
+  <label> also activates the labelled control - next to a checkbox it toggles
+  the checkbox. 3. No outside mousedown/touchstart dismissal, and no
+  Enter/Space handling for keyboard users beyond focus. FIX: keep the
+  top-layer popover placement (it works), port the reference open-state model
+  - hovered OR pinned, remember a focus that came from a press, preventDefault
+  + stopPropagation on click, Enter/Space toggle, outside mousedown/touchstart
+  close. DOM pins first, shown failing.
 
 ---
 
