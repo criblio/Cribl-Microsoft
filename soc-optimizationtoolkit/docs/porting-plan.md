@@ -39,6 +39,10 @@ Legacy source root abbreviations used below:
 - `IS-R/` = `Cribl-Microsoft_IntegrationSolution/src/renderer/`
 - `IS-T/` = `Cribl-Microsoft_IntegrationSolution/tests/`
 
+[2026-07-13: legacy moved to `deprecated/Cribl-Microsoft_IntegrationSolution/`
+in the Cribl-Microsoft repo; not carried into the toolkit's own repository, so
+these roots resolve only there. - noted 2026-10-05]
+
 ---
 
 ## 1. Port-unit backlog
@@ -536,7 +540,7 @@ Each unit lands through the established loop:
 4. External surface in the same PR: proxies.yml/policies.yml change with the feature (invariant 4). New Azure-facing proxy entries always carry the Origin-suppressing header allowlist.
 5. Adversarial verify before merge: drive the affected flow end-to-end (live where feasible, as the Phase 1 slice was verified live); code review at high effort for units touching contracts (17, 19, 20); CI gates (lint, typecheck, test, build, boundary lint) green.
 6. One reviewable increment = one unit = one PR/commit train; no unit starts before its dependency units merge.
-7. Legacy stays untouched and runnable as the fallback throughout. When a unit family completes a catalog domain in apps/cribl-app, mark that domain superseded in feature-catalog.md (strangler-fig plan); archival only at roadmap Phase 7. Was: completion in BOTH shells, and a Phase 7 PARITY audit - the parity gate retired with the local target (ADR-0002), so archival now depends on Cloud-shell coverage alone.
+7. Legacy stays untouched and runnable as the fallback throughout. When a unit family completes a catalog domain in apps/cribl-app, mark that domain superseded in feature-catalog.md (strangler-fig plan); archival only at roadmap Phase 7. Was: completion in BOTH shells, and a Phase 7 PARITY audit - the parity gate retired with the local target (ADR-0002), so archival now depends on Cloud-shell coverage alone. [2026-07-13: legacy moved to `deprecated/Cribl-Microsoft_IntegrationSolution/` in the Cribl-Microsoft repo; not carried into the toolkit's own repository. - noted 2026-10-05]
 8. Documentation: CONTEXT.md per package and ADRs updated when a unit changes boundaries or records a cross-cutting decision (secret placeholder convention, JobStatus 'skipped', hash domain, report format are ADR-worthy). Catalog corrections found during mining (ENG-25 scans remote not mirror; GUI-22 emits HTML not Markdown) are applied to the catalog when the owning unit lands.
 9. No emojis anywhere; commit messages follow repo guidelines.
 
