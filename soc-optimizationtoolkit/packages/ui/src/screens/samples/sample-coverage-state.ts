@@ -248,6 +248,21 @@ export function evidenceLabel(evidence: LogTypeEvidence): string {
   }
 }
 
+/**
+ * The compact row noun (DBT-125): "3 detections", "1 workbook". The full
+ * meaning of each evidence kind - evidenceLabel - is said once, in the tip on
+ * the list heading, instead of on every one of up to a few dozen rows.
+ */
+export function evidenceCount(evidence: "detection" | "workbook", n: number): string {
+  return `${n} ${evidence}${n === 1 ? "" : "s"}`;
+}
+
+/** What each row kind means, for the (i) on the list heading. */
+export const EVIDENCE_LEGEND =
+  "Each row names the field a shipped detection filters on, or a shipped " +
+  "workbook queries, and how many do. Rows marked vendor docs come from the " +
+  "vendor's documentation of what it emits, not from this solution.";
+
 export interface LogTypeRecommendation {
   status: RecommendationStatus;
   /** The lead sentence: what is needed, and what has been provided. */

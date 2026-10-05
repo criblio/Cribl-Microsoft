@@ -87,16 +87,16 @@ describe("LogTypeRecommendation", () => {
       [],
     );
     const first = container.querySelector(".log-type-recommendation-list li");
-    expect(first?.textContent).toContain("type");
-    expect(first?.textContent).toContain("a shipped detection filters on it");
-    expect(first?.textContent).toContain("2 items");
+    // Compact since DBT-125: the field and the count stay on the row; what a
+    // "detection" row means is said once, in the heading tip.
+    expect(first?.textContent).toContain("type - 2 detections");
   });
 
   it("uses the singular for a single referencing item", () => {
     const { container } = renderFor(['T | where type == "TRAFFIC"'], []);
     const row = container.querySelector(".log-type-recommendation-list li");
-    expect(row?.textContent).toContain("1 item");
-    expect(row?.textContent).not.toContain("1 items");
+    expect(row?.textContent).toContain("1 detection");
+    expect(row?.textContent).not.toContain("1 detections");
   });
 
   it("is ADVISORY: renders no button, no input and no gate", () => {
@@ -193,7 +193,7 @@ describe("LogTypeRecommendation", () => {
     expect(
       container.querySelectorAll(".log-type-evidence-vendor").length,
     ).toBeGreaterThan(0);
-    expect(container.textContent).toContain("the vendor documents this feed");
+    expect(container.textContent).toContain("Palo Alto Networks docs");
   });
 
   it("reports unreferenced samples neutrally, never as something to fix", () => {

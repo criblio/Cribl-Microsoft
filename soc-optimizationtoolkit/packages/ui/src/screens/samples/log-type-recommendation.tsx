@@ -17,7 +17,7 @@
 
 import type { LogTypeRecommendation as Recommendation } from "./sample-coverage-state";
 import { InfoTip } from "../../components/info-tip";
-import { evidenceLabel } from "./sample-coverage-state";
+import { EVIDENCE_LEGEND, evidenceCount } from "./sample-coverage-state";
 // The picker's formatter, reused rather than reproduced: "the shortest honest
 // unit, deliberately coarse - a hint, never an accounting figure" is exactly the
 // register a byte ESTIMATE belongs in, and a second formatter would be a second
@@ -80,7 +80,7 @@ export function LogTypeRecommendation({
       <span className="field-label">
         Log types this solution needs{" "}
         {/* The caveat qualifies a claim, so it exists only once there is one. */}
-        {entries.length > 0 && <InfoTip text="A minimum, not a catalog. Entries from content miss rules that filter a whole table and ASIM-normalized rules, which name no log type. Entries from vendor documentation say what the vendor emits, not what this solution needs. Provide anything else your environment sends." />}
+        {entries.length > 0 && <InfoTip text={`${EVIDENCE_LEGEND}\n\nA minimum, not a catalog: content-derived rows miss rules that filter a whole table and ASIM-normalized rules, which name no log type. Provide anything else your environment sends.`} />}
       </span>
       <p className="panel-desc">{headline}</p>
 
@@ -108,8 +108,7 @@ export function LogTypeRecommendation({
               <span className="field-hint">
                 {entry.evidence === "vendor" ? (
                   <>
-                    {evidenceLabel(entry.evidence)}
-                    {entry.vendor !== undefined ? ` (${entry.vendor})` : ""}
+                    {entry.vendor ?? "vendor"} docs
                     {entry.doc !== undefined ? ` - ${entry.doc}` : ""}
                     {entry.docUrl !== undefined && (
                       <>
@@ -126,9 +125,8 @@ export function LogTypeRecommendation({
                   </>
                 ) : (
                   <>
-                    {entry.field}, {evidenceLabel(entry.evidence)} -{" "}
-                    {entry.referenceCount} item
-                    {entry.referenceCount === 1 ? "" : "s"}
+                    {entry.field} -{" "}
+                    {evidenceCount(entry.evidence, entry.referenceCount ?? 0)}
                   </>
                 )}
                 {/* The measured volume, stated beside the evidence rather than
