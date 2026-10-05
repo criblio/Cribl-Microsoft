@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**68 in the backlog, 2 in progress, 24 done.**
+**68 in the backlog, 2 in progress, 25 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 8 | 0 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 10 | 4 | 0 |
+| Cross-cutting | 10 | 5 | 1 |
 
 Open work totals 70.
 
@@ -110,7 +110,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 37% (19/52)
+### `DBT` Quality and technical debt _(enabler)_ - 38% (20/53)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -119,7 +119,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 9/26 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 6/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 4/11 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 5/12 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -162,17 +162,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   removed. Seen live section by section. Left IN PROGRESS for the operator to
   review the result before it closes.
 
-- **DBT-131** Find how the Cribl Marketplace accepts a new app version
-  `DBT-F4` `spike` `unconfirmed`
-  OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the
-  new repository to trigger a CI pipeline, with approvals, that publishes the
-  new app version to the Cribl Marketplace. Nothing in this repository says
-  how the Marketplace takes a version - a publish API, an upload to a partner
-  portal, a pull from a GitHub release, or a submission reviewed by Cribl.
-  Find out (Cribl App Platform docs, the Marketplace team), and record what
-  credential the pipeline needs, what artifact it sends (the .tgz from npm run
-  package), and what approval Cribl itself applies, before the pipeline is
-  designed.
+- **DBT-133** Make the package submittable to the Cribl Marketplace
+  `DBT-F4` `story` `settled`
+  FOUND 2026-10-05 by [[DBT-131]], against Cribl's Marketplace requirements.
+  For [[DBT-130]]. Three gaps: 1. react-router (shipped) has a high-severity
+  advisory, GHSA-qwww-vcr4-c8h2, with a non-breaking fix; submission requires
+  high and critical issues resolved. (The other four npm audit findings are
+  dev-only - vitest, postcss, nanoid - and do not ship.) 2.
+  apps/cribl-app/package.json has no Tags object (Tags.products) and no
+  description. 3. The packaged .tgz carries no README.md; the Marketplace
+  requires one with eleven named sections.
 
 ---
 
@@ -730,7 +729,7 @@ Settled and unblocked, sequenced behind now.
   argument/text, mutation-checked.
 
 - **DBT-130** Move the app to its own repository
-  `DBT-F4` `story` `settled` `blocked by DBT-131`
+  `DBT-F4` `story` `settled` `blocked by DBT-133`
   OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of
   criblio/Cribl-Microsoft into a new repository. The plan and the full
   inventory are docs/repo-migration-plan.md. WHAT IS KNOWN: the shipped app is
@@ -1273,7 +1272,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (24)
+## Done (25)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2613,6 +2612,42 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   because this is prose; the checks hold its paths and statuses, not its
   sentences. The coupling inventory is docs/repo-migration-plan.md (Proposed):
   31 items, 10 needing a decision, carried by [[DBT-130]].
+
+- **DBT-131** Find how the Cribl Marketplace accepts a new app version
+  `DBT-F4` `spike` `settled` `verified: none`
+  OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the
+  new repository to trigger a CI pipeline, with approvals, that publishes the
+  new app version to the Cribl Marketplace. Nothing in this repository says
+  how the Marketplace takes a version - a publish API, an upload to a partner
+  portal, a pull from a GitHub release, or a submission reviewed by Cribl.
+  Find out (Cribl App Platform docs, the Marketplace team), and record what
+  credential the pipeline needs, what artifact it sends (the .tgz from npm run
+  package), and what approval Cribl itself applies, before the pipeline is
+  designed. ANSWERED 2026-10-05 from Cribl's published docs
+  (docs.cribl.io/apps/, /apps/admin-guide/, /apps/publish-to-marketplace/): -
+  HOW: sign in to the Cribl Marketplace at packs.cribl.io with Google
+  authentication, open the Apps publishing page, upload the .tgz that npm run
+  package produces, accept the Developer Terms. Cribl then reviews it; the App
+  stays unlisted until Cribl approves, and Cribl contacts the submitter if
+  changes are needed. No timeline is given. - NO API: the docs name no publish
+  API or CLI, and say nothing about how a NEW VERSION of a listed App is
+  published. Admin-side install paths exist (Marketplace catalog, Add App
+  import of a .tgz/URL/Git repository, Live Preview Deploy, and the Terraform
+  criblio_app resource), but nothing publishes to the Marketplace
+  programmatically. - REQUIREMENTS: package.json name unique against published
+  App IDs; a Tags object with a products array, e.g. "Tags": { "products":
+  ["Stream", "Lake", "Search"] }; a README.md with eleven named sections
+  (title and summary, what it does, when to use it, before you install,
+  installation, configuration, how to use, permissions and external access,
+  data and storage, support model, known limitations and troubleshooting);
+  high and critical vulnerabilities resolved. - CONSEQUENCE for DBT-130: a
+  version change can trigger a pipeline that builds, gates on approval and
+  produces the .tgz, but the last step - submitting it to the Marketplace - is
+  a manual upload by a signed-in person unless the Marketplace team offers an
+  API the docs do not describe. - READINESS GAPS found on the way (filed as
+  DBT-133): package.json has no Tags and no description; the packaged .tgz
+  carries no README.md at all; react-router (shipped) has a high-severity
+  advisory with a non-breaking fix.
 
 - **DBT-132** Prepare the repository move: the app stands alone, and the extraction is rehearsed
   `DBT-F4` `enabler` `settled` `verified: live`

@@ -1342,7 +1342,8 @@
       "dependsOn": [
         "DBT-129",
         "DBT-131",
-        "DBT-132"
+        "DBT-132",
+        "DBT-133"
       ],
       "title": "Move the app to its own repository",
       "detail": "OPERATOR INTENT 2026-10-05: migrate the SOC Optimization Toolkit out of criblio/Cribl-Microsoft into a new repository. The plan and the full inventory are docs/repo-migration-plan.md.\n\nWHAT IS KNOWN: the shipped app is self-contained; the build and checks are not (two core tests and the schema-asset extractor read files outside the app, the docs gate walks the parent folder, CI, hooks and three git-history checks assume the soc-optimizationtoolkit/ prefix). A history-preserving extraction with git filter-repo is viable and can drop 51 old tarballs from history. Azure/CustomDeploymentTemplates/DCR-Templates/ must stay in this repository: Cribl's published docs link it.\n\nUNDECIDED - the decisions in the plan, the two that shape everything else first: the new repo's name and owner, and whether the app keeps its soc-optimizationtoolkit/ subdirectory or is flattened to the repo root.\n\nDECIDED 2026-10-05 (operator): keep the soc-optimizationtoolkit/ subdirectory; the criblio org owns the new repository; it holds ONLY the app and what it strictly needs, for publishing to the Cribl Marketplace - no DCR ARM templates, no deprecated tree; releases are triggered by a version change through a CI pipeline with approvals that publishes to the Cribl Marketplace. Recorded in docs/repo-migration-plan.md (Decided) and backlog.md section 22.\nSTILL UNDECIDED: issue transfer and bug triage, shared hooks, what the old repository keeps of the tarball, branch protection - and how the Cribl Marketplace accepts a new version, which the release pipeline needs before it can be written.\nThe one real unknown - how the Cribl Marketplace takes a new app version - is its own spike, [[DBT-131]]; the release pipeline waits on it. The other open items (issue transfer, shared hooks, the old repository tarball, branch protection) are choices made while doing the move.\n\nSPLIT 2026-10-05: the preparation that does not wait on the Marketplace question is [[DBT-132]]; this card is the move itself plus the release pipeline.",
@@ -1368,12 +1369,13 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "spike",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
-      "settled": "unconfirmed",
+      "settled": "settled",
       "dependsOn": [],
       "title": "Find how the Cribl Marketplace accepts a new app version",
-      "detail": "OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the new repository to trigger a CI pipeline, with approvals, that publishes the new app version to the Cribl Marketplace. Nothing in this repository says how the Marketplace takes a version - a publish API, an upload to a partner portal, a pull from a GitHub release, or a submission reviewed by Cribl. Find out (Cribl App Platform docs, the Marketplace team), and record what credential the pipeline needs, what artifact it sends (the .tgz from npm run package), and what approval Cribl itself applies, before the pipeline is designed."
+      "detail": "OPEN 2026-10-05 for [[DBT-130]]. The operator wants a version change in the new repository to trigger a CI pipeline, with approvals, that publishes the new app version to the Cribl Marketplace. Nothing in this repository says how the Marketplace takes a version - a publish API, an upload to a partner portal, a pull from a GitHub release, or a submission reviewed by Cribl. Find out (Cribl App Platform docs, the Marketplace team), and record what credential the pipeline needs, what artifact it sends (the .tgz from npm run package), and what approval Cribl itself applies, before the pipeline is designed.\n\nANSWERED 2026-10-05 from Cribl's published docs (docs.cribl.io/apps/, /apps/admin-guide/, /apps/publish-to-marketplace/):\n- HOW: sign in to the Cribl Marketplace at packs.cribl.io with Google authentication, open the Apps publishing page, upload the .tgz that npm run package produces, accept the Developer Terms. Cribl then reviews it; the App stays unlisted until Cribl approves, and Cribl contacts the submitter if changes are needed. No timeline is given.\n- NO API: the docs name no publish API or CLI, and say nothing about how a NEW VERSION of a listed App is published. Admin-side install paths exist (Marketplace catalog, Add App import of a .tgz/URL/Git repository, Live Preview Deploy, and the Terraform criblio_app resource), but nothing publishes to the Marketplace programmatically.\n- REQUIREMENTS: package.json name unique against published App IDs; a Tags object with a products array, e.g. \"Tags\": { \"products\": [\"Stream\", \"Lake\", \"Search\"] }; a README.md with eleven named sections (title and summary, what it does, when to use it, before you install, installation, configuration, how to use, permissions and external access, data and storage, support model, known limitations and troubleshooting); high and critical vulnerabilities resolved.\n- CONSEQUENCE for DBT-130: a version change can trigger a pipeline that builds, gates on approval and produces the .tgz, but the last step - submitting it to the Marketplace - is a manual upload by a signed-in person unless the Marketplace team offers an API the docs do not describe.\n- READINESS GAPS found on the way (filed as DBT-133): package.json has no Tags and no description; the packaged .tgz carries no README.md at all; react-router (shipped) has a high-severity advisory with a non-breaking fix.",
+      "verified": "none"
     },
     {
       "id": "DBT-132",
@@ -1389,6 +1391,20 @@
       "title": "Prepare the repository move: the app stands alone, and the extraction is rehearsed",
       "detail": "STARTED 2026-10-05 (operator: prepare the move; keep the two legacy test fixtures). For [[DBT-130]]. (1) Vendor the two legacy JSON files the core provenance pins read from deprecated/ (coverage-model and entra-diagnostics) as frozen fixtures inside the app. (2) Write the git filter-repo extraction and the new-repository root files (a trimmed CLAUDE.md, README, .gitignore, .gitattributes, the CI workflow, the .claude hooks) per the decisions in docs/repo-migration-plan.md. (3) Rehearse it locally: extract into a scratch directory and run install, typecheck, the full suite and every check-* there. Creating the criblio repository, and pushing to it, stay the operator.\n\nDONE 2026-10-05. (1) The two legacy files are frozen copies inside the app; the provenance pins read them, and an equality pin holds each to its original while the original exists (mutation-checked). (2) scripts/repo-move/: extract.sh (clone, filter-repo, setup commit) and postprocess.mjs (root files, CLAUDE.md composed from this repository's binding sections, QUICK_START links made absolute, schema extractor removed, doc pointers into the old repository turned into links), with a README of the operator steps. (3) Rehearsed end to end into a scratch directory: 863 commits, 6.4 MiB, every CI gate green inside the extract with nothing from outside the app. verified: live because the evidence is that real run, not unit pins - the scripts have none. Two script defects the rehearsal found were fixed first.",
       "verified": "live"
+    },
+    {
+      "id": "DBT-133",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-131"
+      ],
+      "title": "Make the package submittable to the Cribl Marketplace",
+      "detail": "FOUND 2026-10-05 by [[DBT-131]], against Cribl's Marketplace requirements. For [[DBT-130]]. Three gaps:\n1. react-router (shipped) has a high-severity advisory, GHSA-qwww-vcr4-c8h2, with a non-breaking fix; submission requires high and critical issues resolved. (The other four npm audit findings are dev-only - vitest, postcss, nanoid - and do not ship.)\n2. apps/cribl-app/package.json has no Tags object (Tags.products) and no description.\n3. The packaged .tgz carries no README.md; the Marketplace requires one with eleven named sections."
     }
   ],
   "features": [

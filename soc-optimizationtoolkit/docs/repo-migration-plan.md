@@ -73,6 +73,21 @@ Two defects in the scripts were found by the rehearsal and fixed before this was
 written: re-adding the tarball into a release/ directory the filter had emptied,
 and the four Living backlog lines check-docs failed.
 
+## How a version reaches the Cribl Marketplace - answered 2026-10-05
+
+[[DBT-131]]. Cribl's published docs describe one path: sign in to
+packs.cribl.io with Google, upload the `.tgz` from `npm run package` on the
+Apps publishing page, accept the Developer Terms, and wait for Cribl's review -
+the App is unlisted until Cribl approves it. There is no documented publish API
+or CLI, and nothing on how a new version of a listed App is published.
+
+So the version-triggered pipeline the operator wants can automate everything up
+to the artifact - build, every gate, an approval, the `.tgz` attached to a
+release - and the submission itself is a manual upload, unless the Marketplace
+team offers an API the docs do not describe. Submission also requires a
+`Tags.products` array in `package.json`, a README.md with eleven named sections
+inside the package, and no high or critical vulnerabilities ([[DBT-133]]).
+
 ## Decisions needed first
 
 | # | Where | Decision |
