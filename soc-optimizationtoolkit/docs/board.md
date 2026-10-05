@@ -2391,7 +2391,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   #183).
 
 - **DBT-122** Field Mappings table shows an example value from the sample
-  `DBT-F2` `story` `settled` `verified: pins`
+  `DBT-F2` `story` `settled` `verified: both`
   OPERATOR REQUEST 2026-10-02: the DCR Gap Analysis Field Mappings table
   (packages/ui/src/screens/mapping-review/mapping-review-section.tsx, the
   per-log-type table with Source Field / Type / Dest Field / Type / Confidence
@@ -2428,4 +2428,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Adversarial review approved; reviewer confirmed the new tests fail with the
   source change reverted. NOT YET SEEN LIVE - verified stays pins until a Live
   Preview check. LEFT OUT: Not checked in the Live Preview with real data;
-  that is out of scope here because live Cribl/Azure calls are forbidden.
+  that is out of scope here because live Cribl/Azure calls are forbidden. SEEN
+  LIVE 2026-10-05: Live Preview, PaloAlto-PAN-OS TRAFFIC after Analyze Samples
+  - the Example Value column carries real sample values (subtype end,
+  generated_time 2012/04/10 04:39:58, srcloc 192.168.0.0-192.168.255.255),
+  beside the RULE badge on subtype. Shipped in 1.12.8.

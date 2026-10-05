@@ -8,7 +8,7 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
-## Unreleased
+## 1.12.8
 
 **Captures with hyphenated keys now split by their real log type, and some will
 regroup (DBT-84).** The capture splitter read `key=value` lines with a key class
