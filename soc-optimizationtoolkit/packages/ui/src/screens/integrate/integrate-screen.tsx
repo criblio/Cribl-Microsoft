@@ -182,7 +182,10 @@ import {
   unionRuleFields,
 } from "../rule-coverage/rule-coverage-state";
 import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
-import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
+import {
+  PIPELINE_PREVIEW_TIP,
+  PipelinePreviewSection,
+} from "../pipeline-preview/pipeline-preview-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
 import { createTableSchemaResolver } from "../table-picker/table-schema-resolver";
 import { useWorkspaceTables } from "../table-picker/use-workspace-tables";
@@ -2256,6 +2259,7 @@ export function IntegrateScreen({
           <span className="field-hint pipeline-preview-summary-hint">
             what a build would generate
           </span>
+          <InfoTip text={PIPELINE_PREVIEW_TIP} />
         </summary>
         <PipelinePreviewSection
           key={contentResetKey}
@@ -2443,6 +2447,15 @@ export function IntegrateScreen({
             Routable - selectable from the Cribl Routes page
           </option>
         </select>
+        {/* Stays VISIBLE (GEN-16): it is the one instruction this choice
+            creates, and the only link between it and the action that
+            satisfies it. Everything else about the shapes is in the tip. */}
+        {packShape === "routable" && (
+          <span className="field-hint">
+            The Sentinel destination must already exist in the worker group -
+            Deploy is what puts it there.
+          </span>
+        )}
       </label>
       {/* GEN-16. The dependency a routable pack creates, checked rather than
           described. Never blocks the build - see the effect that fills this. */}

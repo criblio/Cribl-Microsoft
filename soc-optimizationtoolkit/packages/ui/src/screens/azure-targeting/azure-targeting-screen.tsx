@@ -41,6 +41,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { InfoTip } from "../../components/info-tip";
 import {
   DEFAULT_WORKSPACE_POLL_ATTEMPTS,
   checkSentinelEnabled,
@@ -678,13 +679,10 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
 
   return (
     <section className="panel">
-      <h2 className="panel-title">Azure targeting</h2>
-      <p className="panel-desc">
-        Browse the subscriptions, workspaces, and resource groups this
-        connection can see, create what is missing, then commit the chosen
-        scope with Use this target. Browsing never switches the committed
-        scope by itself.
-      </p>
+      <h2 className="panel-title">
+        Azure targeting{" "}
+        <InfoTip text="Browse the subscriptions, workspaces and resource groups this connection can see, create what is missing, then commit the scope with Use this target. Browsing never changes the committed scope by itself." />
+      </h2>
       <div
         className={`status-bar ${
           subsLoad.status === "loading"
@@ -717,7 +715,10 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
       {subsLoad.status === "error" && <pre className="result">{subsLoad.error}</pre>}
       <div className="form-grid">
         <label className="field">
-          <span className="field-label">Subscription</span>
+          <span className="field-label">
+            Subscription{" "}
+            <InfoTip text="Only subscriptions in the Enabled state are listed." />
+          </span>
           {subsLoad.status === "loaded" && subsLoad.list.length > 0 ? (
             <SearchableSelect
               options={subsLoad.list.map((sub) => ({
@@ -744,12 +745,12 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               </option>
             </select>
           )}
-          <span className="field-hint">
-            Only subscriptions in the Enabled state are listed.
-          </span>
         </label>
         <label className="field">
-          <span className="field-label">Log Analytics workspace</span>
+          <span className="field-label">
+            Log Analytics workspace{" "}
+            <InfoTip text="Selecting a workspace proposes its resource group and location." />
+          </span>
           {depLoad.status === "loaded" && wsOptions.length > 0 ? (
             <SearchableSelect
               options={[
@@ -783,9 +784,6 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               </option>
             </select>
           )}
-          <span className="field-hint">
-            Selecting a workspace proposes its resource group and location.
-          </span>
         </label>
         <label className="field">
           <span className="field-label">Resource group (for DCRs)</span>
@@ -856,17 +854,17 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             rgOptionsWithSelection.length === 0 &&
             browseSub !== "" && (
               <span className="field-hint">
-                Azure returned an empty resource-group list for this
-                subscription rather than an error. That is also what an identity
-                with no role assignment on them sees, so it does not confirm the
-                subscription is empty - check that this app registration has a
-                role (Reader is enough to list) at the subscription or resource
-                group scope.
+                Azure returned no resource groups - this app registration may
+                have no role here.{" "}
+                <InfoTip text="An empty list is also what an identity with no role assignment sees, so it does not confirm the subscription is empty. Check that this app registration has a role at the subscription or resource group scope - Reader is enough to list." />
               </span>
             )}
         </label>
         <label className="field">
-          <span className="field-label">Location</span>
+          <span className="field-label">
+            Location{" "}
+            <InfoTip text="Derived from the selected resource group or workspace; used by the create actions below." />
+          </span>
           <input
             type="text"
             value={location}
@@ -876,10 +874,6 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             spellCheck={false}
             className="mono"
           />
-          <span className="field-hint">
-            Derived from the selected resource group or workspace; used by the
-            create actions below.
-          </span>
         </label>
       </div>
       {depLoad.status === "error" && <pre className="result">{depLoad.error}</pre>}
@@ -888,7 +882,10 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
         <span className="field-label">Create what is missing</span>
         <div className="form-grid">
           <label className="field">
-            <span className="field-label">New resource group name</span>
+            <span className="field-label">
+              New resource group name{" "}
+              <InfoTip text="Letters, digits, underscore, hyphen, parentheses and period only - other characters are removed as you type." />
+            </span>
             <input
               type="text"
               value={newRgName}
@@ -897,10 +894,6 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               autoComplete="off"
               spellCheck={false}
             />
-            <span className="field-hint">
-              Letters, digits, underscore, hyphen, parentheses, and period
-              only (other characters are stripped as you type).
-            </span>
           </label>
           <label className="field">
             <span className="field-label">New workspace name</span>
@@ -913,8 +906,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               spellCheck={false}
             />
             <span className="field-hint">
-              Created in the selected resource group with the legacy defaults
-              (PerGB2018, 90-day retention).
+              Created with PerGB2018 pricing and 90-day retention.
             </span>
           </label>
         </div>

@@ -189,6 +189,12 @@ function ReductionRuleRow({ rule }: { rule: ReductionRuleView }) {
   );
 }
 
+/** What the preview is, for the (i) on its summary line (DBT-125). */
+export const PIPELINE_PREVIEW_TIP =
+  "The exact Cribl pipelines, reduction rules and routes a build would generate " +
+  "from the approved mappings, one pipeline pair per log type. Read-only - " +
+  "nothing here is deployed until you build and install the pack.";
+
 export function PipelinePreviewSection({
   inputs,
   packName,
@@ -252,12 +258,6 @@ export function PipelinePreviewSection({
 
   return (
     <div className="pipeline-preview">
-      <p className="panel-desc">
-        The exact Cribl pipeline a content-driven build would generate from the
-        approved mappings, one pipeline per log type. Read-only: generation runs
-        in the toolkit core; nothing here is deployed until you build and install
-        the pack.
-      </p>
 
       {/* Honest validator signal (task item 3). */}
       {view.valid ? (

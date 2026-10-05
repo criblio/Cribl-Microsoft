@@ -1086,10 +1086,10 @@ describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
     const { container } = renderWithGroup();
     await chooseRoutable(container);
     const hint = [...container.querySelectorAll(".field-hint")].find((el) =>
-      /must ALREADY EXIST in the worker group/i.test(el.textContent ?? ""),
+      /must already exist in the worker group/i.test(el.textContent ?? ""),
     );
     expect(hint).toBeTruthy();
-    expect(hint?.textContent).toMatch(/Deploy is what puts them there/i);
+    expect(hint?.textContent).toMatch(/Deploy is what puts it there/i);
   });
 });
 

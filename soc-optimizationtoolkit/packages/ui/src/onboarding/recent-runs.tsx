@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ONBOARD_TABLE_JOB_KIND } from "@soc/core";
 import type { JobRecord, OnboardTableOutcome } from "@soc/core";
 import { usePorts } from "../ports-context";
+import { InfoTip } from "../components/info-tip";
 import { formatStepLine } from "./step-line";
 import { summaryText } from "./summary";
 
@@ -49,16 +50,24 @@ export interface RecentRunsProps {
   detail?: (job: JobRecord) => string;
 }
 
+/**
+ * How many runs show before "Show all" (DBT-125). The latest few answer "what
+ * happened last time"; a page that printed every run ever recorded put thirty
+ * rows under the deploy button.
+ */
+export const RECENT_RUNS_SHOWN = 5;
+
 export function RecentRuns({
   refreshToken,
   kind = ONBOARD_TABLE_JOB_KIND,
-  title = "Recent runs (persisted job records - the app's run log)",
+  title = "Recent runs",
   label = runLabel,
   detail = runDetail,
 }: RecentRunsProps) {
   const { ports } = usePorts();
   const [jobs, setJobs] = useState<JobRecord[] | null>(null);
   const [error, setError] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +84,10 @@ export function RecentRuns({
 
   return (
     <div className="discovery-result">
-      <span className="field-label">{title}</span>
+      <span className="field-label">
+        {title}{" "}
+        <InfoTip text="The app's own run log - every recorded run, newest first, kept in this app's storage." />
+      </span>
       <div className="panel-controls">
         <button className="run-button" onClick={() => void load()}>
           Refresh
@@ -86,12 +98,19 @@ export function RecentRuns({
         <p className="panel-desc">No runs recorded yet in this app context.</p>
       )}
       {jobs !== null &&
-        jobs.map((job) => (
+        (showAll ? jobs : jobs.slice(0, RECENT_RUNS_SHOWN)).map((job) => (
           <details key={job.id}>
             <summary className="panel-desc">{label(job)}</summary>
             <pre className="result">{detail(job)}</pre>
           </details>
         ))}
+      {jobs !== null && jobs.length > RECENT_RUNS_SHOWN && (
+        <button className="run-button" onClick={() => setShowAll((v) => !v)}>
+          {showAll
+            ? `Show the latest ${RECENT_RUNS_SHOWN}`
+            : `Show all ${jobs.length} runs`}
+        </button>
+      )}
     </div>
   );
 }

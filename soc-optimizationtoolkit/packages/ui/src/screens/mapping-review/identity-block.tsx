@@ -128,17 +128,24 @@ function IdentityFieldRow({
       </div>
       {!missing && (
         <span className="field-hint">
-          {status.status === "sample"
-            ? "provided by the sample data - replacing it adds a constant that " +
-              "overwrites the per-event value for every event"
-            : "enrichment constant - replace it here or in the enrichment fields"}
+          {status.status === "sample" ? (
+            <>
+              from the sample - replacing it overwrites every event's value{" "}
+              <InfoTip text="Replacing adds an enrichment constant, which overwrites the per-event value the sample carries for every event." />
+            </>
+          ) : (
+            <>
+              enrichment constant{" "}
+              <InfoTip text="Added to every event. Replace it here or in the enrichment fields." />
+            </>
+          )}
         </span>
       )}
       {options.length > 0 && (
         <div className="identity-suggestions">
           <span className="field-hint">
-            Known {field} values for this vendor - pick the one matching your
-            feed:
+            Known values:{" "}
+            <InfoTip text={`${field} values this vendor is known to send. Pick the one matching your feed.`} />
           </span>
           {options.map((option) => (
             <button
