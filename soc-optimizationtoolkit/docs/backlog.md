@@ -2786,3 +2786,27 @@ in one sitting. The reasoning that decided each, and what it rules out:
   removing `aws.account`, `Source IP`, `src-ip`). DBT-99 is also bounded:
   expand only the ArcSight-spec escapes, with `\n`/`\r` becoming real control
   characters. GEN-5's leg 1 (kept and coerced fields) did not wait on this.
+
+## 22. Repository move: four decisions answered - 2026-10-05
+
+The pre-migration docs review (DBT-129) produced an inventory of everything
+tying the app to this repository (docs/repo-migration-plan.md). The operator
+answered the four decisions that shape the rest of the move (DBT-130):
+
+- **Keep the soc-optimizationtoolkit/ subdirectory.** Rejected: flattening to
+  the repository root - cleaner, but every path the CI filters, the hooks,
+  board-freshness and the release-drift check hard-code would change in the
+  same commit, for a cosmetic gain.
+- **The criblio organization owns it.** Rejected: a personal account.
+- **Only the app and what it strictly needs.** The point of the new repository
+  is the smallest content from which the app is published to the Cribl
+  Marketplace. Rejected: vendoring the DCR ARM templates (two copies to keep in
+  step, for an extractor the shipped app never runs) and fetching them at a
+  pinned SHA (builds depend on the old repository). Consequence, pending the
+  operator's confirmation: the schema asset ships frozen, and the provenance
+  pins that read deprecated/ legacy files are retired.
+- **A version change triggers the release.** A CI pipeline with an approval
+  gate builds the tarball and publishes the new version to the Cribl
+  Marketplace. Rejected: GitHub Releases and the committed-tarball model as
+  the distribution channel. Unknown and blocking the pipeline: how the
+  Marketplace accepts a new version.

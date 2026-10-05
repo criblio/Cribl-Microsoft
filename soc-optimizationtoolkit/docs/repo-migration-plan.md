@@ -26,6 +26,37 @@ The files it needs from outside follow in one commit rather than with their
 history. Every commit SHA changes: keep this repository archived and publish
 filter-repo's commit-map so SHA citations in the docs can still be followed.
 
+## Decided 2026-10-05
+
+The operator answered the four decisions that shape the rest:
+
+- **Layout - keep the subdirectory.** The new repository holds
+  `soc-optimizationtoolkit/` as a folder, so CI path filters, the hooks,
+  board-freshness and the release-drift check keep their paths. Only
+  check-docs' repoRoot needs repointing (rows 10 and the path items below).
+- **Owner - the criblio organization** (rows 6 and 9). The repository name,
+  branch protection and the gh account are still to be set when it is created.
+- **Content - the app and what it strictly needs, nothing else.** The goal is
+  the smallest repository from which the app can be published to the Cribl
+  Marketplace, so the DCR ARM templates and the deprecated tree do NOT move
+  (rows 1, 2, 3, 8). Read as: the committed
+  `packages/core/src/assets/dcr-template-schemas.json` ships as a frozen asset,
+  and the extractor script and `check-schema-asset` stay behind or are retired;
+  the two core tests that read legacy files under `deprecated/` lose their
+  source, so their provenance pins are retired rather than vendored. This
+  reading is the operator's goal applied to rows 1-3; confirm it before the
+  pins are deleted.
+- **Releases - a version change triggers the release** (row 7). In the new
+  repository a version bump starts a CI pipeline with an approval gate that
+  builds the tarball and publishes the new app version to the Cribl
+  Marketplace. The committed-tarball model in `apps/cribl-app/release/` is
+  replaced by that pipeline; how the Marketplace accepts a version (its
+  publish API or upload path) is not yet known and must be found out before
+  the pipeline can be written.
+
+Still open: rows 4 (issues and bug triage), 5 (shared hooks), what the old
+repository keeps of the tarball, and branch protection.
+
 ## Decisions needed first
 
 | # | Where | Decision |
