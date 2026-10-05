@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**67 in the backlog, 0 in progress, 19 done.**
+**67 in the backlog, 1 in progress, 19 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 3 | 0 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 23 | 15 | 1 |
+| Sentinel Integration | 24 | 15 | 2 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -36,7 +36,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 8 | 2 | 0 |
 
-Open work totals 67.
+Open work totals 68.
 
 ## Epics and features
 
@@ -110,14 +110,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 32% (14/44)
+### `DBT` Quality and technical debt _(enabler)_ - 31% (14/45)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 8/25 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 4/7 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 4/8 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125 |
 | `DBT-F3` Diagram fidelity | Dataflow | 0/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 2/7 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -133,11 +133,27 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (0)
+## In progress (1)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
-_Nothing here._
+- **DBT-125** Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)
+  `DBT-F2` `story` `settled`
+  OPERATOR REQUEST 2026-10-05: there are too many words on the Sentinel
+  Integration page, in every section and again whenever a section updates.
+  Streamline it without losing context; important words go inside an (i) icon.
+  MEASURED 2026-10-05 on feature/streamline-integrate-copy (stacked on the bug
+  sweep): about 2,600 words of visible prose across 15 files the page renders,
+  and none of it behind an InfoTip. Largest: integrate-screen 549,
+  azure-targeting 280, content-install 243, solution-browser 231,
+  sample-intake 190, rule-coverage 169, lake-panel 142, mapping-review 138,
+  pipeline-preview 129, capture-panel 122. RULES (claude-kit
+  standards/info-affordances.md): one lead line per section; definitions and
+  how-it-works behind an InfoTip on the heading, control or column they
+  explain; warnings, confirmations, costs and gate reasons STAY visible
+  because they ask the operator to act; no project history (card ids, dates)
+  in visible or tip text; a tip names the real field or computation, never
+  restates the label.
 
 ---
 

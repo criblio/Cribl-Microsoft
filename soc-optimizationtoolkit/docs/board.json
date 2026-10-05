@@ -1266,6 +1266,18 @@
       "dependsOn": [],
       "title": "check-board does not scan decision questions and option details for dangling links",
       "detail": "FOUND 2026-10-02 reviewing the DBT-120 follow-up (fix/audit-board 6f591f6). board.mjs and board-html.mjs now share one LINK pattern and knownIds(), so they agree on what a link is - but richText renders [[links]] in decision.question and option.detail too, while danglingLinks only scans title, detail and priorityWhy. A dangling link written in a decision would show as gone on the kanban while check-board stays silent. FIX: add the decision fields to LINKED_FIELDS and pin it with a planted fixture. Later because no decision on the board currently carries a link."
+    },
+    {
+      "id": "DBT-125",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)",
+      "detail": "OPERATOR REQUEST 2026-10-05: there are too many words on the Sentinel Integration page, in every section and again whenever a section updates. Streamline it without losing context; important words go inside an (i) icon.\n\nMEASURED 2026-10-05 on feature/streamline-integrate-copy (stacked on the bug sweep): about 2,600 words of visible prose across 15 files the page renders, and none of it behind an InfoTip. Largest: integrate-screen 549, azure-targeting 280, content-install 243, solution-browser 231, sample-intake 190, rule-coverage 169, lake-panel 142, mapping-review 138, pipeline-preview 129, capture-panel 122.\n\nRULES (claude-kit standards/info-affordances.md): one lead line per section; definitions and how-it-works behind an InfoTip on the heading, control or column they explain; warnings, confirmations, costs and gate reasons STAY visible because they ask the operator to act; no project history (card ids, dates) in visible or tip text; a tip names the real field or computation, never restates the label."
     }
   ],
   "features": [
