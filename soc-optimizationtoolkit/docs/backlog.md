@@ -1,10 +1,9 @@
 # Backlog
 
-Status: Living - the open work, newest decisions first. The most honest document in the repo.
+Status: Living - the reasoning behind open work and decisions; sections are numbered in the order they were filed, newest last. The most honest document in the repo.
 
-Updated 2026-08-12 (branch `feature/capability-preflight-mapping`). Each item
-states enough context to be picked up cold. Ordered by priority within each
-group.
+Each item states enough context to be picked up cold. Priority and ordering live
+in `board.json` (rendered as `board.md`), not here.
 
 ## 1. Capability model - COMPLETE, with two follow-ons
 
@@ -12,8 +11,9 @@ All five plan steps have shipped. See
 [capability-model-plan.md](capability-model-plan.md). App modes are gone; what an
 operator can do is measured by a permission audit and annotated, never hidden.
 
-Two things remain, both carried below: step 4 has no UI, and the audit's age has
-no home. Neither blocks anything.
+Two things remained, both carried below. Step 4's offer now sits beside the
+actions (Integrate, Batch Deploy, DCR Automation - see section 16, D-2); the
+audit's age still has no home. Neither blocks anything.
 
 **Step 2 - audit lifecycle. DONE (2026-08-06).** The pure policy
 (`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
@@ -63,9 +63,9 @@ a denied route stays clickable, pinned by DOM tests over the frame (which had no
 direct coverage before this).
 
 Per-route capabilities live in ONE shared `ROUTE_CAPABILITIES` map rather than in
-each shell's route table, so the two shells cannot disagree about what an
-operator can do. Two routes deliberately depart from their old coarse value, and
-both are worth remembering:
+a shell's route table (written when there were two shells, so they could not
+disagree about what an operator can do; ADR-0002 left one). Two routes
+deliberately depart from their old coarse value, and both are worth remembering:
 
 - **`preflight` was `azure`, now `[]`.** It is the screen that RUNS the audit, so
   gating it on permissions is circular - an operator whose audit says "no access"
@@ -82,6 +82,9 @@ plus a preflight probe for it.** The same question came up three times - here,
 in item 4's unmeasured listers, and across item 6 - and it is answered once:
 extend the taxonomy rather than reusing a neighbouring capability or leaving
 surfaces unmeasured. Do the extension as ONE piece of work serving all three.
+
+> ANSWERED 2026-08-31: the connection bar (section 18a, D-1). The paragraph
+> below is kept as history.
 
 **Not yet done in step 3:** the audit's AGE and a manual re-check still have no
 home. The nav was the intended surface for it, and annotating individual items
@@ -111,6 +114,10 @@ out of work that might succeed.
 Three cases correctly produce nothing: an unresolved check, an UNKNOWN verdict
 (not a denial - verified live, where broken Cribl auth produced unknowns and no
 offers), and a denied READ (no artifact exists by design).
+
+**Follow-on - DONE 2026-08-31 (section 16).** The offer now also sits beside
+Integrate's deploy, Batch Deploy and DCR Automation, each with its own
+`onProduce`. The original note, kept as history:
 
 **Follow-on:** the offer is only on the permission panel. Placing it beside the
 ACTIONS themselves - Integrate's deploy, Batch Deploy, DCR Automation - is a
@@ -408,6 +415,9 @@ leaving them unmeasured or reusing a neighbouring capability. Note this is the
 same extension item 1 needs and item 6 needs: ONE piece of work, not three, and
 each new capability needs a real probe or it contributes nothing.
 
+> ANSWERED 2026-08-31 (18b, D-3) and BUILT: capabilities travel in PortsContext
+> (`packages/ui/src/ports-context.ts`). The question below is kept as history.
+
 **Open question 2: prop-drilling.** `capabilities`/`capabilityContext` are
 threaded from the shell into each screen that lists (Integrate ->
 AzureTargeting, DcrInventoryPanel so far). At ~8 listers that is the duplication
@@ -474,7 +484,8 @@ turns a measured zero into an unmeasured absence, which is item 4 in a new place
 
 **Worth settling when picking it up:**
 
-- **Does the screen only report, or does it produce?** The end state matching
+- **Does the screen only report, or does it produce?** ANSWERED 2026-08-31:
+  produce, in scope (section 18c, D-4). The end state matching
   item 3's "still owed" note is an enrichment that reaches the GENERATED
   PIPELINE - a function that reconstructs `Account` from the raw fields, say.
   Reporting first is a legitimate slice; just do not let it become the finished
@@ -1369,9 +1380,10 @@ Two things learned while packaging, worth knowing next time:
   artifact is ~500 KB and that `static/assets` holds the real JS/CSS before
   trusting a package.
 
-**Still installed: 1.2.212.** Packaging does not deploy. The lab workspace runs
-the installed app, not `release/`, so this work stays invisible there until
-someone uploads the new tgz through the Apps page.
+**Installed build: last observed 1.11.3 (2026-09-04, section 20); packaging
+does not deploy.** Re-read the Apps page before relying on this. The lab
+workspace runs the installed app, not `release/`, so this work stays invisible
+there until someone uploads the new tgz through the Apps page.
 
 ## 9. Copy and UX
 
@@ -1382,9 +1394,14 @@ sample from the store. The deletion is correct and intended (samples are
 solution-scoped); the wording is what misleads. Saying "are deleted" would match
 the behavior.
 
+DONE - DBT-9: the copy now says Clearing deletes the samples
+(`solution-browser.tsx`); see section 11.
+
 **Nested scrolling on tall pages.** The 558-row solution list scrolls inside a
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
-wheel chaining at the list's end, but the three-level nesting remains.
+wheel chaining at the list's end, but the three-level nesting remains. Since
+1.12.8 (DBT-14, section 21) contain applies only while the list overflows
+(`.solution-browser-list--scrollable`); the nesting itself remains by decision.
 
 ## 10. Diagram fidelity
 
@@ -1659,7 +1676,9 @@ runs in the gap-analysis path.
 
 What this needs deciding before it is built:
 
-- **Does maintenance re-analyse, or read a stored analysis?** Re-analysing needs
+- **Does maintenance re-analyse, or read a stored analysis?** ANSWERED
+  2026-08-31: re-analyse against the live table schema (section 18d, D-6).
+  Re-analysing needs
   the original samples, which the pack carries (`PackVendorSample`) but which may
   no longer represent live traffic. Reading a stored verdict is cheap and goes
   stale silently. A third option - re-analyse against the LIVE table schema and
@@ -1751,9 +1770,9 @@ The guards stay; what was wrong was the module's stated model, not the code. The
 full verdict table, and what each row actually observed, is in the plan's
 "Needs live verification" section.
 
-**And it is packaged.** ADR-0003 shipped in full in 1.12.0; **1.12.1 is current**
-(see the release entry above). The "still 1.11.15, everything unreleased" claim
-was true when written on 2026-08-23 and stopped being true the next day.
+**And it is packaged.** ADR-0003 shipped in full in 1.12.0 (1.12.1 was current
+when this was written, 2026-08-25; section 8's IS CURRENT line is the live
+claim). The "still 1.11.15, everything unreleased" claim was true when written on 2026-08-23 and stopped being true the next day.
 
 **The run's real yield was defects, not confirmations.** Four PRODUCT defects,
 all silent, the first three each enough on their own to stop the Lake path: the
