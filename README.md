@@ -1,5 +1,7 @@
 # Cribl-Microsoft Integration
 
+Status: Living - the repository front page; corrected to match the code.
+
 Tooling for integrating Cribl Stream with Microsoft Sentinel and Azure
 Monitor. There are two ways to use this repository: the **SOC Optimization
 Toolkit**, which automates the whole path, and the **DCR templates**, which
@@ -27,7 +29,8 @@ that takes a Sentinel solution from selection to production:
 - **Pack Maintenance** - inspect built packs, edit their mappings, rebuild
   at the next version, and install to multiple worker groups with in-place
   upgrades.
-- **SIEM Migration** - upload a Splunk or IBM QRadar detection-rule export;
+- **SIEM Migration** (in development - it sits in the Development section
+  of the app's nav) - upload a Splunk or IBM QRadar detection-rule export;
   the analyzer identifies the data sources the rules depend on, maps them to
   Sentinel solutions and tables with confidence scoring and MITRE coverage,
   and pivots each mapped solution straight into Sentinel Integration.
@@ -91,7 +94,7 @@ walkthrough; the short version:
 4. Inside the app, start at **Setup** to connect Azure (Entra app
    registration, resource targeting, permission validation).
 
-To build from source instead:
+To build from source instead (requires Node 22, the version CI uses):
 
 ```bash
 cd soc-optimizationtoolkit
@@ -101,7 +104,9 @@ npm run package   # mints the next version, writes build/<name>-<version>.tgz
 ```
 
 Development gates: `npm run typecheck`, `npm run lint`, `npm test`,
-`npm run build` (all from `soc-optimizationtoolkit/`).
+`npm run build` (all from `soc-optimizationtoolkit/`). CI additionally runs
+`npm run check-release`, `check-docs`, `check-board`, `check-listings`,
+`check-classnames`, `check-schema-asset` and `check-board-freshness`.
 
 ## Repository layout
 
@@ -110,7 +115,6 @@ Development gates: `npm run typecheck`, `npm run lint`, `npm test`,
 | `soc-optimizationtoolkit/` | The active toolkit: `packages/core` (pure domain + usecases), `packages/ui` (shared React screens), `apps/cribl-app` (Cribl.Cloud shell) |
 | `Azure/CustomDeploymentTemplates/DCR-Templates/` | Pre-built ARM templates for Sentinel native tables - the manual path, and the target of Cribl's published documentation links |
 | `KnowledgeArticles/` | Integration knowledge base articles |
-| `Dev/` | Development scratch area |
 | `deprecated/` | Superseded components (PowerShell automation, the Electron GUI, v1 toolkit) - see [deprecated/README.md](deprecated/README.md) |
 
 ## Security

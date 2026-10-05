@@ -1,11 +1,15 @@
 # CLAUDE.md
 
+Status: Living - binding agent instructions for this repository; corrected to
+match the code whenever they drift.
+
 > **DEPRECATION NOTE (2026-07-13):** the PowerShell automation, Electron
 > GUI, standalone lookups/packs, and the v1 toolkit described below were
 > moved to `deprecated/` and are superseded by `soc-optimizationtoolkit/`
-> (npm workspaces: packages/core, packages/ui, apps/cribl-app,
-> apps/local-app). New work happens there; path references below to
-> `Azure/...` now live under `deprecated/Azure/...`.
+> (npm workspaces: packages/core, packages/ui, apps/cribl-app). New work
+> happens there; path references below to `Azure/...` now live under
+> `deprecated/Azure/...`, EXCEPT `Azure/CustomDeploymentTemplates/DCR-Templates/`,
+> which stays at the root (Cribl's published docs link it).
 
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -92,36 +96,98 @@ start new work there; `deprecated/README.md` records what superseded each part.
 
 ## Core Architecture
 
+### Workspaces
+
+`soc-optimizationtoolkit/` is one npm workspace root (`package.json`
+workspaces: `packages/*`, `apps/*`) with three members:
+
+- **`packages/core`** - pure domain logic, use cases and port interfaces. No
+  IO and no React; everything that talks to Azure, Cribl or GitHub does so
+  through a port the shell implements.
+- **`packages/ui`** - the React screens (`packages/ui/src/screens/`), shared
+  and shell-agnostic.
+- **`apps/cribl-app`** - the Cribl.Cloud shell: the adapters behind the core
+  ports, the route table and nav (`src/App.tsx`), the shipped `config/`
+  (`policies.yml`, `proxies.yml`), and the release and docs tooling under
+  `scripts/`.
+
+Each workspace carries a `CONTEXT.md` with its purpose and invariants, and
+`soc-optimizationtoolkit/docs/adr/` holds the architecture decisions.
+
+### Other components
+
+1. **DCR-Templates** ([Azure/CustomDeploymentTemplates/DCR-Templates/](Azure/CustomDeploymentTemplates/DCR-Templates/))
+ - 100 pre-built ARM templates (50 Sentinel native tables, Direct and DCE variants)
+ - Organized by deployment mode (DCE vs. Non-DCE)
+ - The manual path, and the target of Cribl's published documentation links -
+   keep this path stable
+
+2. **Deprecated components** - everything under `deprecated/`; see
+   [Deprecated PowerShell toolkit](#deprecated-powershell-toolkit-deprecated-only)
+   below and `deprecated/README.md`.
+
+## Common Development Commands
+
+### SOC Optimization Toolkit
+
+Run from `soc-optimizationtoolkit/`:
+
+```bash
+npm install            # install all workspaces
+npm run dev            # cribl-app Vite dev server for Cribl Live Preview
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run package        # mint the next version, write the .tgz, refresh apps/cribl-app/release/
+npm run check-docs     # documentation drift gate
+```
+
+CI (`.github/workflows/soc-toolkit-ci.yml`) also runs `check-listings`,
+`check-schema-asset`, `check-classnames`, `check-release`, `check-board` and
+`check-board-freshness` - see [Testing Approach](#testing-approach).
+
+### Prerequisites (toolkit)
+
+- **Node 22** (the version CI uses) and npm, for the workspaces
+- **Cribl.Cloud** with Cribl Apps; installing the app needs an Organization
+  administrator
+- Azure access is configured inside the app (the Setup page and its encrypted
+  KV store), not in files
+
+## Deprecated PowerShell toolkit (deprecated/ only)
+
+Everything in this section describes components under `deprecated/`. They
+receive no further development; it is kept because the moved code still runs
+and its history is preserved. New work belongs in `soc-optimizationtoolkit/`.
+
 ### Directory Organization
 
-The repository uses a **dev/core configuration pattern**:
+The deprecated PowerShell tools use a **dev/core configuration pattern**:
 - A hidden `.dev-mode` flag file determines environment selection
-- `dev/` subdirectories contain experimental/testing code
+- `dev/` subdirectories contain experimental/testing code (gitignored, so they
+  are not in a clone)
 - `core/` subdirectories contain production-ready configurations
-- Configuration files (`azure-parameters.json`, `operation-parameters.json`) live in both environments
+- Configuration files (`azure-parameters.json`, `operation-parameters.json`) live in `core/`
 
 ### Main Components
 
 1. **DCR-Automation** (DEPRECATED - [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/))
- - Core automation engine in `core/Create-TableDCRs.ps1` (~4,600 lines)
+ - Core automation engine in `core/Create-TableDCRs.ps1` (~3,400 lines)
  - Interactive menu interface via `Run-DCRAutomation.ps1`
  - Cribl configuration generator in `core/Generate-CriblDestinations.ps1`
  - Supports two deployment modes:
  - **Direct DCRs**: Simple, direct ingestion (30-char name limit)
  - **DCE-based DCRs**: Advanced routing via Data Collection Endpoints (64-char limit)
 
-2. **DCR-Templates** ([Azure/CustomDeploymentTemplates/DCR-Templates/](Azure/CustomDeploymentTemplates/DCR-Templates/))
- - ~120 pre-built ARM templates for Sentinel native tables
- - Organized by deployment mode (DCE vs. Non-DCE)
+2. **Discovery Tools** (DEPRECATED)
+ - vNet Flow Log discovery and Cribl config generation:
+   [deprecated/Azure/vNetFlowLogs/vNetFlowLogDiscovery/](deprecated/Azure/vNetFlowLogs/vNetFlowLogDiscovery/)
+ - Event Hub discovery is superseded by the toolkit's Event Hub Discovery screen
+   (`packages/ui/src/screens/eventhub-discovery/`); no tracked PowerShell copy remains
 
-3. **Discovery Tools** (DEPRECATED - [deprecated/Azure/dev/](deprecated/Azure/dev/))
- - Event Hub discovery with Resource Graph API optimization
- - vNet Flow Log discovery and Cribl config generation
- - Superseded by the toolkit's Event Hub Discovery screen
-
-4. **Lab Automation** - no longer exists at a path of its own. Labs are now the
- toolkit's Labs screen (`packages/ui/src/screens/labs/`); the deprecated
- Electron app's `LabAutomation.tsx` page is the only remaining trace.
+3. **Lab Automation** (DEPRECATED - [deprecated/Azure/Labs/](deprecated/Azure/Labs/): AzureFlowLogLab, UnifiedLab).
+ Superseded by the toolkit's Labs screen (`packages/ui/src/screens/labs/`).
 
 ### Key Design Patterns
 
@@ -130,63 +196,39 @@ The repository uses a **dev/core configuration pattern**:
 - **Template-Based Generation**: ARM templates and Cribl configs generated from parameterized templates
 - **Name Abbreviation Intelligence**: Auto-truncates table names to fit Azure's 30-character Direct DCR limit while preserving readability
 
-## Common Development Commands
-
-### DCR Automation
-
-DEPRECATED since 2026-07-13 - these paths are under `deprecated/`, and the tool
-receives no further development. Kept because the moved code still runs and its
-history is preserved; new work belongs in `soc-optimizationtoolkit/`.
+### Commands
 
 ```powershell
-# Interactive menu (recommended for manual operations)
+# DCR Automation - interactive menu (recommended for manual operations)
 .\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1
 
-# Non-interactive mode (for automation/CI-CD)
+# DCR Automation - non-interactive mode (for automation/CI-CD)
 .\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth
 
-# Template generation only (no deployment)
+# DCR Automation - template generation only (no deployment)
 .\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode TemplateOnly
-```
-
-### Discovery Tools
-
-```powershell
-# Event Hub discovery
-.\Azure\dev\EventHubDiscovery\Discover-EventHubSources.ps1
 
 # vNet Flow Log discovery
-.\Azure\dev\vNetFlowLogDiscovery\Run-vNetFlowLogDiscovery.ps1
-```
-
-### Lab Deployments
-
-```powershell
-# Blob Collector Lab
-.\Azure\dev\LabAutomation\BlobCollectorLab\Run-AzureBlobCollectorLab.ps1
+.\deprecated\Azure\vNetFlowLogs\vNetFlowLogDiscovery\Run-vNetFlowLogDiscovery.ps1
 
 # Azure Flow Log Lab
-.\Azure\dev\LabAutomation\AzureFlowLogLab\Run-AzureFlowLogLab.ps1
+.\deprecated\Azure\Labs\AzureFlowLogLab\Run-AzureFlowLogLab.ps1
+
+# Unified Lab
+.\deprecated\Azure\Labs\UnifiedLab\Run-AzureUnifiedLab.ps1
 ```
 
-### Cribl Pack Packaging
+Azure authentication, required before running any of them:
 
 ```powershell
-# Interactive menu for packaging Cribl packs
-.\Azure\dev\Packs\Cribl_Pack_Packaging\Run-PackageAutomation.ps1
-```
-
-### Azure Authentication
-
-```powershell
-# Required before running any automation
 Connect-AzAccount
 Set-AzContext -Subscription "Your-Subscription-Name" # If multiple subscriptions
 ```
 
-## Configuration Setup
+### Configuration Setup
 
-Before running any automation, configure these files:
+Before running the deprecated DCR-Automation, configure these files under
+`deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/`:
 
 1. **Azure Settings**: `core/azure-parameters.json`
  - Resource Group, Workspace, Location
@@ -206,8 +248,6 @@ Before running any automation, configure these files:
  - Create JSON schema files for custom tables that don't exist in Azure yet
  - Format: `TableName_CL.json` with columns array defining name/type
 
-## Important Technical Details
-
 ### DCR Deployment Modes
 
 | Mode | Command Flag | Purpose |
@@ -219,6 +259,11 @@ Before running any automation, configure these files:
 | DCECustom | `-Mode DCECustom` | Deploy custom tables with DCE |
 | DCEBoth | `-Mode DCEBoth` | Deploy all tables with DCE |
 | TemplateOnly | `-Mode TemplateOnly` | Generate ARM templates without deploying |
+
+The `-Mode` ValidateSet (`Run-DCRAutomation.ps1:10-14`) also accepts `Native`,
+`Custom`, `Both`, `Status`, `PrivateLinkNative`, `PrivateLinkCustom`,
+`CollectCribl`, `ValidateCribl` and `ResetCribl`; the tool's own README
+describes them.
 
 ### Table Naming Conventions
 
@@ -243,12 +288,29 @@ After DCR deployment, the script automatically exports:
 - Includes DCR IDs, ingestion endpoints, and stream names
 - Client ID is properly quoted in JSON output
 
-### Prerequisites
+### Output Directories
+
+These directories are auto-created by the deprecated scripts (do not commit):
+- `core/generated-templates/`: ARM templates generated by automation
+- `core/cribl-dcr-configs/`: Cribl Stream destination configurations
+- `eventhub-discovery-results/`: Event Hub discovery output
+- `cribl-destinations/`: vNet Flow Log Cribl configs
+
+### Prerequisites (deprecated PowerShell)
 
 - **Cribl Stream**: 4.14+ required for Direct DCRs (Kind:Direct)
 - **PowerShell**: 5.1+ with Azure modules (Az.Accounts, Az.Resources, Az.OperationalInsights)
 - **Azure Permissions**: Sufficient rights to create DCRs, DCEs, and custom tables
 - **Log Analytics Workspace**: Must be created before running automation
+
+### Testing (deprecated PowerShell and DCR-Templates changes)
+
+1. Test with both Direct and DCE-based DCRs
+2. Verify custom table creation works
+3. Ensure Cribl config export is accurate
+4. Deploy templates in test environment
+5. Validate data flows to Log Analytics
+6. Test with different Azure regions if applicable
 
 ## Cribl SDKs and Terraform Provider
 
@@ -456,18 +518,22 @@ resource "criblio_destination" "azure_sentinel" {
 
 ### Integration with This Repository
 
-The PowerShell scripts in this repository generate Cribl destination configurations as JSON files. These can be:
+The SOC Optimization Toolkit deploys the Cribl Sentinel destination itself
+through the Cribl product API; it has no JSON export step. What follows applies
+to the DEPRECATED PowerShell DCR-Automation, which writes Cribl destination
+configurations as JSON files. These can be:
 
 1. **Manually imported** into Cribl Stream UI
 2. **Automated via Python SDKs**: Use the Control Plane SDK to programmatically create destinations from generated JSON
 3. **Managed via Terraform**: Convert JSON configurations to Terraform HCL for infrastructure-as-code deployment
 
-**Example Integration Workflow**:
+**Example Integration Workflow** (deprecated tool; step 2a is a script you would
+write - none ships in this repository):
 ```powershell
-# Step 1: Generate DCRs and Cribl configs using this repository
-.\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth -ExportCriblConfig
+# Step 1: Generate DCRs and Cribl configs with the deprecated DCR-Automation
+.\deprecated\Azure\CustomDeploymentTemplates\DCR-Automation\Run-DCRAutomation.ps1 -NonInteractive -Mode DirectBoth -ExportCriblConfig
 
-# Step 2a: Use Python SDK to deploy Cribl configurations
+# Step 2a: Use the Python SDK from your own script (hypothetical name)
 python deploy_cribl_destinations.py --config-dir core/cribl-dcr-configs
 
 # Step 2b: Or use Terraform to manage as infrastructure-as-code
@@ -517,9 +583,10 @@ git push origin feature/your-feature-name
 - Use present tense verbs ("Add" not "Added")
 - Keep first line under 50 characters
 - Be descriptive and specific
-- Examples:
+- Good:
  - "Add support for custom table schemas"
  - "Fix timeout issue in DCR deployment"
+- Bad:
  - "Fixed stuff"
  - "WIP"
 
@@ -538,33 +605,36 @@ git push origin feature/your-feature-name
 Key files are located in:
 - Main automation (DEPRECATED): [deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/](deprecated/Azure/CustomDeploymentTemplates/DCR-Automation/)
 - Static templates: [Azure/CustomDeploymentTemplates/DCR-Templates/](Azure/CustomDeploymentTemplates/DCR-Templates/)
-- Discovery tools (DEPRECATED): [deprecated/Azure/dev/EventHubDiscovery/](deprecated/Azure/dev/EventHubDiscovery/) and [deprecated/Azure/dev/vNetFlowLogDiscovery/](deprecated/Azure/dev/vNetFlowLogDiscovery/)
+- Discovery tools (DEPRECATED): [deprecated/Azure/vNetFlowLogs/vNetFlowLogDiscovery/](deprecated/Azure/vNetFlowLogs/vNetFlowLogDiscovery/)
+- Labs (DEPRECATED): [deprecated/Azure/Labs/](deprecated/Azure/Labs/)
 - Documentation: [KnowledgeArticles/](KnowledgeArticles/)
 - **The current toolkit**: [soc-optimizationtoolkit/](soc-optimizationtoolkit/) - see its `README.md` and `docs/`
 
-## Output Directories
-
-These directories are auto-created by scripts (do not commit):
-- `core/generated-templates/`: ARM templates generated by automation
-- `core/cribl-dcr-configs/`: Cribl Stream destination configurations
-- `eventhub-discovery-results/`: Event Hub discovery output
-- `cribl-destinations/`: vNet Flow Log Cribl configs
-
 ## Testing Approach
 
-Before submitting changes:
-1. Test with both Direct and DCE-based DCRs
-2. Verify custom table creation works
-3. Ensure Cribl config export is accurate
-4. Deploy templates in test environment
-5. Validate data flows to Log Analytics
-6. Test with different Azure regions if applicable
+The pre-merge gates for the toolkit are the CI jobs in
+`.github/workflows/soc-toolkit-ci.yml`, run on every PR that touches
+`soc-optimizationtoolkit/`. Run them locally from `soc-optimizationtoolkit/`:
+
+1. `npm ci` (or `npm install`)
+2. `npm run lint` and `npm run typecheck`
+3. `npm run check-listings`, `npm run check-schema-asset`, `npm run check-classnames`
+4. `npm test` and `npm run build`
+5. `npm run check-release`, `npm run check-docs`, `npm run check-board`,
+   `npm run check-board-freshness`
+
+Passing pins is not the same as working in the product: confirm a behaviour
+change in Cribl Live Preview (`/apps/a/__local__` on the leader runs the
+working tree with live credentials). Changes to the deprecated PowerShell tools
+or the DCR templates follow the
+[deprecated testing checklist](#testing-deprecated-powershell-and-dcr-templates-changes).
 
 ## Documentation Standards
 
 Every contribution should include:
 - Updated README if adding new features
-- Inline comments for complex PowerShell logic
+- A `Status:` on every new document, per `soc-optimizationtoolkit/docs/documenting-work.md`
+- Inline comments for complex logic
 - Parameter descriptions for all configurable options
 - Usage examples for new functionality
 - Clear error messages with actionable guidance
