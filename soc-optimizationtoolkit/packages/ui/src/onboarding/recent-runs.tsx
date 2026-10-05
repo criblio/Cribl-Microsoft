@@ -1,9 +1,11 @@
 /**
  * RecentRuns - the app's run log, rendered from the persisted JobStore
  * records. Every run (including failures) is stored with its step-by-step
- * statuses, timestamps, and outcome, so this list survives reloads and
+ * statuses, timestamps, and outcome, so the log survives reloads and
  * answers "what did the app do, when, and where" without any external
- * logging system. Defaults render onboard-table records; other job kinds
+ * logging system. It renders as ONE collapsed line - how many runs, and the
+ * latest - opening to a dropdown of every run and the chosen run's detail
+ * (DBT-125: a list of every run grew under the deploy button forever). Defaults render onboard-table records; other job kinds
  * (e.g. onboard-batch, porting-plan Unit 6) reuse the SAME list by passing
  * their kind plus label/detail renderers. Pure React over the ports: zero
  * direct IO.

@@ -7,11 +7,12 @@
  * It reads SOURCE, not a rendered page, because most of this copy only
  * appears after an action (an analysis, a capture, a deploy) that a unit test
  * cannot reach. Two kinds of string are collected from every module the page
- * renders: every InfoTip text literal, and every JSX text run. Comments are
+ * renders: every InfoTip text literal (and the strings of any named constant
+ * a tip is given), and every JSX text run. Comments are
  * stripped first - that is where history is supposed to live.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -52,6 +53,50 @@ function stripComments(source: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
+/** A double-quoted or template string literal; group 2 is its body. */
+const LITERAL = /(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
+
+/** Marks a constant the gate could not find, so the test can name it. */
+const UNRESOLVED = "UNRESOLVED CONSTANT: ";
+
+/** Every non-test .ts/.tsx file under the ui and core sources. */
+const SOURCE_FILES: readonly string[] = (() => {
+  const roots = [SRC, join(SRC, "..", "..", "core", "src")];
+  return roots.flatMap((root) =>
+    (readdirSync(root, { recursive: true }) as string[])
+      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map((f) => join(root, f)),
+  );
+})();
+
+/**
+ * The string literals of `const NAME = ...;`, looked for in the calling file
+ * first and then across the ui and core sources; null when no definition
+ * exists. The scan stops at the first `;` OUTSIDE a string, because tip text
+ * routinely contains semicolons.
+ */
+function resolveConstant(name: string, localSource: string): string[] | null {
+  const definition = new RegExp(`(?:export\\s+)?const\\s+${name}\\b[^=]*=`);
+  const candidates = [localSource, ...SOURCE_FILES.map((f) => readFileSync(f, "utf8"))];
+  for (const text of candidates) {
+    const found = definition.exec(text);
+    if (found === null) continue;
+    let i = found.index + found[0].length;
+    let quote: string | null = null;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (quote !== null) {
+        if (c === "\\") i++;
+        else if (c === quote) quote = null;
+      } else if (c === '"' || c === "'" || c === "`") quote = c;
+      else if (c === ";") break;
+    }
+    const body = text.slice(found.index + found[0].length, i);
+    return [...body.matchAll(LITERAL)].map((lit) => lit[2] ?? "");
+  }
+  return null;
+}
+
 /** InfoTip text literals and JSX text runs, with a file:line for each. */
 export function collectCopy(file: string): CopyEntry[] {
   const source = stripComments(readFileSync(join(SRC, file), "utf8"));
@@ -75,8 +120,25 @@ export function collectCopy(file: string): CopyEntry[] {
     } else {
       body = source.slice(at, source.indexOf(source[at] ?? '"', at + 1) + 1);
     }
-    for (const lit of body.matchAll(/(["`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    for (const lit of body.matchAll(LITERAL)) {
       out.push({ where: `${file}:${lineOf(m.index ?? 0)} (tip)`, text: lit[2] ?? "" });
+    }
+    // A tip passed as a NAMED CONSTANT (text={PACK_SHAPE_TIP}) holds no literal
+    // here, and the first version of this gate read nothing for five of them.
+    // Every UPPER_CASE name outside the literals is resolved to its definition
+    // and that definition's strings are read; one that cannot be resolved is
+    // reported, so a new constant tip fails loudly instead of slipping past.
+    const names = body.replace(LITERAL, "").match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? [];
+    for (const name of names) {
+      const strings = resolveConstant(name, source);
+      out.push(
+        ...(strings === null
+          ? [{ where: `${file}:${lineOf(m.index ?? 0)} (tip)`, text: `${UNRESOLVED}${name}` }]
+          : strings.map((text) => ({
+              where: `${file}:${lineOf(m.index ?? 0)} (tip ${name})`,
+              text,
+            }))),
+      );
     }
   }
   for (const m of source.matchAll(/>([^<>{}]+)</g)) {
@@ -98,6 +160,24 @@ describe("Sentinel Integration copy carries no project history (DBT-125)", () =>
     // Measured when the gate landed; a collapse to a handful means the
     // collector broke, not that the copy got cleaner.
     expect(tips.length).toBeGreaterThanOrEqual(40);
+  });
+
+  it("resolves every tip passed as a named constant, and reads it", () => {
+    const all = INTEGRATE_COPY_FILES.flatMap(collectCopy);
+    expect(all.filter((e) => e.text.startsWith(UNRESOLVED)).map((e) => e.text)).toEqual([]);
+    // The five constant tips this gate was blind to before - each now read.
+    const named = new Set(
+      all.map((e) => /\(tip ([A-Z0-9_]+)\)$/.exec(e.where)?.[1]).filter(Boolean),
+    );
+    expect([...named].sort()).toEqual(
+      expect.arrayContaining([
+        "PACK_SHAPE_TIP",
+        "PIPELINE_PREVIEW_TIP",
+        "POLICY_BAR_TIP",
+        "RULE_COVERAGE_IDLE_NOTE",
+        "RULE_COVERAGE_NO_REPORTS_NOTE",
+      ]),
+    );
   });
 
   it.each(INTEGRATE_COPY_FILES)("%s", (file) => {

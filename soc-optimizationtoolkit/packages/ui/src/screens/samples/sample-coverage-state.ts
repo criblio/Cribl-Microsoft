@@ -236,21 +236,9 @@ export interface RecommendedLogType {
   estimatedBytes?: number;
 }
 
-/** Operator-facing name for an evidence tier. */
-export function evidenceLabel(evidence: LogTypeEvidence): string {
-  switch (evidence) {
-    case "detection":
-      return "a shipped detection filters on it";
-    case "workbook":
-      return "a shipped workbook queries it";
-    case "vendor":
-      return "the vendor documents this feed";
-  }
-}
-
 /**
  * The compact row noun (DBT-125): "3 detections", "1 workbook". The full
- * meaning of each evidence kind - evidenceLabel - is said once, in the tip on
+ * meaning of each evidence kind - EVIDENCE_LEGEND, below - is said once, in the tip on
  * the list heading, instead of on every one of up to a few dozen rows.
  */
 export function evidenceCount(evidence: "detection" | "workbook", n: number): string {
