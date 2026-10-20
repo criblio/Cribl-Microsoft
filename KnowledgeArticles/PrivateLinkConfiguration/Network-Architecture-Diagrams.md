@@ -830,7 +830,7 @@ Advantages:
  Simpler DNS configuration (one FQDN)
  Single Private Endpoint required
  Easier certificate management
- Cost-effective (one DCE charge)
+ Cost-effective (one Private Endpoint)
  Recommended for most deployments
 ```
 
@@ -885,7 +885,7 @@ Use Cases:
 Considerations:
  Higher complexity (multiple DNS records)
  Additional Private Endpoints required
- Higher cost (multiple DCEs)
+ Higher cost (additional Private Endpoints)
  More granular cost allocation
  Stronger environment isolation
 ```

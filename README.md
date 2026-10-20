@@ -53,14 +53,17 @@ holds 100 pre-built ARM templates - 50 Sentinel native tables in two
 variants, with the full schema for each:
 
 - **`DataCollectionRules(NoDCE)/`** - Direct DCRs (`"kind": "Direct"`). No
-  Data Collection Endpoint, so no DCE charges, and the simpler deployment.
+  separate Data Collection Endpoint - the DCR's own ingestion endpoint is
+  used - and the simpler deployment.
   DCR names are limited to 30 characters. Requires Cribl Stream 4.14+.
 - **`DataCollectionRules(DCE)/`** - DCE-based DCRs for advanced routing and
-  private endpoints. Needs a DCE created first, costs more, and allows
-  64-character names.
+  private endpoints. Needs a DCE created first (one DCE can serve many
+  DCRs) and allows 64-character names.
 
 Start with Direct unless you specifically need private endpoints or DCE
-routing.
+routing. Neither variant costs more by itself: DCE and DCR resources carry no
+charge, ingestion is billed the same way, and only Private Link adds Private
+Endpoint charges.
 
 **Instructions:
 [`DCR-Templates/SentinelNativeTables/README.md`](https://github.com/criblio/Cribl-Microsoft/blob/main/Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md).**
