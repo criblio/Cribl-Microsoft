@@ -537,7 +537,7 @@ export function ContentInstallSection({
   );
 
   return (
-    <div className="content-install">
+    <div>
       {/* DBT-47: one notice for whatever blocks an install - a missing minter,
           a missing Azure identity, or an uncommitted scope. Loading and
           previewing the solution's content never needed any of them, which is

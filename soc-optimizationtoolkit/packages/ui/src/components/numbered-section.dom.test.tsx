@@ -72,7 +72,7 @@ describe("NumberedSection collapse", () => {
     // DBT-127 put Collapse in a foot row beside Done - next; the row itself
     // still comes straight after the body.
     const foot = collapse.closest(".numbered-section-foot");
-    expect(foot?.previousElementSibling?.className).toBe("numbered-section-body");
+    expect(foot?.previousElementSibling?.getAttribute("data-testid")).toBe("numbered-section-body");
     // No Expand affordance while expanded.
     expect(queryByRole("button", { name: "Expand Run DCR Gap Analysis" })).toBeNull();
 

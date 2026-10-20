@@ -91,7 +91,6 @@ export function MappingCatalogScreen() {
                 href={selected.docUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mapping-catalog-doclink"
               >
                 Vendor documentation
               </a>
@@ -125,10 +124,7 @@ export function MappingCatalogScreen() {
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
-                    <tr
-                      className="mapping-row"
-                      key={`${entry.sourceName}|${entry.destName}`}
-                    >
+                    <tr key={`${entry.sourceName}|${entry.destName}`}>
                       <td>
                         <code className="code-chip">{entry.sourceName}</code>
                       </td>
@@ -136,7 +132,7 @@ export function MappingCatalogScreen() {
                       <td className="match-field-type">
                         {entry.action === "decode" ? "base64 decode" : "map"}
                       </td>
-                      <td className="mapping-catalog-doc">
+                      <td>
                         {entryDocLine(entry)}
                       </td>
                     </tr>

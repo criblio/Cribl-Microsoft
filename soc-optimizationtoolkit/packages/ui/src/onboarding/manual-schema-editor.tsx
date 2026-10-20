@@ -55,7 +55,7 @@ export function ManualSchemaEditor(props: ManualSchemaEditorProps) {
     reservedNames.some((n) => n.toLowerCase() === name.trim().toLowerCase());
 
   return (
-    <div className="manual-schema-editor">
+    <div>
       <div
         className="csv-map-grid manual-schema-grid"
         role="group"

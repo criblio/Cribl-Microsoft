@@ -479,7 +479,7 @@ export function PipelinePreviewSection({
           </div>
 
           {/* Readable ordered function list. */}
-          <div className="pipeline-preview-funcs">
+          <div>
             <div className="pipeline-preview-subhead">
               Pipeline functions (in order)
               <InfoTip text="The Cribl functions this pipeline runs, top to bottom: extraction (parse _raw), field renames/coercions, overflow collection, and cleanup. The full conf.yml is shown below." />
@@ -492,7 +492,7 @@ export function PipelinePreviewSection({
           </div>
 
           {/* Reduction rules with reasons. */}
-          <div className="pipeline-preview-rules">
+          <div>
             <div className="pipeline-preview-subhead">
               Reduction rules
               <InfoTip text="Pre-built volume-reduction rules matched for this table/vendor: KEEP rules protect security-relevant events, DROP rules remove no-analytics-value noise, and SUPPRESS rules aggregate high-volume events. Each carries the reason it exists. Filters address RAW vendor field names and run before any rename." />

@@ -86,13 +86,12 @@
 // that interpolation is the empty string in production and the static name was
 // the only class those divs had. UNKNOWN is an ERROR now, worded as what it is.
 //
-// Which is why UNDECIDED_BARE below exists rather than a green tree: FOURTEEN
-// elements survive the narrowing, recorded as THIRTEEN path-plus-name entries
-// with a count each. None of them has been shown to be a defect, and they are
-// recorded instead of being either fixed blind or failed on. NO CARD OWNS THAT
-// DECISION YET - DBT-100's result asks for one; until it exists, this header and
-// that list are the whole record, which is the point of writing them here rather
-// than in a commit message.
+// Which is why UNDECIDED_BARE below exists: FOURTEEN elements survived the
+// narrowing when the gate was wired, recorded as THIRTEEN path-plus-name entries
+// with a count each, rather than being either fixed blind or failed on. DBT-114
+// decided all fourteen (2026-10-20) and the list is EMPTY now - see its header
+// for what each one turned out to be. The mechanism stays, so a future residue
+// can be recorded the same way rather than waived.
 //
 // The INVERSE direction - a rule no element produces - is reported as a note
 // (the "never rendered" count below) and never gated. DBT-97 tracks the one
@@ -150,24 +149,37 @@ export const WAIVED_CLASSES = [
  *
  * Wiring a gate that fails on findings older than itself is how a gate gets
  * bypassed, which is the failure DBT-88 is about - so enabling this blind would
- * have manufactured the problem it exists to catch. FOURTEEN ELEMENTS survive
- * the element-level narrowing above, held as the THIRTEEN path-plus-name
- * entries below, because `gap-overflow-triage` is bare at two separate lines of
- * one file. Both numbers are measured with `baseline: []` against the tree of
- * 2026-09-04, and both are stated because they are not the same number and a
- * reader who has only one of them will draw the wrong conclusion from it.
- * NONE OF THE FOURTEEN HAS BEEN SHOWN TO BE A DEFECT, and none has been shown
- * to be harmless either; deciding them needs the design intent of the screen's
- * owner, which is not a thing this script or DBT-100 can supply, and no card
- * owns it yet.
+ * have manufactured the problem it exists to catch. FOURTEEN ELEMENTS survived
+ * the element-level narrowing above when DBT-100 wired it, held as THIRTEEN
+ * path-plus-name entries, because `gap-overflow-triage` was bare at two
+ * separate lines of one file.
  *
- * The `tag` on each entry is a MEASURED fact and it is what makes most of these
- * doubtful. An `a`, a `tr`, a `td` and a `details` all carry user-agent styling
- * or an ancestor rule that this check cannot see - `.match-field-table td` at
- * styles.css:2840 styles the `td` below outright - so for those the finding is
- * near-certainly nothing. The `div`s are the ones worth a look, because a div
- * with no rule really does render as nothing, which is what
- * .identity-mismatch-block did for two months.
+ * DBT-114 DECIDED ALL FOURTEEN (2026-10-20), and the list is empty because of
+ * what they turned out to be rather than because anybody waived them:
+ *   - NOT ONE was ancestor-styled through its own name. None of the thirteen
+ *     names appears in any selector in styles.css, descendant or otherwise -
+ *     the `td` and `tr` in the mapping catalog ARE styled, by
+ *     `.match-field-table td` and the table rules, but those select the
+ *     element type and never read the class. So DBT-115's measurement on this
+ *     set is 0 of 14.
+ *   - TWELVE were dead names: plain wrappers whose children carry the styling.
+ *     The className was deleted and the element kept, which changes nothing a
+ *     browser renders - each one already had no rule behind it.
+ *   - TWO were test hooks: `numbered-section-body` and `capture-outcome`, which
+ *     dom tests select on. They moved to `data-testid`, which says what they
+ *     are; a class name with no rule that a test reads is a hook dressed as a
+ *     style, and it is the thing that made the 2026-08-17 sweep refuse to
+ *     delete them.
+ * No new CSS rule was added for any of them. Whether a wrapper SHOULD have a
+ * layout rule is a design question about that screen, not a bookkeeping one,
+ * and nothing about these fourteen looked broken in the screens they render.
+ *
+ * WHEN A NEW ENTRY IS RECORDED HERE, the `tag` is a MEASURED fact and it is
+ * what makes most findings doubtful. An `a`, a `tr`, a `td` and a `details` all
+ * carry user-agent styling or an ancestor rule that this check cannot see, so
+ * for those the finding is near-certainly nothing. A `div` is the one worth a
+ * look, because a div with no rule really does render as nothing, which is
+ * what .identity-mismatch-block did for two months.
  *
  * The `count` is what makes an entry a RECORD rather than a licence. Entries
  * carry no line number - a line moves whenever anything above it is edited, and
@@ -180,24 +192,10 @@ export const WAIVED_CLASSES = [
  * An entry that stops matching is an ERROR, exactly as in WAIVED_CLASSES: the
  * whole point of a baseline is that it shrinks, and one nobody prunes is a
  * second silent hole rather than a record.
+ *
+ * @type {{path: string, name: string, tag: string, count: number}[]}
  */
-export const UNDECIDED_BARE = [
-  { path: 'packages/ui/src/components/numbered-section.tsx', name: 'numbered-section-body', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/frame/app-frame.tsx', name: 'app-frame-route', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/onboarding/manual-schema-editor.tsx', name: 'manual-schema-editor', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/architecture/architecture-screen.tsx', name: 'arch-card-head', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/content-install/content-install-section.tsx', name: 'content-install', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/mapping-catalog/mapping-catalog-screen.tsx', name: 'mapping-catalog-doclink', tag: 'a', count: 1 },
-  { path: 'packages/ui/src/screens/mapping-catalog/mapping-catalog-screen.tsx', name: 'mapping-row', tag: 'tr', count: 1 },
-  { path: 'packages/ui/src/screens/mapping-catalog/mapping-catalog-screen.tsx', name: 'mapping-catalog-doc', tag: 'td', count: 1 },
-  // TWO elements, at overflow-triage-block.tsx:61 and :76 - the one entry in
-  // this list that holds more than one, and the reason `count` exists at all.
-  { path: 'packages/ui/src/screens/mapping-review/overflow-triage-block.tsx', name: 'gap-overflow-triage', tag: 'details', count: 2 },
-  { path: 'packages/ui/src/screens/pipeline-preview/pipeline-preview-section.tsx', name: 'pipeline-preview-funcs', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/pipeline-preview/pipeline-preview-section.tsx', name: 'pipeline-preview-rules', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/samples/capture-panel.tsx', name: 'capture-outcome', tag: 'div', count: 1 },
-  { path: 'packages/ui/src/screens/samples/sample-intake-section.tsx', name: 'vendor-name-seam', tag: 'div', count: 1 },
-];
+export const UNDECIDED_BARE = [];
 
 /**
  * The classes a stylesheet defines.
@@ -518,9 +516,9 @@ export function evaluateClassNames(facts) {
     );
   }
 
-  // `baselined` counts ELEMENTS, not entries. The two differ - 14 elements are
-  // held by 13 entries - and reporting entries would restate the length of a
-  // list rather than the size of the residue.
+  // `baselined` counts ELEMENTS, not entries. The two can differ - when DBT-100
+  // wired this, 14 elements were held by 13 entries - and reporting entries
+  // would restate the length of a list rather than the size of the residue.
   let baselined = 0;
   for (const count of seen.values()) baselined += count;
 
@@ -792,10 +790,15 @@ async function main() {
   // what is known-unbacked but provably not rendering bare. Elements AND entries
   // are both named because they are different numbers - one entry can hold
   // several elements - and a line quoting only one of them would let a reader
-  // believe the residue is smaller than it is.
+  // believe the residue is smaller than it is. With nothing recorded (DBT-114
+  // emptied the list) the line says that plainly instead of "EXCEPT the 0".
+  const residue =
+    entries === 0
+      ? 'No element renders with nothing on it, and UNDECIDED_BARE records none.\n'
+      : `No element renders with nothing on it, EXCEPT the ${baselined} recorded in UNDECIDED_BARE's ${entries} entries - undecided, NOT cleared. Each entry holds an exact count, so a further one under a recorded name fails this check rather than joining the record.\n`;
   console.log(
     `${rendered} rendered class name(s) across ${facts.sources.length} source file(s) checked against the ${defined} classes the stylesheets define.\n` +
-      `No element renders with nothing on it, EXCEPT the ${baselined} recorded in UNDECIDED_BARE's ${entries} entries - undecided, NOT cleared. Each entry holds an exact count, so a further one under a recorded name fails this check rather than joining the record.\n` +
+      residue +
       `${unbacked.length} further name(s) resolve to no rule but sit beside a class that does, so nothing renders bare; these are counted, never gated.`,
   );
 }

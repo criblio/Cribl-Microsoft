@@ -611,7 +611,7 @@ export function SampleIntakeSection({
         existing for a solution and not existing.
       */}
       {detectedVendor === "" && vendorKey !== null && samples !== null && samples.length > 0 && (
-        <div className="vendor-name-seam">
+        <div>
           <label className="field-label" htmlFor="operator-vendor">
             Vendor name
           </label>

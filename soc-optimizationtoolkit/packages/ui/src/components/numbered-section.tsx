@@ -175,7 +175,7 @@ export function NumberedSection({
           {blocked && reason !== undefined && reason !== "" && (
             <p className="numbered-section-blocked-reason">{reason}</p>
           )}
-          <div className="numbered-section-body">{children}</div>
+          <div data-testid="numbered-section-body">{children}</div>
           <div className="numbered-section-foot">
             {onDone !== undefined && (
               <button

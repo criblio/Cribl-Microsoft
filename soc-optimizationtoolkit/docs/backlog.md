@@ -1230,6 +1230,35 @@ and a `details`, all of which pick up user-agent styling or an ancestor selector
 this check cannot model. Deciding them needs the design intent of each screen's
 owner, and NO CARD OWNS THAT YET.
 
+**DECIDED by [[DBT-114]] (2026-10-20); `UNDECIDED_BARE` is now empty.** The
+fourteen came apart into two kinds and neither of them was a defect. TWELVE were
+dead wrapper names - `app-frame-route`, `arch-card-head`, `manual-schema-editor`,
+`content-install`, `mapping-catalog-doclink`, the catalog's `mapping-row`,
+`mapping-catalog-doc`, both `gap-overflow-triage`, `pipeline-preview-funcs`,
+`pipeline-preview-rules` and `vendor-name-seam` - so the attribute was deleted and
+the element kept, which changes nothing rendered because none of them had a rule
+to lose. TWO were test hooks - `numbered-section-body` (asserted by string
+equality in `numbered-section.dom.test.tsx`) and `capture-outcome` (queried in
+`capture-panel.dom.test.tsx`) - and moved to `data-testid`, which is what the
+2026-08-17 sweep below meant by "structural hooks rather than dead names". The
+`mapping-row` on `mapping-review-section.tsx` is a different element and a live
+selector; it was left alone. `content-install` turned out NOT to be a test
+selector any more, although that sweep said it was - no test reads it.
+
+FOR [[DBT-115]]: 0 OF 14 WERE ANCESTOR-STYLED through their own name. None of
+the thirteen names appears in any selector in `styles.css`, descendant or
+otherwise. The catalog's `td` and `tr` are styled - `.match-field-table td` - but
+by element type, which never reads the class and so survives the deletion. That
+is the measurement DBT-115 asked this card for, and on this set it says teaching
+the check about descendant selectors would have changed nothing.
+
+What was deliberately NOT done: adding a CSS rule to any of them. A wrapper that
+wants a layout rule is a design change to its screen and needs a Live Preview
+look; nothing about these read as broken, so that would have been churn. Closed
+on pins: a test holds the ten real files to zero bare elements with the empty
+baseline, mutation-checked by restoring `className="arch-card-head"`, which
+fails both that test and the CI step.
+
 So DBT-39's own four names - `pack-card`, `pack-card-head`, `dcr-progress-line`,
 `identity-row-editable` - were deleted in the SAME commit that added the script,
 and the rest were LEFT STANDING rather than accrued afterwards. What went unfixed
@@ -1590,7 +1619,9 @@ Of the rest: five were SCANNER ARTIFACTS (`ok`, `failed`, `running`, `idle`,
 all render correctly - they are grouping wrappers whose children carry the
 styling, or semantic elements (`<a>`, table rows) the browser styles anyway.
 Two of them, `content-install` and `numbered-section-body`, are used as TEST
-SELECTORS, so they are structural hooks rather than dead names.
+SELECTORS, so they are structural hooks rather than dead names. (Superseded
+2026-10-20 by [[DBT-114]]: the hooks are `numbered-section-body` and
+`capture-outcome`, both now `data-testid`, and the dead names were deleted.)
 
 Deliberately NOT "fixed": adding rules to wrappers that never needed them is
 churn that looks like progress, and deleting the names would break two test

@@ -167,11 +167,11 @@ const resultRows = (c: HTMLElement) => c.querySelectorAll(".capture-results li")
 const status = (c: HTMLElement) =>
   c.querySelector(".capture-panel")?.getAttribute("data-status");
 /** What the last commit established, which outlives the preview it came from. */
-const outcomes = (c: HTMLElement) => c.querySelectorAll(".capture-outcome");
+const outcomes = (c: HTMLElement) => c.querySelectorAll('[data-testid="capture-outcome"]');
 const outcomeStatus = (c: HTMLElement) =>
-  c.querySelector(".capture-outcome")?.getAttribute("data-status");
+  c.querySelector('[data-testid="capture-outcome"]')?.getAttribute("data-status");
 const outcomeHeadline = (c: HTMLElement) =>
-  c.querySelector(".capture-outcome .panel-desc")?.textContent;
+  c.querySelector('[data-testid="capture-outcome"] .panel-desc')?.textContent;
 /** The query headline. The outcome renders a .panel-desc of its own. */
 const headline = (c: HTMLElement) =>
   c.querySelector(".capture-panel > .panel-desc")?.textContent;

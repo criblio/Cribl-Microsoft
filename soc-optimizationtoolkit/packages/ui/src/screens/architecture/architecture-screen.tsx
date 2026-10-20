@@ -67,7 +67,7 @@ function PatternCard({
   const deployLink = PATTERN_DEPLOY_LINKS[pattern.id];
   return (
     <div className="arch-card">
-      <div className="arch-card-head">
+      <div>
         <span className="arch-card-title">{pattern.title}</span>
       </div>
       <p className="panel-desc">{pattern.summary}</p>

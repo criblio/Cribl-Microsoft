@@ -257,7 +257,6 @@ export function AppFrame(props: AppFrameProps) {
               return (
                 <div
                   key={route.id}
-                  className="app-frame-route"
                   style={isActive ? undefined : { display: "none" }}
                   {...(isActive ? {} : { "aria-hidden": true })}
                 >

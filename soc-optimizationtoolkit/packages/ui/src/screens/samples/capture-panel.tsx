@@ -420,7 +420,7 @@ export function CapturePanel({
           Lake panel's summary outlives its log-type list: clearing the panel on
           success rounds a partial haul up to a clean one. */}
       {commitView.status !== "idle" && (
-        <div className="capture-outcome" data-status={commitView.status}>
+        <div data-testid="capture-outcome" data-status={commitView.status}>
           <p className="panel-desc">{commitView.headline}</p>
         </div>
       )}
