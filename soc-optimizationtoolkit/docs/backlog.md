@@ -1338,16 +1338,17 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.8 IS CURRENT (2026-10-05).**
-`release/soc-optimizationtoolkit-1.12.8.tgz` - the 2026-10-02 bug sweep: nineteen
-cards closed after every open bug was re-verified, the Field Mappings table
-showing an example value per field (DBT-122), and RULE badges lighting on every
-DCR gap analysis (DBT-121). On top of 1.12.7's operator-chosen pack wiring and
+**1.12.9 IS CURRENT (2026-10-20).**
+`release/soc-optimizationtoolkit-1.12.9.tgz` - worker-group pickers that say why
+they are empty (DBT-134), the permission audit's age in the connection bar
+(HON-6), and Sentinel Integration in one line per section (DBT-125). On top of
+1.12.8's bug sweep - the Field Mappings example values (DBT-122) and RULE badges
+on every DCR gap analysis (DBT-121) - 1.12.7's operator-chosen pack wiring and
 600-second capture window, 1.12.6's wizard
 workspace picker, 1.12.5's ungated deployment target, 1.12.3's replacing pack
 rebuild, 1.12.1's guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.8.
+file at 1.4.0 and now current through 1.12.9.
 
 The two sub-claims above were rewritten on 2026-09-04 having decayed AGAIN - they
 named the 1.12.3 tarball and 1.12.3 notes while `release/` held 1.12.6. That is

@@ -8,6 +8,41 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.12.9
+
+**An empty worker-group list now says why (DBT-134).** A tester saw a worker
+group picker with nothing in it and no explanation. Every picker - Sentinel
+Integration (and its multi-group option), DCR Automation's single-table and
+batch forms, Pack Maintenance's Deploy target, the Dataflow live views and the
+Labs flow-log panel - now shows one of four states: loading; an error with
+Retry; "Cribl returned no worker groups this account can see", naming the
+likely causes (the Cribl role, or the app's policies awaiting an admin's
+re-approval); or "none are Stream worker groups", naming each group Cribl did
+return and its type. An empty list no longer reads "No matches", which is what a
+filter typo shows. Pack Maintenance always shows its Deploy target, reports a
+failed group listing as a worker-group problem rather than "Deployed status
+unavailable", and no longer badges a pack "Not deployed" from a read that never
+ran. The multi-group option shows an error instead of "Loading worker groups..."
+forever. A group now counts as Stream when either its product or its type says
+so.
+
+**One more API path to approve.** The app now declares `GET /master/groups/:id`
+in its policies, alongside the group list it already read. An admin re-approves
+the policies when upgrading.
+
+**The permission audit shows its age (HON-6).** The connection bar now says when
+this connection's Azure and Cribl permissions were last checked - "permissions:
+checked 4 days ago" - with an (i) and a Re-check permissions button. The age
+keeps counting while the page stays open.
+
+**Sentinel Integration reads in one line per section (DBT-125, DBT-126,
+DBT-127).** Each step leads with one line; the detail moved behind (i) icons,
+and an (i) stays open when clicked. Done folds a finished section to a summary,
+and the footer's pills jump back to their section.
+
+**Security.** react-router moves to 7.18.4, which clears a high-severity
+advisory in the shipped bundle.
+
 ## 1.12.8
 
 **Captures with hyphenated keys now split by their real log type, and some will
