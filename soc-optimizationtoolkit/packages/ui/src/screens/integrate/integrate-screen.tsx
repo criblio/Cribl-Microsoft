@@ -158,8 +158,8 @@ import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
-  PACK_SHAPE_TIP,
-  packShapeSummary,
+  PACK_COUNTS_TIP,
+  packCountsSummary,
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
@@ -2237,7 +2237,7 @@ export function IntegrateScreen({
         * acknowledgement that arms the build. */}
       <div className="sample-coverage">
         <p className="field-hint">
-          {packShapeSummary(samples.length)} <InfoTip text={PACK_SHAPE_TIP} />
+          {packCountsSummary(samples.length)} <InfoTip text={PACK_COUNTS_TIP} />
         </p>
         <p
           className={

@@ -45,8 +45,10 @@ export const PIPELINES_PER_LOG_TYPE = 2;
 /**
  * The consequence line for a given sample count. Concrete counts, because
  * "each sample adds routes and pipelines" is abstract until it is numbers.
+ * Named for COUNTS, not shape (GEN-17): core's `PackShape` is how the pack is
+ * wired (all-inclusive | routable), a different question.
  */
-export function packShapeSummary(sampleCount: number): string {
+export function packCountsSummary(sampleCount: number): string {
   if (sampleCount === 0) {
     return "No samples tagged yet - the pack has nothing to route.";
   }
@@ -60,7 +62,7 @@ export function packShapeSummary(sampleCount: number): string {
  * How the counts above are made, for the (i) beside them (DBT-125). Static, so
  * it lives beside the function whose arithmetic it describes.
  */
-export const PACK_SHAPE_TIP =
+export const PACK_COUNTS_TIP =
   "Each unique log type becomes a reduction and a transform pipeline, a route " +
   "for each, and one sample file. A log type with no sample gets no route, so " +
   "its events arrive unshaped.";

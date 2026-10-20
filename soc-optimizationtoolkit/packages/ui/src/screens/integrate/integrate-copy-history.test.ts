@@ -123,7 +123,7 @@ export function collectCopy(file: string): CopyEntry[] {
     for (const lit of body.matchAll(LITERAL)) {
       out.push({ where: `${file}:${lineOf(m.index ?? 0)} (tip)`, text: lit[2] ?? "" });
     }
-    // A tip passed as a NAMED CONSTANT (text={PACK_SHAPE_TIP}) holds no literal
+    // A tip passed as a NAMED CONSTANT (text={PACK_COUNTS_TIP}) holds no literal
     // here, and the first version of this gate read nothing for five of them.
     // Every UPPER_CASE name outside the literals is resolved to its definition
     // and that definition's strings are read; one that cannot be resolved is
@@ -171,7 +171,7 @@ describe("Sentinel Integration copy carries no project history (DBT-125)", () =>
     );
     expect([...named].sort()).toEqual(
       expect.arrayContaining([
-        "PACK_SHAPE_TIP",
+        "PACK_COUNTS_TIP",
         "PIPELINE_PREVIEW_TIP",
         "POLICY_BAR_TIP",
         "RULE_COVERAGE_IDLE_NOTE",

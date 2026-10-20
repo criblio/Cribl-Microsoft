@@ -21,7 +21,7 @@ import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
   joinNames,
-  packShapeSummary,
+  packCountsSummary,
   sampleCoverageGateReason,
 } from "./sample-coverage-state";
 
@@ -38,20 +38,20 @@ const coverageFor = (queries: string[], provided: string[]) =>
     provided,
   );
 
-describe("packShapeSummary", () => {
+describe("packCountsSummary", () => {
   it("states the concrete route and pipeline counts", () => {
-    const out = packShapeSummary(3);
+    const out = packCountsSummary(3);
     expect(out).toContain("3 log types");
     expect(out).toContain("6 routes");
     expect(out).toContain("6 pipelines");
   });
 
   it("says the pack has nothing to route with no samples", () => {
-    expect(packShapeSummary(0)).toContain("nothing to route");
+    expect(packCountsSummary(0)).toContain("nothing to route");
   });
 
   it("uses the singular for one log type", () => {
-    expect(packShapeSummary(1)).toContain("1 log type tagged");
+    expect(packCountsSummary(1)).toContain("1 log type tagged");
   });
 });
 
