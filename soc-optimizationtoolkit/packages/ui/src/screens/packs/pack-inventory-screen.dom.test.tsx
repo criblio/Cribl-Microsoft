@@ -19,7 +19,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { toListing } from "@soc/core";
 import type { AzureConfig } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
-import type { UiPorts } from "../../ports-context";
+import type { StoredPack, UiPorts } from "../../ports-context";
 import { PackInventoryScreen } from "./pack-inventory-screen";
 
 afterEach(cleanup);
@@ -36,11 +36,12 @@ const CONFIG: AzureConfig = {
 function renderWith(
   listGroups: ReturnType<typeof vi.fn>,
   listDeployed: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([]),
+  stored: StoredPack[] = [],
 ) {
   const ports = {
     cribl: { request: vi.fn(), listGroups },
     packs: {
-      list: vi.fn().mockResolvedValue([]),
+      list: vi.fn().mockResolvedValue(stored),
       get: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
@@ -145,5 +146,93 @@ describe("PackInventoryScreen - worker-group listing states (DBT-134)", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(listGroups).toHaveBeenCalledTimes(1);
     expect(listDeployed).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** One stored build record, so the screen renders a badge to read. */
+const STORED: StoredPack = {
+  record: {
+    id: "cribl-palo-alto_1.0.0",
+    packName: "cribl-palo-alto",
+    displayName: "Palo Alto Sentinel",
+    version: "1.0.0",
+    solutionName: "Palo Alto Networks",
+    builtAtMs: 1_700_000_000_000,
+    tables: ["CommonSecurityLog"],
+    crblFileName: "cribl-palo-alto_1.0.0.crbl",
+    crblSizeBytes: 2048,
+  },
+  definition: {
+    plan: {
+      solutionName: "Palo Alto Networks",
+      packName: "cribl-palo-alto",
+      version: "1.0.0",
+      vendorPrefix: "palo_alto",
+      tables: [],
+    },
+    builtAtMs: 1_700_000_000_000,
+  },
+};
+
+/** The deployed badge on the one stored pack's card. */
+function badgeText(container: HTMLElement): string | null {
+  return container.querySelector(".mapping-review-card .gap-badge")?.textContent ?? null;
+}
+
+describe("PackInventoryScreen - a badge cites only a deployed read that ran (DBT-134 review)", () => {
+  it("does not call a pack 'Not deployed' when the groups listing was refused", async () => {
+    const { container, listDeployed } = renderWith(
+      vi.fn().mockRejectedValue(new Error("GET /master/groups: HTTP 403")),
+      undefined,
+      [STORED],
+    );
+    await waitFor(() =>
+      expect(deployTarget(container).textContent).toMatch(/Could not list worker groups/),
+    );
+    await waitFor(() => expect(badgeText(container)).not.toBeNull());
+    expect(badgeText(container)).toBe("Deployed status not read - worker groups unavailable");
+    expect(container.textContent).not.toMatch(/Not deployed/);
+    expect(listDeployed).not.toHaveBeenCalled();
+  });
+
+  it("does not call a pack 'Not deployed' when the groups listing was empty", async () => {
+    const { container } = renderWith(vi.fn().mockResolvedValue(toListing([])), undefined, [
+      STORED,
+    ]);
+    await waitFor(() =>
+      expect(deployTarget(container).textContent).toMatch(/no worker groups/),
+    );
+    await waitFor(() => expect(badgeText(container)).not.toBeNull());
+    expect(badgeText(container)).toBe("Deployed status not read - no Stream worker group listed");
+    expect(container.textContent).not.toMatch(/Not deployed/);
+  });
+
+  it("says 'Not deployed' once the packs read succeeds and lists the pack nowhere", async () => {
+    // The control for the two pins above: the same fixture CAN say it.
+    const { container } = renderWith(
+      vi.fn().mockResolvedValue(toListing([{ id: "prod", product: "stream" }])),
+      vi.fn().mockResolvedValue([{ group: "prod", packs: [] }]),
+      [STORED],
+    );
+    await waitFor(() => expect(badgeText(container)).toBe("Not deployed"));
+  });
+
+  it("drops the previous snapshot when a Refresh re-list fails", async () => {
+    const listGroups = vi
+      .fn()
+      .mockResolvedValueOnce(toListing([{ id: "prod", product: "stream" }]))
+      .mockRejectedValue(new Error("GET /master/groups: HTTP 503"));
+    const { container } = renderWith(
+      listGroups,
+      vi.fn().mockResolvedValue([
+        { group: "prod", packs: [{ id: "cribl-palo-alto", displayName: "p", version: "1.0.0" }] },
+      ]),
+      [STORED],
+    );
+    await waitFor(() => expect(badgeText(container)).toBe("Deployed on 1 group: prod"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(deployTarget(container).textContent).toMatch(/HTTP 503/));
+    expect(badgeText(container)).toBe("Deployed status not read - worker groups unavailable");
+    expect(container.textContent).not.toMatch(/Deployed on 1 group/);
   });
 });

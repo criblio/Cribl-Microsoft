@@ -14,7 +14,7 @@
  * the ports.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyMaintenanceEdits,
   assemblePack,
@@ -40,6 +40,7 @@ import {
   inventoryPlaceholder,
   PACK_INVENTORY_UNAVAILABLE_REASON,
   PACK_RETENTION_NOTE,
+  deployedUnreadReason,
   deriveDeployedBadge,
   deriveInventoryRows,
   deriveStorageSummary,
@@ -48,12 +49,18 @@ import {
   tablesSummary,
   validateDeleteId,
 } from "./pack-inventory-state";
+import type { DeployedRead } from "./pack-inventory-state";
 
 /** Keep the newest builds per pack name in the retention preview. */
 const KEEP_PER_PACK = 5;
 
 /** One identity for "no groups to read", so it never re-triggers a load. */
 const NO_GROUP_IDS: readonly string[] = [];
+
+/** Stable identities for the deployed read, so resets never re-render twice. */
+const DEPLOYED_PENDING: DeployedRead = { kind: "pending" };
+const DEPLOYED_FAILED: DeployedRead = { kind: "failed" };
+const NO_SNAPSHOT: readonly DeployedGroupPacks[] = [];
 
 /** Decode base64 cached bytes to a fresh Uint8Array (browser atob). */
 function decodeBase64(base64: string): Uint8Array {
@@ -97,7 +104,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   const packInstall = ports.packInstall;
 
   const [packs, setPacks] = useState<StoredPack[] | null>(null);
-  const [snapshot, setSnapshot] = useState<DeployedGroupPacks[]>([]);
+  const [deployedRead, setDeployedRead] = useState<DeployedRead>(DEPLOYED_PENDING);
   // MULTI-destination install (user request 2026-07-13).
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -147,17 +154,36 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   // Deployed-status truth: list each worker group's live packs. Best-effort -
   // a Cribl-side error must not blank the build records the operator can
   // still download - and only once there are groups to ask about.
+  //
+  // DBT-134 review: every call starts by forgetting the previous snapshot,
+  // and only the latest call may write one. A snapshot belongs to ONE group
+  // listing; carried across a re-list (or a re-list that failed) it would
+  // show the old deployed groups as current.
+  const deployedSequence = useRef(0);
   const loadDeployed = useCallback(async () => {
+    deployedSequence.current += 1;
+    const mine = deployedSequence.current;
+    setDeployedRead(DEPLOYED_PENDING);
     if (packInstall === undefined || groupIds.length === 0) {
       return;
     }
     try {
-      setSnapshot(await packInstall.listDeployed([...groupIds]));
+      const snapshot = await packInstall.listDeployed([...groupIds]);
+      if (mine !== deployedSequence.current) return;
+      setDeployedRead({ kind: "read", snapshot });
     } catch (err) {
-      setSnapshot([]);
+      if (mine !== deployedSequence.current) return;
+      setDeployedRead(DEPLOYED_FAILED);
       setNotice(`Deployed status unavailable: ${String(err)}`);
     }
   }, [packInstall, groupIds]);
+  const snapshot = deployedRead.kind === "read" ? deployedRead.snapshot : NO_SNAPSHOT;
+  // Checked against the listing as it stands NOW, so a Refresh that sets the
+  // groups back to loading hides the old snapshot on that very render.
+  const unreadReason =
+    packInstall === undefined
+      ? "this shell does not read installed packs"
+      : deployedUnreadReason(workerGroups.state.kind, groupIds.length, deployedRead);
 
   const load = useCallback(async () => {
     await loadPacks();
@@ -294,7 +320,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       try {
         // Next version: above the highest INSTALLED copy and this record.
         const version = nextPackVersion([
-          ...installedPackVersions(snapshot, pack.record.packName),
+          ...installedPackVersions([...snapshot], pack.record.packName),
           pack.record.version,
         ]);
         const nextDef = applyMaintenanceEdits(
@@ -475,7 +501,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       {placeholder !== null && <p className="panel-desc">{placeholder}</p>}
 
       {rows.map((row) => {
-        const badge = deriveDeployedBadge(row);
+        const badge = deriveDeployedBadge(row, unreadReason);
         return (
           <div className="mapping-review-card" key={row.id}>
             <div className="mapping-review-card-head">

@@ -2915,3 +2915,15 @@ product-over-type precedence (real, but identity-independent - kept as
 hardening: either signal saying "stream" now wins), a grant missing from an
 older release (present since the walking skeleton), and a StrictMode race (now
 guarded anyway: only the latest call writes).
+
+**Review round: the badges inherited the same lie.** Splitting the groups out
+of the pack load removed the "Deployed status unavailable" notice from the
+refused-listing path, and left every stored pack badged "Not deployed" - a
+measured zero from a packs read that never ran. The same badge showed while
+the groups were loading or empty, and a Refresh whose re-list failed kept the
+previous snapshot, so stale deployed groups read as current. The badge now
+cites a snapshot only when `listDeployed` succeeded for the listing as it
+stands NOW (`deployedUnreadReason`, which checks the group listing before any
+snapshot); otherwise it says "Deployed status not read - <why>". Each read
+also clears the last snapshot first, so either guard alone closes the
+Refresh case.
