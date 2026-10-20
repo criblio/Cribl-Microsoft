@@ -1414,8 +1414,19 @@ today, so an inline reference shows as "Default selection" rather than naming
 the rule. Worth surfacing.
 
 **`InputRest` has no schema** under that name in the vendored OpenAPI spec, so
-the REST collector is modelled elsewhere - likely `InputCollection` with a
-collector conf. Pin this down before relying on collector breaker classification.
+the REST collector is modelled elsewhere. PINNED 2026-10-20 (DBT-1,
+`packages/core/src/testing/vendored-spec-provenance.test.ts`): it is a collection
+JOB, not an input. `RestCollectorConf` is referenced only by `CollectorRest`
+(`type: "rest"`, `conf: RestCollectorConf`), which is one arm of the `Collector`
+oneOf; `Collector` is the `collector` of `RunnableJobCollection` and
+`SavedJobCollection`, whose `input` is
+`RunnableJobCollectionTypeCollectionWithBreakerRulesetsConstraint`
+(`type: "collection"`, `breakerRulesets: string[]`). The earlier guess, "an
+`InputCollection` with a collector conf", was wrong: `InputCollection` carries no
+collector and no conf. So a REST collector's breaker rulesets are declared on
+the job's `input`; collector breaker classification (`DBT-4`) has to read them
+from the saved job, and nothing in the spec says they also surface through
+`/system/inputs`.
 
 **Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` when the spec is re-vendored.**
 It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted

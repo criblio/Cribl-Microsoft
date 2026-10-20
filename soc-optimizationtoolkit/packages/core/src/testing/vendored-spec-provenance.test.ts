@@ -130,6 +130,9 @@ function path(route: string): Record<string, { summary?: string }> {
 
 /** Only the slices these pins navigate. Not a model of OpenAPI. */
 type SchemaNode = {
+  $ref?: string;
+  allOf?: SchemaNode[];
+  oneOf?: SchemaNode[];
   title?: string;
   description?: string;
   type?: string;
@@ -329,15 +332,14 @@ describe("InputRest's ABSENCE - the fact DBT-1's dependents are waiting on", () 
    *
    * The direction of the failure is the point. If Cribl ADDS InputRest, the
    * REST collector is modelled directly after all, and the answer recorded on
-   * DBT-1 - collector conf carried as an InputCollection - stops being the only
-   * option for the cards that declare `dependsOn` DBT-1. Nobody would look; the
-   * schema would simply be there, and they would be built the long way round for
-   * no reason.
+   * DBT-1 - a collection JOB whose collector is CollectorRest - stops being the
+   * only option for the cards that declare `dependsOn` DBT-1. Nobody would look;
+   * the schema would simply be there, and they would be built the long way round
+   * for no reason.
    *
-   * SCOPE: this pin holds the ABSENCE only. DBT-1's own remaining work is the
-   * positive pin (that InputCollection and RestCollectorConf are still the right
-   * names), and duplicating it here would be the second-copy failure - the two
-   * would drift and nobody would know which was authoritative.
+   * SCOPE: this pin holds the ABSENCE only. The positive model is pinned in the
+   * next block, and duplicating it here would be the second-copy failure - the
+   * two would drift and nobody would know which was authoritative.
    */
   it("still has no schema named InputRest, and none that is one renamed", () => {
     const inputRest = "InputRest" in schemas();
@@ -345,8 +347,8 @@ describe("InputRest's ABSENCE - the fact DBT-1's dependents are waiting on", () 
       inputRest,
       drifted(
         "`InputRest` has no schema under that name in the vendored spec, which " +
-          "is why the REST collector is modelled as an InputCollection carrying " +
-          "a collector conf",
+          "is why the REST collector is modelled as a collection job whose " +
+          "collector is CollectorRest, not as an input type",
         "docs/backlog.md item 10 (Status: Living, so this is a claim about the " +
           "spec as it is now) and item 6's instruction to pin the collector conf " +
           "against the asset; docs/board.json DBT-1, ANSWERED. If Cribl now " +
@@ -398,6 +400,100 @@ describe("InputRest's ABSENCE - the fact DBT-1's dependents are waiting on", () 
           "concluding what was added",
       ),
     ).toEqual([]);
+  });
+});
+
+describe("the REST collector is a collection JOB - DBT-1's positive answer", () => {
+  /**
+   * The model the cards that declare `dependsOn` DBT-1 build on, walked link by
+   * link because each link is a separate thing a re-vendor can break:
+   *
+   *   RunnableJobCollection / SavedJobCollection
+   *     .collector -> Collector (oneOf) -> CollectorRest
+   *                     { type: enum ["rest"], conf -> RestCollectorConf }
+   *     .input     -> RunnableJobCollectionTypeCollectionWithBreakerRulesetsConstraint
+   *                     { type: enum ["collection"], breakerRulesets: string[] }
+   *
+   * WHAT THIS CORRECTS. DBT-1 first recorded the answer as "RestCollectorConf,
+   * carried as an InputCollection" - the card's own guess, read as confirmed.
+   * It was not: InputCollection references no collector schema at all, and
+   * RestCollectorConf is reachable only through CollectorRest and the Collector
+   * oneOf, which only the job schemas (and their response/count envelopes) use.
+   * The last assertion below holds that negative, so the old wording cannot come
+   * back with a green suite behind it.
+   *
+   * WHY THE INPUT HALF MATTERS. The job's `input` is where a REST collector's
+   * breaker rulesets are declared, so collector breaker classification has to
+   * read the saved job, not guess from the `/system/inputs` shapes. That is the
+   * fact DBT-4 leans on, and it is pinned by its own assertion.
+   *
+   * Names are pinned, not shapes: RestCollectorConf's own fields (auth,
+   * pagination, retry families) are not held here - a list of them would be the
+   * second-copy-of-the-spec failure this file's header rejects.
+   */
+  const ref = (name: string) => `#/components/schemas/${name}`;
+  const claimIn =
+    "docs/backlog.md item 10 ('`InputRest` has no schema', PINNED 2026-10-20) " +
+    "and docs/board.json DBT-1. Correct both, and say so on every card that " +
+    "declares `dependsOn` DBT-1, before editing this expectation";
+
+  it("CollectorRest is the 'rest' arm and carries RestCollectorConf as its conf", () => {
+    const claim = drifted(
+      "the REST collector is CollectorRest: type enum ['rest'] with conf -> " +
+        "RestCollectorConf, and nothing else in the spec references RestCollectorConf",
+      claimIn,
+    );
+    expect("CollectorRest" in schemas() && "RestCollectorConf" in schemas(), claim).toBe(true);
+    const arm = (schemas().CollectorRest.allOf ?? []).find((p) => p.properties?.conf !== undefined);
+    expect(arm?.properties?.type?.enum, claim).toEqual(["rest"]);
+    expect(arm?.properties?.conf?.$ref, claim).toBe(ref("RestCollectorConf"));
+  });
+
+  it("Collector's oneOf includes CollectorRest", () => {
+    expect(
+      (schemas().Collector?.oneOf ?? []).map((o) => o.$ref),
+      drifted("Collector is a oneOf whose arms include CollectorRest", claimIn),
+    ).toContain(ref("CollectorRest"));
+  });
+
+  for (const job of ["RunnableJobCollection", "SavedJobCollection"]) {
+    it(`${job} carries the collector, and a 'collection' input with breakerRulesets`, () => {
+      const claim = drifted(
+        `${job}.collector -> Collector, and ${job}.input is a type 'collection' ` +
+          "input carrying breakerRulesets - the job's input, not /system/inputs, " +
+          "is where a REST collector's breaker rulesets are declared",
+        claimIn,
+      );
+      expect(job in schemas(), claim).toBe(true);
+      const props = schemas()[job].properties;
+      expect(props?.collector?.$ref, claim).toBe(ref("Collector"));
+      const inputName = (props?.input?.$ref ?? "").replace(ref(""), "");
+      expect(inputName, claim).toBe("RunnableJobCollectionTypeCollectionWithBreakerRulesetsConstraint");
+      const input = schemas()[inputName]?.properties;
+      expect(input?.type?.enum, claim).toEqual(["collection"]);
+      expect(input?.breakerRulesets?.items?.type, claim).toBe("string");
+    });
+  }
+
+  it("InputCollection carries NO collector and NO conf - the corrected wording", () => {
+    const input = schemas().InputCollection;
+    const refsIn = JSON.stringify(input ?? {}).match(/#\/components\/schemas\/[A-Za-z0-9_]+/g) ?? [];
+    expect(
+      {
+        exists: input !== undefined,
+        keys: Object.keys(input?.properties ?? {}).filter((k) => k === "collector" || k === "conf"),
+        // "Collector", not "Collection": InputCollection's own sub-schemas
+        // (ConnectionConfInputCollection and the rest) are allowed and expected.
+        collectorRefs: refsIn.filter((r) => r.includes("Collector")),
+      },
+      drifted(
+        "the REST collector is NOT 'an InputCollection carrying a collector " +
+          "conf' - InputCollection has no collector/conf property and references " +
+          "no Collector schema. If a re-vendor adds one, the job model above may " +
+          "have gained an alternative; re-read the asset before choosing",
+        claimIn,
+      ),
+    ).toEqual({ exists: true, keys: [], collectorRefs: [] });
   });
 });
 
