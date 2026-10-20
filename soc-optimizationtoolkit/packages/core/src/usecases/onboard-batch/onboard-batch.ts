@@ -82,7 +82,8 @@ import type {
 } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
 import type { JobRecord, JobStatus, JobStep } from "../../ports/job-store";
-import { httpErrorText, is2xx, prop } from "../arm-http";
+import { httpErrorText, is2xx, prop, safeAzureManagement } from "../arm-http";
+import type { ArmAttempt, SafeAzureManagement } from "../arm-http";
 import { generateDcrName } from "../../domain/dcr-naming";
 import type { OperationOptions } from "../../domain/option-forms";
 import { selectSchemaColumns } from "../../domain/schema-mapping";
@@ -379,74 +380,11 @@ export function paceAzureManagement(
   return paced;
 }
 
-/**
- * The outcome of ONE ARM call made through {@link SafeAzureManagement}:
- * either the response the transport produced, or the text of the reason it
- * produced none.
- *
- * A non-2xx ANSWER is `ok: true` - ARM said something, and the caller branches
- * on `status` exactly as before. `ok: false` means there is no answer at all
- * (dropped socket, DNS, an expired token, a proxy that throws). Blurring the
- * two would be worse than the convention this replaces: "ARM refused" and "ARM
- * was never reached" are different operator actions.
- */
-export type ArmAttempt =
-  | { ok: true; response: PortHttpResponse }
-  | { ok: false; error: string };
-
-/**
- * DBT-56: an ARM view that CANNOT reject, so the never-rejects contract
- * documented on {@link onboardBatch} stops being a convention retyped at every
- * call site.
- *
- * It was prose plus a habit: FOUR try blocks around the batch's ARM calls, and
- * DBT-48 existed because one call had been added without one. The measurement
- * that motivated this (2026-09-01): with the ensure-dce, associate-ampls and
- * per-table guards made transparent to a rejection - exactly what a call site
- * added without a guard looks like - the whole core suite still passed, 3511
- * tests. Only the fetch-workspace call was pinned, and only because it is the
- * FIRST call, so a transport that rejects on everything can never reach the
- * six behind it.
- *
- * As a TYPE the omission is a compile error: an {@link ArmAttempt} has no
- * `.status`, so nothing reaches a response without naming what happens when
- * there is none.
- *
- * WHAT IT DOES NOT DO: it does not make throwing impossible here.
- * {@link StepFailure} is still raised deliberately and still needs its
- * enclosing guard, and the child `onboardTable` call is not an ARM call and
- * carries its own rejection shape. It removes ONE class of escape - the
- * transport's - which is the class that produced DBT-48.
- *
- * Deliberately NOT a superset of {@link AzureManagement}: no `requestUrl`,
- * because the batch makes no paginated ARM calls and a view offering a method
- * nobody needs is an invitation to reach for the unsafe one.
- */
-export interface SafeAzureManagement {
-  /** Execute one ARM request. Never rejects; see {@link ArmAttempt}. */
-  request(opts: AzureManagementRequest): Promise<ArmAttempt>;
-}
-
-/**
- * Compose the never-rejecting view over an {@link AzureManagement} (in
- * onboardBatch: over the PACED port, so the safe view inherits the budget).
- */
-export function safeAzureManagement(
-  azure: AzureManagement,
-): SafeAzureManagement {
-  return {
-    request: async (opts: AzureManagementRequest): Promise<ArmAttempt> => {
-      try {
-        return { ok: true, response: await azure.request(opts) };
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-  };
-}
+// ArmAttempt / SafeAzureManagement moved to ../arm-http (DBT-74) so
+// content-install can use them without importing the batch; re-exported here
+// so the batch's public surface is unchanged.
+export { safeAzureManagement };
+export type { ArmAttempt, SafeAzureManagement };
 
 /** Internal signal: a step failed; message already carries the raw text. */
 class StepFailure extends Error {
