@@ -235,7 +235,17 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Loading forever; a group counts as Stream if product OR type says stream;
   GET '/master/groups/:id' declared. The card STAYS IN PROGRESS: the tester's
   org root cause is still unknown, and the next release will show which state
-  the picker lands in.
+  the picker lands in. LIVE 2026-10-20 (Live Preview, admin account): the
+  normal path is intact on every picker - Dataflow Live Workgroup View,
+  Sentinel Integration (primary lists
+  default/defaultHybrid/AzureManaged/DatacenterEast/o11yDemo labelled stream;
+  fan-out lists the other four), Pack Maintenance Deploy target with real
+  deployed badges, DCR Automation Single table and Batch; no console errors.
+  The degraded states stay pins-only, since an admin cannot produce them. Also
+  learned: a bare fetch of /api/v1/master/groups from the leader page answers
+  Unauthorized (the Cribl UI authenticates with a bearer header, not a
+  cookie), so a tester comparison must come from the Network tab, not a
+  console fetch.
 
 ---
 
@@ -1079,7 +1089,7 @@ Settled, gated on something above.
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
-  `HON-F1` `story` `settled` `verified: pins`
+  `HON-F1` `story` `settled` `verified: both`
   The nav was tried and was the wrong surface. Two candidates remain: the
   frame footer, or the connection bar beside the existing chips.
   `backlog.md#1`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**,
@@ -1098,8 +1108,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   The connection bar shows the capability audit's age, with an (i) explanation
   and a Re-check permissions button. Round 2 fixed the header of
   useCapabilityAudit, which named the wrong consumer and claimed a cache reuse
-  that the one-slot cache cannot do. The fix is to a comment only. Not yet
-  looked at in Live Preview; the chip and Re-check button render in pins only.
+  that the one-slot cache cannot do. The fix is to a comment only. LIVE
+  2026-10-20 (Live Preview, fix/worker-group-picker): the connection bar shows
+  "permissions: checked 4 days ago" with the (i) and Re-check permissions on
+  Dataflow, Sentinel Integration, DCR Automation and Pack Maintenance; the (i)
+  opens and explains the stored result. Re-check itself was not clicked.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
   `AZR-F3` `bug` `settled` `verified: pins`
