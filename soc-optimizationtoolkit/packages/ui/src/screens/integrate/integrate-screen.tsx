@@ -102,7 +102,6 @@ import {
   destinationIdFromOptions,
   identityGateMessage,
   installedPackVersions,
-  isStreamWorkerGroup,
   missingIdentityFields,
   nextPackVersion,
   onboardTable,
@@ -119,7 +118,6 @@ import type {
 } from "@soc/core";
 import type {
   ContentItem,
-  CriblGroupSummary,
   PackShape,
   CriblOptions,
   DcrRoleTarget,
@@ -202,6 +200,11 @@ import {
   SearchableMultiSelect,
   SearchableSelect,
 } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { sleep } from "../../polling/sleep";
 import { RoleAssignmentSection } from "../role-assignment/role-assignment-section";
 import {
@@ -433,8 +436,6 @@ export function IntegrateScreen({
   const { ports, config, capabilities, capabilityContext } = usePorts();
 
   // ---- Cribl Configuration section (worker group + pack name) -----------
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
-  const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
   // NO solution here: it is declared below, and a useState initializer runs
   // IMMEDIATELY on first render, so reading it would throw before the component
@@ -803,30 +804,16 @@ export function IntegrateScreen({
     [ports],
   );
 
-  // Populate the worker-group dropdown from the CriblClient port (same
-  // pattern as OnboardTableScreen: raw error + retry, no silent empty list).
-  // The persisted worker-group default wins the initial selection when it
-  // exists in the live list; otherwise the first discovered group is used.
+  // Populate the worker-group dropdown from the CriblClient port. Every
+  // listing state - loading, refused, an unverified empty, groups none of
+  // which is Stream - is WorkerGroupField's to render (DBT-134), shared with
+  // the onboarding screens and Pack Inventory. Edge fleets cannot run these
+  // pipelines: Stream worker groups only. The persisted worker-group default
+  // wins the initial selection when it exists in the live list; otherwise the
+  // first discovered group is used.
   const preferredGroup = criblDefaults?.workerGroup ?? "";
-  const loadGroups = useCallback(async () => {
-    setGroups(null);
-    setGroupsError("");
-    try {
-      // Edge fleets cannot run these pipelines: Stream worker groups only.
-      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(list);
-      const preferred = list.some((g) => g.id === preferredGroup)
-        ? preferredGroup
-        : (list[0]?.id ?? "");
-      setGroupId((current) => (current !== "" ? current : preferred));
-    } catch (err) {
-      setGroupsError(String(err));
-    }
-  }, [ports.cribl, preferredGroup]);
-
-  useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+  const workerGroups = useStreamWorkerGroups(ports.cribl, { logger: ports.logger });
+  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   // Distinct worker groups the pack would be deployed to: the primary group
   // plus any extra groups when the multi-group toggle is on.
@@ -2428,30 +2415,21 @@ export function IntegrateScreen({
           Cribl worker group{" "}
           <InfoTip text="The worker group that runs the pipelines. Prefilled from your saved Options when that group is in the live list." />
         </span>
-        {groups !== null ? (
-          <SearchableSelect
-            options={groups.map((g) => ({
-              value: g.id,
-              label: g.id,
-              hint: g.product,
-            }))}
-            value={groupId}
-            onChange={setGroupId}
-            placeholder="Select a worker group..."
-            ariaLabel="Filter worker groups"
-          />
-        ) : groupsError === "" ? (
-          <span className="field-hint">Loading worker groups...</span>
-        ) : (
-          <span className="field-hint">
-            Could not list worker groups: {groupsError}
-          </span>
-        )}
-        {groupsError !== "" && (
-          <button className="run-button" onClick={() => void loadGroups()}>
-            Retry loading groups
-          </button>
-        )}
+        <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+          {(groups) => (
+            <SearchableSelect
+              options={groups.map((g) => ({
+                value: g.id,
+                label: g.id,
+                hint: g.product,
+              }))}
+              value={groupId}
+              onChange={setGroupId}
+              placeholder="Select a worker group..."
+              ariaLabel="Filter worker groups"
+            />
+          )}
+        </WorkerGroupField>
       </label>
       <label className="field">
         <span className="field-label">
@@ -2587,29 +2565,40 @@ export function IntegrateScreen({
             {multiGroup ? " Select the additional groups below." : ""}
           </span>
         </label>
-        {multiGroup &&
-          (groups !== null ? (
-            groups.filter((g) => g.id !== groupId).length > 0 ? (
-              <label className="field">
-                <span className="field-label">Additional worker groups</span>
-                <SearchableMultiSelect
-                  options={groups
-                    .filter((g) => g.id !== groupId)
-                    .map((g) => ({ value: g.id, label: g.id, hint: g.product }))}
-                  values={extraGroups}
-                  onChange={setExtraGroups}
-                  placeholder="Select additional worker groups..."
-                  ariaLabel="Filter worker groups"
-                />
-              </label>
-            ) : (
-              <span className="field-hint">
-                No other worker groups are available to fan out to.
-              </span>
-            )
-          ) : (
-            <span className="field-hint">Loading worker groups...</span>
-          ))}
+        {/* DBT-134: the fan-out renders the SAME listing states as the
+            picker above. It used to show "Loading worker groups..." forever
+            when the listing had failed, and state a zero it had not verified
+            when only the primary group was listed. */}
+        {multiGroup && (
+          <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+            {(groups) => {
+              const others = groups.filter((g) => g.id !== groupId);
+              return others.length > 0 ? (
+                <label className="field">
+                  <span className="field-label">Additional worker groups</span>
+                  <SearchableMultiSelect
+                    options={others.map((g) => ({
+                      value: g.id,
+                      label: g.id,
+                      hint: g.product,
+                    }))}
+                    values={extraGroups}
+                    onChange={setExtraGroups}
+                    placeholder="Select additional worker groups..."
+                    ariaLabel="Filter worker groups"
+                  />
+                </label>
+              ) : (
+                <span className="field-hint">
+                  {groups.map((g) => g.id).join(", ")} is the only Stream worker
+                  group Cribl returned, and it is already the target above, so
+                  there is no other group to fan out to. Groups your Cribl role
+                  cannot see are not listed.
+                </span>
+              );
+            }}
+          </WorkerGroupField>
+        )}
         <div className="integrate-check">
           <button
             className="run-button"

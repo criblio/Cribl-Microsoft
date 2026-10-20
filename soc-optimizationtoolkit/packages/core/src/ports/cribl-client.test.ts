@@ -11,7 +11,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { deriveGroupProduct, isStreamWorkerGroup } from "./cribl-client";
+import {
+  deriveGroupProduct,
+  isStreamWorkerGroup,
+  streamWorkerGroups,
+} from "./cribl-client";
+import { toListing } from "../domain/inventory-listing";
 
 describe("isStreamWorkerGroup", () => {
   it("keeps groups reporting product 'stream'", () => {
@@ -89,5 +94,51 @@ describe("deriveGroupProduct", () => {
     expect(
       deriveGroupProduct(undefined, undefined, "yes", undefined),
     ).toBeUndefined();
+  });
+
+  it("classes a group as stream when EITHER product or type says so", () => {
+    // DBT-134 hardening: an unexpected product string used to outrank the
+    // spec's own `type` discriminator and drop a Stream group from every
+    // picker.
+    expect(deriveGroupProduct("cribl", "stream", undefined, undefined)).toBe(
+      "stream",
+    );
+    expect(deriveGroupProduct("Stream", "edge", undefined, undefined)).toBe(
+      "stream",
+    );
+    // Neither says stream: the explicit product still wins over the type.
+    expect(deriveGroupProduct("edge", "outpost", undefined, undefined)).toBe(
+      "edge",
+    );
+  });
+});
+
+describe("streamWorkerGroups", () => {
+  it("keeps an EMPTY listing unverified, with nothing excluded", () => {
+    // The tester's case: a 2xx with no items is what a role that covers no
+    // group receives, so it must not become a measured zero.
+    expect(streamWorkerGroups(toListing([]))).toEqual({
+      stream: { kind: "empty" },
+      excluded: [],
+    });
+  });
+
+  it("reports a listing of only non-Stream groups as a measured none, naming them", () => {
+    const fleet = { id: "default_fleet", product: "edge" };
+    const search = { id: "default_search", product: "search" };
+    expect(streamWorkerGroups(toListing([fleet, search]))).toEqual({
+      stream: { kind: "none" },
+      excluded: [fleet, search],
+    });
+  });
+
+  it("splits a mixed listing into Stream rows and the rest", () => {
+    const stream = { id: "default", product: "stream" };
+    const unreported = { id: "legacy" };
+    const fleet = { id: "default_fleet", product: "edge" };
+    expect(streamWorkerGroups(toListing([stream, fleet, unreported]))).toEqual({
+      stream: { kind: "rows", rows: [stream, unreported] },
+      excluded: [fleet],
+    });
   });
 });

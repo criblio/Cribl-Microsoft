@@ -87,3 +87,46 @@ describe("PlatformCriblClient passes the caller's wait to the transport", () => 
     expect(fetchWithTimeout.mock.calls[0]?.[2]).toBeUndefined();
   });
 });
+
+describe("PlatformCriblClient.listGroups returns a Listing (DBT-134)", () => {
+  function respondWith(status: number, body: unknown) {
+    (window as unknown as { CRIBL_API_URL: string }).CRIBL_API_URL =
+      "https://leader.example/api/v1";
+    fetchWithTimeout.mockResolvedValue({
+      status,
+      text: async () => JSON.stringify(body),
+      headers: { get: () => "application/json" },
+    });
+  }
+
+  it("reports a 200 with no items as the UNVERIFIED empty listing", async () => {
+    // The tester's answer, most likely: the leader sends this both when no
+    // group exists and when the caller's role or the app's grant covers none.
+    // A bare [] here is what let four screens render it as "No matches".
+    respondWith(200, { count: 0, items: [] });
+    expect(await new PlatformCriblClient().listGroups()).toEqual({ kind: "empty" });
+  });
+
+  it("maps listed groups to rows, classing type 'stream' as Stream whatever product says", async () => {
+    respondWith(200, {
+      count: 3,
+      items: [
+        { id: "default", type: "stream", product: "cribl" },
+        { id: "default_fleet", isFleet: true },
+        { product: "stream" },
+      ],
+    });
+    expect(await new PlatformCriblClient().listGroups()).toEqual({
+      kind: "rows",
+      rows: [
+        { id: "default", product: "stream" },
+        { id: "default_fleet", product: "edge" },
+      ],
+    });
+  });
+
+  it("still REJECTS a refusal rather than turning it into a listing", async () => {
+    respondWith(403, { message: "Forbidden" });
+    await expect(new PlatformCriblClient().listGroups()).rejects.toThrow(/HTTP 403/);
+  });
+});

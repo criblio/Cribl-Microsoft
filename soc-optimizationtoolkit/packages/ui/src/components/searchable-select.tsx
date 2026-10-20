@@ -141,6 +141,9 @@ function Popover({ query, onQuery, onKeyDown, inputRef, ariaLabel, children }: P
   );
 }
 
+/** The default {@link SearchableSelectProps.emptyText}: no options, not no matches. */
+export const NO_OPTIONS_TEXT = "Nothing to choose from";
+
 export interface SearchableSelectProps {
   options: readonly SelectOption[];
   value: string;
@@ -149,6 +152,13 @@ export interface SearchableSelectProps {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  /**
+   * What the popover says when there are NO options at all (DBT-134). Kept
+   * apart from "No matches" on purpose: that is a statement about the filter
+   * text, and showing it over an empty list made a list nobody could see read
+   * as the operator's typo.
+   */
+  emptyText?: string;
 }
 
 /** Single-select combobox: pick one option; the popover closes on selection. */
@@ -160,6 +170,7 @@ export function SearchableSelect({
   disabled = false,
   ariaLabel,
   className,
+  emptyText = NO_OPTIONS_TEXT,
 }: SearchableSelectProps) {
   const c = useCombo(options);
 
@@ -215,7 +226,9 @@ export function SearchableSelect({
           ariaLabel={ariaLabel ?? "Filter options"}
         >
           {c.filtered.length === 0 ? (
-            <li className="searchable-select-empty">No matches</li>
+            <li className="searchable-select-empty">
+              {options.length === 0 ? emptyText : "No matches"}
+            </li>
           ) : (
             c.filtered.map((o, i) => (
               <li
@@ -247,6 +260,13 @@ export interface SearchableMultiSelectProps {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  /**
+   * What the popover says when there are NO options at all (DBT-134). Kept
+   * apart from "No matches" on purpose: that is a statement about the filter
+   * text, and showing it over an empty list made a list nobody could see read
+   * as the operator's typo.
+   */
+  emptyText?: string;
 }
 
 /** Multi-select combobox: toggle options; the popover stays open while picking. */
@@ -258,6 +278,7 @@ export function SearchableMultiSelect({
   disabled = false,
   ariaLabel,
   className,
+  emptyText = NO_OPTIONS_TEXT,
 }: SearchableMultiSelectProps) {
   const c = useCombo(options);
   const selected = useMemo(() => new Set(values), [values]);
@@ -315,7 +336,9 @@ export function SearchableMultiSelect({
           ariaLabel={ariaLabel ?? "Filter options"}
         >
           {c.filtered.length === 0 ? (
-            <li className="searchable-select-empty">No matches</li>
+            <li className="searchable-select-empty">
+              {options.length === 0 ? emptyText : "No matches"}
+            </li>
           ) : (
             c.filtered.map((o, i) => (
               <li

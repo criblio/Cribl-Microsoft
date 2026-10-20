@@ -6,12 +6,13 @@
  */
 
 import { useCallback, useState } from "react";
-import {
-  assembleFlowLogPack,
-  finalizeFlowLogPack,
-  type CriblGroupSummary,
-} from "@soc/core";
+import { assembleFlowLogPack, finalizeFlowLogPack } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { flowLogPackResultLines, packStorageAccountName } from "./labs-state";
 
 export interface FlowLogPackPanelProps {
@@ -25,32 +26,20 @@ export interface FlowLogPackPanelProps {
 
 export function FlowLogPackPanel({ defaultStorageAccount }: FlowLogPackPanelProps) {
   const { ports, config } = usePorts();
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
+  // Listed only when asked. WorkerGroupField renders every listing state -
+  // an empty listing used to leave the panel with no select and no word
+  // (DBT-134). Stream worker groups only: the pack's collector and
+  // pipeline run on Stream, and every other picker already excluded Edge
+  // fleets; this one listed them.
+  const workerGroups = useStreamWorkerGroups(ports.cribl, { auto: false });
   const [groupId, setGroupId] = useState("");
-  const [groupsError, setGroupsError] = useState("");
+  useInitialWorkerGroup(workerGroups.state, "", setGroupId);
   const [packStorageAccount, setPackStorageAccount] = useState("");
   const [packSecret, setPackSecret] = useState("");
   const [packScheduleEnabled, setPackScheduleEnabled] = useState(true);
   const [deployingPack, setDeployingPack] = useState(false);
   const [packLines, setPackLines] = useState<string[]>([]);
   const [packError, setPackError] = useState("");
-
-  const loadGroups = useCallback(async () => {
-    setGroupsError("");
-    try {
-      const found = await ports.cribl.listGroups();
-      setGroups(found);
-      if (found.length > 0 && groupId === "") {
-        setGroupId(found[0].id);
-      }
-    } catch (err) {
-      setGroups(null);
-      setGroupsError(
-        `Worker groups unavailable (is a Cribl connection active?): ` +
-          (err instanceof Error ? err.message : String(err)),
-      );
-    }
-  }, [ports.cribl, groupId]);
 
   const deployFlowLogPack = useCallback(async () => {
     if (deployingPack || groupId === "" || ports.packInstall === undefined) {
@@ -114,23 +103,26 @@ export function FlowLogPackPanel({ defaultStorageAccount }: FlowLogPackPanelProp
         it, or leave blank if it already exists in the group.
       </p>
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void loadGroups()}>
-          {groups === null ? "Load worker groups" : "Reload worker groups"}
+        <button className="run-button" onClick={workerGroups.reload}>
+          {workerGroups.state.kind === "idle"
+            ? "Load worker groups"
+            : "Reload worker groups"}
         </button>
-        {groupsError !== "" && (
-          <span className="field-hint eh-warning">{groupsError}</span>
-        )}
       </div>
-      {groups !== null && groups.length > 0 && (
+      {workerGroups.state.kind !== "idle" && (
         <label className="field">
           <span className="field-label">Worker group (where to deploy)</span>
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.id}
-              </option>
-            ))}
-          </select>
+          <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+            {(groups) => (
+              <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.id}
+                  </option>
+                ))}
+              </select>
+            )}
+          </WorkerGroupField>
         </label>
       )}
       <label className="field">

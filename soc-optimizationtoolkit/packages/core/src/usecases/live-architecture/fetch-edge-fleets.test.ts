@@ -83,4 +83,19 @@ describe("fetchEdgeFleetData", () => {
     expect(data.fleets.map((f) => f.id)).toEqual(["edge-a"]);
     expect(data.workers).toBeUndefined();
   });
+
+  it("marks an EMPTY groups listing as not listed, and a Stream-only one as listed", async () => {
+    // DBT-134: an empty listing is what a role that covers no group receives,
+    // so "no Edge fleets" is only a fact when groups actually came back.
+    const empty = new FakeCriblClient();
+    empty.respondWith({ status: 200, body: { items: [] } });
+    expect((await fetchEdgeFleetData(empty)).groupsListed).toBe(false);
+
+    const streamOnly = new FakeCriblClient();
+    streamOnly.groups = [{ id: "default", product: "stream" }];
+    streamOnly.respondWith({ status: 200, body: { items: [] } });
+    const data = await fetchEdgeFleetData(streamOnly);
+    expect(data.groupsListed).toBe(true);
+    expect(data.fleets).toEqual([]);
+  });
 });

@@ -21,6 +21,7 @@ import type {
   InstalledPack,
   JobRecord,
   JobStore,
+  Listing,
   Logger,
   PatManagerStatus,
   PortHttpResponse,
@@ -49,6 +50,7 @@ import {
   patFormatIssue,
   patStatusFrom,
   selectConnectorFiles,
+  toListing,
 } from '@soc/core';
 // Pack store + install-client contracts are @soc/ui-owned ports (they carry the
 // StoredPack definition the UI regenerates from); the CloudPorts bundle
@@ -497,7 +499,7 @@ export class PlatformCriblClient implements CriblClient {
     return { status: res.status, body: await readPortBody(res) };
   }
 
-  async listGroups(): Promise<CriblGroupSummary[]> {
+  async listGroups(): Promise<Listing<CriblGroupSummary>> {
     const response = await this.request({ method: 'GET', path: '/master/groups' });
     // listGroups is a convenience that must yield a real list; an HTTP error
     // here leaves nothing sensible to return, so it surfaces as a rejection
@@ -531,7 +533,10 @@ export class PlatformCriblClient implements CriblClient {
       );
       groups.push(product !== undefined ? { id, product } : { id });
     }
-    return groups;
+    // An empty `items` is a 2xx the leader also sends when the caller's role,
+    // or the app's policies.yml grant, covers no group (DBT-134) - so it stays
+    // an unverified `empty`, never a zero the screens may state.
+    return toListing(groups);
   }
 }
 

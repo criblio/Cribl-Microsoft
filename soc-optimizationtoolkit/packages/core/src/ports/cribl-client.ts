@@ -14,6 +14,8 @@
  */
 
 import type { HttpMethod, PortHttpResponse } from './http';
+import { filterListing, listingRows } from '../domain/inventory-listing';
+import type { Listing } from '../domain/inventory-listing';
 
 /** A single Cribl API request. */
 export interface CriblRequest {
@@ -78,6 +80,47 @@ export function isStreamWorkerGroup(group: CriblGroupSummary): boolean {
   );
 }
 
+/** A groups listing split into the Stream worker groups and everything else. */
+export interface StreamWorkerGroupListing {
+  /**
+   * The Stream worker groups. `rows` when there are some; `none` when the
+   * leader DID return groups and none of them is a Stream group (a measured
+   * zero - {@link excluded} names what was there); `empty` when the listing
+   * itself returned nothing, which is unverified and must not be read as
+   * "this deployment has no worker groups".
+   */
+  stream: Listing<CriblGroupSummary>;
+  /**
+   * Every listed group that is NOT a Stream worker group, in listing order:
+   * Edge fleets, Outpost and Search groups. Always empty for an `empty`
+   * listing - nothing was read to exclude.
+   */
+  excluded: readonly CriblGroupSummary[];
+}
+
+/**
+ * Filter a groups listing to the Stream worker groups WITHOUT losing what the
+ * filter removed (DBT-134).
+ *
+ * Every picker used to call `.filter(isStreamWorkerGroup)` on a bare array and
+ * keep only the result, so "the leader returned nothing", "your role sees no
+ * group" and "the leader returned three Edge fleets" all reached the screen as
+ * the same `[]` and rendered as one enabled select reading "No matches". The
+ * source listing has to travel with the filter for those to stay apart, which
+ * is what `filterListing` demands and this keeps in one place.
+ */
+export function streamWorkerGroups(
+  listing: Listing<CriblGroupSummary>,
+): StreamWorkerGroupListing {
+  // Rows to filter, not a count: the empty case is carried by `listing`
+  // itself and reaches `filterListing` unchanged.
+  const all = listingRows(listing);
+  return {
+    stream: filterListing(listing, all.filter(isStreamWorkerGroup)),
+    excluded: all.filter((group) => !isStreamWorkerGroup(group)),
+  };
+}
+
 /**
  * Whether a group is a Cribl Edge FLEET (2026-07-30 Edge fleet inventory).
  * Strict, unlike isStreamWorkerGroup's unreported-product tolerance: a
@@ -119,6 +162,12 @@ export function isSearchGroup(group: CriblGroupSummary): boolean {
  *     both fields above mark Edge fleets and Search groups (live report
  *     2026-07-09: default_fleet listed with no `product` field).
  *
+ * EITHER of the first two saying "stream" wins (DBT-134 hardening): with the
+ * explicit string first and nothing else, an item carrying an unexpected
+ * `product` value beside `type: "stream"` was classed by the product and
+ * dropped from every worker-group picker, although the spec's own
+ * discriminator said it was a Stream group.
+ *
  * Returns undefined only when the item carries NO product signal at all;
  * isStreamWorkerGroup then keeps it visible (a leader reporting nothing is a
  * single-product deployment with nothing to mis-list).
@@ -129,6 +178,11 @@ export function deriveGroupProduct(
   isFleet: unknown,
   isSearch: unknown,
 ): string | undefined {
+  const saysStream = (v: unknown) =>
+    typeof v === "string" && v.toLowerCase() === "stream";
+  if (saysStream(product) || saysStream(type)) {
+    return "stream";
+  }
   if (typeof product === "string" && product !== "") {
     return product;
   }
@@ -160,6 +214,12 @@ export interface CriblClient {
    * List the Worker Groups / Edge Fleets visible to the configured
    * credentials. Convenience over the groups endpoint so usecases can offer
    * a group picker without knowing the route.
+   *
+   * A `Listing`, not an array (DBT-134/DBT-135): the leader answers a caller
+   * whose role - or whose app grant - covers no group with `200 []`, which is
+   * byte-identical to a deployment that has none. `empty` keeps that unknown;
+   * {@link streamWorkerGroups} is how a picker narrows it. Rejects on a
+   * non-2xx or an unreadable body, exactly as before.
    */
-  listGroups(): Promise<CriblGroupSummary[]>;
+  listGroups(): Promise<Listing<CriblGroupSummary>>;
 }

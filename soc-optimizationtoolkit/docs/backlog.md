@@ -2871,3 +2871,47 @@ answered the four decisions that shape the rest of the move (DBT-130):
   Marketplace. Rejected: GitHub Releases and the committed-tarball model as
   the distribution channel. Unknown and blocking the pipeline: how the
   Marketplace accepts a new version.
+
+## 23. DBT-134: an empty worker-group picker, and the doc that said it could not happen - 2026-10-20
+
+**The report.** A tester saw the worker-group picker with nothing in it. The
+developer, an Org admin, saw the full list on the same build.
+
+**What it was, as far as code can say.** Four states rendered as one: the
+leader returned no groups, the caller's role (or the app grant) covered none,
+every group was an Edge fleet / Outpost / Search group, and a typo in the
+filter. All four became an enabled select whose only row read "No matches".
+`CriblClient.listGroups` returned a bare array and five pickers filtered it
+inline, so the information that told them apart was thrown away at the call
+site. `docs/inventory-standard.md` claimed DBT-62 had converted this read to
+`Listing<T>`; it had wrapped it inside one usecase only (DBT-135). The false
+claim is why nobody looked - a BINDING document is evidence people stop
+checking behind.
+
+**The likeliest root cause is a missing grant, and it is not proven.**
+`policies.yml` declared the groups COLLECTION and no per-group read, while the
+platform's own authoring doc (apps/cribl-app/AGENTS.md:230) says a collection
+declaration covers that exact path and "group results can be empty" without
+the per-item one. An admin's own role covers every group, which fits the
+admin-sees, tester-does-not split exactly. `GET /master/groups/:id` is now
+declared. It cannot be confirmed by an admin on themselves: it needs a
+non-admin user shared the app, in Live Preview, capturing the `/master/groups`
+body before and after - and possibly `/products/stream/groups[/:id]`, the
+non-deprecated route the doc actually names, which was deliberately NOT added
+blind.
+
+**Why the honesty fix ships regardless of the grant.** Whatever the live check
+finds, an empty listing is what a role that covers no group receives, so
+rendering it as a zero is wrong on its own. One component
+(`components/worker-group-field.tsx`) now owns every state for every picker,
+and the port returns a `Listing`, so the next picker cannot reintroduce the
+bare-array filter without the compiler noticing.
+
+**Rejected:** a capability (`cribl.groups.read`) and a probe for it. The
+taxonomy is closed deliberately (see the inventory standard's "When NO
+capability covers the list"), and the hedge plus Retry already gives the
+operator the truthful next step. **Rejected as causes:** the mapper's
+product-over-type precedence (real, but identity-independent - kept as
+hardening: either signal saying "stream" now wins), a grant missing from an
+older release (present since the walking skeleton), and a StrictMode race (now
+guarded anyway: only the latest call writes).

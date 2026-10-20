@@ -56,6 +56,8 @@ import {
   isStreamWorkerGroup,
 } from "../ports/cribl-client";
 import type { PortHttpResponse } from "../ports/http";
+import { listingRows, toListing } from "../domain/inventory-listing";
+import type { Listing } from "../domain/inventory-listing";
 
 const BASE = process.env.CRIBL_LIVE_BASE ?? "";
 const TOKEN = process.env.CRIBL_LIVE_TOKEN ?? "";
@@ -178,17 +180,17 @@ function liveClient(): CriblClient {
 
   return {
     request: call,
-    listGroups: async (): Promise<CriblGroupSummary[]> => {
+    listGroups: async (): Promise<Listing<CriblGroupSummary>> => {
       const res = await call({ method: "GET", path: "/master/groups" });
       const items = (res.body as { items?: unknown[] })?.items ?? [];
-      return items.map((raw) => {
+      return toListing(items.map((raw) => {
         const g = raw as Record<string, unknown>;
         const product = deriveGroupProduct(g.product, g.type, g.isFleet, g.isSearch);
         return {
           id: String(g.id),
           ...(product === undefined ? {} : { product }),
         };
-      });
+      }));
     },
   };
 }
@@ -250,8 +252,9 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
   let inputs: LiveInputSummary[] = [];
 
   it("row 7 - the credentials can list groups and inputs", async () => {
-    const groups = await cribl.listGroups();
-    expect(groups.length).toBeGreaterThan(0);
+    const listing = await cribl.listGroups();
+    expect(listing.kind).toBe("rows");
+    const groups = listingRows(listing);
 
     // A Stream group, which is where /system/inputs and /system/capture live.
     //
@@ -574,8 +577,7 @@ describe.skipIf(!LIVE)("live verification against a real workspace", () => {
   });
 
   it("rows 3+6 - Lake datasets list, and the SHIPPED tostring() query runs", async () => {
-    const groups = await cribl.listGroups();
-    const search = groups.find(isSearchGroup);
+    const search = listingRows(await cribl.listGroups()).find(isSearchGroup);
     if (search === undefined) {
       report("rows 3/6 (Lake)", "SKIPPED", "this workspace has no Search group");
       return;

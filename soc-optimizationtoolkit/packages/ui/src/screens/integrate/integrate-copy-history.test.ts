@@ -42,6 +42,7 @@ export const INTEGRATE_COPY_FILES = [
   "screens/role-assignment/role-assignment-section.tsx",
   "onboarding/recent-runs.tsx",
   "components/numbered-section.tsx",
+  "components/worker-group-field.tsx",
 ];
 
 /** Comments out, line breaks kept, so a failure names the real line. */

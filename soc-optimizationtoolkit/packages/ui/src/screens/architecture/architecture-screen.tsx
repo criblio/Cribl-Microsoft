@@ -29,7 +29,6 @@ import {
   applySentinelOverlay,
   buildFleetInventory,
   fetchEdgeFleetData,
-  isStreamWorkerGroup,
   parseWorkerInventory,
   recommendWithSolutions,
   unifyPatternDiagrams,
@@ -39,7 +38,6 @@ import type {
   ArchitecturePreset,
   AzureResource,
   CriblClient,
-  CriblGroupSummary,
   CriblProduct,
   EdgeFleetData,
   LiveArchitectureSnapshot,
@@ -48,6 +46,11 @@ import type {
   PatternRecommendation,
 } from "@soc/core";
 import { SearchableMultiSelect } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { ArchitectureFlow } from "./architecture-flow";
 import type { DiagramEditState } from "./arch-edits";
 import { PATTERN_DEPLOY_LINKS } from "./deploy-links";
@@ -260,8 +263,12 @@ function LiveArchitecturePanel({
   onExport: OnExport;
   criblUiBase?: string;
 }) {
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
+  // Listed only when asked (auto: false). Every listing state, including an
+  // empty one that used to leave this row silently without a select
+  // (DBT-134), is WorkerGroupField's to render. Stream worker groups only.
+  const workerGroups = useStreamWorkerGroups(cribl, { auto: false });
   const [groupId, setGroupId] = useState("");
+  useInitialWorkerGroup(workerGroups.state, "", setGroupId);
   const [liveError, setLiveError] = useState("");
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
@@ -280,23 +287,6 @@ function LiveArchitecturePanel({
     setExpandedPackRoutes([]);
     setRoutesExpanded(false);
   }, [snapshot]);
-
-  const loadGroups = async () => {
-    setLiveError("");
-    try {
-      const found = (await cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(found);
-      if (found.length > 0 && groupId === "") {
-        setGroupId(found[0].id);
-      }
-    } catch (err) {
-      setGroups(null);
-      setLiveError(
-        `Worker groups unavailable (is a Cribl connection active?): ` +
-          (err instanceof Error ? err.message : String(err)),
-      );
-    }
-  };
 
   const loadLive = async () => {
     if (loading || groupId === "") {
@@ -377,18 +367,22 @@ function LiveArchitecturePanel({
         connected Cribl environment. Nothing here changes any configuration.
       </p>
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void loadGroups()}>
-          {groups === null ? "Load worker groups" : "Reload worker groups"}
+        <button className="run-button" onClick={workerGroups.reload}>
+          {workerGroups.state.kind === "idle"
+            ? "Load worker groups"
+            : "Reload worker groups"}
         </button>
-        {groups !== null && groups.length > 0 && (
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.id}
-              </option>
-            ))}
-          </select>
-        )}
+        <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+          {(groups) => (
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </WorkerGroupField>
         <label className="integrate-check">
           <input
             type="checkbox"
@@ -599,10 +593,19 @@ function EdgeFleetsPanel({
       {fleetsError !== "" && (
         <span className="field-hint eh-warning">{fleetsError}</span>
       )}
-      {data !== null && fleetViews.length === 0 && (
+      {data !== null && fleetViews.length === 0 && data.groupsListed && (
         <p className="field-hint">
-          No Edge Fleets reported by this leader - the groups list contains
-          only Stream worker groups.
+          No Edge Fleets reported by this leader - none of the groups it
+          returned is an Edge Fleet.
+        </p>
+      )}
+      {/* DBT-134: an empty groups listing is also what a role that covers no
+          group receives, so it is not evidence that no fleet exists. */}
+      {data !== null && !data.groupsListed && (
+        <p className="field-hint">
+          Cribl returned no groups this account can see, so this cannot
+          confirm whether any Edge Fleets exist. Your Cribl role may not
+          grant access to them.
         </p>
       )}
       {data !== null && data.workers === undefined && fleetViews.length > 0 && (

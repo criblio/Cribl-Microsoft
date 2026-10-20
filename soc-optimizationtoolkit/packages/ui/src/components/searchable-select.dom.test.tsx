@@ -13,7 +13,11 @@
 import { describe, expect, it } from "vitest";
 import { useState } from "react";
 import { render, fireEvent, cleanup } from "@testing-library/react";
-import { SearchableMultiSelect, SearchableSelect } from "./searchable-select";
+import {
+  NO_OPTIONS_TEXT,
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "./searchable-select";
 
 const OPTIONS = [
   { value: "defaultHybrid", label: "defaultHybrid" },
@@ -144,6 +148,50 @@ describe("SearchableSelect DOM interaction (label-wrapped)", () => {
     // the just-closed popover back open.
     expect(container.querySelector(".searchable-select-option")).toBeNull();
     unmount();
+    cleanup();
+  });
+});
+
+/**
+ * DBT-134: zero OPTIONS and zero MATCHES are different facts. The popover used
+ * to say "No matches" for both, so a list nobody could see read as the
+ * operator's own typo in the filter box.
+ */
+describe("Searchable selects: empty options are not 'No matches'", () => {
+  function emptyRow(container: HTMLElement): string {
+    return container.querySelector(".searchable-select-empty")?.textContent ?? "";
+  }
+
+  it("shows emptyText, not 'No matches', when there are no options at all", () => {
+    const { container } = render(
+      <SearchableSelect options={[]} value="" onChange={() => {}} emptyText="Nothing listed here" />,
+    );
+    openPopover(container);
+    expect(emptyRow(container)).toBe("Nothing listed here");
+    cleanup();
+  });
+
+  it("defaults to the no-options text when emptyText is omitted, single and multi", () => {
+    const single = render(<SearchableSelect options={[]} value="" onChange={() => {}} />);
+    openPopover(single.container);
+    expect(emptyRow(single.container)).toBe(NO_OPTIONS_TEXT);
+    expect(emptyRow(single.container)).not.toBe("No matches");
+    cleanup();
+
+    const multi = render(<SearchableMultiSelect options={[]} values={[]} onChange={() => {}} />);
+    openPopover(multi.container);
+    expect(emptyRow(multi.container)).toBe(NO_OPTIONS_TEXT);
+    cleanup();
+  });
+
+  it("still says 'No matches' when options exist and the filter excludes them all", () => {
+    const { container } = render(
+      <SearchableSelect options={OPTIONS} value="" onChange={() => {}} emptyText="Nothing listed here" />,
+    );
+    openPopover(container);
+    const filter = container.querySelector(".searchable-select-search") as HTMLInputElement;
+    fireEvent.change(filter, { target: { value: "zzz-no-such-group" } });
+    expect(emptyRow(container)).toBe("No matches");
     cleanup();
   });
 });

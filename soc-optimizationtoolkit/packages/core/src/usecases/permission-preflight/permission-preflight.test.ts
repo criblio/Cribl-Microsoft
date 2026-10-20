@@ -363,7 +363,7 @@ describe("parallel composition", () => {
         return { status: 200, body: [] };
       },
       async listGroups() {
-        return [];
+        return { kind: "empty" } as const;
       },
     };
 

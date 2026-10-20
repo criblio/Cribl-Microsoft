@@ -59,9 +59,11 @@ DBT-43, DBT-44 and HON-2 were written - three violations of a rule that was
 sitting right here in writing. The conclusion was not that people needed
 reminding. It was that a document cannot fail a build.
 
-So the ARM listers no longer return arrays, and since DBT-62 (2026-08-31)
-neither do the Cribl worker-group read, the Graph service-principal read, or
-`listLabs`. They return `Listing<T>` from
+So the ARM listers no longer return arrays; since DBT-62 (2026-08-31)
+neither do the Graph service-principal read or `listLabs`; and since DBT-134
+(2026-10-20) neither does the Cribl worker-group read itself -
+`CriblClient.listGroups` is `Promise<Listing<CriblGroupSummary>>`, minted by
+`toListing` in the cloud adapter. They return `Listing<T>` from
 `packages/core/src/domain/inventory-listing/`:
 
 ```ts
@@ -209,13 +211,33 @@ for Resource Graph.
   the same confident wrong answer as on a screen. They now carry
   `listing: rows|empty` beside the number.
 - **The remaining listings were converted to `Listing<T>`. DONE 2026-08-31 as
-  DBT-62** (reasoning in backlog.md section 17): the Cribl worker-group read,
-  the Graph service-principal read, and `listLabs` - where the conversion found
-  DBT-64, "No running labs found" rendered off an RBAC-filtered empty, and
-  forced the `none` variant above. Deliberately NOT converted, because none of
-  them has an ambiguous empty: `acquireAnalyticRules` and
-  `acquireSolutionWorkbooks` read files out of the repo, and
-  `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
+  DBT-62** (reasoning in backlog.md section 17): the Graph service-principal
+  read and `listLabs` - where the conversion found DBT-64, "No running labs
+  found" rendered off an RBAC-filtered empty, and forced the `none` variant
+  above. Deliberately NOT converted, because none of them has an ambiguous
+  empty: `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out
+  of the repo, and `listDeprecatedContentHubSolutions` returns a `Set` used as
+  a lookup.
+- **The Cribl worker-group read was NOT converted by DBT-62, although this
+  file said it was. FIXED 2026-10-20 as DBT-134 / DBT-135.** DBT-62 wrapped the
+  result inside `discover-sample-sources` only; the port kept returning a bare
+  `CriblGroupSummary[]`, so the compile-time guard above never reached the
+  five pickers that called it. They filtered with `.filter(isStreamWorkerGroup)`
+  and rendered `[]` as an enabled select whose only row was "No matches" - and
+  a tester, whose access came from the app share rather than an admin role,
+  saw exactly that. Now `listGroups` returns a `Listing`, `streamWorkerGroups`
+  (`packages/core/src/ports/cribl-client.ts`) narrows it while keeping what the
+  filter removed, and every picker renders through ONE component,
+  `packages/ui/src/components/worker-group-field.tsx`: `empty` hedges ("Cribl
+  returned no worker groups this account can see", naming the Cribl role and
+  the app's policies as likely causes, with Retry), `none` names the Edge /
+  Outpost / Search groups that were found, and a refused call shows its error
+  with Retry. Its wording lives in `noStreamGroupsText` rather than
+  `unmeasuredInventoryMessage` because the likely causes are Cribl-specific
+  (an app grant that covers the collection but not the groups) and worth
+  naming; it is still one helper for every screen. The false sentence in this
+  file was itself why nobody looked - the same failure as the
+  Workspace-tables bullet above, one level up.
 
 ## Promoted
 

@@ -15,12 +15,18 @@ export type {
   AzureManagementRequest,
   AzureManagementUrlRequest,
 } from './azure-management';
-export type { CriblClient, CriblRequest, CriblGroupSummary } from './cribl-client';
+export type {
+  CriblClient,
+  CriblRequest,
+  CriblGroupSummary,
+  StreamWorkerGroupListing,
+} from './cribl-client';
 export {
   deriveGroupProduct,
   isEdgeFleet,
   isSearchGroup,
   isStreamWorkerGroup,
+  streamWorkerGroups,
 } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
 export type { TaggedSampleStore } from './tagged-sample-store';

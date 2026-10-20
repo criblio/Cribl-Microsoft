@@ -49,7 +49,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { DEFAULT_CRIBL_OPTIONS, emptyCapabilitySet } from "@soc/core";
+import { DEFAULT_CRIBL_OPTIONS, emptyCapabilitySet, toListing } from "@soc/core";
 import type {
   AzureConfig,
   CapabilityContext,
@@ -299,10 +299,12 @@ function discoveryPorts() {
     azure: { request: vi.fn().mockRejectedValue(new Error("offline")) },
     cribl: {
       request,
-      listGroups: vi.fn().mockResolvedValue([
-        { id: "default", product: "stream" },
-        { id: "grp2", product: "stream" },
-      ]),
+      listGroups: vi.fn().mockResolvedValue(
+        toListing([
+          { id: "default", product: "stream" },
+          { id: "grp2", product: "stream" },
+        ]),
+      ),
     },
     packs: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     packInstall: { list: vi.fn().mockRejectedValue(new Error("offline")) },
@@ -1007,7 +1009,9 @@ function renderWithGroup(request = vi.fn().mockResolvedValue(ROUTABLE_OUTPUTS)) 
     cribl: {
       request,
       // The screen filters to Stream groups; an undefined product qualifies.
-      listGroups: vi.fn().mockResolvedValue([{ id: "AzureManaged", name: "AzureManaged" }]),
+      listGroups: vi
+        .fn()
+        .mockResolvedValue(toListing([{ id: "AzureManaged", name: "AzureManaged" }])),
     },
   } as unknown as UiPorts;
   const utils = render(
@@ -1090,6 +1094,99 @@ describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
     );
     expect(hint).toBeTruthy();
     expect(hint?.textContent).toMatch(/Deploy is what puts it there/i);
+  });
+});
+
+/**
+ * DBT-134 WIRING: the Cribl config section's worker-group field and the
+ * fan-out under it render through the shared WorkerGroupField. What the field
+ * says per state is pinned in worker-group-field.dom.test.tsx; these prove the
+ * screen hands it the listing rather than a filtered array again.
+ */
+describe("IntegrateScreen - worker-group listing states (DBT-134)", () => {
+  function renderListing(listGroups: ReturnType<typeof vi.fn>) {
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      cribl: { request: vi.fn().mockRejectedValue(new Error("offline")), listGroups },
+    } as unknown as UiPorts;
+    const utils = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const section = utils.container.querySelector<HTMLElement>(
+      "#integrate-section-cribl-config",
+    );
+    expect(section).not.toBeNull();
+    return section!;
+  }
+
+  function fanOut() {
+    fireEvent.click(screen.getByLabelText(/Deploy the pack to multiple worker groups/));
+  }
+
+  it("hedges an EMPTY listing - no empty select, no 'No matches'", async () => {
+    const section = renderListing(vi.fn().mockResolvedValue(toListing([])));
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/Cribl returned no worker groups this account can see/),
+    );
+    expect(section.textContent).not.toMatch(/No matches/);
+    expect(section.querySelector(".searchable-select")).toBeNull();
+    expect(
+      section.querySelector('button[aria-label="Retry loading groups"]'),
+    ).not.toBeNull();
+  });
+
+  it("names the groups when the listing holds only Edge / Search groups", async () => {
+    const section = renderListing(
+      vi.fn().mockResolvedValue(
+        toListing([
+          { id: "default_fleet", product: "edge" },
+          { id: "default_search", product: "search" },
+        ]),
+      ),
+    );
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/none is a Stream worker group/),
+    );
+    expect(section.textContent).toMatch(/default_fleet \(edge\), default_search \(search\)/);
+  });
+
+  it("shows a refused listing as an error in the fan-out too, never an endless Loading", async () => {
+    const section = renderListing(
+      vi.fn().mockRejectedValue(new Error("GET /master/groups: HTTP 403")),
+    );
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/Could not list worker groups/),
+    );
+    fanOut();
+    expect(section.textContent).not.toMatch(/Loading worker groups/);
+    // Once for the primary picker, once for the fan-out under it.
+    expect(
+      section.querySelectorAll('button[aria-label="Retry loading groups"]'),
+    ).toHaveLength(2);
+    expect(section.textContent?.match(/Could not list worker groups/g)).toHaveLength(2);
+  });
+
+  it("says which group is the only one, rather than that none are available", async () => {
+    const section = renderListing(
+      vi.fn().mockResolvedValue(toListing([{ id: "default", product: "stream" }])),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/worker group: default/i)).toBeTruthy(),
+    );
+    fanOut();
+    expect(section.textContent).toMatch(
+      /default is the only Stream worker group Cribl returned/,
+    );
+    expect(section.textContent).toMatch(/Groups your Cribl role cannot see are not listed/);
+    expect(section.textContent).not.toMatch(/No other worker groups are available/);
   });
 });
 

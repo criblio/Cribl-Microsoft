@@ -1,5 +1,7 @@
 import type { CriblClient, CriblGroupSummary, CriblRequest } from '../ports/cribl-client';
 import type { PortHttpResponse } from '../ports/http';
+import { toListing } from '../domain/inventory-listing';
+import type { Listing } from '../domain/inventory-listing';
 
 /**
  * In-memory {@link CriblClient} for tests.
@@ -7,8 +9,10 @@ import type { PortHttpResponse } from '../ports/http';
  * Script `request` responses with {@link respondWith}; they are consumed
  * FIFO, one per call, and every call is recorded in {@link calls}. A call
  * with no scripted response left throws, so tests fail loudly on unexpected
- * extra calls. `listGroups` returns the mutable {@link groups} array and
- * counts its invocations in {@link listGroupsCalls}.
+ * extra calls. `listGroups` returns a copy of the mutable {@link groups}
+ * array as a `Listing` (an empty array is the unverified `empty`, exactly as
+ * the cloud adapter reports it) and counts its invocations in
+ * {@link listGroupsCalls}.
  */
 export class FakeCriblClient implements CriblClient {
   /** Every request received, in call order. */
@@ -54,8 +58,8 @@ export class FakeCriblClient implements CriblClient {
     return response;
   }
 
-  async listGroups(): Promise<CriblGroupSummary[]> {
+  async listGroups(): Promise<Listing<CriblGroupSummary>> {
     this.listGroupsCalls++;
-    return this.groups.map((group) => ({ ...group }));
+    return toListing(this.groups.map((group) => ({ ...group })));
   }
 }
