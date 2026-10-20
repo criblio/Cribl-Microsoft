@@ -356,10 +356,9 @@ export async function addDcrField(
   input: UpdateDcrInput & { column: { name: string; type: string } },
 ): Promise<AddDcrFieldResult> {
   const name = input.column.name.trim();
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error(
-      `field name '${name}' is invalid - letters, digits, and underscores only, not starting with a digit`,
-    );
+  // DBT-107: one column-name rule, asked of the domain rather than re-spelled.
+  if (!isValidColumnName(name)) {
+    throw new Error(`field name '${name}' is invalid - ${COLUMN_NAME_RULE}`);
   }
   const workspacePath =
     `/subscriptions/${input.subscriptionId}` +
