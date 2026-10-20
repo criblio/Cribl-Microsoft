@@ -164,13 +164,14 @@
       "feature": "HON-F1",
       "title": "Give the audit's AGE a home and add a manual re-check",
       "type": "story",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "D-1"
       ],
-      "detail": "The nav was tried and was the wrong surface. Two candidates remain: the frame footer, or the connection bar beside the existing chips. `backlog.md#1`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product > against the lab workspace, not just in tests. HON-8 was a claim ledger that > outlived the run that made it: the loader marked its key loaded before > awaiting, the cleanup cancelled the run so its answer was discarded, and the > claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9 > was `extractDiscriminatorValues` taking the quoted text out of > `Activity == \"{activities}\"` verbatim. > > One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run > must stop working, not merely stop setting state - that resisted three > attempts at a unit pin and is verified only live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of > a green suite. FX-4's sweep should treat it as a known-unpinned guard."
+      "detail": "The nav was tried and was the wrong surface. Two candidates remain: the frame footer, or the connection bar beside the existing chips. `backlog.md#1`. > **HON-8 and HON-9 SHIPPED, PR #134 merged 2026-08-27**, both verified in the live product > against the lab workspace, not just in tests. HON-8 was a claim ledger that > outlived the run that made it: the loader marked its key loaded before > awaiting, the cleanup cancelled the run so its answer was discarded, and the > claim stayed - so the next run skipped a fetch nobody was waiting for. HON-9 > was `extractDiscriminatorValues` taking the quoted text out of > `Activity == \"{activities}\"` verbatim. > > One thing worth carrying: the HON-8 fix has a SECOND half - a cancelled run > must stop working, not merely stop setting state - that resisted three > attempts at a unit pin and is verified only live. It is called out in > `azure-targeting-screen.dom.test.tsx` so nobody deletes it on the strength of > a green suite. FX-4's sweep should treat it as a known-unpinned guard.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): The connection bar shows the capability audit's age, with an (i) explanation and a Re-check permissions button. Round 2 fixed the header of useCapabilityAudit, which named the wrong consumer and claimed a cache reuse that the one-slot cache cannot do. The fix is to a comment only. Not yet looked at in Live Preview; the chip and Re-check button render in pins only.",
+      "verified": "pins"
     },
     {
       "id": "AZR-S1",
@@ -418,11 +419,12 @@
       "feature": "DBT-F3",
       "title": "Pin how the REST collector is modelled in the vendored spec",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`InputRest` has no schema under that name; it is likely `InputCollection` with a collector conf. Blocks [[AZR-7]] and [[DBT-4]]. `backlog.md#10`. ANSWERED 2026-08-31 by grooming, straight out of packages/core/assets/cribl-openapi.json - the card's own hypothesis is confirmed. `InputRest` DOES NOT EXIST as a schema name. The REST collector is `RestCollectorConf` (with `CollectorRest`), carried as an `InputCollection` alongside `ConnectionConfInputCollection` and `MetadataConfInputCollection`, and scheduled through `RunnableJobCollection`. The surrounding shapes a caller needs are all named: `RestCollectMethodGet|Post|PostWithBody|Other`, the `RestAuthentication*` family (none/basic/login/oauth/hmac, each with a Secret variant), `RestPaginationType*` and `RestRetryRulesType*`. WHAT REMAINS is the PIN, not the answer: this card says 'pin how it is modelled', and a finding recorded only in prose is exactly what re-vendoring the spec would silently invalidate - see [[DBT-12]], which exists for that failure mode. The work left is an assertion that `InputCollection` and `RestCollectorConf` are still the right names after a re-vendor."
+      "detail": "`InputRest` has no schema under that name; it is likely `InputCollection` with a collector conf. Blocks [[AZR-7]] and [[DBT-4]]. `backlog.md#10`. ANSWERED 2026-08-31 by grooming, straight out of packages/core/assets/cribl-openapi.json - the card's own hypothesis is confirmed. `InputRest` DOES NOT EXIST as a schema name. The REST collector is `RestCollectorConf` (with `CollectorRest`), carried as an `InputCollection` alongside `ConnectionConfInputCollection` and `MetadataConfInputCollection`, and scheduled through `RunnableJobCollection`. The surrounding shapes a caller needs are all named: `RestCollectMethodGet|Post|PostWithBody|Other`, the `RestAuthentication*` family (none/basic/login/oauth/hmac, each with a Secret variant), `RestPaginationType*` and `RestRetryRulesType*`. WHAT REMAINS is the PIN, not the answer: this card says 'pin how it is modelled', and a finding recorded only in prose is exactly what re-vendoring the spec would silently invalidate - see [[DBT-12]], which exists for that failure mode. The work left is an assertion that `InputCollection` and `RestCollectorConf` are still the right names after a re-vendor.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): Pinned in vendored-spec-provenance.test.ts and corrected in backlog.md item 10. The REST collector is a collection JOB: RunnableJobCollection/SavedJobCollection.collector -> Collector (oneOf) -> CollectorRest {type rest, conf RestCollectorConf}, with input = a type 'collection' constraint carrying breakerRulesets. It is NOT an InputCollection, which references no collector at all. The corrected answer is backlog.md item 10: the REST collector is a collection JOB (RunnableJobCollection/SavedJobCollection.collector -> CollectorRest {type rest, conf RestCollectorConf}), not an input.",
+      "verified": "pins"
     },
     {
       "id": "DBT-4",
@@ -457,11 +459,11 @@
       "feature": "DBT-F4",
       "title": "Correct the external datagen research note",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "backlog",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "The recorded \"verified create call\" returns HTTP 200 and produces no sample file; a datagen bound to it emits nothing while reporting health Green. The correct shape is `POST /api/v1/m/{group}/system/samples` with a `context.events` array, and it is not in the OpenAPI spec. `zscaler-lake-lab.md:104-131`."
+      "detail": "The recorded \"verified create call\" returns HTTP 200 and produces no sample file; a datagen bound to it emits nothing while reporting health Green. The correct shape is `POST /api/v1/m/{group}/system/samples` with a `context.events` array, and it is not in the OpenAPI spec. `zscaler-lake-lab.md:104-131`.\n\nATTEMPTED 2026-10-20 and put back: the note it corrects lives in the separate jphltech repository. An agent drafted the corrections there as UNCOMMITTED edits (project.md, context/handoff-prompts.md, both phase runbooks) and nothing was committed in either repo. Finishing it means reviewing and committing those edits in jphltech, plus a jq null-guard on the handoff curl example the review asked for."
     },
     {
       "id": "DBT-10",
@@ -763,11 +765,12 @@
       "feature": "DBT-F1",
       "title": "content-install still hand-rolls the never-rejects contract DBT-56 made a type",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Found by the fifteenth architecture audit, check 2, and reported as ADJACENT rather than duplicated because the two are not the same question - a distinction worth stating, since the last two audits reported real smells with wrong causes. [[DBT-56]] replaced four hand-written try blocks in onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the never-rejects contract stops being a convention repeated per call site. Its scope was deliberately limited to the batch, and correctly so. content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is exactly the convention DBT-56 was filed about, in a module DBT-56 did not touch. Neither the card nor the SafeAzureManagement header records content-install as out of scope, so nothing today tells the next person these are the same pattern. THE TRAP, and the reason this needs care rather than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true, carrying the response. content-install ok means the STEP SUCCEEDED - it checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there naively would invert the meaning of every check. Scope: convert content-install to SafeAzureManagement for the transport half and keep its own is2xx step-outcome layer above it, so the two meanings stay separate and named. Do NOT rename either ok without deciding which one keeps the word. Priority next rather than now: the hand-rolled version WORKS and no defect is observed. What is missing is the guard - as with the batch before DBT-56, the next ARM call added outside a try block reopens the failure and nothing fails when it does."
+      "detail": "Found by the fifteenth architecture audit, check 2, and reported as ADJACENT rather than duplicated because the two are not the same question - a distinction worth stating, since the last two audits reported real smells with wrong causes. [[DBT-56]] replaced four hand-written try blocks in onboardBatch with a type: ArmAttempt / SafeAzureManagement, so the never-rejects contract stops being a convention repeated per call site. Its scope was deliberately limited to the batch, and correctly so. content-install.ts STILL DOES IT BY HAND. content-install.ts:100-111 wraps an ARM PUT in try/catch and returns {ok:false, detail} on throw - which is exactly the convention DBT-56 was filed about, in a module DBT-56 did not touch. Neither the card nor the SafeAzureManagement header records content-install as out of scope, so nothing today tells the next person these are the same pattern. THE TRAP, and the reason this needs care rather than a mechanical sweep: the word `ok` MEANS DIFFERENT THINGS in the two places. ArmAttempt.ok means the call did not throw - a 403 is still ok:true, carrying the response. content-install ok means the STEP SUCCEEDED - it checks is2xx, so a 403 is ok:false. Adopting SafeAzureManagement there naively would invert the meaning of every check. Scope: convert content-install to SafeAzureManagement for the transport half and keep its own is2xx step-outcome layer above it, so the two meanings stay separate and named. Do NOT rename either ok without deciding which one keeps the word. Priority next rather than now: the hand-rolled version WORKS and no defect is observed. What is missing is the guard - as with the batch before DBT-56, the next ARM call added outside a try block reopens the failure and nothing fails when it does.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): content-install's single ARM requests now go through SafeAzureManagement, which moved to usecases/arm-http and is re-exported from onboard-batch. The step outcome is still decided by is2xx, so a 403 stays ok:false. 17 new pins (10 rejection, 7 x 403) were mutation-checked: inverting the ok fails every 403 pin, and a rethrowing safe view fails every rejection pin. listAllPages blocks and ensure-tables were deliberately left out (they need requestUrl, and there is an error-vs-empty question).",
+      "verified": "pins"
     },
     {
       "id": "GEN-5",
@@ -813,11 +816,12 @@
       "feature": "DBT-F1",
       "title": "package.mjs should regenerate the lock it invalidates, retiring a manual release step",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "[[DBT-76]] added a fifth version claim to check-release-drift and, in doing so, made `npm run package` leave the repo in a state that FAILS that check: package.mjs bumps apps/cribl-app/package.json and writes the tgz, but never invokes npm, so the lock still records the previous version. MEASURED in a sandbox at the exact release state: check-release-drift exits 1 with 'package-lock.json records the app at 1.12.3 but package.json says 1.12.4'. CI runs that check on every PR touching soc-optimizationtoolkit, so it is PR-blocking. The manual step (`npm install --package-lock-only`, which works from either directory since npm walks up to the workspace root) is documented in backlog.md item 8 as the interim answer. Making package.mjs do it turns the fifth claim into a guard over an AUTOMATED fact rather than a remembered one, and takes the manual claim count back from three of five to two of five."
+      "detail": "[[DBT-76]] added a fifth version claim to check-release-drift and, in doing so, made `npm run package` leave the repo in a state that FAILS that check: package.mjs bumps apps/cribl-app/package.json and writes the tgz, but never invokes npm, so the lock still records the previous version. MEASURED in a sandbox at the exact release state: check-release-drift exits 1 with 'package-lock.json records the app at 1.12.3 but package.json says 1.12.4'. CI runs that check on every PR touching soc-optimizationtoolkit, so it is PR-blocking. The manual step (`npm install --package-lock-only`, which works from either directory since npm walks up to the workspace root) is documented in backlog.md item 8 as the interim answer. Making package.mjs do it turns the fifth claim into a guard over an AUTOMATED fact rather than a remembered one, and takes the manual claim count back from three of five to two of five.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): npm run package now writes the app workspace's version into package-lock.json (scripts/lock-version.mjs), so a faithful release no longer leaves check-release red. Source-reading pins hold package.mjs to the call, the write and the order (compute the lock before writing package.json), and each was mutation-checked. backlog.md item 8 now says the manual step is retired and the remaining drift window is a hand-bump. Pins read package.mjs and run the lock writer against fixtures; a real npm run package has not been run with it yet, so the first release is the live confirmation.",
+      "verified": "pins"
     },
     {
       "id": "DBT-92",
@@ -850,11 +854,12 @@
       "feature": "DBT-F1",
       "title": "Reconcile the two contradictory live measurements of the solution hash in the iframe",
       "type": "spike",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "TWO LIVE OBSERVATIONS IN THIS REPO POINT OPPOSITE WAYS and neither has been reconciled. solution-browser.tsx:74-77 records, from a live review on 2026-08-03, that the Cribl app iframe DOES NOT PRESERVE the `#/?solution=` hash. [[DBT-28]] records an investigation that considered exactly that candidate - 'the hash lands on the OUTER frame, so the app may never see it at all' - and found BOTH its recorded candidates WRONG, attributing the observed non-change to a measured resolver defect instead, which presupposes the hash DID arrive. This blocked honest wording twice while closing [[DBT-75]]: the first comment cited the DBT-28 attempt as evidence FOR non-arrival, which the board contradicts, and the second asserted the SIEM pivot 'already takes successfully' the same path - true on the first visit only, since AppFrame keeps routes mounted after that. IT NEEDS A MEASUREMENT, NOT AN ARGUMENT, and it is a small one: open the app in the Cribl shell with a `?solution=` fragment appended and observe whether the document sees it. Until then the comment says the two disagree and neither is settled, which is the honest state. Answering this also unblocks the wording on [[DBT-83]]."
+      "detail": "TWO LIVE OBSERVATIONS IN THIS REPO POINT OPPOSITE WAYS and neither has been reconciled. solution-browser.tsx:74-77 records, from a live review on 2026-08-03, that the Cribl app iframe DOES NOT PRESERVE the `#/?solution=` hash. [[DBT-28]] records an investigation that considered exactly that candidate - 'the hash lands on the OUTER frame, so the app may never see it at all' - and found BOTH its recorded candidates WRONG, attributing the observed non-change to a measured resolver defect instead, which presupposes the hash DID arrive. This blocked honest wording twice while closing [[DBT-75]]: the first comment cited the DBT-28 attempt as evidence FOR non-arrival, which the board contradicts, and the second asserted the SIEM pivot 'already takes successfully' the same path - true on the first visit only, since AppFrame keeps routes mounted after that. IT NEEDS A MEASUREMENT, NOT AN ARGUMENT, and it is a small one: open the app in the Cribl shell with a `?solution=` fragment appended and observe whether the document sees it. Until then the comment says the two disagree and neither is settled, which is the honest state. Answering this also unblocks the wording on [[DBT-83]].\n\nDONE 2026-10-20 (branch fix/worker-group-picker): The solution-browser comment no longer calls fragment survival UNSETTLED. It records the 2026-09-04 measurement (an external fragment never reaches the iframe) and that the hash inside the iframe still works. Comment-only, so verified none. The measurement itself is the live evidence (backlog.md section 20, 2026-09-04); this change only made the code comment say so.",
+      "verified": "live"
     },
     {
       "id": "DBT-87",
@@ -900,11 +905,12 @@
       "feature": "DBT-F1",
       "title": "check-docs never path-checks a backticked path carrying a :line suffix",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND while writing the [[DBT-73]] provenance pins. check-docs validates that paths cited in documentation exist, but a citation written as `path/to/file.ts:43-54` - which is the form this repo uses constantly, and the form that makes a citation useful - carries a line suffix that defeats the path check, so those citations are unvalidated. That is precisely the class [[DBT-73]] exists for: a citation that reads as evidence with nothing holding it. The repo's own habit of citing file:line makes the UNCHECKED form the common one and the checked form the exception. Strip a trailing `:N` or `:N-M` before the existence check. Do NOT try to validate that the line numbers still point at the right thing - line numbers drift on every edit above them, and a gate that fails on that would be bypassed within a week."
+      "detail": "FOUND while writing the [[DBT-73]] provenance pins. check-docs validates that paths cited in documentation exist, but a citation written as `path/to/file.ts:43-54` - which is the form this repo uses constantly, and the form that makes a citation useful - carries a line suffix that defeats the path check, so those citations are unvalidated. That is precisely the class [[DBT-73]] exists for: a citation that reads as evidence with nothing holding it. The repo's own habit of citing file:line makes the UNCHECKED form the common one and the checked form the exception. Strip a trailing `:N` or `:N-M` before the existence check. Do NOT try to validate that the line numbers still point at the right thing - line numbers drift on every edit above them, and a gate that fails on that would be bypassed within a week.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): check-docs now path-checks backticked citations carrying a :N or :N-M suffix and does not validate the line numbers. The one finding it surfaced (a stale package.mjs line citation in backlog.md, in the DO NOT HAND-BUMP paragraph) is fixed, and the pins were mutation-checked.",
+      "verified": "pins"
     },
     {
       "id": "DBT-96",
@@ -963,11 +969,12 @@
       "feature": "DBT-F1",
       "title": "Nothing checks that an npm script named in a document actually resolves",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "[[DBT-90]] was exactly this: the docs told you to run check-release, no manifest forwarded it, and the command exited 1 for everyone who followed the instructions. Nothing caught it because nothing looks. The forward is now in place and STILL UNPINNED - delete the root check-release script tomorrow and every gate stays green, and the documented command silently reverts to exit 1. SCOPE: check-docs already validates that cited PATHS exist. The same shape applies to cited COMMANDS - extract `npm run X` from tracked documents and assert each X resolves in some manifest. Deliberately narrow: assert the script EXISTS, not that it passes. Running them would make check-docs a second CI and it would be turned off. Related: [[DBT-95]] (backticked paths carrying a :line suffix defeat the existing path check)."
+      "detail": "[[DBT-90]] was exactly this: the docs told you to run check-release, no manifest forwarded it, and the command exited 1 for everyone who followed the instructions. Nothing caught it because nothing looks. The forward is now in place and STILL UNPINNED - delete the root check-release script tomorrow and every gate stays green, and the documented command silently reverts to exit 1. SCOPE: check-docs already validates that cited PATHS exist. The same shape applies to cited COMMANDS - extract `npm run X` from tracked documents and assert each X resolves in some manifest. Deliberately narrow: assert the script EXISTS, not that it passes. Running them would make check-docs a second CI and it would be turned off. Related: [[DBT-95]] (backticked paths carrying a :line suffix defeat the existing path check).\n\nDONE 2026-10-20 (branch fix/worker-group-picker): check-docs fails a Living doc naming an npm script that does not resolve: against the root manifest, or against the workspace the command's own --workspace flag names, never the union. Root forwards are checked too. The DBT-90 regression is pinned and mutation-checked.",
+      "verified": "pins"
     },
     {
       "id": "DBT-105",
@@ -987,11 +994,12 @@
       "feature": "GEN-F1",
       "title": "csvRoutingWarning is named for half of what it answers",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT. route-placeholder.ts:161-167 says 'THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03: it also answers for positional ... the rename is a card.' No card existed; this is it. csvRoutingWarning now produces the warning for every column-order format, not just CSV, and [[GEN-8]] may widen it further. The name will keep drifting from the behaviour as long as it names a format instead of the property. Deliberately `later`: nothing is wrong, the behaviour is correct and pinned, and the rename touches the pipeline-generation barrel and the samples screen - so it is worth doing WITH the next change in this area rather than as its own PR. Do it at the same time as GEN-8 if that lands, since GEN-8 decides whether the concept is 'column order' or something wider."
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT. route-placeholder.ts:161-167 says 'THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03: it also answers for positional ... the rename is a card.' No card existed; this is it. csvRoutingWarning now produces the warning for every column-order format, not just CSV, and [[GEN-8]] may widen it further. The name will keep drifting from the behaviour as long as it names a format instead of the property. Deliberately `later`: nothing is wrong, the behaviour is correct and pinned, and the rename touches the pipeline-generation barrel and the samples screen - so it is worth doing WITH the next change in this area rather than as its own PR. Do it at the same time as GEN-8 if that lands, since GEN-8 decides whether the concept is 'column order' or something wider.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): Renamed csvRoutingWarning to formatRoutingWarning, named for the property formatCanDiscriminate decides rather than for one format. Updated the barrel, the samples screen, the tests and the prose. This is a pure rename: typecheck passes and the 26 route-placeholder pins pass. New name: formatRoutingWarning.",
+      "verified": "pins"
     },
     {
       "id": "DBT-106",
@@ -1012,11 +1020,12 @@
       "feature": "DBT-F1",
       "title": "The column-name rule is spelled twice and the two can disagree",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, duplicated-decisions check. CONFIRMED by reading both, not suspected. domain/custom-table/custom-table.ts:286 defines isValidColumnName as /^[A-Za-z_][A-Za-z0-9_]*$/, with COLUMN_NAME_RULE beside it holding the same rule 'in the operator's words'. usecases/update-dcr/update-dcr.ts:359 re-spells that regex INLINE and writes its own message ('letters, digits, and underscores only, not starting with a digit'). They answer the same question about the same thing - is this a legal Log Analytics column name - and they can disagree the moment either moves. The layering permits the fix: update-dcr is a usecase and custom-table is domain, so the import is legal and already the established direction. This is the exact shape the architecture-audit skill names: 'a predicate reimplemented inline rather than imported'. It is ALSO the shape that produced the capability model - app modes were a second, drifting proxy for permissions - so the repo has paid for this lesson before. Fix: import isValidColumnName and COLUMN_NAME_RULE, and pin that the two call sites reject the same set. Check for further copies first - the same regex appears in coverage-analysis and transform-kql-mining, but those are KQL IDENTIFIER parsing and accessor-names.ts is Cribl ACCESSOR safety. Three different questions that happen to share a regex is not duplication; only fold the two that answer the same one."
+      "detail": "FOUND BY THE 2026-09-04 ARCHITECTURE AUDIT, duplicated-decisions check. CONFIRMED by reading both, not suspected. domain/custom-table/custom-table.ts:286 defines isValidColumnName as /^[A-Za-z_][A-Za-z0-9_]*$/, with COLUMN_NAME_RULE beside it holding the same rule 'in the operator's words'. usecases/update-dcr/update-dcr.ts:359 re-spells that regex INLINE and writes its own message ('letters, digits, and underscores only, not starting with a digit'). They answer the same question about the same thing - is this a legal Log Analytics column name - and they can disagree the moment either moves. The layering permits the fix: update-dcr is a usecase and custom-table is domain, so the import is legal and already the established direction. This is the exact shape the architecture-audit skill names: 'a predicate reimplemented inline rather than imported'. It is ALSO the shape that produced the capability model - app modes were a second, drifting proxy for permissions - so the repo has paid for this lesson before. Fix: import isValidColumnName and COLUMN_NAME_RULE, and pin that the two call sites reject the same set. Check for further copies first - the same regex appears in coverage-analysis and transform-kql-mining, but those are KQL IDENTIFIER parsing and accessor-names.ts is Cribl ACCESSOR safety. Three different questions that happen to share a regex is not duplication; only fold the two that answer the same one.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): addDcrField now asks isValidColumnName and COLUMN_NAME_RULE from custom-table.ts instead of its own inline regex. A pin makes both DCR write paths accept and reject the same names, and it was mutation-checked three ways. derive-schema-from-sample.ts:45 still has a third, stricter rule (letter first, 45 chars max). That is left for its own card.",
+      "verified": "pins"
     },
     {
       "id": "GEN-10",
@@ -1028,7 +1037,7 @@
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "RECORDED 2026-09-04 so a live pass knows what to re-read. csvRoutingWarning's column-order text was HON-5's, live-verified in both directions on 2026-08-30. [[GEN-8]] changed one clause of it: 'no filter can tell this log type from the others' was MEASURED FALSE (_raw.indexOf(',TRAFFIC,') separates a headerless PAN-OS TRAFFIC row from a THREAT row) and is now scoped to the field NAMES, with the working filter shown. THE DEFERRAL ARGUMENT IS WORTH KEEPING because it was nearly right: rewriting live-verified operator copy as a drive-by is how wording gets worse than the defect. What it missed is that HON-5 verified the copy RENDERS, not that it is TRUE, and a clause measured false is not protected by having once been reviewed. TO CLOSE: read both branches of csvRoutingWarning on screen in the live preview and confirm the new sentence reads as well as the one it replaced. Both branches are pinned together now, which is what stops them diverging again."
+      "detail": "RECORDED 2026-09-04 so a live pass knows what to re-read. formatRoutingWarning (was csvRoutingWarning, renamed by GEN-9)'s column-order text was HON-5's, live-verified in both directions on 2026-08-30. [[GEN-8]] changed one clause of it: 'no filter can tell this log type from the others' was MEASURED FALSE (_raw.indexOf(',TRAFFIC,') separates a headerless PAN-OS TRAFFIC row from a THREAT row) and is now scoped to the field NAMES, with the working filter shown. THE DEFERRAL ARGUMENT IS WORTH KEEPING because it was nearly right: rewriting live-verified operator copy as a drive-by is how wording gets worse than the defect. What it missed is that HON-5 verified the copy RENDERS, not that it is TRUE, and a clause measured false is not protected by having once been reviewed. TO CLOSE: read both branches of formatRoutingWarning (was csvRoutingWarning, renamed by GEN-9) on screen in the live preview and confirm the new sentence reads as well as the one it replaced. Both branches are pinned together now, which is what stops them diverging again."
     },
     {
       "id": "GEN-11",
@@ -1049,11 +1058,12 @@
       "feature": "GEN-F1",
       "title": "PlaceholderCause is declared, documented as operator-facing, and never emitted",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND during [[GEN-8]]: a comment justified saying nothing for CEF and LEEF on the grounds that such a log type 'reports the generic evidence cause instead'. Nothing reports it. A repo-wide grep returns exactly two hits - the type declaration and a type-only re-export. No function returns it, no state stores it, no screen renders it. So a CEF header-only log type gets a placeholder route and NO explanation of any kind, and the type's whole purpose - distinguishing 'not enough evidence' from 'this format can never be separated', so an operator is not sent to collect more samples that cannot help - is unrealised. Decide: emit it and render it, or delete it and stop the next reader arguing from it as this comment did. Deleting is defensible; leaving a declared-but-dead operator concept is not."
+      "detail": "FOUND during [[GEN-8]]: a comment justified saying nothing for CEF and LEEF on the grounds that such a log type 'reports the generic evidence cause instead'. Nothing reports it. A repo-wide grep returns exactly two hits - the type declaration and a type-only re-export. No function returns it, no state stores it, no screen renders it. So a CEF header-only log type gets a placeholder route and NO explanation of any kind, and the type's whole purpose - distinguishing 'not enough evidence' from 'this format can never be separated', so an operator is not sent to collect more samples that cannot help - is unrealised. Decide: emit it and render it, or delete it and stop the next reader arguing from it as this comment did. Deleting is defensible; leaving a declared-but-dead operator concept is not.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): Deleted the never-emitted PlaceholderCause type and its barrel export. The evidence-vs-format reasoning stays in route-placeholder.ts, now anchored on formatRoutingWarning and formatCanDiscriminate. Emitting a per-field cause is still a separate, larger idea.",
+      "verified": "pins"
     },
     {
       "id": "DBT-109",
@@ -1087,11 +1097,12 @@
       "feature": "DBT-F1",
       "title": "Decide the fourteen elements recorded in the class-name baseline",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "[[DBT-100]] wired check-classnames into CI with the real residue recorded as a baseline, so the gate does not fail on day one - which is what makes it survivable. The residue is FOURTEEN elements recorded as THIRTEEN path-plus-name pairs, because one name is bare at two lines in one file. Each is an element whose classes resolve to no CSS rule, so it renders unstyled. Decide per element: styled by an ancestor selector the check cannot see (then it is a check limitation - see [[DBT-115]]), genuinely dead (delete the attribute), or a missing rule (add it). NOTE the baseline is keyed on path and name with no count, so a repeat of a recorded name in a recorded file is NOT gated. Tightening that to a count or a line is part of this card, or the baseline quietly absorbs new instances."
+      "detail": "[[DBT-100]] wired check-classnames into CI with the real residue recorded as a baseline, so the gate does not fail on day one - which is what makes it survivable. The residue is FOURTEEN elements recorded as THIRTEEN path-plus-name pairs, because one name is bare at two lines in one file. Each is an element whose classes resolve to no CSS rule, so it renders unstyled. Decide per element: styled by an ancestor selector the check cannot see (then it is a check limitation - see [[DBT-115]]), genuinely dead (delete the attribute), or a missing rule (add it). NOTE the baseline is keyed on path and name with no count, so a repeat of a recorded name in a recorded file is NOT gated. Tightening that to a count or a line is part of this card, or the baseline quietly absorbs new instances.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): All 14 are decided and UNDECIDED_BARE is empty. Twelve dead wrapper class names were deleted and two test hooks moved to data-testid, so nothing renders differently and no CSS was added. For DBT-115: 0 of 14 were styled through their own name by an ancestor selector.",
+      "verified": "pins"
     },
     {
       "id": "DBT-115",
@@ -1161,13 +1172,14 @@
       "epic": "GEN",
       "feature": "GEN-F1",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "menu": "none",
       "dependsOn": [],
       "title": "PackShape collides with the older packShapeSummary, which means something else",
-      "detail": "[[GEN-13]] introduced the type `PackShape` = all-inclusive | routable, meaning HOW THE PACK IS WIRED. The codebase already had `packShapeSummary`, which describes the pack's FILE LAYOUT - what directories and files it contains. Two unrelated meanings of 'shape' now sit in the same subsystem, and the older one is the one a reader meets first.\n\nNothing is broken; this is a naming hazard, which is why it is `later` rather than a bug. The cost lands on the next person who greps 'shape' in pack-assembly and has to work out which of two answers they got. Renaming one is cheap now and gets steadily less cheap as either spreads."
+      "detail": "[[GEN-13]] introduced the type `PackShape` = all-inclusive | routable, meaning HOW THE PACK IS WIRED. The codebase already had `packShapeSummary`, which describes the pack's FILE LAYOUT - what directories and files it contains. Two unrelated meanings of 'shape' now sit in the same subsystem, and the older one is the one a reader meets first.\n\nNothing is broken; this is a naming hazard, which is why it is `later` rather than a bug. The cost lands on the next person who greps 'shape' in pack-assembly and has to work out which of two answers they got. Renaming one is cheap now and gets steadily less cheap as either spreads.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): Renamed the UI helper packShapeSummary to packCountsSummary and PACK_SHAPE_TIP to PACK_COUNTS_TIP. Core's PackShape now owns the word 'shape' (how the pack is wired). Correction to this card: packShapeSummary gave route and pipeline COUNTS per tagged log type, not file layout. Pinned by the named-constant list in integrate-copy-history.test.ts, which fails if left on the old name. Correction to the text above: packShapeSummary gave route and pipeline COUNTS per tagged log type, not file layout - hence the new name packCountsSummary.",
+      "verified": "pins"
     },
     {
       "id": "GEN-18",
@@ -1265,12 +1277,13 @@
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
       "title": "check-board does not scan decision questions and option details for dangling links",
-      "detail": "FOUND 2026-10-02 reviewing the DBT-120 follow-up (fix/audit-board 6f591f6). board.mjs and board-html.mjs now share one LINK pattern and knownIds(), so they agree on what a link is - but richText renders [[links]] in decision.question and option.detail too, while danglingLinks only scans title, detail and priorityWhy. A dangling link written in a decision would show as gone on the kanban while check-board stays silent. FIX: add the decision fields to LINKED_FIELDS and pin it with a planted fixture. Later because no decision on the board currently carries a link."
+      "detail": "FOUND 2026-10-02 reviewing the DBT-120 follow-up (fix/audit-board 6f591f6). board.mjs and board-html.mjs now share one LINK pattern and knownIds(), so they agree on what a link is - but richText renders [[links]] in decision.question and option.detail too, while danglingLinks only scans title, detail and priorityWhy. A dangling link written in a decision would show as gone on the kanban while check-board stays silent. FIX: add the decision fields to LINKED_FIELDS and pin it with a planted fixture. Later because no decision on the board currently carries a link.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): danglingLinks now also scans decision.question and each option's detail, the same fields board-html renders links in. The warning is still non-fatal. It is pinned with a planted fixture, a malformed-decision case and the independent oracle, and both pins were mutation-checked.",
+      "verified": "pins"
     },
     {
       "id": "DBT-125",
@@ -1421,19 +1434,20 @@
       "settled": "settled",
       "dependsOn": [],
       "title": "The worker group filter showed no available worker groups to a tester",
-      "detail": "REPORTED 2026-10-20 by a user testing the app: the worker group filter (the searchable select labelled \"Filter worker groups\") listed no worker groups to choose from. Not yet reproduced; the investigation has to establish which screen, which list call feeds it, and whether the empty list is a real empty answer, a permission-filtered one, or an error rendered as empty (the inventory-honesty rule).\n\nINVESTIGATED 2026-10-20 (three independent traces plus an adversarial judge; proven against the real PlatformCriblClient and SearchableSelect with a throwaway test, not yet live):\n- LIKELY ROOT CAUSE (inferred, needs a non-admin live check): GET /master/groups answers 200 with every group filtered out for the tester. policies.yml declares only the collection path '/master/groups' GET (config/policies.yml:75-76); apps/cribl-app/AGENTS.md:230 says declaring a collection covers that exact path only and group results can be empty without the per-item path. An Org admin's '*' role masks this, which fits 'developer sees groups, tester does not'. A 403 is ruled out: it throws and renders 'Could not list worker groups' with Retry.\n- CONFIRMED HONESTY DEFECT: a true zero, an RBAC-filtered list and an Edge/Outpost/Search-only list all become groups = [] (adapters.ts:516-535 plus the inline .filter(isStreamWorkerGroup) on four screens) and render as an enabled select whose only row is 'No matches' (searchable-select.tsx:217-218), byte-identical to a filter typo. The port still returns a bare array (cribl-client.ts:164), contrary to docs/inventory-standard.md, which claims DBT-62 converted it to Listing<T>.\n- CONFIRMED SECONDARY: Pack Inventory hides the picker entirely when groups are empty or the read failed, and reports a listGroups failure as 'Deployed status unavailable' (pack-inventory-screen.tsx:94, 116-127, 385). Integrate's multi-group fan-out shows 'Loading worker groups...' forever when the listing failed (integrate-screen.tsx:2611-2612).\n- REJECTED as the cause: mapper product-over-type precedence (real, identity-independent - hardening only), a missing grant in an older release (present since 166deed), StrictMode races, the sample-source picker.\n- FIX PLAN: add GET '/master/groups/:id' (and decide on /products/stream/groups[/:id] in the live check); listGroups returns Listing<T> with raw count and excluded products; one shared WorkerGroupField with loading / error+Retry / unverified-empty / none-are-Stream states; SearchableSelect emptyText; DOM pins per state, mutation-checked."
+      "detail": "REPORTED 2026-10-20 by a user testing the app: the worker group filter (the searchable select labelled \"Filter worker groups\") listed no worker groups to choose from. Not yet reproduced; the investigation has to establish which screen, which list call feeds it, and whether the empty list is a real empty answer, a permission-filtered one, or an error rendered as empty (the inventory-honesty rule).\n\nINVESTIGATED 2026-10-20 (three independent traces plus an adversarial judge; proven against the real PlatformCriblClient and SearchableSelect with a throwaway test, not yet live):\n- LIKELY ROOT CAUSE (inferred, needs a non-admin live check): GET /master/groups answers 200 with every group filtered out for the tester. policies.yml declares only the collection path '/master/groups' GET (config/policies.yml:75-76); apps/cribl-app/AGENTS.md:230 says declaring a collection covers that exact path only and group results can be empty without the per-item path. An Org admin's '*' role masks this, which fits 'developer sees groups, tester does not'. A 403 is ruled out: it throws and renders 'Could not list worker groups' with Retry.\n- CONFIRMED HONESTY DEFECT: a true zero, an RBAC-filtered list and an Edge/Outpost/Search-only list all become groups = [] (adapters.ts:516-535 plus the inline .filter(isStreamWorkerGroup) on four screens) and render as an enabled select whose only row is 'No matches' (searchable-select.tsx:217-218), byte-identical to a filter typo. The port still returns a bare array (cribl-client.ts:164), contrary to docs/inventory-standard.md, which claims DBT-62 converted it to Listing<T>.\n- CONFIRMED SECONDARY: Pack Inventory hides the picker entirely when groups are empty or the read failed, and reports a listGroups failure as 'Deployed status unavailable' (pack-inventory-screen.tsx:94, 116-127, 385). Integrate's multi-group fan-out shows 'Loading worker groups...' forever when the listing failed (integrate-screen.tsx:2611-2612).\n- REJECTED as the cause: mapper product-over-type precedence (real, identity-independent - hardening only), a missing grant in an older release (present since 166deed), StrictMode races, the sample-source picker.\n- FIX PLAN: add GET '/master/groups/:id' (and decide on /products/stream/groups[/:id] in the live check); listGroups returns Listing<T> with raw count and excluded products; one shared WorkerGroupField with loading / error+Retry / unverified-empty / none-are-Stream states; SearchableSelect emptyText; DOM pins per state, mutation-checked.\n\nUPDATE 2026-10-20 (operator, with the tester): the app installed from the release package lists groups correctly in two other orgs, and the tester is the Cribl Org Owner/Admin. That RULES OUT the investigation's leading cause - per-group RBAC and the collection-only policy grant only filter non-admins - so the GET '/master/groups/:id' policy entry stays as least-privilege hygiene, not as the fix. Remaining org-specific candidates: (a) the workspace the app is installed in has no Stream group (Stream not launched there, only Edge/Search/Lake/Outpost groups, or a different workspace from the one with the groups) - every item is dropped by isStreamWorkerGroup; (b) that org's leader or App Platform version reports a product/type the mapper does not read as stream (product outranks type in deriveGroupProduct), or items without a string id; (c) the app-scoped proxy path /api/v1/a/<appId>/master/groups answers differently from the direct /api/v1/master/groups in that org. Next evidence needed: the raw response of both calls from the tester's browser. The honesty fix (naming excluded groups and their products) makes (a) and (b) self-diagnosing.\n\nHONESTY FIX DONE 2026-10-20 (branch fix/worker-group-picker, pins, mutation-checked): CriblClient.listGroups returns Listing<T>; one WorkerGroupField renders loading / error+Retry / unverified-empty / none-are-Stream (naming the excluded groups and products) in every picker; SearchableSelect emptyText; Pack Inventory always renders the field and no longer badges 'Not deployed' from a read that never ran; Integrate's fan-out shows errors instead of Loading forever; a group counts as Stream if product OR type says stream; GET '/master/groups/:id' declared. The card STAYS IN PROGRESS: the tester's org root cause is still unknown, and the next release will show which state the picker lands in."
     },
     {
       "id": "DBT-135",
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "inventory-standard.md claims the worker-group read returns Listing<T>; it returns a bare array",
-      "detail": "FOUND 2026-10-20 by the [[DBT-134]] investigation. docs/inventory-standard.md:62-65 and :211-213 say DBT-62 converted 'the Cribl worker-group read' to Listing<T>, so the compile-time guard against rendering an unverified empty covers it. It does not: CriblClient.listGroups is still Promise<CriblGroupSummary[]> (packages/core/src/ports/cribl-client.ts:164), and only discover-sample-sources wraps it. The false claim is why the empty-worker-group-picker honesty defect went unnoticed. Fixed together with DBT-134, which converts the port, so the doc becomes true rather than being edited back."
+      "detail": "FOUND 2026-10-20 by the [[DBT-134]] investigation. docs/inventory-standard.md:62-65 and :211-213 say DBT-62 converted 'the Cribl worker-group read' to Listing<T>, so the compile-time guard against rendering an unverified empty covers it. It does not: CriblClient.listGroups is still Promise<CriblGroupSummary[]> (packages/core/src/ports/cribl-client.ts:164), and only discover-sample-sources wraps it. The false claim is why the empty-worker-group-picker honesty defect went unnoticed. Fixed together with DBT-134, which converts the port, so the doc becomes true rather than being edited back.\n\nDONE 2026-10-20 (branch fix/worker-group-picker): inventory-standard.md now matches the code: listGroups returns Listing<T> at the port, and the earlier false claim is recorded as drift.",
+      "verified": "pins"
     },
     {
       "id": "DBT-136",
@@ -1447,6 +1461,19 @@
       "verified": "none",
       "title": "The DCR template docs say a DCE adds cost; DCE and DCR resources carry no charge",
       "detail": "REPORTED 2026-10-20 by a reader of Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md: its Template Types section said Direct DCRs cost less (\"no DCE charges\") and DCE-based DCRs cost more (\"DCE + DCR charges\"), and the root README and the Private Link article repeated it. Azure Monitor bills ingestion and retention; no DCE or DCR meter exists (learn.microsoft.com azure-monitor cost-usage). A Logs Ingestion DCR carries its own logsIngestion endpoint, so a DCE is needed only for Private Link or by preference (data-collection-endpoint-overview). The extra cost on the DCE path is Private Link Private Endpoints.\n\nDONE 2026-10-20 on branch docs/dce-cost-wording (from main, kept off the stacked PRs so the public doc is not held behind them): the cost lines now describe the endpoint, the Important Notes item says the resources are free and Private Link is the cost, and the Private Link article prices endpoints, not DCEs. deprecated/ keeps the old wording (frozen tree). verified: none - prose checked against Microsoft docs, nothing executable."
+    },
+    {
+      "id": "DBT-137",
+      "epic": "HON",
+      "feature": "HON-F1",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "none",
+      "title": "useCapabilityAudit's header named the wrong consumer and claimed a cache reuse it cannot do",
+      "detail": "FOUND 2026-10-20 by the review of [[HON-6]]: the committed header of packages/ui/src/capabilities/use-capability-audit.ts said the preflight panel uses the hook to show the audit's age, and that a cached audit is reused across views - the one-slot cache cannot do that. Fixed in the HON-6 branch (comment only)."
     }
   ],
   "features": [
