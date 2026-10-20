@@ -81,7 +81,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InfoTip } from "../../components/info-tip";
 import {
-  csvRoutingWarning,
+  formatRoutingWarning,
   detectVendorIdentity,
   isUsableVendorName,
   operatorVendorKey,
@@ -773,8 +773,9 @@ export function SampleIntakeSection({
                   />
                 )}
                 {/*
-                  HON-5: say it HERE, when the CSV sample is tagged, not at the
-                  preview. Both route discriminators early-return on "csv" by
+                  HON-5: say it HERE, when the sample is tagged, not at the
+                  preview. Both route discriminators early-return on a format
+                  formatCanDiscriminate rejects (csv, positional, syslog) by
                   construction, so this pack can never route automatically - and
                   an operator told only "no discriminator found" would go and
                   collect more samples, which cannot possibly help. The
@@ -783,7 +784,7 @@ export function SampleIntakeSection({
                 */}
                 {!isRenaming &&
                   (() => {
-                    const warning = csvRoutingWarning(
+                    const warning = formatRoutingWarning(
                       sample.format,
                       samples.length - 1,
                     );

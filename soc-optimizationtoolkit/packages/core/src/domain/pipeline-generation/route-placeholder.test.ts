@@ -43,7 +43,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  csvRoutingWarning,
+  formatRoutingWarning,
   formatCanDiscriminate,
   isMintedHeaderField,
   isPlaceholderFilter,
@@ -275,7 +275,7 @@ describe("isMintedHeaderField", () => {
    * `normalizeSourceFormat` (pipeline-preview-state.ts) erases "unknown", "" and
    * undefined to "json" before `reportToPlanInput` builds the plan, so the
    * planner and both discriminators only ever see "json". "unknown" reaches
-   * exactly one caller on this surface: csvRoutingWarning, called from the
+   * exactly one caller on this surface: formatRoutingWarning, called from the
    * samples screen with the DETECTED format.
    *
    * So the pin, the module doc and GEN-8's card all named a string the product
@@ -293,8 +293,9 @@ describe("isMintedHeaderField", () => {
     expect(isMintedHeaderField("Name", "json")).toBe(false);
     expect(isMintedHeaderField("Timestamp", "json")).toBe(false);
     // "unknown" is answered the same way and for the same reason. It is kept
-    // because csvRoutingWarning really is handed it - but it is NOT the string
-    // that carries the gap, because it never gets as far as this predicate.
+    // because formatRoutingWarning really is handed it - but it is NOT the
+    // string that carries the gap, because it never gets as far as this
+    // predicate.
     expect(isMintedHeaderField("DeviceEventClassID", "unknown")).toBe(false);
     expect(isMintedHeaderField("Name", "unknown")).toBe(false);
   });
@@ -463,9 +464,9 @@ describe("isMintedHeaderField", () => {
   });
 });
 
-describe("csvRoutingWarning", () => {
+describe("formatRoutingWarning", () => {
   it("warns a CSV log type that has siblings", () => {
-    const text = csvRoutingWarning("csv", 3);
+    const text = formatRoutingWarning("csv", 3);
 
     expect(text).toContain("cannot be routed automatically");
     // The actionable half: stop collecting samples, write the filter.
@@ -474,7 +475,7 @@ describe("csvRoutingWarning", () => {
   });
 
   it("warns a POSITIONAL log type too, and says so in words", () => {
-    const text = csvRoutingWarning("positional", 3) ?? "";
+    const text = formatRoutingWarning("positional", 3) ?? "";
 
     expect(text).toContain("cannot be routed automatically");
     expect(text).toContain("more samples will not change that");
@@ -489,11 +490,13 @@ describe("csvRoutingWarning", () => {
   it("gives both COLUMN-ORDER formats the SAME text, because it is one cause", () => {
     // A CSV row and a whitespace-positional line differ only in separator, so
     // two messages here would be two chances to get the reason wrong.
-    expect(csvRoutingWarning("positional", 2)).toBe(csvRoutingWarning("csv", 2));
+    expect(formatRoutingWarning("positional", 2)).toBe(
+      formatRoutingWarning("csv", 2),
+    );
   });
 
   it("warns a SYSLOG log type, in its own words and not CSV's", () => {
-    const text = csvRoutingWarning("syslog", 3) ?? "";
+    const text = formatRoutingWarning("syslog", 3) ?? "";
 
     // The three clauses every format-cause warning owes the operator.
     expect(text).toContain("cannot be routed automatically");
@@ -508,7 +511,7 @@ describe("csvRoutingWarning", () => {
     expect(text).not.toContain("column order");
     expect(text).toContain("regex");
     expect(text).toContain("_raw");
-    expect(text).not.toBe(csvRoutingWarning("csv", 3));
+    expect(text).not.toBe(formatRoutingWarning("csv", 3));
   });
 
   /**
@@ -535,7 +538,7 @@ describe("csvRoutingWarning", () => {
    * the form that works.
    */
   it("scopes the impossibility to the NAMES and hands over the working form", () => {
-    const text = csvRoutingWarning("syslog", 3) ?? "";
+    const text = formatRoutingWarning("syslog", 3) ?? "";
 
     // It must not claim the separation itself is impossible.
     expect(text).not.toContain("no filter can tell this log type");
@@ -567,7 +570,7 @@ describe("csvRoutingWarning", () => {
     // THREAT row - so the separation the old clause called impossible is one
     // string search away.
     for (const format of ["csv", "positional"]) {
-      const text = csvRoutingWarning(format, 3) ?? "";
+      const text = formatRoutingWarning(format, 3) ?? "";
       expect(text, format).not.toContain("no filter can tell this log type");
       expect(text, format).toContain("nothing built from those field");
       expect(text, format).toContain("_raw.indexOf(");
@@ -579,7 +582,7 @@ describe("csvRoutingWarning", () => {
     // so the example cannot rot into something plausible that matches nothing -
     // which is precisely the defect class this module exists to prevent, and it
     // would be that much worse arriving as advice.
-    const text = csvRoutingWarning("syslog", 3) ?? "";
+    const text = formatRoutingWarning("syslog", 3) ?? "";
     const example = /typeof _raw === '[^']*' && _raw\.indexOf\('[^']*'\) !== -1/.exec(
       text,
     )?.[0];
@@ -601,21 +604,21 @@ describe("csvRoutingWarning", () => {
     // Naming them is what makes "more samples will not change that" checkable
     // rather than something the operator has to take on trust: they can look at
     // their own line and see that none of these words is in it.
-    const text = csvRoutingWarning("syslog", 1) ?? "";
+    const text = formatRoutingWarning("syslog", 1) ?? "";
     for (const name of ["Timestamp", "Hostname", "Program", "PID", "Message"]) {
       expect(text, name).toContain(name);
     }
   });
 
   it("stays SILENT for a single-log-type syslog pack, as for the others", () => {
-    expect(csvRoutingWarning("syslog", 0)).toBeNull();
+    expect(formatRoutingWarning("syslog", 0)).toBeNull();
   });
 
   it("stays SILENT for a single-log-type positional pack, as for CSV", () => {
     // Same argument, same threshold: plan.ts runs the ladder only when
     // `tables.length > 1`, so a lone positional log type keeps a working
     // match-all and warning about it would be crying wolf.
-    expect(csvRoutingWarning("positional", 0)).toBeNull();
+    expect(formatRoutingWarning("positional", 0)).toBeNull();
   });
 
   it("stays SILENT for a single-log-type CSV pack", () => {
@@ -623,12 +626,12 @@ describe("csvRoutingWarning", () => {
     // lone CSV log type keeps a working match-all. Warning there would be
     // crying wolf about a pack that routes correctly - the DBT-19 failure this
     // repo has already had twice.
-    expect(csvRoutingWarning("csv", 0)).toBeNull();
+    expect(formatRoutingWarning("csv", 0)).toBeNull();
   });
 
   it("stays silent for every format that CAN discriminate", () => {
     for (const f of ["cef", "json", "ndjson", "leef", "kv"]) {
-      expect(csvRoutingWarning(f, 5), f).toBeNull();
+      expect(formatRoutingWarning(f, 5), f).toBeNull();
     }
   });
 
@@ -638,15 +641,15 @@ describe("csvRoutingWarning", () => {
     // fire on all of them - crying wolf about packs that work, which is the
     // DBT-19 failure this repo has already had twice. The header exclusion is
     // per FIELD and shows up only if it actually costs the log type its filter.
-    expect(csvRoutingWarning("cef", 5)).toBeNull();
-    expect(csvRoutingWarning("leef", 5)).toBeNull();
+    expect(formatRoutingWarning("cef", 5)).toBeNull();
+    expect(formatRoutingWarning("leef", 5)).toBeNull();
   });
 
   it("does not promise the route is missing - the pack still ships it", () => {
     // The placeholder keeps the route AND the pipeline; only the filter is
     // unfinished. An operator who reads this as "no route was generated" would
     // go looking for a bug that is not there.
-    const text = csvRoutingWarning("csv", 2) ?? "";
+    const text = formatRoutingWarning("csv", 2) ?? "";
 
     expect(text).toContain("Its route ships with");
     expect(text).not.toContain("dropped");
