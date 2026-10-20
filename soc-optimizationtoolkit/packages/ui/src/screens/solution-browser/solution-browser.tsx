@@ -741,32 +741,39 @@ export function SolutionBrowser({
               about the chip is entirely the paragraph above - there is no
               pasteable ADDRESS to put the fragment on, not an inability to
               consume one it is handed.
-              WHETHER THE FRAGMENT SURVIVES THE IFRAME IS UNSETTLED, and the
-              record points both ways. Do NOT cite the 2026-08-28 live attempt
-              for non-arrival, which an earlier draft here did: DBT-28
-              investigated non-arrival as its candidate (1) and records that it
-              "found BOTH recorded candidates wrong", attributing the unchanged
-              selection to a measured RESOLVER defect instead. THAT DEFECT IS
-              HISTORY, NOT A DESCRIPTION OF THE CODE BESIDE THIS NOTE, and it is
-              cited here only for what it displaced: AS OF 2026-08-28
-              resolveSelectedSolution matched exact and case-insensitive-exact
-              only, so a punctuation variant resolved to nothing and was consumed
-              in silence. Both halves are closed as of 2026-09-04 - the
-              separator-insensitive third pass is in browser-state.ts (with its
-              own note on why equality and not substring), and both callers here
-              now raise the unresolved-handoff notice above instead of
-              swallowing the miss. What that leaves standing is only the
-              displacement itself: an unchanged selection in 2026-08-28's live
-              attempt has a measured cause that is NOT non-arrival, so it is not
-              evidence that the fragment failed to reach this document.
-              Pointing the other way, the restoreName note
-              at the top of this file records live review 2026-08-03 finding
-              that "the Cribl app iframe does not preserve" the hash - which is
-              why the HOST restores the selection from the content cache at
-              all. The two have not been reconciled and neither is settled.
-              Removing the chip needs neither answer: with no address to paste,
-              advertising one is a FALSE CLAIM rather than an unfinished
-              feature.
+              A FRAGMENT FROM OUTSIDE THE SHELL DOES NOT REACH THIS DOCUMENT -
+              settled by live measurement on 2026-09-04 (backlog.md section 20,
+              DBT-119), after this note had said for a while that the record
+              pointed both ways. Navigating to `#/?solution=` and reading the
+              mounted iframe's src, on Live Preview and on installed 1.11.3:
+              the outer frame carried the hash, and the iframe src carried no
+              fragment and no query. The Cribl shell builds that src, so an
+              externally supplied fragment never arrives. That agrees with the
+              restoreName note at the top of this file (live review 2026-08-03:
+              "the Cribl app iframe does not preserve" the hash), which is why
+              the HOST restores the selection from the content cache. It is a
+              claim about the shell AS MEASURED on that date, not a law - a
+              later shell that forwards the fragment would change it, and
+              DBT-119 carries that trigger.
+              The 2026-08-28 live attempt is reconciled by the same measurement,
+              not contradicted by it. DBT-28 attributed its unchanged selection
+              to a RESOLVER defect: AS OF 2026-08-28 resolveSelectedSolution
+              matched exact and case-insensitive-exact only, so a punctuation
+              variant resolved to nothing and was consumed in silence. That
+              defect was real and is closed - the separator-insensitive third
+              pass is in browser-state.ts (with its own note on why equality and
+              not substring), and both callers here raise the unresolved-handoff
+              notice above instead of swallowing the miss - but it was not what
+              that attempt saw. The fragment never arrived, so the resolver was
+              never reached (backlog.md section 20: "cause (1), the fragment
+              never arriving, is correct").
+              NONE OF THIS IS ABOUT THE HASH INSIDE THE IFRAME, which works and
+              stays: select() writes it, and the SIEM-migration pivot hands off
+              by writing it (backlog.md section 20; the mechanism paragraph
+              below). Only the link arriving from OUTSIDE the shell is
+              undeliverable. Removing the chip never depended on this answer:
+              with no address to paste, advertising one is a FALSE CLAIM rather
+              than an unfinished feature.
               THE MECHANISM IS UNTOUCHED - AND WAS ALREADY HALF BROKEN.
               buildSolutionDeepLink still writes the hash in select() above,
               the mount read still preselects on the FIRST mount of this route,
@@ -783,11 +790,13 @@ export function SolutionBrowser({
               packages/ui suite green (80 files / 1343 tests). Re-measured
               2026-09-03: with the read pin present the same inversion fails
               exactly one test of 1344, and it is that pin.
-              WHETHER A SHAREABLE DEEP LINK IS WANTED IS STILL OPEN. Answering
-              it needs a base URL this app does not own, so it is a Cribl
-              platform question and not a routing one. Do not re-add a chip to
-              answer it - the pin in solution-browser.dom.test.tsx fails if
-              this card starts printing an address again. */}
+              A SHAREABLE DEEP LINK IS WANTED (answered 2026-09-04, backlog.md
+              section 20) AND IS PARKED AS DBT-119. Delivering it needs the
+              Cribl shell to forward a query onto the app-ui URL or post the
+              entry route on mount, so it is a Cribl platform request and not a
+              routing one. Do not re-add a chip to answer it - the pin in
+              solution-browser.dom.test.tsx fails if this card starts printing
+              an address again. */}
           {detail.phase === "loaded" && (
             <span className="field-hint">
               {detail.detail.connectorCount} connector file
