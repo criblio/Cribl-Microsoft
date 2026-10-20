@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**49 in the backlog, 18 in progress, 30 done.**
+**49 in the backlog, 18 in progress, 31 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Permission Verification | 7 | 1 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 10 | 6 | 2 |
+| Cross-cutting | 10 | 7 | 2 |
 
 Open work totals 67.
 
@@ -110,7 +110,7 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 44% (24/55)
+### `DBT` Quality and technical debt _(enabler)_ - 45% (25/56)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
@@ -119,7 +119,7 @@ ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's ow
 | `DBT-F1` Verification gaps | Sentinel Integration | 10/27 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 1/3 | DBT-1, DBT-4, DBT-12 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 6/13 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 7/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -1275,7 +1275,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (30)
+## Done (31)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2737,3 +2737,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   outside the app. verified: live because the evidence is that real run, not
   unit pins - the scripts have none. Two script defects the rehearsal found
   were fixed first.
+
+- **DBT-136** The DCR template docs say a DCE adds cost; DCE and DCR resources carry no charge
+  `DBT-F4` `bug` `settled` `verified: none`
+  REPORTED 2026-10-20 by a reader of
+  Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md:
+  its Template Types section said Direct DCRs cost less ("no DCE charges") and
+  DCE-based DCRs cost more ("DCE + DCR charges"), and the root README and the
+  Private Link article repeated it. Azure Monitor bills ingestion and
+  retention; no DCE or DCR meter exists (learn.microsoft.com azure-monitor
+  cost-usage). A Logs Ingestion DCR carries its own logsIngestion endpoint, so
+  a DCE is needed only for Private Link or by preference
+  (data-collection-endpoint-overview). The extra cost on the DCE path is
+  Private Link Private Endpoints. DONE 2026-10-20 on branch
+  docs/dce-cost-wording (from main, kept off the stacked PRs so the public doc
+  is not held behind them): the cost lines now describe the endpoint, the
+  Important Notes item says the resources are free and Private Link is the
+  cost, and the Private Link article prices endpoints, not DCEs. deprecated/
+  keeps the old wording (frozen tree). verified: none - prose checked against
+  Microsoft docs, nothing executable.

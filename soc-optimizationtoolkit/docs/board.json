@@ -1434,6 +1434,19 @@
       "dependsOn": [],
       "title": "inventory-standard.md claims the worker-group read returns Listing<T>; it returns a bare array",
       "detail": "FOUND 2026-10-20 by the [[DBT-134]] investigation. docs/inventory-standard.md:62-65 and :211-213 say DBT-62 converted 'the Cribl worker-group read' to Listing<T>, so the compile-time guard against rendering an unverified empty covers it. It does not: CriblClient.listGroups is still Promise<CriblGroupSummary[]> (packages/core/src/ports/cribl-client.ts:164), and only discover-sample-sources wraps it. The false claim is why the empty-worker-group-picker honesty defect went unnoticed. Fixed together with DBT-134, which converts the port, so the doc becomes true rather than being edited back."
+    },
+    {
+      "id": "DBT-136",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "none",
+      "title": "The DCR template docs say a DCE adds cost; DCE and DCR resources carry no charge",
+      "detail": "REPORTED 2026-10-20 by a reader of Azure/CustomDeploymentTemplates/DCR-Templates/SentinelNativeTables/README.md: its Template Types section said Direct DCRs cost less (\"no DCE charges\") and DCE-based DCRs cost more (\"DCE + DCR charges\"), and the root README and the Private Link article repeated it. Azure Monitor bills ingestion and retention; no DCE or DCR meter exists (learn.microsoft.com azure-monitor cost-usage). A Logs Ingestion DCR carries its own logsIngestion endpoint, so a DCE is needed only for Private Link or by preference (data-collection-endpoint-overview). The extra cost on the DCE path is Private Link Private Endpoints.\n\nDONE 2026-10-20 on branch docs/dce-cost-wording (from main, kept off the stacked PRs so the public doc is not held behind them): the cost lines now describe the endpoint, the Important Notes item says the resources are free and Private Link is the cost, and the Private Link article prices endpoints, not DCEs. deprecated/ keeps the old wording (frozen tree). verified: none - prose checked against Microsoft docs, nothing executable."
     }
   ],
   "features": [
