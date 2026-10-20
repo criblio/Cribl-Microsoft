@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**50 in the backlog, 3 in progress, 46 done.**
+**55 in the backlog, 3 in progress, 46 done.**
 
 ## By menu item
 
@@ -27,16 +27,16 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 |---|---|---|---|
 | Dataflow | 1 | 2 | 0 |
 | Setup | 1 | 0 | 0 |
-| Sentinel Integration | 14 | 29 | 3 |
+| Sentinel Integration | 18 | 29 | 3 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
-| Permission Verification | 6 | 3 | 0 |
+| Permission Verification | 7 | 3 | 0 |
 | Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 10 | 1 |
 
-Open work totals 53.
+Open work totals 58.
 
 ## Epics and features
 
@@ -70,13 +70,13 @@ Sentinel-side and Lake-side halves of Windows event handling
 | `WIN-F2` Microsoft proprietary enrichment catalog | Windows Event analysis (planned) | 0/2 | WIN-2, D-4 |
 | `WIN-F3` Lake copy format - JSON vs Parquet | Windows Event analysis (planned) | 0/1 | D-5 |
 
-### `HON` Inventory and diagnostic honesty - 100% (3/3)
+### `HON` Inventory and diagnostic honesty - 75% (3/4)
 
 Measured gaps where the app reports a confident wrong answer
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `HON-F1` Capability model follow-ons | Permission Verification | 3/3 | HON-6, D-1, DBT-137 |
+| `HON-F1` Capability model follow-ons | Permission Verification | 3/4 | HON-6, D-1, DBT-137, DBT-139 |
 
 ### `GEN` Pipeline and pack generation - 70% (7/10)
 
@@ -110,13 +110,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 63% (35/56)
+### `DBT` Quality and technical debt _(enabler)_ - 58% (35/60)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 17/27 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 17/31 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/10 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -327,7 +327,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (18)
+## Backlog - next (21)
 
 Settled and unblocked, sequenced behind now.
 
@@ -667,9 +667,38 @@ Settled and unblocked, sequenced behind now.
     [x] `keep-subdirectory` Keep the subdirectory - Fewest edits: CI path filters, the hooks, board-freshness and the release-drift check keep working. Still needs the outside inputs vendored and check-docs' repoRoot repointed.
     [ ] `flatten` Flatten to the repo root - Cleaner layout, but every path retarget in the inventory (CI, hooks, board-freshness and its pins, release drift, check-docs) must change in the same commit.
 
+- **DBT-138** Integrate lists worker groups twice, and the samples copy omits the policy-approval cause
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-20 by the architecture audit. integrate-screen.tsx calls
+  useStreamWorkerGroups AND useSampleSources, whose listSampleSourceGroups
+  does its own cribl.listGroups() (discover-sample-sources.ts:97): two
+  requests against the 100 req/min proxy budget whose answers can disagree
+  between two panels on one screen. The samples empty note
+  (discover-sample-sources.ts, "this token cannot see them") also omits the
+  app-policy re-approval cause that noStreamGroupsText names. Fix: let
+  listSampleSourceGroups take an existing Listing so Integrate lists once, and
+  share the copy.
+
+- **DBT-139** useCapabilityAudit still returns a view no shell renders, and it freezes
+  `HON-F1` `enabler` `settled`
+  FOUND 2026-10-20 by the architecture audit. use-capability-audit.ts returns
+  `view` (computed at render, so it never ages); its only reader is
+  use-capability-audit.dom.test.tsx. audit-age-chip.tsx derives its own age
+  for exactly that reason, so the next consumer of `view` gets a frozen
+  "checked just now". Fix: drop `view`, retarget the test to
+  describeCapabilityAudit.
+
+- **DBT-140** useInitialWorkerGroup - the one preselection rule for five screens - has no pin for its two behaviours
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-20 by the architecture audit. worker-group-listing.ts
+  useInitialWorkerGroup decides the first selection on Integrate, Onboard,
+  Batch, Architecture and the flow-log panel. Its only test passes
+  preferred="". Unpinned: the saved default wins when it is listed, and an
+  existing pick is never overridden. Fix: two hook pins, mutation-checked.
+
 ---
 
-## Backlog - later (31)
+## Backlog - later (33)
 
 Settled, gated on something above.
 
@@ -1081,6 +1110,23 @@ Settled, gated on something above.
   Cribl release notes either mechanism, or if the app is ever hosted somewhere
   its own document is the address bar - the local-app shell ADR 0001 shipped
   was exactly that, and the chip worked there.
+
+- **DBT-141** onboard-batch re-exports safeAzureManagement after DBT-74 moved it, and its tests still import through the batch
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-20 by the architecture audit. The re-export (onboard-batch.ts
+  and onboard-batch/index.ts) has no consumer outside core; it is public only
+  through the usecases barrel. The DBT-56 never-rejects pins in
+  onboard-batch.test.ts import through it, so they test the move target
+  through the old path. Fix: move those pins to arm-http.test.ts, then drop
+  the re-export.
+
+- **DBT-142** deployedUnreadReason restates the worker-group state names instead of importing them
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-20 by the architecture audit (suspected, minor).
+  pack-inventory-state.ts types its groups parameter as a hand-written "idle"
+  | "loading" | "failed" | "loaded" union rather than
+  WorkerGroupsState["kind"], so a state added to the hook would not reach the
+  badge logic. Fix: import the type.
 
 ---
 

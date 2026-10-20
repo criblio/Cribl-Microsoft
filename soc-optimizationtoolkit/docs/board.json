@@ -1474,6 +1474,66 @@
       "verified": "none",
       "title": "useCapabilityAudit's header named the wrong consumer and claimed a cache reuse it cannot do",
       "detail": "FOUND 2026-10-20 by the review of [[HON-6]]: the committed header of packages/ui/src/capabilities/use-capability-audit.ts said the preflight panel uses the hook to show the audit's age, and that a cached audit is reused across views - the one-slot cache cannot do that. Fixed in the HON-6 branch (comment only)."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-138",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Integrate lists worker groups twice, and the samples copy omits the policy-approval cause",
+      "detail": "FOUND 2026-10-20 by the architecture audit. integrate-screen.tsx calls useStreamWorkerGroups AND useSampleSources, whose listSampleSourceGroups does its own cribl.listGroups() (discover-sample-sources.ts:97): two requests against the 100 req/min proxy budget whose answers can disagree between two panels on one screen. The samples empty note (discover-sample-sources.ts, \"this token cannot see them\") also omits the app-policy re-approval cause that noStreamGroupsText names. Fix: let listSampleSourceGroups take an existing Listing so Integrate lists once, and share the copy."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-139",
+      "epic": "HON",
+      "feature": "HON-F1",
+      "type": "enabler",
+      "priority": "next",
+      "title": "useCapabilityAudit still returns a view no shell renders, and it freezes",
+      "detail": "FOUND 2026-10-20 by the architecture audit. use-capability-audit.ts returns `view` (computed at render, so it never ages); its only reader is use-capability-audit.dom.test.tsx. audit-age-chip.tsx derives its own age for exactly that reason, so the next consumer of `view` gets a frozen \"checked just now\". Fix: drop `view`, retarget the test to describeCapabilityAudit."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-140",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "enabler",
+      "priority": "next",
+      "title": "useInitialWorkerGroup - the one preselection rule for five screens - has no pin for its two behaviours",
+      "detail": "FOUND 2026-10-20 by the architecture audit. worker-group-listing.ts useInitialWorkerGroup decides the first selection on Integrate, Onboard, Batch, Architecture and the flow-log panel. Its only test passes preferred=\"\". Unpinned: the saved default wins when it is listed, and an existing pick is never overridden. Fix: two hook pins, mutation-checked."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-141",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "enabler",
+      "priority": "later",
+      "title": "onboard-batch re-exports safeAzureManagement after DBT-74 moved it, and its tests still import through the batch",
+      "detail": "FOUND 2026-10-20 by the architecture audit. The re-export (onboard-batch.ts and onboard-batch/index.ts) has no consumer outside core; it is public only through the usecases barrel. The DBT-56 never-rejects pins in onboard-batch.test.ts import through it, so they test the move target through the old path. Fix: move those pins to arm-http.test.ts, then drop the re-export."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-142",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "enabler",
+      "priority": "later",
+      "title": "deployedUnreadReason restates the worker-group state names instead of importing them",
+      "detail": "FOUND 2026-10-20 by the architecture audit (suspected, minor). pack-inventory-state.ts types its groups parameter as a hand-written \"idle\" | \"loading\" | \"failed\" | \"loaded\" union rather than WorkerGroupsState[\"kind\"], so a state added to the hook would not reach the badge logic. Fix: import the type."
     }
   ],
   "features": [
