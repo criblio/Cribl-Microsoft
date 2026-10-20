@@ -1271,11 +1271,13 @@ exactly the damage this check exists for and no more - `npm ci` accepts the
 mismatch (measured on npm 11.4.2 - exit 0, lock untouched) and the lock never
 ships inside the tgz, so nothing breaks except that a tracked file states a
 version that is not the version. The full argument is in the script's header.
-The cost, stated rather than buried: THREE of the five claims are now kept true
-by hand where two were. The root fix is `package.mjs` regenerating the lock as it
-already writes `package.json` and `release/`, at which point this claim guards an
-automated fact instead of a chore; until that lands, the packaging procedure
-below carries the step.
+The cost, stated rather than buried: it made THREE of the five claims kept true
+by hand where two had been. That cost is RETIRED (DBT-82): `package.mjs` now
+writes the lock's version field through
+`apps/cribl-app/scripts/lock-version.mjs`, as it already writes
+`package.json` and `release/`, so two of the five are manual again - the
+release-notes section and this file's "IS CURRENT" line - and this claim guards
+an automated fact instead of a chore.
 
 **Unreleased source WARNS and never fails**, which is the one rule to keep if
 this is ever rewritten: a feature branch normally carries source the last package
@@ -1331,34 +1333,31 @@ a third correction as proof the check should have been built instead - so the
 third correction built it.
 
 **DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
-bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`
+bump: `scripts/package.mjs:77` increments the patch itself (`--minor`, `--major`
 and `--version X.Y.Z` override it). Editing `package.json` first and then
 running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
 landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
 only place the doubled number shows up, and `release/` gets pruned to it, so the
 wrong version becomes the shipped one quietly. Bump by running the script.
 
-**AFTER `npm run package`, RUN `npm install --package-lock-only` AND COMMIT THE
-ONE-LINE LOCK CHANGE.** `package.mjs` bumps `apps/cribl-app/package.json` and
-writes the tgz but never invokes npm, so without this step every release commit
-leaves `package-lock.json` naming the PREVIOUS version and `check-release` red.
-That check runs in CI on every PR touching `soc-optimizationtoolkit/**`, so the
-consequence is a blocked PR, not a local nuisance. Measured 2026-09-02 in an
-isolated sandbox mirroring the layout: a faithful 1.12.3 -> 1.12.4 release with
-the lock left as npm left it exits 1 with "package-lock.json records the app at
-1.12.3 but package.json says 1.12.4"; running the command turns the same tree
-green. Run it from `soc-optimizationtoolkit` or from `apps/cribl-app` - npm walks
-up to the workspace root either way, also measured - and prefer
-`--package-lock-only` over a bare `npm install` because it is the minimal command
-that fixes this and only this. NOT because the bare form rewrites the lock: in
-the same sandbox, seeded at manifest 1.12.4 / lock 1.12.3, the two commands wrote
-a BYTE-IDENTICAL lock - same sha256, and the same SINGLE changed line, the
-`apps/cribl-app` version field: one deletion and one insertion, which is the
-one-line change the heading above asks you to commit. Re-measured 2026-09-03 on
-npm 11.4.2 / node 24.4.1, from both directories. The difference is
-`node_modules`, which the bare form resolves and installs and
-`--package-lock-only` never creates. This step disappears when `package.mjs`
-regenerates the lock itself.
+**`npm run package` UPDATES `package-lock.json` TOO - COMMIT THE ONE-LINE LOCK
+CHANGE WITH THE RELEASE.** Until DBT-82 this was a manual step: `package.mjs`
+bumped `apps/cribl-app/package.json` and wrote the tgz but never touched the
+lock, so every release commit left `package-lock.json` naming the PREVIOUS
+version and `check-release` red - PR-blocking, since that check runs in CI on
+every PR touching `soc-optimizationtoolkit/**` (measured 2026-09-02 in a sandbox:
+a faithful 1.12.3 -> 1.12.4 release exited 1 with "package-lock.json records the
+app at 1.12.3 but package.json says 1.12.4"). The fix had always been one line:
+in the same sandbox, `npm install --package-lock-only` and a bare `npm install`
+wrote a BYTE-IDENTICAL lock whose only change was the `apps/cribl-app` version
+field (re-measured 2026-09-03 on npm 11.4.2 / node 24.4.1). So `package.mjs` now
+writes that field itself (`apps/cribl-app/scripts/lock-version.mjs`) rather
+than shelling out to npm, and `lock-version.test.mjs` holds the write to that same single line against
+the real lock. It computes the new lock BEFORE writing `package.json` and refuses
+a conflict-marked or entry-less lock, so a failure leaves the tree un-bumped
+rather than half-bumped. `npm install --package-lock-only` stays the remedy
+`check-release` names, for the case it still catches: a version hand-edited
+outside `package.mjs`.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing

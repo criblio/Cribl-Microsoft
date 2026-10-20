@@ -5,7 +5,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BACKLOG_CURRENT, evaluateReleaseDrift } from './check-release-drift.mjs';
+import { BACKLOG_CURRENT, evaluateReleaseDrift, readLockVersion } from './check-release-drift.mjs';
+import { lockWorkspaceKey, syncLockVersion } from './lock-version.mjs';
 
 const CONSISTENT = {
   manifestVersion: '1.12.0',
@@ -253,5 +254,40 @@ describe('the script holds itself to its own rule', () => {
     // error raised when backlog.md stops stating a version. Deleting either one
     // (rather than rewording it) is how the shape gets lost.
     expect(source.match(/\*\*X\.Y\.Z IS CURRENT/g)).toHaveLength(2);
+  });
+});
+
+// DBT-82: package.mjs now writes the lock's version field itself, so the state
+// it leaves behind must be one this check passes - before that, every faithful
+// release came out red until "npm install --package-lock-only" was run by hand.
+// This is the release as package.mjs performs it, against the REAL lock: bump,
+// write through syncLockVersion, then read back through the check's own reader.
+// The writer and the reader share lockWorkspaceKey; if either ever picked a
+// different entry, the version read back would be the old one and this fails.
+describe('a release as package.mjs makes it', () => {
+  it('leaves the lock in the state check-release accepts', () => {
+    const lockPath = fileURLToPath(new URL('../../../package-lock.json', import.meta.url));
+    const appDir = fileURLToPath(new URL('..', import.meta.url));
+    const toolkitDir = fileURLToPath(new URL('../../..', import.meta.url));
+    const bumped = '99.0.0';
+
+    const lock = syncLockVersion(
+      readFileSync(lockPath, 'utf8'),
+      lockWorkspaceKey(toolkitDir, appDir),
+      bumped,
+    );
+
+    const result = evaluateReleaseDrift(
+      facts({
+        manifestVersion: bumped,
+        lockVersion: readLockVersion(lock),
+        releaseTarballs: [`soc-optimizationtoolkit-${bumped}.tgz`],
+        releaseNotes: `# Release notes\n\n## ${bumped}\n`,
+        backlog: `**${bumped} IS CURRENT (2026-10-20).**\n`,
+      }),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.packagedVersion).toBe(bumped);
   });
 });

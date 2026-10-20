@@ -1,10 +1,14 @@
 import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lockWorkspaceKey, syncLockVersion } from './lock-version.mjs';
 import { createAppPack } from './pkgutil.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
+// The workspace root, which holds package-lock.json - the same derivation
+// check-release-drift uses, so both resolve the same lock.
+const toolkitDir = join(rootDir, '..', '..');
 const buildOutDir = join(rootDir, 'build');
 const packageJsonPath = join(rootDir, 'package.json');
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -71,7 +75,21 @@ function nextVersion(currentVersion, args) {
 
 const packageInfo = JSON.parse(await readFile(packageJsonPath, 'utf8'));
 packageInfo.version = nextVersion(packageInfo.version || '0.0.0', process.argv.slice(2));
+
+// The lock records this workspace's version too, and check-release fails when
+// it disagrees with package.json (DBT-82 - this used to be a manual "npm
+// install --package-lock-only" after every package). The new lock text is
+// computed BEFORE package.json is written: syncLockVersion throws on a
+// conflict-marked or entry-less lock, and failing there leaves the tree
+// untouched instead of half-bumped.
+const lockPath = join(toolkitDir, 'package-lock.json');
+const lockText = syncLockVersion(
+  await readFile(lockPath, 'utf8'),
+  lockWorkspaceKey(toolkitDir, rootDir),
+  packageInfo.version,
+);
 await writeFile(packageJsonPath, `${JSON.stringify(packageInfo, null, 2)}\n`);
+await writeFile(lockPath, lockText);
 
 const tgzName = `${packageInfo.name || 'app'}-${packageInfo.version}.tgz`;
 const tgzPath = join(buildOutDir, tgzName);
