@@ -20,7 +20,7 @@ document's instructions bind:
 
 | Status | Means | Checked for |
 |---|---|---|
-| `Living` | Describes how things are now, and is kept true | retired paths, broken path references |
+| `Living` | Describes how things are now, and is kept true | retired paths, broken path references, unresolvable npm scripts |
 | `Proposed` | A plan not yet built | retired paths, and it EXPIRES |
 | `Record` | A dated account of what happened | nothing |
 | `Superseded` | Replaced, and says by what | that it names a successor |
@@ -75,6 +75,32 @@ Every marker is counted and the total is printed on every run, clean or not. A
 suppression nobody can see is how this check would quietly stop meaning
 anything. If that number climbs, the question is whether the document should
 have been split, not whether the check is too strict.
+
+## Paths and commands a live document names
+
+**A backticked path must exist**, written from the repo root or from inside
+`soc-optimizationtoolkit/`. A trailing line suffix - `file.ts:43` or
+`file.ts:43-54` - is allowed and stripped before the check. The line numbers
+are NOT checked: they drift on every edit above them, and a gate that failed on
+that would be bypassed within a week. `file.ts#L43` and `file.ts:43:5` are not
+recognised as paths at all.
+
+**`npm run <name>` must resolve**, and the rule is where:
+
+- By default it resolves against the toolkit ROOT `package.json`, because that
+  is the directory these documents tell a reader to work from.
+- If the command itself carries `--workspace <dir>`, it resolves against that
+  workspace's `package.json` instead. The flag binds to its own command only,
+  not to every `npm run` on the line.
+- It never resolves against the union of all manifests. `check-release` exists
+  in `apps/cribl-app` as well as at the root, so a union would stay green with
+  the root forward deleted - the DBT-90 regression, where the documented
+  command exited 1 for everyone who followed it.
+
+Only lowercase names are checked, so `npm run X` stays usable as a placeholder.
+The check asserts the script EXISTS, not that it passes. Separately, every root
+script written `npm run Y --workspace W` must find `Y` in `W`, because a forward
+pointing at nothing fails exactly like a missing one.
 
 ## Retiring something
 

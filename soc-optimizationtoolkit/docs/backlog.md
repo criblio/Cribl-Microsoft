@@ -1257,6 +1257,24 @@ card now has a second unpinned command to cover: this section documents
 `npm run check-classnames` as well, and deleting either forward would leave every
 gate green while both documented commands exit 1.
 
+**Guarded since 2026-10-20 ([[DBT-101]]).** The paragraph above described the
+state before the card; check-docs now resolves every `npm run <name>` in a
+Living document. The directory question was settled by convention rather than
+by reading prose: a mention resolves against the toolkit ROOT manifest unless
+the command carries its own `--workspace <dir>`. The obvious alternative - a
+name resolves if ANY manifest defines it - was rejected because it cannot catch
+the bug the card exists for: `check-release` is defined in `apps/cribl-app` too,
+so with the root forward deleted a union stays green. The pin deletes exactly
+that forward and expects the error; switching the resolver to the union turns it
+green, which is how it was mutation-checked. Root scripts of the form
+`npm run Y --workspace W` are also checked to find `Y` in `W`. Two limits stay
+open on purpose: only `docs/**/*.md` and `CONTEXT.md` are scanned, so
+`README.md` and the repo `CLAUDE.md` - where most operator-facing commands live -
+are NOT covered (widening that would expose them to every other check-docs rule
+too, a separate decision); and a Living doc that names a workspace-only script
+such as `preview` without `--workspace` will fail even if the prose says which
+directory to run it from.
+
 **The lock claim was added 2026-09-02, and it cost a manual step until DBT-82.** The lock was
 found recording 1.11.5 while `package.json` said 1.12.3. The argument against
 checking a GENERATED file was taken seriously first - a claim on one fails
@@ -1335,7 +1353,7 @@ a third correction as proof the check should have been built instead - so the
 third correction built it.
 
 **DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
-bump: `scripts/package.mjs:77` increments the patch itself (`--minor`, `--major`
+bump: `apps/cribl-app/scripts/package.mjs:77` increments the patch itself (`--minor`, `--major`
 and `--version X.Y.Z` override it). Editing `package.json` first and then
 running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
 landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
