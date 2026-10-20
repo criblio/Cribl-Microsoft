@@ -260,11 +260,13 @@ describe('the script holds itself to its own rule', () => {
 // DBT-82: package.mjs now writes the lock's version field itself, so the state
 // it leaves behind must be one this check passes - before that, every faithful
 // release came out red until "npm install --package-lock-only" was run by hand.
-// This is the release as package.mjs performs it, against the REAL lock: bump,
-// write through syncLockVersion, then read back through the check's own reader.
-// The writer and the reader share lockWorkspaceKey; if either ever picked a
-// different entry, the version read back would be the old one and this fails.
-describe('a release as package.mjs makes it', () => {
+// This replays the lock half of that release against the REAL lock: bump, write
+// through syncLockVersion, then read back through the check's own reader. It
+// does not run package.mjs - the block after it holds package.mjs to making
+// this call. The writer and the reader share lockWorkspaceKey; if either ever
+// picked a different entry, the version read back would be the old one and
+// this fails.
+describe('the lock write package.mjs makes', () => {
   it('leaves the lock in the state check-release accepts', () => {
     const lockPath = fileURLToPath(new URL('../../../package-lock.json', import.meta.url));
     const appDir = fileURLToPath(new URL('..', import.meta.url));
@@ -289,5 +291,36 @@ describe('a release as package.mjs makes it', () => {
 
     expect(result.errors).toEqual([]);
     expect(result.packagedVersion).toBe(bumped);
+  });
+});
+
+// The round trip above calls syncLockVersion itself, so it stays green if
+// package.mjs stops calling it - reverting package.mjs to before DBT-82 passed
+// every pin. These read package.mjs's own source for the wiring: one sync call
+// keyed through lockWorkspaceKey, its result written to the lock, and the sync
+// computed BEFORE package.json is written, so a lock that throws leaves the
+// tree un-bumped instead of half-bumped.
+describe('package.mjs writes the lock it computes', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./package.mjs', import.meta.url)),
+    'utf8',
+  );
+  const sync = source.match(/const (\w+) = syncLockVersion\(([^;]*)\);/);
+
+  it('computes the lock text once, keyed through lockWorkspaceKey', () => {
+    expect(source.match(/syncLockVersion\(/g)).toHaveLength(1);
+    expect(sync?.[2]).toMatch(/lockWorkspaceKey\(toolkitDir, rootDir\)/);
+    expect(sync?.[2]).toMatch(/packageInfo\.version/);
+  });
+
+  it('writes that text to the lock', () => {
+    expect(source).toContain(`await writeFile(lockPath, ${sync?.[1]});`);
+  });
+
+  it('computes it before package.json is written', () => {
+    const packageWrite = source.indexOf('await writeFile(packageJsonPath,');
+
+    expect(packageWrite).toBeGreaterThan(-1);
+    expect(sync?.index).toBeLessThan(packageWrite);
   });
 });

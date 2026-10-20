@@ -1257,14 +1257,16 @@ card now has a second unpinned command to cover: this section documents
 `npm run check-classnames` as well, and deleting either forward would leave every
 gate green while both documented commands exit 1.
 
-**The lock claim was added 2026-09-02, and it costs a manual step.** The lock was
+**The lock claim was added 2026-09-02, and it cost a manual step until DBT-82.** The lock was
 found recording 1.11.5 while `package.json` said 1.12.3. The argument against
 checking a GENERATED file was taken seriously first - a claim on one fails
 whenever somebody forgets to regenerate it, which is how a check gets bypassed
 rather than obeyed - and it lost on THREE measurements, the same three the
-script's header numbers, in the same order. (1) The drift window is one moment,
-the release commit, because `package.mjs` writes the version and never invokes
-npm, while ordinary dependency work already forces an `npm install`. (2) It does
+script's header numbers, in the same order. (1) The drift window was one moment,
+the release commit, because `package.mjs` wrote the version and never invoked
+npm, while ordinary dependency work already forces an `npm install`. Since
+DBT-82 `package.mjs` writes the lock as well, so the window that remains is a
+version hand-edited outside `package.mjs`. (2) It does
 not self-correct: the lock sat at 1.11.5 across FOURTEEN subsequent releases,
 1.11.6 through 1.12.3, before an agent noticed it by accident. (3) The damage is
 exactly the damage this check exists for and no more - `npm ci` accepts the
