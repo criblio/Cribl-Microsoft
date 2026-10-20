@@ -760,6 +760,34 @@ describe('DBT-120 - [[links]] that name nothing on this board', () => {
     ]);
   });
 
+  // DBT-124: board-html's richText renders links in decision.question and in
+  // each option's detail, so a dead one there showed as gone on the kanban
+  // while check-board said nothing.
+  const decided = () =>
+    linked({
+      detail: '',
+      decision: {
+        question: 'Wait on [[GONE-1]] or [[REL-2]]?',
+        options: [
+          { key: 'a', label: 'A', detail: 'see [[GONE-2]]' },
+          { key: 'b', label: 'B' },
+        ],
+      },
+    });
+
+  it('scans the decision question and each option detail', () => {
+    expect(danglingLinks(decided())).toEqual([
+      { from: 'REL-1', field: 'decision.question', target: 'GONE-1' },
+      { from: 'REL-1', field: 'decision.options.a.detail', target: 'GONE-2' },
+    ]);
+  });
+
+  it('does not throw on a malformed decision', () => {
+    for (const decision of ['yes', null, { options: 'x' }, { question: 'q', options: [null] }]) {
+      expect(danglingLinks(linked({ detail: '', decision }))).toEqual([]);
+    }
+  });
+
   it('resolves links to features and to spike-shaped ids', () => {
     // AZR-S1 is a real story id on the board; a regex written for `X-F?N` only
     // would have reported a link to it as dangling.
@@ -820,8 +848,15 @@ describe('DBT-120 - [[links]] that name nothing on this board', () => {
     ]);
     const out = [];
     for (const s of data.stories) {
-      for (const field of ['title', 'detail', 'priorityWhy']) {
-        const text = String(s[field] ?? '');
+      const texts = ['title', 'detail', 'priorityWhy'].map((f) => [f, s[f]]);
+      if (s.decision && typeof s.decision === 'object') {
+        texts.push(['decision.question', s.decision.question]);
+        for (const [i, o] of (Array.isArray(s.decision.options) ? s.decision.options : []).entries()) {
+          texts.push([`decision.options.${o?.key ?? i}.detail`, o?.detail]);
+        }
+      }
+      for (const [field, raw] of texts) {
+        const text = String(raw ?? '');
         let at = text.indexOf('[[');
         while (at !== -1) {
           const end = text.indexOf(']]', at + 2);
@@ -841,6 +876,10 @@ describe('DBT-120 - [[links]] that name nothing on this board', () => {
     expect(oracleDangling(linked())).toEqual([
       { from: 'REL-1', field: 'detail', target: 'GONE-7' },
       { from: 'REL-1', field: 'detail', target: 'GONE-7' },
+    ]);
+    expect(oracleDangling(decided())).toEqual([
+      { from: 'REL-1', field: 'decision.question', target: 'GONE-1' },
+      { from: 'REL-1', field: 'decision.options.a.detail', target: 'GONE-2' },
     ]);
   });
 

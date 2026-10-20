@@ -518,8 +518,31 @@ export function knownIds(data) {
 }
 
 /**
- * Every `[[link]]` in a card's title, detail or priorityWhy that names nothing
- * on this board - neither a story nor a feature. DBT-120.
+ * Every text field of a card that board-html renders through richText, as
+ * {field, text}: the top-level LINKED_FIELDS plus the decision's question and
+ * each option's detail (DBT-124 - those render links on the kanban too). The
+ * decision is an object, so its fields cannot sit in LINKED_FIELDS. Guarded
+ * with ?. because a malformed decision is validateBoard's to report, not ours
+ * to throw on.
+ *
+ * @returns {{field: string, text: string}[]}
+ */
+function linkedTexts(s) {
+  const out = LINKED_FIELDS.map((field) => ({ field, text: String(s[field] ?? '') }));
+  const d = s.decision;
+  if (d && typeof d === 'object') {
+    out.push({ field: 'decision.question', text: String(d.question ?? '') });
+    (Array.isArray(d.options) ? d.options : []).forEach((o, i) => {
+      out.push({ field: `decision.options.${o?.key ?? i}.detail`, text: String(o?.detail ?? '') });
+    });
+  }
+  return out;
+}
+
+/**
+ * Every `[[link]]` in a card's title, detail, priorityWhy, decision question
+ * or decision option details that names nothing on this board - neither a
+ * story nor a feature. DBT-120, DBT-124.
  *
  * Repeats are kept: the count is the size of the decay a reader will trip
  * over, and two dead links in one paragraph are two trips. This is NOT part of
@@ -533,8 +556,8 @@ export function danglingLinks(data) {
   const known = knownIds(data);
   const out = [];
   for (const s of data.stories ?? []) {
-    for (const field of LINKED_FIELDS) {
-      for (const m of String(s[field] ?? '').matchAll(LINK)) {
+    for (const { field, text } of linkedTexts(s)) {
+      for (const m of text.matchAll(LINK)) {
         if (!known.has(m[1])) out.push({ from: s.id, field, target: m[1] });
       }
     }
