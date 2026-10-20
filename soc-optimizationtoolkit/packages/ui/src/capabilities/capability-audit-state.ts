@@ -29,11 +29,11 @@ export function hasAzureIdentity(config: AzureConfig): boolean {
 /**
  * The connection facts the capability domain resolves unmeasured verdicts from.
  *
- * `criblReachable` is SHELL-SUPPLIED rather than derived here, because the two
- * shells know it differently: the cloud app runs inside the leader under
- * policies.yml, while the local app connects out to a configured one. The plan
- * calls this the seam that keeps the presentation identical while the
- * measurement source differs.
+ * `criblReachable` is SHELL-SUPPLIED rather than derived here, because only the
+ * shell knows it: the cloud app runs inside the leader under policies.yml,
+ * which nothing in this pure module can see. (It was also the seam between two
+ * shells that measured it differently; ADR 0002 retired the local one, and the
+ * parameter stays because the fact is still the shell's, not the config's.)
  */
 export function deriveCapabilityContext(
   config: AzureConfig,
