@@ -676,12 +676,14 @@ export type {
 // it is safe because the audit informs rather than forbids. Step 3's nav
 // annotation is the intended consumer.
 export {
+  AuditAgeChip,
   auditStatusTone,
   deriveCapabilityContext,
   hasAzureIdentity,
   refreshLabel,
   useCapabilityAudit,
 } from "./capabilities";
+export type { AuditAgeChipProps } from "./capabilities";
 // Route id -> required capabilities, SHARED by both shells (the render
 // functions are per-shell; what a route needs is one product decision).
 export {

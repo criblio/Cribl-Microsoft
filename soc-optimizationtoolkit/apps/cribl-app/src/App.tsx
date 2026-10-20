@@ -4,6 +4,7 @@ import {
   APP_THEME_KEY,
   AppFrame,
   ArchitectureScreen,
+  AuditAgeChip,
   MappingCatalogScreen,
   AzureConnectSection,
   AzureResourcesSection,
@@ -1607,6 +1608,17 @@ function App() {
             platform link:{' '}
             {platformLink === 'ok' ? 'ok' : platformLink === 'checking...' ? 'checking' : 'failed'}
           </span>
+          {/* HON-6 / D-1: the audit's age sits with the other facts about the
+            * live connection. It gets the set, key and clock rather than the
+            * hook's `view`, because `view` is computed at THIS render and the
+            * shell does not re-render as time passes - the chip ticks itself. */}
+          <AuditAgeChip
+            capabilities={capabilityAudit.capabilities}
+            auditKey={capabilityAudit.key}
+            now={nowIso}
+            running={capabilityAudit.running}
+            onRecheck={capabilityAudit.refresh}
+          />
         </div>
         {switchNotice !== '' && <p className="connection-notice">{switchNotice}</p>}
         {identityDrifted && (

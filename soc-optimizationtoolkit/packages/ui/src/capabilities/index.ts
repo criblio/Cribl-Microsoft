@@ -9,6 +9,8 @@ export {
   hasAzureIdentity,
   refreshLabel,
 } from "./capability-audit-state";
+export { AuditAgeChip } from "./audit-age-chip";
+export type { AuditAgeChipProps } from "./audit-age-chip";
 export { useCapabilityAudit } from "./use-capability-audit";
 export type {
   CapabilityAuditOptions,

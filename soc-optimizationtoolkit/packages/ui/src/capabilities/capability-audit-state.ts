@@ -61,3 +61,41 @@ export function auditStatusTone(status: AuditStatus): string {
 export function refreshLabel(running: boolean): string {
   return running ? "Checking..." : "Re-check permissions";
 }
+
+/**
+ * The connection-bar chip's own text: short, because it sits in a row of
+ * chips that already wraps, and the domain's `label` for `other-connection` is
+ * a two-sentence instruction. The full label travels in the chip's (i) instead,
+ * so nothing the domain says is lost - only moved off the row.
+ *
+ * `age` is the domain's phrase (describeAuditAge); it is only read for
+ * `current`, the one status whose text depends on the clock.
+ */
+export function auditChipText(status: AuditStatus, age: string): string {
+  switch (status) {
+    case "current":
+      return `permissions: checked ${age}`;
+    case "never-run":
+      return "permissions: not checked";
+    case "other-connection":
+      return "permissions: not checked for this connection";
+  }
+}
+
+/**
+ * What the age means and why it can be old. True of the shipped lifecycle: a
+ * launch reuses the cached audit when it was measured against the same key
+ * (shouldRunAudit), so a reload shows an earlier measurement, and nothing
+ * re-measures on a timer. It deliberately does NOT promise that switching back
+ * to a connection reuses its result: the cache is ONE slot
+ * (CAPABILITY_AUDIT_CACHE_KEY), so switching away overwrote it.
+ */
+export const AUDIT_CHIP_HINT =
+  "When this connection's Azure and Cribl permissions were last measured. " +
+  "A stored result is reused when the app reloads, and nothing re-measures on " +
+  "a timer, so after changing role assignments use Re-check permissions.";
+
+/** The chip's (i) text: the domain's full line, then what the age means. */
+export function auditChipTip(label: string): string {
+  return `${label}\n\n${AUDIT_CHIP_HINT}`;
+}

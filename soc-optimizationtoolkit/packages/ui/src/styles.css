@@ -690,6 +690,61 @@ body {
   max-width: 100%;
 }
 
+/* The capability audit's age and its manual re-check, in the connection bar
+ * beside the secret / target / platform-link chips. Lives here rather than in
+ * the cloud shell's App.css because AuditAgeChip ships from this package. The
+ * group wraps, so at a narrow width the button drops below the chip instead of
+ * pushing the row sideways. */
+.audit-chip-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.audit-chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.audit-chip-ok {
+  color: var(--ok);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.audit-chip-muted {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.audit-chip-attention {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.audit-chip-recheck {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.audit-chip-recheck:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
 /* Minimal topBar container for shells without a full connection bar (the
  * local shell): keeps the chip aligned with the frame content. */
 .scope-bar {
