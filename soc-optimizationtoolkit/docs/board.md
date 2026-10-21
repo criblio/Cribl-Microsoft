@@ -941,7 +941,7 @@ Settled, gated on something above.
     [x] `live-schema` Re-analyse against the LIVE table schema - Shows what changed since the pack was built; the same fetch the picker already makes. Noted on the card as probably the honest one.
 
 - **D-8** `AZR` Resource Graph change tracking - offer it at all? Recorded under `notSupported` as query-
-  `AZR-F5` `decision` `settled`
+  `AZR-F5` `decision` `settled` `blocked by CAP-1`
   only with no streaming path. If offered, it is a second scheduled collector,
   and it lands on the same Resource Graph gap CAP-1 closes. `backlog.md#6d`. >
   **D-9 became DBT-14 on 2026-08-27.** It asked what to do about three-level >

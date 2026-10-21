@@ -656,7 +656,9 @@
       "status": "backlog",
       "priority": "later",
       "settled": "settled",
-      "dependsOn": [],
+      "dependsOn": [
+        "CAP-1"
+      ],
       "decision": {
         "question": "Offer Resource Graph change tracking, and if so as a row or a real collector?",
         "options": [
