@@ -1258,3 +1258,88 @@ describe("IntegrateScreen - fold as you go (DBT-127)", () => {
     );
   });
 });
+
+describe("IntegrateScreen - removing one log type reaches both sections (DBT-143)", () => {
+  // The two sections are siblings: a removal from either has to cross this
+  // component, and that crossing is the part no section-level test can see.
+  function jsonSample(logType: string, record: Record<string, string>): TaggedSample {
+    const raw = JSON.stringify(record);
+    return {
+      logType,
+      format: "json",
+      rawEvents: [raw],
+      parsed: {
+        format: "json",
+        records: [record],
+        eventCount: 1,
+        fields: Object.keys(record).map((name) => ({
+          name,
+          type: "string",
+          examples: [record[name]],
+        })),
+        rawEvents: [raw],
+        sourceName: `${logType}.json`,
+        errors: [],
+      },
+    } as unknown as TaggedSample;
+  }
+
+  it("the gap card's Remove deletes the sample, its chip and its card", async () => {
+    const byType = new Map(
+      [
+        jsonSample("Traffic", { src: "10.0.0.1", action: "allow" }),
+        jsonSample("Decryption", { src: "10.0.0.2", tls: "1.3" }),
+      ].map((s) => [s.logType, s]),
+    );
+    const remove = vi.fn(async (logType: string) => {
+      byType.delete(logType);
+    });
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      samples: {
+        list: vi.fn(async () => [...byType.values()]),
+        get: vi.fn(async (t: string) => byType.get(t) ?? null),
+        upsert: vi.fn(async (s: TaggedSample) => {
+          byType.set(s.logType, s);
+        }),
+        remove,
+      },
+    } as unknown as UiPorts;
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const chips = () =>
+      [...container.querySelectorAll(".sample-chip-name")].map((n) => n.textContent);
+    const cards = () =>
+      [...container.querySelectorAll(".mapping-review-logtype")].map(
+        (n) => n.textContent,
+      );
+
+    await waitFor(() => expect(chips()).toEqual(["Traffic", "Decryption"]));
+    const analyze = [...container.querySelectorAll(".mapping-review-analyze button")][0];
+    await act(async () => {
+      fireEvent.click(analyze);
+    });
+    await waitFor(() => expect(cards()).toEqual(["Traffic", "Decryption"]));
+
+    await act(async () => {
+      fireEvent.click(
+        container.querySelector('button[aria-label="Remove Decryption sample"]')!,
+      );
+    });
+
+    await waitFor(() => expect(cards()).toEqual(["Traffic"]));
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledWith("Decryption");
+    expect(chips()).toEqual(["Traffic"]);
+    expect(container.textContent).not.toMatch(/re-analyze to refresh/i);
+  });
+});

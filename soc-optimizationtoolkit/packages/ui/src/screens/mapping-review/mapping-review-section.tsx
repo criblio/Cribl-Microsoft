@@ -41,7 +41,8 @@
  * the "Approval Required" / "Approved" badges, the staleness prompt, and the
  * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis; edits
  * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
- * optional renameEvent prop).
+ * optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
+ * only its own card and review; the other tables keep their approvals.
  *
  * All analysis IO flows through @soc/core: resolveSampleRouting then the
  * analyzeSamples usecase (fed the pre-resolved DCR flows - one fetch pass)
@@ -104,9 +105,18 @@ import {
   mergeEnrichments,
 } from "../pipeline-preview/pipeline-preview-state";
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
-import type { RequirementsForAssessment } from "./mapping-review-state";
+import type {
+  AnalysisSignature,
+  RequirementsForAssessment,
+} from "./mapping-review-state";
 import {
+  EMPTY_ANALYSIS_SIGNATURE,
   INITIAL_MAPPING_REVIEW_STATE,
+  analysisSignature,
+  forgetLogTypeKeys,
+  isSignatureStale,
+  signatureWithout,
+  withoutKey,
   assessUnusedOverflow,
   autoDropPlan,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
@@ -160,6 +170,13 @@ export interface MappingReviewRenameEvent {
   from: string;
   to: string;
   /** Bumped on every rename so a repeated from/to still fires the effect. */
+  nonce: number;
+}
+
+/** A log type whose sample was removed (DBT-143), to prune from the review. */
+export interface MappingReviewRemoveEvent {
+  logType: string;
+  /** Bumped on every removal so removing, re-adding and removing again fires. */
   nonce: number;
 }
 
@@ -233,6 +250,19 @@ export interface MappingReviewSectionProps {
   /** A log-type rename to re-key approvals + edits by (the Unit 11 seam). */
   renameEvent?: MappingReviewRenameEvent;
   /**
+   * A log type whose sample is gone (DBT-143). Its card, approval, edits, table
+   * override, enrichments and seed guards are pruned; every other table keeps
+   * its review. The ONE prune path - a card's own Remove does not prune
+   * locally, it asks through onRemoveLogType and arrives back here, so the
+   * store, the Sample Data chips and this section cannot disagree.
+   */
+  removeEvent?: MappingReviewRemoveEvent;
+  /**
+   * The card's Remove button: asks the page to delete this log type's sample.
+   * Absent = no button (a host that cannot delete samples offers none).
+   */
+  onRemoveLogType?: (logType: string) => void;
+  /**
    * Surfaces the user-added ENRICHMENT constants (merged global + per-table)
    * keyed by logType - fields the source does not carry that the pipeline
    * adds (e.g. DeviceVendor for PAN-OS). Feeds the pipeline preview, the pack
@@ -305,14 +335,6 @@ const COMMON_NATIVE_TABLES: readonly string[] = [
   "WindowsEvent",
 ];
 
-/** A stable signature of the analysis inputs (drives staleness detection). */
-function inputSignature(solutionName: string, samples: TaggedSample[]): string {
-  const parts = samples.map(
-    (s) => `${s.logType}#${s.parsed.fields.length}#${s.format}`,
-  );
-  return `${solutionName}||${parts.join("|")}`;
-}
-
 export function MappingReviewSection({
   solutionName,
   samples,
@@ -327,6 +349,8 @@ export function MappingReviewSection({
   onReportsChange,
   onEffectiveMappingsChange,
   renameEvent,
+  removeEvent,
+  onRemoveLogType,
   onEnrichmentsChange,
   learnedCache,
   contentRequirements,
@@ -409,6 +433,7 @@ export function MappingReviewSection({
     tableEnrichments,
     addEnrichment,
     removeEnrichment,
+    forgetLogType: forgetLogTypeEnrichments,
   } = useEnrichmentFields(reports, isValidEnrichmentFieldName, onEnrichmentsChange);
 
   const [review, dispatch] = useReducer(
@@ -587,8 +612,15 @@ export function MappingReviewSection({
     }
   }, [reports, assessments, unusedPolicy, review]);
 
-  const analyzedSigRef = useRef<string>("");
-  const currentSig = inputSignature(solutionName, samples);
+  const analyzedSigRef = useRef<AnalysisSignature>(EMPTY_ANALYSIS_SIGNATURE);
+  const currentSig = useMemo(
+    () => analysisSignature(solutionName, samples),
+    [solutionName, samples],
+  );
+  // The samples as of the LATEST render, for a run that started before a
+  // removal landed: its results must not resurrect the removed log type.
+  const samplesRef = useRef(samples);
+  samplesRef.current = samples;
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
   const runAnalysis = useCallback(async (
@@ -669,12 +701,20 @@ export function MappingReviewSection({
           ],
         },
       );
-      setReports(produced);
+      // A sample removed WHILE this run was in flight has already been pruned
+      // everywhere else; keep its report out too. Filtered against the live
+      // list, not this closure's, which still holds it.
+      const live = new Set(samplesRef.current.map((s) => s.logType));
+      const kept = produced.filter((r) => live.has(r.logType));
+      setReports(kept);
       logger?.info("gap-analysis: finished", {
-        tables: produced.map((r) => r.tableName).join(","),
-        reports: produced.length,
+        tables: kept.map((r) => r.tableName).join(","),
+        reports: kept.length,
       });
-      analyzedSigRef.current = inputSignature(solutionName, samples);
+      analyzedSigRef.current = analysisSignature(
+        solutionName,
+        samples.filter((s) => live.has(s.logType)),
+      );
       dispatch({ type: "analyzed" });
     } catch (err) {
       logger?.error(`gap-analysis: failed: ${String(err)}`);
@@ -747,7 +787,7 @@ export function MappingReviewSection({
     if (reports.length === 0) {
       return;
     }
-    if (currentSig !== analyzedSigRef.current) {
+    if (isSignatureStale(analyzedSigRef.current, currentSig)) {
       dispatch({ type: "inputs-changed" });
     }
   }, [currentSig, reports.length]);
@@ -768,6 +808,35 @@ export function MappingReviewSection({
       to: renameEvent.to,
     });
   }, [renameEvent]);
+
+  // ---- Remove prune (DBT-143) ---------------------------------------------
+  // Everything this section keys by log type goes, and nothing else does. The
+  // seed guards are cleared too: they exist so a DELETED seed stays deleted,
+  // and a sample re-added under the same name is a new sample, not that one.
+  const lastRemoveNonce = useRef<number>(removeEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (removeEvent === undefined) {
+      return;
+    }
+    if (removeEvent.nonce === lastRemoveNonce.current) {
+      return;
+    }
+    lastRemoveNonce.current = removeEvent.nonce;
+    const { logType } = removeEvent;
+    setReports((prev) => {
+      const next = prev.filter((r) => r.logType !== logType);
+      return next.length === prev.length ? prev : next;
+    });
+    dispatch({ type: "remove-log-type", logType });
+    setTableOverrides((prev) => withoutKey(prev, logType));
+    setMappingSearch((prev) => withoutKey(prev, logType));
+    forgetLogTypeEnrichments(logType);
+    forgetLogTypeKeys(seededIdentityRef.current, logType);
+    forgetLogTypeKeys(seededLabelRef.current, logType);
+    forgetLogTypeKeys(autoDroppedRef.current, logType);
+    analyzedSigRef.current = signatureWithout(analyzedSigRef.current, logType);
+    logger?.info("gap-analysis: log type removed", { logType });
+  }, [removeEvent, forgetLogTypeEnrichments, logger]);
 
   // ---- Content-path gate + reports surfacing ----------------------------
   const gate = deriveMappingReviewGate(review, reports);
@@ -1064,6 +1133,17 @@ export function MappingReviewSection({
                   ariaLabel="Filter destination tables"
                 />
               </div>
+              {onRemoveLogType !== undefined && (
+                <button
+                  className="run-button mapping-review-remove"
+                  onClick={() => onRemoveLogType(report.logType)}
+                  disabled={analyzing}
+                  aria-label={`Remove ${report.logType} sample`}
+                  title="Delete this log type's sample and drop it from every section below. The other tables keep their review and approvals."
+                >
+                  Remove
+                </button>
+              )}
             </div>
 
             <div className="match-stat-grid">

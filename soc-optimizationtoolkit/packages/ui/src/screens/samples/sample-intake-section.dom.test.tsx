@@ -616,3 +616,63 @@ describe("SampleIntakeSection - where a chip's column names came from", () => {
     expect(dialogTextarea(view.container).value).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Removing one log type (DBT-143)
+// ---------------------------------------------------------------------------
+
+describe("SampleIntakeSection - removing one log type", () => {
+  const seed = () => [
+    lakeSample("Traffic", NAMED_JSON),
+    lakeSample("Decryption", NAMED_JSON),
+  ];
+
+  it("reports the chip's Remove upward AFTER the store entry is gone", async () => {
+    const { store, byType } = makeStore(seed());
+    const removedAt: boolean[] = [];
+    const onRemoveLogType = vi.fn((logType: string) => {
+      removedAt.push(byType.has(logType));
+    });
+    const view = render(
+      <SampleIntakeSection store={store} onRemoveLogType={onRemoveLogType} />,
+    );
+    await waitFor(() => expect(chipNames(view.container)).toHaveLength(2));
+
+    const chip = Array.from(view.container.querySelectorAll(".sample-chip")).find(
+      (el) => el.querySelector(".sample-chip-name")?.textContent === "Decryption",
+    )!;
+    const remove = Array.from(chip.querySelectorAll("button")).find(
+      (b) => b.textContent === "Remove",
+    )!;
+    fireEvent.click(remove);
+
+    await waitFor(() => expect(onRemoveLogType).toHaveBeenCalledWith("Decryption"));
+    expect(onRemoveLogType).toHaveBeenCalledTimes(1);
+    // Downstream prunes only once the sample really is gone from the store.
+    expect(removedAt).toEqual([false]);
+    expect(chipNames(view.container)).toEqual(["Traffic"]);
+  });
+
+  it("performs a removal asked for from elsewhere, once per nonce", async () => {
+    const { store, byType } = makeStore(seed());
+    const onRemoveLogType = vi.fn();
+    const onSamplesChange = vi.fn();
+    const props = { store, onRemoveLogType, onSamplesChange };
+    const view = render(<SampleIntakeSection {...props} />);
+    await waitFor(() => expect(chipNames(view.container)).toHaveLength(2));
+
+    const request = { logType: "Decryption", nonce: 1 };
+    view.rerender(<SampleIntakeSection {...props} removeRequest={request} />);
+    await waitFor(() => expect(chipNames(view.container)).toEqual(["Traffic"]));
+    expect([...byType.keys()]).toEqual(["Traffic"]);
+    expect(onRemoveLogType).toHaveBeenCalledWith("Decryption");
+    // The page's list follows too: the last report carries only Traffic.
+    const last = onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(last.map((s) => s.logType)).toEqual(["Traffic"]);
+
+    // A re-render carrying the same request does not remove again.
+    view.rerender(<SampleIntakeSection {...props} removeRequest={{ ...request }} />);
+    await act(async () => {});
+    expect(store.remove).toHaveBeenCalledTimes(1);
+  });
+});

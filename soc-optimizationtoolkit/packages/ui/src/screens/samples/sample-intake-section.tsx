@@ -167,6 +167,20 @@ export interface SampleIntakeSectionProps {
    */
   onRenameLogType?: (from: string, to: string) => void;
   /**
+   * Remove contract (DBT-143), invoked AFTER the store entry is deleted, so the
+   * page can prune everything downstream keyed by that log type. Without it a
+   * removed sample left its gap-analysis card behind and made the remaining
+   * analysis stale.
+   */
+  onRemoveLogType?: (logType: string) => void;
+  /**
+   * A removal asked for from ELSEWHERE - the DCR Gap Analysis card's Remove.
+   * Routed through this section's own remove so there is one delete path: the
+   * store, these chips and onRemoveLogType all follow from it. Nonce'd and
+   * consumed once, like arrivalEvent.
+   */
+  removeRequest?: { logType: string; nonce: number };
+  /**
    * Samples that landed in the store through a SIBLING acquisition panel - the
    * capture panel or the Lake panel - rather than through the paste/upload
    * controls in here.
@@ -197,6 +211,8 @@ export function SampleIntakeSection({
   definitionCache,
   onSamplesChange,
   onRenameLogType,
+  onRemoveLogType,
+  removeRequest,
   arrivalEvent,
 }: SampleIntakeSectionProps) {
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
@@ -418,12 +434,16 @@ export function SampleIntakeSection({
     [samples, store, commit],
   );
 
+  const removeRef = useRef(onRemoveLogType);
+  removeRef.current = onRemoveLogType;
+
   const removeSample = useCallback(
     async (logType: string) => {
       setBusy(true);
       try {
         await store.remove(logType);
         commit(removeByLogType(samples ?? [], logType));
+        removeRef.current?.(logType);
       } catch (err) {
         setLoadError(String(err));
       } finally {
@@ -432,6 +452,22 @@ export function SampleIntakeSection({
     },
     [store, samples, commit],
   );
+
+  // Seeded with the current nonce for the same reason as arrivalEvent: a
+  // remount by key must not replay a removal it already performed.
+  const lastRemoveNonce = useRef<number>(removeRequest?.nonce ?? -1);
+  useEffect(() => {
+    if (removeRequest === undefined || samples === null) {
+      // Wait for the list: removing against a null list would commit [] and
+      // report every other sample away.
+      return;
+    }
+    if (removeRequest.nonce === lastRemoveNonce.current) {
+      return;
+    }
+    lastRemoveNonce.current = removeRequest.nonce;
+    void removeSample(removeRequest.logType);
+  }, [removeRequest, samples, removeSample]);
 
   const commitRename = useCallback(async () => {
     if (renaming === null) {

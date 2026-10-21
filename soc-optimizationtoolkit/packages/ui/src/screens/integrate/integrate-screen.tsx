@@ -180,7 +180,11 @@ import {
   ruleFieldsFromGapReports,
   unionRuleFields,
 } from "../rule-coverage/rule-coverage-state";
-import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
+import type {
+  MappingReviewRemoveEvent,
+  MappingReviewRenameEvent,
+} from "../mapping-review/mapping-review-section";
+import { withoutKey } from "../mapping-review/mapping-review-state";
 import {
   PIPELINE_PREVIEW_TIP,
   PipelinePreviewSection,
@@ -803,6 +807,36 @@ export function IntegrateScreen({
     },
     [ports],
   );
+
+  // Remove contract (DBT-143). TWO origins, ONE delete: the Sample Data chip
+  // removes from the store itself and reports here; the Gap Analysis card asks
+  // here, and the request is routed back into the Sample Data section so its
+  // own remove does the deleting. Either way handleRemovedLogType runs once,
+  // after the store entry is gone, and prunes everything keyed by log type -
+  // the gap section's review via removeEvent, and the two per-log-type maps
+  // held at this level. Reports, effective mappings and enrichments are
+  // surfaced by the gap section, so rule coverage, the pipeline preview and
+  // the deploy follow from its prune without wiring of their own.
+  const [removeEvent, setRemoveEvent] = useState<MappingReviewRemoveEvent>();
+  const [removeRequest, setRemoveRequest] = useState<{
+    logType: string;
+    nonce: number;
+  }>();
+  const removeNonce = useRef(0);
+  const handleRemovedLogType = useCallback(
+    (logType: string) => {
+      ports.logger?.info("sample log type removed", { logType });
+      removeNonce.current += 1;
+      setRemoveEvent({ logType, nonce: removeNonce.current });
+      setIdentityOverrides((prev) => withoutKey(prev, logType));
+      setRouteFilterOverrides((prev) => withoutKey(prev, logType));
+    },
+    [ports],
+  );
+  const requestRemoveLogType = useCallback((logType: string) => {
+    removeNonce.current += 1;
+    setRemoveRequest({ logType, nonce: removeNonce.current });
+  }, []);
 
   // Populate the worker-group dropdown from the CriblClient port. Every
   // listing state - loading, refused, an unverified empty, groups none of
@@ -2209,6 +2243,8 @@ export function IntegrateScreen({
         definitionCache={ports.contentCache}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
+        onRemoveLogType={handleRemovedLogType}
+        removeRequest={removeRequest}
         arrivalEvent={sampleArrival}
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
@@ -2281,6 +2317,8 @@ export function IntegrateScreen({
         onEffectiveMappingsChange={setMappingOverrides}
         onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}
+        removeEvent={removeEvent}
+        onRemoveLogType={requestRemoveLogType}
         contentRequirements={contentRequirements}
         dropUnneededEvent={dropUnneededEvent}
         identityFindings={identityFindings}

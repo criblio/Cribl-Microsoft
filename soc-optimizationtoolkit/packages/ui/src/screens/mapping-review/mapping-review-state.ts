@@ -23,7 +23,10 @@
  *   3. STALENESS - a flag raised when the underlying samples / solution / schema
  *      changed AFTER the last analysis. Stale approvals cannot gate a deploy
  *      (the mapping they approved no longer reflects the inputs); the UI prompts
- *      a re-analyze. The legacy `analysisStale` flag, made explicit.
+ *      a re-analyze. The legacy `analysisStale` flag, made explicit. Judged PER
+ *      LOG TYPE (DBT-143): removing one sample is not a change to the others,
+ *      so it does not make their analysis stale - the removed log type is
+ *      pruned instead (`remove-log-type`), and every other approval stands.
  *
  * DEPLOY-GATE PARTITION (task item 3, the critical MVP guard): the approval
  * gate here applies ONLY to the content/mapping-driven path. It NEVER touches
@@ -35,7 +38,12 @@
  * the Unit 11 reKeyByLogType primitive (the shared re-key seam) verbatim.
  */
 
-import type { GapFieldMapping, GapReport, GapReportStat } from "@soc/core";
+import type {
+  GapFieldMapping,
+  GapReport,
+  GapReportStat,
+  TaggedSample,
+} from "@soc/core";
 import { FIELD_EXAMPLE_MAX_CHARS } from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
@@ -122,14 +130,21 @@ export type MappingReviewAction =
    * approval and the edit store from `from` to `to` with the shared primitive,
    * so neither is orphaned under the old key.
    */
-  | { type: "rename-log-type"; from: string; to: string };
+  | { type: "rename-log-type"; from: string; to: string }
+  /**
+   * A log type's sample was removed (DBT-143). Drops its approval and its edit
+   * store and touches nothing else: the other tables' approvals stand, and
+   * staleness is unchanged, because the remaining analysis is still about
+   * exactly the samples it was run on.
+   */
+  | { type: "remove-log-type"; logType: string };
 
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
 
 /** Drop one key from a record, returning a new record (never mutates). */
-function withoutKey<T>(
+export function withoutKey<T>(
   record: Readonly<Record<string, T>>,
   key: string,
 ): Record<string, T> {
@@ -220,12 +235,104 @@ export function mappingReviewReducer(
         ),
       };
 
+    case "remove-log-type":
+      return {
+        ...state,
+        approvals: withoutKey(state.approvals, action.logType),
+        mappingEdits: withoutKey(state.mappingEdits, action.logType),
+      };
+
     default: {
       // Exhaustiveness: a new action type must be handled above.
       const never: never = action;
       return never;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Staleness signature (per log type)
+// ---------------------------------------------------------------------------
+
+/**
+ * What an analysis was run on: the solution, and one fingerprint per log type.
+ *
+ * PER LOG TYPE, NOT ONE STRING (DBT-143). This was a single joined string, so
+ * removing any sample changed it and marked the whole analysis stale - and the
+ * only way out, Re-analyze, resets every approval. Keyed by log type, a
+ * removed sample simply has no current counterpart to disagree with.
+ */
+export interface AnalysisSignature {
+  solutionName: string;
+  byLogType: Readonly<Record<string, string>>;
+}
+
+/** The empty signature: nothing analyzed yet. */
+export const EMPTY_ANALYSIS_SIGNATURE: AnalysisSignature = {
+  solutionName: "",
+  byLogType: {},
+};
+
+/** Fingerprint the analysis inputs (same three facets the string form used). */
+export function analysisSignature(
+  solutionName: string,
+  samples: readonly TaggedSample[],
+): AnalysisSignature {
+  const byLogType: Record<string, string> = {};
+  for (const s of samples) {
+    byLogType[s.logType] = `${s.parsed.fields.length}#${s.format}`;
+  }
+  return { solutionName, byLogType };
+}
+
+/**
+ * Whether `current` asks for an analysis `analyzed` did not do: the solution
+ * changed, or a current log type was never analyzed or has changed since. A
+ * log type present only in `analyzed` - a removed sample - is NOT staleness;
+ * the caller prunes its report instead.
+ */
+export function isSignatureStale(
+  analyzed: AnalysisSignature,
+  current: AnalysisSignature,
+): boolean {
+  if (analyzed.solutionName !== current.solutionName) {
+    return true;
+  }
+  return Object.entries(current.byLogType).some(
+    ([logType, fingerprint]) => analyzed.byLogType[logType] !== fingerprint,
+  );
+}
+
+/**
+ * Forget one log type from an analyzed signature, so a sample re-added under
+ * the same name after a removal reads as NEW (stale) rather than as already
+ * analyzed - its report was pruned and nothing would otherwise prompt a run.
+ */
+export function signatureWithout(
+  signature: AnalysisSignature,
+  logType: string,
+): AnalysisSignature {
+  return {
+    solutionName: signature.solutionName,
+    byLogType: withoutKey(signature.byLogType, logType),
+  };
+}
+
+/**
+ * Drop every `${logType}|...` key from a one-shot guard set (the identity and
+ * label seed guards, the auto-drop ledger). Mutates the set, which is what
+ * those refs are for. Returns how many keys went.
+ */
+export function forgetLogTypeKeys(keys: Set<string>, logType: string): number {
+  const prefix = `${logType}|`;
+  let removed = 0;
+  for (const key of [...keys]) {
+    if (key.startsWith(prefix)) {
+      keys.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
 }
 
 // ---------------------------------------------------------------------------

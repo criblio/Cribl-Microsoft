@@ -266,7 +266,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   removal no longer marks the remaining analysis stale; an added or changed
   sample still does. Reports, effective mappings and enrichments already flow
   down to rule coverage, pipeline preview and deploy, so those follow without
-  new wiring.
+  new wiring. BUILT 2026-10-21 on feature/remove-sample-log-type, pins only so
+  far. Unit pins on the reducer and the per-log-type signature; DOM pins on
+  both sections and one on IntegrateScreen that drives Analyze then the gap
+  card Remove and reads the store, the chips and the cards. Mutation-checked:
+  per-log-type staleness, the report prune, card-asks-not-prunes, the upward
+  report, the nonce guard, the request consumption, and each of the three
+  parent props. NOT YET confirmed in Live Preview - close as both once it is.
 
 ---
 

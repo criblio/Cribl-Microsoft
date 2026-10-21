@@ -10,7 +10,12 @@
  */
 import { EMPTY_OVERFLOW_TRIAGE } from "@soc/core";
 import { describe, expect, it } from "vitest";
-import type { GapFieldMapping, GapReport, MatchAction } from "@soc/core";
+import type {
+  GapFieldMapping,
+  GapReport,
+  MatchAction,
+  TaggedSample,
+} from "@soc/core";
 import type { UnusedFieldAssessment } from "./mapping-review-state";
 import {
   INITIAL_MAPPING_REVIEW_STATE,
@@ -35,6 +40,11 @@ import {
   deriveLiveStats,
   formatExampleValue,
   EXAMPLE_VALUE_MAX_CHARS,
+  EMPTY_ANALYSIS_SIGNATURE,
+  analysisSignature,
+  forgetLogTypeKeys,
+  isSignatureStale,
+  signatureWithout,
 } from "./mapping-review-state";
 import type {
   MappingReviewAction,
@@ -346,6 +356,114 @@ describe("rename-log-type", () => {
       to: "other",
     });
     expect(next.approvals).toEqual({ A: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// remove-log-type and the per-log-type staleness signature (DBT-143)
+// ---------------------------------------------------------------------------
+
+function tagged(logType: string, fieldCount: number, format = "json"): TaggedSample {
+  return {
+    logType,
+    format,
+    parsed: { fields: Array.from({ length: fieldCount }, () => ({})) },
+  } as unknown as TaggedSample;
+}
+
+describe("remove-log-type", () => {
+  it("drops exactly the removed log type's approval and edits", () => {
+    const start = analyzed({
+      approvals: { Gone: true, Keep: true },
+      mappingEdits: { Gone: [mapping({ source: "x" })], Keep: [mapping()] },
+    });
+    const next = mappingReviewReducer(start, {
+      type: "remove-log-type",
+      logType: "Gone",
+    });
+    expect(next.approvals).toEqual({ Keep: true });
+    expect(Object.keys(next.mappingEdits)).toEqual(["Keep"]);
+    // The other table's review is untouched, and nothing is marked stale.
+    expect(next.stale).toBe(false);
+    expect(next.analysisRevision).toBe(start.analysisRevision);
+  });
+
+  it("leaves the content gate READY when every remaining table is approved", () => {
+    const keep = report("Keep", [mapping()]);
+    const start = analyzed({ approvals: { Keep: true } });
+    const next = mappingReviewReducer(start, {
+      type: "remove-log-type",
+      logType: "Gone",
+    });
+    expect(deriveMappingReviewGate(next, [keep]).ready).toBe(true);
+  });
+});
+
+describe("analysis signature", () => {
+  const analyzedSig = analysisSignature("PaloAlto", [
+    tagged("Traffic", 10),
+    tagged("Decryption", 7),
+  ]);
+
+  it("is NOT stale when a sample is removed", () => {
+    const current = analysisSignature("PaloAlto", [tagged("Traffic", 10)]);
+    expect(isSignatureStale(analyzedSig, current)).toBe(false);
+  });
+
+  it("is stale when a sample is added, changed, or the solution changes", () => {
+    const added = analysisSignature("PaloAlto", [
+      tagged("Traffic", 10),
+      tagged("Decryption", 7),
+      tagged("Threat", 4),
+    ]);
+    const changed = analysisSignature("PaloAlto", [
+      tagged("Traffic", 11),
+      tagged("Decryption", 7),
+    ]);
+    const reformatted = analysisSignature("PaloAlto", [
+      tagged("Traffic", 10, "csv"),
+      tagged("Decryption", 7),
+    ]);
+    const otherSolution = analysisSignature("Zscaler", [
+      tagged("Traffic", 10),
+      tagged("Decryption", 7),
+    ]);
+    expect(isSignatureStale(analyzedSig, added)).toBe(true);
+    expect(isSignatureStale(analyzedSig, changed)).toBe(true);
+    expect(isSignatureStale(analyzedSig, reformatted)).toBe(true);
+    expect(isSignatureStale(analyzedSig, otherSolution)).toBe(true);
+  });
+
+  it("treats a sample re-added after removal as unanalyzed", () => {
+    // Its report was pruned, so an identical re-add must prompt a run rather
+    // than read as already analyzed and leave the sample with no card.
+    const pruned = signatureWithout(analyzedSig, "Decryption");
+    const readded = analysisSignature("PaloAlto", [
+      tagged("Traffic", 10),
+      tagged("Decryption", 7),
+    ]);
+    expect(isSignatureStale(pruned, readded)).toBe(true);
+    expect(isSignatureStale(analyzedSig, readded)).toBe(false);
+  });
+
+  it("starts empty", () => {
+    expect(EMPTY_ANALYSIS_SIGNATURE.byLogType).toEqual({});
+  });
+});
+
+describe("forgetLogTypeKeys", () => {
+  it("drops only keys for that log type, not a log type sharing its prefix", () => {
+    const keys = new Set([
+      "Decryption|CommonSecurityLog|DeviceVendor",
+      "Decryption|CommonSecurityLog|DeviceProduct",
+      "DecryptionV2|CommonSecurityLog|DeviceVendor",
+      "Traffic|CommonSecurityLog|DeviceVendor",
+    ]);
+    expect(forgetLogTypeKeys(keys, "Decryption")).toBe(2);
+    expect([...keys].sort()).toEqual([
+      "DecryptionV2|CommonSecurityLog|DeviceVendor",
+      "Traffic|CommonSecurityLog|DeviceVendor",
+    ]);
   });
 });
 
