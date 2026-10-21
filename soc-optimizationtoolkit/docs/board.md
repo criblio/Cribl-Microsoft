@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**55 in the backlog, 4 in progress, 46 done.**
+**56 in the backlog, 4 in progress, 46 done.**
 
 ## By menu item
 
@@ -32,11 +32,11 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Permission Verification | 7 | 3 | 0 |
-| Azure Native Source Onboarding (planned) | 12 | 1 | 0 |
+| Azure Native Source Onboarding (planned) | 13 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 10 | 1 |
 
-Open work totals 59.
+Open work totals 60.
 
 ## Epics and features
 
@@ -45,7 +45,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 8% (1/13)
+### `AZR` Azure native source onboarding - 7% (1/14)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -58,7 +58,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding (planned) | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding (planned) | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding (planned) | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding (planned) | 0/2 | AZR-11, AZR-12 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding (planned) | 0/3 | AZR-18, AZR-11, AZR-12 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -354,7 +354,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (21)
+## Backlog - next (25)
 
 Settled and unblocked, sequenced behind now.
 
@@ -411,6 +411,47 @@ Settled and unblocked, sequenced behind now.
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
+
+- **AZR-3** Defender for Cloud continuous export
+  `AZR-F3` `story` `settled` `blocked by AZR-18`
+  Per subscription, a `Microsoft.Security/automations` resource. Detects which
+  of 12 paid plans are enabled and never enables one - keep that property.
+  `backlog.md#6b`.
+
+- **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
+  `AZR-F9` `story` `settled`
+  OPERATOR DECISION 2026-10-21, from grooming the azure-onboarding menu: every
+  open AZR card is a SECTION of a screen that does not exist - no route, no
+  nav entry, no usecase (backlog.md#6: "The port has never happened"). With no
+  card for the screen itself there was no first step, which is why the menu
+  sat at later with nothing in progress. SCOPE: the route and nav entry for
+  the planned azure-onboarding menu id, rendering the coverage-model checkbox
+  sections (AZR-0) with the onboarding-selection additive-only contract
+  (AZR-1) persisted to the KV store. Every category the screen cannot yet act
+  on renders as a visible, disabled section, not an absent one. The first
+  sections that WORK are AZR-11 (the Event Hub namespace prerequisite, which
+  nearly every section needs) and AZR-3 (Defender for Cloud continuous
+  export), both of which depend on this card. WHY DEFENDER FIRST, NOT ENTRA
+  (operator choice): Entra (6b) has its domain logic built (AZR-2), but
+  ticking it triggers the content-preservation problem in
+  features/content-preserving-native-reroute.md - a 6b build that ignores that
+  silently breaks Entra content. Defender export is one
+  Microsoft.Security/automations write per subscription with no content
+  breakage. OPEN BEFORE BUILDING: whether writing
+  Microsoft.Security/automations needs a capability and probe that CAP-F1 does
+  not yet list. Check it; do not assume the existing Azure role covers it.
+
+- **AZR-11** Make the prerequisite ordering explicit
+  `AZR-F9` `enabler` `settled` `blocked by AZR-18, AZR-12`
+  Nearly every section needs an Event Hub namespace first, and the policy
+  sections need Policy Contributor plus User Access Administrator at MG scope.
+  `backlog.md#6h`.
+
+- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
+  `AZR-F9` `enabler` `settled`
+  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
+  related only by subject; keep them separable, because one is Sentinel-side
+  and one is Lake-side and either could ship alone.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled`
@@ -725,7 +766,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (33)
+## Backlog - later (30)
 
 Settled, gated on something above.
 
@@ -743,12 +784,6 @@ Settled, gated on something above.
   the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
   UrlClickEvents), so complementary is the likely answer - still unverified,
   which is the point.
-
-- **AZR-3** Defender for Cloud continuous export
-  `AZR-F3` `story` `settled`
-  Per subscription, a `Microsoft.Security/automations` resource. Detects which
-  of 12 paid plans are enabled and never enables one - keep that property.
-  `backlog.md#6b`.
 
 - **AZR-8** Blob-only sources as visible unavailable rows
   `AZR-F6` `story` `settled`
@@ -797,18 +832,6 @@ Settled, gated on something above.
   and the work is data, new entries in `architecture-patterns.ts`. Draw the
   manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way.
   Trail each section by one. `backlog.md#6g`.
-
-- **AZR-11** Make the prerequisite ordering explicit
-  `AZR-F9` `enabler` `settled`
-  Nearly every section needs an Event Hub namespace first, and the policy
-  sections need Policy Contributor plus User Access Administrator at MG scope.
-  `backlog.md#6h`.
-
-- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
-  `AZR-F9` `enabler` `settled`
-  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
-  related only by subject; keep them separable, because one is Sentinel-side
-  and one is Lake-side and either could ship alone.
 
 - **WIN-1** The screen shell and route, opting in to `table.read`
   `WIN-F1` `story` `settled`
