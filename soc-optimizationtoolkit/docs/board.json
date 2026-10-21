@@ -328,14 +328,14 @@
       "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md#6g`."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-18",
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "story",
-      "priority": "next",
+      "priority": "now",
       "title": "Azure Native Source Onboarding screen exists - route, menu entry, and its first section",
       "detail": "OPERATOR DECISION 2026-10-21, from grooming the azure-onboarding menu: every open AZR card is a SECTION of a screen that does not exist - no route, no nav entry, no usecase (backlog.md#6: \"The port has never happened\"). With no card for the screen itself there was no first step, which is why the menu sat at later with nothing in progress.\n\nSCOPE: the route and nav entry for the planned azure-onboarding menu id, rendering the coverage-model checkbox sections (AZR-0) with the onboarding-selection additive-only contract (AZR-1) persisted to the KV store. Every category the screen cannot yet act on renders as a visible, disabled section, not an absent one. The first sections that WORK are AZR-11 (the Event Hub namespace prerequisite, which nearly every section needs) and AZR-3 (Defender for Cloud continuous export), both of which depend on this card.\n\nWHY DEFENDER FIRST, NOT ENTRA (operator choice): Entra (6b) has its domain logic built (AZR-2), but ticking it triggers the content-preservation problem in features/content-preserving-native-reroute.md - a 6b build that ignores that silently breaks Entra content. Defender export is one Microsoft.Security/automations write per subscription with no content breakage.\n\nOPEN BEFORE BUILDING: whether writing Microsoft.Security/automations needs a capability and probe that CAP-F1 does not yet list. Check it; do not assume the existing Azure role covers it."
     },
@@ -360,8 +360,8 @@
       "feature": "AZR-F9",
       "title": "Check `eventhub-discovery` for overlap before building a second Event Hub surface",
       "type": "enabler",
-      "status": "backlog",
-      "priority": "next",
+      "status": "in-progress",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "detail": "`backlog.md#6h`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone."

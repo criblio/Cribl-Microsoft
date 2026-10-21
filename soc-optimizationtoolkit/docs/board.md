@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**56 in the backlog, 4 in progress, 46 done.**
+**54 in the backlog, 6 in progress, 46 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Permission Verification | 7 | 3 | 0 |
-| Azure Native Source Onboarding (planned) | 13 | 1 | 0 |
+| Azure Native Source Onboarding (planned) | 13 | 1 | 2 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 10 | 1 |
 
@@ -133,9 +133,38 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (4)
+## In progress (6)
 
 Started. Anything here with an unfinished dependency is called out on its card.
+
+- **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
+  `AZR-F9` `story` `settled`
+  OPERATOR DECISION 2026-10-21, from grooming the azure-onboarding menu: every
+  open AZR card is a SECTION of a screen that does not exist - no route, no
+  nav entry, no usecase (backlog.md#6: "The port has never happened"). With no
+  card for the screen itself there was no first step, which is why the menu
+  sat at later with nothing in progress. SCOPE: the route and nav entry for
+  the planned azure-onboarding menu id, rendering the coverage-model checkbox
+  sections (AZR-0) with the onboarding-selection additive-only contract
+  (AZR-1) persisted to the KV store. Every category the screen cannot yet act
+  on renders as a visible, disabled section, not an absent one. The first
+  sections that WORK are AZR-11 (the Event Hub namespace prerequisite, which
+  nearly every section needs) and AZR-3 (Defender for Cloud continuous
+  export), both of which depend on this card. WHY DEFENDER FIRST, NOT ENTRA
+  (operator choice): Entra (6b) has its domain logic built (AZR-2), but
+  ticking it triggers the content-preservation problem in
+  features/content-preserving-native-reroute.md - a 6b build that ignores that
+  silently breaks Entra content. Defender export is one
+  Microsoft.Security/automations write per subscription with no content
+  breakage. OPEN BEFORE BUILDING: whether writing
+  Microsoft.Security/automations needs a capability and probe that CAP-F1 does
+  not yet list. Check it; do not assume the existing Azure role covers it.
+
+- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
+  `AZR-F9` `enabler` `settled`
+  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
+  related only by subject; keep them separable, because one is Sentinel-side
+  and one is Lake-side and either could ship alone.
 
 - **DBT-125** Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)
   `DBT-F2` `story` `settled`
@@ -354,7 +383,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (25)
+## Backlog - next (23)
 
 Settled and unblocked, sequenced behind now.
 
@@ -418,40 +447,11 @@ Settled and unblocked, sequenced behind now.
   of 12 paid plans are enabled and never enables one - keep that property.
   `backlog.md#6b`.
 
-- **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
-  `AZR-F9` `story` `settled`
-  OPERATOR DECISION 2026-10-21, from grooming the azure-onboarding menu: every
-  open AZR card is a SECTION of a screen that does not exist - no route, no
-  nav entry, no usecase (backlog.md#6: "The port has never happened"). With no
-  card for the screen itself there was no first step, which is why the menu
-  sat at later with nothing in progress. SCOPE: the route and nav entry for
-  the planned azure-onboarding menu id, rendering the coverage-model checkbox
-  sections (AZR-0) with the onboarding-selection additive-only contract
-  (AZR-1) persisted to the KV store. Every category the screen cannot yet act
-  on renders as a visible, disabled section, not an absent one. The first
-  sections that WORK are AZR-11 (the Event Hub namespace prerequisite, which
-  nearly every section needs) and AZR-3 (Defender for Cloud continuous
-  export), both of which depend on this card. WHY DEFENDER FIRST, NOT ENTRA
-  (operator choice): Entra (6b) has its domain logic built (AZR-2), but
-  ticking it triggers the content-preservation problem in
-  features/content-preserving-native-reroute.md - a 6b build that ignores that
-  silently breaks Entra content. Defender export is one
-  Microsoft.Security/automations write per subscription with no content
-  breakage. OPEN BEFORE BUILDING: whether writing
-  Microsoft.Security/automations needs a capability and probe that CAP-F1 does
-  not yet list. Check it; do not assume the existing Azure role covers it.
-
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18, AZR-12`
   Nearly every section needs an Event Hub namespace first, and the policy
   sections need Policy Contributor plus User Access Administrator at MG scope.
   `backlog.md#6h`.
-
-- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
-  `AZR-F9` `enabler` `settled`
-  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
-  related only by subject; keep them separable, because one is Sentinel-side
-  and one is Lake-side and either could ship alone.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled`
