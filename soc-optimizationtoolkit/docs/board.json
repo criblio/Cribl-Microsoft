@@ -225,13 +225,13 @@
       "feature": "AZR-F3",
       "title": "Defender for Cloud continuous export",
       "type": "story",
-      "status": "backlog",
-      "priority": "next",
+      "status": "in-progress",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [
         "AZR-18"
       ],
-      "detail": "Per subscription, a `Microsoft.Security/automations` resource. Detects which of 12 paid plans are enabled and never enables one - keep that property. `backlog.md#6b`."
+      "detail": "Per subscription, a `Microsoft.Security/automations` resource. Detects which of 12 paid plans are enabled and never enables one - keep that property. `backlog.md#6b`.\n\nSLICE (operator 2026-10-21): Alerts source only, for the configured subscription only, into an EXISTING resource group the operator picks. Zero enabled paid plans: deploy is ALLOWED with a plain warning (a recorded departure from legacy, which refused). Create-only: re-list subscription-wide, refuse on an existing CriblDefenderExport anywhere, on any automation already exporting to the chosen hub, or on a drifted one; listKeys only after confirm; GET back and compare non-secret fields. Never enables a plan, never re-PUTs, never deletes. Recommendations, Secure Score, Regulatory Compliance, multi-subscription, repair and Remove are follow-up cards. Done after Live Preview against a real subscription."
     },
     {
       "id": "AZR-8",
@@ -345,14 +345,14 @@
       "feature": "AZR-F9",
       "title": "Make the prerequisite ordering explicit",
       "type": "enabler",
-      "status": "backlog",
-      "priority": "next",
+      "status": "in-progress",
+      "priority": "now",
       "settled": "settled",
       "dependsOn": [
         "AZR-18",
         "AZR-12"
       ],
-      "detail": "Nearly every section needs an Event Hub namespace first, and the policy sections need Policy Contributor plus User Access Administrator at MG scope. `backlog.md#6h`."
+      "detail": "Nearly every section needs an Event Hub namespace first, and the policy sections need Policy Contributor plus User Access Administrator at MG scope. `backlog.md#6h`.\n\nSLICE (operator 2026-10-21, with AZR-18): USE EXISTING only. Pick a namespace, then a namespace-level rule that can Send (any; RootManageSharedAccessKey allowed but NOT preselected, with a note that a Send-only rule is safer), then an existing hub. Creating a namespace, hub or rule renders as visible, disabled controls and is a follow-up card. The choice is held in screen state and not persisted."
     },
     {
       "id": "AZR-12",
@@ -360,11 +360,11 @@
       "feature": "AZR-F9",
       "title": "Check `eventhub-discovery` for overlap before building a second Event Hub surface",
       "type": "enabler",
-      "status": "in-progress",
-      "priority": "now",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "`backlog.md#6h`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone."
+      "detail": "`backlog.md#6h`.  ### WIN - Windows event analysis  Backlog item 5. Two goals related only by subject; keep them separable, because one is Sentinel-side and one is Lake-side and either could ship alone.\n\nDONE 2026-10-21 by reading code (the AZR-18 design workflow), so verified none. VERDICT: EXTEND, do not build a second surface. Event Hub Discovery is single-subscription and read-only: namespaces via Resource Graph, hubs by one GET per namespace, auth rules at HUB scope only, no listKeys, and it ends at a JSON download. Its namespace GET/PUT builders are duplicated in labs (same api-version, same path). AZR-11 therefore lifts the builders into one domain/eventhub-arm module, splits a namespaces-only discovery usecase out of discover-event-hubs, re-bases listEventHubsRequest on a minimal namespace reference, and adds namespace-rule listing, a Send-rights check and listKeys. The Event Hub Discovery screen itself stays as it is.",
+      "verified": "none"
     },
     {
       "id": "WIN-1",

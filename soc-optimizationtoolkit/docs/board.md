@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**54 in the backlog, 6 in progress, 46 done.**
+**52 in the backlog, 7 in progress, 47 done.**
 
 ## By menu item
 
@@ -32,11 +32,11 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Permission Verification | 7 | 3 | 0 |
-| Azure Native Source Onboarding (planned) | 13 | 1 | 2 |
+| Azure Native Source Onboarding (planned) | 12 | 2 | 3 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 10 | 1 |
 
-Open work totals 60.
+Open work totals 59.
 
 ## Epics and features
 
@@ -45,7 +45,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 7% (1/14)
+### `AZR` Azure native source onboarding - 14% (2/14)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -58,7 +58,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding (planned) | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding (planned) | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding (planned) | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding (planned) | 0/3 | AZR-18, AZR-11, AZR-12 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding (planned) | 1/3 | AZR-18, AZR-11, AZR-12 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -133,9 +133,24 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (6)
+## In progress (7)
 
 Started. Anything here with an unfinished dependency is called out on its card.
+
+- **AZR-3** Defender for Cloud continuous export
+  `AZR-F3` `story` `settled` `blocked by AZR-18`
+  Per subscription, a `Microsoft.Security/automations` resource. Detects which
+  of 12 paid plans are enabled and never enables one - keep that property.
+  `backlog.md#6b`. SLICE (operator 2026-10-21): Alerts source only, for the
+  configured subscription only, into an EXISTING resource group the operator
+  picks. Zero enabled paid plans: deploy is ALLOWED with a plain warning (a
+  recorded departure from legacy, which refused). Create-only: re-list
+  subscription-wide, refuse on an existing CriblDefenderExport anywhere, on
+  any automation already exporting to the chosen hub, or on a drifted one;
+  listKeys only after confirm; GET back and compare non-secret fields. Never
+  enables a plan, never re-PUTs, never deletes. Recommendations, Secure Score,
+  Regulatory Compliance, multi-subscription, repair and Remove are follow-up
+  cards. Done after Live Preview against a real subscription.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -160,11 +175,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Microsoft.Security/automations needs a capability and probe that CAP-F1 does
   not yet list. Check it; do not assume the existing Azure role covers it.
 
-- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
-  `AZR-F9` `enabler` `settled`
-  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
-  related only by subject; keep them separable, because one is Sentinel-side
-  and one is Lake-side and either could ship alone.
+- **AZR-11** Make the prerequisite ordering explicit
+  `AZR-F9` `enabler` `settled` `blocked by AZR-18`
+  Nearly every section needs an Event Hub namespace first, and the policy
+  sections need Policy Contributor plus User Access Administrator at MG scope.
+  `backlog.md#6h`. SLICE (operator 2026-10-21, with AZR-18): USE EXISTING
+  only. Pick a namespace, then a namespace-level rule that can Send (any;
+  RootManageSharedAccessKey allowed but NOT preselected, with a note that a
+  Send-only rule is safer), then an existing hub. Creating a namespace, hub or
+  rule renders as visible, disabled controls and is a follow-up card. The
+  choice is held in screen state and not persisted.
 
 - **DBT-125** Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)
   `DBT-F2` `story` `settled`
@@ -383,7 +403,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (23)
+## Backlog - next (21)
 
 Settled and unblocked, sequenced behind now.
 
@@ -440,18 +460,6 @@ Settled and unblocked, sequenced behind now.
   `backlog.md#4` calls "honest, but inert". Depends on CAP-1. Already
   measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every
   Cribl-side write is `source.manage`. ---
-
-- **AZR-3** Defender for Cloud continuous export
-  `AZR-F3` `story` `settled` `blocked by AZR-18`
-  Per subscription, a `Microsoft.Security/automations` resource. Detects which
-  of 12 paid plans are enabled and never enables one - keep that property.
-  `backlog.md#6b`.
-
-- **AZR-11** Make the prerequisite ordering explicit
-  `AZR-F9` `enabler` `settled` `blocked by AZR-18, AZR-12`
-  Nearly every section needs an Event Hub namespace first, and the policy
-  sections need Policy Contributor plus User Access Administrator at MG scope.
-  `backlog.md#6h`.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled`
@@ -1180,7 +1188,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (46)
+## Done (47)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -1286,6 +1294,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
     [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
     [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
+
+- **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
+  `AZR-F9` `enabler` `settled` `verified: none`
+  `backlog.md#6h`. ### WIN - Windows event analysis Backlog item 5. Two goals
+  related only by subject; keep them separable, because one is Sentinel-side
+  and one is Lake-side and either could ship alone. DONE 2026-10-21 by reading
+  code (the AZR-18 design workflow), so verified none. VERDICT: EXTEND, do not
+  build a second surface. Event Hub Discovery is single-subscription and
+  read-only: namespaces via Resource Graph, hubs by one GET per namespace,
+  auth rules at HUB scope only, no listKeys, and it ends at a JSON download.
+  Its namespace GET/PUT builders are duplicated in labs (same api-version,
+  same path). AZR-11 therefore lifts the builders into one domain/eventhub-arm
+  module, splits a namespaces-only discovery usecase out of
+  discover-event-hubs, re-bases listEventHubsRequest on a minimal namespace
+  reference, and adds namespace-rule listing, a Send-rights check and
+  listKeys. The Event Hub Discovery screen itself stays as it is.
 
 - **DBT-1** Pin how the REST collector is modelled in the vendored spec
   `DBT-F3` `enabler` `settled` `verified: pins`
