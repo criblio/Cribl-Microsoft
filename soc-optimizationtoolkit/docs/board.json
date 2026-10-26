@@ -466,6 +466,74 @@
       }
     },
     {
+      "id": "AZR-30",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Onboarding dataflow diagram: how each selected source's logs reach Cribl and Sentinel",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a diagram on the AZR-18 screen, one lane per selected source, from the Azure emitter (diagnostic setting, Defender export, flow logs, Entra export...) through its transport (Event Hub or Storage Blob) to the Cribl source, Cribl routing and the destination. DEFAULT TAKEN for \"each perspective\" (operator said build now): each lane can be read from the Azure side (what is configured where), the Cribl side (source, route, destination) or end to end. House diagram standard (claude-kit standards/cribl-dataflow-diagram.md and its reference implementation): hand SVG + dagre, tokens, (i) on every card, keyboard-focusable, no animation unless the flow is MEASURED (AZR-33)."
+    },
+    {
+      "id": "AZR-31",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Guided manual path: choose what to onboard, step instructions in a dialog, tick each step when done",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-30"
+      ],
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: for an operator who will not let the app write Azure, a How-to mode on the same screen: pick sources, each source expands into the steps the app would have automated (portal or CLI instructions in a dialog, with the exact names, scopes and values the app computed), and a done checkbox per step persisted in the coverage KV document. Nothing in this mode writes Azure. Must cover every Azure aspect the automated path performs for the sources the screen offers, Event Hub and Blob transports both."
+    },
+    {
+      "id": "AZR-32",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Read-only validation of the Azure configuration, automated or manual",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-30"
+      ],
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a Validate action that READS Azure (no writes) and reports per step: configured as expected, present but different (what differs), absent, or unknown because the read was refused (inventory-honesty: a refused read is never 'absent'). Works the same whether the app or the operator did the configuration; feeds the diagram's lane states."
+    },
+    {
+      "id": "AZR-33",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Diagram shows a new live flow when data arrives in Cribl",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-30"
+      ],
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: per lane, read Cribl's own metrics for the Cribl source the lane maps to (claude-kit standards/cribl-metrics.md) and draw the Azure -> Cribl hop as flowing only when events were measured in the window; idle, never-seen and unmeasurable are distinct states, and polling respects the shared proxy budget. Animation is allowed only on a measured flow."
+    },
+    {
+      "id": "AZR-34",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-30"
+      ],
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: the Cribl side is always automated: for each selected source, build and create the Cribl input it needs (azure_eventhub for Event Hub transports with a Listen-capable rule, azure_blob for storage transports) in the chosen worker group, credentials stored as Cribl secrets, behind a confirm, read-modify-write, create-only with refusal on a differing existing input, then commit and deploy per claude-kit standards/config-plane-writes.md. Adds the input write policies to config/policies.yml (input creation is not shipped today). Live verification must NOT click Deploy against the operator's real leader without the operator."
+    },
+    {
       "id": "AZR-11",
       "epic": "AZR",
       "feature": "AZR-F9",
