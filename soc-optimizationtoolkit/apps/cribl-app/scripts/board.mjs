@@ -89,6 +89,7 @@ export const MENUS = [
   'preflight',
   'eventhub-discovery',
   'mapping-catalog',
+  'azure-logging-map',
   // diagnostics
   'harness',
   // planned - no route exists yet
@@ -113,6 +114,7 @@ export const MENU_LABELS = {
   preflight: 'Permission Verification',
   'eventhub-discovery': 'Event Hub Discovery',
   'mapping-catalog': 'Mapping Catalog',
+  'azure-logging-map': 'Azure Logging Map',
   harness: 'Diagnostics',
   'azure-onboarding': 'Azure Native Source Onboarding (planned)',
   'windows-events': 'Windows Event analysis (planned)',

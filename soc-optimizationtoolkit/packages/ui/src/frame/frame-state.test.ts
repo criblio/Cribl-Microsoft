@@ -10,6 +10,7 @@ import {
   resolveFramePhase,
 } from "./frame-state";
 import type { NavSection } from "./frame-state";
+import { ROUTE_CAPABILITIES, capabilitiesForRoute } from "./route-capabilities";
 
 const ACCEPTED: AcceptanceRecord = { acceptedAt: "2026-07-03T00:00:00.000Z" };
 
@@ -135,5 +136,16 @@ describe("isScrolledToBottom", () => {
     // so the gate must count unscrollable content as already reviewed.
     expect(isScrolledToBottom(0, 400, 400)).toBe(true);
     expect(isScrolledToBottom(0, 400, 200)).toBe(true);
+  });
+});
+
+describe("azure-logging-map route capability", () => {
+  // capabilitiesForRoute falls back to [] for an UNKNOWN id, so asserting the
+  // [] alone would pass even if the entry were never added. hasOwn pins that
+  // the route's empty requirement is a recorded decision (the taxonomy gap),
+  // not the silent fallback.
+  it("is an explicit, empty entry rather than the unknown-id fallback", () => {
+    expect(Object.hasOwn(ROUTE_CAPABILITIES, "azure-logging-map")).toBe(true);
+    expect(capabilitiesForRoute("azure-logging-map")).toEqual([]);
   });
 });

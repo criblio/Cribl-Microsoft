@@ -58,5 +58,6 @@ export * from "./domain/eventhub-discovery";
 export * from "./domain/siem-migration";
 export * from "./domain/content-install";
 export * from "./domain/labs";
+export * from "./domain/logging-map";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

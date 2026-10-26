@@ -666,6 +666,112 @@ assignments recreate settings after removal, so knowing what exists and what
 would be affected is most of the value an operator needs before dropping to the
 legacy script to act.
 
+#### 6a-i. The Azure Logging Map (AZR-19) - phase 1, read-only - 2026-10-26
+
+**Asked and answered first: no earlier version of the app had this.** No
+version of the toolkit ever read the management-group tree, policy assignments
+or exemptions, or drew where logging policy applies. The legacy PowerShell in
+`deprecated/Azure/Azure-LogCollection/core/` only DEPLOYED assignments and
+printed a gap analysis. It never drew a tree and never classified assignments
+written by anyone else. So nothing was restored. What phase 1 ports from the
+legacy is DATA only: the names, definition ids, identity name and scopes it
+wrote, the diagnostic-settings parameter names, the roles it granted its
+identity, and the gap-category order. Each piece is pinned against a frozen
+byte-for-byte copy in `packages/core/src/domain/logging-map/legacy/`.
+
+**Ownership: `createdBy` is not usable.** Azure stamps `metadata.createdBy` on
+every assignment. The card's default ("ours = createdBy set by the toolkit") is
+replaced by a reserved key plus ranked legacy evidence; see
+`docs/adr/0006-policy-assignment-ownership-marker.md` (Proposed). The key is an
+open decision on AZR-19.
+
+**Legacy defects deliberately NOT ported.** Each one turns a failed or
+truncated read into an answer that looks real:
+
+- `deprecated/Azure/Azure-LogCollection/core/Analyze-ComplianceGaps.ps1:232-244`
+  reads Resource Graph with `-First 1000` and no paging, and both the empty
+  branch and the `catch` return `@()`. A refused read and a management group
+  with no resources print the same thing.
+- `Analyze-ComplianceGaps.ps1:256` reads compliance with `-Top 5000` and no
+  paging, so a large estate's summary is silently a sample.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-BuiltInPolicyInitiatives.ps1:893-906`
+  looks assignments up with `-ErrorAction SilentlyContinue`, and both the miss
+  and the `catch` print "NOT ASSIGNED". A 403 reads as not deployed.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-SupplementalPolicies.ps1:2343-2347`
+  does the same for the Activity Log. Its `catch` would say UNKNOWN, but
+  `SilentlyContinue` means it never fires.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-CommunityPolicyInitiative.ps1:1162-1188`
+  builds MultiRegion `resourceSelectors` and never adds them to the splat, so a
+  "per-region" community assignment covers every region. The map therefore
+  reads regions from an assignment's actual selectors and never from its name.
+
+The port instead treats every per-scope list read as a verdict: read rows, a
+verified zero, or refused (http, transport, unexpected shape, too many pages).
+A refusal is UNKNOWN and counted, never "none".
+
+**Why the usecase has its own pager.** `listAllPages`
+(`packages/core/src/usecases/azure-discovery/azure-discovery.ts:155-161`)
+quietly skips a 2xx page whose `value` is missing or not an array, and returns
+only the concatenated items. Its caller cannot tell "zero rows" from "a body it
+did not understand". The map needs that distinction to mint a verified zero, so
+`packages/core/src/usecases/read-logging-map/arm-pager.ts` checks every page
+and refuses the whole list on a bad one. `listAllPages` is shared and was left
+unchanged; whether its other callers have the same blind spot is a separate
+question, not answered here.
+
+**What a verified zero rests on.** A per-scope ARM read (policyAssignments with
+`atScope()`, policyExemptions, roleAssignments) answers 403 when the caller
+cannot read that scope; it does not filter to an empty list. So a 2xx with an
+array `value` on every page is a capability verdict for that scope, and
+`toListingFromRead` in `packages/core/src/domain/logging-map/list-read.ts` may
+mint `none` from it. The permission-FILTERED `GET /subscriptions` read is
+wrapped with `toListing` and never mints `none`
+(`packages/core/src/domain/inventory-listing/inventory-listing.ts:56-66`). The
+visible management-group list is used only to build the tree: it is never
+wrapped in a Listing and never shown as a count. Anything that later shows its
+count must wrap it with `toListing`, not `toListingFromRead`.
+The 403-not-empty claim is platform knowledge and is live-verification item 3f
+on AZR-19. If it turns out wrong for either request kind, `toListingFromRead`
+must stop minting `none` for that kind.
+
+**The read cost, and why not Resource Graph yet.** Phase 1 reads direct ARM per
+scope: one assignments read and one exemptions read per management group and
+subscription, then the distinct non-built-in definitions (capped at 60), then
+roles for the shown assignments (capped at 40, shared between role-assignment
+and role-definition reads). Reads are sequential and paced at 60 a minute,
+which leaves headroom in the 100-a-minute app proxy budget. On a tenant with
+200 subscriptions that is more than 400 requests before definitions, so the
+first open takes several minutes. Resource Graph `policyresources` would
+answer the same in a few calls, but no code here has used Resource Graph with
+a management-group scope (Event Hub discovery uses subscriptions only), and
+the capability work (CAP-1) is not done. That is its own follow-up card.
+
+**Roles via `assignedTo()`, with one open question.** For each shown
+assignment with a principal id, roles are read once per principal and scope
+with `roleAssignments?$filter=assignedTo('<pid>')` at the assignment's scope,
+then each distinct role definition once for its name. Unknown: whether that
+read at a management group returns grants made BELOW it, such as the legacy's
+Azure Event Hubs Data Owner grant on the namespace. If it does not, the panel
+has to say "roles at scopes below this were not read" rather than imply the
+list is complete. Live-verification item 3g.
+
+**Deferred to phase 2: the DeployIfNotExists compliance lag.** Phase 1 shows
+where an assignment APPLIES, not whether resources comply. Compliance lags
+15-30 minutes after an assignment and DINE fires only for new resources (see
+6a above), so a compliance overlay has to explain a fresh "non-compliant"
+instead of reporting it. The legacy's own gap categories
+(`Analyze-ComplianceGaps.ps1:314-373`) are kept as reference data and not used.
+
+**Drag is not built, pending a decision.** The approved mockup has no drag; the
+house diagram standard requires movable cards and Reset layout. Phase 1 ships
+the mockup and the conflict is a decision card under AZR-F8. Background pan
+(dragging on the empty canvas) is built; only card drag is not.
+
+**Portal link for a management group is unverified.** The panel links every
+scope as `#resource<scopeId>/overview`. That is known for subscriptions; the
+portal normally opens management groups through the ManagementGroups
+drilldown blade. The AZR-19 live checklist opens both before the card closes.
+
 ### 6b. Direct ARM configuration - script, no policy
 
 Sources configured by a direct ARM PUT rather than through policy. Both carry
@@ -943,7 +1049,10 @@ Partial coverage already exists and should be extended rather than duplicated:
 `event-hub-fanin`, `entra-reroute` (Entra, content-preserving), the
 `azure-platform-fanin` preset ("platform diagnostics and Entra ID exports stream
 into Event Hubs"), `vnet-flow-collection`, `blob-collector`, `windows-ama-direct`
-and `direct-dcr`. What has no diagram today: the POLICY mechanism itself (6a -
+and `direct-dcr`. (2026-10-26: the Azure Logging Map, 6a-i, now draws WHERE
+policy assignments apply in the management-group tree. That is a scope map, not
+a dataflow pattern, so the gap below still stands.) What has no diagram today:
+the POLICY mechanism itself (6a -
 assignment at MG scope, DeployIfNotExists, the managed identity, remediation for
 pre-existing resources), Defender for Cloud continuous export (6b), Defender XDR
 streaming with its manual portal step (6c), and the pull collectors (6d).

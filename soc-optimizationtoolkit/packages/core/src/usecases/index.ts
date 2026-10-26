@@ -26,3 +26,5 @@ export * from "./capture-samples";
 export * from "./query-lake-samples";
 export * from "./provision-lab";
 export * from "./live-architecture";
+// AZR-19: the Azure Logging Map read (READ-ONLY), with its own verdict pager.
+export * from "./read-logging-map";

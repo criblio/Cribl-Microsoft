@@ -159,6 +159,18 @@
       "detail": "ribl worker groups. They render `unmeasuredInventoryMessage` today, which `backlog.md#4` calls \"honest, but inert\". Depends on CAP-1.  Already measured, do not re-add: Event Hub namespace creation is `arm.deploy`; every Cribl-side write is `source.manage`.  ---"
     },
     {
+      "id": "CAP-8",
+      "epic": "CAP",
+      "feature": "CAP-F1",
+      "title": "Capability for Management Group Reader / policy and role read",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "The azure-logging-map route ships with requires [] (route-capabilities.ts, following the eventhub-discovery precedent) because the capability taxonomy (capabilities.ts:22-29) has no capability for Management Group Reader, policy read (policyAssignments/read, policyExemptions/read) or role-assignment read. The screen reports its own refusals as unknown, so nothing is hidden, but the nav cannot annotate the route before the operator opens it. DONE WHEN: a capability exists with a real probe (the step-2 mapping rule records only measurements), and the [[AZR-19]] route requires it."
+    },
+    {
       "id": "HON-6",
       "epic": "HON",
       "feature": "HON-F1",
@@ -341,7 +353,7 @@
     },
     {
       "status": "in-progress",
-      "settled": "settled",
+      "settled": "undecided",
       "dependsOn": [],
       "id": "AZR-19",
       "epic": "AZR",
@@ -349,7 +361,73 @@
       "type": "story",
       "priority": "now",
       "title": "Azure Logging Map - where each logging setting is applied in the management group tree",
-      "detail": "OPERATOR REQUEST 2026-10-21/26: \"a Diagram of the Azure logging and where we implemented our Settings... the Tenant Root management groups and sub management groups under it with associated policies assigned\", planned as the published mockup (Azure Logging Map artifact), then \"build it now\".\n\nPHASE 1 SCOPE, READ-ONLY: the management group tree from Tenant Root to subscriptions; policy assignments on each scope; inherited assignments with their origin; notScopes exclusions and exemptions drawn as gaps; ours vs other owners; scopes that cannot be read drawn and counted as unknown, never as uncovered; trace a setting; an outline (role=tree) view sharing selection with the diagram; a details panel; a visible (i) on every card. Hand SVG + dagre per the house diagram standard, tokens only, keyboard-focusable cards, no animation (coverage is configuration, not measured flow).\n\nDEFAULTS TAKEN FOR THE MOCKUP'S THREE DECISIONS (operator said build now): OURS = metadata.createdBy set by the toolkit, plus the assignment names the legacy Deploy-*PolicyInitiatives scripts write, since the new app writes no policy yet. SHOWN = ours plus other owners' logging-related assignments (diagnostic settings, DeployIfNotExists to Event Hub or Log Analytics), with an all-policy toggle. START = Tenant Root; when it cannot be read, start at the highest readable scope and say what was not read.\n\nDEFERRED to later phases: compliance overlay, After apply preview of the onboarding selection, the non-policy lanes (Entra, Defender, Activity Log) and the where-data-goes lines. Ships as its own Development route now and is embedded in the AZR-18 screen as its Where it lands panel once AZR-18 lands. Covers AZR-10 for the policy category."
+      "detail": "OPERATOR REQUEST 2026-10-21/26: \"a Diagram of the Azure logging and where we implemented our Settings... the Tenant Root management groups and sub management groups under it with associated policies assigned\", planned as the published mockup (Azure Logging Map artifact), then \"build it now\".\n\nPHASE 1 SCOPE, READ-ONLY: the management group tree from Tenant Root to subscriptions; policy assignments on each scope; inherited assignments with their origin; notScopes exclusions and exemptions drawn as gaps; ours vs other owners; scopes that cannot be read drawn and counted as unknown, never as uncovered; trace a setting; an outline (role=tree) view sharing selection with the diagram; a details panel; a visible (i) on every card. Hand SVG + dagre per the house diagram standard, tokens only, keyboard-focusable cards, no animation (coverage is configuration, not measured flow).\n\nDEFAULTS TAKEN FOR THE MOCKUP'S THREE DECISIONS (operator said build now): OURS = metadata.createdBy set by the toolkit, plus the assignment names the legacy Deploy-*PolicyInitiatives scripts write, since the new app writes no policy yet. SHOWN = ours plus other owners' logging-related assignments (diagnostic settings, DeployIfNotExists to Event Hub or Log Analytics), with an all-policy toggle. START = Tenant Root; when it cannot be read, start at the highest readable scope and say what was not read.\n\nDEFERRED to later phases: compliance overlay, After apply preview of the onboarding selection, the non-policy lanes (Entra, Defender, Activity Log) and the where-data-goes lines. Ships as its own Development route now and is embedded in the AZR-18 screen as its Where it lands panel once AZR-18 lands. Covers AZR-10 for the policy category.\n\nBUILT 2026-10-26 (phase 1, branch feature/azure-logging-map): shipped as its own Development route, `azure-logging-map`, so this card overrides AZR-F8's menu. The OURS default above is REPLACED: Azure writes metadata.createdBy on every policy assignment, so it cannot tell the toolkit from anyone else. Phase 1 recognises a RESERVED key metadata.criblSocToolkit (no assignment carries it yet) and the legacy writer by name + scope + definition, with ranked evidence (toolkit-marker > legacy-strong > legacy-identity > name-only); see `docs/adr/0006-policy-assignment-ownership-marker.md` (Proposed). The decision block on this card is that open question, which is why settled is now undecided. DRAG IS NOT BUILT: the approved mockup has no drag, while the house diagram standard (claude-kit standards/cribl-dataflow-diagram.md) requires draggable cards and Reset layout. The approved spec shipped; the deviation is recorded in packages/ui/CONTEXT.md and put to the owner on [[AZR-20]]. The managed identity and its roles ARE included (mockup spec line 187), read via roleAssignments assignedTo(). Reads are direct ARM per scope (policyAssignments atScope(), policyExemptions), paced at 60/min; Resource Graph is the follow-up [[AZR-21]]. The route requires no capability because the taxonomy has none for Management Group Reader or policy/role read; that is [[CAP-8]]. NOT YET VERIFIED LIVE: this card moves to done with verified both only after the Live Preview checklist is run, and stays undecided until the marker decision is answered. The checklist includes the PORTAL LINK: open the details panel link for a subscription and for a management group. Both are built as portal.azure.com/#resource<scopeId>/overview (logging-map-copy.ts portalLink, shapes pinned in logging-map-copy.test.ts); that deep link is known for subscriptions, but management groups normally open through the ManagementGroups drilldown blade, so the management-group link is unverified. If it opens a not-found blade, build a management-group-specific URL and re-pin both shapes.",
+      "menu": "azure-logging-map",
+      "decision": {
+        "question": "Which marker identifies a policy assignment the toolkit wrote? (ADR 0006, Proposed)",
+        "options": [
+          {
+            "key": "criblSocToolkit",
+            "label": "Reserved metadata key criblSocToolkit = { version } (recommended)",
+            "detail": "Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker."
+          },
+          {
+            "key": "createdBy-principal",
+            "label": "metadata.createdBy equal to the toolkit service principal object id",
+            "detail": "Azure writes createdBy on EVERY assignment, so presence proves nothing; only a match against the toolkit principal could. That principal is shared with whatever else the operator runs under it, so a match overclaims ownership, and assignments the legacy PowerShell wrote under a person's login never match."
+          },
+          {
+            "key": "name-prefix",
+            "label": "Assignment name prefix only (Cribl-*)",
+            "detail": "What the legacy toolkit relied on (Run-AzureLogCollection.ps1:1963). Cheap, but a customer can name their own assignment Cribl-*, and the 24-character MG-scope name cap forces truncations that collide."
+          }
+        ],
+        "chosen": null
+      }
+    },
+    {
+      "id": "AZR-20",
+      "epic": "AZR",
+      "feature": "AZR-F8",
+      "title": "Logging map: draggable cards + Reset layout, or keep the fixed layout",
+      "type": "decision",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "undecided",
+      "dependsOn": [],
+      "menu": "azure-logging-map",
+      "decision": {
+        "question": "Should the Azure Logging Map add draggable cards and a Reset layout button per the house diagram standard, or keep the approved mockup's fixed layout?",
+        "options": [
+          {
+            "key": "add-drag",
+            "label": "Add drag + Reset layout (house standard)",
+            "detail": "claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted."
+          },
+          {
+            "key": "keep-fixed",
+            "label": "Keep the fixed layout (approved mockup)",
+            "detail": "The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams."
+          }
+        ],
+        "chosen": null
+      },
+      "detail": "SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by the implementer. The approved interactive mockup (the operator-approved UX spec for the logging map) has no drag. The house standard requires it for on-screen diagrams. The CLAUDE.md precedence rule decides between superpowers skills and standards, not between a standard and an operator-approved spec, so it does not settle this. Phase 1 shipped the approved spec (no drag, no Reset layout), pinned by a test so the choice cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md. NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test \"the same gesture on the empty canvas does pan the view\"), which the mockup did not list either; only CARD drag is absent. keep-fixed with strict mockup parity would also remove the pan."
+    },
+    {
+      "id": "AZR-21",
+      "epic": "AZR",
+      "feature": "AZR-F8",
+      "title": "Resource Graph policyresources read for the logging map",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-19"
+      ],
+      "menu": "azure-logging-map",
+      "detail": "Phase 1 of [[AZR-19]] reads policy assignments and exemptions with direct ARM GETs, two per scope plus definition and role reads, paced at 60/min under the 100 req/min proxy budget. On a large tenant that is minutes per map. Resource Graph (policyresources) answers the same question in a few paged queries, but this codebase has only ever queried Resource Graph with a subscriptions scope (eventhub-discovery.ts:65-82), never with a managementGroups body scope, and CAP-1 is not done. DONE WHEN: the read uses Resource Graph where the caller can, falls back to the per-scope ARM read where it cannot, and a partial or refused Resource Graph answer is still counted as unknown rather than none. Reasoning in `backlog.md#6a`."
     },
     {
       "id": "AZR-11",

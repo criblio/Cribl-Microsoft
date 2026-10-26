@@ -106,6 +106,9 @@
   /* The Cribl Search send-path line: teal, a hue no node category or cost
    * badge uses (2026-07-31 - violet now belongs to route nodes). */
   --tone-search: #08979c;
+  /* Azure Logging Map: the soft fill behind "ours" chips and covered scopes
+   * (the stroke reuses --tone-search, the teal no other diagram state uses). */
+  --lm-ours-bg: #e6fffb;
   /* Load-bearing monospace stack (technical values, counts, summaries,
    * placeholders, the REPOS status line, code chips). Previously several rules
    * referenced var(--font-mono) with no fallback and silently rendered as
@@ -171,6 +174,7 @@
   --tier-pipeline: #e0669f;
   --tier-pipeline-bg: #2a1220;
   --tone-search: #33bcb7;
+  --lm-ours-bg: #0f2a2a;
 }
 
 * {
@@ -6399,4 +6403,779 @@ details[open] > summary::before {
   color: var(--text-dim);
   border-left: 2px solid var(--warn);
   padding: 4px 10px;
+}
+
+/* ===================================================================
+ * Azure Logging Map (screens/azure-logging-map). Hand SVG, no animation:
+ * policy coverage is configuration, not measured flow. Every state carries
+ * more than colour - a pill, a border style or a hatch - so it survives
+ * greyscale and both themes. Tokens only; no hex here.
+ * =================================================================== */
+.lm-screen {
+  display: grid;
+  gap: 12px;
+}
+
+.lm-lead {
+  color: var(--text-muted);
+  max-width: 80ch;
+}
+
+.lm-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.lm-btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.lm-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.lm-btn:focus-visible,
+.lm-seg button:focus-visible,
+.lm-crumb:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.lm-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.lm-progress {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-mock {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.lm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lm-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.lm-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.lm-seg button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.lm-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.lm-ctl-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-ctl select,
+.lm-search {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  max-width: 260px;
+}
+
+.lm-counts {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lm-count-label {
+  color: var(--text-muted);
+}
+
+.lm-count-value {
+  color: var(--text);
+}
+
+.lm-banner {
+  display: grid;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-border);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.lm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-height: 560px;
+}
+
+@media (max-width: 860px) {
+  .lm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lm-panel {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    max-height: none;
+  }
+
+  .lm-counts {
+    margin-left: 0;
+  }
+}
+
+.lm-stage {
+  position: relative;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.lm-canvas-root {
+  position: relative;
+  height: 100%;
+}
+
+.lm-zoom {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lm-canvas {
+  position: relative;
+  height: 600px;
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.lm-canvas-empty {
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.lm-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.4;
+}
+
+.lm-card {
+  cursor: pointer;
+}
+
+.lm-card:focus {
+  outline: none;
+}
+
+.lm-card-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+
+.lm-card-management-group .lm-card-box,
+.lm-card-tenant-root .lm-card-box {
+  stroke-width: 1.6;
+}
+
+.lm-card-subscription .lm-card-box {
+  stroke-width: 1.2;
+}
+
+.lm-card-placeholder .lm-card-box,
+.lm-card-count .lm-card-box {
+  stroke-dasharray: 6 4;
+}
+
+.lm-card:focus-visible .lm-card-box,
+.lm-card.is-selected .lm-card-box {
+  stroke: var(--border-focus);
+  stroke-width: 2.4;
+}
+
+/* Unreadable: a dashed card plus the lock note - never drawn as empty. */
+.lm-card.is-unread .lm-card-box {
+  stroke-dasharray: 3 3;
+  stroke: var(--text-faint);
+}
+
+.lm-card-header {
+  fill: var(--surface-raised);
+}
+
+.lm-card-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  fill: var(--text-muted);
+}
+
+.lm-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.lm-card-status,
+.lm-card-more {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+.lm-card-lock {
+  font-style: italic;
+}
+
+/* Trace marks: origin is ringed, covered is filled, gaps are hatched,
+ * unknown stays dashed, and what the assignment does not reach is dimmed. */
+.lm-mark-origin .lm-card-box {
+  fill: var(--lm-ours-bg);
+  stroke: var(--tone-search);
+  stroke-width: 3;
+}
+
+.lm-mark-covered .lm-card-box,
+.lm-mark-conditional .lm-card-box,
+.lm-mark-partial .lm-card-box,
+.lm-mark-covered-exemptions-unknown .lm-card-box {
+  fill: var(--lm-ours-bg);
+}
+
+.lm-mark-conditional .lm-card-box,
+.lm-mark-partial .lm-card-box,
+.lm-mark-covered-exemptions-unknown .lm-card-box {
+  stroke-dasharray: 8 3;
+}
+
+.lm-mark-unknown .lm-card-box {
+  stroke-dasharray: 3 3;
+  stroke: var(--text-faint);
+}
+
+.lm-mark-dimmed {
+  opacity: 0.32;
+}
+
+.lm-card-hatch {
+  pointer-events: none;
+}
+
+.lm-hatch-bg {
+  fill: var(--error-bg);
+}
+
+.lm-hatch-line {
+  stroke: var(--error);
+  stroke-width: 1.4;
+  opacity: 0.45;
+}
+
+.lm-mark-gap-excluded .lm-card-box,
+.lm-mark-gap-exempt .lm-card-box {
+  stroke: var(--error);
+}
+
+.lm-chip rect {
+  stroke-width: 1;
+}
+
+.lm-chip-ours rect {
+  fill: var(--lm-ours-bg);
+  stroke: var(--tone-search);
+}
+
+.lm-chip-other rect {
+  fill: var(--surface-raised);
+  stroke: var(--text-faint);
+}
+
+.lm-chip-inherited rect {
+  fill: transparent;
+  stroke: var(--text-faint);
+  stroke-dasharray: 2 2;
+}
+
+.lm-chip-text {
+  font-size: 10.5px;
+  font-weight: 500;
+  fill: var(--text);
+}
+
+.lm-chip-inherited .lm-chip-text {
+  font-style: italic;
+  fill: var(--text-muted);
+}
+
+.lm-chip-pill {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  fill: var(--text-muted);
+}
+
+.lm-chip-ours .lm-chip-pill {
+  fill: var(--tone-search);
+}
+
+.lm-info,
+.lm-caret {
+  cursor: pointer;
+}
+
+.lm-info:focus,
+.lm-caret:focus {
+  outline: none;
+}
+
+.lm-info-hit,
+.lm-caret-hit {
+  fill: transparent;
+}
+
+.lm-info-glyph {
+  fill: var(--surface);
+  stroke: var(--text-muted);
+}
+
+.lm-info:focus-visible .lm-info-glyph,
+.lm-info[aria-expanded='true'] .lm-info-glyph,
+.lm-caret:focus-visible .lm-caret-hit {
+  stroke: var(--border-focus);
+  stroke-width: 2;
+}
+
+.lm-info-i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.lm-caret-glyph {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.lm-popover {
+  position: absolute;
+  z-index: 3;
+  width: 280px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.lm-popover-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.lm-popover-title {
+  font-weight: 600;
+}
+
+.lm-popover-id,
+.lm-mono,
+.lm-scope-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-popover-facts {
+  margin-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.lm-popover-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 0 6px;
+}
+
+.lm-outline {
+  padding: 14px 18px;
+  min-height: 560px;
+}
+
+.lm-outline-tree,
+.lm-outline-group {
+  list-style: none;
+}
+
+.lm-outline-group {
+  padding-left: 18px;
+  border-left: 1px dashed var(--border);
+}
+
+.lm-outline-item {
+  margin: 4px 0;
+}
+
+.lm-outline-item:focus {
+  outline: none;
+}
+
+.lm-outline-item:focus-visible > .lm-outline-row {
+  outline: 2px solid var(--border-focus);
+}
+
+.lm-outline-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lm-outline-item.is-selected > .lm-outline-row {
+  background: var(--surface-raised);
+  box-shadow: inset 2px 0 0 var(--border-focus);
+}
+
+.lm-outline-name {
+  color: var(--text);
+}
+
+.lm-outline-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.lm-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.lm-pill-kind,
+.lm-pill-other {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.lm-pill-ours {
+  background: var(--lm-ours-bg);
+  color: var(--tone-search);
+  border-color: var(--tone-search);
+}
+
+.lm-pill-name {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn-border);
+}
+
+.lm-pill-unread {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--text-faint);
+}
+
+.lm-pill-gap {
+  background: var(--error-bg);
+  color: var(--error-strong);
+  border-color: var(--error-border);
+}
+
+.lm-panel {
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+  max-height: 760px;
+  font-size: 13px;
+}
+
+.lm-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.lm-panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.lm-panel-trace {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 2px solid var(--tone-search);
+  border-radius: var(--radius-control);
+}
+
+.lm-panel-section {
+  display: grid;
+  gap: 8px;
+}
+
+.lm-crumbs {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-crumb {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.lm-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-note-unknown {
+  font-style: italic;
+  border-left: 2px dashed var(--text-faint);
+  padding-left: 8px;
+}
+
+.lm-unread-block {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px dashed var(--text-faint);
+  border-radius: var(--radius-control);
+}
+
+.lm-alist {
+  display: grid;
+  gap: 10px;
+}
+
+.lm-acard {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.lm-acard-ours {
+  border-left: 4px solid var(--tone-search);
+}
+
+.lm-acard-other {
+  border-left: 4px solid var(--text-faint);
+}
+
+.lm-acard-inherited {
+  border-left: 4px dotted var(--text-faint);
+}
+
+.lm-acard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-acard-name {
+  overflow-wrap: anywhere;
+}
+
+.lm-dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+}
+
+.lm-dl dt {
+  color: var(--text-muted);
+}
+
+.lm-dl dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lm-evidence,
+.lm-roles,
+.lm-exemptions {
+  margin-left: 16px;
+  display: grid;
+  gap: 3px;
+}
+
+.lm-evidence-kind,
+.lm-role-name {
+  font-weight: 600;
+}
+
+.lm-evidence-detail {
+  color: var(--text-muted);
+}
+
+.lm-role-row,
+.lm-exemption-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.lm-role-scope {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-identity-ua {
+  display: block;
+}
+
+.lm-portal-link {
+  color: var(--accent);
+}
+
+.lm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 11px;
+  border-radius: 3px;
+  border: 2px solid var(--border);
+}
+
+.lm-swatch-ours {
+  border-color: var(--tone-search);
+  background: var(--lm-ours-bg);
+}
+
+.lm-swatch-other {
+  border-color: var(--text-faint);
+  background: var(--surface-raised);
+}
+
+.lm-swatch-inherited {
+  border-style: dotted;
+  border-color: var(--text-faint);
+}
+
+.lm-swatch-gap {
+  border-color: var(--error);
+  background: repeating-linear-gradient(45deg, var(--error-bg) 0 3px, var(--error-border) 3px 5px);
+}
+
+.lm-swatch-unread {
+  border-style: dashed;
+  border-color: var(--text-faint);
 }
