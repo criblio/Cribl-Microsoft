@@ -142,3 +142,66 @@ describe("NumberedSection driven by the page (DBT-127)", () => {
     expect(container.querySelector(".numbered-section-summary")).toBeNull();
   });
 });
+
+describe("NumberedSection coming-soon and notBuiltBody (AZR-18)", () => {
+  it("without the prop, coming-soon is unchanged: the note, no body, no children, no collapse", () => {
+    const { container, getByText, queryByText, queryByRole } = render(
+      <NumberedSection
+        number={2}
+        title="Azure Policy"
+        status="coming-soon"
+        infoTip="tip"
+        reason="Not available yet."
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    expect(getByText("Not yet available")).toBeTruthy();
+    expect(getByText("Not available yet.")).toBeTruthy();
+    // The children are never rendered for a coming-soon section.
+    expect(queryByText("count:0")).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-body"]')).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-notbuilt"]')).toBeNull();
+    expect(queryByRole("button", { name: "Collapse Azure Policy" })).toBeNull();
+  });
+
+  it("with the prop, coming-soon shows the not-built rows under the note, and still not the children", () => {
+    const { container, getByLabelText, queryByText } = render(
+      <NumberedSection
+        number={2}
+        title="Azure Policy"
+        status="coming-soon"
+        infoTip="tip"
+        reason="Not available yet."
+        notBuiltBody={
+          <label>
+            <input type="checkbox" disabled aria-label="Built-in initiative" />
+          </label>
+        }
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    const box = getByLabelText("Built-in initiative") as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(box.closest(".numbered-section-comingsoon")).not.toBeNull();
+    expect(queryByText("count:0")).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-body"]')).toBeNull();
+  });
+
+  it("ignores notBuiltBody on a built section", () => {
+    const { container, getByText } = render(
+      <NumberedSection
+        number={2}
+        title="Direct configuration"
+        status="available"
+        infoTip="tip"
+        notBuiltBody={<span>not built</span>}
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    expect(getByText("count:0")).toBeTruthy();
+    expect(container.querySelector('[data-testid="numbered-section-notbuilt"]')).toBeNull();
+  });
+});

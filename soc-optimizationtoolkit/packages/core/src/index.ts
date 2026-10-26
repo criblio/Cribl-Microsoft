@@ -55,6 +55,13 @@ export * from "./domain/sample-sources";
 export * from "./domain/log-type-catalog";
 export * from "./domain/capture-filter";
 export * from "./domain/eventhub-discovery";
+// AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
+// Azure onboarding screen all use.
+export * from "./domain/eventhub-arm";
+// AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
+export * from "./domain/defender-export";
+// AZR-18: the Azure onboarding screen's section layout and item availability.
+export * from "./domain/onboarding-sections";
 export * from "./domain/siem-migration";
 export * from "./domain/content-install";
 export * from "./domain/labs";

@@ -59,6 +59,7 @@ import type {
   GraphDirectory,
   InstalledPack,
   JobStore,
+  KvDocumentStore,
   Logger,
   PackBuildRecord,
   PackScaffoldInput,
@@ -219,6 +220,15 @@ export interface UiPorts {
    * (exactly today's behavior); a denied directory read degrades the same way.
    */
   graph?: GraphDirectory;
+  /**
+   * OPTIONAL plain-JSON document store with a three-way read (AZR-18): absent,
+   * value, or unknown. The Azure Native Source Onboarding screen loads and
+   * saves its coverage selection through it, and blocks Save on an unknown
+   * read rather than mistaking a refused read for a first run. Absent = that
+   * screen shows a shell-wiring gap and keeps Save disabled; every other screen
+   * is unaffected.
+   */
+  kvDocuments?: KvDocumentStore;
 }
 
 /**

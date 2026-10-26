@@ -511,6 +511,10 @@ export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
 
+// Azure Native Source Onboarding (AZR-18): the coverage catalog by collection
+// method, the Event Hub target, and the Defender for Cloud alert export.
+export { AzureOnboardingScreen } from "./screens/azure-onboarding/azure-onboarding-screen";
+
 // Labs (roadmap Phase 5, LAB-01/02/13/14): app-provisioned disposable Azure
 // lab environments - the 8 UnifiedLab profiles as a planning surface plus the
 // live foundation deploy with the mandatory TTL self-destruct.
@@ -841,6 +845,7 @@ export {
   emptyInventoryMessage,
   unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
+  verifiedNoneInventoryMessage,
 } from "./capabilities";
 export type {
   AuditedScope,

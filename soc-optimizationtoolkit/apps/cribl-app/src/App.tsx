@@ -4,6 +4,7 @@ import {
   APP_THEME_KEY,
   AppFrame,
   ArchitectureScreen,
+  AzureOnboardingScreen,
   AuditAgeChip,
   MappingCatalogScreen,
   AzureConnectSection,
@@ -1976,6 +1977,32 @@ function App() {
     </>
   );
 
+  // Azure Native Source Onboarding (AZR-18): a checklist of Azure native
+  // sources to send through Cribl, persisted as the coverage document in KV.
+  // This slice makes two sections work - the Event Hub prerequisite (AZR-11,
+  // an EXISTING namespace, hub and Send-capable rule) and the Defender for
+  // Cloud continuous export of Alerts (AZR-3, configured subscription only);
+  // every other category renders visible and disabled. The only Azure
+  // resource it creates is the Defender automation, behind a two-step
+  // confirm. The KV document store arrives through makeCloudPorts, so no port
+  // is wired here. requires: [] until CAP-7 measures its actions - see
+  // route-capabilities.ts.
+  const azureOnboardingView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Azure Native Source Onboarding</h1>
+        <p className="harness-subtitle">
+          Choose which Azure native sources to send through Cribl, point them
+          at an existing Event Hub, and deploy the Defender for Cloud alert
+          export.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        <AzureOnboardingScreen />
+      </PortsProvider>
+    </>
+  );
+
   // Labs (roadmap Phase 5, LAB-01/02/13/14): provision disposable Azure lab
   // environments - the 8 UnifiedLab profiles as a planning surface (naming,
   // validation, phases, permissions, plan download) plus the live foundation
@@ -2205,7 +2232,7 @@ function App() {
   // journey/tools one item at a time as each passes live testing.
   // That migration has largely HAPPENED. It began as Setup and Sentinel
   // Integration alone; Dataflow, DCR Automation and Pack Maintenance have
-  // since graduated into journey, leaving four items parked below. Read the
+  // since graduated into journey, leaving the rest parked below. Read the
   // route table for the current split - this comment records the RULE, and
   // the table is the only place the answer lives.
   const routes: AppRoute[] = [
@@ -2224,6 +2251,7 @@ function App() {
     { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'azure-onboarding', label: 'Azure Native Source Onboarding', requires: capabilitiesForRoute('azure-onboarding'), section: 'development', render: () => azureOnboardingView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
     { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];

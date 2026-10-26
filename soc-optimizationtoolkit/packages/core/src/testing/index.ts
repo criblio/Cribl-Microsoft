@@ -12,5 +12,7 @@ export { FakeAzureManagement } from './fake-azure-management';
 export { FakeCriblClient } from './fake-cribl-client';
 export { FakeLogger } from './fake-logger';
 export { FakeTaggedSampleStore } from './fake-tagged-sample-store';
+export { FakeKvDocumentStore } from './fake-kv-document-store';
+export type { FakeKvDocumentSave } from './fake-kv-document-store';
 export type { FakeSentinelContentSeed } from './fake-sentinel-content';
 export { FakeSentinelContent, FakeContentCache } from './fake-sentinel-content';

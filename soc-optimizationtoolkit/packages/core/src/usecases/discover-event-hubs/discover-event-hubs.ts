@@ -1,7 +1,8 @@
 /**
  * Event Hub discovery ACQUISITION usecase - roadmap Phase 4 (EVH-03 over the
  * AzureManagement port). One Resource Graph POST (skipToken-paginated)
- * inventories every namespace; one bounded ARM GET per namespace lists its
+ * inventories every namespace ({@link discoverEventHubNamespaces}, also used
+ * alone by the onboarding picker); one bounded ARM GET per namespace lists its
  * hubs (Resource Graph does not index hub child resources - the catalog's
  * dev-variant finding). The legacy N-resources x M-hubs scan (EVH-05) is
  * deliberately NOT ported.
@@ -16,6 +17,11 @@
 import type { AzureManagement } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import { is2xx } from "../arm-http";
+import {
+  listingRows,
+  toListing,
+} from "../../domain/inventory-listing/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing/inventory-listing";
 import {
   EVENTHUB_DIAG_SETTINGS_KQL,
   EVENTHUB_NAMESPACES_KQL,
@@ -51,20 +57,30 @@ export interface EventHubDiscoveryResult {
 }
 
 /**
- * Discover every Event Hub namespace and its hubs in a subscription.
+ * List the Event Hub namespaces in a subscription - the Resource Graph read
+ * ONLY, with no per-namespace hub GETs (AZR-18). The onboarding picker needs
+ * the namespaces before the operator has chosen one, and spending one ARM GET
+ * per namespace against the 100 req/min proxy budget to build a dropdown is
+ * the cost this split exists to avoid. {@link discoverEventHubs} calls it, so
+ * there is one namespace query and one pagination bound.
+ *
+ * Returns a {@link Listing}: an empty answer is `empty`, never `none`. A
+ * Resource Graph query is filtered by what the identity can read, so zero rows
+ * is byte-identical to "Reader is missing" - the caller words that case with
+ * `unmeasuredInventoryMessage`, not a count. Throws on a non-2xx, keeping the
+ * Reader hint on 403 (nothing to show, and the operator needs the fix).
  */
-export async function discoverEventHubs(
+export async function discoverEventHubNamespaces(
   azure: AzureManagement,
-  input: { subscriptionId: string },
+  subscriptionId: string,
   logger?: Logger,
-): Promise<EventHubDiscoveryResult> {
-  // Namespace inventory: one Resource Graph query, skipToken-paginated.
+): Promise<Listing<EventHubNamespaceInfo>> {
   const namespaces: EventHubNamespaceInfo[] = [];
   let skipToken = "";
   for (let page = 0; page < EH_DISCOVERY_MAX_PAGES; page += 1) {
     const res = await azure.request(
       resourceGraphRequest(
-        input.subscriptionId,
+        subscriptionId,
         EVENTHUB_NAMESPACES_KQL,
         skipToken === "" ? undefined : skipToken,
       ),
@@ -84,6 +100,36 @@ export async function discoverEventHubs(
       break;
     }
   }
+  const listing = toListing(namespaces);
+  // An unverified `empty` carries no count: Resource Graph is permission
+  // filtered, so a bare 0 here would read as "this subscription has none".
+  // The kind says what was seen; a count is logged only for real rows.
+  logger?.info("eventhub-discovery: namespaces", {
+    subscription: subscriptionId,
+    listing: listing.kind,
+    ...(listing.kind === "rows" ? { namespaces: listing.rows.length } : {}),
+  });
+  return listing;
+}
+
+/**
+ * Discover every Event Hub namespace and its hubs in a subscription.
+ */
+export async function discoverEventHubs(
+  azure: AzureManagement,
+  input: { subscriptionId: string },
+  logger?: Logger,
+): Promise<EventHubDiscoveryResult> {
+  // Namespace inventory: the same Resource Graph read the picker uses. The
+  // unwrap is deliberate: this result is an array the discovery screen maps
+  // over. The listing is kept so the log below reports its kind rather than
+  // the unwrapped array's length, which cannot tell `empty` from `none`.
+  const namespaceListing = await discoverEventHubNamespaces(
+    azure,
+    input.subscriptionId,
+    logger,
+  );
+  const namespaces = [...listingRows(namespaceListing)];
 
   // Per-namespace hub listing (plain ARM GET; soft-fails to a warning).
   const hubs: EventHubInfo[] = [];
@@ -118,7 +164,7 @@ export async function discoverEventHubs(
 
   logger?.info("eventhub-discovery: complete", {
     subscription: input.subscriptionId,
-    namespaces: namespaces.length,
+    namespaceListing: namespaceListing.kind,
     hubs: hubs.length,
     warnings: warnings.length,
   });

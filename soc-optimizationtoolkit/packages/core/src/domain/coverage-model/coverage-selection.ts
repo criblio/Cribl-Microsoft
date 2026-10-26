@@ -32,6 +32,14 @@
  * failure must not silently become a meaningful choice the operator did not
  * make.
  *
+ * IDENTITY AND READABILITY ARE TWO CHECKS (AZR-18). {@link decodeSelection} is
+ * tolerant by design, which makes it the wrong gate for a WRITE: it would read a
+ * document a later release wrote as "defaults", and the next Save would replace
+ * real data. {@link readCoverageDocument} answers the two questions the shared
+ * KV standard (claude-kit standards/cribl-kv-store.md) keeps apart - is this
+ * ours (`kind`), and can this release read it (`version` exactly) - before the
+ * tolerant decode runs. A screen saves only on `ok`.
+ *
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto. The KV read
  * and write belong to the shell; this module only turns values into text and
  * back.
@@ -54,6 +62,14 @@ export const COVERAGE_SELECTION_KEY = "azure-coverage-selection";
  * versions rather than discarding them.
  */
 export const COVERAGE_SELECTION_VERSION = 1;
+
+/**
+ * The document's IDENTITY, written by {@link encodeSelection}. Distinct from the
+ * key on purpose: the key says where the value lives, `kind` says what the value
+ * is, and only the value travels (an envelope, a copy, a restore). It happens to
+ * spell the same as the key; changing either does not change the other.
+ */
+export const COVERAGE_SELECTION_KIND = "azure-coverage-selection";
 
 export interface CoverageSelection {
   readonly mode: DeploymentMode;
@@ -104,6 +120,7 @@ export function encodeSelection(selection: CoverageSelection): string {
     subSelections[id] = selection.subSelections[id];
   }
   return JSON.stringify({
+    kind: COVERAGE_SELECTION_KIND,
     version: COVERAGE_SELECTION_VERSION,
     mode: selection.mode,
     enabled: inCatalogOrder(selection.enabled),
@@ -186,6 +203,69 @@ export function decodeSelection(raw: unknown): DecodedSelection {
     dropped,
     usedDefaults: false,
   };
+}
+
+/**
+ * What a stored value IS, decided before anything decodes it.
+ *
+ *   ok          ours and readable; `decoded` is {@link decodeSelection}'s answer.
+ *               Also the answer for nothing stored, for unparseable or
+ *               non-object text, and for an object with neither `kind` nor
+ *               `version` (`{}`, a hand edit): the standard reads a value that
+ *               fails the identity check as absent (defaults, `usedDefaults:
+ *               true`) and lets the next deliberate write replace it.
+ *   foreign     an object whose `kind` is present and is not ours. Not ours to
+ *               overwrite, so Save is blocked.
+ *   unreadable  ours (our `kind`, or no `kind` but a `version` field) and
+ *               `version` is anything
+ *               other than {@link COVERAGE_SELECTION_VERSION} exactly - missing,
+ *               0, the string "1", or a later release's number. Save is blocked:
+ *               overwriting it would destroy a document this release cannot see.
+ */
+export type CoverageDocument =
+  | { readonly status: "ok"; readonly decoded: DecodedSelection }
+  | { readonly status: "foreign"; readonly kind: unknown }
+  | { readonly status: "unreadable"; readonly version: unknown };
+
+/**
+ * Classify a stored value, then decode it only if it is ours and readable.
+ * Never throws.
+ *
+ * A document with NO `kind` counts as ours only when it carries a `version`:
+ * {@link encodeSelection} wrote no `kind` before AZR-18 but always wrote
+ * `version: 1`, so a version-1 document without one is an earlier release's
+ * save, not a stranger's. With neither field it is treated as absent. The
+ * version test is strict equality, never "numeric
+ * and at least 1": a looser test would let version 0 or "1" be decoded as
+ * defaults and then overwritten.
+ *
+ * @param raw the KV value: a JSON string, or `null`/`undefined` when unset.
+ */
+export function readCoverageDocument(raw: unknown): CoverageDocument {
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { status: "ok", decoded: decodeSelection(raw) };
+    }
+  }
+  if (!isRecord(parsed)) return { status: "ok", decoded: decodeSelection(parsed) };
+
+  if ("kind" in parsed && parsed["kind"] !== COVERAGE_SELECTION_KIND) {
+    return { status: "foreign", kind: parsed["kind"] };
+  }
+  // No `kind` AND no `version` fails the identity check outright: nothing in
+  // it says it is ours, so it reads as absent (the defaults), and the next
+  // deliberate Save replaces it. Blocking here would strand the operator, since
+  // only a write could repair the key and writes would be refused.
+  if (!("kind" in parsed) && !("version" in parsed)) {
+    return { status: "ok", decoded: decodeSelection(undefined) };
+  }
+  if (parsed["version"] !== COVERAGE_SELECTION_VERSION) {
+    return { status: "unreadable", version: parsed["version"] };
+  }
+  return { status: "ok", decoded: decodeSelection(parsed) };
 }
 
 /**

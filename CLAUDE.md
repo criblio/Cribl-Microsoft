@@ -36,8 +36,9 @@ npm run groom -- integrate   # ...narrowed to one MENU ITEM
 
 Every feature carries a `menu` - which part of the product it is about, using
 the app's own route ids. `npm run board` renders a "By menu item" rollup, and
-the live kanban has a menu filter. Two values (`azure-onboarding`,
-`windows-events`) name PLANNED screens with no route yet; `none` means no
+the live kanban has a menu filter. One value (`windows-events`) names a
+PLANNED screen with no route yet; `azure-onboarding` was PLANNED until AZR-18
+routed it in the development section. `none` means no
 operator sees it (release mechanics, docs, board tooling) and is not a synonym
 for "unsure".
 

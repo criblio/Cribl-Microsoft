@@ -14,6 +14,11 @@
  */
 
 import type { AzureManagementRequest } from "../../ports/azure-management";
+import type { NamespaceRef } from "../eventhub-arm/eventhub-arm";
+import {
+  EVENTHUB_ARM_API_VERSION,
+  buildNamespaceHubsListRequest,
+} from "../eventhub-arm/eventhub-arm";
 
 // ---------------------------------------------------------------------------
 // Resource Graph inventory (EVH-03 step 1)
@@ -22,8 +27,11 @@ import type { AzureManagementRequest } from "../../ports/azure-management";
 /** The Resource Graph API version the discovery POSTs against. */
 export const RESOURCE_GRAPH_API_VERSION = "2022-10-01";
 
-/** The Event Hub ARM data-plane management API version (hubs, consumer groups). */
-export const EVENTHUB_API_VERSION = "2021-11-01";
+/**
+ * The Event Hub ARM data-plane management API version (hubs, consumer groups).
+ * An alias of the shared EVENTHUB_ARM_API_VERSION (domain/eventhub-arm).
+ */
+export const EVENTHUB_API_VERSION = EVENTHUB_ARM_API_VERSION;
 
 /**
  * The single-query namespace inventory (EVH-03): every Event Hub namespace in
@@ -118,18 +126,14 @@ export function parseNamespacesResponse(body: unknown): {
   return { namespaces, skipToken };
 }
 
-/** Build the ARM GET that lists the Event Hubs inside one namespace. */
-export function listEventHubsRequest(
-  ns: EventHubNamespaceInfo,
-): AzureManagementRequest {
-  return {
-    method: "GET",
-    path:
-      `/subscriptions/${ns.subscriptionId}` +
-      `/resourceGroups/${ns.resourceGroup}` +
-      `/providers/Microsoft.EventHub/namespaces/${ns.name}/eventhubs`,
-    apiVersion: EVENTHUB_API_VERSION,
-  };
+/**
+ * Build the ARM GET that lists the Event Hubs inside one namespace. Takes the
+ * minimal {@link NamespaceRef} (AZR-12): a discovered EventHubNamespaceInfo
+ * satisfies it structurally and a pasted resource id yields it directly. The
+ * path and api-version come from domain/eventhub-arm.
+ */
+export function listEventHubsRequest(ns: NamespaceRef): AzureManagementRequest {
+  return buildNamespaceHubsListRequest(ns);
 }
 
 /** Project one ARM eventhubs list item into an {@link EventHubInfo}. */
@@ -394,6 +398,10 @@ export function inferSendersFromEnumeration(
       });
     }
   }
+  // A hub-level HINT, deliberately looser than eventhub-arm's ruleCanSend:
+  // any right containing "send" suggests a consumer exists. ruleCanSend is the
+  // namespace-level ELIGIBILITY rule (exactly Send or Manage) used to pick a
+  // rule whose keys Cribl will use; do not swap one for the other.
   for (const rule of enumeration.authRules) {
     if (
       rule.name !== "RootManageSharedAccessKey" &&

@@ -12,6 +12,10 @@ export * from "./analyze-samples";
 export * from "./coverage-analysis";
 export * from "./list-service-principals";
 export * from "./discover-event-hubs";
+// AZR-11: hubs and Send-capable namespace rules for one chosen namespace.
+export * from "./eventhub-target";
+// AZR-3: read Defender state subscription-wide; create-only deploy.
+export * from "./defender-export";
 export * from "./guided-deploy";
 export * from "./permission-preflight";
 export * from "./capability-audit";

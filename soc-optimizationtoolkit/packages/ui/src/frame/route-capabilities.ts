@@ -58,6 +58,14 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // unconstrained and the screen keeps reporting its own errors. Recorded in
     // the backlog as a taxonomy gap rather than papered over here.
     "eventhub-discovery": [],
+    // EXPLICITLY EMPTY, not forgotten. Azure Native Source Onboarding needs
+    // three actions no capability in the taxonomy measures yet - reading
+    // Defender pricings, writing the security automation, and listing the
+    // Event Hub rule's keys. Mapping them onto arm.deploy or a workspace read
+    // would misreport what is checked, so the screen renders them itself as
+    // "needed, not yet measured". CAP-7 (under CAP-F1) adds the capabilities;
+    // this entry changes when it lands.
+    "azure-onboarding": [],
     "mapping-catalog": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.

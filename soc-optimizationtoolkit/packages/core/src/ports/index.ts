@@ -30,6 +30,8 @@ export {
 } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
 export type { TaggedSampleStore } from './tagged-sample-store';
+export type { KvDocumentStore, KvDocumentLoad } from './kv-document-store';
+export { isKvDocumentKey } from './kv-document-store';
 export type { SchemaCatalog, DcrSchemaColumn } from './schema-catalog';
 export type {
   SentinelContent,

@@ -25,6 +25,8 @@ import {
 } from "./coverage-catalog";
 import {
   COVERAGE_SELECTION_KEY,
+  COVERAGE_SELECTION_KIND,
+  COVERAGE_SELECTION_VERSION,
   decodeSelection,
   defaultSelection,
   encodeSelection,
@@ -453,6 +455,19 @@ describe("the KV contract", () => {
     // Changing this orphans every saved selection in the field, so it is worth
     // a pin rather than a comment.
     expect(COVERAGE_SELECTION_KEY).toBe("azure-coverage-selection");
+  });
+
+  it("writes its identity and version into every document", () => {
+    // AZR-18 added `kind`: the shared KV standard keeps "is this ours?" apart
+    // from "can this release read it?", and the Save gate in
+    // readCoverageDocument (coverage-document.test.ts) needs the first answer
+    // to be a field, not a guess. The decodeSelection pins above deliberately
+    // store documents WITHOUT kind: that is what a pre-AZR-18 save looks like,
+    // and decodeSelection is unchanged and still ignores kind.
+    const doc = JSON.parse(encodeSelection(defaultSelection())) as Record<string, unknown>;
+    expect(doc["kind"]).toBe(COVERAGE_SELECTION_KIND);
+    expect(COVERAGE_SELECTION_KIND).toBe("azure-coverage-selection");
+    expect(doc["version"]).toBe(COVERAGE_SELECTION_VERSION);
   });
 
   it("encodes deterministically, so an unchanged selection is not a rewrite", () => {

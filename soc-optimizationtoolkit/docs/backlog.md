@@ -1017,6 +1017,29 @@ discovery and the unmeasured listers. Already measured and reusable: Event Hub
 namespace creation is `arm.deploy`; every Cribl-side write here, Event Hub source
 or REST collector, is `source.manage`.
 
+> CORRECTED 2026-10-21 (ADR 0005, `docs/adr/0005-azure-onboarding-sections-and-kv-documents.md`):
+> Event Hub namespace creation is NOT measured by `arm.deploy`. That capability is
+> measured from `deployments/write` only (`capability-mapping.ts`), while the labs
+> preflight checks `namespaces/write` directly (`lab-permissions.ts`). Treat
+> namespace creation as unmeasured until a capability probes it. Filed as CAP-7,
+> with the Defender `pricings`/`automations` actions and the namespace rule
+> `listKeys/action`.
+
+> AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
+> workflow, so verified none): EXTEND the existing Event Hub surface; do not build
+> a second one. Event Hub Discovery is single-subscription and read-only -
+> namespaces via Resource Graph, hubs by one GET per namespace, authorization
+> rules at HUB scope only, no listKeys, ending at a JSON download - and its
+> namespace GET/PUT builders were duplicated in labs (same api-version, same
+> path). So AZR-11 lifts those builders into one `domain/eventhub-arm` module,
+> re-bases `listEventHubsRequest` on a minimal `NamespaceRef` (which the existing
+> callers satisfy structurally), splits a Resource-Graph-only
+> `discoverEventHubNamespaces` out of `discoverEventHubs` so the picker does not
+> spend one ARM GET per namespace, and adds hub and namespace-level rule listing
+> for one namespace, a Send-rights check and listKeys (`eventhub-target`). The
+> Event Hub Discovery screen itself stays as it is. ADR 0005 section 6 records the
+> same decision.
+
 Each new capability needs a preflight PROBE, not just a name - an unprobed
 capability contributes nothing per the step-2 mapping rule (only measurements are
 recorded). The existing rules carry over unchanged: writes come only from

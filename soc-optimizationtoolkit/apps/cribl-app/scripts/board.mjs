@@ -58,12 +58,14 @@ const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
  * in `apps/cribl-app/src/App.tsx`, so the vocabulary cannot describe a menu the
  * app does not have. Their order here is the nav's order, by section.
  *
- * Two ids are NOT routes and are marked so below, because conflating them with
+ * One id is NOT a route and is marked so below, because conflating it with
  * shipped menus is how a rollup starts overstating what exists:
  *
- *   azure-onboarding  PLANNED. backlog.md#6 calls it a menu item; there is no
- *                     route, no screen, and AZR is the epic that builds it
  *   windows-events    PLANNED. backlog.md#5's Windows Event analysis screen
+ *
+ * (azure-onboarding was PLANNED until AZR-18 shipped its route; it now sits in
+ * the development section after eventhub-discovery, its prerequisite screen.
+ * scripts/board-menus-routes.test.mjs holds this list to App.tsx.)
  *
  * And one is the honest escape hatch:
  *
@@ -88,11 +90,11 @@ export const MENUS = [
   'siem-migration',
   'preflight',
   'eventhub-discovery',
+  'azure-onboarding',
   'mapping-catalog',
   // diagnostics
   'harness',
   // planned - no route exists yet
-  'azure-onboarding',
   'windows-events',
   // cross-cutting
   'none',
@@ -114,13 +116,27 @@ export const MENU_LABELS = {
   'eventhub-discovery': 'Event Hub Discovery',
   'mapping-catalog': 'Mapping Catalog',
   harness: 'Diagnostics',
-  'azure-onboarding': 'Azure Native Source Onboarding (planned)',
+  'azure-onboarding': 'Azure Native Source Onboarding',
   'windows-events': 'Windows Event analysis (planned)',
   none: 'Cross-cutting',
 };
 
-/** The two that name a screen nobody can open yet. */
-export const PLANNED_MENUS = ['azure-onboarding', 'windows-events'];
+/** The one that names a screen nobody can open yet. */
+export const PLANNED_MENUS = ['windows-events'];
+
+/**
+ * The rollup's sentence about PLANNED menus, derived from PLANNED_MENUS so it
+ * cannot drift. It was a hard-coded "Two menus are PLANNED" and kept saying
+ * so after AZR-18 routed azure-onboarding and only one remained.
+ */
+export function plannedMenusSentence(planned = PLANNED_MENUS) {
+  const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five'];
+  const n = planned.length;
+  const count = NUMBER_WORDS[n] ?? String(n);
+  return n === 1
+    ? `${count} menu is PLANNED and has no route yet.`
+    : `${count} menus are PLANNED and have no route yet.`;
+}
 
 /**
  * A story's menu: its own if it overrides, otherwise its feature's.
@@ -789,7 +805,7 @@ export function renderBoard(data, today) {
   L.push('');
   L.push('Which part of the product each card is about, using the app\'s own route');
   L.push('ids. `Cross-cutting` is release mechanics, docs and board tooling - work no');
-  L.push('operator sees on any screen. Two menus are PLANNED and have no route yet.');
+  L.push(`operator sees on any screen. ${plannedMenusSentence()}`);
   L.push('');
   L.push('| Menu | Open | Done | Now |');
   L.push('|---|---|---|---|');

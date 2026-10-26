@@ -27,6 +27,11 @@
  *     section is never a working teaser). The note deliberately does NOT name
  *     a roadmap unit: "Arrives in Unit 16" is internal vocabulary that means
  *     nothing to the operator reading it (user report 2026-08-04).
+ *     The optional `notBuiltBody` (AZR-18) is the one exception, and it is
+ *     NOT the body: it shows what the section WILL hold - rows with their
+ *     controls disabled - so an operator can see every source the screen
+ *     knows about without any of it being actionable. Omitted, coming-soon
+ *     renders exactly as before.
  *
  * The InfoTip reuses the shared component, fed the section's point-of-
  * decision help text.
@@ -70,6 +75,13 @@ export interface NumberedSectionProps {
   onDone?: () => void;
   /** DOM id, so the page can scroll a section into view. */
   anchorId?: string;
+  /**
+   * AZR-18: what a coming-soon section shows under its note - the rows it
+   * will hold, every control already disabled by the caller. Ignored for the
+   * other statuses (a built section passes `children`). It is not collapsible
+   * and is not the body: the caller owns keeping it inert.
+   */
+  notBuiltBody?: ReactNode;
 }
 
 export function NumberedSection({
@@ -84,6 +96,7 @@ export function NumberedSection({
   summary,
   onDone,
   anchorId,
+  notBuiltBody,
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
@@ -164,6 +177,11 @@ export function NumberedSection({
           </span>
           {reason !== undefined && reason !== "" && (
             <p className="numbered-section-comingsoon-note">{reason}</p>
+          )}
+          {notBuiltBody !== undefined && notBuiltBody !== null && (
+            <div className="numbered-section-notbuilt" data-testid="numbered-section-notbuilt">
+              {notBuiltBody}
+            </div>
           )}
         </div>
       ) : (

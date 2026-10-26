@@ -21,6 +21,7 @@ import type {
   InstalledPack,
   JobRecord,
   JobStore,
+  KvDocumentStore,
   Listing,
   Logger,
   PatManagerStatus,
@@ -62,6 +63,7 @@ import type {
   StoredPack,
 } from '@soc/ui';
 import { acquireArmToken, acquireGraphToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
+import { PlatformKvDocumentStore } from './kv-document-store';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1775,6 +1777,12 @@ export interface CloudPorts {
   /** Entra directory reader for the ingestion service-principal picker (B3). */
   graph: GraphDirectory;
   /**
+   * Plain JSON documents in KV with a three-way read - absent, value, or
+   * unknown (AZR-18). Unlike secrets/contentCache, a 403 here is unknown, never
+   * absent; see platform/kv-document-store.ts.
+   */
+  kvDocuments: KvDocumentStore;
+  /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
    * the assign-dcr-role usecase takes its per-assignment name from here. The
@@ -1820,6 +1828,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl, logger),
     graph: new PlatformGraphDirectory(tenantId),
+    kvDocuments: new PlatformKvDocumentStore(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The app is hosted inside a Cribl.Cloud workspace: Lake federation applies.

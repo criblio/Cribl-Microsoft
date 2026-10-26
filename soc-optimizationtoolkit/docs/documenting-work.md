@@ -203,9 +203,11 @@ feature is about the capability audit - and `check-board` rejects an override
 that merely restates its feature's menu, because a second copy of a fact is a
 second thing to keep in step.
 
-Two values name screens nobody can open yet, `azure-onboarding` and
-`windows-events`, and they render as PLANNED so a rollup cannot imply a route
-exists. `none` is for work no operator sees on any screen - release mechanics,
+One value names a screen nobody can open yet, `windows-events`, and it
+renders as PLANNED so a rollup cannot imply a route exists. (`azure-onboarding`
+was the other until AZR-18 shipped its route;
+`apps/cribl-app/scripts/board-menus-routes.test.mjs` now holds the menu list to
+the App.tsx route table, so a shipped screen cannot stay PLANNED.) `none` is for work no operator sees on any screen - release mechanics,
 docs, the board's own tooling - and it is not a synonym for "unsure": if a card
 changes what an operator sees anywhere, it has a menu.
 

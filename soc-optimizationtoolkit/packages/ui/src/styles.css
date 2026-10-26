@@ -1955,6 +1955,14 @@ button.journey-step-main:hover .journey-step-label {
   margin: 0;
 }
 
+/* AZR-18: the rows a coming-soon section WILL hold, shown under its note with
+ * every control disabled by the caller. Muted, so it reads as a preview and
+ * not as a working form. */
+.numbered-section-notbuilt {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
 /* Azure Resources capability checkboxes (DCE / metrics / role) - read-only
  * honest reflections of what the deploy does, not editable controls. */
 .integrate-check {
@@ -6399,4 +6407,134 @@ details[open] > summary::before {
   color: var(--text-dim);
   border-left: 2px solid var(--warn);
   padding: 4px 10px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Azure Native Source Onboarding (AZR-18, screens/azure-onboarding/). Tokens
+ * only, so the dark theme follows. The catalog rows, the Event Hub target and
+ * Defender export blocks, the toned state lines, the plans and exports tables
+ * and the two-step deploy confirm.
+ * ------------------------------------------------------------------------ */
+
+.azure-onboarding {
+  display: flex;
+  flex-direction: column;
+}
+
+.azure-onboarding-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.azure-onboarding-defender {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.azure-onboarding-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.azure-onboarding-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.azure-onboarding-rows {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.azure-onboarding-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.azure-onboarding-state {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+.azure-onboarding-state-deployed {
+  color: var(--ok-strong);
+}
+
+.azure-onboarding-state-pending {
+  color: var(--accent-strong);
+}
+
+.azure-onboarding-state-unknown,
+.azure-onboarding-state-deployed-unselected {
+  color: var(--warn);
+}
+
+.azure-onboarding-banner {
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  max-width: 96ch;
+}
+
+.azure-onboarding-banner-info {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.azure-onboarding-banner-warning {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.azure-onboarding-banner-error {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+  color: var(--error-strong);
+}
+
+.azure-onboarding-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azure-onboarding-table th,
+.azure-onboarding-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azure-onboarding-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.azure-onboarding-confirm {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  margin: 4px 0 8px;
 }
