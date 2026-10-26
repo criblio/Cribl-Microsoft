@@ -67,6 +67,14 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // this entry changes when it lands.
     "azure-onboarding": [],
     "mapping-catalog": [],
+    // Same gap, same precedent as eventhub-discovery above. The logging map
+    // reads management groups, policy assignments, exemptions, definitions and
+    // role assignments; Management Group Reader and policy / role read are not
+    // in the capability taxonomy (core capabilities.ts), and borrowing a
+    // workspace or DCR capability would misreport what is checked. So the
+    // route is unconstrained and the screen reports every refused read itself
+    // as UNKNOWN, counted. A dedicated capability is filed as its own card.
+    "azure-logging-map": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.
     harness: [],

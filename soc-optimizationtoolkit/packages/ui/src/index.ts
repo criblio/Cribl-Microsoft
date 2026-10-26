@@ -511,6 +511,10 @@ export type { RepositoriesScreenProps } from "./screens/repositories/repositorie
 export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
+// Azure Logging Map (AZR-19, phase 1, read-only): management-group tree with
+// the policy assignments that deploy diagnostic settings, who owns them, and
+// what each one covers, excludes or cannot be read.
+export { AzureLoggingMapScreen } from "./screens/azure-logging-map/azure-logging-map-screen";
 
 // Azure Native Source Onboarding (AZR-18): the coverage catalog by collection
 // method, the Event Hub target, and the Defender for Cloud alert export.

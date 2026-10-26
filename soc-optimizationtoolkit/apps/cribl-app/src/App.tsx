@@ -6,6 +6,7 @@ import {
   ArchitectureScreen,
   AzureOnboardingScreen,
   AuditAgeChip,
+  AzureLoggingMapScreen,
   MappingCatalogScreen,
   AzureConnectSection,
   AzureResourcesSection,
@@ -2035,6 +2036,26 @@ function App() {
     </>
   );
 
+  // Azure Logging Map (AZR-19, phase 1, READ-ONLY): the management-group tree
+  // with the policy assignments that deploy diagnostic settings - which are
+  // ours, which belong to someone else, and what each covers or cannot read.
+  // requires: [] - see the taxonomy-gap note in route-capabilities.ts.
+  const azureLoggingMapView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Azure Logging Map</h1>
+        <p className="harness-subtitle">
+          See which policy assignments deploy diagnostic settings across your
+          management groups and subscriptions, who owns them, and what each one
+          covers. Nothing here changes Azure.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        <AzureLoggingMapScreen />
+      </PortsProvider>
+    </>
+  );
+
   // Labs (roadmap Phase 5, LAB-01/02/13/14): provision disposable Azure lab
   // environments - the 8 UnifiedLab profiles as a planning surface (naming,
   // validation, phases, permissions, plan download) plus the live foundation
@@ -2285,6 +2306,7 @@ function App() {
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
     { id: 'azure-onboarding', label: 'Azure Native Source Onboarding', requires: capabilitiesForRoute('azure-onboarding'), section: 'development', render: () => azureOnboardingView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
+    { id: 'azure-logging-map', label: 'Azure Logging Map', requires: capabilitiesForRoute('azure-logging-map'), section: 'development', render: () => azureLoggingMapView },
     { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 
