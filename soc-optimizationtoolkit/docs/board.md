@@ -52,13 +52,13 @@ The largest unstarted block: every Azure telemetry source, category by category
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding | 0/2 | AZR-4, AZR-5 |
-| `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding | 1/5 | AZR-13, AZR-3, AZR-23, AZR-24, AZR-25 |
+| `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding | 1/5 | AZR-13, AZR-3, AZR-26, AZR-27, AZR-28 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding | 0/1 | AZR-6 |
 | `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 0/1 | AZR-10 |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 1/7 | AZR-18, AZR-11, AZR-12, AZR-19, AZR-20, AZR-21, AZR-22 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 1/7 | AZR-18, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -828,7 +828,7 @@ Settled and unblocked, sequenced behind now.
   creation is `arm.deploy`: it is not measured by any capability today
   (backlog.md 6h).
 
-- **AZR-19** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
+- **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
@@ -836,8 +836,8 @@ Settled and unblocked, sequenced behind now.
   hub or rule renders as visible, disabled controls. This card makes them
   work, behind a confirm, and needs CAP-7 to measure namespace write first.
 
-- **AZR-20** Create a dedicated Send-only authorization rule for the onboarding export
-  `AZR-F9` `story` `settled` `blocked by AZR-19`
+- **AZR-23** Create a dedicated Send-only authorization rule for the onboarding export
+  `AZR-F9` `story` `settled` `blocked by AZR-22`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
   decided here"). AZR-11 lets the operator pick any namespace rule that can
@@ -845,7 +845,7 @@ Settled and unblocked, sequenced behind now.
   RootManageSharedAccessKey. This card offers to create that Send-only rule
   rather than only recommending it.
 
-- **AZR-23** Add the Recommendations, Secure Score and Regulatory Compliance export sources
+- **AZR-26** Add the Recommendations, Secure Score and Regulatory Compliance export sources
   `AZR-F3` `story` `settled` `blocked by AZR-3`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
@@ -854,7 +854,7 @@ Settled and unblocked, sequenced behind now.
   resource, so adding them to an existing export must re-PUT the UNION of what
   is there and what is added, never a fresh body.
 
-- **AZR-24** Repair a Defender export that is present but differs
+- **AZR-27** Repair a Defender export that is present but differs
   `AZR-F3` `story` `settled` `blocked by AZR-3`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
@@ -1276,7 +1276,7 @@ Settled, gated on something above.
   WorkerGroupsState["kind"], so a state added to the hook would not reach the
   badge logic. Fix: import the type.
 
-- **AZR-21** Persist the Event Hub prerequisite choice
+- **AZR-24** Persist the Event Hub prerequisite choice
   `AZR-F9` `story` `settled` `blocked by AZR-11`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
@@ -1285,7 +1285,7 @@ Settled, gated on something above.
   selection in the KV document store, with the same
   absent/unknown/foreign/unreadable read discipline.
 
-- **AZR-22** Onboard more than one subscription
+- **AZR-25** Onboard more than one subscription
   `AZR-F9` `story` `settled` `blocked by AZR-18`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
@@ -1293,7 +1293,7 @@ Settled, gated on something above.
   continuous export is one automation per subscription, so a tenant with
   several needs a per-subscription loop and a per-subscription result.
 
-- **AZR-25** Remove the Defender continuous export
+- **AZR-28** Remove the Defender continuous export
   `AZR-F3` `story` `settled` `blocked by AZR-3`
   FILED 2026-10-21 as a follow-up of AZR-18
   (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
