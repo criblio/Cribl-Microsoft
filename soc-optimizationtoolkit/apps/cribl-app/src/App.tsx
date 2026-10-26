@@ -100,6 +100,12 @@ import { makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
 // warn/error mirrored to one rolling plain KV entry. Module scope so the
 // ring survives connection switches and ports-bundle rebuilds.
 import { PlatformLogger } from './platform/logger';
+import {
+  PLATFORM_LINK_CHECKING,
+  criblReachability,
+  criblReachableUnlessFailed,
+  platformLinkState,
+} from './platform/platform-link';
 
 // The app's display name, shown in generated change-request tickets and the
 // architecture diagrams embedded in them. The change-request text and diagrams
@@ -680,7 +686,7 @@ function App() {
 
   // Status of the consolidated connection poll (the one budgeted poller):
   // 'checking...' -> 'ok' | 'failed - <error>'.
-  const [platformLink, setPlatformLink] = useState('checking...');
+  const [platformLink, setPlatformLink] = useState(PLATFORM_LINK_CHECKING);
 
   // Load acceptance + setup + options once on mount. Tolerant on purpose: a
   // failed acceptance read parses to null, which re-prompts rather than
@@ -1078,7 +1084,7 @@ function App() {
     // reachability - the same mapping hasCribl and journeyFacts already use.
     // 'checking...' is not yet a failure, so it counts as reachable and the
     // Cribl verdicts stay 'unknown' rather than briefly claiming 'unreachable'.
-    criblReachable: platformLink !== 'failed',
+    criblReachable: criblReachableUnlessFailed(platformLink),
     now: nowIso,
   });
   const { audit: auditCapabilities } = capabilityAudit;
@@ -1468,7 +1474,7 @@ function App() {
             // workspace it would talk to. The consolidated platform-link poll is
             // the honest live signal, and 'checking...' must not read as a
             // failure, so an unresolved poll counts as connected.
-            hasCribl: platformLink !== 'failed',
+            hasCribl: criblReachableUnlessFailed(platformLink),
             hasAzure:
               activeConfig.tenantId.trim() !== '' &&
               activeConfig.clientId.trim() !== '',
@@ -1530,8 +1536,7 @@ function App() {
       activeConfig.subscriptionId.trim() !== '' &&
       activeConfig.resourceGroup.trim() !== '' &&
       activeConfig.workspaceName.trim() !== '',
-    criblReachable:
-      platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
+    criblReachable: criblReachability(platformLink),
   };
 
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
@@ -1636,11 +1641,11 @@ function App() {
             })}
           </span>
           <span
-            className={`link-badge ${platformLink === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
+            className={`link-badge ${platformLinkState(platformLink) === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
             title={platformLink}
           >
             platform link:{' '}
-            {platformLink === 'ok' ? 'ok' : platformLink === 'checking...' ? 'checking' : 'failed'}
+            {platformLinkState(platformLink)}
           </span>
           {/* HON-6 / D-1: the audit's age sits with the other facts about the
             * live connection. It gets the set, key and clock rather than the
