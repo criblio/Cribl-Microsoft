@@ -1736,7 +1736,7 @@
       "feature": "DBT-F1",
       "title": "Cribl reachability is decided four ways in App.tsx, and two of them are always true",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],

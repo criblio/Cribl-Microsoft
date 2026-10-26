@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**66 in the backlog, 10 in progress, 47 done.**
+**65 in the backlog, 11 in progress, 47 done.**
 
 ## By menu item
 
@@ -134,7 +134,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (10)
+## In progress (11)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -441,9 +441,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   with verified live once two browsers open Live Preview side by side without
   a restart.
 
+- **DBT-147** Cribl reachability is decided four ways in App.tsx, and two of them are always true
+  `DBT-F1` `bug` `settled`
+  FOUND by the 2026-10-26 architecture audit (first noticed by the AZR-18
+  final reviewer). The platform-link poll sets platformLink to 'checking...',
+  'ok' or `failed - <error>` (App.tsx setPlatformLink). Two readers test
+  `platformLink !== 'failed'` - the capability facts' criblReachable and the
+  SetupWizard's hasCribl - which is TRUE for every value the poll can produce,
+  so both always see Cribl as reachable. The other two readers (the tri-state
+  at the journey facts and the link badge) test `=== 'ok'` and are right, so
+  the four can disagree. FIX: one pure helper, e.g.
+  criblReachability(platformLink): true | false | undefined ('checking...' is
+  undefined), used by all four; pin the 'failed - <error>' case. Then confirm
+  in Live Preview what the wizard and capability chips show when Cribl is
+  unreachable - the behaviour change is that they finally notice.
+
 ---
 
-## Backlog - now (2)
+## Backlog - now (1)
 
 Next to pick up. Nothing blocks these.
 
@@ -518,21 +533,6 @@ Next to pick up. Nothing blocks these.
   skipped the DECODE action, so an unaddressable base64-decode source
   (b64.url) still built. Fixed and pinned; the build message now says pipeline
   validation, since it counts plan checks as well as YAML.
-
-- **DBT-147** Cribl reachability is decided four ways in App.tsx, and two of them are always true
-  `DBT-F1` `bug` `settled`
-  FOUND by the 2026-10-26 architecture audit (first noticed by the AZR-18
-  final reviewer). The platform-link poll sets platformLink to 'checking...',
-  'ok' or `failed - <error>` (App.tsx setPlatformLink). Two readers test
-  `platformLink !== 'failed'` - the capability facts' criblReachable and the
-  SetupWizard's hasCribl - which is TRUE for every value the poll can produce,
-  so both always see Cribl as reachable. The other two readers (the tri-state
-  at the journey facts and the link badge) test `=== 'ok'` and are right, so
-  the four can disagree. FIX: one pure helper, e.g.
-  criblReachability(platformLink): true | false | undefined ('checking...' is
-  undefined), used by all four; pin the 'failed - <error>' case. Then confirm
-  in Live Preview what the wizard and capability chips show when Cribl is
-  unreachable - the behaviour change is that they finally notice.
 
 ---
 
