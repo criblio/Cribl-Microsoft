@@ -30,6 +30,7 @@ import {
   capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
+  loadableSetupFromRead,
   mergeJourneyLinks,
   resolveFramePhase,
   useCapabilityAudit,
@@ -58,7 +59,6 @@ import {
   EMPTY_SETUP_RECORD,
   preflightPathForSetupPath,
   parseAcceptanceRecord,
-  parseSetupRecord,
   parseAppOptions,
   serializeAppOptions,
   parseAzureConfig,
@@ -681,10 +681,12 @@ function App() {
   // 'checking...' -> 'ok' | 'failed - <error>'.
   const [platformLink, setPlatformLink] = useState('checking...');
 
-  // Load acceptance + mode + options once on mount. Tolerant on purpose: a
-  // failed read parses to null, which re-prompts (acceptance) or re-asks
-  // (mode) rather than silently waving the user through; options fall back
-  // to their defaults.
+  // Load acceptance + setup + options once on mount. Tolerant on purpose: a
+  // failed acceptance read parses to null, which re-prompts rather than
+  // silently waving the user through; options fall back to their defaults.
+  // A failed SETUP read is the exception: it becomes 'unreadable', never
+  // "not set up", because folding it into null sent a finished install back
+  // into the setup flow on any 5xx, timeout or bridge error (DBT-145).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -700,7 +702,7 @@ function App() {
       setAcceptance(
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
-      setSetupDone(parseSetupRecord(modeRaw.status === 'fulfilled' ? modeRaw.value : null) !== null);
+      setSetupDone(loadableSetupFromRead(modeRaw));
       setAppOptions(
         parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
       );
@@ -1307,6 +1309,14 @@ function App() {
     }
   };
 
+  // Retry of an unreadable setup record (DBT-145): re-read ONLY that key, so
+  // acceptance, options and theme keep what they already loaded.
+  const retrySetupRead = async () => {
+    setSetupDone('loading');
+    const [read] = await Promise.allSettled([appStateStore.get(SETUP_KEY)]);
+    setSetupDone(loadableSetupFromRead(read));
+  };
+
   // TBL-3: the table the Tables tab handed to Single, and which DCR tab is
   // showing. Held here because the hand-off crosses from one tab's panel to
   // another's. MUST live above the gate returns below - these are hooks, and
@@ -1324,6 +1334,28 @@ function App() {
         <header className="harness-header">
           <h1 className="harness-title">{APP_NAME}</h1>
           <p className="harness-subtitle">Loading...</p>
+        </header>
+      </div>
+    );
+  }
+  // The setup record could not be READ (DBT-145). Say so and offer a retry;
+  // never fall through to the wizard, which would walk a finished install
+  // through setup again and let Get Started overwrite the record.
+  if (phase.phase === 'setup-unreadable') {
+    return (
+      <div className="harness">
+        <header className="harness-header">
+          <h1 className="harness-title">{APP_NAME}</h1>
+          <p className="harness-subtitle">
+            Could not read whether setup is complete: the app key-value store did not answer.
+            Not showing the setup flow, because this install may already be set up. Retry when
+            the leader is reachable.
+          </p>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => void retrySetupRead()}>
+              Retry reading setup
+            </button>
+          </div>
         </header>
       </div>
     );

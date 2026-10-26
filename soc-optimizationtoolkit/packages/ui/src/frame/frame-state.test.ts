@@ -7,6 +7,7 @@ import {
   NAV_SECTION_ORDER,
   groupNavSections,
   isScrolledToBottom,
+  loadableSetupFromRead,
   resolveFramePhase,
 } from "./frame-state";
 import type { NavSection } from "./frame-state";
@@ -40,8 +41,32 @@ describe("resolveFramePhase", () => {
     expect(resolveFramePhase(ACCEPTED, false)).toEqual({ phase: "setup" });
   });
 
+  it("never routes an unreadable setup record into the wizard (DBT-145)", () => {
+    // A rejected read is not "not set up": the setup flow for a finished
+    // install is the defect this state exists to prevent.
+    expect(resolveFramePhase(ACCEPTED, "unreadable")).toEqual({ phase: "setup-unreadable" });
+    // The acceptance gate still comes first.
+    expect(resolveFramePhase(null, "unreadable")).toEqual({ phase: "aua" });
+  });
+
   it("is ready once accepted and set up, carrying nothing else", () => {
     expect(resolveFramePhase(ACCEPTED, true)).toEqual({ phase: "ready" });
+  });
+});
+
+describe("loadableSetupFromRead", () => {
+  it("reports a rejected read as unreadable, not as not-set-up (DBT-145)", () => {
+    expect(
+      loadableSetupFromRead({ status: "rejected", reason: new Error("KV get setupComplete failed: 502") }),
+    ).toBe("unreadable");
+  });
+
+  it("parses a fulfilled read: a record is set up, null or empty is not", () => {
+    expect(
+      loadableSetupFromRead({ status: "fulfilled", value: JSON.stringify({ completedAt: "2026-07-03T00:00:00.000Z" }) }),
+    ).toBe(true);
+    expect(loadableSetupFromRead({ status: "fulfilled", value: null })).toBe(false);
+    expect(loadableSetupFromRead({ status: "fulfilled", value: "" })).toBe(false);
   });
 });
 
