@@ -340,6 +340,18 @@
       "detail": "OPERATOR DECISION 2026-10-21, from grooming the azure-onboarding menu: every open AZR card is a SECTION of a screen that does not exist - no route, no nav entry, no usecase (backlog.md#6: \"The port has never happened\"). With no card for the screen itself there was no first step, which is why the menu sat at later with nothing in progress.\n\nSCOPE: the route and nav entry for the planned azure-onboarding menu id, rendering the coverage-model checkbox sections (AZR-0) with the onboarding-selection additive-only contract (AZR-1) persisted to the KV store. Every category the screen cannot yet act on renders as a visible, disabled section, not an absent one. The first sections that WORK are AZR-11 (the Event Hub namespace prerequisite, which nearly every section needs) and AZR-3 (Defender for Cloud continuous export), both of which depend on this card.\n\nWHY DEFENDER FIRST, NOT ENTRA (operator choice): Entra (6b) has its domain logic built (AZR-2), but ticking it triggers the content-preservation problem in features/content-preserving-native-reroute.md - a 6b build that ignores that silently breaks Entra content. Defender export is one Microsoft.Security/automations write per subscription with no content breakage.\n\nOPEN BEFORE BUILDING: whether writing Microsoft.Security/automations needs a capability and probe that CAP-F1 does not yet list. Check it; do not assume the existing Azure role covers it."
     },
     {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "AZR-19",
+      "epic": "AZR",
+      "feature": "AZR-F8",
+      "type": "story",
+      "priority": "now",
+      "title": "Azure Logging Map - where each logging setting is applied in the management group tree",
+      "detail": "OPERATOR REQUEST 2026-10-21/26: \"a Diagram of the Azure logging and where we implemented our Settings... the Tenant Root management groups and sub management groups under it with associated policies assigned\", planned as the published mockup (Azure Logging Map artifact), then \"build it now\".\n\nPHASE 1 SCOPE, READ-ONLY: the management group tree from Tenant Root to subscriptions; policy assignments on each scope; inherited assignments with their origin; notScopes exclusions and exemptions drawn as gaps; ours vs other owners; scopes that cannot be read drawn and counted as unknown, never as uncovered; trace a setting; an outline (role=tree) view sharing selection with the diagram; a details panel; a visible (i) on every card. Hand SVG + dagre per the house diagram standard, tokens only, keyboard-focusable cards, no animation (coverage is configuration, not measured flow).\n\nDEFAULTS TAKEN FOR THE MOCKUP'S THREE DECISIONS (operator said build now): OURS = metadata.createdBy set by the toolkit, plus the assignment names the legacy Deploy-*PolicyInitiatives scripts write, since the new app writes no policy yet. SHOWN = ours plus other owners' logging-related assignments (diagnostic settings, DeployIfNotExists to Event Hub or Log Analytics), with an all-policy toggle. START = Tenant Root; when it cannot be read, start at the highest readable scope and say what was not read.\n\nDEFERRED to later phases: compliance overlay, After apply preview of the onboarding selection, the non-policy lanes (Entra, Defender, Activity Log) and the where-data-goes lines. Ships as its own Development route now and is embedded in the AZR-18 screen as its Where it lands panel once AZR-18 lands. Covers AZR-10 for the policy category."
+    },
+    {
       "id": "AZR-11",
       "epic": "AZR",
       "feature": "AZR-F9",
