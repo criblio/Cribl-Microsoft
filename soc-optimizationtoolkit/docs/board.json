@@ -430,6 +430,42 @@
       "detail": "Phase 1 of [[AZR-19]] reads policy assignments and exemptions with direct ARM GETs, two per scope plus definition and role reads, paced at 60/min under the 100 req/min proxy budget. On a large tenant that is minutes per map. Resource Graph (policyresources) answers the same question in a few paged queries, but this codebase has only ever queried Resource Graph with a subscriptions scope (eventhub-discovery.ts:65-82), never with a managementGroups body scope, and CAP-1 is not done. DONE WHEN: the read uses Resource Graph where the caller can, falls back to the per-scope ARM read where it cannot, and a partial or refused Resource Graph answer is still counted as unknown rather than none. Reasoning in `backlog.md#6a`."
     },
     {
+      "id": "AZR-29",
+      "epic": "AZR",
+      "feature": "AZR-F8",
+      "title": "Logging map: optional Cribl Lakehouse Engine lane as an alternative to Splunk/Elastic",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "undecided",
+      "dependsOn": [
+        "AZR-19"
+      ],
+      "menu": "azure-logging-map",
+      "detail": "OPERATOR REQUEST 2026-10-26: \"Add an optional dataflow to stream data to Cribl Lakehouse Engine as an alternative to Splunk/Elastic. Should still show end-to-end data flow like the splunk and elastic flows show with redacted data.\" Placement chosen by the operator: the Azure Logging Map (AZR-19).\n\nBuilds on the where-data-goes lines deferred from AZR-19 phase 1: from a scope's diagnostic-settings assignment, through the Event Hub and Cribl, to each destination. Lakehouse Engine is one optional destination lane beside Sentinel, Splunk and Elastic, off by default.\n\nOPEN: which existing Splunk/Elastic flow with redacted data this should match. Nothing in the current app or the map mockup draws Splunk or Elastic flows; the only candidate found is the deprecated Electron SiemMigration page. Until that is answered the redaction behaviour is unspecified.",
+      "decision": {
+        "question": "Which existing Splunk/Elastic end-to-end flow (with redacted data) should the Lakehouse lane match?",
+        "options": [
+          {
+            "key": "electron-siem",
+            "label": "The deprecated Electron SIEM Migration page",
+            "detail": "deprecated/Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SiemMigration.tsx - the only Splunk/Elastic flow page found in the repo."
+          },
+          {
+            "key": "outside-repo",
+            "label": "A flow outside this repo",
+            "detail": "The operator links the page or deck; its redaction behaviour becomes the spec."
+          },
+          {
+            "key": "design-new",
+            "label": "Design the redacted flow fresh for the map",
+            "detail": "Sample events per lane with sensitive fields masked, drawn on the where-data-goes lines; Splunk and Elastic lanes get the same treatment."
+          }
+        ],
+        "chosen": null
+      }
+    },
+    {
       "id": "AZR-11",
       "epic": "AZR",
       "feature": "AZR-F9",

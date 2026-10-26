@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**63 in the backlog, 9 in progress, 47 done.**
+**64 in the backlog, 9 in progress, 47 done.**
 
 ## By menu item
 
@@ -33,11 +33,11 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Repositories | 0 | 1 | 0 |
 | Permission Verification | 9 | 3 | 0 |
 | Azure Native Source Onboarding | 19 | 2 | 3 |
-| Azure Logging Map | 3 | 0 | 1 |
+| Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 7 | 10 | 1 |
 
-Open work totals 72.
+Open work totals 73.
 
 ## Epics and features
 
@@ -46,7 +46,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 8% (2/24)
+### `AZR` Azure native source onboarding - 8% (2/25)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -58,7 +58,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
-| `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 0/4 | AZR-10, AZR-19*, AZR-20*, AZR-21* |
+| `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 0/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 1/7 | AZR-18, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -503,7 +503,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (27)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -583,6 +583,26 @@ Settled and unblocked, sequenced behind now.
   mockup's fixed layout?
     [ ] `add-drag` Add drag + Reset layout (house standard) - claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted.
     [ ] `keep-fixed` Keep the fixed layout (approved mockup) - The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams.
+
+- **AZR-29** Logging map: optional Cribl Lakehouse Engine lane as an alternative to Splunk/Elastic
+  `AZR-F8` `story` `undecided` `blocked by AZR-19`
+  OPERATOR REQUEST 2026-10-26: "Add an optional dataflow to stream data to
+  Cribl Lakehouse Engine as an alternative to Splunk/Elastic. Should still
+  show end-to-end data flow like the splunk and elastic flows show with
+  redacted data." Placement chosen by the operator: the Azure Logging Map
+  (AZR-19). Builds on the where-data-goes lines deferred from AZR-19 phase 1:
+  from a scope's diagnostic-settings assignment, through the Event Hub and
+  Cribl, to each destination. Lakehouse Engine is one optional destination
+  lane beside Sentinel, Splunk and Elastic, off by default. OPEN: which
+  existing Splunk/Elastic flow with redacted data this should match. Nothing
+  in the current app or the map mockup draws Splunk or Elastic flows; the only
+  candidate found is the deprecated Electron SiemMigration page. Until that is
+  answered the redaction behaviour is unspecified.
+  DECISION (unanswered): Which existing Splunk/Elastic end-to-end flow (with
+  redacted data) should the Lakehouse lane match?
+    [ ] `electron-siem` The deprecated Electron SIEM Migration page - deprecated/Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SiemMigration.tsx - the only Splunk/Elastic flow page found in the repo.
+    [ ] `outside-repo` A flow outside this repo - The operator links the page or deck; its redaction behaviour becomes the spec.
+    [ ] `design-new` Design the redacted flow fresh for the map - Sample events per lane with sensitive fields masked, drawn on the where-data-goes lines; Splunk and Elastic lanes get the same treatment.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled`
