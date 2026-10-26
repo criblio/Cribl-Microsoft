@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react'
 // @ts-ignore
 import { servePackageTgz } from './scripts/pkgutil.mjs'
 import { appVersionFrom } from './scripts/app-version.mjs'
+import { initScriptUrlFor } from './scripts/init-script-url.mjs'
 
 // The app version shown in the always-visible sidebar footer, read from THIS
 // app's package.json (the package script bumps it on every build, so the
@@ -54,7 +55,9 @@ const injectScriptFromQueryPlugin = () => {
     },
     transformIndexHtml(html: string, ctx: IndexHtmlTransformContext): IndexHtmlTransformResult{
       const url = new URL(ctx.originalUrl ?? '/', 'https://localhost');
-      initScriptUrl = initScriptUrl || url.searchParams.get('init');
+      // The request's own ?init= wins: the script is per Live Preview session,
+      // so reusing the first one seen broke every other browser (DBT-146).
+      initScriptUrl = initScriptUrlFor(url.searchParams.get('init'), initScriptUrl);
       const root = process.cwd();
       let appName;
       let appVersion;
