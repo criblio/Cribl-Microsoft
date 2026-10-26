@@ -1731,6 +1731,33 @@
       "detail": "OPERATOR REPORT 2026-10-26: Live Preview opened in Edge shows the setup flow while Chrome remembers the settings, and whichever browser opens Live Preview first is the only one that works until the dev server restarts.\n\nCAUSE: apps/cribl-app/vite.config.ts injectScriptFromQueryPlugin kept `initScriptUrl = initScriptUrl || url.searchParams.get('init')`, so the FIRST ?init= URL the dev server saw was injected into every later page load. The init script is per Live Preview session (it carries session data), so a second browser booted with the first browser's session script; its KV reads did not answer as its own, setupComplete read as absent, and the app showed setup. A dev server restart cleared the cache, which is why only the first browser worked.\n\nFIX: the request's own ?init= wins; the remembered one is only a fallback for a load that carries none (scripts/init-script-url.mjs, pinned). Dev server only; the packaged app never runs this plugin. Close with verified live once two browsers open Live Preview side by side without a restart."
     },
     {
+      "id": "DBT-147",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Cribl reachability is decided four ways in App.tsx, and two of them are always true",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "home",
+      "detail": "FOUND by the 2026-10-26 architecture audit (first noticed by the AZR-18 final reviewer). The platform-link poll sets platformLink to 'checking...', 'ok' or `failed - <error>` (App.tsx setPlatformLink). Two readers test `platformLink !== 'failed'` - the capability facts' criblReachable and the SetupWizard's hasCribl - which is TRUE for every value the poll can produce, so both always see Cribl as reachable. The other two readers (the tri-state at the journey facts and the link badge) test `=== 'ok'` and are right, so the four can disagree.\n\nFIX: one pure helper, e.g. criblReachability(platformLink): true | false | undefined ('checking...' is undefined), used by all four; pin the 'failed - <error>' case. Then confirm in Live Preview what the wizard and capability chips show when Cribl is unreachable - the behaviour change is that they finally notice."
+    },
+    {
+      "id": "DBT-148",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "listAllPages reads a 2xx page with no `value` array as zero items",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "priorityWhy": "Latent: no caller has been seen to receive a 2xx list page without a value array, so nothing is costing anyone today. It is still a bug because when it happens seven callers would state an unverified zero as fact; it outranks features once any live read shows the shape.",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "none",
+      "detail": "FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery listAllPages collects `value` only when it is an array and otherwise adds nothing, so a 2xx page with a missing or non-array `value` becomes zero items. Its callers (assign-dcr-role, azure-discovery listings, content-install, available-content, deployment-preview, manage-labs, workspace-tables) then render 'none' for what is really unknown - the inventory-honesty failure. AZR-19 wrote its own verdict-returning pager (read-logging-map/arm-pager.ts) precisely because of this and left the shared one unchanged.\n\nFIX: make listAllPages throw on a 2xx page whose `value` is not an array (it already throws on non-2xx, so every caller handles a throw), pin it, and consider whether arm-pager can then share the page walk. Check the callers' empty states against inventory-honesty while there."
+    },
+    {
       "id": "AZR-22",
       "epic": "AZR",
       "feature": "AZR-F9",

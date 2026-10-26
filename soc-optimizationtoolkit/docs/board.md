@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**64 in the backlog, 10 in progress, 47 done.**
+**66 in the backlog, 10 in progress, 47 done.**
 
 ## By menu item
 
@@ -26,7 +26,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Menu | Open | Done | Now |
 |---|---|---|---|
 | Dataflow | 1 | 2 | 0 |
-| Setup | 2 | 0 | 1 |
+| Setup | 3 | 0 | 2 |
 | Sentinel Integration | 19 | 29 | 4 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
@@ -35,9 +35,9 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 19 | 2 | 3 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 8 | 10 | 2 |
+| Cross-cutting | 9 | 10 | 2 |
 
-Open work totals 74.
+Open work totals 76.
 
 ## Epics and features
 
@@ -111,13 +111,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 56% (35/63)
+### `DBT` Quality and technical debt _(enabler)_ - 54% (35/65)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 17/33 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 17/35 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -443,7 +443,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (1)
+## Backlog - now (2)
 
 Next to pick up. Nothing blocks these.
 
@@ -519,9 +519,24 @@ Next to pick up. Nothing blocks these.
   (b64.url) still built. Fixed and pinned; the build message now says pipeline
   validation, since it counts plan checks as well as YAML.
 
+- **DBT-147** Cribl reachability is decided four ways in App.tsx, and two of them are always true
+  `DBT-F1` `bug` `settled`
+  FOUND by the 2026-10-26 architecture audit (first noticed by the AZR-18
+  final reviewer). The platform-link poll sets platformLink to 'checking...',
+  'ok' or `failed - <error>` (App.tsx setPlatformLink). Two readers test
+  `platformLink !== 'failed'` - the capability facts' criblReachable and the
+  SetupWizard's hasCribl - which is TRUE for every value the poll can produce,
+  so both always see Cribl as reachable. The other two readers (the tri-state
+  at the journey facts and the link badge) test `=== 'ok'` and are right, so
+  the four can disagree. FIX: one pure helper, e.g.
+  criblReachability(platformLink): true | false | undefined ('checking...' is
+  undefined), used by all four; pin the 'failed - <error>' case. Then confirm
+  in Live Preview what the wizard and capability chips show when Cribl is
+  unreachable - the behaviour change is that they finally notice.
+
 ---
 
-## Backlog - next (28)
+## Backlog - next (29)
 
 Settled and unblocked, sequenced behind now.
 
@@ -948,6 +963,26 @@ Settled and unblocked, sequenced behind now.
   drops it; no probe ever grants a write. CORRECTS CAP-6's note that namespace
   creation is `arm.deploy`: it is not measured by any capability today
   (backlog.md 6h).
+
+- **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
+  `DBT-F1` `bug` `settled`
+  Not now because: Latent: no caller has been seen to receive a 2xx list page
+  without a value array, so nothing is costing anyone today. It is still a bug
+  because when it happens seven callers would state an unverified zero as
+  fact; it outranks features once any live read shows the shape.
+  FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery
+  listAllPages collects `value` only when it is an array and otherwise adds
+  nothing, so a 2xx page with a missing or non-array `value` becomes zero
+  items. Its callers (assign-dcr-role, azure-discovery listings,
+  content-install, available-content, deployment-preview, manage-labs,
+  workspace-tables) then render 'none' for what is really unknown - the
+  inventory-honesty failure. AZR-19 wrote its own verdict-returning pager
+  (read-logging-map/arm-pager.ts) precisely because of this and left the
+  shared one unchanged. FIX: make listAllPages throw on a 2xx page whose
+  `value` is not an array (it already throws on non-2xx, so every caller
+  handles a throw), pin it, and consider whether arm-pager can then share the
+  page walk. Check the callers' empty states against inventory-honesty while
+  there.
 
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
