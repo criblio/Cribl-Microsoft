@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**64 in the backlog, 9 in progress, 47 done.**
+**64 in the backlog, 10 in progress, 47 done.**
 
 ## By menu item
 
@@ -35,9 +35,9 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 19 | 2 | 3 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 7 | 10 | 1 |
+| Cross-cutting | 8 | 10 | 2 |
 
-Open work totals 73.
+Open work totals 74.
 
 ## Epics and features
 
@@ -111,13 +111,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 56% (35/62)
+### `DBT` Quality and technical debt _(enabler)_ - 56% (35/63)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 17/32 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 17/33 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/3 | DBT-1, DBT-4, DBT-12 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -134,7 +134,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (9)
+## In progress (10)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -422,6 +422,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   instead of the setup flow (frame-state pins). Still open after slice 1: the
   403 fold itself, which arrives as a fulfilled null and so still lands in
   setup.
+
+- **DBT-146** Live Preview dev server serves the first browser's init script to every browser
+  `DBT-F1` `bug` `settled`
+  OPERATOR REPORT 2026-10-26: Live Preview opened in Edge shows the setup flow
+  while Chrome remembers the settings, and whichever browser opens Live
+  Preview first is the only one that works until the dev server restarts.
+  CAUSE: apps/cribl-app/vite.config.ts injectScriptFromQueryPlugin kept
+  `initScriptUrl = initScriptUrl || url.searchParams.get('init')`, so the
+  FIRST ?init= URL the dev server saw was injected into every later page load.
+  The init script is per Live Preview session (it carries session data), so a
+  second browser booted with the first browser's session script; its KV reads
+  did not answer as its own, setupComplete read as absent, and the app showed
+  setup. A dev server restart cleared the cache, which is why only the first
+  browser worked. FIX: the request's own ?init= wins; the remembered one is
+  only a fallback for a load that carries none (scripts/init-script-url.mjs,
+  pinned). Dev server only; the packaged app never runs this plugin. Close
+  with verified live once two browsers open Live Preview side by side without
+  a restart.
 
 ---
 
