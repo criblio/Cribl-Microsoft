@@ -8,6 +8,7 @@ import { FakeLogger } from "../../testing/fake-logger";
 import { defaultPlanValues, type PlanValues } from "../../domain/onboarding-howto/plan-values";
 import { onboardingSource, type OnboardingSource } from "../../domain/onboarding-howto/sources";
 import {
+  COMMIT_MARKERS,
   buildEventHubInputBody,
   onboardingInputId,
   onboardingSecretId,
@@ -22,6 +23,8 @@ import {
   type PlanCriblSourceInput,
   type ReadyCriblSource,
 } from "./index";
+import { commitFilesFor } from "./plan-cribl-source";
+import { placePath } from "../../kit/config-writes/commitDeploy";
 
 // ---------------------------------------------------------------------------
 // One call log across both ports, so the pinned order spans Cribl and Azure.
@@ -186,6 +189,18 @@ function deepContains(value: unknown, needle: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+
+describe("commitFilesFor", () => {
+  // DBT-164: the confirm names these as an upper bound on the commit. The kit
+  // exports no path builder, so each name is held to the kit's own classifier:
+  // a name the kit would not place as this group's file could never be
+  // committed, and the confirm would list a file the commit cannot carry.
+  it("names one file per marker, each placed by the kit as this group's", () => {
+    const files = commitFilesFor(G);
+    expect(files).toHaveLength(COMMIT_MARKERS.length);
+    for (const f of files) expect(placePath(f, G, COMMIT_MARKERS), f).toBe("mine");
+  });
+});
 
 describe("planCriblSource", () => {
   it("makes only GETs, on both ports, and names what the confirm shows", async () => {

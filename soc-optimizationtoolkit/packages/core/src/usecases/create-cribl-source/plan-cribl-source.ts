@@ -154,7 +154,11 @@ export interface ReadyCriblSource {
   readonly attested: boolean;
   /** The pasted connection string's descriptor (paste only). */
   readonly descriptor: ConnectionDescriptor | null;
-  /** The files the commit will carry, as `groups/<g>/<marker>`. */
+  /**
+   * The files the commit CAN carry, as `groups/<g>/<marker>`: an upper bound.
+   * The kit's commitAndDeploy commits only those pending after the write, so
+   * the confirm must not word this list as what the commit will carry.
+   */
   readonly commitFiles: readonly string[];
   /** Somebody else's uncommitted work in those files, which the commit will carry too. */
   readonly dirtyAlready: readonly string[];
@@ -236,7 +240,13 @@ export function groupRequest(cribl: CriblClient, groupId: string): Request {
   return criblRequestFor(cribl, groupId, { timeoutMsFor: commitDeployTimeouts(CRIBL_SOURCE_COMMIT_TIMEOUT_MS) });
 }
 
-/** The commit files a create would carry, named in the group's tree. */
+/**
+ * Every file a create's commit could carry, named in the group's tree: an
+ * UPPER BOUND, not the commit. The kit commits only the markers still pending
+ * after the write (commitAndDeploy), and which ones a create dirties is
+ * undefined until measured. The kit exports no path builder, only the
+ * classifier placePath; a pin holds every name here to placing as `mine`.
+ */
 export function commitFilesFor(groupId: string): string[] {
   return COMMIT_MARKERS.map((m) => `groups/${groupId}/${m}`);
 }

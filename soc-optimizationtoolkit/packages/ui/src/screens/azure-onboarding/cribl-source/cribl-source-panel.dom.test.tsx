@@ -142,6 +142,7 @@ describe("CriblSourcePanel", () => {
     for (const named of ["g1", READY.inputId, READY.secretId, "reader", ...READY.commitFiles]) {
       expect(confirm, named).toContain(named);
     }
+    expect(confirm).toContain("The commit can include at most these files");
     fireEvent.click(createButton());
     await waitFor(() => expect(p.onApply).toHaveBeenCalledTimes(1));
     expect(vi.mocked(p.onApply).mock.calls[0]![0]).toBe(READY);
