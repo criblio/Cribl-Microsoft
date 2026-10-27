@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**77 in the backlog, 24 in progress, 51 done.**
+**71 in the backlog, 31 in progress, 51 done.**
 
 ## By menu item
 
@@ -36,9 +36,9 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 31 | 2 | 10 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 16 | 14 | 7 |
+| Cross-cutting | 17 | 14 | 7 |
 
-Open work totals 101.
+Open work totals 102.
 
 ## Epics and features
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 46% (39/84)
+### `DBT` Quality and technical debt _(enabler)_ - 46% (39/85)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 21/53 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 21/54 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (24)
+## In progress (31)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -793,6 +793,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   secretType. Awaits the live read-back of a secret written each way (GET
   /system/secrets/:id) before done.
 
+- **DBT-152** Ensure-secret overwrites an existing Cribl secret on a 409, including one another admin owns
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
+  NOT fixed by that work.
+  packages/ui/src/screens/integrate/wiring-section.tsx:163-166 PATCHes the
+  named secret when its POST returns 409, and
+  packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:75-81 does
+  the same on a 409 OR a 400. Neither checks who created the secret or what it
+  holds, so a fixed secret id that another admin or another app already uses
+  is silently replaced, breaking whatever reads it. A 400 is not a conflict at
+  all - it can be a malformed body - and is still answered with an overwrite.
+  config-plane-writes.md: create-only, and refuse on an existing object the
+  app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove
+  ownership (description stamp, as the AZR-34 work does with the kit's
+  ownership helpers), and refuse otherwise; treat 400 as a failure.
+
 - **DBT-154** The lab blob source passes queueName unquoted where Cribl expects a JS expression
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -831,6 +847,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   error text): new Sentinel destinations reference !{secretId} via a
   create-only secret (409 refuses, never PATCH); existing clear-secret
   destinations are flagged at verify, never migrated. Awaits Live Preview.
+
+- **DBT-158** A failed options read falls back to defaults, and the next inline save writes the defaults over the real options
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). App.tsx:704 and :732 - when the options KV read is
+  refused or fails, the app runs on defaults, and the next inline save of any
+  option PUTs that whole default document over the operator's saved options.
+  Data loss, and it predates DBT-145 (null on 403, defaults on 5xx). FIX:
+  track the options read as loaded / unreadable; while unreadable, block (or
+  read-modify-write) the save and say why; pin both.
+
+- **DBT-159** Three readers mishandle a refused KV cache or PAT-status read
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). Since DBT-145 a non-encrypted 403 throws (a 5xx always
+  did). (1) sample-intake-section.tsx:272 awaits definitionCache.get with no
+  try/catch inside a void async block: unhandled rejection. (2)
+  solution-browser.tsx:274 and :354 read the cache inside the same try as the
+  GitHub fetch, so a cache failure fails the whole load instead of falling
+  through to content.listSolutions(). (3) repositories-screen.tsx:93 shows a
+  failed PAT status read as 'no PAT' with no message (inventory-honesty). FIX:
+  catch each; a cache miss falls through to the source of truth; the PAT form
+  says the status could not be read. Pin each.
+
+- **DBT-160** listAllPages returns the first page as the whole list when it cannot follow a nextLink
+  `DBT-F1` `bug` `settled`
+  Not now because: Latent: it needs an AzureManagement adapter without
+  requestUrl AND a multi-page answer; the shipped adapter has requestUrl.
+  Still a bug because it would present page one as the whole list.
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). When a page carries nextLink but the adapter has no
+  requestUrl, listAllPages returns page one alone as if complete;
+  arm-pager.readAllPages refuses the same case. FIX: throw, matching DBT-148's
+  honesty rule; pin it.
 
 - **DBT-162** The __inputId form is decided four ways; the onboarding dataflow and Live Architecture give opposite route answers
   `DBT-F1` `bug` `settled`
@@ -873,9 +923,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   on POST and PATCH. For DBT-152: the 409/400 fallback PATCH now stamps a
   secret the app may not own.
 
+- **DBT-166** Validate reads a remediation as configured when it ran for a different assignment of the same family
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts
+  any legacy-family assignment even when an assignment name was instructed, so
+  a Succeeded remediation on Cribl-AU-Old reads as-expected while
+  classifyAssignment calls that same assignment present-other-name. FIX: when
+  a name is instructed, only an exact-name match is as-expected; a family
+  match is present-other-name. Pin.
+
+- **DBT-167** Validate reads an Event Grid topic as configured when the plan has no storage account
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyTopic (classify.ts ~:489) skips the source check when the
+  storageAccount plan value is empty, so a topic on any account reads
+  as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list
+  storageAccount, so it is not reported as missing either. FIX: list it as
+  required, so the step reads unknown (missing value) instead. Pin.
+
+- **DBT-168** Two module comments describe code that DBT-162 and DBT-163 moved
+  `DBT-F1` `bug` `settled`
+  Not now because: Both are comments that now describe code that moved; no
+  operator-visible behaviour is wrong, and the delta audit fixes them in the
+  same pass as it looks for others.
+  FOUND 2026-10-27 while landing DBT-162/163. capture-filter.ts's
+  captureFilterWarning comment still describes the pre-DBT-162 input-id
+  handling, and packages/core/CONTEXT.md:87 still says buildSecretBody lives
+  in cribl-onboarding-source (it moved to domain/cribl-secrets). FIX: correct
+  both, and anything else the delta audit (d2d248f..HEAD) finds of the same
+  kind.
+
 ---
 
-## Backlog - now (10)
+## Backlog - now (5)
 
 Next to pick up. Nothing blocks these.
 
@@ -988,22 +1069,6 @@ Next to pick up. Nothing blocks these.
   (POST /system/metrics/query, within the proxy budget), static otherwise; the
   onboarding diagram's measured-only AnimatedEdge (AZR-33) is the pattern.
 
-- **DBT-152** Ensure-secret overwrites an existing Cribl secret on a 409, including one another admin owns
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
-  NOT fixed by that work.
-  packages/ui/src/screens/integrate/wiring-section.tsx:163-166 PATCHes the
-  named secret when its POST returns 409, and
-  packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:75-81 does
-  the same on a 409 OR a 400. Neither checks who created the secret or what it
-  holds, so a fixed secret id that another admin or another app already uses
-  is silently replaced, breaking whatever reads it. A 400 is not a conflict at
-  all - it can be a malformed body - and is still answered with an overwrite.
-  config-plane-writes.md: create-only, and refuse on an existing object the
-  app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove
-  ownership (description stamp, as the AZR-34 work does with the kit's
-  ownership helpers), and refuse otherwise; treat 400 as a failure.
-
 - **DBT-153** policies.yml wildcards and pre-existing coverage gaps
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -1034,51 +1099,9 @@ Next to pick up. Nothing blocks these.
   with awaited conditions, and mutation-check that the repaired pins still
   fail on the behaviour they guard. Not proven on main yet.
 
-- **DBT-158** A failed options read falls back to defaults, and the next inline save writes the defaults over the real options
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
-  introduced by them). App.tsx:704 and :732 - when the options KV read is
-  refused or fails, the app runs on defaults, and the next inline save of any
-  option PUTs that whole default document over the operator's saved options.
-  Data loss, and it predates DBT-145 (null on 403, defaults on 5xx). FIX:
-  track the options read as loaded / unreadable; while unreadable, block (or
-  read-modify-write) the save and say why; pin both.
-
-- **DBT-159** Three readers mishandle a refused KV cache or PAT-status read
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
-  introduced by them). Since DBT-145 a non-encrypted 403 throws (a 5xx always
-  did). (1) sample-intake-section.tsx:272 awaits definitionCache.get with no
-  try/catch inside a void async block: unhandled rejection. (2)
-  solution-browser.tsx:274 and :354 read the cache inside the same try as the
-  GitHub fetch, so a cache failure fails the whole load instead of falling
-  through to content.listSolutions(). (3) repositories-screen.tsx:93 shows a
-  failed PAT status read as 'no PAT' with no message (inventory-honesty). FIX:
-  catch each; a cache miss falls through to the source of truth; the PAT form
-  says the status could not be read. Pin each.
-
-- **DBT-166** Validate reads a remediation as configured when it ran for a different assignment of the same family
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
-  classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts
-  any legacy-family assignment even when an assignment name was instructed, so
-  a Succeeded remediation on Cribl-AU-Old reads as-expected while
-  classifyAssignment calls that same assignment present-other-name. FIX: when
-  a name is instructed, only an exact-name match is as-expected; a family
-  match is present-other-name. Pin.
-
-- **DBT-167** Validate reads an Event Grid topic as configured when the plan has no storage account
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
-  classifyTopic (classify.ts ~:489) skips the source check when the
-  storageAccount plan value is empty, so a topic on any account reads
-  as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list
-  storageAccount, so it is not reported as missing either. FIX: list it as
-  required, so the step reads unknown (missing value) instead. Pin.
-
 ---
 
-## Backlog - next (30)
+## Backlog - next (29)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1463,17 +1486,6 @@ Settled and unblocked, sequenced behind now.
   Batch, Architecture and the flow-log panel. Its only test passes
   preferred="". Unpinned: the saved default wins when it is listed, and an
   existing pick is never overridden. Fix: two hook pins, mutation-checked.
-
-- **DBT-160** listAllPages returns the first page as the whole list when it cannot follow a nextLink
-  `DBT-F1` `bug` `settled`
-  Not now because: Latent: it needs an AzureManagement adapter without
-  requestUrl AND a multi-page answer; the shipped adapter has requestUrl.
-  Still a bug because it would present page one as the whole list.
-  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
-  introduced by them). When a page carries nextLink but the adapter has no
-  requestUrl, listAllPages returns page one alone as if complete;
-  arm-pager.readAllPages refuses the same case. FIX: throw, matching DBT-148's
-  honesty rule; pin it.
 
 - **DBT-161** Diagram drag hook can swallow one non-pointer click after a drag
   `DBT-F1` `bug` `settled`
