@@ -950,7 +950,10 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
   };
   const PUSH_JSON = JSON.stringify({ kind: "Push", properties: { title: "x" } });
 
-  function harness() {
+  // `writesRefused`: a store that refuses a read for want of permission
+  // refuses the write after it too - the realistic case, and the one where a
+  // bare cache.set after the fall-through failed the load all over again.
+  function harness(writesRefused = false) {
     const listSolutions = vi.fn(async () => SOLUTIONS);
     const listConnectorFiles = vi.fn(async () => [FILE]);
     const content = {
@@ -965,7 +968,9 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
       get: vi.fn(async () => {
         throw new Error("KV read refused (403)");
       }),
-      set: vi.fn(async () => undefined),
+      set: vi.fn(async () => {
+        if (writesRefused) throw new Error("KV write refused (403)");
+      }),
     };
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     render(
@@ -1019,6 +1024,29 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
     expect(h.logger.warn).toHaveBeenCalledTimes(2);
     // ONE note however many reads were refused: it describes the cache, not
     // each key, and two copies of one sentence read as two problems.
+    expect(notes()).toHaveLength(1);
+  });
+
+  it("still loads, and still fetches connectors, when the store refuses WRITES too", async () => {
+    const h = harness(true);
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list .solution-browser-item")
+          .length,
+      ).toBe(SOLUTIONS.length);
+    });
+    expect(screen.queryByText(/Could not load the solution index/)).toBeNull();
+    fireEvent.click(screen.getByText(NAME));
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected .ingestion-badge")
+          ?.textContent,
+      ).toBe("Recommended");
+    });
+    expect(screen.queryByText(/Could not fetch this solution/)).toBeNull();
+    expect(h.contentCache.set).toHaveBeenCalledTimes(2);
+    // Two refused reads and two refused writes: four warns, one note.
+    expect(h.logger.warn).toHaveBeenCalledTimes(4);
     expect(notes()).toHaveLength(1);
   });
 });

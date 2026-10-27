@@ -196,6 +196,27 @@ async function readCacheOrMiss(
 }
 
 /**
+ * Write one content-cache entry, answering a REFUSED write as a skipped store
+ * (DBT-159). A store that refuses a read for want of permission refuses the
+ * write that follows the fall-through too, and a bare `cache.set` there threw
+ * after the content had already been fetched - failing the load the read had
+ * just been taught to survive. The fetched value is still used; only the
+ * saving of it is lost.
+ */
+async function writeCacheOrSkip(
+  cache: { set(key: string, value: unknown): Promise<void> },
+  key: string,
+  value: unknown,
+  onRefused: (reason: string) => void,
+): Promise<void> {
+  try {
+    await cache.set(key, value);
+  } catch (err) {
+    onRefused(String(err));
+  }
+}
+
+/**
  * Translate the screen's fetch phase into the evidence the badge derivation
  * reasons over (DBT-15). Structural on purpose - every judgement about what the
  * evidence MEANS lives in deliveryFitBadge, where it is pinned without a DOM.
@@ -251,9 +272,9 @@ export function SolutionBrowser({
   const [hubDeprecated, setHubDeprecated] = useState<Set<string>>(new Set());
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
-  // The reason the content cache last refused a read, "" while it has not
-  // (DBT-159). One string for both reads: the note describes the cache, not a
-  // key, so a second refusal replaces the first rather than adding a line.
+  // The reason the content cache last refused a read or write, "" while it has
+  // not (DBT-159). One string for every refusal: the note describes the cache,
+  // not a key, so a second refusal replaces the first rather than adding a line.
   const [cacheRefused, setCacheRefused] = useState("");
   const [query, setQuery] = useState("");
   const [hideDeprecated, setHideDeprecated] = useState(false);
@@ -285,14 +306,17 @@ export function SolutionBrowser({
   const [unresolvedHandoff, setUnresolvedHandoff] =
     useState<UnresolvedHandoff | null>(null);
 
-  // A refused cache read, logged AND kept for the on-screen note (DBT-159).
+  // A refused cache read or write, logged AND kept for the on-screen note
+  // (DBT-159).
   const logger = ports.logger;
   const noteCacheRefused = useCallback(
-    (key: string, reason: string) => {
-      logger?.warn("content cache read refused; fetching instead", {
-        key,
-        reason,
-      });
+    (op: "read" | "write", key: string, reason: string) => {
+      logger?.warn(
+        op === "read"
+          ? "content cache read refused; fetching instead"
+          : "content cache write refused; the fetched value is not saved",
+        { key, reason },
+      );
       setCacheRefused(reason);
     },
     [logger],
@@ -313,7 +337,7 @@ export function SolutionBrowser({
       let list: SolutionRef[] | null = null;
       if (cache !== undefined) {
         const cached = await readCacheOrMiss(cache, indexKey, (reason) =>
-          noteCacheRefused(indexKey, reason),
+          noteCacheRefused("read", indexKey, reason),
         );
         if (Array.isArray(cached)) {
           list = cached as SolutionRef[];
@@ -322,7 +346,9 @@ export function SolutionBrowser({
       if (list === null) {
         list = await content.listSolutions();
         if (cache !== undefined) {
-          await cache.set(indexKey, list);
+          await writeCacheOrSkip(cache, indexKey, list, (reason) =>
+            noteCacheRefused("write", indexKey, reason),
+          );
         }
       }
       setSolutions(list);
@@ -395,7 +421,7 @@ export function SolutionBrowser({
         const cacheKey = connectorsCacheKey(name, commitSha ?? "");
         if (cache !== undefined) {
           const cached = await readCacheOrMiss(cache, cacheKey, (reason) =>
-            noteCacheRefused(cacheKey, reason),
+            noteCacheRefused("read", cacheKey, reason),
           );
           if (
             cached !== null &&
@@ -432,7 +458,9 @@ export function SolutionBrowser({
           ingestion: classes.length > 0 ? classifySolutionIngestion(classes) : null,
         };
         if (cache !== undefined) {
-          await cache.set(cacheKey, built);
+          await writeCacheOrSkip(cache, cacheKey, built, (reason) =>
+            noteCacheRefused("write", cacheKey, reason),
+          );
         }
         setDetail({ phase: "loaded", detail: built });
       } catch (err) {
@@ -644,15 +672,15 @@ export function SolutionBrowser({
           )}
         </p>
       )}
-      {/* DBT-159. The page still works with the cache refusing reads - every
+      {/* DBT-159. The page still works with the cache refusing reads or writes - every
           read fell through to GitHub - so this is a note, not an error: it
-          explains a slower page and spends the request budget the cache was
+          explains a slower page that spends the request budget the cache was
           there to save. */}
       {cacheRefused !== "" && (
         <p className="field-hint solution-browser-cache-note" role="status">
-          The content cache could not be read ({cacheRefused}), so this was
+          The content cache could not be used ({cacheRefused}), so this was
           fetched from GitHub instead. Everything still works; it is slower and
-          uses more of the request budget until the cache can be read again.
+          uses more of the request budget until the cache can be used again.
         </p>
       )}
       {loadError !== "" ? (
