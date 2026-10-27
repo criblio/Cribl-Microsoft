@@ -33,6 +33,11 @@ import {
   formatScopeChip,
   loadableSetupFromRead,
   mergeJourneyLinks,
+  OPTIONS_LOADING,
+  OPTIONS_UNREADABLE_NOTICE,
+  optionsReadFromSave,
+  optionsReadFromSettled,
+  planOptionsSave,
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
@@ -46,12 +51,12 @@ import type {
   JourneyLinks,
   LoadableAcceptance,
   LoadableSetup,
+  OptionsRead,
   ThemeControl,
 } from '@soc/ui';
 import {
   commitTargetScope,
   computeInvalidation,
-  DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
   mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
@@ -61,8 +66,6 @@ import {
   EMPTY_SETUP_RECORD,
   preflightPathForSetupPath,
   parseAcceptanceRecord,
-  parseAppOptions,
-  serializeAppOptions,
   parseAzureConfig,
   parseProfileStore,
   parseThemeChoice,
@@ -79,7 +82,6 @@ import {
 } from '@soc/core';
 import type {
   AcceptanceRecord,
-  AppOptions,
   OperationOptions,
   AzureConfig,
   BatchPacing,
@@ -644,9 +646,16 @@ function App() {
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
   // refreshed by saveAppOptions (the Integrate page's DCE toggle persists
-  // through it). The tolerant codec makes a failed read equal "defaults",
-  // never a crash.
-  const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
+  // through it). The read is held WITH what it said - loaded, absent or
+  // unreadable - because the tolerant codec turns a failed read into the
+  // defaults, and saving over a failed read wrote those defaults over the
+  // operator's real options (DBT-158). appOptions is what screens render;
+  // whether it may be saved over is planOptionsSave's decision.
+  const [optionsRead, setOptionsRead] = useState<OptionsRead>(OPTIONS_LOADING);
+  const appOptions = optionsRead.options;
+  // Why the last inline options save was refused, when the read had not
+  // settled yet (the unreadable case renders from optionsRead itself).
+  const [optionsSaveRefusal, setOptionsSaveRefusal] = useState<string | null>(null);
 
   // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
   // (light | dark | system) persists as the plain appTheme KV entry (the
@@ -691,10 +700,11 @@ function App() {
 
   // Load acceptance + setup + options once on mount. Tolerant on purpose: a
   // failed acceptance read parses to null, which re-prompts rather than
-  // silently waving the user through; options fall back to their defaults.
-  // A failed SETUP read is the exception: it becomes 'unreadable', never
-  // "not set up", because folding it into null sent a finished install back
-  // into the setup flow on any 5xx, timeout or bridge error (DBT-145).
+  // silently waving the user through. A failed SETUP read is the exception:
+  // it becomes 'unreadable', never "not set up", because folding it into null
+  // sent a finished install back into the setup flow on any 5xx, timeout or
+  // bridge error (DBT-145). A failed OPTIONS read is 'unreadable' too: the
+  // screens render the defaults, but no inline save may write them (DBT-158).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -711,9 +721,7 @@ function App() {
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
       setSetupDone(loadableSetupFromRead(modeRaw));
-      setAppOptions(
-        parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
-      );
+      setOptionsRead(optionsReadFromSettled(optionsRaw));
       // Theme: a failed read parses to 'system' - always renderable.
       setThemeChoice(
         parseThemeChoice(themeRaw.status === 'fulfilled' ? themeRaw.value : null)
@@ -731,16 +739,32 @@ function App() {
   // DEFAULT_APP_OPTIONS and the surviving inline edits persist through here.
   const saveAppOptions = useCallback(async (serialized: string) => {
     await appStateStore.set(APP_OPTIONS_KEY, serialized);
-    setAppOptions(parseAppOptions(serialized));
+    setOptionsRead(optionsReadFromSave(serialized));
   }, []);
   // Persist an inline OperationOptions edit (the Integrate page's DCE capability
-  // toggle) through the same appOptions entry.
+  // toggle) through the same appOptions entry - only over a read that
+  // answered. While the read is loading or unreadable planOptionsSave refuses
+  // and NOTHING is PUT: the stored options may exist, and the document this
+  // shell holds is the defaults (DBT-158).
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
-      void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
+      const plan = planOptionsSave(optionsRead, (options) => ({ ...options, operation }));
+      if (plan.kind === 'refused') {
+        setOptionsSaveRefusal(plan.reason);
+        return;
+      }
+      setOptionsSaveRefusal(null);
+      void saveAppOptions(plan.serialized);
     },
-    [appOptions, saveAppOptions],
+    [optionsRead, saveAppOptions],
   );
+  // Retry an unreadable options read: re-read ONLY that key. A read that
+  // answers lifts the save block; another refusal keeps it.
+  const retryOptionsRead = useCallback(async () => {
+    setOptionsSaveRefusal(null);
+    const [read] = await Promise.allSettled([appStateStore.get(APP_OPTIONS_KEY)]);
+    setOptionsRead(optionsReadFromSettled(read));
+  }, []);
 
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
@@ -1778,6 +1802,24 @@ function App() {
     </>
   );
 
+  // The options-read notice (DBT-158), rendered on every route that shows the
+  // persisted options: while the appOptions read is unreadable the values on
+  // screen are the defaults, not the operator's, and inline saves are
+  // refused - say so, and offer the retry that lifts the block.
+  const optionsNotice =
+    optionsRead.state === 'unreadable' ? (
+      <div className="connection-notice" role="status">
+        <p>{OPTIONS_UNREADABLE_NOTICE}</p>
+        <div className="panel-controls">
+          <button className="run-button" onClick={() => void retryOptionsRead()}>
+            Retry reading options
+          </button>
+        </div>
+      </div>
+    ) : optionsSaveRefusal !== null ? (
+      <p className="connection-notice" role="status">{optionsSaveRefusal}</p>
+    ) : null;
+
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
   // screens (Azure Targeting cascade + the operable native-table deploy) as
@@ -1800,6 +1842,7 @@ function App() {
       {secretNotice !== null && (
         <p className="connection-notice">{secretNotice}</p>
       )}
+      {optionsNotice}
       <PortsProvider {...portsProviderProps}>
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
@@ -1813,7 +1856,9 @@ function App() {
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
-          onOperationChange={persistOperation}
+          // Unreadable options: the toggle is read-only (optionsNotice says
+          // why); persistOperation refuses regardless (DBT-158).
+          {...(optionsRead.state === 'unreadable' ? {} : { onOperationChange: persistOperation })}
           roleGuidance={ROLE_GUIDANCE}
         />
       </PortsProvider>
@@ -1855,6 +1900,7 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
+          {optionsNotice}
           <PortsProvider {...portsProviderProps}>
             {/* The key carries prefillTable (TBL-3) so handing a table over
                 from the Tables tab REMOUNTS this screen and re-seeds its
@@ -1914,6 +1960,7 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
+          {optionsNotice}
           <PortsProvider {...portsProviderProps}>
             <BatchDeployScreen
               key={`batch-${store.activeProfileId ?? 'none'}`}
