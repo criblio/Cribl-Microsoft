@@ -104,6 +104,27 @@ function bodyText(body: unknown): string {
   }
 }
 
+// The body the platform sends with the 403 for an encrypted (write-only) KV
+// entry (verified live; see platform/http.ts).
+const KV_ENCRYPTED_VALUE_MESSAGE = 'Cannot read encrypted value';
+
+/**
+ * Read a KV GET's 403 body and say whether it is the encrypted-value refusal
+ * (DBT-145). That 403 is the ONLY one that may read as absent; any other 403
+ * is a refused read (role or grant) of an entry that may well exist. A body
+ * that cannot be read is not the marker - guessing "encrypted" would turn the
+ * refusal back into an absence.
+ */
+async function kvRead403(res: Response): Promise<{ encrypted: boolean; body: string }> {
+  let body = '';
+  try {
+    body = await res.text();
+  } catch {
+    // Unreadable body: report the bare 403.
+  }
+  return { encrypted: body.includes(KV_ENCRYPTED_VALUE_MESSAGE), body };
+}
+
 // ---------------------------------------------------------------------------
 // SecretsStore
 // ---------------------------------------------------------------------------
@@ -114,9 +135,10 @@ function bodyText(body: unknown): string {
  * WRITE-ONLY ENCRYPTED ENTRIES: values written with `{ encrypted: true }`
  * (PUT ...?encrypted=true) can NEVER be read back - GET returns HTTP 403
  * {"message":"Cannot read encrypted value"} (verified live; the docs'
- * "redacted placeholder" does not happen). This adapter maps that 403 to
+ * "redacted placeholder" does not happen). This adapter maps THAT 403 to
  * null, same as a missing key, so callers must treat "null" as "not readable
- * here" and re-`set` rather than read-modify-write secrets. Encrypted values
+ * here" and re-`set` rather than read-modify-write secrets. Any other 403
+ * rejects (DBT-145): it is a refused read, not an absence. Encrypted values
  * are still USABLE server-side via proxies.yml `kv.*` header injection.
  */
 export class PlatformSecretsStore implements SecretsStore {
@@ -130,11 +152,19 @@ export class PlatformSecretsStore implements SecretsStore {
 
   async get(key: string): Promise<string | null> {
     const res = await fetchWithTimeout(kvUrl(key));
-    // 404: the key does not exist. 403: the key exists but was written
-    // encrypted and is write-only ("Cannot read encrypted value") - the
-    // plaintext is unreadable by design, so surface it as absent too.
-    if (res.status === 404 || res.status === 403) {
+    // 404: the key does not exist. The encrypted-value 403: the key exists
+    // but is write-only - the plaintext is unreadable by design, so surface it
+    // as absent too. Any OTHER 403 rejects: folding it into null sent a
+    // finished install back into setup (DBT-145).
+    if (res.status === 404) {
       return null;
+    }
+    if (res.status === 403) {
+      const refusal = await kvRead403(res);
+      if (refusal.encrypted) {
+        return null;
+      }
+      throw new Error(`GET kvstore/${key}: HTTP 403\n${refusal.body}`);
     }
     if (!res.ok) {
       throw new Error(`GET kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);
@@ -1303,8 +1333,17 @@ export class KvContentCache implements ContentCache {
 
   async get(cacheKey: string): Promise<unknown | null> {
     const res = await fetchWithTimeout(kvUrl(this.key(cacheKey)));
-    if (res.status === 404 || res.status === 403) {
+    // A 404 or the encrypted-value 403 is a miss; any other 403 is a refused
+    // read and rejects like any backend failure (DBT-145).
+    if (res.status === 404) {
       return null;
+    }
+    if (res.status === 403) {
+      const refusal = await kvRead403(res);
+      if (refusal.encrypted) {
+        return null;
+      }
+      throw new Error(`GET content-cache ${cacheKey}: HTTP 403\n${refusal.body}`);
     }
     if (!res.ok) {
       throw new Error(`GET content-cache ${cacheKey}: HTTP ${res.status}\n${await res.text()}`);
@@ -1358,7 +1397,10 @@ const GITHUB_PAT_STATUS_KEY = 'githubPatStatus';
 export class PlatformGithubPat implements GithubPatManager {
   async status(): Promise<PatManagerStatus> {
     const res = await fetchWithTimeout(kvUrl(GITHUB_PAT_STATUS_KEY));
-    if (res.status === 404 || res.status === 403) {
+    // Only a 404 means "no PAT". githubPatStatus is always written plain, so
+    // EVERY 403 - the encrypted-value one included - is a refused read and
+    // falls through to the throw below (DBT-145).
+    if (res.status === 404) {
       return { hasPat: false };
     }
     if (!res.ok) {
@@ -1778,8 +1820,9 @@ export interface CloudPorts {
   graph: GraphDirectory;
   /**
    * Plain JSON documents in KV with a three-way read - absent, value, or
-   * unknown (AZR-18). Unlike secrets/contentCache, a 403 here is unknown, never
-   * absent; see platform/kv-document-store.ts.
+   * unknown (AZR-18). A 403 here is unknown, never absent - even the
+   * encrypted-value 403 that secrets/contentCache read as null; see
+   * platform/kv-document-store.ts.
    */
   kvDocuments: KvDocumentStore;
   /**

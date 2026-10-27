@@ -253,7 +253,9 @@ Preview proves a GA version.
 
 **An onboarding selection can no longer be lost to a failed read.** That holds
 on this screen only. Every other KV consumer still reads a 403 as absent, until
-the bug card lands.
+the bug card lands. (DBT-145 landed: `PlatformSecretsStore.get` and
+`KvContentCache.get` now read only the encrypted-value 403 as absent and reject
+any other; `PlatformGithubPat.status` rejects every 403.)
 
 **A legacy deployment blocks this one.** A tenant that ran the PowerShell
 script gets `already-exists` (or `present-differs`) instead of a second export

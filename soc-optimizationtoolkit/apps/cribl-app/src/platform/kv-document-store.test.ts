@@ -4,7 +4,8 @@
  * answers to the port's three-way read, and the shape of the write.
  *
  * The 403 pin is the one this adapter exists for. The two older KV adapters
- * answer `res.status === 404 || res.status === 403` with "absent"; copying that
+ * answered `res.status === 404 || res.status === 403` with "absent" until
+ * DBT-145, and still read the encrypted-value 403 as absent; copying either
  * branch here would compile, pass every other pin, and turn a refused read of
  * the operator's saved selection into the defaults the next Save writes over
  * it.

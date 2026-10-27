@@ -3,13 +3,14 @@
  * read (AZR-18). The cloud shell binds it over the app-scoped KV store.
  *
  * WHY A NEW PORT AND NOT SecretsStore OR ContentCache. Both existing KV
- * adapters fold a 403 into "absent" (null). For a secret that is right - an
- * encrypted entry is write-only and answers 403 by design. For a document the
- * operator edits it is a data-loss path: a read that FAILED decodes as "no
- * document", the screen shows the defaults, and the next Save replaces the
- * operator's real selection with them (claude-kit standards/cribl-kv-store.md,
- * "A failed read is not a first run"). This port makes the difference a type,
- * so a caller cannot forget it:
+ * adapters fold the encrypted-value 403 into "absent" (null), and since
+ * DBT-145 reject any other 403. For a secret that is right - an encrypted
+ * entry is write-only and answers 403 by design. For a document the operator
+ * edits, a null-or-reject read is still a data-loss path: one forgotten catch
+ * and a read that FAILED decodes as "no document", the screen shows the
+ * defaults, and the next Save replaces the operator's real selection with them
+ * (claude-kit standards/cribl-kv-store.md, "A failed read is not a first
+ * run"). This port makes the difference a type, so a caller cannot forget it:
  *
  *   absent   404, an empty body, or a body that is not JSON. Nothing of ours is
  *            there to lose - start from defaults, and Save may overwrite it.
