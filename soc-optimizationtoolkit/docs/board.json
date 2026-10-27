@@ -1925,6 +1925,20 @@
       "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet."
     },
     {
+      "id": "DBT-157",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "AZR-34's connection-string.ts was never committed: .gitignore *connection-string* dropped it",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "none",
+      "verified": "pins",
+      "detail": "FOUND 2026-10-27 by the DBT-145 implementer: at ad8a874 the branch imports domain/cribl-onboarding-source/connection-string.ts (via its index.ts), but the file and its test were not in git. The repo-root .gitignore has unanchored secret-file name patterns (*api-key*, *endpoint*, *connection-string*), and `git add` of an explicit path list skips ignored files and still exits 0, so the commit looked complete. Every gate passed only because the build worktree still had the file on disk; a clean checkout could not load @soc/core.\n\nFIX: the two files were restored from the build worktree, and .gitignore re-includes .ts/.tsx under soc-optimizationtoolkit/{packages,apps}/*/src right after those patterns, so a secret-file name pattern can no longer drop toolkit source. Verified by git check-ignore and the file's own tests plus typecheck on the restored tree."
+    },
+    {
       "id": "AZR-22",
       "epic": "AZR",
       "feature": "AZR-F9",

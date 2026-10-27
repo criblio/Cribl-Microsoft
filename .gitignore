@@ -246,6 +246,12 @@ ConsoleHost_history.txt
 *api-key*
 *endpoint*
 *connection-string*
+# These name patterns are for secret FILES. They must never drop toolkit source:
+# connection-string.ts was silently left out of a commit by the line above (DBT-157).
+!/soc-optimizationtoolkit/packages/*/src/**/*.ts
+!/soc-optimizationtoolkit/packages/*/src/**/*.tsx
+!/soc-optimizationtoolkit/apps/*/src/**/*.ts
+!/soc-optimizationtoolkit/apps/*/src/**/*.tsx
 
 # Personal notes and scratch files
 notes.txt

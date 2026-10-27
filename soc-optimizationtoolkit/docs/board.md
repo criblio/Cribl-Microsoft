@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**71 in the backlog, 23 in progress, 47 done.**
+**71 in the backlog, 23 in progress, 48 done.**
 
 ## By menu item
 
@@ -36,7 +36,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 29 | 2 | 8 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 11 | 10 | 4 |
+| Cross-cutting | 11 | 11 | 4 |
 
 Open work totals 94.
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 48% (35/73)
+### `DBT` Quality and technical debt _(enabler)_ - 49% (36/74)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 17/42 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 18/43 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -1950,7 +1950,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (47)
+## Done (48)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3771,3 +3771,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   panel uses the hook to show the audit's age, and that a cached audit is
   reused across views - the one-slot cache cannot do that. Fixed in the HON-6
   branch (comment only).
+
+- **DBT-157** AZR-34's connection-string.ts was never committed: .gitignore *connection-string* dropped it
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-27 by the DBT-145 implementer: at ad8a874 the branch imports
+  domain/cribl-onboarding-source/connection-string.ts (via its index.ts), but
+  the file and its test were not in git. The repo-root .gitignore has
+  unanchored secret-file name patterns (*api-key*, *endpoint*,
+  *connection-string*), and `git add` of an explicit path list skips ignored
+  files and still exits 0, so the commit looked complete. Every gate passed
+  only because the build worktree still had the file on disk; a clean checkout
+  could not load @soc/core. FIX: the two files were restored from the build
+  worktree, and .gitignore re-includes .ts/.tsx under
+  soc-optimizationtoolkit/{packages,apps}/*/src right after those patterns, so
+  a secret-file name pattern can no longer drop toolkit source. Verified by
+  git check-ignore and the file's own tests plus typecheck on the restored
+  tree.
