@@ -1,13 +1,16 @@
 # ADR 0006: Recognise our policy assignments by a reserved metadata key, not by createdBy
 
-Date: 2026-10-26
-Status: Proposed - open until the owner answers the ownership-marker decision
-        on AZR-19 in `docs/board.json`. Nothing the toolkit writes carries the
-        key yet, so adopting it changes no deployed assignment.
-Last-confirmed: 2026-10-26
-Invalidates: none while Proposed. If Accepted, it falsifies the "OURS =
-        metadata.createdBy" default recorded on AZR-19, and that card's detail
-        must say so.
+Date: 2026-10-26 (proposed); 2026-10-27 (accepted)
+Status: Accepted - 2026-10-27. The owner answered the ownership-marker
+        decision on AZR-19 with the recommended key, `criblSocToolkit`.
+        No toolkit release writes policy yet, so accepting it changes no
+        deployed assignment; the How-to steps tell an operator who creates
+        an assignment by hand to set it (see Consequences).
+Invalidates: backlog.md
+        It falsifies the "OURS = metadata.createdBy" default first recorded
+        on AZR-19. backlog.md section 6a-i already carries the correction and
+        now records the key as decided; the AZR-19 card detail in
+        `docs/board.json` must say the same.
 
 ## Context
 
@@ -37,15 +40,16 @@ calls pass no `-Metadata`:
 So the legacy assignments can only be recognised by their SHAPE: name, scope
 and definition.
 
-## Decision (proposed)
+## Decision
 
 1. **A reserved key for everything the toolkit writes from now on:**
    `metadata.criblSocToolkit = { version }`. The constant is
    `TOOLKIT_MARKER_KEY` in
    `packages/core/src/domain/logging-map/ownership.ts`. Any future writer of
    policy assignments must set it, including AZR-4 and anything else that
-   deploys policy. Phase 1 only reads it; no assignment in any tenant carries it
-   yet.
+   deploys policy. Phase 1 only reads it. An assignment an operator creates
+   by hand from the How-to steps carries it with `version: "manual"`, which
+   says no toolkit release wrote it.
 
 2. **The legacy writer is recognised by ranked evidence, never a boolean.** The
    evidence is shown to the operator in this order, strongest first:
@@ -103,15 +107,21 @@ and definition.
 
 ## Consequences
 
-- AZR-19 carries a `decision` block for the marker key (`criblSocToolkit`
-  recommended, with alternatives) and is moved from `settled` to `undecided`,
-  because `check-board` fails a settled card whose decision is unanswered
-  (`apps/cribl-app/scripts/board.mjs:234-238`).
-- Phase 1 behaves the same whichever key is chosen, because no assignment
-  carries one yet. The choice only binds the FIRST writer (AZR-4). That is
-  why it can stay open while the map ships.
-- If the owner picks a different key, the change is one constant and its pin
-  in `ownership.ts` / `ownership.test.ts`, plus this ADR.
+- The marker key was a `decision` block on AZR-19 (`criblSocToolkit`
+  recommended, with alternatives). The owner chose `criblSocToolkit` on
+  2026-10-27, so the decision is answered and this ADR is Accepted.
+- The key binds every writer: AZR-4 when it deploys policy, and the operator
+  who follows the How-to steps by hand. The Audit, community and Activity Log
+  assignment steps (`packages/core/src/domain/onboarding-howto-steps/policy-steps.ts`
+  and `entra-activity-steps.ts`) pass `--metadata @marker-metadata.json` to
+  `az policy assignment create`, show the metadata in their values table, and
+  tell a portal user to add it with `az policy assignment update` because the
+  portal's assignment form has no metadata field. `steps.test.ts` pins that
+  every assignment-creating step does so and that its metadata makes the
+  recogniser answer `toolkit-marker`.
+- Changing the key later is one constant and its pin in `ownership.ts` /
+  `ownership.test.ts`, plus this ADR, and it orphans every assignment already
+  marked with the old key.
 - Rejected: `metadata.createdBy` (see Context); a tag (a policy
   assignment has no tags property); a description or display-name prefix (free
   text that any editor in the portal rewrites).

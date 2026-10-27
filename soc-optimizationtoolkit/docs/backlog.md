@@ -682,8 +682,10 @@ byte-for-byte copy in `packages/core/src/domain/logging-map/legacy/`.
 **Ownership: `createdBy` is not usable.** Azure stamps `metadata.createdBy` on
 every assignment. The card's default ("ours = createdBy set by the toolkit") is
 replaced by a reserved key plus ranked legacy evidence; see
-`docs/adr/0006-policy-assignment-ownership-marker.md` (Proposed). The key is an
-open decision on AZR-19.
+`docs/adr/0006-policy-assignment-ownership-marker.md` (Accepted 2026-10-27).
+The owner chose the key `criblSocToolkit` (`metadata.criblSocToolkit =
+{ version }`) on AZR-19, and the How-to assignment steps tell an operator who
+creates an assignment by hand to set it, with `version: "manual"`.
 
 **Legacy defects deliberately NOT ported.** Each one turns a failed or
 truncated read into an answer that looks real:
