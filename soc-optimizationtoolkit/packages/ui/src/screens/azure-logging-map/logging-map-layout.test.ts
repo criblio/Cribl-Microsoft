@@ -6,11 +6,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { MAX_ZOOM, MIN_LEGIBLE_ZOOM, MIN_ZOOM } from "../../components/diagram/geometry";
 import {
   LABEL_MAX_LINES,
-  MAX_ZOOM,
-  MIN_LEGIBLE_ZOOM,
-  MIN_ZOOM,
   NODE_W,
   applyPositions,
   clampZoom,

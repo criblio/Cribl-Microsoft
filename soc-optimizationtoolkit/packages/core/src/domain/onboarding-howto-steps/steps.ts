@@ -33,7 +33,6 @@
 
 import type { CheckKind } from "../onboarding-howto/check-kinds";
 import type { PlanValueKey, PlanValues } from "../onboarding-howto/plan-values";
-import { isPlanValueKey } from "../onboarding-howto/plan-values";
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { onboardingSource } from "../onboarding-howto/sources";
 import { BLOB_STEPS } from "./blob-steps";
@@ -169,7 +168,3 @@ export function stepsForSelection(
   });
 }
 
-/** Whether every placeholder in the step names a plan value. */
-export function placeholdersArePlanValues(step: HowToStep): boolean {
-  return templatePlaceholders(step).every(isPlanValueKey);
-}

@@ -32,17 +32,16 @@ import {
   fitLine,
   wrapText,
   type Point,
-  type ViewTransform,
-  type Viewport,
-  type Wrapped,
 } from "../../components/diagram/geometry";
 import type { DiagramGraph } from "./logging-map-state";
 
 /*
  * The pure geometry (fitLine, wrapText, edgePath, clampZoom, fit and their
  * constants and types) moved to components/diagram/geometry.ts so every
- * hand-SVG diagram shares it (AZR-30). Re-exported here unchanged, so the
- * canvas and the AZR-19 pins import from this module as before.
+ * hand-SVG diagram shares it (AZR-30). The functions and constants are
+ * re-exported here unchanged, so the canvas imports from this module as
+ * before; the types are not, since nothing imported them from here - take
+ * them from components/diagram/geometry.
  */
 export {
   CARD_LINE_CHARS,
@@ -57,7 +56,6 @@ export {
   fitLine,
   wrapText,
 };
-export type { Point, ViewTransform, Viewport, Wrapped };
 
 export const NODE_W = 200;
 const PAD_Y = 8;
