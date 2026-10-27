@@ -76,7 +76,14 @@ export function flowQuery(kind: FlowQueryKind): MetricsQuery {
   };
 }
 
-/** The literal body sent for a kind. */
+/**
+ * The literal body sent for a kind. A PIN SEAM: no production code calls it
+ * (the read-source-flow use case passes flowQuery to the kit's queryMetrics,
+ * which builds the same body). flow-query.test.ts holds it to a literal, and
+ * the read-source-flow pins compare the body that reached the port against it,
+ * so that literal is written once. Kept here rather than in a test helper
+ * because both test folders need it and it must track flowQuery exactly.
+ */
 export function flowQueryBody(kind: FlowQueryKind): Record<string, unknown> {
   return buildMetricsQueryBody(flowQuery(kind));
 }

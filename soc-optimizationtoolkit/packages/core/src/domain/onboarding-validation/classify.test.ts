@@ -430,6 +430,116 @@ describe("classifyArrival: a measured zero is not unknown", () => {
   });
 });
 
+describe("policy-remediation: outcomes", () => {
+  const COMMUNITY = checkExpectationsFor("communityPolicyInitiative", FULL);
+  const remediation = (assignment: string, provisioningState: string) => ({
+    properties: {
+      policyAssignmentId: `/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyAssignments/${assignment}`,
+      provisioningState,
+    },
+  });
+  const check = (ex: CheckExpectations, rows: unknown[]) =>
+    classifyCheck("policy-remediation", FULL, [readRows(rows)], ex);
+
+  it("a Succeeded remediation of the exact assignment name is as-expected", () => {
+    expect(AUDIT.policy?.assignmentName).toBe("Cribl-AU-Central");
+    expect(check(AUDIT, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({ kind: "as-expected" });
+    // Matched case-insensitively, on the id's last segment.
+    expect(check(AUDIT, [remediation("cribl-au-central", "succeeded")])).toEqual({ kind: "as-expected" });
+    // Today's instructed name is also a family member, so the case above
+    // cannot tell the exact-name match from the family match. An instructed
+    // name outside the family can: only the exact-name match accepts it.
+    const outside: CheckExpectations = {
+      ...AUDIT,
+      policy: { ...AUDIT.policy!, assignmentName: "Contoso-Diag-Policy" },
+    };
+    expect(check(outside, [remediation("contoso-diag-policy", "Succeeded")])).toEqual({ kind: "as-expected" });
+  });
+
+  it("with no instructed name, a Succeeded remediation in the legacy family is as-expected", () => {
+    expect(COMMUNITY.policy?.assignmentName).toBeNull();
+    expect(check(COMMUNITY, [remediation("Cribl-Diag-EH-mg-1", "Succeeded")])).toEqual({ kind: "as-expected" });
+  });
+
+  it("no remediation of a matching assignment is absent", () => {
+    expect(check(AUDIT, [])).toEqual({ kind: "absent" });
+    expect(check(AUDIT, [remediation("SomeoneElse", "Succeeded")])).toEqual({ kind: "absent" });
+    // The other initiative's name does not match the community family.
+    expect(check(COMMUNITY, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({ kind: "absent" });
+    // The bare family prefix is not a member: the family needs a suffix.
+    expect(check(COMMUNITY, [remediation("Cribl-Diag-EH-", "Succeeded")])).toEqual({ kind: "absent" });
+  });
+
+  it("matching remediations none of which Succeeded differ on every provisioningState, joined", () => {
+    expect(
+      check(AUDIT, [
+        remediation("Cribl-AU-Central", "Failed"),
+        remediation("SomeoneElse", "Succeeded"),
+        remediation("Cribl-AU-Central", "Running"),
+      ]),
+    ).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed, Running" }],
+    });
+    // One Succeeded among them is enough.
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Central", "Failed"), remediation("Cribl-AU-Central", "Succeeded")]),
+    ).toEqual({ kind: "as-expected" });
+    // A missing state reads as "(none)", never as Succeeded.
+    expect(check(AUDIT, [{ properties: { policyAssignmentId: "/x/policyAssignments/Cribl-AU-Central" } }])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "(none)" }],
+    });
+  });
+});
+
+describe("eventgrid-topic: outcomes", () => {
+  const ACCOUNT_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
+  const topic = (source: string, topicType = "Microsoft.Storage.StorageAccounts") => ({
+    name: "flowlogsa-events",
+    properties: { source, topicType },
+  });
+
+  it("a system topic on the plan's storage account is as-expected", () => {
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(ACCOUNT_ID))])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(ACCOUNT_ID.toUpperCase()))])).toEqual({
+      kind: "as-expected",
+    });
+  });
+
+  it("a topic on another source differs on source; a non-storage topicType differs too", () => {
+    const other = ACCOUNT_ID.replace("flowlogsa", "othersa");
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(other))])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "source", expected: ACCOUNT_ID, actual: other }],
+    });
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic("", "Microsoft.Resources.Subscriptions"))])).toEqual({
+      kind: "present-differs",
+      diffs: [
+        { field: "source", expected: ACCOUNT_ID, actual: "(none)" },
+        {
+          field: "topicType",
+          expected: "Microsoft.Storage.StorageAccounts",
+          actual: "Microsoft.Resources.Subscriptions",
+        },
+      ],
+    });
+  });
+
+  it("a 404 for the topic is absent", () => {
+    const notFound = readRefused<unknown>(refusal({ status: 404, code: "ResourceNotFound" }));
+    expect(classifyCheck("eventgrid-topic", FULL, [notFound])).toEqual({ kind: "absent" });
+  });
+
+  it("a denied or failed read is unknown, never absent", () => {
+    const v = classifyCheck("eventgrid-topic", FULL, [denied]);
+    expect(v.kind === "unknown" && v.reason).toBe("denied");
+    const serverError = readRefused<unknown>(refusal({ status: 500, code: "InternalServerError" }));
+    const failed = classifyCheck("eventgrid-topic", FULL, [serverError]);
+    expect(failed.kind === "unknown" && failed.reason).toBe("failed");
+  });
+});
+
 describe("barrels reach the C3 additions", () => {
   it("resolves the new names through each domain index", () => {
     expect(ruleCanListen(["Listen"])).toBe(true);

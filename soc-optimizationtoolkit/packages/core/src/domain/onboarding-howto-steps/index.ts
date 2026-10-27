@@ -9,7 +9,6 @@ export {
   PLACEHOLDER,
   SUPERSEDED_STEPS,
   howToStep,
-  placeholdersArePlanValues,
   stepsFor,
   stepsForSelection,
   templatePlaceholders,

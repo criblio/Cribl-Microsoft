@@ -3,8 +3,9 @@
  * in this package shares (AZR-30). No DOM, no React, no clock.
  *
  * Lifted UNCHANGED from the Azure Logging Map (screens/azure-logging-map/
- * logging-map-layout.ts, which re-exports these names so its callers and pins
- * are untouched), itself ported from the claude-kit cribl-dataflow-diagram
+ * logging-map-layout.ts, which re-exports the functions and constants so its
+ * canvas is untouched; the types are taken from here), itself ported from the
+ * claude-kit cribl-dataflow-diagram
  * reference `layout.ts`. One addition: {@link edgePathLR}, the left-to-right
  * edge a dataflow (emitter -> transport -> source -> route -> destination)
  * draws, where the logging map's tree draws top to bottom.
