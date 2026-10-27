@@ -50,4 +50,10 @@ describe("capabilitiesForRoute", () => {
   it("returns the listed capabilities for a constrained route", () => {
     expect(capabilitiesForRoute("labs")).toEqual(["arm.deploy"]);
   });
+
+  it("gates Event Hub discovery on the Resource Graph read it actually makes (CAP-1)", () => {
+    // Was [] while no capability covered Resource Graph. Exactly this one: a
+    // workspace or DCR read here would misreport what the screen needs.
+    expect(capabilitiesForRoute("eventhub-discovery")).toEqual(["resourcegraph.read"]);
+  });
 });

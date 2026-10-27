@@ -25,8 +25,9 @@
  *      check for something short of essential (Sentinel content install, the
  *      DCR ingestion grant) cannot report "not ready" to an operator who can
  *      deploy perfectly well. See domain/azure-permissions PermissionNecessity.
- *   2. LIVE EXISTENCE PROBES - no-op GETs (workspace GET, tables list, DCR
- *      list). PROBES ARE TRUTH about what is actually reachable/readable right
+ *   2. LIVE EXISTENCE PROBES - no-op reads (workspace GET, tables list, DCR
+ *      list, and a one-row Resource Graph query - a POST, but query-only).
+ *      PROBES ARE TRUTH about what is actually reachable/readable right
  *      now. They decorate the report but never, on their own, flip
  *      deploy-readiness: a Reader passes every probe yet must still read as NOT
  *      deployable, because read does not imply write (the key pin).
@@ -70,6 +71,7 @@ import type {
   SetupPath,
 } from "../../domain/azure-permissions";
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
+import { resourceGraphRequest } from "../../domain/eventhub-discovery";
 import { WORKSPACE_API_VERSION } from "../azure-discovery";
 import { httpErrorText, is2xx, prop } from "../arm-http";
 
@@ -84,6 +86,14 @@ import { httpErrorText, is2xx, prop } from "../arm-http";
  * roleAssignments PUT in assign-dcr-role pins).
  */
 export const RBAC_PERMISSIONS_API_VERSION = "2022-04-01";
+
+/**
+ * The Resource Graph probe's query (CAP-1): one row, one column, any type. It
+ * asks only whether the query endpoint answers this identity for the target
+ * subscription - the smallest read that exercises the same POST Event Hub
+ * discovery makes. Resource Graph is query-only, so the probe cannot write.
+ */
+export const RESOURCE_GRAPH_PROBE_QUERY = "Resources | project id | limit 1";
 
 // ---------------------------------------------------------------------------
 // Setup-path -> scope selection (per-SetupPath scope, checked by test)
@@ -553,6 +563,14 @@ export async function runAzurePreflight(
       },
     });
   }
+  // CAP-1. Subscription-wide on every path, so the default (resource-group)
+  // audit measures it too. Issued LAST so it never shifts the order of the
+  // probes above.
+  probeRequests.push({
+    name: "resource-graph-query",
+    label: "Query Azure Resource Graph",
+    request: resourceGraphRequest(target.subscriptionId, RESOURCE_GRAPH_PROBE_QUERY),
+  });
   const probes = await Promise.all(
     probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request)),
   );

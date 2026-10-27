@@ -88,13 +88,17 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
  * Azure existence-probe name -> the capability it establishes.
  *
  * Every entry is a READ capability, and that is structural rather than
- * incidental: the probes are no-op GETs, so a probe can only ever prove a read.
+ * incidental: the probes are no-op reads (GETs, and one Resource Graph query),
+ * so a probe can only ever prove a read.
  */
 export const AZURE_PROBE_CAPABILITIES: Readonly<Record<string, AzureCapability>> =
   Object.freeze({
     "dcr-list": "dcr.read",
     "workspace-get": "workspace.read",
     "tables-list": "table.read",
+    // CAP-1. A POST, but a query: Resource Graph has no write, so the probe
+    // still proves only a read.
+    "resource-graph-query": "resourcegraph.read",
   });
 
 /** Cribl probe key -> capability. One probe per Cribl capability, exactly. */

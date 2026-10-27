@@ -599,6 +599,36 @@ describe("over a real preflight report", () => {
     expect(verdictFor("defender-automation.write", set, connected)).toBe("unknown");
   });
 
+  it("measures resourcegraph.read from the query probe on the default path", async () => {
+    // CAP-1. existing-rg is what the audit runs by default, and its RBAC checks
+    // say nothing about Resource Graph, so the probe is the whole measurement.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, OK, OK, OK);
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBe("granted");
+  });
+
+  it("a 403 on the Resource Graph query denies only resourcegraph.read", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, FORBIDDEN);
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBe("denied");
+    expect(set.verdicts["dcr.read"]).toBe("granted");
+    expect(set.verdicts["dcr.write"]).toBe("granted");
+  });
+
+  it("a query that fails for another reason leaves resourcegraph.read unmeasured", async () => {
+    // A 400 (bad query, unregistered provider) is not a permission answer.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, { status: 400, body: {} });
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBeUndefined();
+    expect(verdictFor("resourcegraph.read", set, connected)).toBe("unknown");
+  });
+
   it("a 403 on the DCR list denies only the read it probed", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(permsResponse(OWNER), FORBIDDEN, OK, OK);

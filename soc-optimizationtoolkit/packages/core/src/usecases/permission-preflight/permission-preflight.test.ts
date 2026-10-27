@@ -28,6 +28,7 @@ import {
   RBAC_PERMISSIONS_API_VERSION,
 } from "./index";
 import type { PermissionPreflightInput } from "./index";
+import { RESOURCE_GRAPH_PROBE_QUERY } from "./permission-preflight";
 import { REQUIRED_ACTIONS } from "../../domain/azure-permissions";
 import type { PermissionSet } from "../../domain/azure-permissions";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
@@ -126,9 +127,10 @@ describe("scope selection per SetupPath", () => {
 describe("Reader-only is not deployable (read does not imply write)", () => {
   it("passes every read probe yet yields hasRequiredAccess false", async () => {
     const azure = new FakeAzureManagement();
-    // perms(READER) + dcr-list + workspace-get + tables-list all succeed (reader
-    // can read everything) - the probes are all OK.
-    azure.respondWith(permsResponse(READER), OK, OK, OK);
+    // perms(READER) + dcr-list + workspace-get + tables-list + resource-graph
+    // query all succeed (reader can read everything) - the probes are all OK.
+    // The fifth OK joined with CAP-1's probe; the assertion is unchanged.
+    azure.respondWith(permsResponse(READER), OK, OK, OK, OK);
 
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
@@ -180,6 +182,62 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
       c.action.includes("roleAssignments/write"),
     );
     expect(roleAssign?.granted).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Resource Graph probe (CAP-1)
+// ---------------------------------------------------------------------------
+
+describe("Resource Graph probe", () => {
+  it("issues one read-only query, last, on a resource-group path", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, OK, OK, OK);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+
+    // perms + dcr-list + workspace-get + tables-list + the query, in that order:
+    // appending keeps every earlier probe where scripted callers expect it.
+    expect(azure.calls).toHaveLength(5);
+    const query = azure.calls[4];
+    expect(query.method).toBe("POST");
+    expect(query.path).toBe("/providers/Microsoft.ResourceGraph/resources");
+    expect(query.body).toEqual({
+      subscriptions: [SUB],
+      query: RESOURCE_GRAPH_PROBE_QUERY,
+    });
+    // The other probes stay GETs. The query is the one POST, and Resource Graph
+    // has no write to reach.
+    expect(azure.calls.slice(1, 4).map((c) => c.method)).toEqual(["GET", "GET", "GET"]);
+    const probe = result.probes.find((p) => p.name === "resource-graph-query");
+    expect(probe?.status).toBe("ok");
+  });
+
+  it("runs on a subscription path too, with no resource group configured", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, { status: 403, body: {} });
+    const result = await runAzurePreflight(azure, "existing-subscription", {
+      subscriptionId: SUB,
+      resourceGroup: "",
+      workspaceName: "",
+    });
+    expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      `GET /subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`,
+      `GET /subscriptions/${SUB}/providers/Microsoft.Insights/dataCollectionRules`,
+      "POST /providers/Microsoft.ResourceGraph/resources",
+    ]);
+    expect(result.probes.find((p) => p.name === "resource-graph-query")?.status).toBe("denied");
+  });
+
+  it("never decides deploy readiness", async () => {
+    // A refused query is a read fact; Owner is still deployable.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, { status: 403, body: {} });
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(result.hasRequiredAccess).toBe(true);
+  });
+
+  it("asks for one row and nothing that could be large", () => {
+    expect(RESOURCE_GRAPH_PROBE_QUERY).toMatch(/\| limit 1$/);
   });
 });
 
@@ -321,9 +379,11 @@ describe("partial render", () => {
 
   it("renders the Azure half when the RBAC permissions fetch itself fails", async () => {
     const azure = new FakeAzureManagement();
-    // perms 403 (denied), then the 3 read probes still run and can be denied too.
+    // perms 403 (denied), then the 4 read probes still run and can be denied
+    // too (the fourth, the Resource Graph query, joined with CAP-1).
     azure.respondWith(
       { status: 403, body: { error: { code: "AuthorizationFailed" } } },
+      { status: 403, body: {} },
       { status: 403, body: {} },
       { status: 403, body: {} },
       { status: 403, body: {} },

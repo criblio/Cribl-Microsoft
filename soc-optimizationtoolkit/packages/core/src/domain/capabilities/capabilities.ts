@@ -25,6 +25,12 @@
  * continuous export: reading which plans are on, listing the subscription's
  * exports, and creating one. They are measured from the subscription-scope
  * RBAC evaluation only - no probe of them exists, and none may grant the write.
+ *
+ * `resourcegraph.read` (CAP-1) is the Azure Resource Graph query that Event Hub
+ * discovery and the namespace picker read through. Measured by a probe only: a
+ * one-row query on every audited path. GRANTED MEANS THE QUERY IS ANSWERED, not
+ * that every resource is visible - Resource Graph filters rows by what the
+ * identity can read, so an empty result is still not a verified none.
  */
 export type AzureCapability =
   | "dcr.write"
@@ -36,7 +42,8 @@ export type AzureCapability =
   | "role.assign"
   | "defender-plans.read"
   | "defender-automation.read"
-  | "defender-automation.write";
+  | "defender-automation.write"
+  | "resourcegraph.read";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -58,6 +65,7 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "defender-plans.read",
   "defender-automation.read",
   "defender-automation.write",
+  "resourcegraph.read",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([
