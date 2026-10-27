@@ -67,7 +67,7 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'DELETE', path: '/m/:gid/packs/:id', caller: `${PACK_INSTALL}.install (deletePack)` },
   { method: 'GET', path: '/m/:gid/routes', caller: `${WIRE}; ${LIVE_ARCH}; ${PREFLIGHT}; read-source-flow/read-onboarding-cribl-side.ts` },
   { method: 'PUT', path: '/m/:gid/routes', caller: WIRE },
-  { method: 'POST', path: '/m/:gid/system/secrets', caller: `${WIRING_UI}; ${FLOWLOG}; ${CREATE_SOURCE} apply-cribl-source.ts` },
+  { method: 'POST', path: '/m/:gid/system/secrets', caller: `${WIRING_UI}; ${FLOWLOG}; ${CREATE_SOURCE} apply-cribl-source.ts; ${ONBOARD} (destination client secret, create-only, DBT-155)` },
   { method: 'PATCH', path: '/m/:gid/system/secrets/:id', caller: `${WIRING_UI} (on 409); ${FLOWLOG} (on 409/400)` },
   { method: 'GET', path: '/m/:gid/system/secrets/:id', caller: `${CREATE_SOURCE} plan-cribl-source.ts` },
   { method: 'POST', path: '/m/:gid/system/capture', caller: 'core usecases/capture-samples/capture-samples.ts' },

@@ -352,10 +352,11 @@ export function OnboardTableScreen({
           />
           <span className="field-hint">
             Transient: this platform&apos;s encrypted storage is write-only, so
-            the app cannot reuse a stored secret here. Provide it to bake it
-            into the destination for this run only, or leave blank to create
-            the destination with the {SENTINEL_SECRET_PLACEHOLDER} placeholder
-            and paste the real secret in Cribl&apos;s UI.
+            the app cannot reuse a stored secret here. Provide it to store it
+            once as a Cribl secret the destination references (never in the
+            destination itself), or leave blank to create the destination with
+            the {SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real
+            secret in Cribl&apos;s UI.
           </span>
         </label>
       </div>

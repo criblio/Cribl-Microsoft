@@ -64,10 +64,13 @@ function baseInput(overrides: Partial<OnboardTableInput> = {}): OnboardTableInpu
   };
 }
 
-function scriptHappyPath(ports: {
-  azure: FakeAzureManagement;
-  cribl: FakeCriblClient;
-}): void {
+function scriptHappyPath(
+  ports: {
+    azure: FakeAzureManagement;
+    cribl: FakeCriblClient;
+  },
+  withSecret = false,
+): void {
   ports.azure.respondWith(
     WORKSPACE_RESPONSE,
     TABLE_SCHEMA_RESPONSE,
@@ -75,6 +78,8 @@ function scriptHappyPath(ports: {
     { status: 200, body: DCR_SUCCEEDED_BODY },
     { status: 200, body: DCR_SUCCEEDED_BODY },
   );
+  // DBT-155: a supplied client secret is first created as a Cribl secret.
+  if (withSecret) ports.cribl.respondWith({ status: 200, body: {} });
   ports.cribl.respondWith(
     { status: 201, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
     { status: 200, body: { items: [{ commit: "abc123" }] } },
@@ -86,7 +91,7 @@ function scriptHappyPath(ports: {
 describe("onboardTable logging", () => {
   it("logs the job start, every step transition, and the final success, tagged with the job id", async () => {
     const ports = makePorts();
-    scriptHappyPath(ports);
+    scriptHappyPath(ports, true);
 
     const job = await onboardTable(ports, {
       ...baseInput(),
@@ -124,7 +129,7 @@ describe("onboardTable logging", () => {
 
   it("never logs the ingestion client secret value - only its redacted shape", async () => {
     const ports = makePorts();
-    scriptHappyPath(ports);
+    scriptHappyPath(ports, true);
 
     await onboardTable(ports, {
       ...baseInput(),

@@ -2785,7 +2785,7 @@ export function IntegrateScreen({
           <span className="field-hint">
             Optional; used for this run only.
             <InfoTip
-              text={`Transient: this platform's encrypted storage is write-only, so the app cannot reuse a stored secret here. Provide it to bake it into the destination for this run only, or leave blank to create the destination with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real secret in Cribl's UI.`}
+              text={`Transient: this platform's encrypted storage is write-only, so the app cannot reuse a stored secret here. Provide it to store it once as a Cribl secret the destination references (never in the destination itself), or leave blank to create the destination with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real secret in Cribl's UI.`}
             />
           </span>
         </label>
