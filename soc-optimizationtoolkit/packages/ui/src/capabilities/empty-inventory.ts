@@ -221,7 +221,9 @@ export function unauditedScopeInventoryMessage(
  * The honest line for an empty inventory NO CAPABILITY COVERS.
  *
  * The settled taxonomy has no capability for listing subscriptions, resource
- * groups, Resource Graph results, or Cribl worker groups, and the standing rule
+ * groups, or Cribl worker groups, and none that makes a Resource Graph result
+ * complete (`resourcegraph.read` proves the query returns rows; Resource Graph
+ * still filters them by what the identity can read), and the standing rule
  * is not to quietly reuse a neighbouring one - mapping a subscription list onto
  * `workspace.read` would misreport what was actually checked.
  *

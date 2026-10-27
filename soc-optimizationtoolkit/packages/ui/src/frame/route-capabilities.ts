@@ -8,8 +8,8 @@
  *
  * This is a faithful TRANSLATION of the old coarse requirements, not a redesign:
  * `none` becomes `[]`, and `azure`/`cribl`/`both` become the specific capability
- * that route's primary purpose actually exercises. Two entries deliberately
- * depart from the old value, and both are noted below.
+ * that route's primary purpose actually exercises. `preflight` deliberately
+ * departs from the old value, as noted below.
  *
  * Pure data: no IO, no React.
  */
@@ -51,23 +51,26 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // says "no access" would find the one screen that could correct that finding
     // flagged as unavailable. It must always read as available.
     preflight: [],
-    // DEPARTS FROM THE OLD 'azure', for a different and less satisfying reason:
-    // Event Hub discovery reads through Resource Graph, and the settled
-    // 11-capability taxonomy has nothing covering that. Mapping it onto a
-    // workspace or DCR read would MISREPORT what is being checked, so it is left
-    // unconstrained and the screen keeps reporting its own errors. Recorded in
-    // the backlog as a taxonomy gap rather than papered over here.
-    "eventhub-discovery": [],
+    // Event Hub discovery's primary read is the Resource Graph query. This was
+    // `[]` while the taxonomy had nothing covering Resource Graph (mapping it
+    // onto a workspace or DCR read would have MISREPORTED what was checked);
+    // CAP-1 added resourcegraph.read, measured by a one-row query probe on every
+    // audited path. The per-namespace hub GETs that follow are still not a
+    // capability, so the screen keeps reporting its own errors for those.
+    "eventhub-discovery": ["resourcegraph.read"],
     // EXPLICITLY EMPTY, not forgotten. Azure Native Source Onboarding needs
-    // three actions no capability in the taxonomy measures yet - reading
-    // Defender pricings, writing the security automation, and listing the
-    // Event Hub rule's keys. Mapping them onto arm.deploy or a workspace read
-    // would misreport what is checked, so the screen renders them itself as
-    // "needed, not yet measured". CAP-7 (under CAP-F1) adds the capabilities;
-    // this entry changes when it lands.
+    // Defender pricings read, the security automation read and write, and the
+    // Event Hub rule's listKeys. CAP-7a added the three Defender capabilities
+    // (defender-plans.read, defender-automation.read/.write), measured only by
+    // an existing-subscription audit; listKeys is still unmeasured (CAP-7b).
+    // The entry stays [] because the screen still renders both lists itself as
+    // "needed, not yet measured" and reads no verdict, and because the route
+    // is several sources: gating all of it on the Defender export would flag
+    // the Event Hub and Entra paths for an operator who never touches Defender.
+    // It changes together with that screen copy, under CAP-7.
     "azure-onboarding": [],
     "mapping-catalog": [],
-    // Same gap, same precedent as eventhub-discovery above. The logging map
+    // Same kind of gap eventhub-discovery had before CAP-1. The logging map
     // reads management groups, policy assignments, exemptions, definitions and
     // role assignments; Management Group Reader and policy / role read are not
     // in the capability taxonomy (core capabilities.ts), and borrowing a

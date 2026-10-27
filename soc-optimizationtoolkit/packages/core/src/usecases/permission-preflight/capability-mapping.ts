@@ -44,6 +44,11 @@ import type {
   CriblCapability,
 } from "../../domain/capabilities";
 import type { SetupPath } from "../../domain/azure-permissions";
+import {
+  DEFENDER_AUTOMATIONS_READ,
+  DEFENDER_AUTOMATIONS_WRITE,
+  DEFENDER_PRICINGS_READ,
+} from "../../domain/defender-export/defender-permissions";
 import type { AzurePreflight, CriblPreflight, PermissionReport } from "./permission-preflight";
 import { checkedAzureActions } from "./permission-preflight";
 
@@ -60,6 +65,11 @@ import { checkedAzureActions } from "./permission-preflight";
  * concerns with no capability in the settled taxonomy, and inventing one here
  * would widen a model the plan closed. An unmapped action is simply not a
  * capability signal - it is never an error.
+ *
+ * The three Defender keys (CAP-7a) are imported from the Defender domain, so
+ * the action this table maps is the action REQUIRED_ACTIONS checks by
+ * construction. They appear only on `existing-subscription`, so only an audit
+ * of that path records them; every other path leaves them unmeasured.
  */
 export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>> =
   Object.freeze({
@@ -69,19 +79,45 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
     "Microsoft.OperationalInsights/workspaces/read": "workspace.read",
     "Microsoft.Resources/deployments/write": "arm.deploy",
     "Microsoft.Authorization/roleAssignments/write": "role.assign",
+    [DEFENDER_PRICINGS_READ]: "defender-plans.read",
+    [DEFENDER_AUTOMATIONS_READ]: "defender-automation.read",
+    [DEFENDER_AUTOMATIONS_WRITE]: "defender-automation.write",
   });
+
+/**
+ * Actions whose resource lives BELOW the scope the preflight evaluates them at,
+ * so the evaluation can establish a grant but never a denial.
+ *
+ * The Defender continuous export is checked on `existing-subscription`, but the
+ * automation resource sits in a resource group the operator picks at deploy
+ * time (defender-automation defenderExportPath). A grant at the subscription is
+ * inherited by every group, so it is a real `granted`. Not granted at the
+ * subscription says nothing about a role on that group - the same reason CAP-7b
+ * keeps listKeys out - so it is recorded as nothing, and the domain resolves
+ * `unknown` rather than claiming a denial nobody measured.
+ *
+ * pricings/read and automations/read stay two-sided: the app reads both at the
+ * subscription itself, so the subscription evaluation is their real scope.
+ */
+export const GRANT_ONLY_AZURE_ACTIONS: ReadonlySet<string> = new Set([
+  DEFENDER_AUTOMATIONS_WRITE,
+]);
 
 /**
  * Azure existence-probe name -> the capability it establishes.
  *
  * Every entry is a READ capability, and that is structural rather than
- * incidental: the probes are no-op GETs, so a probe can only ever prove a read.
+ * incidental: the probes are no-op reads (GETs, and one Resource Graph query),
+ * so a probe can only ever prove a read.
  */
 export const AZURE_PROBE_CAPABILITIES: Readonly<Record<string, AzureCapability>> =
   Object.freeze({
     "dcr-list": "dcr.read",
     "workspace-get": "workspace.read",
     "tables-list": "table.read",
+    // CAP-1. A POST, but a query: Resource Graph has no write, so the probe
+    // still proves only a read.
+    "resource-graph-query": "resourcegraph.read",
   });
 
 /** Cribl probe key -> capability. One probe per Cribl capability, exactly. */
@@ -135,7 +171,9 @@ type Verdicts = Partial<Record<Capability, CapabilityVerdict>>;
  * granted:false checks (see rule 3 in the module doc), and those are not
  * measurements. When it was read, granted maps to `granted` and NOT granted maps
  * to `denied` - at that point it IS a measurement, which is the entire reason
- * the preflight prefers effective actions over role names.
+ * the preflight prefers effective actions over role names. The exception is
+ * {@link GRANT_ONLY_AZURE_ACTIONS}, evaluated above their resource's scope:
+ * there NOT granted is not a measurement, and nothing is recorded.
  */
 function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
   if (!preflight.permissionsFetched) {
@@ -143,8 +181,13 @@ function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
   }
   for (const check of preflight.checks) {
     const capability = AZURE_ACTION_CAPABILITIES[check.action];
-    if (capability !== undefined) {
-      into[capability] = check.granted ? "granted" : "denied";
+    if (capability === undefined) {
+      continue;
+    }
+    if (check.granted) {
+      into[capability] = "granted";
+    } else if (!GRANT_ONLY_AZURE_ACTIONS.has(check.action)) {
+      into[capability] = "denied";
     }
   }
 }

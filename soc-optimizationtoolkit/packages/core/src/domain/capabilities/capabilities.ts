@@ -18,7 +18,21 @@
  * timestamp is supplied by the caller - the shell owns the clock.
  */
 
-/** Azure-side capabilities, named for the ACTION rather than the role. */
+/**
+ * Azure-side capabilities, named for the ACTION rather than the role.
+ *
+ * The three `defender-*` entries (CAP-7a) cover the Defender for Cloud
+ * continuous export: reading which plans are on, listing the subscription's
+ * exports, and creating one. They are measured from the subscription-scope
+ * RBAC evaluation only - no probe of them exists, and none may grant the write.
+ *
+ * `resourcegraph.read` (CAP-1) is the Azure Resource Graph query that Event Hub
+ * discovery and the namespace picker read through. Measured by a probe only: a
+ * one-row query on every audited path. GRANTED MEANS THE QUERY RETURNED A ROW,
+ * not that every resource is visible - Resource Graph filters rows by what the
+ * identity can read rather than refusing, so an answer with no rows is left
+ * unmeasured, and an empty discovery result is still not a verified none.
+ */
 export type AzureCapability =
   | "dcr.write"
   | "dcr.read"
@@ -26,7 +40,11 @@ export type AzureCapability =
   | "table.read"
   | "workspace.read"
   | "arm.deploy"
-  | "role.assign";
+  | "role.assign"
+  | "defender-plans.read"
+  | "defender-automation.read"
+  | "defender-automation.write"
+  | "resourcegraph.read";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -45,6 +63,10 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "workspace.read",
   "arm.deploy",
   "role.assign",
+  "defender-plans.read",
+  "defender-automation.read",
+  "defender-automation.write",
+  "resourcegraph.read",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([
