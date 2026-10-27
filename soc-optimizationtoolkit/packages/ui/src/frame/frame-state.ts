@@ -53,9 +53,10 @@ export type LoadableSetup = boolean | null | "loading" | "unreadable";
 /**
  * Turn the settled boot read of the setup record into a {@link LoadableSetup}.
  * A fulfilled read parses (a missing or empty record is null, "not set up");
- * a REJECTED read is "unreadable", never null (DBT-145). A read that resolves
- * null because the adapter folded a 403 into "absent" still arrives as
- * fulfilled - that fold is the adapter's half of DBT-145, not decided here.
+ * a REJECTED read is "unreadable", never null (DBT-145). Which answers reject
+ * is the adapter's half of DBT-145, not decided here: PlatformSecretsStore
+ * rejects every 403 except the encrypted-value one, which resolves null and
+ * so arrives here as fulfilled.
  */
 export function loadableSetupFromRead(
   read: PromiseSettledResult<string | null>,
