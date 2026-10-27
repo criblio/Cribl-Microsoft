@@ -206,7 +206,18 @@ describe("how-to step catalog", () => {
       expect(step.cli, step.id).toContain(`--metadata @${MARKER_FILE}`);
       expect(step.portal.join("\n"), step.id).toContain(`metadata.${TOOLKIT_MARKER_KEY}`);
       expect(step.portal.join("\n"), step.id).toContain(`az policy assignment update --name`);
-      const row = renderStep(step, FULL).values.find((r) => r.label === MARKER_ROW_LABEL);
+      // The portal user's command must set the marker on THIS assignment, at
+      // the scope the step created it at: a sentence that merely names the key
+      // would satisfy the line above.
+      const rendered = renderStep(step, FULL);
+      const name = rendered.values.find((r) => r.label === "Assignment name")?.value;
+      const scope = /--scope (\S+)/.exec(rendered.cli)?.[1];
+      expect(name, step.id).toBeTruthy();
+      expect(scope, step.id).toBeTruthy();
+      expect(rendered.portal.join("\n"), step.id).toContain(
+        `az policy assignment update --name ${name} --scope ${scope} --metadata @${MARKER_FILE}`,
+      );
+      const row = rendered.values.find((r) => r.label === MARKER_ROW_LABEL);
       expect(row, step.id).toBeDefined();
       // Run the metadata through the recogniser on an assignment with NO legacy
       // shape, so only the marker can make it ours.

@@ -18,7 +18,7 @@ import { normaliseScopeId, type ReadLoggingMapResult } from "@soc/core";
 import { LoggingMapCanvas } from "./logging-map-canvas";
 import { NODE_W } from "./logging-map-layout";
 import { initialState, loggingMapReducer, type LoggingMapUiState } from "./logging-map-state";
-import { MG_ALPHA, SUB_A, SUB_C, fixtureResult } from "./logging-map-test-fixture";
+import { MG_ALPHA, MG_BETA, SUB_A, SUB_C, fixtureResult } from "./logging-map-test-fixture";
 
 afterEach(cleanup);
 
@@ -289,6 +289,58 @@ describe("LoggingMapCanvas - movable cards (AZR-20)", () => {
     expect(boxOf(container, SUB_A)).toEqual(start);
     expect(edgeDs(container)).toEqual(d0);
     expect(reset.disabled).toBe(true);
+  });
+
+  it("a new layout (expand, then collapse back) drops the moved positions: they were placed against the old tree", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    const reset = getByRole("button", { name: "Reset layout" }) as HTMLButtonElement;
+    const start = boxOf(container, SUB_A);
+    const d0 = edgeDs(container);
+    const card = cardEl(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 160, 150);
+    up(card, 160, 150);
+    expect(boxOf(container, SUB_A)).not.toEqual(start);
+
+    // Expand Beta through its count card (a fresh press, so the click is not
+    // the one that ended the drag), then collapse it again with its caret:
+    // the tree is back to the one SUB_A was computed in.
+    const count = container.querySelector(".lm-card-count") as SVGGElement;
+    press(count, 10, 10);
+    up(count, 10, 10);
+    fireEvent.click(count);
+    expect(container.querySelector(".lm-card-count")).toBeNull();
+    const caret = container.querySelector(`[data-lm-card-group="${normaliseScopeId(MG_BETA)}"] [data-lm-caret]`);
+    expect(caret).not.toBeNull();
+    fireEvent.click(caret as Element);
+    expect(container.querySelectorAll(".lm-card-count").length).toBe(1);
+
+    expect(boxOf(container, SUB_A)).toEqual(start);
+    expect(edgeDs(container)).toEqual(d0);
+    expect(reset.disabled).toBe(true);
+  });
+
+  it("Fit frames the cards where they are drawn, a moved card included", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    // happy-dom has no layout: give the canvas a size so Fit has something to fit into.
+    const canvas = container.querySelector(".lm-canvas") as HTMLElement;
+    Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(canvas, "clientHeight", { configurable: true, value: 600 });
+    const viewport = container.querySelector("[data-lm-viewport]") as SVGGElement;
+    fireEvent.click(getByRole("button", { name: "Fit" }));
+    const fitted = viewport.getAttribute("transform");
+
+    const card = cardEl(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 3100, 2100);
+    up(card, 3100, 2100);
+    // A drag never re-fits the view by itself.
+    expect(viewport.getAttribute("transform")).toBe(fitted);
+    fireEvent.click(getByRole("button", { name: "Fit" }));
+    // Fitting the computed layout instead would give the same transform as before the drag.
+    expect(viewport.getAttribute("transform")).not.toBe(fitted);
   });
 });
 
