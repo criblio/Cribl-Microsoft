@@ -163,7 +163,8 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "storage-account": STORAGE,
   "storage-container": [...STORAGE, "container"],
   "storage-queue": [...STORAGE, "queueName"],
-  "eventgrid-topic": ["subscriptionId", "resourceGroup", "systemTopic"],
+  // storageAccount: the topic is checked against the plan's account (DBT-167).
+  "eventgrid-topic": [...STORAGE, "systemTopic"],
   "eventgrid-subscription": ["subscriptionId", "resourceGroup", "systemTopic", "queueName"],
   "storage-rbac": [...STORAGE, "criblPrincipalObjectId"],
 };

@@ -447,21 +447,37 @@ function classifyAssignment(rows: readonly unknown[], ex: CheckExpectations): St
   return { kind: "absent" };
 }
 
+/** The provisioningState diffs of a set of remediations: none when one Succeeded. */
+function remediationDiffs(matches: readonly unknown[]): VerdictDiff[] {
+  const states = matches.map((r) => str(rec(r, "properties"), "provisioningState"));
+  if (states.some((s) => same(s, "Succeeded"))) return [];
+  return [{ field: "provisioningState", expected: "Succeeded", actual: states.join(", ") || "(none)" }];
+}
+
+/**
+ * Remediations of the plan's assignment. With an assignment name instructed,
+ * only that exact name is the plan's; a legacy-family assignment is another
+ * one, present-other-name - the same call classifyAssignment makes of it
+ * (DBT-166). With no name instructed, the family is the plan's.
+ */
 function classifyRemediation(rows: readonly unknown[], ex: CheckExpectations): StepVerdict {
   const policy = ex.policy;
   if (policy === undefined) return unknown("missing-value", "No initiative is expected for this source.");
-  const matches = rows.filter((r) => {
-    const assignment = lastSegment(str(rec(r, "properties"), "policyAssignmentId"));
-    return policy.assignmentName !== null
-      ? same(assignment, policy.assignmentName) || policy.assignmentFamily.test(assignment)
-      : policy.assignmentFamily.test(assignment);
-  });
-  if (matches.length === 0) return { kind: "absent" };
-  const states = matches.map((r) => str(rec(r, "properties"), "provisioningState"));
-  if (states.some((s) => same(s, "Succeeded"))) return { kind: "as-expected" };
+  const assignmentOf = (r: unknown) => lastSegment(str(rec(r, "properties"), "policyAssignmentId"));
+  const inFamily = (r: unknown) => policy.assignmentFamily.test(assignmentOf(r));
+  const instructed = policy.assignmentName;
+  const ours =
+    instructed !== null ? rows.filter((r) => same(assignmentOf(r), instructed)) : rows.filter(inFamily);
+  if (ours.length > 0) return verdictOf(remediationDiffs(ours));
+  if (instructed === null) return { kind: "absent" };
+  const other = rows.filter(inFamily);
+  const first = other[0];
+  if (first === undefined) return { kind: "absent" };
+  const name = assignmentOf(first);
   return {
-    kind: "present-differs",
-    diffs: [{ field: "provisioningState", expected: "Succeeded", actual: states.join(", ") || "(none)" }],
+    kind: "present-other-name",
+    name,
+    diffs: remediationDiffs(other.filter((r) => same(assignmentOf(r), name))),
   };
 }
 
@@ -486,14 +502,21 @@ function classifyFlowLog(values: PlanValues, row: unknown): StepVerdict {
   return verdictOf(diffs);
 }
 
-function classifyTopic(values: PlanValues, row: unknown): StepVerdict {
+/**
+ * The system topic is the plan's only if its source is the plan's storage
+ * account, so without one it cannot be as-expected. classifyCheck already
+ * stops on the missing value (CHECK_REQUIRED_VALUES); this guard holds even
+ * if that list drifts (DBT-167). Exported for that pin only, not the barrel.
+ */
+export function classifyTopic(values: PlanValues, row: unknown): StepVerdict {
+  if (value(values, "storageAccount") === "") {
+    return unknown("missing-value", `Set ${PLAN_VALUE_LABELS.storageAccount.label} first.`);
+  }
   const props = rec(row, "properties");
   const diffs: VerdictDiff[] = [];
-  if (value(values, "storageAccount") !== "") {
-    const expected = planStorageAccountId(values);
-    const actual = str(props, "source");
-    if (!same(actual, expected)) diffs.push({ field: "source", expected, actual: actual || "(none)" });
-  }
+  const expected = planStorageAccountId(values);
+  const actual = str(props, "source");
+  if (!same(actual, expected)) diffs.push({ field: "source", expected, actual: actual || "(none)" });
   const topicType = str(props, "topicType");
   if (topicType !== "" && !same(topicType, "Microsoft.Storage.StorageAccounts")) {
     diffs.push({ field: "topicType", expected: "Microsoft.Storage.StorageAccounts", actual: topicType });

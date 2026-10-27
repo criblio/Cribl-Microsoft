@@ -20,6 +20,8 @@ import {
   requestsFor,
   type CheckExpectations,
 } from "./index";
+// Module-internal (not in the barrel): pinned directly for its own guard.
+import { classifyTopic } from "./classify";
 
 const FULL: PlanValues = {
   ...defaultPlanValues({ subscriptionId: "sub-1", resourceGroup: "rg-1" }),
@@ -456,6 +458,61 @@ describe("policy-remediation: outcomes", () => {
     expect(check(outside, [remediation("contoso-diag-policy", "Succeeded")])).toEqual({ kind: "as-expected" });
   });
 
+  // DBT-166: with a name instructed, a remediation of a family member is the
+  // same "another assignment" policy-assignment reports, not the plan's own.
+  it("with a name instructed, a remediation of a family member is present-other-name", () => {
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [],
+    });
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Old", "Running")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed, Running" }],
+    });
+    // The diffs are the named assignment's own: another family member's
+    // Succeeded does not clear them.
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Older", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+    });
+    // The same assignment, read by policy-assignment, is called the same thing.
+    const assignment = {
+      name: "Cribl-AU-Old",
+      identity: { type: "UserAssigned" },
+      properties: { policyDefinitionId: AUDIT.policy?.definitionId, enforcementMode: "Default" },
+    };
+    expect(classifyCheck("policy-assignment", FULL, [readRows([assignment])], AUDIT)).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [],
+    });
+    // An instructed name outside the family: a family remediation is still another assignment's.
+    const outside: CheckExpectations = {
+      ...AUDIT,
+      policy: { ...AUDIT.policy!, assignmentName: "Contoso-Diag-Policy" },
+    };
+    expect(check(outside, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Central",
+      diffs: [],
+    });
+  });
+
+  it("with a name instructed, the exact name's remediations decide, whatever the family's say", () => {
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Old", "Succeeded"), remediation("Cribl-AU-Central", "Failed")]),
+    ).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+    });
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Central", "Succeeded")]),
+    ).toEqual({ kind: "as-expected" });
+  });
+
   it("with no instructed name, a Succeeded remediation in the legacy family is as-expected", () => {
     expect(COMMUNITY.policy?.assignmentName).toBeNull();
     expect(check(COMMUNITY, [remediation("Cribl-Diag-EH-mg-1", "Succeeded")])).toEqual({ kind: "as-expected" });
@@ -524,6 +581,29 @@ describe("eventgrid-topic: outcomes", () => {
         },
       ],
     });
+  });
+
+  // DBT-167: the topic is only the plan's if it sits on the plan's account.
+  it("with no storage account in the plan, the topic is unknown missing-value, never as-expected", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "" };
+    expect(requestsFor("eventgrid-topic", noAccount)).toEqual({ kind: "missing", missing: ["storageAccount"] });
+    for (const source of [ACCOUNT_ID, ACCOUNT_ID.replace("flowlogsa", "othersa")]) {
+      expect(classifyCheck("eventgrid-topic", noAccount, [one(topic(source))])).toEqual({
+        kind: "unknown",
+        reason: "missing-value",
+        detail: "Set Storage account first.",
+      });
+    }
+  });
+
+  it("classifyTopic itself refuses to call a topic as-expected without a storage account", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "  " };
+    expect(classifyTopic(noAccount, topic(ACCOUNT_ID))).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
+    expect(classifyTopic(FULL, topic(ACCOUNT_ID))).toEqual({ kind: "as-expected" });
   });
 
   it("a 404 for the topic is absent", () => {
