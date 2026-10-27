@@ -106,6 +106,16 @@ export type {
   NavSection,
   NavSectionGroup,
 } from "./frame/frame-state";
+// The appOptions read as loaded / absent / unreadable, and the inline-save
+// decision over it: an unreadable read refuses the save (DBT-158).
+export {
+  OPTIONS_LOADING,
+  OPTIONS_UNREADABLE_NOTICE,
+  optionsReadFromSave,
+  optionsReadFromSettled,
+  planOptionsSave,
+} from "./frame/options-read";
+export type { OptionsRead, OptionsSavePlan } from "./frame/options-read";
 
 // Theme (porting-plan dark-mode note, lands with Unit 6.5): the UI layer
 // over @soc/core's app-theme model (codec + resolveTheme live in core) -
