@@ -42,6 +42,7 @@ import {
   ZERO_PLANS_DEPLOY_ALLOWED,
   buildSections,
   canSave,
+  criblSideReadingOf,
   defenderDeployDisabledReason,
   defenderStateNote,
   deployOutcomeMessage,
@@ -599,5 +600,40 @@ describe("visible copy carries no project history", () => {
 
     expect(entries.length).toBeGreaterThan(40);
     expect(findHistoryInCopy(entries)).toEqual([]);
+  });
+});
+
+// DBT-162: the lane reading keeps a bare-id route's flag, so the lane card
+// never presents the app's own bare-id route as a confirmed one.
+describe("criblSideReadingOf", () => {
+  it("carries legacyBareMatch from the consuming route, and only from it", () => {
+    const side = (legacy: boolean) => ({
+      groupId: "g1",
+      requests: [],
+      inputs: [
+        {
+          inputId: "in1",
+          inputType: "eventhub",
+          input: { kind: "absent" as const },
+          route: {
+            kind: "consumes" as const,
+            routes: [
+              { id: "w", name: "wired", filter: "", output: "sentinel_out", final: true, ...(legacy ? { legacyBareMatch: true as const } : {}) },
+            ],
+          },
+        },
+      ],
+    });
+    expect(criblSideReadingOf(side(true)).routes["in1"]).toEqual({
+      kind: "consumes",
+      route: "wired",
+      destination: "sentinel_out",
+      legacyBareMatch: true,
+    });
+    expect(criblSideReadingOf(side(false)).routes["in1"]).toEqual({
+      kind: "consumes",
+      route: "wired",
+      destination: "sentinel_out",
+    });
   });
 });

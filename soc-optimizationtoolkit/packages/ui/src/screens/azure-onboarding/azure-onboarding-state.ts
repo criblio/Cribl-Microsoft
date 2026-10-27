@@ -47,6 +47,8 @@
  *   - {@link deployOutcomeMessage}: the deploy's outcome in Azure's words. A
  *     success says delivery is not verified until an alert arrives, because the
  *     read-back proves the export's shape, not that anything flows through it.
+ *   - {@link criblSideReadingOf}: the "Read Cribl side" result in the lane
+ *     builder's shape, keeping a bare-id route's unconfirmed flag.
  *
  * VISIBLE COPY. Every string these functions return reaches the screen, so
  * none carries a card id, a date or a phase number; the test runs
@@ -72,12 +74,14 @@ import {
 } from "@soc/core";
 import type {
   CollectionMethod,
+  CriblSideReading,
   CoverageSelection,
   DecodedSelection,
   DefenderDeployOutcome,
   DefenderDeployStep,
   DefenderPlansState,
   DefenderState,
+  OnboardingCriblSide,
   EventHubInfo,
   EventHubNamespaceInfo,
   EventHubTargetRead,
@@ -718,3 +722,52 @@ const STEP_LABELS: Readonly<Record<DefenderDeployStep, string>> = {
   "list-keys": "reading the rule's connection string",
   "automation-put": "creating the export",
 };
+
+/**
+ * The Cribl-side read in the shape the lane builder takes, keyed by input id.
+ * A QuickConnect input is drawn as consumed by QuickConnect, because the lane
+ * vocabulary has no separate word for it. A bare-id route keeps its
+ * `legacyBareMatch` flag so the lane never reads it as confirmed (DBT-162).
+ */
+export function criblSideReadingOf(side: OnboardingCriblSide): CriblSideReading {
+  const inputs: Record<string, CriblSideReading["inputs"][string]> = {};
+  const routes: Record<string, CriblSideReading["routes"][string]> = {};
+  for (const entry of side.inputs) {
+    const p = entry.input;
+    inputs[entry.inputId] =
+      p.kind === "present" ? { kind: "present" } : p.kind === "absent" ? { kind: "absent" } : { kind: "unknown", detail: p.detail };
+    const r = entry.route;
+    switch (r.kind) {
+      case "consumes": {
+        const last = r.routes[r.routes.length - 1];
+        routes[entry.inputId] =
+          last === undefined
+            ? { kind: "unknown", detail: "the route walk returned no route" }
+            : {
+                kind: "consumes",
+                route: last.name,
+                destination: last.output ?? null,
+                ...(last.legacyBareMatch === true ? { legacyBareMatch: true as const } : {}),
+              };
+        break;
+      }
+      case "quickconnect":
+        routes[entry.inputId] = {
+          kind: "consumes",
+          route: "QuickConnect",
+          destination: r.connections.map((c) => c.output).join(", ") || null,
+        };
+        break;
+      case "not-routed":
+        routes[entry.inputId] = { kind: "not-routed" };
+        break;
+      case "cannot-evaluate":
+        routes[entry.inputId] = { kind: "cannot-evaluate", route: r.routeId, detail: r.filter };
+        break;
+      case "unknown":
+        routes[entry.inputId] = { kind: "unknown", detail: r.detail };
+        break;
+    }
+  }
+  return { inputs, routes };
+}

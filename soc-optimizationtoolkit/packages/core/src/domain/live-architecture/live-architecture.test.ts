@@ -1445,4 +1445,33 @@ describe("buildLiveDiagram - __inputId forms (DBT-162)", () => {
       buildLiveDiagram(withFilter("__inputId.startsWith('syslog_')"), { azureOnly: false }).flows,
     ).toEqual([{ ...PAN_FLOW, legacyInputMatch: true }]);
   });
+
+  it("names at most five legacy matches, then counts the rest", () => {
+    const routes = Array.from({ length: 6 }, (_, i) => ({
+      id: `p${i}`,
+      name: `p${i}`,
+      filter: "__inputId=='syslog_pan'",
+      output: "splunk_dest",
+      final: false,
+    }));
+    const { notes } = buildLiveDiagram({ ...labSnapshot(), routes: ok({ routes }) }, { azureOnly: false });
+    const legacy = notes.filter((n) => n.includes("legacy"));
+    expect(legacy.map((n) => n.split(" names ")[0])).toEqual([
+      "Route 'p0'",
+      "Route 'p1'",
+      "Route 'p2'",
+      "Route 'p3'",
+      "Route 'p4'",
+      "+1 more legacy bare-id route match(es).",
+    ]);
+  });
+
+  it("a collector job answers to collection:<id> whatever its own type field says", () => {
+    const snapshot = jobsSnapshot();
+    snapshot.jobs = ok({ items: [{ id: "blob_flowlogs", type: "azure_blob" }] });
+    const { flows, notes } = buildLiveDiagram(snapshot, { azureOnly: false });
+    expect(flows.map((f) => f.key)).toEqual(["g:blob_flowlogs>r1>adx_dest"]);
+    expect(flows[0]).not.toHaveProperty("legacyInputMatch");
+    expect(legacyNotes(notes)).toEqual([]);
+  });
 });

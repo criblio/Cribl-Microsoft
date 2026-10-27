@@ -29,10 +29,9 @@
  *
  * QuickConnect: an input with `sendToRoutes: false` bypasses the routing table
  * and sends to its `connections` instead (Cribl defaults sendToRoutes to true;
- * only an explicit false counts). Inputs are parsed BY live-architecture.ts
- * normalizeInput, not a restatement of it. Such an input reads `quickconnect`,
- * never a route walk. When
- * the input was not read as present (inputs read unknown, or the input absent),
+ * only an explicit false counts). Such an input reads `quickconnect`, never a
+ * route walk. Inputs are parsed BY live-architecture.ts normalizeInput, not a
+ * restatement of it. When the input was not read as present (inputs read unknown, or the input absent),
  * the walk still runs but carries `assumesSendToRoutes: true`, so a caller
  * cannot present it as confirmed.
  *

@@ -361,6 +361,24 @@ describe("Cribl side", () => {
     );
     expect(card(lanes, "entraId", "cribl-source")?.status.kind).toBe("present");
     expect(card(lanes, "entraId", "route")?.status.label).toBe("routed by sentinel");
+
+    // DBT-162: a route that names the input only by its bare id still reads
+    // as consuming, but its label never presents it as confirmed.
+    const legacy = buildOnboardingLanes(
+      input({
+        progress,
+        criblSide: {
+          inputs: { [RECORD_EH.inputId]: { kind: "present" } },
+          routes: {
+            [RECORD_EH.inputId]: { kind: "consumes", route: "sentinel", destination: "sentinel_out", legacyBareMatch: true },
+          },
+        },
+      }),
+    );
+    expect(card(legacy, "entraId", "route")?.status).toEqual({
+      kind: "consumes",
+      label: "routed by sentinel (unconfirmed: its filter names the bare input id)",
+    });
     // Destinations are never read (D17): the card says what was read, the route naming it.
     expect(card(lanes, "entraId", "destination")?.status).toEqual({
       kind: "named-by-route",

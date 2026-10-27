@@ -70,7 +70,6 @@ import type {
   BatchPacing,
   BuildOnboardingLanesInput,
   CoverageSelection,
-  CriblSideReading,
   DefenderState,
   KvDocumentLoad,
   LaneTopics,
@@ -97,6 +96,7 @@ import {
   DEFENDER_ITEM_ID,
   buildSections,
   canSave,
+  criblSideReadingOf,
   loadBanners,
   loadStateFrom,
   loadedSelection,
@@ -198,49 +198,6 @@ function sectionStatus(view: OnboardingSectionView): SectionStatus {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * The Cribl-side read in the shape the lane builder takes, keyed by input id.
- * A QuickConnect input is drawn as consumed by QuickConnect, because the lane
- * vocabulary has no separate word for it.
- */
-function criblSideReadingOf(side: OnboardingCriblSide): CriblSideReading {
-  const inputs: Record<string, CriblSideReading["inputs"][string]> = {};
-  const routes: Record<string, CriblSideReading["routes"][string]> = {};
-  for (const entry of side.inputs) {
-    const p = entry.input;
-    inputs[entry.inputId] =
-      p.kind === "present" ? { kind: "present" } : p.kind === "absent" ? { kind: "absent" } : { kind: "unknown", detail: p.detail };
-    const r = entry.route;
-    switch (r.kind) {
-      case "consumes": {
-        const last = r.routes[r.routes.length - 1];
-        routes[entry.inputId] =
-          last === undefined
-            ? { kind: "unknown", detail: "the route walk returned no route" }
-            : { kind: "consumes", route: last.name, destination: last.output ?? null };
-        break;
-      }
-      case "quickconnect":
-        routes[entry.inputId] = {
-          kind: "consumes",
-          route: "QuickConnect",
-          destination: r.connections.map((c) => c.output).join(", ") || null,
-        };
-        break;
-      case "not-routed":
-        routes[entry.inputId] = { kind: "not-routed" };
-        break;
-      case "cannot-evaluate":
-        routes[entry.inputId] = { kind: "cannot-evaluate", route: r.routeId, detail: r.filter };
-        break;
-      case "unknown":
-        routes[entry.inputId] = { kind: "unknown", detail: r.detail };
-        break;
-    }
-  }
-  return { inputs, routes };
 }
 
 /**

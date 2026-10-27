@@ -485,7 +485,9 @@ function routeText(r: RouteConsumption): string {
       const last = r.routes[r.routes.length - 1];
       return last === undefined
         ? "routed"
-        : `routed by ${last.name}${last.output === undefined ? "" : ` to ${last.output}`}`;
+        : `routed by ${last.name}${last.output === undefined ? "" : ` to ${last.output}`}` +
+            // DBT-162: a bare-id filter is drawn, never presented as confirmed.
+            (last.legacyBareMatch === true ? " (unconfirmed: its filter names the bare input id)" : "");
     }
     case "cannot-evaluate":
       return `cannot check: route ${r.routeId} has a filter the app cannot evaluate`;

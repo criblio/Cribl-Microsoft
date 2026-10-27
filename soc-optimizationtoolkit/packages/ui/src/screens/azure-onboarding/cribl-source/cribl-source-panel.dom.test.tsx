@@ -26,6 +26,7 @@ import type {
   ApplyCriblSourceOutcome,
   ListRead,
   NamespaceAuthRule,
+  OnboardingCriblSide,
   PlanCredential,
   PlanCriblSourceResult,
   ReadyCriblSource,
@@ -393,5 +394,39 @@ describe("CriblSourcePanel - attestation and listKeys wiring", () => {
     fireEvent.click(createButton());
     await waitFor(() => expect(p.onApply).toHaveBeenCalledTimes(1));
     expect(vi.mocked(p.onApply).mock.calls[0]![1]).toEqual({ kind: "listKeys" });
+  });
+});
+
+describe("CriblSourcePanel - Cribl side line", () => {
+  const record = { groupId: "g1", inputId: READY.inputId, inputType: "eventhub" as const, secretId: READY.secretId };
+  const side = (legacy: boolean): OnboardingCriblSide => ({
+    groupId: "g1",
+    requests: [],
+    inputs: [
+      {
+        inputId: record.inputId,
+        inputType: "eventhub",
+        input: { kind: "present", type: "eventhub", disabled: false, sendToRoutes: true, connections: [] },
+        route: {
+          kind: "consumes",
+          routes: [
+            { id: "w", name: "wired", filter: "", output: "sentinel_out", final: true, ...(legacy ? { legacyBareMatch: true as const } : {}) },
+          ],
+        },
+      },
+    ],
+  });
+  const rows = sourceRows(["defenderExport"], { criblSources: { defenderExport: record } });
+
+  // DBT-162: a route that names the input only by its bare id still shows,
+  // but the line never presents it as a confirmed route.
+  it("marks a bare-id route as unconfirmed and leaves a typed route plain", () => {
+    render(<CriblSourcePanel {...props({ rows, criblSide: side(true) })} />);
+    expect(
+      screen.getByText(/routed by wired to sentinel_out \(unconfirmed: its filter names the bare input id\)\.$/),
+    ).toBeTruthy();
+    cleanup();
+    render(<CriblSourcePanel {...props({ rows, criblSide: side(false) })} />);
+    expect(screen.getByText(/routed by wired to sentinel_out\.$/)).toBeTruthy();
   });
 });

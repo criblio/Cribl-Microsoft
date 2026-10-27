@@ -98,7 +98,16 @@ export type CriblInputReading =
 
 /** Whether a route sends the input's events somewhere, as the Cribl-side read found it. */
 export type CriblRouteReading =
-  | { readonly kind: "consumes"; readonly route: string; readonly destination: string | null }
+  | {
+      readonly kind: "consumes";
+      readonly route: string;
+      readonly destination: string | null;
+      /**
+       * The consuming route names the input only by its bare id, which a
+       * capture found matching nothing (DBT-162): shown, never as confirmed.
+       */
+      readonly legacyBareMatch?: true;
+    }
   | { readonly kind: "not-routed" }
   | { readonly kind: "cannot-evaluate"; readonly route: string; readonly detail: string }
   | { readonly kind: "unknown"; readonly detail: string };
@@ -464,7 +473,17 @@ function routeStatus(inputId: string | null, criblSide: CriblSideReading | null)
   if (r === undefined) return { status: { kind: "not-read", label: "not read" }, destination: null, route: null };
   switch (r.kind) {
     case "consumes":
-      return { status: { kind: "consumes", label: `routed by ${r.route}` }, destination: r.destination, route: r.route };
+      return {
+        status: {
+          kind: "consumes",
+          label:
+            r.legacyBareMatch === true
+              ? `routed by ${r.route} (unconfirmed: its filter names the bare input id)`
+              : `routed by ${r.route}`,
+        },
+        destination: r.destination,
+        route: r.route,
+      };
     case "not-routed":
       return { status: { kind: "not-routed", label: "no route sends it on yet" }, destination: null, route: null };
     case "cannot-evaluate":
