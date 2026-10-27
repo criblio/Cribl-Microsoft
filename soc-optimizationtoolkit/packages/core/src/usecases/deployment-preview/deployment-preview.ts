@@ -148,8 +148,8 @@ export interface ExistingDcrCheck {
  * never cached files (the legacy check-existing/preview split trusted two
  * different truths; this is the ONE existence oracle for Unit 7).
  *
- * ONE list request per call (paginated via listAllPages when the adapter
- * implements requestUrl), scoped to the resource group, at api-version
+ * ONE list request per call (paginated via listAllPages, which throws when a
+ * nextLink cannot be followed - DBT-160), scoped to the resource group, at api-version
  * 2023-03-11 ({@link DIRECT_DCR_API_VERSION}); then ONE GET per MATCHED table
  * (never for misses - pinned by call-count test) resolving immutableId and
  * the logs-ingestion endpoint via the existing parsers (parseDcrDeployment,

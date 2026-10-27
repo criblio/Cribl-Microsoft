@@ -226,8 +226,8 @@ export interface DcrTableMatch {
  * azure:get-dcr-ids substring match, so shared-prefix tables (Cloudflare vs
  * CloudflareAudit) can no longer cross-match.
  *
- * ONE list request per call (paginated via listAllPages when the adapter
- * implements requestUrl), scoped to the resource group. Results are returned
+ * ONE list request per call (paginated via listAllPages, which throws when a
+ * nextLink cannot be followed - DBT-160), scoped to the resource group. Results are returned
  * in input order.
  */
 export async function matchDcrsToTables(
