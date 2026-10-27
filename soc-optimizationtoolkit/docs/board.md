@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**71 in the backlog, 31 in progress, 51 done.**
+**82 in the backlog, 27 in progress, 55 done.**
 
 ## By menu item
 
@@ -25,20 +25,20 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 
 | Menu | Open | Done | Now |
 |---|---|---|---|
-| Dataflow | 2 | 2 | 1 |
+| Dataflow | 3 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 23 | 29 | 8 |
+| Sentinel Integration | 29 | 29 | 13 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
-| Azure Native Source Onboarding | 31 | 2 | 10 |
+| Azure Native Source Onboarding | 32 | 4 | 10 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 17 | 14 | 7 |
+| Cross-cutting | 16 | 16 | 7 |
 
-Open work totals 102.
+Open work totals 109.
 
 ## Epics and features
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 46% (39/85)
+### `DBT` Quality and technical debt _(enabler)_ - 45% (43/96)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 21/54 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 25/65 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (31)
+## In progress (27)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -856,7 +856,17 @@ Started. Anything here with an unfinished dependency is called out on its card.
   option PUTs that whole default document over the operator's saved options.
   Data loss, and it predates DBT-145 (null on 403, defaults on 5xx). FIX:
   track the options read as loaded / unreadable; while unreadable, block (or
-  read-modify-write) the save and say why; pin both.
+  read-modify-write) the save and say why; pin both. NOTE 2026-10-27: LANDED
+  (73e060b, review approved without changes, merged 06f6824):
+  packages/ui/src/frame/options-read.ts holds the options read as
+  loading/absent/loaded/unreadable; planOptionsSave refuses while loading or
+  unreadable and nothing is PUT; Integrate/Onboard/Batch show a notice with
+  Retry; 11 pins, mutation-checked by both agents. Review minors left open:
+  Retry has no in-flight state (a double click races two reads, a failed retry
+  looks unchanged); the failure detail is not rendered (as on DBT-145's setup
+  screen); a 'loading' refusal is not cleared on settle (unreachable today).
+  Awaits live: a refused appOptions GET shows the notice and sends no PUT;
+  Retry restores the real options; a 404 saves normally.
 
 - **DBT-159** Three readers mishandle a refused KV cache or PAT-status read
   `DBT-F1` `bug` `settled`
@@ -869,18 +879,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   through to content.listSolutions(). (3) repositories-screen.tsx:93 shows a
   failed PAT status read as 'no PAT' with no message (inventory-honesty). FIX:
   catch each; a cache miss falls through to the source of truth; the PAT form
-  says the status could not be read. Pin each.
-
-- **DBT-160** listAllPages returns the first page as the whole list when it cannot follow a nextLink
-  `DBT-F1` `bug` `settled`
-  Not now because: Latent: it needs an AzureManagement adapter without
-  requestUrl AND a multi-page answer; the shipped adapter has requestUrl.
-  Still a bug because it would present page one as the whole list.
-  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
-  introduced by them). When a page carries nextLink but the adapter has no
-  requestUrl, listAllPages returns page one alone as if complete;
-  arm-pager.readAllPages refuses the same case. FIX: throw, matching DBT-148's
-  honesty rule; pin it.
+  says the status could not be read. Pin each. NOTE 2026-10-27: LANDED
+  (861a52f + review 8066e25, merged eefc12d): a refused cache read is a miss
+  with a note (sample intake, solution browser); a refused PAT status read is
+  'Token status unknown' with the reason; the review found and fixed that a
+  refused cache WRITE after the fallback still failed the load. Awaits live in
+  the three screens. Same-class leftovers are DBT-175.
 
 - **DBT-162** The __inputId form is decided four ways; the onboarding dataflow and Live Architecture give opposite route answers
   `DBT-F1` `bug` `settled`
@@ -923,40 +927,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   on POST and PATCH. For DBT-152: the 409/400 fallback PATCH now stamps a
   secret the app may not own.
 
-- **DBT-166** Validate reads a remediation as configured when it ran for a different assignment of the same family
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
-  classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts
-  any legacy-family assignment even when an assignment name was instructed, so
-  a Succeeded remediation on Cribl-AU-Old reads as-expected while
-  classifyAssignment calls that same assignment present-other-name. FIX: when
-  a name is instructed, only an exact-name match is as-expected; a family
-  match is present-other-name. Pin.
-
-- **DBT-167** Validate reads an Event Grid topic as configured when the plan has no storage account
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
-  classifyTopic (classify.ts ~:489) skips the source check when the
-  storageAccount plan value is empty, so a topic on any account reads
-  as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list
-  storageAccount, so it is not reported as missing either. FIX: list it as
-  required, so the step reads unknown (missing value) instead. Pin.
-
-- **DBT-168** Two module comments describe code that DBT-162 and DBT-163 moved
-  `DBT-F1` `bug` `settled`
-  Not now because: Both are comments that now describe code that moved; no
-  operator-visible behaviour is wrong, and the delta audit fixes them in the
-  same pass as it looks for others.
-  FOUND 2026-10-27 while landing DBT-162/163. capture-filter.ts's
-  captureFilterWarning comment still describes the pre-DBT-162 input-id
-  handling, and packages/core/CONTEXT.md:87 still says buildSecretBody lives
-  in cribl-onboarding-source (it moved to domain/cribl-secrets). FIX: correct
-  both, and anything else the delta audit (d2d248f..HEAD) finds of the same
-  kind.
-
 ---
 
-## Backlog - now (5)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1099,9 +1072,101 @@ Next to pick up. Nothing blocks these.
   with awaited conditions, and mutation-check that the repaired pins still
   fail on the behaviour they guard. Not proven on main yet.
 
+- **DBT-169** captureFilterWarning does not recognise a filter written in the typed __inputId form
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified.
+  packages/core/src/domain/capture-filter/capture-filter.ts:223 builds a
+  quoted-literal regex (optional leading colon, then the bare id) to decide
+  whether a capture filter names the selected input. Run under node with id
+  in_syslog it is false for __inputId=='syslog:in_syslog' and for
+  __inputId.startsWith('syslog:in_syslog:') - the typed form
+  domain/capture-filter/input-id.ts (DBT-162) names as the real value - and
+  true only for the bare id, which matches nothing in the product. So a
+  correct filter draws the warning and the legacy one does not. FIX: decide it
+  through input-id.ts (matchInputIdFilter); pin both forms.
+
+- **DBT-170** Live Architecture computes legacyInputMatch and never shows it
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified. LiveFlowSummary.legacyInputMatch
+  (live-architecture.ts:215-220, set :1179) is computed and pinned, but no
+  code in packages/ui or apps/cribl-app reads it, so a route matched only by
+  its bare input id is drawn as confirmed on the Dataflow screen while the
+  onboarding screen calls the same route unconfirmed (DBT-162). FIX: render a
+  per-flow 'unconfirmed: filter names the bare input id' badge from the field;
+  DOM pin.
+
+- **DBT-172** Every inline options save drops keys the app does not manage
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
+  introduced by it). App.tsx:143-145 says saves go through applyOptionsPatch
+  so unmanaged keys survive, but the save serialises canonical options
+  (serializeAppOptions, now in packages/ui/src/frame/options-read.ts
+  planOptionsSave), dropping _comments and any section a newer version wrote.
+  FIX: keep the raw stored string in the loaded read and save through
+  applyOptionsPatch; pin that an unknown key survives a toggle.
+
+- **DBT-173** A failed options save is an unhandled rejection the operator never hears about
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
+  introduced by it). App.tsx persistOperation calls `void
+  saveAppOptions(...)`; a failed PUT rejects unhandled and the toggle looks
+  saved. Also decide: Onboard and Batch still run with default options while
+  the options read is unreadable (the DBT-158 notice says so, but Run is not
+  blocked). FIX: catch, show the failure, revert the toggle; pin.
+
+- **DBT-175** More KV readers and writers turn a refused store into silence or a false 'Saved'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-159 implementer/reviewer (pre-existing, not
+  introduced by it). (1) sample-intake-section.tsx:683 `void
+  definitionCache.set(vendorKey, name)` has no catch and sets vendorSaved
+  before the write lands: unhandled rejection plus a false 'Saved'; the new
+  DBT-159 hint 'Naming it again replaces whatever is stored' is false in
+  exactly that case. (2) siem-migration-screen.tsx:100-112 shows a refused
+  plan-cache read as 'no saved plan'. (3) use-vendor-column-order.ts:95
+  swallows a refused read and :133/:145 refused writes with no reason shown.
+  (4) pat-form-state derivePatFormView: canClear is hasPat-only, so with the
+  status unknown a possibly stored token cannot be cleared. FIX each; pin
+  each.
+
+- **DBT-176** Content Hub catalog failures read as 'not in the catalog' or 'none deprecated'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-160 implementer/reviewer (pre-existing, not
+  introduced by it). findSolutionCatalogEntry
+  (usecases/content-install/available-content.ts:68-81) returns null for both
+  unreadable and no-match, and content-install-section.tsx:600-604 then says
+  'Load to look up this solution in Content Hub.' after a load;
+  listDeprecatedContentHubSolutions (:127-140, used by
+  solution-browser.tsx:315) returns an empty set on failure; installParser
+  (content-install.ts:611-627) swallows a failed saved-searches listing and
+  PUTs anyway (safe, idempotent, never reported). DBT-160 adds one more cause
+  to each. FIX: a tri-state result (found / not found / unreadable with
+  reason) and render it; pin.
+
+- **DBT-178** Validate tells the operator a policy assignment or remediation 'targets the plan's hub'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-166/167 implementer/reviewer (pre-existing, not
+  introduced by it).
+  packages/ui/src/screens/azure-onboarding/validate/validate-state.ts:127
+  gives every present-other-name verdict the detail 'Found as X, which targets
+  the plan's hub.' False for policy-assignment and, since DBT-166,
+  policy-remediation. Also: when several family assignments exist, the verdict
+  names only the first and does not say there are more. FIX: per-check-kind
+  wording; pin.
+
+- **DBT-179** Validate may read an Event Grid subscription on another account's topic as configured
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-167 implementer/reviewer (pre-existing, not
+  introduced by it). SUSPECTED, not confirmed: eventgrid-subscription
+  (requests.ts:168) does not require storageAccount and its classifier matches
+  only on queueName, the same shape DBT-167 fixed for the topic. FIX after
+  confirming: require the plan's storage account and check the subscription's
+  topic source; pin.
+
 ---
 
-## Backlog - next (29)
+## Backlog - next (32)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1501,6 +1566,42 @@ Settled and unblocked, sequenced behind now.
   skills/cribl-dataflow-diagram/reference/FlowDiagram.tsx has the same logic.
   FIX in the kit: clear the flag on the click it suppresses (or on a timeout
   tick), pin it, then sync.
+
+- **DBT-171** The bare-id route wording is written twice, and RouteFilterInputs is a dead alias
+  `DBT-F1` `bug` `settled`
+  Not now because: Two literals that agree today and a dead type alias;
+  nothing an operator sees is wrong until one literal is edited alone, and the
+  pin on each would catch a change to that one.
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified. ' (unconfirmed: its filter names the bare input id)'
+  is a literal in core lanes.ts:480-482 and again in the UI
+  cribl-source-panel.tsx:490, pinned separately. live-architecture.ts:377
+  exports RouteFilterInputs = InputIdFilter, re-exported from the barrel, used
+  only inside its own file. FIX: one exported wording constant from core; drop
+  the alias.
+
+- **DBT-174** A corrupt stored options blob reads as loaded defaults, and the next save overwrites it
+  `DBT-F1` `bug` `settled`
+  Not now because: Needs a stored appOptions blob that is not valid JSON,
+  which only a hand edit or a truncated write produces; the refused-read case
+  DBT-158 closed is the common one.
+  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
+  introduced by it). parseAppOptions
+  (packages/core/src/domain/option-forms/option-forms.ts:645) parses invalid
+  JSON to the defaults, so options-read.ts calls it loaded and planOptionsSave
+  writes the defaults over it. FIX: a parse failure is unreadable (with the
+  reason), not loaded; pin.
+
+- **DBT-177** Three ARM pagers implement one contract
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-27 by the DBT-160 implementer and reviewer. listAllPages
+  (apps/cribl-app azure-discovery.ts:151), arm-pager.readAllPages
+  (read-logging-map/arm-pager.ts:87) and the private pager in
+  usecases/defender-export/defender-export.ts:232-280 now agree on every
+  refusal (non-2xx page, no array value, unfollowable nextLink, page cap).
+  Decide first: the cap (51 pages followed vs 50 in total), rejections (raw vs
+  a 'transport' refusal) and the error texts the pins assert. Then make
+  readAllPages the core and the others thin wrappers.
 
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
@@ -2085,7 +2186,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (51)
+## Done (55)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3948,6 +4049,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   git check-ignore and the file's own tests plus typecheck on the restored
   tree.
 
+- **DBT-160** listAllPages returns the first page as the whole list when it cannot follow a nextLink
+  `DBT-F1` `bug` `settled` `verified: pins`
+  Not now because: Latent: it needs an AzureManagement adapter without
+  requestUrl AND a multi-page answer; the shipped adapter has requestUrl.
+  Still a bug because it would present page one as the whole list.
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). When a page carries nextLink but the adapter has no
+  requestUrl, listAllPages returns page one alone as if complete;
+  arm-pager.readAllPages refuses the same case. FIX: throw, matching DBT-148's
+  honesty rule; pin it. NOTE 2026-10-27: LANDED (7db0c5a + review 201af62,
+  merged daf1ed2): listAllPages throws when a page carries nextLink and the
+  adapter cannot follow it; every caller pinned to surface the refusal (12
+  pins; the review reinstated the old early return and exactly those failed).
+  Pager unification is DBT-177.
+
 - **DBT-164** The create-Cribl-source confirm states a fixed commit file list; the kit commits only what is pending
   `DBT-F1` `bug` `settled` `verified: pins`
   FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
@@ -3976,3 +4092,45 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   core; dead exports removed; Validate remediation/topic outcome pins (review
   made the exact-name pin able to fail); diagram shell provenance in
   .claude-kit.json. Defects the new pins exposed are DBT-166 and DBT-167.
+
+- **DBT-166** Validate reads a remediation as configured when it ran for a different assignment of the same family
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts
+  any legacy-family assignment even when an assignment name was instructed, so
+  a Succeeded remediation on Cribl-AU-Old reads as-expected while
+  classifyAssignment calls that same assignment present-other-name. FIX: when
+  a name is instructed, only an exact-name match is as-expected; a family
+  match is present-other-name. Pin. NOTE 2026-10-27: LANDED (c39d6da + review
+  97b1c5b, merged bf8baac): with an instructed name only an exact-name
+  remediation is as-expected; a family match is present-other-name, and its
+  diffs cover the named assignment only (the review added that pin). Open for
+  the operator, not a defect: the exact assignment with no remediation while a
+  family member has one reads present-other-name; 'absent' could be argued.
+
+- **DBT-167** Validate reads an Event Grid topic as configured when the plan has no storage account
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyTopic (classify.ts ~:489) skips the source check when the
+  storageAccount plan value is empty, so a topic on any account reads
+  as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list
+  storageAccount, so it is not reported as missing either. FIX: list it as
+  required, so the step reads unknown (missing value) instead. Pin. NOTE
+  2026-10-27: LANDED (same commits as DBT-166): storageAccount is a required
+  plan value for eventgrid-topic, and classifyTopic refuses as-expected
+  without one. The sibling eventgrid-subscription case is DBT-179.
+
+- **DBT-168** Two module comments describe code that DBT-162 and DBT-163 moved
+  `DBT-F1` `bug` `settled` `verified: pins`
+  Not now because: Both are comments that now describe code that moved; no
+  operator-visible behaviour is wrong, and the delta audit fixes them in the
+  same pass as it looks for others.
+  FOUND 2026-10-27 while landing DBT-162/163. capture-filter.ts's
+  captureFilterWarning comment still describes the pre-DBT-162 input-id
+  handling, and packages/core/CONTEXT.md:87 still says buildSecretBody lives
+  in cribl-onboarding-source (it moved to domain/cribl-secrets). FIX: correct
+  both, and anything else the delta audit (d2d248f..HEAD) finds of the same
+  kind. NOTE 2026-10-27: LANDED (702d76d, merged 1f0d4bf) with the delta audit
+  d2d248f..451ae85: the captureFilterWarning comment and core CONTEXT.md :45
+  and :87 corrected. The audit's structural findings, all four adversarially
+  verified, are DBT-169..DBT-171.
