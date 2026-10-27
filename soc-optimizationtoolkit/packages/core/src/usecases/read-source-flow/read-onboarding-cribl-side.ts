@@ -19,13 +19,19 @@
  * Filters are read with live-architecture's parseRouteFilterInputs; a filter
  * that parser cannot evaluate, reached before a final match, makes the answer
  * `cannot-evaluate` - the app does not guess whether the events stop there.
- * The `__inputId` an input's events carry is `<type>:<id>` (the same form the
- * route filter this app writes uses; live-architecture.ts parseRouteFilterInputs).
+ * Whether a filter selects the input is domain/capture-filter/input-id.ts
+ * matchInputIdFilter, the same answer Live Architecture draws from (DBT-162).
+ * The `__inputId` an input's events carry is `<type>:<id>`. The route filter
+ * this app's own wiring WRITES (guided-deploy/source-wiring.ts, air-gap-export)
+ * is the BARE id, which a capture found matching nothing; such a route still
+ * counts as a match so the app's own route is shown, but it carries
+ * `legacyBareMatch: true` and must not be presented as confirmed.
  *
  * QuickConnect: an input with `sendToRoutes: false` bypasses the routing table
  * and sends to its `connections` instead (Cribl defaults sendToRoutes to true;
- * only an explicit false counts - the same reading as live-architecture.ts
- * normalizeInput). Such an input reads `quickconnect`, never a route walk. When
+ * only an explicit false counts). Inputs are parsed BY live-architecture.ts
+ * normalizeInput, not a restatement of it. Such an input reads `quickconnect`,
+ * never a route walk. When
  * the input was not read as present (inputs read unknown, or the input absent),
  * the walk still runs but carries `assumesSendToRoutes: true`, so a caller
  * cannot present it as confirmed.
@@ -40,7 +46,13 @@
 
 import type { CriblClient } from "../../ports/cribl-client";
 import { criblEnvelopeItems, readProp } from "../../domain/cribl-api/envelope";
-import { parseRouteFilterInputs } from "../../domain/live-architecture";
+import { matchInputIdFilter, type InputIdRef } from "../../domain/capture-filter";
+import {
+  normalizeInput,
+  parseRouteFilterInputs,
+  type LiveConnection,
+  type LiveInput,
+} from "../../domain/live-architecture";
 
 /** One onboarding input the diagram draws: its Cribl type and id. */
 export interface OnboardingInputRef {
@@ -59,16 +71,13 @@ export type InputPresence =
       disabled: boolean;
       /** False only when the input explicitly says so (QuickConnect). */
       sendToRoutes: boolean;
-      connections: QuickConnection[];
+      connections: readonly QuickConnection[];
     }
   | { kind: "absent" }
   | { kind: "unknown"; reason: CriblSideUnknownReason; detail: string };
 
 /** One QuickConnect connection on an input: where its events go instead of the routes. */
-export interface QuickConnection {
-  output: string;
-  pipeline?: string;
-}
+export type QuickConnection = LiveConnection;
 
 /** One route that receives the input's events. */
 export interface ConsumingRoute {
@@ -79,6 +88,12 @@ export interface ConsumingRoute {
   pipeline?: string;
   output?: string;
   final: boolean;
+  /**
+   * The route selects the input ONLY by its bare id (`__inputId=='<id>'`, the
+   * form this app's wiring writes) - reported so the route is visible, but
+   * unconfirmed: the events carry `<type>:<id>` (DBT-162).
+   */
+  legacyBareMatch?: true;
 }
 
 /**
@@ -101,7 +116,7 @@ export type RouteConsumption =
   /** The whole table was read and no final route matches the input. */
   | ({ kind: "not-routed"; copies: ConsumingRoute[] } & WalkAssumption)
   /** The input bypasses the routing table (sendToRoutes false) and sends to these. */
-  | { kind: "quickconnect"; connections: QuickConnection[] }
+  | { kind: "quickconnect"; connections: readonly QuickConnection[] }
   | { kind: "unknown"; reason: CriblSideUnknownReason; detail: string };
 
 export interface OnboardingCriblInputSide {
@@ -147,15 +162,8 @@ async function get(cribl: CriblClient, groupId: string, path: string): Promise<R
   }
 }
 
-interface ListedInput {
-  type: string;
-  disabled: boolean;
-  sendToRoutes: boolean;
-  connections: QuickConnection[];
-}
-
 type InputsList =
-  | { kind: "list"; byId: Map<string, ListedInput> }
+  | { kind: "list"; byId: Map<string, LiveInput> }
   | { kind: "unknown"; reason: CriblSideUnknownReason; detail: string };
 
 function parseInputs(read: Read): InputsList {
@@ -164,34 +172,12 @@ function parseInputs(read: Read): InputsList {
   if (items === null) {
     return { kind: "unknown", reason: "unexpected-shape", detail: "the inputs response is not a list" };
   }
-  const byId = new Map<string, ListedInput>();
+  const byId = new Map<string, LiveInput>();
   for (const item of items) {
-    const id = readProp(item, "id");
-    if (typeof id !== "string" || id === "") continue;
-    const type = readProp(item, "type");
-    const nested = readProp(item, "input");
-    byId.set(id, {
-      type: typeof type === "string" ? type : "",
-      disabled: readProp(item, "disabled") === true,
-      // Cribl defaults sendToRoutes to true; only an explicit false (what
-      // QuickConnect writes) takes the input out of the routing table.
-      sendToRoutes: (readProp(item, "sendToRoutes") ?? readProp(nested, "sendToRoutes")) !== false,
-      connections: parseConnections(readProp(item, "connections") ?? readProp(nested, "connections")),
-    });
+    const input = normalizeInput(item, false);
+    if (input !== null) byId.set(input.id, input);
   }
   return { kind: "list", byId };
-}
-
-function parseConnections(raw: unknown): QuickConnection[] {
-  if (!Array.isArray(raw)) return [];
-  const out: QuickConnection[] = [];
-  for (const entry of raw) {
-    const output = readProp(entry, "output");
-    if (typeof output !== "string" || output === "") continue;
-    const pipeline = readProp(entry, "pipeline");
-    out.push({ output, ...(typeof pipeline === "string" && pipeline !== "" ? { pipeline } : {}) });
-  }
-  return out;
 }
 
 export interface RouteRow extends ConsumingRoute {
@@ -245,7 +231,7 @@ function strip(row: RouteRow): ConsumingRoute {
 }
 
 /** Pure: walk the routing table for one input's `__inputId`. Exported for the tests. */
-export function routeConsumption(table: RoutesTable, inputIdValue: string): RouteConsumption {
+export function routeConsumption(table: RoutesTable, ref: InputIdRef): RouteConsumption {
   if (table.kind === "unknown") return table;
   const matched: ConsumingRoute[] = [];
   for (const row of table.routes) {
@@ -254,23 +240,20 @@ export function routeConsumption(table: RoutesTable, inputIdValue: string): Rout
     if (parsed.kind === "unparsed") {
       return { kind: "cannot-evaluate", routeId: row.id, filter: row.filter, copiesBefore: matched };
     }
-    const hit =
-      parsed.kind === "all" ||
-      (parsed.kind === "inputs" && parsed.ids.includes(inputIdValue)) ||
-      (parsed.kind === "prefix" && inputIdValue.startsWith(parsed.value));
-    if (!hit) continue;
-    matched.push(strip(row));
+    const how = matchInputIdFilter(parsed, ref);
+    if (how === "none") continue;
+    matched.push(how === "legacy" ? { ...strip(row), legacyBareMatch: true } : strip(row));
     if (row.final) return { kind: "consumes", routes: matched };
   }
   return { kind: "not-routed", copies: matched };
 }
 
 /** Pure: QuickConnect beats the walk; a walk without a present input is marked assumed. */
-function routeFor(input: InputPresence, table: RoutesTable, inputIdValue: string): RouteConsumption {
+function routeFor(input: InputPresence, table: RoutesTable, ref: InputIdRef): RouteConsumption {
   if (input.kind === "present" && !input.sendToRoutes) {
     return { kind: "quickconnect", connections: input.connections };
   }
-  const walked = routeConsumption(table, inputIdValue);
+  const walked = routeConsumption(table, ref);
   if (input.kind === "present" || walked.kind === "unknown" || walked.kind === "quickconnect") return walked;
   return { ...walked, assumesSendToRoutes: true };
 }
@@ -317,7 +300,7 @@ export async function readOnboardingCriblSide(
             }
           : { kind: "absent" };
       }
-      return { inputId: ref.id, inputType: ref.type, input, route: routeFor(input, table, `${ref.type}:${ref.id}`) };
+      return { inputId: ref.id, inputType: ref.type, input, route: routeFor(input, table, ref) };
     }),
   };
 }

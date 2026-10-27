@@ -760,17 +760,21 @@ describe("routes popover detail and pack internals (2026-07-30)", () => {
   it("inventories every complete flow and honors selectedFlows", () => {
     // The inventory is filter-independent: azureOnly still lists both.
     const inventory = buildLiveDiagram(labSnapshot(), { azureOnly: true }).flows;
+    // labSnapshot wires both routes with the BARE-id filter, so both flows
+    // carry the legacy flag (DBT-162): still listed, never presented as plain.
     expect(inventory).toEqual([
       {
         key: "g:flowlog_collector>r1>sentinel_dest",
         label:
           "flowlog_collector -> flowlogs (pack AzureFlowLogs) -> sentinel_dest",
         azure: true,
+        legacyInputMatch: true,
       },
       {
         key: "g:syslog_pan>r2>splunk_dest",
         label: "syslog_pan -> pan-to-splunk -> splunk_dest",
         azure: false,
+        legacyInputMatch: true,
       },
     ]);
     // Pack flows appear as one selectable unit, labeled by display name.
@@ -1374,7 +1378,7 @@ describe("event breaker classification", () => {
         type,
         disabled: false,
         breakerRulesets: rulesets,
-        aliases: ["i"],
+        inputIdRef: { type, id: "i" },
         connections: [],
         sendToRoutes: true,
         conf: {},
@@ -1386,5 +1390,59 @@ describe("event breaker classification", () => {
     expect(brk("SPLUNK_HEC")).toBe("default"); // case-insensitive
     expect(BREAKER_CONFIGURABLE_INPUT_TYPES).toContain("azure_blob");
     expect(BREAKER_CONFIGURABLE_INPUT_TYPES).not.toContain("syslog");
+  });
+});
+
+/**
+ * DBT-162: attribution matches the `<type>:<id>` value events carry, through
+ * the same helper the onboarding route walk uses. The bare id is kept ONLY as
+ * a flagged legacy match - the form this app's wiring writes.
+ */
+describe("buildLiveDiagram - __inputId forms (DBT-162)", () => {
+  const withFilter = (filter: string): LiveArchitectureSnapshot => ({
+    ...labSnapshot(),
+    routes: ok({
+      routes: [{ id: "r2", name: "pan", filter, output: "splunk_dest", final: true }],
+    }),
+  });
+  const legacyNotes = (notes: string[]) => notes.filter((n) => n.includes("legacy match"));
+  const PAN_FLOW = { key: "g:syslog_pan>r2>splunk_dest", label: "syslog_pan -> pan -> splunk_dest", azure: false };
+
+  it("a typed filter attributes the input as a plain match", () => {
+    const { flows, notes } = buildLiveDiagram(withFilter("__inputId=='syslog:syslog_pan'"), {
+      azureOnly: false,
+    });
+    expect(flows).toEqual([PAN_FLOW]);
+    expect(legacyNotes(notes)).toEqual([]);
+    expect(notes.some((n) => n.includes("unknown input id"))).toBe(false);
+  });
+
+  it("a bare-id filter still draws, flagged on the flow and named in a note", () => {
+    const { flows, notes } = buildLiveDiagram(withFilter("__inputId=='syslog_pan'"), {
+      azureOnly: false,
+    });
+    expect(flows).toEqual([{ ...PAN_FLOW, legacyInputMatch: true }]);
+    expect(legacyNotes(notes)).toEqual([
+      "Route 'pan' names input 'syslog_pan' by its bare id; its events carry __inputId " +
+        "'syslog:syslog_pan', so this legacy match is drawn but may route nothing.",
+    ]);
+  });
+
+  it("a list naming both forms is typed, never legacy", () => {
+    const { flows, notes } = buildLiveDiagram(
+      withFilter("['syslog_pan','syslog:syslog_pan'].includes(__inputId)"),
+      { azureOnly: false },
+    );
+    expect(flows).toEqual([PAN_FLOW]);
+    expect(legacyNotes(notes)).toEqual([]);
+  });
+
+  it("a typed prefix selects by type; a bare-id prefix is legacy", () => {
+    expect(
+      buildLiveDiagram(withFilter("__inputId.startsWith('syslog:')"), { azureOnly: false }).flows,
+    ).toEqual([PAN_FLOW]);
+    expect(
+      buildLiveDiagram(withFilter("__inputId.startsWith('syslog_')"), { azureOnly: false }).flows,
+    ).toEqual([{ ...PAN_FLOW, legacyInputMatch: true }]);
   });
 });

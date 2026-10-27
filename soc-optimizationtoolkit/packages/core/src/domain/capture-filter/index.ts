@@ -10,3 +10,6 @@ export type { CaptureFilterInput } from "./capture-filter";
 // were reachable only from their own tests. A test importing the module
 // directly loses nothing.
 export { buildCaptureFilter, captureFilterWarning } from "./capture-filter";
+// The __inputId value and filter matching every route reader shares (DBT-162).
+export type { InputIdFilter, InputIdMatch, InputIdRef } from "./input-id";
+export { inputIdValue, matchInputIdFilter } from "./input-id";

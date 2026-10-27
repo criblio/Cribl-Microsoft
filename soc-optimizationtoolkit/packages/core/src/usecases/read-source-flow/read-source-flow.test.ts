@@ -255,23 +255,49 @@ describe("routeConsumption", () => {
     final: extra.final ?? true,
     disabled: extra.disabled ?? false,
   });
+  const EH_X = { type: "eventhub", id: "x" };
 
   it("skips disabled routes", () => {
-    const r = routeConsumption(table([row("d", "true", { disabled: true }), row("p", "__inputId.startsWith('eventhub:')")]), "eventhub:x");
+    const r = routeConsumption(table([row("d", "true", { disabled: true }), row("p", "__inputId.startsWith('eventhub:')")]), EH_X);
     expect(r).toMatchObject({ kind: "consumes", routes: [{ id: "p" }] });
   });
 
   it("collects non-final copies before the final match", () => {
-    const r = routeConsumption(table([row("c", "['eventhub:x'].includes(__inputId)", { final: false }), row("f", "true")]), "eventhub:x");
+    const r = routeConsumption(table([row("c", "['eventhub:x'].includes(__inputId)", { final: false }), row("f", "true")]), EH_X);
     expect(r).toMatchObject({ kind: "consumes", routes: [{ id: "c" }, { id: "f" }] });
   });
 
   it("no final match over a complete table is not-routed", () => {
-    expect(routeConsumption(table([row("o", "__inputId=='syslog:a'")]), "eventhub:x")).toEqual({ kind: "not-routed", copies: [] });
+    expect(routeConsumption(table([row("o", "__inputId=='syslog:a'")]), EH_X)).toEqual({ kind: "not-routed", copies: [] });
   });
 
   it("matches type and id, not id alone", () => {
-    expect(routeConsumption(table([row("o", "__inputId=='azure_blob:x'")]), "eventhub:x").kind).toBe("not-routed");
+    expect(routeConsumption(table([row("o", "__inputId=='azure_blob:x'")]), EH_X).kind).toBe("not-routed");
+  });
+
+  // DBT-162: the bare-id filter this app's wiring writes is still a match, so
+  // the app's own route shows - but flagged, because the events carry
+  // `eventhub:x` and a capture found the bare form matching nothing.
+  it("a bare-id filter consumes as a FLAGGED legacy match", () => {
+    expect(routeConsumption(table([row("w", "__inputId=='x'")]), EH_X)).toEqual({
+      kind: "consumes",
+      routes: [{ id: "w", name: "w", filter: "__inputId=='x'", final: true, legacyBareMatch: true }],
+    });
+  });
+
+  it("a typed filter is a plain match, and a list naming both forms is typed", () => {
+    const typed = routeConsumption(table([row("t", "__inputId=='eventhub:x'")]), EH_X);
+    expect(typed).toEqual({ kind: "consumes", routes: [{ id: "t", name: "t", filter: "__inputId=='eventhub:x'", final: true }] });
+    const both = routeConsumption(table([row("b", "['x','eventhub:x'].includes(__inputId)")]), EH_X);
+    expect(both).toMatchObject({ kind: "consumes", routes: [{ id: "b" }] });
+    expect((both as { routes: object[] }).routes[0]).not.toHaveProperty("legacyBareMatch");
+  });
+
+  it("reads the same inputs Live Architecture does: a missing type is 'unknown', not ''", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith({ status: 200, body: { items: [{ id: "x" }] } }, { status: 200, body: { routes: [] } });
+    const side = await readOnboardingCriblSide(cribl, "g", [EH_X]);
+    expect(side.inputs[0]!.input).toMatchObject({ kind: "present", type: "unknown" });
   });
 });
 
