@@ -46,9 +46,13 @@ export const SECRETS_API_PATH = "/system/secrets";
 
 /**
  * Shape the create request for the named Sentinel client secret. Cribl text
- * secrets are created with POST /system/secrets carrying `{ id, type: 'text',
- * value }`; a 409/conflict means the secret already exists and the shell should
- * fall back to {@link buildUpdateSecretRequest} (create-or-update).
+ * secrets are created with POST /system/secrets carrying `{ id, secretType:
+ * 'text', value }`; a 409/conflict means the secret already exists and the
+ * shell should fall back to {@link buildUpdateSecretRequest} (create-or-update).
+ *
+ * `secretType`, NEVER `type` (DBT-151): the vendored OpenAPI RestSecret
+ * requires `id` and `secretType`, and the AZR-34 writer (buildSecretBody in
+ * cribl-onboarding-source) already sends it.
  *
  * @param secretValue TRANSIENT client secret - never logged or persisted.
  * @param groupId Optional worker group scope for the secret.
@@ -62,7 +66,7 @@ export function buildEnsureSecretRequest(
     path: SECRETS_API_PATH,
     body: {
       id: SENTINEL_CLIENT_SECRET_NAME,
-      type: "text",
+      secretType: "text",
       value: secretValue,
     },
   };
@@ -85,7 +89,7 @@ export function buildUpdateSecretRequest(
     path: `${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`,
     body: {
       id: SENTINEL_CLIENT_SECRET_NAME,
-      type: "text",
+      secretType: "text",
       value: secretValue,
     },
   };

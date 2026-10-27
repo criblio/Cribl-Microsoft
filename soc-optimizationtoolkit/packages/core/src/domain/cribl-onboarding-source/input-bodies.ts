@@ -15,8 +15,8 @@
  * legacy template's buildEventHubSourceConfig does, eventhub-discovery.ts).
  *
  * `secretType`, NEVER `type`: RestSecret requires `id` and `secretType`
- * (cribl-openapi.json RestSecret.required). The older secret writers send
- * `type` (a filed bug card, not fixed here).
+ * (cribl-openapi.json RestSecret.required). The older secret writers sent
+ * `type` until DBT-151 brought them into line.
  *
  * Every body is stamped with the kit's stampDescription so ownership can be
  * proven later (kit/config-writes/ownership.ts, config-plane-writes rule 11).

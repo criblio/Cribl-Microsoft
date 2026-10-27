@@ -62,13 +62,14 @@ export async function finalizeFlowLogPack(
   };
 
   // --- 1. Secret (create-or-update; the guided-deploy convention) ---------
+  // `secretType`, never `type`: RestSecret requires it (DBT-151).
   const secretValue = input.clientSecret ?? "";
   if (secretValue !== "") {
     const create = await cribl.request({
       method: "POST",
       path: "/system/secrets",
       groupId: input.groupId,
-      body: { id: FLOWLOG_SECRET_NAME, type: "text", value: secretValue },
+      body: { id: FLOWLOG_SECRET_NAME, secretType: "text", value: secretValue },
     });
     if (is2xx(create.status)) {
       outcome.secret = "created";
@@ -78,7 +79,7 @@ export async function finalizeFlowLogPack(
         method: "PATCH",
         path: `/system/secrets/${FLOWLOG_SECRET_NAME}`,
         groupId: input.groupId,
-        body: { id: FLOWLOG_SECRET_NAME, type: "text", value: secretValue },
+        body: { id: FLOWLOG_SECRET_NAME, secretType: "text", value: secretValue },
       });
       if (!is2xx(update.status)) {
         throw new Error(
