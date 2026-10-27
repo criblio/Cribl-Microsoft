@@ -446,6 +446,14 @@ describe("policy-remediation: outcomes", () => {
     expect(check(AUDIT, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({ kind: "as-expected" });
     // Matched case-insensitively, on the id's last segment.
     expect(check(AUDIT, [remediation("cribl-au-central", "succeeded")])).toEqual({ kind: "as-expected" });
+    // Today's instructed name is also a family member, so the case above
+    // cannot tell the exact-name match from the family match. An instructed
+    // name outside the family can: only the exact-name match accepts it.
+    const outside: CheckExpectations = {
+      ...AUDIT,
+      policy: { ...AUDIT.policy!, assignmentName: "Contoso-Diag-Policy" },
+    };
+    expect(check(outside, [remediation("contoso-diag-policy", "Succeeded")])).toEqual({ kind: "as-expected" });
   });
 
   it("with no instructed name, a Succeeded remediation in the legacy family is as-expected", () => {
