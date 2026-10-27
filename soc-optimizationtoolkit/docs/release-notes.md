@@ -8,6 +8,36 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## Unreleased
+
+**Ensure Cribl secret no longer overwrites a secret it cannot show it wrote
+(DBT-152).** Sentinel Integration's "Ensure Cribl secret" and the Labs
+flow-log pack used to replace an existing secret of the same name
+(`sentinel_client_secret`, `Azure_vNet_Flowlogs_Secret`) whoever had made it,
+and the pack did so on a 400 as well. Now a create that answers 409 is followed
+by a read of the secret, and it is updated only when its description carries
+this app's `[managed-by:soc-optimizationtoolkit]` stamp. Otherwise it is left
+unchanged and the operator is told why. A 400 is reported as an error. Secrets
+written by 1.12.9 and earlier carry no stamp, so updating one of those is
+refused the first time: delete it in Cribl, or add the stamp to its
+description, then run the action again. A refused flow-log pack secret stops
+the finish before the commit; the pack itself has already been installed.
+
+**A failed read of the saved deployment options no longer leads to them being
+overwritten (DBT-158).** When the app could not read its saved options, it
+showed the defaults, and the next Sentinel Integration DCE toggle saved those
+defaults over the real options. Sentinel Integration and DCR Automation (single
+and batch) now say the saved options could not be read and offer "Retry
+reading options". Until a read succeeds, the toggle is read-only and nothing is
+saved; the values on screen are the defaults.
+
+**A refused cache or token-status read is no longer reported as something
+else (DBT-159).** Repositories shows "Token status unknown" instead of saying no
+token is saved when the saved-token status cannot be read. The solution browser
+fetches from GitHub when its content cache refuses a read or a write, and shows
+a note saying so; it no longer fails the index load with a message that blamed
+the GitHub token. Sample intake says when a saved vendor name could not be read.
+
 ## 1.12.9
 
 **An empty worker-group list now says why (DBT-134).** A tester saw a worker

@@ -12,8 +12,9 @@
  * input that is ours and matches is "already applied" (zero writes); one that
  * differs, or that this app cannot prove it created, is REFUSED with the
  * fields named. A secret that already exists is refused rather than
- * overwritten: another admin's secret of the same name must never be replaced
- * (contrast the older ensure-secret writers, a filed bug card).
+ * overwritten: another admin's secret of the same name must never be replaced.
+ * Even one this app provably owns is refused here, where ensureTextSecret
+ * (usecases/ensure-secret, DBT-152) PATCHes its own stamped secret on a 409.
  *
  * LISTEN, NOT SEND. A Cribl Event Hub SOURCE reads, so the rule behind its
  * credential needs Listen or Manage. The AZR-18 picker chooses a Send rule for

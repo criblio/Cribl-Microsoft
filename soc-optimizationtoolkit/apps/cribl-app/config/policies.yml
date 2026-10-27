@@ -53,7 +53,12 @@
 #                                              only of a secret whose
 #                                              description carries this app's
 #                                              stamp (DBT-152)
-#   /system/lake/datasets (post)             - CLOUD-ONLY Cribl Lake dataset
+#   /m/{groupId}/system/secrets/{id} (get)   - ensure-secret read of who owns
+#                                              the secret a 409 named (DBT-152);
+#                                              the route is declared with the
+#                                              Azure Native Source Onboarding
+#                                              paths below
+#   /system/lake/datasets (post)            - CLOUD-ONLY Cribl Lake dataset
 #                                              create (409/exists is success); a
 #                                              leader route, no /m/ prefix
 # The wiring's commit (/m/{groupId}/version/commit) and deploy
@@ -69,6 +74,8 @@
 #   /m/{groupId}/system/inputs/{id} (get)   - the kit's verifyStored read-back
 #   /m/{groupId}/system/secrets/{id} (get)  - create-cribl-source plan: is the
 #                                             secret id free, ours or foreign
+#                                             (also ensure-text-secret after a
+#                                             409, DBT-152)
 #   /m/{groupId}/version/status (get)       - the kit's commitScope /
 #                                             commitAndDeploy status reads
 #   /m/{groupId}/version (get)              - the kit's HEAD read
@@ -205,8 +212,8 @@ policies:
     actions: ['PATCH']
   # ensure-text-secret (DBT-152): after a 409, read who owns the secret.
   # create-cribl-source plan (AZR-34): read one named secret to classify it as
-  # absent, ours or foreign before any write. A 409 on create refuses; it is
-  # never PATCHed.
+  # absent, ours or foreign before any write. A 409 on ITS create refuses; it
+  # never PATCHes (ensure-text-secret above is the only secret PATCH).
   - object: '/m/:gid/system/secrets/:id'
     actions: ['GET']
   # read-source-flow (AZR-33): the per-input intake query behind the onboarding
