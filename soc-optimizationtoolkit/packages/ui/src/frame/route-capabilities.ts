@@ -59,12 +59,15 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // the backlog as a taxonomy gap rather than papered over here.
     "eventhub-discovery": [],
     // EXPLICITLY EMPTY, not forgotten. Azure Native Source Onboarding needs
-    // three actions no capability in the taxonomy measures yet - reading
-    // Defender pricings, writing the security automation, and listing the
-    // Event Hub rule's keys. Mapping them onto arm.deploy or a workspace read
-    // would misreport what is checked, so the screen renders them itself as
-    // "needed, not yet measured". CAP-7 (under CAP-F1) adds the capabilities;
-    // this entry changes when it lands.
+    // Defender pricings read, the security automation read and write, and the
+    // Event Hub rule's listKeys. CAP-7a added the three Defender capabilities
+    // (defender-plans.read, defender-automation.read/.write), measured only by
+    // an existing-subscription audit; listKeys is still unmeasured (CAP-7b).
+    // The entry stays [] because the screen still renders both lists itself as
+    // "needed, not yet measured" and reads no verdict, and because the route
+    // is several sources: gating all of it on the Defender export would flag
+    // the Event Hub and Entra paths for an operator who never touches Defender.
+    // It changes together with that screen copy, under CAP-7.
     "azure-onboarding": [],
     "mapping-catalog": [],
     // Same gap, same precedent as eventhub-discovery above. The logging map

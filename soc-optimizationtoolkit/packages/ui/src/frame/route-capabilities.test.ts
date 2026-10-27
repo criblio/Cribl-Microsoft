@@ -17,6 +17,10 @@ describe("ROUTE_CAPABILITIES['azure-onboarding']", () => {
     expect(Object.hasOwn(ROUTE_CAPABILITIES, "azure-onboarding")).toBe(true);
   });
 
+  // CAP-7a added the Defender capabilities but deliberately left this entry
+  // empty (see the comment above it in route-capabilities.ts): the screen
+  // still states its permissions as not yet measured, and the route serves
+  // more than the Defender export.
   it("requires nothing until CAP-7 measures its actions", () => {
     expect(ROUTE_CAPABILITIES["azure-onboarding"]).toEqual([]);
     expect(capabilitiesForRoute("azure-onboarding")).toEqual([]);

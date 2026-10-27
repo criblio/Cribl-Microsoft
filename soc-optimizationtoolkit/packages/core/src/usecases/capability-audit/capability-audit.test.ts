@@ -186,6 +186,23 @@ describe("persistence", () => {
     expect(stored.connectionId).toBe(KEY);
   });
 
+  it("stores and restores the Defender verdicts an existing-subscription audit measured", async () => {
+    // CAP-7a. The cached set is decoded against the capability taxonomy, which
+    // DROPS names it does not know - so a capability missing from the taxonomy
+    // would be measured, saved, and silently lost on the next launch.
+    const cache = new FakeContentCache();
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(permSet({ actions: ["*/read"] })), OK, OK);
+    const subInput: CapabilityAuditInput = { ...INPUT, setupPath: "existing-subscription" };
+    const first = await runCapabilityAudit({ azure, cribl: new FakeCriblClient(), cache }, subInput);
+    expect(first.set.verdicts["defender-automation.write"]).toBe("denied");
+
+    const stored = await loadCachedCapabilities(cache);
+    expect(stored.verdicts["defender-plans.read"]).toBe("granted");
+    expect(stored.verdicts["defender-automation.read"]).toBe("granted");
+    expect(stored.verdicts["defender-automation.write"]).toBe("denied");
+  });
+
   it("re-audits after a scope change, because the key changed", async () => {
     const cache = new FakeContentCache();
     await runCapabilityAudit(ownerPorts(cache), INPUT);

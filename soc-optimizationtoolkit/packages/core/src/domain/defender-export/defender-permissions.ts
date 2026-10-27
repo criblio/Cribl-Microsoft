@@ -1,12 +1,15 @@
 /**
- * The Azure actions the Defender export needs - STATED, NOT YET MEASURED.
+ * The Azure actions the Defender export needs, per scope.
  *
  * AZR-3. The permission preflight measures capabilities (`domain/capabilities`)
- * from effective actions and probes, and none of them covers Microsoft.Security
- * or an Event Hub listKeys. The capabilities and probes that would are filed
- * as CAP-7; until they land, the screen shows these lists under
- * {@link DEFENDER_ACTIONS_NOT_MEASURED} and Azure's own 403 at each step is
- * what the operator actually sees.
+ * from effective actions and probes. CAP-7a measures the SUBSCRIPTION list:
+ * REQUIRED_ACTIONS['existing-subscription'] spreads it in as `feature` checks,
+ * and capability-mapping turns each into a capability. The NAMESPACE list is
+ * still unmeasured (CAP-7b): listKeys can be granted on the namespace itself,
+ * so a subscription-scope evaluation would read it as denied. The screen still
+ * shows both lists under {@link DEFENDER_ACTIONS_NOT_MEASURED}, because it does
+ * not read the audit's verdicts, and Azure's own 403 at each step is what the
+ * operator actually sees.
  *
  * ONE LIST PER SCOPE, BECAUSE THE SCOPES DIFFER AND `RequiredAction` HAS NO
  * SCOPE FIELD. The automation is written at the subscription; the connection
@@ -17,8 +20,9 @@
  *
  * EVERY ACTION IS `feature`. Deploy readiness is one boolean over the
  * REQUIRED_ACTIONS core entries; the Defender export is one feature, and a
- * denial here must never report the DCR path as not ready. None of these lists
- * is merged into REQUIRED_ACTIONS - that is pinned.
+ * denial here must never report the DCR path as not ready. Only the
+ * subscription list is merged into REQUIRED_ACTIONS, only on the
+ * subscription-scope path, and only as `feature` - all three are pinned.
  *
  * NO PRICINGS WRITE, EVER. The app reads which Defender plans are on and never
  * changes one (see defender-plans). Listing `pricings/write` here would ask an
@@ -37,20 +41,28 @@
 
 import type { RequiredAction } from "../azure-permissions/azure-permissions";
 
+// Named so capability-mapping can key on them without restating the strings.
+/** Read which Defender plans are on (defender-plans). */
+export const DEFENDER_PRICINGS_READ = "Microsoft.Security/pricings/read";
+/** List the subscription's continuous exports (defender-automation). */
+export const DEFENDER_AUTOMATIONS_READ = "Microsoft.Security/automations/read";
+/** Create the continuous export (defender-automation). */
+export const DEFENDER_AUTOMATIONS_WRITE = "Microsoft.Security/automations/write";
+
 /** Actions at the SUBSCRIPTION the export watches. */
 export const DEFENDER_SUBSCRIPTION_ACTIONS: readonly RequiredAction[] = [
   {
-    action: "Microsoft.Security/pricings/read",
+    action: DEFENDER_PRICINGS_READ,
     label: "Read which Defender plans are enabled",
     necessity: "feature",
   },
   {
-    action: "Microsoft.Security/automations/read",
+    action: DEFENDER_AUTOMATIONS_READ,
     label: "List the subscription's continuous exports",
     necessity: "feature",
   },
   {
-    action: "Microsoft.Security/automations/write",
+    action: DEFENDER_AUTOMATIONS_WRITE,
     label: "Create the continuous export",
     necessity: "feature",
   },

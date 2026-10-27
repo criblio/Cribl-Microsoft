@@ -8,7 +8,8 @@
  * annotation; step 4 routes each `kind` to the generator that already exists.
  *
  * THE READ CAPABILITIES HAVE NO FALLBACK, and that is a deliberate answer rather
- * than a gap. Without `dcr.read` / `workspace.read` / `table.read` discovery
+ * than a gap. Without `dcr.read` / `workspace.read` / `table.read` (or the
+ * Defender `.read` pair) discovery
  * genuinely cannot run - there is no artifact a colleague could hand back that
  * substitutes for being able to list the resources. The plan is explicit that
  * the honest UI says so instead of inventing an offline substitute, so
@@ -31,7 +32,8 @@ export type CapabilityFallbackKind =
   | "arm-template"
   | "role-assignment-request"
   | "app-registration-request"
-  | "cribl-pack";
+  | "cribl-pack"
+  | "defender-howto-steps";
 
 /** What the operator gets when an action is blocked. */
 export interface CapabilityFallback {
@@ -93,6 +95,16 @@ export const CAPABILITY_FALLBACKS: Readonly<
     kind: "cribl-pack",
     label: "Built Cribl pack (.crbl)",
     action: "The pack carries the routes - upload it by hand.",
+  },
+  // CAP-7a. Its own kind rather than `arm-template`: that kind's run is the
+  // Sentinel Integration export, which builds no continuous export. The How-to
+  // steps (onboarding-howto-steps/defender-steps) carry the body the Automated
+  // mode would PUT, built by the same builder, with the connection string
+  // stood in - the artifact someone with Security Admin can follow.
+  "defender-automation.write": {
+    kind: "defender-howto-steps",
+    label: "How-to steps for the Defender continuous export",
+    action: "Hand them to someone with Security Admin on the subscription to follow.",
   },
 });
 

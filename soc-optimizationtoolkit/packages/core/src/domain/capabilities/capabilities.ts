@@ -18,7 +18,14 @@
  * timestamp is supplied by the caller - the shell owns the clock.
  */
 
-/** Azure-side capabilities, named for the ACTION rather than the role. */
+/**
+ * Azure-side capabilities, named for the ACTION rather than the role.
+ *
+ * The three `defender-*` entries (CAP-7a) cover the Defender for Cloud
+ * continuous export: reading which plans are on, listing the subscription's
+ * exports, and creating one. They are measured from the subscription-scope
+ * RBAC evaluation only - no probe of them exists, and none may grant the write.
+ */
 export type AzureCapability =
   | "dcr.write"
   | "dcr.read"
@@ -26,7 +33,10 @@ export type AzureCapability =
   | "table.read"
   | "workspace.read"
   | "arm.deploy"
-  | "role.assign";
+  | "role.assign"
+  | "defender-plans.read"
+  | "defender-automation.read"
+  | "defender-automation.write";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -45,6 +55,9 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "workspace.read",
   "arm.deploy",
   "role.assign",
+  "defender-plans.read",
+  "defender-automation.read",
+  "defender-automation.write",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([

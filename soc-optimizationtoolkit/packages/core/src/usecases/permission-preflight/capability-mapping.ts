@@ -44,6 +44,11 @@ import type {
   CriblCapability,
 } from "../../domain/capabilities";
 import type { SetupPath } from "../../domain/azure-permissions";
+import {
+  DEFENDER_AUTOMATIONS_READ,
+  DEFENDER_AUTOMATIONS_WRITE,
+  DEFENDER_PRICINGS_READ,
+} from "../../domain/defender-export/defender-permissions";
 import type { AzurePreflight, CriblPreflight, PermissionReport } from "./permission-preflight";
 import { checkedAzureActions } from "./permission-preflight";
 
@@ -60,6 +65,11 @@ import { checkedAzureActions } from "./permission-preflight";
  * concerns with no capability in the settled taxonomy, and inventing one here
  * would widen a model the plan closed. An unmapped action is simply not a
  * capability signal - it is never an error.
+ *
+ * The three Defender keys (CAP-7a) are imported from the Defender domain, so
+ * the action this table maps is the action REQUIRED_ACTIONS checks by
+ * construction. They appear only on `existing-subscription`, so only an audit
+ * of that path records them; every other path leaves them unmeasured.
  */
 export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>> =
   Object.freeze({
@@ -69,6 +79,9 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
     "Microsoft.OperationalInsights/workspaces/read": "workspace.read",
     "Microsoft.Resources/deployments/write": "arm.deploy",
     "Microsoft.Authorization/roleAssignments/write": "role.assign",
+    [DEFENDER_PRICINGS_READ]: "defender-plans.read",
+    [DEFENDER_AUTOMATIONS_READ]: "defender-automation.read",
+    [DEFENDER_AUTOMATIONS_WRITE]: "defender-automation.write",
   });
 
 /**

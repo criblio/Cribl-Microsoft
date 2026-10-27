@@ -197,11 +197,20 @@ describe("evaluatePermissions / allGranted per setup path", () => {
   });
 
   it("Reader grants the read-only path but denies any write path", () => {
+    // RE-PINNED 2026-10-27 (CAP-7a) from allGranted to coreGranted plus an
+    // exact missing list. The path now carries the Defender export's
+    // automations/write as a `feature` check, which '*/read' cannot grant, so
+    // allGranted is false for a Reader who can still do everything the path's
+    // core does. The exact list keeps the pin as strong as it was: one denial,
+    // and it is that write - not a read the Reader should have.
     const readResults = evaluatePermissions(
       response(READER),
       REQUIRED_ACTIONS["existing-subscription"],
     );
-    expect(allGranted(readResults)).toBe(true);
+    expect(coreGranted(readResults)).toBe(true);
+    expect(missingFeatureActions(readResults).map((r) => r.action)).toEqual([
+      "Microsoft.Security/automations/write",
+    ]);
 
     const writeResults = evaluatePermissions(
       response(READER),
@@ -210,6 +219,28 @@ describe("evaluatePermissions / allGranted per setup path", () => {
     expect(allGranted(writeResults)).toBe(false);
     // Every existing-rg action is a write, so none are granted by '*/read'.
     expect(writeResults.every((r) => !r.granted)).toBe(true);
+  });
+
+  it("an identity with no Microsoft.Security access is still ready on existing-subscription", () => {
+    // CAP-7a. The Defender actions are measured on this path and reported, and
+    // must never turn the path's readiness false: an operator who can read DCRs
+    // and workspaces but has no Security role is exactly as ready as before.
+    const discoveryOnly = permSet({
+      actions: [
+        "Microsoft.Insights/dataCollectionRules/read",
+        "Microsoft.OperationalInsights/workspaces/read",
+      ],
+    });
+    const results = evaluatePermissions(
+      response(discoveryOnly),
+      REQUIRED_ACTIONS["existing-subscription"],
+    );
+    expect(coreGranted(results)).toBe(true);
+    expect(missingFeatureActions(results).map((r) => r.action)).toEqual([
+      "Microsoft.Security/pricings/read",
+      "Microsoft.Security/automations/read",
+      "Microsoft.Security/automations/write",
+    ]);
   });
 
   it("Contributor satisfies the CORE actions of existing-rg and lab-byo-rg", () => {

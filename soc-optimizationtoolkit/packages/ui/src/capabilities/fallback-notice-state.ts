@@ -31,6 +31,8 @@ export function fallbackActionLabel(kind: CapabilityFallbackKind): string {
       return "Generate the app-registration request";
     case "cribl-pack":
       return "Download the pack (.crbl)";
+    case "defender-howto-steps":
+      return "Show the How-to steps";
   }
 }
 
@@ -51,6 +53,10 @@ export function isInlineArtifact(kind: CapabilityFallbackKind): boolean {
 
 /** One line of context under the offer, or null when the label says enough. */
 export function fallbackHint(kind: CapabilityFallbackKind): string | null {
+  if (kind === "defender-howto-steps") {
+    // Not a run: the steps are rendered, and rendering them writes nothing.
+    return "Written out as steps - showing them makes no live changes.";
+  }
   return isInlineArtifact(kind)
     ? "Generated here - paste it into a ticket."
     : "Produced by a run that makes no live changes.";
@@ -106,6 +112,13 @@ export function fallbackRunPointer(kind: CapabilityFallbackKind): string | null 
         "Sentinel Integration's Deploy section produces this: Export instead " +
         "of deploy assembles the pack without installing it, and includes it " +
         "in the .tgz once the Gap Analysis mappings are approved."
+      );
+    case "defender-howto-steps":
+      return (
+        "Azure Native Source Onboarding's How to set it up yourself section " +
+        "produces these: set the Defender export to How-to and its steps " +
+        "carry the export body the app would create, with the connection " +
+        "string left for whoever follows them."
       );
     case "role-assignment-request":
     case "app-registration-request":

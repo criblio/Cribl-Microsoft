@@ -28,6 +28,7 @@
  */
 
 import type { AzureSetupPath } from "../azure-config";
+import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../defender-export/defender-permissions";
 
 /**
  * One element of the RBAC permissions API response - the effective permission
@@ -190,8 +191,11 @@ export type SetupPath =
  * These are the operations the app itself performs on the customer's behalf,
  * so the preflight checks EXACTLY these rather than trusting any role name:
  *
- * - `existing-subscription` - discovery only, evaluated at the subscription
- *   scope (Reader breadth is sufficient).
+ * - `existing-subscription` - discovery, evaluated at the subscription scope
+ *   (Reader breadth covers its core reads). It also carries the Defender
+ *   export's subscription actions as `feature` checks (CAP-7a), because the
+ *   pricings and automations it reads and writes are subscription-scoped, so
+ *   this is the one path whose scope matches them. They never gate.
  * - `existing-rg` - the writes the DCR automation performs against an existing
  *   workspace resource group.
  * - `lab-new-rg-subscription` - create-new-resource-group lab mode, evaluated
@@ -216,6 +220,11 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       action: "Microsoft.OperationalInsights/workspaces/read",
       label: "Read workspaces",
     },
+    // CAP-7a. Spread from the Defender domain rather than restated, so the
+    // screen's list and the measured list are one list. The namespace's
+    // listKeys is NOT here: it can be granted on the namespace alone, and this
+    // path evaluates the subscription, so it would read as denied (CAP-7b).
+    ...DEFENDER_SUBSCRIPTION_ACTIONS,
   ],
   "existing-rg": [
     {

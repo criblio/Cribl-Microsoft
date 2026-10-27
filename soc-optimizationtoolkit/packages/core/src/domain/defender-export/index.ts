@@ -2,7 +2,8 @@
  * defender-export domain barrel (AZR-3): Defender for Cloud continuous export
  * to an Event Hub. Plans are read and never written; the automation is
  * created only, never replaced, and recognised by name in any resource group;
- * the actions it needs are stated per scope and not yet measured. All pure.
+ * the actions it needs are stated per scope, and the subscription ones are
+ * measured by the permission preflight (CAP-7a). All pure.
  */
 
 export {
