@@ -79,6 +79,42 @@ describe("patFormReducer", () => {
     expect(afterEdit.error).toBe("");
   });
 
+  it("hydrate-error keeps the status UNKNOWN and carries the reason (DBT-159)", () => {
+    const s = patFormReducer(initialPatFormState(), {
+      type: "hydrate-error",
+      message: "KV read refused (403)",
+    });
+    // null, not { hasPat: false }: nothing was learned about the token.
+    expect(s.status).toBeNull();
+    expect(s.statusError).toBe("KV read refused (403)");
+    // It is not a form error - nothing the operator typed was rejected.
+    expect(s.error).toBe("");
+  });
+
+  it("a status that IS learned later replaces the unknown (DBT-159)", () => {
+    const failed = { type: "hydrate-error", message: "refused" } as const;
+    const afterSave = reduce(
+      initialPatFormState(),
+      failed,
+      { type: "submit-start" },
+      { type: "submit-result", status: { hasPat: true, login: "octo" } },
+    );
+    expect(afterSave.statusError).toBe("");
+    const afterClear = reduce(
+      initialPatFormState(),
+      failed,
+      { type: "clear-start" },
+      { type: "clear-result" },
+    );
+    expect(afterClear.statusError).toBe("");
+    // An edit is not evidence about the stored token, so it leaves it alone.
+    const afterEdit = reduce(initialPatFormState(), failed, {
+      type: "edit",
+      value: "ghp_x",
+    });
+    expect(afterEdit.statusError).toBe("refused");
+  });
+
   it("clear-result resets to the no-PAT state", () => {
     const s = reduce(
       initialPatFormState(),
@@ -124,6 +160,19 @@ describe("derivePatFormView", () => {
     expect(view.login).toBe("octocat");
     expect(view.canClear).toBe(true);
     expect(view.submitLabel).toMatch(/replace/i);
+  });
+
+  it("exposes an unknown status with its reason, and no stored PAT claimed (DBT-159)", () => {
+    const view = derivePatFormView(
+      patFormReducer(initialPatFormState(), {
+        type: "hydrate-error",
+        message: "KV read refused (403)",
+      }),
+    );
+    expect(view.statusUnknown).toBe("KV read refused (403)");
+    expect(view.hasPat).toBe(false);
+    expect(view.canClear).toBe(false);
+    expect(derivePatFormView(initialPatFormState()).statusUnknown).toBe("");
   });
 
   it("disables everything while a round-trip is in flight", () => {
@@ -185,6 +234,41 @@ describe("deriveReachabilityStatus - reachable + PAT-valid + indexed, never 'dow
     expect(s.label).toMatch(/valid/i);
     expect(s.detail.toLowerCase()).not.toContain("download");
     expect(s.detail.toLowerCase()).toContain("lazily");
+  });
+
+  it("a REFUSED status read is unknown with its reason, never 'no token' (DBT-159)", () => {
+    // Cloud is the case that matters: with hasPat false the derivation used to
+    // say "Not connected - a token is required" about a token that may well be
+    // saved. Not knowing is its own state.
+    const s = deriveReachabilityStatus({
+      platform: "cloud",
+      hasPat: false,
+      patStatusError: "KV read refused (403)",
+      solutionCount: null,
+      error: "",
+    });
+    expect(s).toEqual({
+      tone: "warn",
+      label: "Token status unknown",
+      detail:
+        "Could not read whether a GitHub token is saved: KV read refused (403). " +
+        "Refresh to check GitHub directly.",
+    });
+  });
+
+  it("an unknown status does not hide a PROVEN connection (DBT-159)", () => {
+    // Refresh answered the question the status read could not: GitHub served
+    // the index, so the page is connected whatever the stored flag says.
+    const s = deriveReachabilityStatus({
+      platform: "cloud",
+      hasPat: false,
+      patStatusError: "KV read refused (403)",
+      solutionCount: 3,
+      error: "",
+    });
+    expect(s.tone).toBe("ok");
+    expect(s.label).toBe("Connected");
+    expect(s.detail).toContain("3 solutions available");
   });
 
   it("connected with a count reports 'N solutions available', never 'downloaded'", () => {

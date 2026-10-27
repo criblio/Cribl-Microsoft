@@ -259,17 +259,30 @@ export function SampleIntakeSection({
   // carries the canonical spelling every existing definition is filed under.
   const [operatorVendor, setOperatorVendor] = useState("");
   const [vendorSaved, setVendorSaved] = useState(false);
+  // Why the saved name could not be READ, "" when it could (DBT-159). Shown
+  // under the box: "never named" and "could not read the name" look the same
+  // in an empty input and ask different things of the operator.
+  const [vendorReadError, setVendorReadError] = useState("");
   const vendorKey = useMemo(() => operatorVendorKey(solutionName), [solutionName]);
 
   useEffect(() => {
     let cancelled = false;
     setOperatorVendor("");
     setVendorSaved(false);
+    setVendorReadError("");
     if (definitionCache === undefined || vendorKey === null || detectedVendor !== "") {
       return;
     }
     void (async () => {
-      const stored = await definitionCache.get(vendorKey);
+      // DBT-159: since DBT-145 a refused KV read THROWS, and with no catch here
+      // it was an unhandled rejection. A refused read is a miss for the box.
+      let stored: unknown;
+      try {
+        stored = await definitionCache.get(vendorKey);
+      } catch (err) {
+        if (!cancelled) setVendorReadError(String(err));
+        return;
+      }
       if (cancelled || typeof stored !== "string") return;
       setOperatorVendor(stored);
       setVendorSaved(stored !== "");
@@ -674,6 +687,13 @@ export function SampleIntakeSection({
           >
             {vendorSaved ? "Saved" : "Use this vendor"}
           </button>
+          {vendorReadError !== "" && (
+            <p className="field-hint sample-intake-vendor-unread" role="status">
+              A vendor name saved for this solution could not be read (
+              {vendorReadError}), so the box starts empty. Naming it again
+              replaces whatever is stored.
+            </p>
+          )}
           <p className="field-hint">
             This solution is not in the curated vendor list, so column orders
             cannot be remembered for it until you name the vendor. Naming it

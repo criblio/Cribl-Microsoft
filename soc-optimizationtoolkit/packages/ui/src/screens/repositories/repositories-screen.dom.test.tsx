@@ -110,3 +110,40 @@ describe("Repositories screen sections (DBT-118)", () => {
     expect(listElasticTestFiles).toHaveBeenCalledTimes(0);
   });
 });
+
+/**
+ * A REFUSED PAT STATUS READ (DBT-159).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403, and the mount's
+ * status read swallowed the throw and left the form in its no-PAT default. On
+ * the hosted app that rendered "A token is required" and "Not connected" - a
+ * confident NONE about a token that may well be saved, with the actual reason
+ * thrown away. Not knowing is a third state, and it carries its reason.
+ */
+describe("Repositories screen - a refused PAT status read (DBT-159)", () => {
+  async function mountRefused(): Promise<HTMLElement> {
+    const { ports } = makePorts();
+    (ports.githubPat as unknown as { status: () => Promise<never> }).status =
+      vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      });
+    return mount(ports);
+  }
+
+  it("says the token status is UNKNOWN, with the reason", async () => {
+    const container = await mountRefused();
+    const unknown = container.querySelectorAll(".repositories-pat-unknown");
+    expect(unknown).toHaveLength(1);
+    expect(unknown[0].textContent).toContain("KV read refused (403)");
+    expect(container.querySelector(".reachability-label")?.textContent).toBe(
+      "Token status unknown",
+    );
+  });
+
+  it("never reads as 'no token'", async () => {
+    const text = (await mountRefused()).textContent ?? "";
+    expect(countOccurrences(text, "A token is required on this hosted app")).toBe(0);
+    expect(countOccurrences(text, "Not connected")).toBe(0);
+    expect(countOccurrences(text, "GitHub token saved")).toBe(0);
+  });
+});

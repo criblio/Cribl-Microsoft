@@ -172,6 +172,51 @@ interface UnresolvedHandoff {
 }
 
 /**
+ * Read one content-cache entry, answering a REFUSED read as a miss (DBT-159).
+ *
+ * The cache is an optimisation over the content port, so a failed read must
+ * cost speed and nothing else. Since DBT-145 the KV store throws on a
+ * non-encrypted 403 (a 5xx always did), and both reads below used to sit inside
+ * the same try as the GitHub fetch - one refused read failed the whole index
+ * load, under a message blaming the GitHub token. `onRefused` receives the
+ * reason so the caller can SAY the cache is not working rather than becoming a
+ * slow page nobody can explain.
+ */
+async function readCacheOrMiss(
+  cache: { get(key: string): Promise<unknown> },
+  key: string,
+  onRefused: (reason: string) => void,
+): Promise<unknown> {
+  try {
+    return await cache.get(key);
+  } catch (err) {
+    onRefused(String(err));
+    return null;
+  }
+}
+
+/**
+ * Write one content-cache entry, answering a REFUSED write as a skipped store
+ * (DBT-159). A store that refuses a read for want of permission refuses the
+ * write that follows the fall-through too, and a bare `cache.set` there threw
+ * after the content had already been fetched - failing the load the read had
+ * just been taught to survive. The fetched value is still used; only the
+ * saving of it is lost.
+ */
+async function writeCacheOrSkip(
+  cache: { set(key: string, value: unknown): Promise<void> },
+  key: string,
+  value: unknown,
+  onRefused: (reason: string) => void,
+): Promise<void> {
+  try {
+    await cache.set(key, value);
+  } catch (err) {
+    onRefused(String(err));
+  }
+}
+
+/**
  * Translate the screen's fetch phase into the evidence the badge derivation
  * reasons over (DBT-15). Structural on purpose - every judgement about what the
  * evidence MEANS lives in deliveryFitBadge, where it is pinned without a DOM.
@@ -227,6 +272,10 @@ export function SolutionBrowser({
   const [hubDeprecated, setHubDeprecated] = useState<Set<string>>(new Set());
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
+  // The reason the content cache last refused a read or write, "" while it has
+  // not (DBT-159). One string for every refusal: the note describes the cache,
+  // not a key, so a second refusal replaces the first rather than adding a line.
+  const [cacheRefused, setCacheRefused] = useState("");
   const [query, setQuery] = useState("");
   const [hideDeprecated, setHideDeprecated] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -257,6 +306,22 @@ export function SolutionBrowser({
   const [unresolvedHandoff, setUnresolvedHandoff] =
     useState<UnresolvedHandoff | null>(null);
 
+  // A refused cache read or write, logged AND kept for the on-screen note
+  // (DBT-159).
+  const logger = ports.logger;
+  const noteCacheRefused = useCallback(
+    (op: "read" | "write", key: string, reason: string) => {
+      logger?.warn(
+        op === "read"
+          ? "content cache read refused; fetching instead"
+          : "content cache write refused; the fetched value is not saved",
+        { key, reason },
+      );
+      setCacheRefused(reason);
+    },
+    [logger],
+  );
+
   // Load the solution index lazily: resolve the HEAD commit (the cache stamp),
   // then read the cached index for that commit or fetch it once and cache it.
   const loadIndex = useCallback(async () => {
@@ -271,7 +336,9 @@ export function SolutionBrowser({
       const indexKey = solutionIndexCacheKey(sha);
       let list: SolutionRef[] | null = null;
       if (cache !== undefined) {
-        const cached = await cache.get(indexKey);
+        const cached = await readCacheOrMiss(cache, indexKey, (reason) =>
+          noteCacheRefused("read", indexKey, reason),
+        );
         if (Array.isArray(cached)) {
           list = cached as SolutionRef[];
         }
@@ -279,14 +346,16 @@ export function SolutionBrowser({
       if (list === null) {
         list = await content.listSolutions();
         if (cache !== undefined) {
-          await cache.set(indexKey, list);
+          await writeCacheOrSkip(cache, indexKey, list, (reason) =>
+            noteCacheRefused("write", indexKey, reason),
+          );
         }
       }
       setSolutions(list);
     } catch (err) {
       setLoadError(String(err));
     }
-  }, [content, cache]);
+  }, [content, cache, noteCacheRefused]);
 
   useEffect(() => {
     void loadIndex();
@@ -351,7 +420,9 @@ export function SolutionBrowser({
       try {
         const cacheKey = connectorsCacheKey(name, commitSha ?? "");
         if (cache !== undefined) {
-          const cached = await cache.get(cacheKey);
+          const cached = await readCacheOrMiss(cache, cacheKey, (reason) =>
+            noteCacheRefused("read", cacheKey, reason),
+          );
           if (
             cached !== null &&
             typeof cached === "object" &&
@@ -387,14 +458,16 @@ export function SolutionBrowser({
           ingestion: classes.length > 0 ? classifySolutionIngestion(classes) : null,
         };
         if (cache !== undefined) {
-          await cache.set(cacheKey, built);
+          await writeCacheOrSkip(cache, cacheKey, built, (reason) =>
+            noteCacheRefused("write", cacheKey, reason),
+          );
         }
         setDetail({ phase: "loaded", detail: built });
       } catch (err) {
         setDetail({ phase: "error", message: String(err) });
       }
     },
-    [content, cache, commitSha],
+    [content, cache, commitSha, noteCacheRefused],
   );
 
   // Select a solution: record the name and report up. The detail fetch is
@@ -597,6 +670,17 @@ export function SolutionBrowser({
               for it, the same deletion the Clear selection button warns about.
             </>
           )}
+        </p>
+      )}
+      {/* DBT-159. The page still works with the cache refusing reads or writes - every
+          read fell through to GitHub - so this is a note, not an error: it
+          explains a slower page that spends the request budget the cache was
+          there to save. */}
+      {cacheRefused !== "" && (
+        <p className="field-hint solution-browser-cache-note" role="status">
+          The content cache could not be used ({cacheRefused}), so this was
+          fetched from GitHub instead. Everything still works; it is slower and
+          uses more of the request budget until the cache can be used again.
         </p>
       )}
       {loadError !== "" ? (
