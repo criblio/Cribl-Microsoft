@@ -4,7 +4,9 @@
  * AZR-3. The permission preflight measures capabilities (`domain/capabilities`)
  * from effective actions and probes. CAP-7a measures the SUBSCRIPTION list:
  * REQUIRED_ACTIONS['existing-subscription'] spreads it in as `feature` checks,
- * and capability-mapping turns each into a capability. The NAMESPACE list is
+ * and capability-mapping turns each into a capability - the write only ever as
+ * granted, because the automation lives in a resource group the subscription
+ * evaluation cannot see into (GRANT_ONLY_AZURE_ACTIONS). The NAMESPACE list is
  * still unmeasured (CAP-7b): listKeys can be granted on the namespace itself,
  * so a subscription-scope evaluation would read it as denied. The screen still
  * shows both lists under {@link DEFENDER_ACTIONS_NOT_MEASURED}, because it does

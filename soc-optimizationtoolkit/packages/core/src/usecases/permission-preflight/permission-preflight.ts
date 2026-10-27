@@ -92,6 +92,7 @@ export const RBAC_PERMISSIONS_API_VERSION = "2022-04-01";
  * asks only whether the query endpoint answers this identity for the target
  * subscription - the smallest read that exercises the same POST Event Hub
  * discovery makes. Resource Graph is query-only, so the probe cannot write.
+ * The row matters: an answer with none in it is not counted as access.
  */
 export const RESOURCE_GRAPH_PROBE_QUERY = "Resources | project id | limit 1";
 
@@ -278,7 +279,10 @@ export interface AzureProbeResult {
   name: string;
   /** Human-readable label. */
   label: string;
-  /** ok = 2xx; denied = explicit 401/403; unknown = anything else. */
+  /**
+   * ok = 2xx (with a row, for the Resource Graph query); denied = explicit
+   * 401/403; unknown = anything else.
+   */
   status: AzureProbeStatus;
   /** Short greppable detail. */
   detail: string;
@@ -435,16 +439,44 @@ function deniedChecks(setupPath: SetupPath): PermissionCheckResult[] {
 // Azure side
 // ---------------------------------------------------------------------------
 
-/** Run one live no-op Azure existence probe; never rejects. */
+/**
+ * Whether a 2xx Resource Graph answer carries at least one row (CAP-1).
+ *
+ * Resource Graph FILTERS rows by what the identity can read rather than
+ * refusing the query, so an identity with no access to the subscription can
+ * still be answered 200 with nothing in it. Only a returned row is evidence the
+ * identity reads anything there; an empty or unreadable `data` is not.
+ */
+export function resourceGraphReturnedRows(body: unknown): boolean {
+  const data = prop(body, "data");
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Run one live no-op Azure existence probe; never rejects.
+ *
+ * `evidence`, when given, must hold for a 2xx to count as `ok`. A 2xx that
+ * fails it is `unknown`, never `denied`: the request was answered, it just did
+ * not prove the read.
+ */
 async function probeAzure(
   azure: AzureManagement,
   name: string,
   label: string,
   request: AzureManagementRequest,
+  evidence?: (body: unknown) => boolean,
 ): Promise<AzureProbeResult> {
   try {
     const response = await azure.request(request);
     if (is2xx(response.status)) {
+      if (evidence !== undefined && !evidence(response.body)) {
+        return {
+          name,
+          label,
+          status: "unknown",
+          detail: `HTTP ${response.status} with no rows - access not proven`,
+        };
+      }
       return { name, label, status: "ok", detail: "access confirmed" };
     }
     if (response.status === 401 || response.status === 403) {
@@ -532,6 +564,7 @@ export async function runAzurePreflight(
     name: string;
     label: string;
     request: AzureManagementRequest;
+    evidence?: (body: unknown) => boolean;
   }[] = [
     {
       name: "dcr-list",
@@ -565,14 +598,16 @@ export async function runAzurePreflight(
   }
   // CAP-1. Subscription-wide on every path, so the default (resource-group)
   // audit measures it too. Issued LAST so it never shifts the order of the
-  // probes above.
+  // probes above. A 2xx counts only with a row in it - see
+  // resourceGraphReturnedRows.
   probeRequests.push({
     name: "resource-graph-query",
     label: "Query Azure Resource Graph",
     request: resourceGraphRequest(target.subscriptionId, RESOURCE_GRAPH_PROBE_QUERY),
+    evidence: resourceGraphReturnedRows,
   });
   const probes = await Promise.all(
-    probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request)),
+    probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request, p.evidence)),
   );
 
   const hasRequiredAccess = permissionsFetched && coreGranted(checks);

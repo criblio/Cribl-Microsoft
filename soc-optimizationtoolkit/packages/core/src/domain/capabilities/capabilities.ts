@@ -28,9 +28,10 @@
  *
  * `resourcegraph.read` (CAP-1) is the Azure Resource Graph query that Event Hub
  * discovery and the namespace picker read through. Measured by a probe only: a
- * one-row query on every audited path. GRANTED MEANS THE QUERY IS ANSWERED, not
- * that every resource is visible - Resource Graph filters rows by what the
- * identity can read, so an empty result is still not a verified none.
+ * one-row query on every audited path. GRANTED MEANS THE QUERY RETURNED A ROW,
+ * not that every resource is visible - Resource Graph filters rows by what the
+ * identity can read rather than refusing, so an answer with no rows is left
+ * unmeasured, and an empty discovery result is still not a verified none.
  */
 export type AzureCapability =
   | "dcr.write"

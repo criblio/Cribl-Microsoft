@@ -67,6 +67,11 @@ function permsResponse(...sets: PermissionSet[]): PortHttpResponse {
   return { status: 200, body: { value: sets } };
 }
 const OK: PortHttpResponse = { status: 200, body: {} };
+/** A Resource Graph answer with a row in it - the only 2xx that counts. */
+const GRAPH_ROW: PortHttpResponse = {
+  status: 200,
+  body: { totalRecords: 1, count: 1, data: [{ id: `/subscriptions/${SUB}/resourceGroups/rg` }] },
+};
 
 const FULL_TARGET = { subscriptionId: SUB, resourceGroup: RG, workspaceName: WS };
 
@@ -129,8 +134,9 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
     const azure = new FakeAzureManagement();
     // perms(READER) + dcr-list + workspace-get + tables-list + resource-graph
     // query all succeed (reader can read everything) - the probes are all OK.
-    // The fifth OK joined with CAP-1's probe; the assertion is unchanged.
-    azure.respondWith(permsResponse(READER), OK, OK, OK, OK);
+    // The fifth response joined with CAP-1's probe, and is a row because only
+    // a row counts as an OK query; the assertion is unchanged.
+    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
 
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
@@ -192,7 +198,7 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
 describe("Resource Graph probe", () => {
   it("issues one read-only query, last, on a resource-group path", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(READER), OK, OK, OK, OK);
+    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
     // perms + dcr-list + workspace-get + tables-list + the query, in that order:
@@ -234,6 +240,27 @@ describe("Resource Graph probe", () => {
     azure.respondWith(permsResponse(OWNER), OK, OK, OK, { status: 403, body: {} });
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
     expect(result.hasRequiredAccess).toBe(true);
+  });
+
+  it("does not count an answer with no rows as access", async () => {
+    // Resource Graph filters rows by what the identity can read instead of
+    // refusing, so a 200 with nothing in it is what an identity with no access
+    // to the subscription can get. Unknown, never ok - and never denied either,
+    // since an empty subscription answers the same way.
+    for (const body of [{ totalRecords: 0, count: 0, data: [] }, {}, { data: "x" }]) {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(READER), OK, OK, OK, { status: 200, body });
+      const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+      const probe = result.probes.find((p) => p.name === "resource-graph-query");
+      expect(probe?.status, JSON.stringify(body)).toBe("unknown");
+      expect(probe?.detail).toContain("no rows");
+      // The row rule is the query's alone: the GET probes stay ok on a bare 2xx.
+      expect(result.probes.filter((p) => p.status === "ok").map((p) => p.name)).toEqual([
+        "dcr-list",
+        "workspace-get",
+        "tables-list",
+      ]);
+    }
   });
 
   it("asks for one row and nothing that could be large", () => {

@@ -192,15 +192,19 @@ describe("persistence", () => {
     // would be measured, saved, and silently lost on the next launch.
     const cache = new FakeContentCache();
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(permSet({ actions: ["*/read"] })), OK, OK);
+    // RE-PINNED 2026-10-27 (review): Reader-like '*/read' became Security
+    // Admin's Microsoft.Security/*, because a subscription-scope miss on the
+    // automations write is no longer recorded (it may be granted on the group
+    // the export is written to), so only a grant can round-trip for it.
+    azure.respondWith(permsResponse(permSet({ actions: ["Microsoft.Security/*"] })), OK, OK);
     const subInput: CapabilityAuditInput = { ...INPUT, setupPath: "existing-subscription" };
     const first = await runCapabilityAudit({ azure, cribl: new FakeCriblClient(), cache }, subInput);
-    expect(first.set.verdicts["defender-automation.write"]).toBe("denied");
+    expect(first.set.verdicts["defender-automation.write"]).toBe("granted");
 
     const stored = await loadCachedCapabilities(cache);
     expect(stored.verdicts["defender-plans.read"]).toBe("granted");
     expect(stored.verdicts["defender-automation.read"]).toBe("granted");
-    expect(stored.verdicts["defender-automation.write"]).toBe("denied");
+    expect(stored.verdicts["defender-automation.write"]).toBe("granted");
   });
 
   it("re-audits after a scope change, because the key changed", async () => {

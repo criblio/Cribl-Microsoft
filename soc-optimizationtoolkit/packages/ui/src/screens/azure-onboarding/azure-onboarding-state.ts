@@ -598,8 +598,10 @@ export interface PickerMessage {
 }
 
 /**
- * The namespace picker's line. The Resource Graph read has no capability, so
- * an empty answer is the shared unmeasured hedge, never a zero.
+ * The namespace picker's line. An empty Resource Graph answer is the shared
+ * unmeasured hedge, never a zero: `resourcegraph.read` (CAP-1) only proves the
+ * query returns rows, and Resource Graph filters them by what the identity can
+ * read, so no capability establishes that every namespace was visible.
  */
 export function namespaceListMessage(listing: Listing<EventHubNamespaceInfo>): PickerMessage | null {
   if (listing.kind === "rows") return null;

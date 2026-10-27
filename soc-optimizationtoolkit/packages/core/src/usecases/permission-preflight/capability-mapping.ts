@@ -85,6 +85,25 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
   });
 
 /**
+ * Actions whose resource lives BELOW the scope the preflight evaluates them at,
+ * so the evaluation can establish a grant but never a denial.
+ *
+ * The Defender continuous export is checked on `existing-subscription`, but the
+ * automation resource sits in a resource group the operator picks at deploy
+ * time (defender-automation defenderExportPath). A grant at the subscription is
+ * inherited by every group, so it is a real `granted`. Not granted at the
+ * subscription says nothing about a role on that group - the same reason CAP-7b
+ * keeps listKeys out - so it is recorded as nothing, and the domain resolves
+ * `unknown` rather than claiming a denial nobody measured.
+ *
+ * pricings/read and automations/read stay two-sided: the app reads both at the
+ * subscription itself, so the subscription evaluation is their real scope.
+ */
+export const GRANT_ONLY_AZURE_ACTIONS: ReadonlySet<string> = new Set([
+  DEFENDER_AUTOMATIONS_WRITE,
+]);
+
+/**
  * Azure existence-probe name -> the capability it establishes.
  *
  * Every entry is a READ capability, and that is structural rather than
@@ -152,7 +171,9 @@ type Verdicts = Partial<Record<Capability, CapabilityVerdict>>;
  * granted:false checks (see rule 3 in the module doc), and those are not
  * measurements. When it was read, granted maps to `granted` and NOT granted maps
  * to `denied` - at that point it IS a measurement, which is the entire reason
- * the preflight prefers effective actions over role names.
+ * the preflight prefers effective actions over role names. The exception is
+ * {@link GRANT_ONLY_AZURE_ACTIONS}, evaluated above their resource's scope:
+ * there NOT granted is not a measurement, and nothing is recorded.
  */
 function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
   if (!preflight.permissionsFetched) {
@@ -160,8 +181,13 @@ function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
   }
   for (const check of preflight.checks) {
     const capability = AZURE_ACTION_CAPABILITIES[check.action];
-    if (capability !== undefined) {
-      into[capability] = check.granted ? "granted" : "denied";
+    if (capability === undefined) {
+      continue;
+    }
+    if (check.granted) {
+      into[capability] = "granted";
+    } else if (!GRANT_ONLY_AZURE_ACTIONS.has(check.action)) {
+      into[capability] = "denied";
     }
   }
 }
