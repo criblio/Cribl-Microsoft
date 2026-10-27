@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**71 in the backlog, 23 in progress, 48 done.**
+**75 in the backlog, 22 in progress, 49 done.**
 
 ## By menu item
 
@@ -36,9 +36,9 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 29 | 2 | 8 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 11 | 11 | 4 |
+| Cross-cutting | 14 | 12 | 6 |
 
-Open work totals 94.
+Open work totals 97.
 
 ## Epics and features
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 49% (36/74)
+### `DBT` Quality and technical debt _(enabler)_ - 47% (37/78)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 18/43 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 19/47 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,14 +135,18 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (23)
+## In progress (22)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
 - **CAP-1** Add `resourcegraph.read` and its probe
   `CAP-F1` `enabler` `settled`
   The gap recorded in backlog items 1 and 4 and again under 6d.
-  `backlog.md#1`, `:321-329`, `:786-808`.
+  `backlog.md#1`, `:321-329`, `:786-808`. NOTE 2026-10-27: LANDED (5c79d03 +
+  review db5ae03, merged af9bfad): resourcegraph.read; review fix: a 2xx
+  counts as granted only when rows come back (Resource Graph filters rather
+  than refuses), an empty answer is unknown. Awaits a live preflight before
+  done.
 
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled` `blocked by AZR-18`
@@ -236,7 +240,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   known for subscriptions, but management groups normally open through the
   ManagementGroups drilldown blade, so the management-group link is
   unverified. If it opens a not-found blade, build a management-group-specific
-  URL and re-pin both shapes.
+  URL and re-pin both shapes. NOTE 2026-10-27: Decision applied (merged
+  743c611): ADR 0006 Accepted 2026-10-27; the How-to assignment steps give the
+  exact az policy assignment update --metadata command, pinned.
   DECISION: Which marker identifies a policy assignment the toolkit wrote?
   (ADR 0006, Proposed)
     [x] `criblSocToolkit` Reserved metadata key criblSocToolkit = { version } (recommended) - Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker.
@@ -257,7 +263,10 @@ Started. Anything here with an unfinished dependency is called out on its card.
   canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test "the
   same gesture on the empty canvas does pan the view"), which the mockup did
   not list either; only CARD drag is absent. keep-fixed with strict mockup
-  parity would also remove the pan.
+  parity would also remove the pan. NOTE 2026-10-27: LANDED (5b9a071 + review
+  b68bb35, merged 743c611): draggable cards, Reset layout, edges follow, Fit
+  frames moved cards, layout change drops moved positions. Awaits Live
+  Preview. Kit hook click-swallow is DBT-161.
   DECISION: Should the Azure Logging Map add draggable cards and a Reset
   layout button per the house diagram standard, or keep the approved mockup's
   fixed layout?
@@ -674,7 +683,11 @@ Started. Anything here with an unfinished dependency is called out on its card.
   RBAC evaluation. CAP-7b (Event Hub listKeys and namespace write) waits for a
   persisted namespace target (AZR-11/AZR-24): those rights can be granted on
   the namespace itself, so a subscription-scope evaluation would wrongly read
-  them as denied.
+  them as denied. NOTE 2026-10-27: CAP-7a LANDED (merged af9bfad): Defender
+  pricings/read and automations read+write. Review fix db5ae03:
+  automations/write is GRANT-ONLY at subscription scope (the export is written
+  in a resource group the operator picks, so a subscription miss is unknown,
+  not denied). CAP-7b still open. Awaits a live preflight.
 
 - **DBT-145** A failed or forbidden KV read reads as absent, and sends a finished install back to setup
   `DBT-F1` `bug` `settled`
@@ -716,7 +729,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   ('Cannot read encrypted value') folds to null in PlatformSecretsStore.get
   and KvContentCache.get; any other 403 throws. PlatformGithubPat.status reads
   a never-encrypted key, so any 403 there throws. The App.tsx silent
-  setup-write half follows separately.
+  setup-write half follows separately. NOTE 2026-10-27: Store half LANDED
+  (0e0a528 + review d7bdaa6, merged c37ba05): only 404 and the 'Cannot read
+  encrypted value' 403 read as absent; any other 403 throws; PAT status throws
+  on any 403. Pinned and mutation-checked. Awaits Live Preview: the body of a
+  non-encrypted KV 403, and the setup-unreadable screen. Callers that
+  mishandle the throw are DBT-159; options overwrite is DBT-158. App.tsx
+  setup-write half still open.
 
 - **DBT-146** Live Preview dev server serves the first browser's init script to every browser
   `DBT-F1` `bug` `settled`
@@ -751,26 +770,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   in Live Preview what the wizard and capability chips show when Cribl is
   unreachable - the behaviour change is that they finally notice.
 
-- **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
-  `DBT-F1` `bug` `settled`
-  Not now because: Latent: no caller has been seen to receive a 2xx list page
-  without a value array, so nothing is costing anyone today. It is still a bug
-  because when it happens seven callers would state an unverified zero as
-  fact; it outranks features once any live read shows the shape.
-  FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery
-  listAllPages collects `value` only when it is an array and otherwise adds
-  nothing, so a 2xx page with a missing or non-array `value` becomes zero
-  items. Its callers (assign-dcr-role, azure-discovery listings,
-  content-install, available-content, deployment-preview, manage-labs,
-  workspace-tables) then render 'none' for what is really unknown - the
-  inventory-honesty failure. AZR-19 wrote its own verdict-returning pager
-  (read-logging-map/arm-pager.ts) precisely because of this and left the
-  shared one unchanged. FIX: make listAllPages throw on a 2xx page whose
-  `value` is not an array (it already throws on non-2xx, so every caller
-  handles a throw), pin it, and consider whether arm-pager can then share the
-  page walk. Check the callers' empty states against inventory-honesty while
-  there.
-
 - **DBT-151** Cribl secret writers send `type`, where the API schema names the field `secretType`
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -784,6 +783,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   this may work today by accident or may store a secret of the wrong type.
   FIX: confirm on a test group what GET /system/secrets/:id returns for a
   secret written each way, then send `secretType` and pin the request body.
+  NOTE 2026-10-27: LANDED (merged 89e9837): all secret writers send
+  secretType. Awaits the live read-back of a secret written each way (GET
+  /system/secrets/:id) before done.
 
 - **DBT-154** The lab blob source passes queueName unquoted where Cribl expects a JS expression
   `DBT-F1` `bug` `settled`
@@ -796,7 +798,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Generate-CriblConfigs output it was ported from may have worked because
   Cribl falls back to the literal. FIX: wrap it in backticks (as the AZR-34
   onboarding blob input does), pin it, and confirm on a lab that the input
-  reads its queue.
+  reads its queue. NOTE 2026-10-27: LANDED (merged 89e9837): lab azure_blob
+  queueName is a backtick JS expression. Awaits a live lab check that the
+  input reads its queue.
 
 - **DBT-155** The Sentinel destination is created with the client secret in clear in the output body
   `DBT-F1` `bug` `settled`
@@ -816,11 +820,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   answer the existing-destinations question): new writes send the client
   secret as a Cribl secret reference, never in clear; destinations that
   already carry a clear secret are detected and flagged on screen, never
-  migrated by the app. Migration stays an operator action.
+  migrated by the app. Migration stays an operator action. NOTE 2026-10-27:
+  LANDED (merged 89e9837; review a1a4eba also redacts the JSON-escaped form in
+  error text): new Sentinel destinations reference !{secretId} via a
+  create-only secret (409 refuses, never PATCH); existing clear-secret
+  destinations are flagged at verify, never migrated. Awaits Live Preview.
 
 ---
 
-## Backlog - now (6)
+## Backlog - now (8)
 
 Next to pick up. Nothing blocks these.
 
@@ -979,9 +987,32 @@ Next to pick up. Nothing blocks these.
   with awaited conditions, and mutation-check that the repaired pins still
   fail on the behaviour they guard. Not proven on main yet.
 
+- **DBT-158** A failed options read falls back to defaults, and the next inline save writes the defaults over the real options
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). App.tsx:704 and :732 - when the options KV read is
+  refused or fails, the app runs on defaults, and the next inline save of any
+  option PUTs that whole default document over the operator's saved options.
+  Data loss, and it predates DBT-145 (null on 403, defaults on 5xx). FIX:
+  track the options read as loaded / unreadable; while unreadable, block (or
+  read-modify-write) the save and say why; pin both.
+
+- **DBT-159** Three readers mishandle a refused KV cache or PAT-status read
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). Since DBT-145 a non-encrypted 403 throws (a 5xx always
+  did). (1) sample-intake-section.tsx:272 awaits definitionCache.get with no
+  try/catch inside a void async block: unhandled rejection. (2)
+  solution-browser.tsx:274 and :354 read the cache inside the same try as the
+  GitHub fetch, so a cache failure fails the whole load instead of falling
+  through to content.listSolutions(). (3) repositories-screen.tsx:93 shows a
+  failed PAT status read as 'no PAT' with no message (inventory-honesty). FIX:
+  catch each; a cache miss falls through to the source of truth; the PAT form
+  says the status could not be read. Pin each.
+
 ---
 
-## Backlog - next (28)
+## Backlog - next (30)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1366,6 +1397,32 @@ Settled and unblocked, sequenced behind now.
   Batch, Architecture and the flow-log panel. Its only test passes
   preferred="". Unpinned: the saved default wins when it is listed, and an
   existing pick is never overridden. Fix: two hook pins, mutation-checked.
+
+- **DBT-160** listAllPages returns the first page as the whole list when it cannot follow a nextLink
+  `DBT-F1` `bug` `settled`
+  Not now because: Latent: it needs an AzureManagement adapter without
+  requestUrl AND a multi-page answer; the shipped adapter has requestUrl.
+  Still a bug because it would present page one as the whole list.
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). When a page carries nextLink but the adapter has no
+  requestUrl, listAllPages returns page one alone as if complete;
+  arm-pager.readAllPages refuses the same case. FIX: throw, matching DBT-148's
+  honesty rule; pin it.
+
+- **DBT-161** Diagram drag hook can swallow one non-pointer click after a drag
+  `DBT-F1` `bug` `settled`
+  Not now because: PLAUSIBLE, not reproduced: affects only a click with no
+  pointer press (screen-reader browse mode) once after a drag; Enter and Space
+  work. The fix belongs in the claude-kit diagram reference hook first, then a
+  kitDrift sync.
+  FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
+  introduced by them). packages/ui/src/components/diagram drag hook keeps its
+  'was dragged' flag until the next pointer press on a card, so a click with
+  no preceding press (screen-reader activation in browse mode) is swallowed
+  once. Shared by the logging map and the onboarding dataflow; claude-kit
+  skills/cribl-dataflow-diagram/reference/FlowDiagram.tsx has the same logic.
+  FIX in the kit: clear the flag on the click it suppresses (or on a timeout
+  tick), pin it, then sync.
 
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
@@ -1950,7 +2007,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (48)
+## Done (49)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3771,6 +3828,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   panel uses the hook to show the audit's age, and that a cached audit is
   reused across views - the one-slot cache cannot do that. Fixed in the HON-6
   branch (comment only).
+
+- **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
+  `DBT-F1` `bug` `settled` `verified: pins`
+  Not now because: Latent: no caller has been seen to receive a 2xx list page
+  without a value array, so nothing is costing anyone today. It is still a bug
+  because when it happens seven callers would state an unverified zero as
+  fact; it outranks features once any live read shows the shape.
+  FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery
+  listAllPages collects `value` only when it is an array and otherwise adds
+  nothing, so a 2xx page with a missing or non-array `value` becomes zero
+  items. Its callers (assign-dcr-role, azure-discovery listings,
+  content-install, available-content, deployment-preview, manage-labs,
+  workspace-tables) then render 'none' for what is really unknown - the
+  inventory-honesty failure. AZR-19 wrote its own verdict-returning pager
+  (read-logging-map/arm-pager.ts) precisely because of this and left the
+  shared one unchanged. FIX: make listAllPages throw on a 2xx page whose
+  `value` is not an array (it already throws on non-2xx, so every caller
+  handles a throw), pin it, and consider whether arm-pager can then share the
+  page walk. Check the callers' empty states against inventory-honesty while
+  there. NOTE 2026-10-27: LANDED (6b5d111 + review dee8c68, merged 1678687):
+  listAllPages throws on a 2xx page without an array value, naming the page
+  URL; fixtures swept, arm-pager pin inverted, stale comments and backlog
+  corrected. Mutation-checked by implementer and reviewer. Pins only: the
+  shape has never been seen live, so there is nothing to observe. The
+  nextLink-without-requestUrl gap is DBT-160.
 
 - **DBT-157** AZR-34's connection-string.ts was never committed: .gitignore *connection-string* dropped it
   `DBT-F1` `bug` `settled` `verified: pins`
