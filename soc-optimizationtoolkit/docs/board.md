@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**75 in the backlog, 26 in progress, 49 done.**
+**77 in the backlog, 24 in progress, 51 done.**
 
 ## By menu item
 
@@ -33,10 +33,10 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
-| Azure Native Source Onboarding | 29 | 2 | 8 |
+| Azure Native Source Onboarding | 31 | 2 | 10 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 18 | 12 | 9 |
+| Cross-cutting | 16 | 14 | 7 |
 
 Open work totals 101.
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 45% (37/82)
+### `DBT` Quality and technical debt _(enabler)_ - 46% (39/84)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 19/51 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 21/53 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (26)
+## In progress (24)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -848,7 +848,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   match; share the input/connection normalizers; correct the header. Whether
   the bare filter the wiring section WRITES routes nothing is suspected and
   needs a live read of __inputId on a wired source - the writers are not
-  changed until then.
+  changed until then. NOTE 2026-10-27: LANDED (a28b3ae + review 6dc84b8,
+  fast-forwarded): one input-id helper for both readers; bare-id matches are
+  legacy - drawn and noted on Live Architecture, 'unconfirmed' on onboarding
+  (the review caught onboarding dropping the flag). Writers unchanged. Awaits
+  the live read of __inputId on a wired source; a per-flow badge on Live
+  Architecture is not done.
 
 - **DBT-163** Three Cribl secret body builders, and only the onboarding one stamps ownership
   `DBT-F1` `bug` `settled`
@@ -862,31 +867,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   deploy-flowlog-pack.ts:72,82 do not. DBT-151 had to fix secretType in each
   separately. FIX: one neutral domain secret-body builder used by all three,
   stamping the description; pin that every /system/secrets body comes from it.
-
-- **DBT-164** The create-Cribl-source confirm states a fixed commit file list; the kit commits only what is pending
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
-  verified. plan-cribl-source.ts commitFilesFor (:240-242) lists every
-  COMMIT_MARKER under groups/<g>/ as what the commit will carry; the adopted
-  kit commitAndDeploy commits the files actually pending. The confirm can
-  overstate what is written. FIX: word it as an upper bound or show the kit's
-  read CommitScope; do not re-derive the path grammar outside the kit.
-
-- **DBT-165** Audit cleanups: progress gate restated in UI, dead exports, Validate verdict pins, diagram shell provenance
-  `DBT-F1` `enabler` `settled`
-  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
-  verified. (1) progress-document.ts canWriteProgressDocument and progressFrom
-  are dead; the UI's canWriteProgress/loadedProgress restate them - make the
-  UI derive from core. (2) placeholdersArePlanValues (steps.ts:173) is dead;
-  flowQueryBody is test-only; logging-map-layout.ts re-exports unused types.
-  (3) classify.ts classifyRemediation (:450) and classifyTopic (:489) have no
-  outcome pins. (4) packages/ui/src/components/diagram is a port of the
-  claude-kit cribl-dataflow-diagram reference but is not recorded in
-  .claude-kit.json, so kitDrift cannot see it.
+  NOTE 2026-10-27: LANDED (cdbd514 + review 06d46cc, merged 129fca4):
+  domain/cribl-secrets builds every secret body with secretType and the APP_ID
+  stamp, with a scan pin. Awaits a live read-back that Cribl keeps description
+  on POST and PATCH. For DBT-152: the 409/400 fallback PATCH now stamps a
+  secret the app may not own.
 
 ---
 
-## Backlog - now (8)
+## Backlog - now (10)
 
 Next to pick up. Nothing blocks these.
 
@@ -1067,6 +1056,25 @@ Next to pick up. Nothing blocks these.
   failed PAT status read as 'no PAT' with no message (inventory-honesty). FIX:
   catch each; a cache miss falls through to the source of truth; the PAT form
   says the status could not be read. Pin each.
+
+- **DBT-166** Validate reads a remediation as configured when it ran for a different assignment of the same family
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts
+  any legacy-family assignment even when an assignment name was instructed, so
+  a Succeeded remediation on Cribl-AU-Old reads as-expected while
+  classifyAssignment calls that same assignment present-other-name. FIX: when
+  a name is instructed, only an exact-name match is as-expected; a family
+  match is present-other-name. Pin.
+
+- **DBT-167** Validate reads an Event Grid topic as configured when the plan has no storage account
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree).
+  classifyTopic (classify.ts ~:489) skips the source check when the
+  storageAccount plan value is empty, so a topic on any account reads
+  as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list
+  storageAccount, so it is not reported as missing either. FIX: list it as
+  required, so the step reads unknown (missing value) instead. Pin.
 
 ---
 
@@ -2065,7 +2073,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (49)
+## Done (51)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3927,3 +3935,32 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   a secret-file name pattern can no longer drop toolkit source. Verified by
   git check-ignore and the file's own tests plus typecheck on the restored
   tree.
+
+- **DBT-164** The create-Cribl-source confirm states a fixed commit file list; the kit commits only what is pending
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. plan-cribl-source.ts commitFilesFor (:240-242) lists every
+  COMMIT_MARKER under groups/<g>/ as what the commit will carry; the adopted
+  kit commitAndDeploy commits the files actually pending. The confirm can
+  overstate what is written. FIX: word it as an upper bound or show the kit's
+  read CommitScope; do not re-derive the path grammar outside the kit. NOTE
+  2026-10-27: LANDED (96c8bdd + review 416bfee, merged 6312165): the confirm
+  says the commit can include AT MOST the listed files; ADR 0007 matches.
+  Pinned. Which files a create really dirties stays on the ADR 0007 live list.
+  Watch: a folder-style COMMIT_MARKER would make 'at most these files' false.
+
+- **DBT-165** Audit cleanups: progress gate restated in UI, dead exports, Validate verdict pins, diagram shell provenance
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. (1) progress-document.ts canWriteProgressDocument and progressFrom
+  are dead; the UI's canWriteProgress/loadedProgress restate them - make the
+  UI derive from core. (2) placeholdersArePlanValues (steps.ts:173) is dead;
+  flowQueryBody is test-only; logging-map-layout.ts re-exports unused types.
+  (3) classify.ts classifyRemediation (:450) and classifyTopic (:489) have no
+  outcome pins. (4) packages/ui/src/components/diagram is a port of the
+  claude-kit cribl-dataflow-diagram reference but is not recorded in
+  .claude-kit.json, so kitDrift cannot see it. NOTE 2026-10-27: LANDED
+  (d61c32f + review 95068d6, merged 7704f9f): UI progress gate derives from
+  core; dead exports removed; Validate remediation/topic outcome pins (review
+  made the exact-name pin able to fail); diagram shell provenance in
+  .claude-kit.json. Defects the new pins exposed are DBT-166 and DBT-167.

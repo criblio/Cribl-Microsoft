@@ -2004,7 +2004,7 @@
       "type": "bug",
       "priority": "now",
       "title": "The __inputId form is decided four ways; the onboarding dataflow and Live Architecture give opposite route answers",
-      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. read-onboarding-cribl-side.ts matches routes on `<type>:<id>` (and its header falsely says live-architecture agrees); live-architecture.ts normalizeInput aliases only the bare id; source-wiring.ts:161 and air-gap-export.ts:173 WRITE the bare form; capture-filter.ts:125-160 records as verified against the product (2026-08-21) that __inputId is `<type>:<id>[:...]` and the bare form matched nothing. The onboarding reader also restates live-architecture's input/connection normalizers (parseInputs/parseConnections).\n\nFIX: one domain helper beside capture-filter (input id value + filter-matches-input) used by both readers; live-architecture gains the typed alias, bare kept only as a flagged legacy match; share the input/connection normalizers; correct the header. Whether the bare filter the wiring section WRITES routes nothing is suspected and needs a live read of __inputId on a wired source - the writers are not changed until then."
+      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. read-onboarding-cribl-side.ts matches routes on `<type>:<id>` (and its header falsely says live-architecture agrees); live-architecture.ts normalizeInput aliases only the bare id; source-wiring.ts:161 and air-gap-export.ts:173 WRITE the bare form; capture-filter.ts:125-160 records as verified against the product (2026-08-21) that __inputId is `<type>:<id>[:...]` and the bare form matched nothing. The onboarding reader also restates live-architecture's input/connection normalizers (parseInputs/parseConnections).\n\nFIX: one domain helper beside capture-filter (input id value + filter-matches-input) used by both readers; live-architecture gains the typed alias, bare kept only as a flagged legacy match; share the input/connection normalizers; correct the header. Whether the bare filter the wiring section WRITES routes nothing is suspected and needs a live read of __inputId on a wired source - the writers are not changed until then.\n\nNOTE 2026-10-27: LANDED (a28b3ae + review 6dc84b8, fast-forwarded): one input-id helper for both readers; bare-id matches are legacy - drawn and noted on Live Architecture, 'unconfirmed' on onboarding (the review caught onboarding dropping the flag). Writers unchanged. Awaits the live read of __inputId on a wired source; a per-flow badge on Live Architecture is not done."
     },
     {
       "epic": "DBT",
@@ -2018,12 +2018,12 @@
       "priority": "next",
       "priorityWhy": "Nothing reads the missing stamp yet; it bites when DBT-152 adds ownership proof on 409, which would then refuse the app's own earlier secrets. Must land before or with DBT-152.",
       "title": "Three Cribl secret body builders, and only the onboarding one stamps ownership",
-      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. buildSecretBody (input-bodies.ts:222-233) stamps description with APP_ID; buildEnsureSecretRequest/buildUpdateSecretRequest (secret-provisioning.ts:60-104) and the inline literal in deploy-flowlog-pack.ts:72,82 do not. DBT-151 had to fix secretType in each separately.\n\nFIX: one neutral domain secret-body builder used by all three, stamping the description; pin that every /system/secrets body comes from it."
+      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. buildSecretBody (input-bodies.ts:222-233) stamps description with APP_ID; buildEnsureSecretRequest/buildUpdateSecretRequest (secret-provisioning.ts:60-104) and the inline literal in deploy-flowlog-pack.ts:72,82 do not. DBT-151 had to fix secretType in each separately.\n\nFIX: one neutral domain secret-body builder used by all three, stamping the description; pin that every /system/secrets body comes from it.\n\nNOTE 2026-10-27: LANDED (cdbd514 + review 06d46cc, merged 129fca4): domain/cribl-secrets builds every secret body with secretType and the APP_ID stamp, with a scan pin. Awaits a live read-back that Cribl keeps description on POST and PATCH. For DBT-152: the 409/400 fallback PATCH now stamps a secret the app may not own."
     },
     {
       "epic": "DBT",
       "feature": "DBT-F1",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "menu": "none",
@@ -2031,12 +2031,13 @@
       "type": "bug",
       "priority": "now",
       "title": "The create-Cribl-source confirm states a fixed commit file list; the kit commits only what is pending",
-      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. plan-cribl-source.ts commitFilesFor (:240-242) lists every COMMIT_MARKER under groups/<g>/ as what the commit will carry; the adopted kit commitAndDeploy commits the files actually pending. The confirm can overstate what is written.\n\nFIX: word it as an upper bound or show the kit's read CommitScope; do not re-derive the path grammar outside the kit."
+      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. plan-cribl-source.ts commitFilesFor (:240-242) lists every COMMIT_MARKER under groups/<g>/ as what the commit will carry; the adopted kit commitAndDeploy commits the files actually pending. The confirm can overstate what is written.\n\nFIX: word it as an upper bound or show the kit's read CommitScope; do not re-derive the path grammar outside the kit.\n\nNOTE 2026-10-27: LANDED (96c8bdd + review 416bfee, merged 6312165): the confirm says the commit can include AT MOST the listed files; ADR 0007 matches. Pinned. Which files a create really dirties stays on the ADR 0007 live list. Watch: a folder-style COMMIT_MARKER would make 'at most these files' false.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
       "feature": "DBT-F1",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "menu": "none",
@@ -2044,7 +2045,34 @@
       "type": "enabler",
       "priority": "now",
       "title": "Audit cleanups: progress gate restated in UI, dead exports, Validate verdict pins, diagram shell provenance",
-      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. (1) progress-document.ts canWriteProgressDocument and progressFrom are dead; the UI's canWriteProgress/loadedProgress restate them - make the UI derive from core. (2) placeholdersArePlanValues (steps.ts:173) is dead; flowQueryBody is test-only; logging-map-layout.ts re-exports unused types. (3) classify.ts classifyRemediation (:450) and classifyTopic (:489) have no outcome pins. (4) packages/ui/src/components/diagram is a port of the claude-kit cribl-dataflow-diagram reference but is not recorded in .claude-kit.json, so kitDrift cannot see it."
+      "detail": "FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially verified. (1) progress-document.ts canWriteProgressDocument and progressFrom are dead; the UI's canWriteProgress/loadedProgress restate them - make the UI derive from core. (2) placeholdersArePlanValues (steps.ts:173) is dead; flowQueryBody is test-only; logging-map-layout.ts re-exports unused types. (3) classify.ts classifyRemediation (:450) and classifyTopic (:489) have no outcome pins. (4) packages/ui/src/components/diagram is a port of the claude-kit cribl-dataflow-diagram reference but is not recorded in .claude-kit.json, so kitDrift cannot see it.\n\nNOTE 2026-10-27: LANDED (d61c32f + review 95068d6, merged 7704f9f): UI progress gate derives from core; dead exports removed; Validate remediation/topic outcome pins (review made the exact-name pin able to fail); diagram shell provenance in .claude-kit.json. Defects the new pins exposed are DBT-166 and DBT-167.",
+      "verified": "pins"
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "azure-onboarding",
+      "id": "DBT-166",
+      "title": "Validate reads a remediation as configured when it ran for a different assignment of the same family",
+      "detail": "FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree). classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts any legacy-family assignment even when an assignment name was instructed, so a Succeeded remediation on Cribl-AU-Old reads as-expected while classifyAssignment calls that same assignment present-other-name. FIX: when a name is instructed, only an exact-name match is as-expected; a family match is present-other-name. Pin."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "azure-onboarding",
+      "id": "DBT-167",
+      "title": "Validate reads an Event Grid topic as configured when the plan has no storage account",
+      "detail": "FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree). classifyTopic (classify.ts ~:489) skips the source check when the storageAccount plan value is empty, so a topic on any account reads as-expected; CHECK_REQUIRED_VALUES['eventgrid-topic'] does not list storageAccount, so it is not reported as missing either. FIX: list it as required, so the step reads unknown (missing value) instead. Pin."
     },
     {
       "id": "AZR-22",
