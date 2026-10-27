@@ -471,6 +471,13 @@ describe("policy-remediation: outcomes", () => {
       name: "Cribl-AU-Old",
       diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed, Running" }],
     });
+    // The diffs are the named assignment's own: another family member's
+    // Succeeded does not clear them.
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Older", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+    });
     // The same assignment, read by policy-assignment, is called the same thing.
     const assignment = {
       name: "Cribl-AU-Old",
