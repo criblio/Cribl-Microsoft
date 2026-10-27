@@ -807,7 +807,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   config-plane-writes.md: create-only, and refuse on an existing object the
   app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove
   ownership (description stamp, as the AZR-34 work does with the kit's
-  ownership helpers), and refuse otherwise; treat 400 as a failure.
+  ownership helpers), and refuse otherwise; treat 400 as a failure. NOTE
+  2026-10-27: LANDED (89f0a63 + review b264f1d, merged 0e8ec6c): one core
+  usecase ensureTextSecret and pure decideSecretConflict serve both callers;
+  on a 409 it GETs the secret and PATCHes only when the description carries
+  the exact [managed-by:soc-optimizationtoolkit] stamp; a foreign or
+  unreadable owner is refused naming the id, a 400 is an error;
+  buildEnsureSecretRequest/buildUpdateSecretRequest removed. The review
+  reworded the refusal (a secret this app wrote before DBT-163 is unstamped,
+  so it now says the app cannot show it wrote it and how to proceed), pinned
+  exact stamp matching against lookalikes, and added a WiringSection DOM test.
+  BEHAVIOUR CHANGE for release notes: an unstamped existing secret is no
+  longer overwritten. Awaits live: that GET /system/secrets/:id returns
+  items[].description (if not, every rotation is refused); that a duplicate id
+  answers 409, not 400; Ensure secret on fresh / stamped / hand-made secrets;
+  the Labs flow-log pack with an existing secret (the pack is installed before
+  the refusal).
 
 - **DBT-154** The lab blob source passes queueName unquoted where Cribl expects a JS expression
   `DBT-F1` `bug` `settled`
