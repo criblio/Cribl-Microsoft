@@ -1,6 +1,7 @@
 /**
- * cribl-onboarding-source domain barrel (AZR-34): the Cribl input and secret
- * bodies the onboarding screen creates, the non-secret descriptor of a pasted
+ * cribl-onboarding-source domain barrel (AZR-34): the Cribl input bodies the
+ * onboarding screen creates (its secret body is domain/cribl-secrets'
+ * buildSecretBody, re-exported, DBT-163), the non-secret descriptor of a pasted
  * Event Hub connection string, the create-only classifiers of what already
  * exists, the commit markers, and the hubs a lane reads (ADR 0007 D7-D10).
  * All pure; usecases/create-cribl-source performs the reads and writes.

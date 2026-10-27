@@ -1,5 +1,7 @@
 /**
- * Cribl INPUT and SECRET bodies for the onboarding source (AZR-34, ADR 0007 D8).
+ * Cribl INPUT bodies for the onboarding source (AZR-34, ADR 0007 D8). The
+ * SECRET body is built in domain/cribl-secrets and only re-exported here
+ * (DBT-163).
  *
  * THE EVENT HUB INPUT TYPE IS `eventhub`. `azure_eventhub` is the DESTINATION
  * type (live-architecture.ts:643,652); the vendored OpenAPI InputEventhub has
@@ -15,11 +17,11 @@
  * goes to POST /system/secrets and nowhere else. No body carries `_metadata` (the
  * legacy template's buildEventHubSourceConfig does, eventhub-discovery.ts).
  *
- * `secretType`, NEVER `type`: RestSecret requires `id` and `secretType`
- * (cribl-openapi.json RestSecret.required). The older secret writers sent
- * `type` until DBT-151 brought them into line.
+ * `secretType`, NEVER `type`, is the secret builder's rule and is documented
+ * there (cribl-secrets/secret-body.ts); since DBT-163 every secret writer goes
+ * through it, so no writer can drift back to `type` (DBT-151).
  *
- * Every body is stamped with the kit's stampDescription so ownership can be
+ * Every input body is stamped with the kit's stampDescription so ownership can be
  * proven later (kit/config-writes/ownership.ts, config-plane-writes rule 11).
  *
  * Pure: no IO, no Date, no randomness, no crypto.

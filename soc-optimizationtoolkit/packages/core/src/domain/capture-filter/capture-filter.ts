@@ -212,9 +212,14 @@ export function captureFilterWarning(
   if (!filter.includes("__inputId")) {
     return `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
   }
-  // The `:?` admits the SUFFIX form inputPredicate emits (`":in_syslog"`) as
-  // well as the bare one, so an operator who trims the clause down to just the
-  // endsWith arm is not warned about a filter that is still correct.
+  // The test is a quoted literal that is the bare id, or the bare id after a
+  // leading `:` (`":in_syslog"`). inputPredicate no longer emits that suffix
+  // form - it compares the second `:` segment against the bare literal, which
+  // the check accepts - so the `:?` now only spares an operator-written
+  // `__inputId.endsWith(":in_syslog")`. It does NOT admit the typed literal
+  // `'<type>:<id>'` that the events actually carry (capture-filter/input-id.ts
+  // inputIdValue, and Cribl's own Input Filters list above), so a filter
+  // written that way is warned as naming a different source.
   const quoted = new RegExp(`["'\`]:?${escapeRegExp(inputId)}["'\`]`);
   if (!quoted.test(filter)) {
     return `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
