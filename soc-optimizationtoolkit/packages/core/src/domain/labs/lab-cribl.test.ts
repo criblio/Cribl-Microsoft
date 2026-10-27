@@ -51,7 +51,10 @@ describe("generator shapes (legacy Generate-CriblConfigs, verbatim)", () => {
     );
     expect(source["id"]).toBe("azure_blob_queue_criblqueuesource");
     expect(source["type"]).toBe("azure_blob");
-    expect(source["queueName"]).toBe("blob-notifications");
+    // DBT-154: this pin used to expect the raw name, which is the defect -
+    // Cribl evaluates queueName as a JS expression, so `blob-notifications`
+    // unquoted is a subtraction. Changed to the backtick-quoted constant.
+    expect(source["queueName"]).toBe("`blob-notifications`");
     expect(source["visibilityTimeout"]).toBe(600);
     expect(source["clientTextSecret"]).toBe("Azure_Blob_Queue_Secret");
   });
