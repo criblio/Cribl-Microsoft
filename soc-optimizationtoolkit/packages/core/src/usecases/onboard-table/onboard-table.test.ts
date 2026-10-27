@@ -642,6 +642,29 @@ describe("client secret as a Cribl secret (DBT-155)", () => {
     expect(JSON.stringify(job)).not.toContain("live-secret");
   });
 
+  it("never echoes a value that the error text JSON-escapes", async () => {
+    // httpErrorText JSON-encodes the body, so an echoed `"` or `\` arrives
+    // escaped; redacting only the raw value would let this one through.
+    const value = 'live"se\\cret';
+    const ports = makePorts();
+    scriptAzureThroughVerify(ports);
+    ports.cribl.respondWith({
+      status: 400,
+      body: { message: `bad value ${value}` },
+    });
+
+    const job = await onboardTable(ports, {
+      ...baseInput(),
+      ingestionClientSecret: value,
+    });
+
+    expect(job.status).toBe("failed");
+    const detail = stepByName(job.steps, "create-cribl-destination").detail ?? "";
+    expect(detail).toContain("bad value <redacted>");
+    expect(detail).not.toContain(JSON.stringify(value).slice(1, -1));
+    expect(detail).not.toContain(value);
+  });
+
   it("FLAGS a destination that embeds its secret on verify, and changes nothing", async () => {
     // A destination created before the fix, reused because it already
     // points at this DCR: the default taken on the card is detect, never

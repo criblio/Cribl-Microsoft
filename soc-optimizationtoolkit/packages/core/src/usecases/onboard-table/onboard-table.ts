@@ -974,12 +974,17 @@ export async function onboardTable(
         }
         if (!is2xx(secretResponse.status)) {
           // An error body could echo the request; the value never leaves here.
+          // httpErrorText JSON-encodes the body, so a value holding `"` or `\`
+          // appears escaped there: redact that form as well as the raw one.
+          const escapedValue = JSON.stringify(secretValue).slice(1, -1);
           throw new StepFailure(
             httpErrorText(
               `create Cribl secret '${clientSecretId}'`,
               secretResponse.status,
               secretResponse.body,
             )
+              .split(escapedValue)
+              .join("<redacted>")
               .split(secretValue)
               .join("<redacted>"),
           );
