@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { CRIBL_SECRET_REFERENCE } from "../../domain/pack-assembly";
 import { SENTINEL_SECRET_PLACEHOLDER } from "../../domain/sentinel-destination";
+import { APP_ID } from "../../domain/cribl-secrets";
+import { stampFor } from "../../kit/config-writes/ownership";
 import {
   buildEnsureSecretRequest,
   buildUpdateSecretRequest,
   SECRETS_API_PATH,
+  SENTINEL_CLIENT_SECRET_DESCRIPTION,
   SENTINEL_CLIENT_SECRET_NAME,
   SENTINEL_CLIENT_SECRET_REFERENCE,
 } from "./secret-provisioning";
+
+/** The description every body carries: the app's ownership stamp (DBT-163). */
+const STAMPED = `${SENTINEL_CLIENT_SECRET_DESCRIPTION} ${stampFor(APP_ID)}`;
 
 describe("secret convention - ONE reference, two delivery paths", () => {
   it("the connected reference is `!{sentinel_client_secret}` and matches pack-assembly's", () => {
@@ -30,6 +36,8 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
   // DBT-151: this pin used to expect `type: "text"`, which is the defect -
   // the vendored OpenAPI RestSecret requires `secretType`. Changed, not weakened:
   // the whole body is still compared, so a `type` key fails it.
+  // DBT-163 added the stamped description to the whole-body compares: the
+  // body comes from buildSecretBody, so proveOwnership can read it later.
   it("creates the named text secret via POST /system/secrets", () => {
     const request = buildEnsureSecretRequest("s3cr3t-value", "wg-1");
     expect(request).toEqual({
@@ -40,6 +48,7 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
         id: SENTINEL_CLIENT_SECRET_NAME,
         secretType: "text",
         value: "s3cr3t-value",
+        description: STAMPED,
       },
     });
   });
@@ -63,6 +72,7 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
       id: SENTINEL_CLIENT_SECRET_NAME,
       secretType: "text",
       value: "rotated",
+      description: STAMPED,
     });
   });
 });

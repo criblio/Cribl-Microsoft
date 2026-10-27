@@ -74,6 +74,9 @@ export * from "./domain/onboarding-howto";
 export * from "./domain/onboarding-howto-steps";
 export * from "./domain/onboarding-validation";
 export * from "./domain/cribl-onboarding-source";
+// The one Cribl text-secret body builder (DBT-163); cribl-onboarding-source
+// re-exports the same APP_ID and buildSecretBody bindings.
+export * from "./domain/cribl-secrets";
 export * from "./domain/onboarding-flow";
 export * from "./domain/onboarding-dataflow";
 // The adopted claude-kit code stays internal: only the request description a
