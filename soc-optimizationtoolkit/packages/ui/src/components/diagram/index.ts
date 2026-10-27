@@ -5,6 +5,11 @@
  * compose these and write no viewport, popover, drag or packet code of their
  * own. (React Flow, used by screens/architecture, is a separate engine and
  * out of scope here.)
+ *
+ * PROVENANCE. This shell is PORTED from the claude-kit cribl-dataflow-diagram
+ * reference (FlowDiagram.tsx and layout.ts), not copied, so .claude-kit.json
+ * records it as an adoption with every file skipped, and kitDrift cannot
+ * compare it: a kit change to those two files must be diffed by hand.
  */
 
 export {

@@ -26,6 +26,35 @@
       }
     },
     {
+      "skill": "cribl-dataflow-diagram",
+      "from": "skills/cribl-dataflow-diagram/reference",
+      "to": "packages/ui/src/components/diagram",
+      "kitCommit": "0b276a88cc1c8ecddd593f59f27e4f64a204b111",
+      "skipped": [
+        "skills/cribl-dataflow-diagram/reference/FlowDiagram.test.tsx",
+        "skills/cribl-dataflow-diagram/reference/FlowDiagram.tsx",
+        "skills/cribl-dataflow-diagram/reference/dataflow.css",
+        "skills/cribl-dataflow-diagram/reference/exportSvg.ts",
+        "skills/cribl-dataflow-diagram/reference/fixtures.ts",
+        "skills/cribl-dataflow-diagram/reference/flow.test.ts",
+        "skills/cribl-dataflow-diagram/reference/flow.ts",
+        "skills/cribl-dataflow-diagram/reference/layout.test.ts",
+        "skills/cribl-dataflow-diagram/reference/layout.ts",
+        "skills/cribl-dataflow-diagram/reference/model.test.ts",
+        "skills/cribl-dataflow-diagram/reference/model.ts",
+        "skills/cribl-dataflow-diagram/reference/policies.snippet.yml",
+        "skills/cribl-dataflow-diagram/reference/snapshot.test.ts",
+        "skills/cribl-dataflow-diagram/reference/snapshot.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowMetrics.test.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowMetrics.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowSnapshot.test.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowSnapshot.ts"
+      ],
+      "notCopiedWhy": {
+        "skills/cribl-dataflow-diagram/reference": "ported into hooks, not copied: FlowDiagram.tsx became use-diagram-viewport.ts, use-card-drag.ts, diagram-info.tsx and animated-edge.tsx, and layout.ts's pure geometry became geometry.ts (by way of screens/azure-logging-map/logging-map-layout.ts). No file is a copy, so none has a `files` record and kitDrift cannot compare them: after a kit change to FlowDiagram.tsx or layout.ts, diff them by hand against the ported files, from this kitCommit (the reference's head when the shell was ported). The other reference files (model, flow, snapshot, metrics hooks, export, css, fixtures, policies snippet, tests) were not ported."
+      }
+    },
+    {
       "skill": "cribl-metrics",
       "from": "skills/cribl-metrics/reference",
       "to": "packages/core/src/kit/metrics",
