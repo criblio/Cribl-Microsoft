@@ -386,8 +386,11 @@ export function isArmed(state: ConfirmState, key: string): state is Extract<Conf
 /**
  * The confirm, line by line: the worker group, the input id and type, the
  * secret id, the key name ACTUALLY used (or the principal), the attestation
- * when one was given, every file the commit carries (and anybody else's
- * pending work in them), and that the deploy restarts the group's workers.
+ * when one was given, the files the commit can include AT MOST (and anybody
+ * else's pending work in them), and that the deploy restarts the group's
+ * workers. The file list is an upper bound, not a promise: the kit's
+ * commitAndDeploy commits only the files still pending after the create
+ * (DBT-164).
  */
 export function confirmText(ready: ReadyCriblSource): string[] {
   const who =
@@ -406,7 +409,9 @@ export function confirmText(ready: ReadyCriblSource): string[] {
       `You confirmed that ${ready.keyNameOrPrincipal} has Listen rights; the app could not read the rules to check.`,
     );
   }
-  lines.push(`The commit carries: ${ready.commitFiles.join(", ")}.`);
+  lines.push(
+    `The commit can include at most these files, and only those still uncommitted after the create: ${ready.commitFiles.join(", ")}.`,
+  );
   if (ready.dirtyAlready.length > 0) {
     lines.push(
       `These files already have someone else's uncommitted changes, which the commit will carry too: ${ready.dirtyAlready.join(", ")}.`,

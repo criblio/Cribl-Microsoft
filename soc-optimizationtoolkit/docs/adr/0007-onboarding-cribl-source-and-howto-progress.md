@@ -170,7 +170,10 @@ place refuses.
 
 **The confirm** names the group, the input id and type, the secret id, the key
 name actually used (or the principal), the attestation if ticked, every file
-the commit will carry, and the worker restart. Any change to those disarms it.
+the commit can include at most, and the worker restart. Any change to those
+disarms it. The file list is an upper bound, not the commit: the kit's
+`commitAndDeploy` commits only the files still pending after the create
+(DBT-164).
 
 **APPLY**, in this order:
 

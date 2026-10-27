@@ -285,6 +285,17 @@ describe("confirmText", () => {
     expect(text).not.toContain("confirmed that");
   });
 
+  // DBT-164: the kit commits only the files still pending after the create,
+  // so the list is an upper bound and must be worded as one.
+  it("words the commit file list as an upper bound, never as what the commit carries", () => {
+    const lines = confirmText(READY);
+    const line = lines.find((l) => l.includes(READY.commitFiles[0]!));
+    expect(line).toBe(
+      `The commit can include at most these files, and only those still uncommitted after the create: ${READY.commitFiles.join(", ")}.`,
+    );
+    expect(lines.join("\n")).not.toContain("The commit carries");
+  });
+
   it("names the attestation and other people's pending work", () => {
     const text = confirmText({ ...READY, attested: true, dirtyAlready: ["groups/g1/cribl/inputs.yml"] }).join("\n");
     expect(text).toContain("You confirmed that reader has Listen rights");
