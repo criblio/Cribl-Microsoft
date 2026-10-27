@@ -1,8 +1,8 @@
 /**
  * Pins for the verdict-returning pager (AZR-19). The first case is the gap
- * the pager exists for: the shared `listAllPages` turns a 2xx without an array
- * `value` into zero items with no signal, which the logging map would then
- * state as a verified "none".
+ * the pager was written for: the shared `listAllPages` used to turn a 2xx
+ * without an array `value` into zero items with no signal (it throws since
+ * DBT-148), which the logging map would then have stated as a verified "none".
  */
 
 import { describe, expect, it } from "vitest";
@@ -48,9 +48,12 @@ const P = REQ.path;
 const url = (n: number): string => `https://management.azure.com/next/${n}`;
 
 describe("readAllPages", () => {
-  it("refuses a 2xx with no `value` as unexpected-shape, where listAllPages says zero items", async () => {
-    const shared = await listAllPages(new RoutedAzure({ [P]: [{ status: 200, body: {} }] }), REQ, "x");
-    expect(shared).toEqual([]); // the silent gap
+  it("refuses a 2xx with no `value` as unexpected-shape, where listAllPages throws (DBT-148)", async () => {
+    // listAllPages used to read this body as zero items; it now throws, and
+    // readAllPages returns the same failure as a verdict instead.
+    await expect(
+      listAllPages(new RoutedAzure({ [P]: [{ status: 200, body: {} }] }), REQ, "x"),
+    ).rejects.toThrow(`x: HTTP 200 body from ${P} has no array 'value'`);
 
     const read = await readAllPages(new RoutedAzure({ [P]: [{ status: 200, body: {} }] }), REQ, "exemptions");
     expect(read.state).toBe("refused");

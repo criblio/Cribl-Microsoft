@@ -70,8 +70,10 @@ export interface AzureManagement {
    * ARM access only, and a nextLink is the single ARM surface that arrives as
    * an absolute URL. Same error semantics as {@link AzureManagement.request}.
    *
-   * When an adapter does not implement this method, callers treat every list
-   * response as single-page (see listAllPages in usecases/azure-discovery).
+   * When an adapter does not implement this method, listAllPages (in
+   * usecases/azure-discovery) returns the first page alone, and readAllPages
+   * (usecases/read-logging-map) refuses a list that has a nextLink with
+   * "pagination unavailable".
    */
   requestUrl?(opts: AzureManagementUrlRequest): Promise<PortHttpResponse>;
 }

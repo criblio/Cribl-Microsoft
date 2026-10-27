@@ -139,7 +139,11 @@ async function logged<T>(
  * nextLinks, then throws - a cyclic or absurd nextLink chain fails loudly
  * instead of looping.
  *
- * Throws on any non-2xx page response with raw greppable error text.
+ * Throws on any non-2xx page response with raw greppable error text, and on
+ * a 2xx page whose body has no array `value` (DBT-148): such a page is a body
+ * we did not understand, not zero items, and reading it as zero would let
+ * every caller state an unverified "none". The message names the page's URL
+ * (the request path for the first page, the nextLink after it).
  */
 export async function listAllPages(
   azure: AzureManagement,
@@ -152,15 +156,16 @@ export async function listAllPages(
   }
 
   const items: unknown[] = [];
-  const collect = (body: unknown): string => {
+  const collect = (pageContext: string, url: string, status: number, body: unknown): string => {
     const value = prop(body, "value");
-    if (Array.isArray(value)) {
-      items.push(...value);
+    if (!Array.isArray(value)) {
+      throw new Error(`${pageContext}: HTTP ${status} body from ${url} has no array 'value'`);
     }
+    items.push(...(value as unknown[]));
     return asString(prop(body, "nextLink"));
   };
 
-  let nextLink = collect(first.body);
+  let nextLink = collect(context, request.path, first.status, first.body);
   if (nextLink === "" || typeof azure.requestUrl !== "function") {
     return items;
   }
@@ -173,13 +178,13 @@ export async function listAllPages(
       );
     }
     pagesFollowed++;
-    const page = await azure.requestUrl({ method: "GET", url: nextLink });
+    const pageUrl = nextLink;
+    const pageContext = `${context} (page ${pagesFollowed + 1})`;
+    const page = await azure.requestUrl({ method: "GET", url: pageUrl });
     if (!is2xx(page.status)) {
-      throw new Error(
-        httpErrorText(`${context} (page ${pagesFollowed + 1})`, page.status, page.body),
-      );
+      throw new Error(httpErrorText(pageContext, page.status, page.body));
     }
-    nextLink = collect(page.body);
+    nextLink = collect(pageContext, pageUrl, page.status, page.body);
   }
   return items;
 }
