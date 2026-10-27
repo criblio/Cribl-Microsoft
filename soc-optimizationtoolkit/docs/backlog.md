@@ -86,6 +86,8 @@ surfaces unmeasured. Do the extension as ONE piece of work serving all three.
 > ANSWERED 2026-08-31: the connection bar (section 18a, D-1). The paragraph
 > below is kept as history.
 
+> LANDED 2026-10-27 (CAP-1, merged af9bfad; awaits a live preflight): `resourcegraph.read` exists, `eventhub-discovery` now requires it, and the probe counts a 2xx as granted only when rows come back, because Resource Graph filters rather than refuses.
+
 **Not yet done in step 3:** the audit's AGE and a manual re-check still have no
 home. The nav was the intended surface for it, and annotating individual items
 turned out to be the wrong place for a global "checked 5 minutes ago" line - it
@@ -749,6 +751,8 @@ first open takes several minutes. Resource Graph `policyresources` would
 answer the same in a few calls, but no code here has used Resource Graph with
 a management-group scope (Event Hub discovery uses subscriptions only), and
 the capability work (CAP-1) is not done. That is its own follow-up card.
+(2026-10-27: CAP-1 has landed, pending its live preflight; the management-group
+scope is still unmeasured, so AZR-21 still waits on that.)
 
 **Roles via `assignedTo()`, with one open question.** For each shown
 assignment with a principal id, roles are read once per principal and scope
@@ -2794,6 +2798,7 @@ it.
 This is the most work of the three and it lands on the unmeasured Resource Graph
 capability that CAP-1 closes, which is the real sequencing constraint: CAP-1
 first, or this ships against a permission nothing has measured.
+(2026-10-27: CAP-1 has landed in code; it is measured once its live preflight passes.)
 
 ### 18f. D-10 - the setup wizard stepper grows to match its header
 

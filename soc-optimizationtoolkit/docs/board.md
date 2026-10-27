@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**75 in the backlog, 22 in progress, 49 done.**
+**75 in the backlog, 26 in progress, 49 done.**
 
 ## By menu item
 
@@ -36,9 +36,9 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Azure Native Source Onboarding | 29 | 2 | 8 |
 | Azure Logging Map | 4 | 0 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 14 | 12 | 6 |
+| Cross-cutting | 18 | 12 | 9 |
 
-Open work totals 97.
+Open work totals 101.
 
 ## Epics and features
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 47% (37/78)
+### `DBT` Quality and technical debt _(enabler)_ - 45% (37/82)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 19/47 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 19/51 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165* |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (22)
+## In progress (26)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -187,7 +187,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
   not yet list. Check it; do not assume the existing Azure role covers it.
 
 - **AZR-19** Azure Logging Map - where each logging setting is applied in the management group tree
-  `AZR-F8` `story` `undecided`
+  `AZR-F8` `story` `settled`
   OPERATOR REQUEST 2026-10-21/26: "a Diagram of the Azure logging and where we
   implemented our Settings... the Tenant Root management groups and sub
   management groups under it with associated policies assigned", planned as
@@ -242,15 +242,18 @@ Started. Anything here with an unfinished dependency is called out on its card.
   unverified. If it opens a not-found blade, build a management-group-specific
   URL and re-pin both shapes. NOTE 2026-10-27: Decision applied (merged
   743c611): ADR 0006 Accepted 2026-10-27; the How-to assignment steps give the
-  exact az policy assignment update --metadata command, pinned.
+  exact az policy assignment update --metadata command, pinned. NOTE
+  2026-10-27: ADR 0006 is Accepted; any text above calling it Proposed is
+  history. Reasoning in backlog.md section 6a-i (ownership; alternatives in
+  docs/adr/0006-policy-assignment-ownership-marker.md).
   DECISION: Which marker identifies a policy assignment the toolkit wrote?
-  (ADR 0006, Proposed)
+  (ADR 0006, Accepted 2026-10-27)
     [x] `criblSocToolkit` Reserved metadata key criblSocToolkit = { version } (recommended) - Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker.
     [ ] `createdBy-principal` metadata.createdBy equal to the toolkit service principal object id - Azure writes createdBy on EVERY assignment, so presence proves nothing; only a match against the toolkit principal could. That principal is shared with whatever else the operator runs under it, so a match overclaims ownership, and assignments the legacy PowerShell wrote under a person's login never match.
     [ ] `name-prefix` Assignment name prefix only (Cribl-*) - What the legacy toolkit relied on (Run-AzureLogCollection.ps1:1963). Cheap, but a customer can name their own assignment Cribl-*, and the 24-character MG-scope name cap forces truncations that collide.
 
 - **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
-  `AZR-F8` `decision` `undecided`
+  `AZR-F8` `decision` `settled`
   SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by
   the implementer. The approved interactive mockup (the operator-approved UX
   spec for the logging map) has no drag. The house standard requires it for
@@ -266,7 +269,8 @@ Started. Anything here with an unfinished dependency is called out on its card.
   parity would also remove the pan. NOTE 2026-10-27: LANDED (5b9a071 + review
   b68bb35, merged 743c611): draggable cards, Reset layout, edges follow, Fit
   frames moved cards, layout change drops moved positions. Awaits Live
-  Preview. Kit hook click-swallow is DBT-161.
+  Preview. Kit hook click-swallow is DBT-161. Reasoning in backlog.md section
+  6a-i ("Drag follows the standard").
   DECISION: Should the Azure Logging Map add draggable cards and a Reset
   layout button per the house diagram standard, or keep the approved mockup's
   fixed layout?
@@ -318,7 +322,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   SVG + dagre'. The build does not use dagre: the layout is a pure
   section-per-flow, left-to-right column layout
   (packages/ui/src/screens/azure-onboarding/dataflow/lane-layout.ts) on the
-  shared components/diagram shell, per ADR 0007 section 8.
+  shared components/diagram shell, per ADR 0007 section 8. CORRECTION
+  2026-10-27: the Logging Map cards are draggable since AZR-20 (743c611); any
+  text above saying the shell's drag is unused there is history.
 
 - **AZR-31** Guided manual path: choose what to onboard, step instructions in a dialog, tick each step when done
   `AZR-F9` `story` `settled` `blocked by AZR-30`
@@ -825,6 +831,58 @@ Started. Anything here with an unfinished dependency is called out on its card.
   error text): new Sentinel destinations reference !{secretId} via a
   create-only secret (409 refuses, never PATCH); existing clear-secret
   destinations are flagged at verify, never migrated. Awaits Live Preview.
+
+- **DBT-162** The __inputId form is decided four ways; the onboarding dataflow and Live Architecture give opposite route answers
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. read-onboarding-cribl-side.ts matches routes on `<type>:<id>` (and
+  its header falsely says live-architecture agrees); live-architecture.ts
+  normalizeInput aliases only the bare id; source-wiring.ts:161 and
+  air-gap-export.ts:173 WRITE the bare form; capture-filter.ts:125-160 records
+  as verified against the product (2026-08-21) that __inputId is
+  `<type>:<id>[:...]` and the bare form matched nothing. The onboarding reader
+  also restates live-architecture's input/connection normalizers
+  (parseInputs/parseConnections). FIX: one domain helper beside capture-filter
+  (input id value + filter-matches-input) used by both readers;
+  live-architecture gains the typed alias, bare kept only as a flagged legacy
+  match; share the input/connection normalizers; correct the header. Whether
+  the bare filter the wiring section WRITES routes nothing is suspected and
+  needs a live read of __inputId on a wired source - the writers are not
+  changed until then.
+
+- **DBT-163** Three Cribl secret body builders, and only the onboarding one stamps ownership
+  `DBT-F1` `bug` `settled`
+  Not now because: Nothing reads the missing stamp yet; it bites when DBT-152
+  adds ownership proof on 409, which would then refuse the app's own earlier
+  secrets. Must land before or with DBT-152.
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. buildSecretBody (input-bodies.ts:222-233) stamps description with
+  APP_ID; buildEnsureSecretRequest/buildUpdateSecretRequest
+  (secret-provisioning.ts:60-104) and the inline literal in
+  deploy-flowlog-pack.ts:72,82 do not. DBT-151 had to fix secretType in each
+  separately. FIX: one neutral domain secret-body builder used by all three,
+  stamping the description; pin that every /system/secrets body comes from it.
+
+- **DBT-164** The create-Cribl-source confirm states a fixed commit file list; the kit commits only what is pending
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. plan-cribl-source.ts commitFilesFor (:240-242) lists every
+  COMMIT_MARKER under groups/<g>/ as what the commit will carry; the adopted
+  kit commitAndDeploy commits the files actually pending. The confirm can
+  overstate what is written. FIX: word it as an upper bound or show the kit's
+  read CommitScope; do not re-derive the path grammar outside the kit.
+
+- **DBT-165** Audit cleanups: progress gate restated in UI, dead exports, Validate verdict pins, diagram shell provenance
+  `DBT-F1` `enabler` `settled`
+  FOUND 2026-10-27 by the architecture audit (849e80c..d2d248f), adversarially
+  verified. (1) progress-document.ts canWriteProgressDocument and progressFrom
+  are dead; the UI's canWriteProgress/loadedProgress restate them - make the
+  UI derive from core. (2) placeholdersArePlanValues (steps.ts:173) is dead;
+  flowQueryBody is test-only; logging-map-layout.ts re-exports unused types.
+  (3) classify.ts classifyRemediation (:450) and classifyTopic (:489) have no
+  outcome pins. (4) packages/ui/src/components/diagram is a port of the
+  claude-kit cribl-dataflow-diagram reference but is not recorded in
+  .claude-kit.json, so kitDrift cannot see it.
 
 ---
 
