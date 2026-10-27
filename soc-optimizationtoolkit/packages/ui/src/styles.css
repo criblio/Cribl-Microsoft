@@ -7450,7 +7450,7 @@ details[open] > summary::before {
 }
 
 .lm-card {
-  cursor: pointer;
+  cursor: grab;
 }
 
 .lm-card:focus {

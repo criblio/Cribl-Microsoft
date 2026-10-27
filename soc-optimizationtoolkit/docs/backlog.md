@@ -764,10 +764,13 @@ where an assignment APPLIES, not whether resources comply. Compliance lags
 instead of reporting it. The legacy's own gap categories
 (`Analyze-ComplianceGaps.ps1:314-373`) are kept as reference data and not used.
 
-**Drag is not built, pending a decision.** The approved mockup has no drag; the
-house diagram standard requires movable cards and Reset layout. Phase 1 ships
-the mockup and the conflict is a decision card under AZR-F8. Background pan
-(dragging on the empty canvas) is built; only card drag is not.
+**Drag follows the standard (AZR-20, decided 2026-10-27).** The approved mockup
+had no drag; the house diagram standard requires movable cards and Reset
+layout, and the owner chose the standard. Every card drags on the shared
+`components/diagram` drag hook, its edges follow it through `applyPositions`,
+and Reset layout restores the computed tree. Positions are session-only, as
+the standard asks, and a collapse, fold or filter drops them. Background pan
+(dragging on the empty canvas) is unchanged.
 
 **Portal link for a management group is unverified.** The panel links every
 scope as `#resource<scopeId>/overview`. That is known for subscriptions; the

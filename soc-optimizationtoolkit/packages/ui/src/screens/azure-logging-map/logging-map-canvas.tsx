@@ -5,13 +5,23 @@
  *
  * Follows the house diagram standard (claude-kit
  * standards/cribl-dataflow-diagram.md, ported from its reference
- * FlowDiagram.tsx) with these deliberate differences:
- * - NO DRAG and NO "Reset layout". The approved mockup's interaction model is
- *   zoom, fit, collapse, outline and trace, and has no drag; the standard
- *   asks for movable cards. That conflict is a recorded decision card, not
- *   settled here. A pointer press on a card therefore never moves it and
- *   never pans the view; `applyPositions` (layout) stays the one seam a drag
- *   would later feed. Panning the empty canvas is allowed.
+ * FlowDiagram.tsx), including its "Movable cards" rule (AZR-20, the owner's
+ * answer to the drag-vs-mockup decision):
+ * - Every card can be dragged once the pointer travels the shared
+ *   DRAG_THRESHOLD_PX; below it a press is a click and selects. The shared
+ *   useCardDrag holds the positions and `applyPositions` (layout) is the one
+ *   seam they feed: it re-draws a moved card's edges between the anchors.
+ * - "Reset layout" returns every card to the computed layout. A new layout
+ *   (collapse, fold, a filter) also drops them, because they were placed
+ *   against the old tree; a drag itself never re-fits the view.
+ * - Positions are SESSION-ONLY component state: the standard persists them
+ *   only when the owner asks, and then in the KV store, never browser storage.
+ * - A drag never remounts the card element, so it keeps its focus and its
+ *   sibling (i); only the click that ends a drag is swallowed, so Enter and
+ *   Space still select a dragged, focused card. Dragging changes no status,
+ *   count or chip. Panning the empty canvas is unchanged.
+ *
+ * Deliberate differences from the standard:
  * - NO ANIMATION. Policy coverage is configuration, not measured flow, and
  *   the standard animates only measured flow.
  * - No arrowheads: a top-to-bottom tree reads parent above child.
@@ -27,8 +37,8 @@
  * The viewport (pan, zoom, wheel, fit), the (i) circle and the popover's
  * dismissal come from the shared diagram shell in components/diagram
  * (AZR-30), so this canvas and the onboarding dataflow share one engine. It
- * passes its own lm-* class names and uses neither the shell's drag nor its
- * animated edge.
+ * passes its own lm-* class names, uses the shell's card drag, and does not
+ * use its animated edge.
  *
  * Every state is drawn with more than colour (the mockup's visual encoding):
  * ours is a solid chip with an "ours" pill, other owners a grey chip,
@@ -37,9 +47,9 @@
  * remaining gap states each have their own pill.
  */
 
-import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
 
-import { DiagramInfoPopover, InfoHitCircle, useDiagramViewport } from "../../components/diagram";
+import { DiagramInfoPopover, InfoHitCircle, useCardDrag, useDiagramViewport } from "../../components/diagram";
 import {
   CARD,
   CARD_LINE_CHARS,
@@ -86,7 +96,7 @@ export interface LoggingMapCanvasProps {
   readonly onToggleFolded: (scopeId: string) => void;
 }
 
-/** A press on any of these starts no pan (and never moves a card: there is no drag). */
+/** A press on any of these starts no pan (a press on a card may start a card drag instead). */
 const PAN_IGNORE = "[data-lm-card], [data-lm-info], [data-lm-caret], [data-lm-popover]";
 /** A pointerdown on these leaves the popover open (the (i) toggles it itself). */
 const POPOVER_KEEP = "[data-lm-popover], [data-lm-info]";
@@ -206,28 +216,42 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `state` is read only for the four fields listed
     [map, collapsed, folded, showAll, showInherited],
   );
-  // applyPositions is the ONE seam a future drag would feed; phase 1 passes none.
-  const laid = useMemo(() => applyPositions(layoutLoggingMap(graph), undefined), [graph]);
+  // The computed layout; hand-placed positions are applied over it below.
+  const laid = useMemo(() => layoutLoggingMap(graph), [graph]);
   const marks = useMemo(() => traceView(map, { tracedAssignment: state.tracedAssignment }), [map, state.tracedAssignment]);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const hatchId = `${uid}-hatch`;
   const [infoId, setInfoId] = useState<string | null>(null);
 
   const closeInfo = useCallback(() => setInfoId(null), []);
-  const cardsById = useMemo(() => new Map(laid.cards.map((c) => [c.id, c])), [laid.cards]);
 
   // Panning the EMPTY canvas only (PAN_IGNORE): a press that lands on a card,
-  // its (i) or its caret starts nothing, so pressing and moving on a card
-  // neither moves the card nor pans the view. Every zoom, wheel, fit and pan
-  // closes the popover through onViewChange.
+  // its (i) or its caret starts no pan; on a card it may start a card drag.
+  // Every zoom, wheel, fit, pan and drag start closes the popover.
   const viewport = useDiagramViewport({ layout: laid, onViewChange: closeInfo, panIgnoreSelector: PAN_IGNORE });
-  const { containerRef, view, fit } = viewport;
+  const { containerRef, view, fit, fitTo } = viewport;
+  const drag = useCardDrag({ zoom: view.k, onDragStart: closeInfo });
+  const { reset: resetDrag } = drag;
+  // THE seam: the computed layout with the hand-placed cards applied. Edges
+  // are drawn from these cards, so they follow a dragged card.
+  const drawn = useMemo(() => applyPositions(laid, drag.positions), [laid, drag.positions]);
+  const cardsById = useMemo(() => new Map(drawn.cards.map((c) => [c.id, c])), [drawn.cards]);
 
-  // Re-fit only when the layout itself changes (collapse, fold, filters).
+  // Re-fit only when the computed layout changes (collapse, fold, filters),
+  // never on a drag; positions placed against the old tree are dropped.
   useEffect(() => {
+    resetDrag();
     fit();
     closeInfo();
-  }, [laid, fit, closeInfo]);
+  }, [laid, resetDrag, fit, closeInfo]);
+
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!drag.onPointerMove(e)) viewport.panHandlers.onPointerMove(e);
+  };
+  const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
+    drag.endDrag(e);
+    viewport.panHandlers.onPointerUp(e);
+  };
 
   const activate = (card: LaidOutCard) => {
     if (card.kind === "count") {
@@ -246,7 +270,7 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
   };
   const toggleInfo = (id: string) => setInfoId((cur) => (cur === id ? null : id));
 
-  if (laid.cards.length === 0) {
+  if (drawn.cards.length === 0) {
     return <div className="lm-canvas-empty">No scope could be listed, so there is nothing to draw.</div>;
   }
 
@@ -258,14 +282,26 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
         <button type="button" className="lm-btn" aria-label="Zoom out" onClick={viewport.zoomOut}>
           -
         </button>
-        <button type="button" className="lm-btn" onClick={fit}>
+        {/* Fit frames what is drawn, moved cards included. */}
+        <button type="button" className="lm-btn" onClick={() => fitTo(drawn)}>
           Fit
         </button>
         <button type="button" className="lm-btn" aria-label="Zoom in" onClick={viewport.zoomIn}>
           +
         </button>
+        <button type="button" className="lm-btn" onClick={resetDrag} disabled={!drag.hasMoved}>
+          Reset layout
+        </button>
       </div>
-      <div ref={containerRef} className="lm-canvas" onWheel={viewport.onWheel} {...viewport.panHandlers}>
+      <div
+        ref={containerRef}
+        className="lm-canvas"
+        onWheel={viewport.onWheel}
+        onPointerDown={viewport.panHandlers.onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+      >
         <svg width="100%" height="100%" role="group" aria-label="Management group tree with policy assignments">
           <defs>
             <pattern id={hatchId} width={8} height={8} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -274,14 +310,14 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
             </pattern>
           </defs>
           <g data-lm-viewport="" transform={viewport.transform}>
-            {laid.edges.map((edge) => {
+            {drawn.edges.map((edge) => {
               const from = cardsById.get(edge.from);
               const to = cardsById.get(edge.to);
               if (from === undefined || to === undefined) return null;
               const { start, end } = edgeAnchors(from, to);
               return <path key={`${edge.from}>${edge.to}`} className="lm-edge" d={edgePath(edge.points, start, end)} />;
             })}
-            {laid.cards.map((card) => (
+            {drawn.cards.map((card) => (
               <CardGroup
                 key={card.id}
                 map={map}
@@ -290,7 +326,11 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
                 mark={marks?.get(card.scopeId)}
                 hatchId={hatchId}
                 infoOpen={infoId === card.id}
-                onActivate={() => activate(card)}
+                onActivate={() => {
+                  // The click that ends a drag is swallowed; Enter/Space are not.
+                  if (!drag.wasDragged()) activate(card);
+                }}
+                onPointerDown={(e) => drag.onCardPointerDown(e, card.id, { x: card.x, y: card.y })}
                 onKey={(e) => onCardKey(e, card)}
                 onToggleInfo={() => toggleInfo(card.id)}
                 onToggleCollapsed={() => onToggleCollapsed(card.scopeId)}
@@ -341,12 +381,25 @@ interface CardGroupProps {
   readonly hatchId: string;
   readonly infoOpen: boolean;
   readonly onActivate: () => void;
+  readonly onPointerDown: (e: PointerEvent<SVGGElement>) => void;
   readonly onKey: (e: KeyboardEvent<SVGGElement>) => void;
   readonly onToggleInfo: () => void;
   readonly onToggleCollapsed: () => void;
 }
 
-function CardGroup({ map, state, card, mark, hatchId, infoOpen, onActivate, onKey, onToggleInfo, onToggleCollapsed }: CardGroupProps) {
+function CardGroup({
+  map,
+  state,
+  card,
+  mark,
+  hatchId,
+  infoOpen,
+  onActivate,
+  onPointerDown,
+  onKey,
+  onToggleInfo,
+  onToggleCollapsed,
+}: CardGroupProps) {
   const node = map.nodesById.get(card.scopeId)?.node;
   const isCount = card.kind === "count";
   const selected = !isCount && state.selectedScope === card.scopeId;
@@ -376,6 +429,7 @@ function CardGroup({ map, state, card, mark, hatchId, infoOpen, onActivate, onKe
         aria-label={cardLabel(map, card, mark)}
         aria-pressed={isCount ? undefined : selected}
         onClick={onActivate}
+        onPointerDown={onPointerDown}
         onKeyDown={onKey}
       >
         <rect className="lm-card-box" x={card.x} y={card.y} width={card.width} height={card.height} rx={8} />

@@ -117,7 +117,7 @@ describe("wrapText", () => {
   });
 });
 
-describe("applyPositions: the one seam drag would feed", () => {
+describe("applyPositions: the one seam the card drag feeds (AZR-20)", () => {
   it("moves only the given card and re-routes only its edges", () => {
     const laid = layoutLoggingMap(tree());
     const before = byId(laid.cards);
