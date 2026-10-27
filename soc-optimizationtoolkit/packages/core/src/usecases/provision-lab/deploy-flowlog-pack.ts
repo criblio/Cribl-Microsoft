@@ -20,7 +20,14 @@
 import type { CriblClient } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import { FLOWLOG_SECRET_NAME } from "../../domain/labs/lab-flowlog-pack";
+import { buildSecretBody } from "../../domain/cribl-secrets";
 import { is2xx, prop } from "../arm-http";
+
+/**
+ * The description the collector's text secret is written with; buildSecretBody
+ * appends the app's ownership stamp to it (DBT-163).
+ */
+export const FLOWLOG_SECRET_DESCRIPTION = "Client secret for the AzureFlowLogs pack collector";
 
 /** Input for {@link finalizeFlowLogPack}. */
 export interface FinalizeFlowLogPackInput {
@@ -62,14 +69,20 @@ export async function finalizeFlowLogPack(
   };
 
   // --- 1. Secret (create-or-update; the guided-deploy convention) ---------
-  // `secretType`, never `type`: RestSecret requires it (DBT-151).
+  // The app-wide builder (DBT-163): `secretType`, never `type` (DBT-151), and
+  // the ownership stamp in the description.
   const secretValue = input.clientSecret ?? "";
   if (secretValue !== "") {
+    const body = buildSecretBody({
+      id: FLOWLOG_SECRET_NAME,
+      value: secretValue,
+      description: FLOWLOG_SECRET_DESCRIPTION,
+    });
     const create = await cribl.request({
       method: "POST",
       path: "/system/secrets",
       groupId: input.groupId,
-      body: { id: FLOWLOG_SECRET_NAME, secretType: "text", value: secretValue },
+      body,
     });
     if (is2xx(create.status)) {
       outcome.secret = "created";
@@ -79,7 +92,7 @@ export async function finalizeFlowLogPack(
         method: "PATCH",
         path: `/system/secrets/${FLOWLOG_SECRET_NAME}`,
         groupId: input.groupId,
-        body: { id: FLOWLOG_SECRET_NAME, secretType: "text", value: secretValue },
+        body,
       });
       if (!is2xx(update.status)) {
         throw new Error(

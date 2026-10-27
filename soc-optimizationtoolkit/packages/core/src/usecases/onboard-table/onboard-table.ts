@@ -97,7 +97,7 @@ import {
   parseOutputListing,
   sentinelClientSecretId,
 } from "../../domain/sentinel-destination";
-import { buildSecretBody } from "../../domain/cribl-onboarding-source/input-bodies";
+import { buildSecretBody } from "../../domain/cribl-secrets";
 import {
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
   isCustomTableName,

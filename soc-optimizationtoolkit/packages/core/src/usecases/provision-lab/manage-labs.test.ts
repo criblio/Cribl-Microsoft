@@ -3,7 +3,15 @@ import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import { listingRows } from "../../domain/inventory-listing";
 import { destroyLab, extendLabTtl, listLabs } from "./manage-labs";
-import { finalizeFlowLogPack } from "./deploy-flowlog-pack";
+import { FLOWLOG_SECRET_DESCRIPTION, finalizeFlowLogPack } from "./deploy-flowlog-pack";
+import { APP_ID } from "../../domain/cribl-secrets";
+import { stampFor } from "../../kit/config-writes/ownership";
+
+/**
+ * The description the collector secret carries on POST and PATCH: the app's
+ * ownership stamp, because the body comes from buildSecretBody (DBT-163).
+ */
+const FLOWLOG_STAMPED = `${FLOWLOG_SECRET_DESCRIPTION} ${stampFor(APP_ID)}`;
 
 const SUB = "11111111-2222-3333-4444-555555555555";
 const NOW = "2026-07-17T12:00:00.000Z";
@@ -144,6 +152,7 @@ describe("finalizeFlowLogPack", () => {
       id: "Azure_vNet_Flowlogs_Secret",
       secretType: "text",
       value: "transient-secret",
+      description: FLOWLOG_STAMPED,
     });
     expect(cribl.calls[2].path).toBe("/master/groups/default/deploy");
   });
@@ -166,6 +175,7 @@ describe("finalizeFlowLogPack", () => {
       id: "Azure_vNet_Flowlogs_Secret",
       secretType: "text",
       value: "transient-secret",
+      description: FLOWLOG_STAMPED,
     });
   });
 

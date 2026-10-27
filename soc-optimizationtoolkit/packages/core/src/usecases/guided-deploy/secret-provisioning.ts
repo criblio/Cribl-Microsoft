@@ -29,6 +29,7 @@
 
 import type { CriblRequest } from "../../ports/cribl-client";
 import { CRIBL_SECRET_REFERENCE } from "../../domain/pack-assembly";
+import { buildSecretBody } from "../../domain/cribl-secrets";
 
 /** The Cribl secret object name the Sentinel destinations reference. */
 export const SENTINEL_CLIENT_SECRET_NAME = "sentinel_client_secret";
@@ -45,14 +46,29 @@ export const SENTINEL_CLIENT_SECRET_REFERENCE = CRIBL_SECRET_REFERENCE;
 export const SECRETS_API_PATH = "/system/secrets";
 
 /**
+ * The description the named secret is written with; buildSecretBody appends
+ * the app's ownership stamp to it (DBT-163).
+ */
+export const SENTINEL_CLIENT_SECRET_DESCRIPTION = "Client secret for the Sentinel destinations";
+
+function sentinelSecretBody(secretValue: string) {
+  return buildSecretBody({
+    id: SENTINEL_CLIENT_SECRET_NAME,
+    value: secretValue,
+    description: SENTINEL_CLIENT_SECRET_DESCRIPTION,
+  });
+}
+
+/**
  * Shape the create request for the named Sentinel client secret. Cribl text
  * secrets are created with POST /system/secrets carrying `{ id, secretType:
- * 'text', value }`; a 409/conflict means the secret already exists and the
- * shell should fall back to {@link buildUpdateSecretRequest} (create-or-update).
+ * 'text', value, description }`; a 409/conflict means the secret already
+ * exists and the shell should fall back to {@link buildUpdateSecretRequest}
+ * (create-or-update).
  *
- * `secretType`, NEVER `type` (DBT-151): the vendored OpenAPI RestSecret
- * requires `id` and `secretType`, and the AZR-34 writer (buildSecretBody in
- * cribl-onboarding-source) already sends it.
+ * The body comes from the app-wide buildSecretBody (domain/cribl-secrets,
+ * DBT-163): `secretType`, never `type` (DBT-151), and a description carrying
+ * the ownership stamp proveOwnership reads.
  *
  * @param secretValue TRANSIENT client secret - never logged or persisted.
  * @param groupId Optional worker group scope for the secret.
@@ -64,11 +80,7 @@ export function buildEnsureSecretRequest(
   const request: CriblRequest = {
     method: "POST",
     path: SECRETS_API_PATH,
-    body: {
-      id: SENTINEL_CLIENT_SECRET_NAME,
-      secretType: "text",
-      value: secretValue,
-    },
+    body: sentinelSecretBody(secretValue),
   };
   if (groupId !== undefined) {
     request.groupId = groupId;
@@ -87,11 +99,7 @@ export function buildUpdateSecretRequest(
   const request: CriblRequest = {
     method: "PATCH",
     path: `${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`,
-    body: {
-      id: SENTINEL_CLIENT_SECRET_NAME,
-      secretType: "text",
-      value: secretValue,
-    },
+    body: sentinelSecretBody(secretValue),
   };
   if (groupId !== undefined) {
     request.groupId = groupId;

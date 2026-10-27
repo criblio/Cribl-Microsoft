@@ -10,8 +10,9 @@
  * NO SECRET IN A BODY. The Event Hub input names its connection string through
  * `sasl.textSecret` (authType 'secret') and never carries `sasl.password`; the
  * blob input names its client secret through `clientTextSecret`. The only body
- * that carries a credential is {@link buildSecretBody}, which goes to
- * POST /system/secrets and nowhere else. No body carries `_metadata` (the
+ * that carries a credential is the secret body, built by the app-wide
+ * buildSecretBody in domain/cribl-secrets (DBT-163; re-exported here), which
+ * goes to POST /system/secrets and nowhere else. No body carries `_metadata` (the
  * legacy template's buildEventHubSourceConfig does, eventhub-discovery.ts).
  *
  * `secretType`, NEVER `type`: RestSecret requires `id` and `secretType`
@@ -25,15 +26,16 @@
  */
 
 import { stampDescription } from "../../kit/config-writes/ownership";
+import { APP_ID } from "../cribl-secrets/secret-body";
 import type { CriblInputType, OnboardingSource } from "../onboarding-howto/sources";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 
 /**
- * The app id the description stamp names: the cribl-app package name
- * (apps/cribl-app/package.json "name"). Changing it orphans every object
- * already stamped, so it is a constant, not configuration.
+ * APP_ID and buildSecretBody live in domain/cribl-secrets (DBT-163): every
+ * secret the app writes is built there, not only this feature's. Re-exported
+ * so this module's public API is unchanged.
  */
-export const APP_ID = "soc-optimizationtoolkit";
+export { APP_ID, buildSecretBody } from "../cribl-secrets/secret-body";
 
 /** Prefix of every input id this feature creates; the manifest of ids it may own. */
 export const ONBOARDING_INPUT_ID_PREFIX = "azure_onb_";
@@ -212,23 +214,6 @@ export function buildBlobInputBody(spec: BlobInputSpec): Record<string, unknown>
       `Azure onboarding: ${spec.sourceTitle} from ${spec.storageAccount.trim()}`,
       APP_ID,
     ),
-  };
-}
-
-/**
- * The text-secret body for POST /system/secrets. THE ONLY BODY THAT CARRIES A
- * CREDENTIAL. `secretType`, never `type` (RestSecret.required).
- */
-export function buildSecretBody(spec: {
-  readonly id: string;
-  readonly value: string;
-  readonly description: string;
-}): { id: string; secretType: "text"; value: string; description: string } {
-  return {
-    id: spec.id,
-    secretType: "text",
-    value: spec.value,
-    description: stampDescription(spec.description, APP_ID),
   };
 }
 
