@@ -39,8 +39,10 @@ import {
   ONBOARDING_SOURCES,
   PLAN_VALUE_LABELS,
   aggregateVerdict,
+  canWriteProgressDocument,
   howToStep,
   isAutomatable,
+  progressFrom,
   readProgressDocument,
   renderStep,
   stepsForSelection,
@@ -62,6 +64,7 @@ import type {
   OnboardingTransport,
   PlanValueKey,
   PlanValues,
+  ProgressDocument,
   RenderedStep,
   SourceMode,
   StepProvenance,
@@ -116,14 +119,39 @@ export function progressLoadStateFrom(load: KvDocumentLoad | null): ProgressLoad
   }
 }
 
+/**
+ * The core document this load state stands for, or null while `loading` (the
+ * one state core has no word for). The gate below asks core rather than
+ * restating which statuses may be written, so the rule lives in one place
+ * (progress-document.ts canWriteProgressDocument / progressFrom).
+ */
+function progressDocumentOf(state: ProgressLoadState): ProgressDocument | null {
+  switch (state.status) {
+    case "loading":
+      return null;
+    case "absent":
+      return { status: "absent", progress: state.progress };
+    case "ready":
+      return { status: "ok", decoded: { progress: state.progress, dropped: state.dropped } };
+    case "doc-foreign":
+      return { status: "foreign", kind: state.kind };
+    case "doc-unreadable":
+      return { status: "unreadable", version: state.version };
+    case "read-unknown":
+      return { status: "read-unknown", reason: state.reason };
+  }
+}
+
 /** Whether a progress write is allowed: only after an `absent` or readable load. */
 export function canWriteProgress(state: ProgressLoadState): boolean {
-  return state.status === "absent" || state.status === "ready";
+  const doc = progressDocumentOf(state);
+  return doc !== null && canWriteProgressDocument(doc);
 }
 
 /** The progress to show and edit, or null when none was loaded. */
 export function loadedProgress(state: ProgressLoadState): OnboardingProgress | null {
-  return state.status === "absent" || state.status === "ready" ? state.progress : null;
+  const doc = progressDocumentOf(state);
+  return doc === null ? null : progressFrom(doc);
 }
 
 /** A line the How-to panel renders above its steps. */
