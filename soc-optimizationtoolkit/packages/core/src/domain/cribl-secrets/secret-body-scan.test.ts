@@ -17,7 +17,12 @@
  * What it cannot see: a body built by a helper in another file and passed in
  * (wiring-section sends buildEnsureSecretRequest's request). Those helpers are
  * themselves writers on the table, and their bodies are pinned whole in
- * secret-provisioning.test.ts.
+ * secret-provisioning.test.ts. Nor does rule 3 count bodies: a writer that
+ * calls buildSecretBody once can still send a second, kind-less body (no
+ * `secretType`, no `type`) that this scan passes. The per-caller body pins
+ * catch that: secret-provisioning.test.ts, manage-labs.test.ts and
+ * onboard-table.test.ts compare whole bodies, and create-cribl-source.test.ts
+ * requires `secretType`.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
