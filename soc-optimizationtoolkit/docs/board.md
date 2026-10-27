@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**82 in the backlog, 27 in progress, 55 done.**
+**72 in the backlog, 37 in progress, 55 done.**
 
 ## By menu item
 
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (27)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -863,6 +863,28 @@ Started. Anything here with an unfinished dependency is called out on its card.
   create-only secret (409 refuses, never PATCH); existing clear-secret
   destinations are flagged at verify, never migrated. Awaits Live Preview.
 
+- **DBT-156** UI tests time out or miscount under full-suite load and pass alone
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in
+  packages/ui failed twice with two different pairs of failures, in folders
+  the build did not touch: integrate-screen.dom.test.tsx ("the gap card's
+  Remove deletes the sample, its chip and its card", 5000ms timeout),
+  integrate-copy-history.test.ts (timeout) and
+  mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when
+  run alone, and a third full run passed (1971/1971). A gate that fails at
+  random trains people to rerun it until green, which hides a real failure.
+  FIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool),
+  find which wait or shared state each test relies on, replace fixed timeouts
+  with awaited conditions, and mutation-check that the repaired pins still
+  fail on the behaviour they guard. Not proven on main yet. NOTE 2026-10-27:
+  hit again on the round-3 merged gate run (0e8ec6c): only "the gap card's
+  Remove deletes the sample, its chip and its card" failed (2007/2008), and
+  the file passed 43/43 alone. Worktree runs in the same round timed out in
+  seven more files (integrate-copy-history, mapping-review-*,
+  azure-onboarding-screen.dom, azure-onboarding-howto.dom), and apps/cribl-app
+  check-listings.test.mjs "the repository itself" ran 6.9s against the 5s
+  default. Third red gate from this flake today.
+
 - **DBT-158** A failed options read falls back to defaults, and the next inline save writes the defaults over the real options
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not
@@ -942,9 +964,114 @@ Started. Anything here with an unfinished dependency is called out on its card.
   on POST and PATCH. For DBT-152: the 409/400 fallback PATCH now stamps a
   secret the app may not own.
 
+- **DBT-169** captureFilterWarning does not recognise a filter written in the typed __inputId form
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified.
+  packages/core/src/domain/capture-filter/capture-filter.ts:223 builds a
+  quoted-literal regex (optional leading colon, then the bare id) to decide
+  whether a capture filter names the selected input. Run under node with id
+  in_syslog it is false for __inputId=='syslog:in_syslog' and for
+  __inputId.startsWith('syslog:in_syslog:') - the typed form
+  domain/capture-filter/input-id.ts (DBT-162) names as the real value - and
+  true only for the bare id, which matches nothing in the product. So a
+  correct filter draws the warning and the legacy one does not. FIX: decide it
+  through input-id.ts (matchInputIdFilter); pin both forms.
+
+- **DBT-170** Live Architecture computes legacyInputMatch and never shows it
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified. LiveFlowSummary.legacyInputMatch
+  (live-architecture.ts:215-220, set :1179) is computed and pinned, but no
+  code in packages/ui or apps/cribl-app reads it, so a route matched only by
+  its bare input id is drawn as confirmed on the Dataflow screen while the
+  onboarding screen calls the same route unconfirmed (DBT-162). FIX: render a
+  per-flow 'unconfirmed: filter names the bare input id' badge from the field;
+  DOM pin.
+
+- **DBT-171** The bare-id route wording is written twice, and RouteFilterInputs is a dead alias
+  `DBT-F1` `bug` `settled`
+  Not now because: Two literals that agree today and a dead type alias;
+  nothing an operator sees is wrong until one literal is edited alone, and the
+  pin on each would catch a change to that one.
+  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
+  adversarially verified. ' (unconfirmed: its filter names the bare input id)'
+  is a literal in core lanes.ts:480-482 and again in the UI
+  cribl-source-panel.tsx:490, pinned separately. live-architecture.ts:377
+  exports RouteFilterInputs = InputIdFilter, re-exported from the barrel, used
+  only inside its own file. FIX: one exported wording constant from core; drop
+  the alias.
+
+- **DBT-172** Every inline options save drops keys the app does not manage
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
+  introduced by it). App.tsx:143-145 says saves go through applyOptionsPatch
+  so unmanaged keys survive, but the save serialises canonical options
+  (serializeAppOptions, now in packages/ui/src/frame/options-read.ts
+  planOptionsSave), dropping _comments and any section a newer version wrote.
+  FIX: keep the raw stored string in the loaded read and save through
+  applyOptionsPatch; pin that an unknown key survives a toggle.
+
+- **DBT-173** A failed options save is an unhandled rejection the operator never hears about
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
+  introduced by it). App.tsx persistOperation calls `void
+  saveAppOptions(...)`; a failed PUT rejects unhandled and the toggle looks
+  saved. Also decide: Onboard and Batch still run with default options while
+  the options read is unreadable (the DBT-158 notice says so, but Run is not
+  blocked). FIX: catch, show the failure, revert the toggle; pin.
+
+- **DBT-175** More KV readers and writers turn a refused store into silence or a false 'Saved'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-159 implementer/reviewer (pre-existing, not
+  introduced by it). (1) sample-intake-section.tsx:683 `void
+  definitionCache.set(vendorKey, name)` has no catch and sets vendorSaved
+  before the write lands: unhandled rejection plus a false 'Saved'; the new
+  DBT-159 hint 'Naming it again replaces whatever is stored' is false in
+  exactly that case. (2) siem-migration-screen.tsx:100-112 shows a refused
+  plan-cache read as 'no saved plan'. (3) use-vendor-column-order.ts:95
+  swallows a refused read and :133/:145 refused writes with no reason shown.
+  (4) pat-form-state derivePatFormView: canClear is hasPat-only, so with the
+  status unknown a possibly stored token cannot be cleared. FIX each; pin
+  each.
+
+- **DBT-176** Content Hub catalog failures read as 'not in the catalog' or 'none deprecated'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-160 implementer/reviewer (pre-existing, not
+  introduced by it). findSolutionCatalogEntry
+  (usecases/content-install/available-content.ts:68-81) returns null for both
+  unreadable and no-match, and content-install-section.tsx:600-604 then says
+  'Load to look up this solution in Content Hub.' after a load;
+  listDeprecatedContentHubSolutions (:127-140, used by
+  solution-browser.tsx:315) returns an empty set on failure; installParser
+  (content-install.ts:611-627) swallows a failed saved-searches listing and
+  PUTs anyway (safe, idempotent, never reported). DBT-160 adds one more cause
+  to each. FIX: a tri-state result (found / not found / unreadable with
+  reason) and render it; pin.
+
+- **DBT-178** Validate tells the operator a policy assignment or remediation 'targets the plan's hub'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-166/167 implementer/reviewer (pre-existing, not
+  introduced by it).
+  packages/ui/src/screens/azure-onboarding/validate/validate-state.ts:127
+  gives every present-other-name verdict the detail 'Found as X, which targets
+  the plan's hub.' False for policy-assignment and, since DBT-166,
+  policy-remediation. Also: when several family assignments exist, the verdict
+  names only the first and does not say there are more. FIX: per-check-kind
+  wording; pin.
+
+- **DBT-179** Validate may read an Event Grid subscription on another account's topic as configured
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-27 by the DBT-167 implementer/reviewer (pre-existing, not
+  introduced by it). SUSPECTED, not confirmed: eventgrid-subscription
+  (requests.ts:168) does not require storageAccount and its classifier matches
+  only on queueName, the same shape DBT-167 fixed for the topic. FIX after
+  confirming: require the plan's storage account and check the subscription's
+  topic source; pin.
+
 ---
 
-## Backlog - now (13)
+## Backlog - now (4)
 
 Next to pick up. Nothing blocks these.
 
@@ -1072,116 +1199,9 @@ Next to pick up. Nothing blocks these.
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
 
-- **DBT-156** UI tests time out or miscount under full-suite load and pass alone
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in
-  packages/ui failed twice with two different pairs of failures, in folders
-  the build did not touch: integrate-screen.dom.test.tsx ("the gap card's
-  Remove deletes the sample, its chip and its card", 5000ms timeout),
-  integrate-copy-history.test.ts (timeout) and
-  mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when
-  run alone, and a third full run passed (1971/1971). A gate that fails at
-  random trains people to rerun it until green, which hides a real failure.
-  FIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool),
-  find which wait or shared state each test relies on, replace fixed timeouts
-  with awaited conditions, and mutation-check that the repaired pins still
-  fail on the behaviour they guard. Not proven on main yet.
-
-- **DBT-169** captureFilterWarning does not recognise a filter written in the typed __inputId form
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
-  adversarially verified.
-  packages/core/src/domain/capture-filter/capture-filter.ts:223 builds a
-  quoted-literal regex (optional leading colon, then the bare id) to decide
-  whether a capture filter names the selected input. Run under node with id
-  in_syslog it is false for __inputId=='syslog:in_syslog' and for
-  __inputId.startsWith('syslog:in_syslog:') - the typed form
-  domain/capture-filter/input-id.ts (DBT-162) names as the real value - and
-  true only for the bare id, which matches nothing in the product. So a
-  correct filter draws the warning and the legacy one does not. FIX: decide it
-  through input-id.ts (matchInputIdFilter); pin both forms.
-
-- **DBT-170** Live Architecture computes legacyInputMatch and never shows it
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
-  adversarially verified. LiveFlowSummary.legacyInputMatch
-  (live-architecture.ts:215-220, set :1179) is computed and pinned, but no
-  code in packages/ui or apps/cribl-app reads it, so a route matched only by
-  its bare input id is drawn as confirmed on the Dataflow screen while the
-  onboarding screen calls the same route unconfirmed (DBT-162). FIX: render a
-  per-flow 'unconfirmed: filter names the bare input id' badge from the field;
-  DOM pin.
-
-- **DBT-172** Every inline options save drops keys the app does not manage
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
-  introduced by it). App.tsx:143-145 says saves go through applyOptionsPatch
-  so unmanaged keys survive, but the save serialises canonical options
-  (serializeAppOptions, now in packages/ui/src/frame/options-read.ts
-  planOptionsSave), dropping _comments and any section a newer version wrote.
-  FIX: keep the raw stored string in the loaded read and save through
-  applyOptionsPatch; pin that an unknown key survives a toggle.
-
-- **DBT-173** A failed options save is an unhandled rejection the operator never hears about
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not
-  introduced by it). App.tsx persistOperation calls `void
-  saveAppOptions(...)`; a failed PUT rejects unhandled and the toggle looks
-  saved. Also decide: Onboard and Batch still run with default options while
-  the options read is unreadable (the DBT-158 notice says so, but Run is not
-  blocked). FIX: catch, show the failure, revert the toggle; pin.
-
-- **DBT-175** More KV readers and writers turn a refused store into silence or a false 'Saved'
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-159 implementer/reviewer (pre-existing, not
-  introduced by it). (1) sample-intake-section.tsx:683 `void
-  definitionCache.set(vendorKey, name)` has no catch and sets vendorSaved
-  before the write lands: unhandled rejection plus a false 'Saved'; the new
-  DBT-159 hint 'Naming it again replaces whatever is stored' is false in
-  exactly that case. (2) siem-migration-screen.tsx:100-112 shows a refused
-  plan-cache read as 'no saved plan'. (3) use-vendor-column-order.ts:95
-  swallows a refused read and :133/:145 refused writes with no reason shown.
-  (4) pat-form-state derivePatFormView: canClear is hasPat-only, so with the
-  status unknown a possibly stored token cannot be cleared. FIX each; pin
-  each.
-
-- **DBT-176** Content Hub catalog failures read as 'not in the catalog' or 'none deprecated'
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-160 implementer/reviewer (pre-existing, not
-  introduced by it). findSolutionCatalogEntry
-  (usecases/content-install/available-content.ts:68-81) returns null for both
-  unreadable and no-match, and content-install-section.tsx:600-604 then says
-  'Load to look up this solution in Content Hub.' after a load;
-  listDeprecatedContentHubSolutions (:127-140, used by
-  solution-browser.tsx:315) returns an empty set on failure; installParser
-  (content-install.ts:611-627) swallows a failed saved-searches listing and
-  PUTs anyway (safe, idempotent, never reported). DBT-160 adds one more cause
-  to each. FIX: a tri-state result (found / not found / unreadable with
-  reason) and render it; pin.
-
-- **DBT-178** Validate tells the operator a policy assignment or remediation 'targets the plan's hub'
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-166/167 implementer/reviewer (pre-existing, not
-  introduced by it).
-  packages/ui/src/screens/azure-onboarding/validate/validate-state.ts:127
-  gives every present-other-name verdict the detail 'Found as X, which targets
-  the plan's hub.' False for policy-assignment and, since DBT-166,
-  policy-remediation. Also: when several family assignments exist, the verdict
-  names only the first and does not say there are more. FIX: per-check-kind
-  wording; pin.
-
-- **DBT-179** Validate may read an Event Grid subscription on another account's topic as configured
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-27 by the DBT-167 implementer/reviewer (pre-existing, not
-  introduced by it). SUSPECTED, not confirmed: eventgrid-subscription
-  (requests.ts:168) does not require storageAccount and its classifier matches
-  only on queueName, the same shape DBT-167 fixed for the topic. FIX after
-  confirming: require the plan's storage account and check the subscription's
-  topic source; pin.
-
 ---
 
-## Backlog - next (32)
+## Backlog - next (31)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1581,19 +1601,6 @@ Settled and unblocked, sequenced behind now.
   skills/cribl-dataflow-diagram/reference/FlowDiagram.tsx has the same logic.
   FIX in the kit: clear the flag on the click it suppresses (or on a timeout
   tick), pin it, then sync.
-
-- **DBT-171** The bare-id route wording is written twice, and RouteFilterInputs is a dead alias
-  `DBT-F1` `bug` `settled`
-  Not now because: Two literals that agree today and a dead type alias;
-  nothing an operator sees is wrong until one literal is edited alone, and the
-  pin on each would catch a change to that one.
-  FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85),
-  adversarially verified. ' (unconfirmed: its filter names the bare input id)'
-  is a literal in core lanes.ts:480-482 and again in the UI
-  cribl-source-panel.tsx:490, pinned separately. live-architecture.ts:377
-  exports RouteFilterInputs = InputIdFilter, re-exported from the barrel, used
-  only inside its own file. FIX: one exported wording constant from core; drop
-  the alias.
 
 - **DBT-174** A corrupt stored options blob reads as loaded defaults, and the next save overwrites it
   `DBT-F1` `bug` `settled`
