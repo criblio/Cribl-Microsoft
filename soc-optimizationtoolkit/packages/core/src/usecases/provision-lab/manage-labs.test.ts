@@ -190,8 +190,9 @@ describe("finalizeFlowLogPack", () => {
     await expect(
       finalizeFlowLogPack(cribl, { groupId: "default", clientSecret: "transient-secret" }),
     ).rejects.toThrow(
-      "Cribl secret 'Azure_vNet_Flowlogs_Secret' already exists and is owned by someone else " +
-        `(its description carries no ${stampFor(APP_ID)} stamp); it was left unchanged.`,
+      "Cribl secret 'Azure_vNet_Flowlogs_Secret' already exists and this app cannot show it wrote it " +
+        `(its description carries no ${stampFor(APP_ID)} stamp); it was left unchanged. ` +
+        `If it is yours to replace, delete it in Cribl or add ${stampFor(APP_ID)} to its description, then run this again.`,
     );
     expect(cribl.calls.map((c) => c.method)).toEqual(["POST", "GET"]);
   });

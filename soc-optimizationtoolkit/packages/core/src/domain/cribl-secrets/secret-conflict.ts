@@ -71,11 +71,15 @@ export function decideSecretConflict(secretId: string, read: SecretConflictRead 
   const description = found["description"];
   const stamp = stampFor(APP_ID);
   if (typeof description === "string" && description.includes(stamp)) return { kind: "patch" };
+  // The evidence is only that the stamp is absent, so the message says that and
+  // no more: the secret may be another admin's, or one this app wrote before it
+  // stamped its secrets (DBT-163). Either way it is not overwritten.
   return {
     kind: "refuse",
     reason: "foreign",
     message:
-      `Cribl secret '${secretId}' already exists and is owned by someone else ` +
-      `(its description carries no ${stamp} stamp); it was left unchanged.`,
+      `Cribl secret '${secretId}' already exists and this app cannot show it wrote it ` +
+      `(its description carries no ${stamp} stamp); it was left unchanged. ` +
+      `If it is yours to replace, delete it in Cribl or add ${stamp} to its description, then run this again.`,
   };
 }

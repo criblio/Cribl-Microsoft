@@ -57,10 +57,23 @@ describe("ensureTextSecret (DBT-152)", () => {
       reason: "foreign",
       secretId: ID,
       message:
-        `Cribl secret '${ID}' already exists and is owned by someone else ` +
-        `(its description carries no ${stampFor(APP_ID)} stamp); it was left unchanged.`,
+        `Cribl secret '${ID}' already exists and this app cannot show it wrote it ` +
+        `(its description carries no ${stampFor(APP_ID)} stamp); it was left unchanged. ` +
+        `If it is yours to replace, delete it in Cribl or add ${stampFor(APP_ID)} to its description, then run this again.`,
     });
     expect(methods(cribl)).toEqual(["POST /system/secrets [wg-1]", `GET /system/secrets/${ID} [wg-1]`]);
+  });
+
+  it.each([
+    ["another app's stamp", "[managed-by:other-app]"],
+    ["a stamp whose app id only starts with ours", `[managed-by:${APP_ID}-fork]`],
+    ["our app id without the stamp brackets", `managed-by:${APP_ID}`],
+  ])("409 and the description carries %s: foreign, no PATCH (the stamp match is exact)", async (_label, description) => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith({ status: 409, body: {} }, { status: 200, body: { items: [{ id: ID, description }] } });
+    const outcome = await ensureTextSecret(cribl, SPEC);
+    expect(outcome.kind === "refused" && outcome.reason).toBe("foreign");
+    expect(cribl.calls.map((r) => r.method)).toEqual(["POST", "GET"]);
   });
 
   it("409 and the existing secret has no description at all: foreign, no PATCH", async () => {
