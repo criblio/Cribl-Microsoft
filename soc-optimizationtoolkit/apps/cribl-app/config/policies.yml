@@ -49,8 +49,10 @@
 #                                              merged config back
 #   /m/{groupId}/system/secrets (post)       - ensure-secret create of the named
 #                                              text secret sentinel_client_secret
-#   /m/{groupId}/system/secrets/{id} (patch) - ensure-secret update on a 409
-#                                              (create-or-update)
+#   /m/{groupId}/system/secrets/{id} (patch) - ensure-secret update on a 409,
+#                                              only of a secret whose
+#                                              description carries this app's
+#                                              stamp (DBT-152)
 #   /system/lake/datasets (post)             - CLOUD-ONLY Cribl Lake dataset
 #                                              create (409/exists is success); a
 #                                              leader route, no /m/ prefix
@@ -197,9 +199,11 @@ policies:
   - object: '/m/:gid/system/secrets'
     actions: ['POST']
   # Unit 20 ensure-secret update on a 409 (create-or-update): PATCH the existing
-  # named secret in place.
+  # named secret in place, only when its description carries this app's stamp
+  # (ensure-text-secret.ts, DBT-152; the GET below reads it first).
   - object: '/m/:gid/system/secrets/*'
     actions: ['PATCH']
+  # ensure-text-secret (DBT-152): after a 409, read who owns the secret.
   # create-cribl-source plan (AZR-34): read one named secret to classify it as
   # absent, ours or foreign before any write. A 409 on create refuses; it is
   # never PATCHed.

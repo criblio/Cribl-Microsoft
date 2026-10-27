@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { FakeCriblClient } from "../../testing/fake-cribl-client";
+import { ensureTextSecret } from "../ensure-secret";
 import { CRIBL_SECRET_REFERENCE } from "../../domain/pack-assembly";
 import { SENTINEL_SECRET_PLACEHOLDER } from "../../domain/sentinel-destination";
 import { APP_ID } from "../../domain/cribl-secrets";
 import { stampFor } from "../../kit/config-writes/ownership";
 import {
-  buildEnsureSecretRequest,
-  buildUpdateSecretRequest,
   SECRETS_API_PATH,
   SENTINEL_CLIENT_SECRET_DESCRIPTION,
   SENTINEL_CLIENT_SECRET_NAME,
@@ -32,17 +32,51 @@ describe("secret convention - ONE reference, two delivery paths", () => {
   });
 });
 
-describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)", () => {
+describe("the Sentinel client secret through ensureTextSecret (connected path)", () => {
   // DBT-151: this pin used to expect `type: "text"`, which is the defect -
   // the vendored OpenAPI RestSecret requires `secretType`. Changed, not weakened:
   // the whole body is still compared, so a `type` key fails it.
-  // DBT-163 added the stamped description to the whole-body compares: the
-  // body comes from buildSecretBody, so proveOwnership can read it later.
-  it("creates the named text secret via POST /system/secrets", () => {
-    const request = buildEnsureSecretRequest("s3cr3t-value", "wg-1");
-    expect(request).toEqual({
-      method: "POST",
-      path: SECRETS_API_PATH,
+  // DBT-163 added the stamped description to the whole-body compares.
+  // DBT-152 moved the requests out of this module into ensureTextSecret (the
+  // POST/PATCH builders went out on any 409 with no ownership check); the
+  // whole-body pins follow the request to where it is now built.
+  const SENTINEL = {
+    groupId: "wg-1",
+    id: SENTINEL_CLIENT_SECRET_NAME,
+    value: "s3cr3t-value",
+    description: SENTINEL_CLIENT_SECRET_DESCRIPTION,
+  };
+
+  it("creates the named text secret via POST /system/secrets with the stamped body", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith({ status: 201, body: {} });
+    expect(await ensureTextSecret(cribl, SENTINEL)).toEqual({ kind: "created", secretId: SENTINEL_CLIENT_SECRET_NAME });
+    expect(cribl.calls).toEqual([
+      {
+        method: "POST",
+        path: SECRETS_API_PATH,
+        groupId: "wg-1",
+        body: {
+          id: SENTINEL_CLIENT_SECRET_NAME,
+          secretType: "text",
+          value: "s3cr3t-value",
+          description: STAMPED,
+        },
+      },
+    ]);
+  });
+
+  it("updates via PATCH /system/secrets/{id} on a 409 only when the secret is ours, same body", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: SENTINEL_CLIENT_SECRET_NAME, description: STAMPED }] } },
+      { status: 200, body: {} },
+    );
+    expect(await ensureTextSecret(cribl, SENTINEL)).toEqual({ kind: "updated", secretId: SENTINEL_CLIENT_SECRET_NAME });
+    expect(cribl.calls[2]).toEqual({
+      method: "PATCH",
+      path: `${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`,
       groupId: "wg-1",
       body: {
         id: SENTINEL_CLIENT_SECRET_NAME,
@@ -50,29 +84,6 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
         value: "s3cr3t-value",
         description: STAMPED,
       },
-    });
-  });
-
-  it("omits groupId when none is given (leader-scoped)", () => {
-    const request = buildEnsureSecretRequest("s3cr3t-value");
-    expect(request.groupId).toBeUndefined();
-    expect(request.path).toBe(SECRETS_API_PATH);
-  });
-
-  it("updates via PATCH /system/secrets/{id} on conflict", () => {
-    const request = buildUpdateSecretRequest("rotated", "wg-1");
-    expect(request.method).toBe("PATCH");
-    expect(request.path).toBe(`${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`);
-    expect((request.body as { value: string }).value).toBe("rotated");
-  });
-
-  it("names the secret kind `secretType` on the PATCH too (DBT-151)", () => {
-    const request = buildUpdateSecretRequest("rotated", "wg-1");
-    expect(request.body).toEqual({
-      id: SENTINEL_CLIENT_SECRET_NAME,
-      secretType: "text",
-      value: "rotated",
-      description: STAMPED,
     });
   });
 });

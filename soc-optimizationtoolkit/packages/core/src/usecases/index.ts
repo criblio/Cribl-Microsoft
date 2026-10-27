@@ -17,6 +17,8 @@ export * from "./eventhub-target";
 // AZR-3: read Defender state subscription-wide; create-only deploy.
 export * from "./defender-export";
 export * from "./guided-deploy";
+// DBT-152: create-or-update a named text secret, updating only one that is ours.
+export * from "./ensure-secret";
 export * from "./permission-preflight";
 export * from "./capability-audit";
 export * from "./workspace-tables";

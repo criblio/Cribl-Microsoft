@@ -3,9 +3,10 @@
  *
  * Every POST /system/secrets and PATCH /system/secrets/:id body the app sends
  * is built here: the onboarding source (create-cribl-source), the Sentinel
- * destination client secret (onboard-table), the guided-deploy ensure-secret
- * (buildEnsureSecretRequest / buildUpdateSecretRequest) and the AzureFlowLogs
- * pack collector secret (deploy-flowlog-pack). There were three builders and
+ * destination client secret (onboard-table), and ensureTextSecret
+ * (usecases/ensure-secret, DBT-152), which carries both the guided-deploy
+ * ensure-secret and the AzureFlowLogs pack collector secret
+ * (deploy-flowlog-pack). There were three builders and
  * only the onboarding one stamped ownership; DBT-151 had to fix `secretType`
  * in each of them separately. secret-body-scan.test.ts holds the line.
  *
