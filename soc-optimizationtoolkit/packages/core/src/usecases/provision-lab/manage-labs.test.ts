@@ -157,10 +157,12 @@ describe("finalizeFlowLogPack", () => {
     expect(cribl.calls[2].path).toBe("/master/groups/default/deploy");
   });
 
-  it("falls back to PATCH when the secret already exists", async () => {
+  it("falls back to PATCH when the secret already exists and is ours (DBT-152)", async () => {
     const cribl = new FakeCriblClient();
     cribl.respondWith(
       { status: 409, body: {} }, // POST conflict
+      // GET: the existing secret carries this app's stamp, so it is ours to update
+      { status: 200, body: { items: [{ id: "Azure_vNet_Flowlogs_Secret", description: FLOWLOG_STAMPED }] } },
       { status: 200, body: {} }, // PATCH
       { status: 200, body: { items: [{ commit: "abc123" }] } },
       { status: 200, body: {} },
@@ -170,13 +172,38 @@ describe("finalizeFlowLogPack", () => {
       clientSecret: "transient-secret",
     });
     expect(outcome.secret).toBe("updated");
-    expect(cribl.calls[1].method).toBe("PATCH");
-    expect(cribl.calls[1].body).toEqual({
+    expect(cribl.calls.map((c) => c.method)).toEqual(["POST", "GET", "PATCH", "POST", "PATCH"]);
+    expect(cribl.calls[2].body).toEqual({
       id: "Azure_vNet_Flowlogs_Secret",
       secretType: "text",
       value: "transient-secret",
       description: FLOWLOG_STAMPED,
     });
+  });
+
+  it("refuses, sends no PATCH and no commit, when the existing secret is someone else's (DBT-152)", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: "Azure_vNet_Flowlogs_Secret", description: "Made by hand" }] } },
+    );
+    await expect(
+      finalizeFlowLogPack(cribl, { groupId: "default", clientSecret: "transient-secret" }),
+    ).rejects.toThrow(
+      "Cribl secret 'Azure_vNet_Flowlogs_Secret' already exists and this app cannot show it wrote it " +
+        `(its description carries no ${stampFor(APP_ID)} stamp); it was left unchanged. ` +
+        `If it is yours to replace, delete it in Cribl or add ${stampFor(APP_ID)} to its description, then run this again.`,
+    );
+    expect(cribl.calls.map((c) => c.method)).toEqual(["POST", "GET"]);
+  });
+
+  it("treats a 400 on the create as an error, never an overwrite (DBT-152)", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith({ status: 400, body: { message: "bad body" } });
+    await expect(
+      finalizeFlowLogPack(cribl, { groupId: "default", clientSecret: "transient-secret" }),
+    ).rejects.toThrow(`store Cribl secret 'Azure_vNet_Flowlogs_Secret': HTTP 400 {"message":"bad body"}`);
+    expect(cribl.calls.map((c) => c.method)).toEqual(["POST"]);
   });
 
   it("skips the secret without a value and reports commit errors nonfatally", async () => {

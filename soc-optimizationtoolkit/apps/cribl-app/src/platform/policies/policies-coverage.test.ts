@@ -62,7 +62,7 @@ const KNOWN_EXCEPTIONS: readonly KnownException[] = [
   {
     object: '/m/:gid/system/secrets/*',
     cardId: WILDCARD_CARD,
-    reason: 'ensure-secret PATCH on a 409 (wiring-section, deploy-flowlog-pack); should be /m/:gid/system/secrets/:id',
+    reason: 'ensure-secret PATCH on a 409 of a secret we own (ensure-text-secret, DBT-152); should be /m/:gid/system/secrets/:id',
   },
   {
     object: '/m/:gid/search/jobs/*',

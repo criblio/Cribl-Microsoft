@@ -27,10 +27,10 @@
 
 import { useCallback, useState } from "react";
 import {
+  SENTINEL_CLIENT_SECRET_DESCRIPTION,
   SENTINEL_CLIENT_SECRET_NAME,
   SENTINEL_CLIENT_SECRET_REFERENCE,
-  buildEnsureSecretRequest,
-  buildUpdateSecretRequest,
+  ensureTextSecret,
   wireSource,
 } from "@soc/core";
 import type {
@@ -58,10 +58,6 @@ export interface WiringSectionProps {
 }
 
 type ActionState = "idle" | "running" | "ok" | "failed";
-
-function is2xx(status: number): boolean {
-  return status >= 200 && status < 300;
-}
 
 export function WiringSection({
   deployCompleted,
@@ -153,27 +149,25 @@ export function WiringSection({
     const group = workerGroup.trim();
     const value = secretValue.trim();
     try {
-      // Create-or-update: POST creates the named secret; a 409/conflict means
-      // it already exists, so PATCH updates it in place (the ensure contract).
-      const created = await ports.cribl.request(
-        buildEnsureSecretRequest(value, group),
-      );
-      if (is2xx(created.status)) {
+      // Create-or-update, ours only (ensureTextSecret, DBT-152): POST creates
+      // the named secret; on a 409 it is PATCHed only when its description
+      // carries this app's ownership stamp. A secret another admin or app made
+      // under this name, or one whose owner cannot be read, is left unchanged
+      // and the refusal says so; a 400 is an error, never an overwrite.
+      const ensured = await ensureTextSecret(ports.cribl, {
+        groupId: group,
+        id: SENTINEL_CLIENT_SECRET_NAME,
+        value,
+        description: SENTINEL_CLIENT_SECRET_DESCRIPTION,
+      });
+      if (ensured.kind === "created") {
         setSecretNote(`Created Cribl secret ${SENTINEL_CLIENT_SECRET_NAME}.`);
         setSecretState("ok");
-      } else if (created.status === 409) {
-        const updated = await ports.cribl.request(
-          buildUpdateSecretRequest(value, group),
-        );
-        if (is2xx(updated.status)) {
-          setSecretNote(`Updated existing Cribl secret ${SENTINEL_CLIENT_SECRET_NAME}.`);
-          setSecretState("ok");
-        } else {
-          setSecretError(`Secret update failed: HTTP ${updated.status}`);
-          setSecretState("failed");
-        }
+      } else if (ensured.kind === "updated") {
+        setSecretNote(`Updated existing Cribl secret ${SENTINEL_CLIENT_SECRET_NAME}.`);
+        setSecretState("ok");
       } else {
-        setSecretError(`Secret create failed: HTTP ${created.status}`);
+        setSecretError(ensured.message);
         setSecretState("failed");
       }
     } catch (err) {
@@ -200,7 +194,8 @@ export function WiringSection({
         Store the ingestion client secret
         under that name here so the live destination resolves without hand-editing
         Cribl. Create-or-update: it creates the secret, or updates it if it
-        already exists. The value is transient - written once to Cribl, never
+        already exists and this app created it; a secret of that name made by
+        anyone else is left unchanged. The value is transient - written once to Cribl, never
         kept by this app. Leave the deploy&apos;s destination on the placeholder
         and provision it here. A secret given at deploy time goes into a
         per-destination Cribl secret instead, never into the destination -

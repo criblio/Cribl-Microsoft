@@ -15,14 +15,14 @@
  *      request at all.
  *
  * What it cannot see: a body built by a helper in another file and passed in
- * (wiring-section sends buildEnsureSecretRequest's request). Those helpers are
- * themselves writers on the table, and their bodies are pinned whole in
- * secret-provisioning.test.ts. Nor does rule 3 count bodies: a writer that
- * calls buildSecretBody once can still send a second, kind-less body (no
- * `secretType`, no `type`) that this scan passes. The per-caller body pins
- * catch that: secret-provisioning.test.ts, manage-labs.test.ts and
- * onboard-table.test.ts compare whole bodies, and create-cribl-source.test.ts
- * requires `secretType`.
+ * (wiring-section and deploy-flowlog-pack call ensureTextSecret, DBT-152).
+ * That helper is itself a writer on the table, and its bodies are pinned whole
+ * in ensure-text-secret.test.ts and secret-provisioning.test.ts. Nor does rule
+ * 3 count bodies: a writer that calls buildSecretBody once can still send a
+ * second, kind-less body (no `secretType`, no `type`) that this scan passes.
+ * The per-caller body pins catch that: ensure-text-secret.test.ts,
+ * secret-provisioning.test.ts, manage-labs.test.ts and onboard-table.test.ts
+ * compare whole bodies, and create-cribl-source.test.ts requires `secretType`.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -50,8 +50,8 @@ type Role =
 const ROLES: Readonly<Record<string, Role>> = {
   "packages/core/src/usecases/create-cribl-source/apply-cribl-source.ts": "writer",
   "packages/core/src/usecases/onboard-table/onboard-table.ts": "writer",
-  "packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts": "writer",
-  "packages/core/src/usecases/guided-deploy/secret-provisioning.ts": "writer",
+  "packages/core/src/usecases/ensure-secret/ensure-text-secret.ts": "writer",
+  "packages/core/src/usecases/guided-deploy/secret-provisioning.ts": "constant",
   "packages/core/src/usecases/create-cribl-source/plan-cribl-source.ts": "reader",
   "packages/core/src/usecases/guided-deploy/index.ts": "constant",
   "apps/cribl-app/src/platform/policies/paths.ts": "policy",

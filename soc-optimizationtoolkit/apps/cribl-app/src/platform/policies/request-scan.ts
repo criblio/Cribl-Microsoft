@@ -36,7 +36,7 @@
 //      a literal - is reported as dynamic too, so it must be on DYNAMIC_PATHS.
 //
 // WHAT IT CANNOT SEE: a request object built by a helper and passed in
-// (`cribl.request(buildEnsureSecretRequest(...))`), and raw fetch() calls.
+// (`cribl.request(buildSomeRequest(...))`), and raw fetch() calls.
 // Those entries in API_CALLS are kept honest by review.
 
 import type { Method } from './policyCoverage';

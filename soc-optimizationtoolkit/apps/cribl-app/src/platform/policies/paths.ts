@@ -24,7 +24,8 @@ const FLOWLOG = 'core usecases/provision-lab/deploy-flowlog-pack.ts';
 const LIVE_ARCH = 'core usecases/live-architecture/fetch-live-architecture.ts';
 const PREFLIGHT = 'core usecases/permission-preflight/permission-preflight.ts (CRIBL_CAPABILITY_PROBES)';
 const PACK_INSTALL = 'app platform/adapters.ts PlatformPackInstall';
-const WIRING_UI = 'ui screens/integrate/wiring-section.tsx (secret-provisioning.ts builders)';
+const WIRING_UI = 'ui screens/integrate/wiring-section.tsx';
+const ENSURE_SECRET = 'core usecases/ensure-secret/ensure-text-secret.ts (DBT-152)';
 const CREATE_SOURCE = 'core usecases/create-cribl-source (AZR-34)';
 const KIT_COMMIT = 'core kit/config-writes/commitDeploy.ts via create-cribl-source (AZR-34)';
 const LAKE_QUERY = 'core usecases/query-lake-samples/query-lake-samples.ts';
@@ -67,9 +68,9 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'DELETE', path: '/m/:gid/packs/:id', caller: `${PACK_INSTALL}.install (deletePack)` },
   { method: 'GET', path: '/m/:gid/routes', caller: `${WIRE}; ${LIVE_ARCH}; ${PREFLIGHT}; read-source-flow/read-onboarding-cribl-side.ts` },
   { method: 'PUT', path: '/m/:gid/routes', caller: WIRE },
-  { method: 'POST', path: '/m/:gid/system/secrets', caller: `${WIRING_UI}; ${FLOWLOG}; ${CREATE_SOURCE} apply-cribl-source.ts; ${ONBOARD} (destination client secret, create-only, DBT-155)` },
-  { method: 'PATCH', path: '/m/:gid/system/secrets/:id', caller: `${WIRING_UI} (on 409); ${FLOWLOG} (on 409/400)` },
-  { method: 'GET', path: '/m/:gid/system/secrets/:id', caller: `${CREATE_SOURCE} plan-cribl-source.ts` },
+  { method: 'POST', path: '/m/:gid/system/secrets', caller: `${ENSURE_SECRET} for ${WIRING_UI} and ${FLOWLOG}; ${CREATE_SOURCE} apply-cribl-source.ts; ${ONBOARD} (destination client secret, create-only, DBT-155)` },
+  { method: 'PATCH', path: '/m/:gid/system/secrets/:id', caller: `${ENSURE_SECRET} (on 409, only a secret carrying our stamp) for ${WIRING_UI} and ${FLOWLOG}` },
+  { method: 'GET', path: '/m/:gid/system/secrets/:id', caller: `${CREATE_SOURCE} plan-cribl-source.ts; ${ENSURE_SECRET} (who owns the secret a 409 named)` },
   { method: 'POST', path: '/m/:gid/system/capture', caller: 'core usecases/capture-samples/capture-samples.ts' },
   { method: 'POST', path: '/m/:gid/system/metrics/query', caller: 'core usecases/read-source-flow/read-source-flow.ts via kit metricsQuery (AZR-33)' },
   // Search is group-scoped under the SEARCH group, whose id is resolved from
