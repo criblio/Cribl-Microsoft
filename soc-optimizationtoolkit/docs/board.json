@@ -90,7 +90,7 @@
       "feature": "CAP-F1",
       "title": "Add `resourcegraph.read` and its probe",
       "type": "enabler",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
@@ -382,7 +382,7 @@
             "detail": "What the legacy toolkit relied on (Run-AzureLogCollection.ps1:1963). Cheap, but a customer can name their own assignment Cribl-*, and the 24-character MG-scope name cap forces truncations that collide."
           }
         ],
-        "chosen": null
+        "chosen": "criblSocToolkit"
       }
     },
     {
@@ -391,7 +391,7 @@
       "feature": "AZR-F8",
       "title": "Logging map: draggable cards + Reset layout, or keep the fixed layout",
       "type": "decision",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "undecided",
       "dependsOn": [],
@@ -410,7 +410,7 @@
             "detail": "The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams."
           }
         ],
-        "chosen": null
+        "chosen": "add-drag"
       },
       "detail": "SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by the implementer. The approved interactive mockup (the operator-approved UX spec for the logging map) has no drag. The house standard requires it for on-screen diagrams. The CLAUDE.md precedence rule decides between superpowers skills and standards, not between a standard and an operator-approved spec, so it does not settle this. Phase 1 shipped the approved spec (no drag, no Reset layout), pinned by a test so the choice cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md. NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test \"the same gesture on the empty canvas does pan the view\"), which the mockup did not list either; only CARD drag is absent. keep-fixed with strict mockup parity would also remove the pan."
     },
@@ -1766,11 +1766,11 @@
       "feature": "CAP-F1",
       "title": "Add the Defender export and Event Hub listKeys capabilities plus probes",
       "type": "enabler",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FILED 2026-10-21 as a follow-up of AZR-18 (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, \"What is NOT decided here\"). No existing capability covers `Microsoft.Security/pricings/read`, `Microsoft.Security/automations/read` and `/write`, the namespace authorization rule `listKeys/action`, or Event Hub namespace write (`Microsoft.EventHub/namespaces/write`). Until this lands, `ROUTE_CAPABILITIES['azure-onboarding']` is an explicit `[]` with a comment naming CAP-7, and the screen lists `DEFENDER_SUBSCRIPTION_ACTIONS` and `DEFENDER_NAMESPACE_ACTIONS` as \"needed, not yet measured\" (ADR 0005 section 7). Each addition needs a real probe, or the step-2 mapping rule drops it; no probe ever grants a write. CORRECTS CAP-6's note that namespace creation is `arm.deploy`: it is not measured by any capability today (backlog.md 6h)."
+      "detail": "FILED 2026-10-21 as a follow-up of AZR-18 (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, \"What is NOT decided here\"). No existing capability covers `Microsoft.Security/pricings/read`, `Microsoft.Security/automations/read` and `/write`, the namespace authorization rule `listKeys/action`, or Event Hub namespace write (`Microsoft.EventHub/namespaces/write`). Until this lands, `ROUTE_CAPABILITIES['azure-onboarding']` is an explicit `[]` with a comment naming CAP-7, and the screen lists `DEFENDER_SUBSCRIPTION_ACTIONS` and `DEFENDER_NAMESPACE_ACTIONS` as \"needed, not yet measured\" (ADR 0005 section 7). Each addition needs a real probe, or the step-2 mapping rule drops it; no probe ever grants a write. CORRECTS CAP-6's note that namespace creation is `arm.deploy`: it is not measured by any capability today (backlog.md 6h).\n\nNOTE 2026-10-27: Started as CAP-7a only: Defender pricings/read and automations read+write, measured by subscription-scope RBAC evaluation. CAP-7b (Event Hub listKeys and namespace write) waits for a persisted namespace target (AZR-11/AZR-24): those rights can be granted on the namespace itself, so a subscription-scope evaluation would wrongly read them as denied."
     },
     {
       "id": "DBT-145",
@@ -1783,7 +1783,7 @@
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-10-21 by the AZR-18 design workflow (ADR 0005 section 3). `PlatformSecretsStore.get` and `KvContentCache.get` (both in `apps/cribl-app/src/platform/adapters.ts`) return null on a 403 through their `status === 404 || status === 403` fold, on the reasoning that a 403 means \"written encrypted, unreadable by design\". On an UNENCRYPTED key a 403 is a permission failure, so the caller is told the value does not exist and may offer to create it or overwrite it. `PlatformGithubPat.status` has the same fold. The worst consequence is the frame itself: `PlatformSecretsStore` backs `appStateStore` in `apps/cribl-app/src/App.tsx`, the boot read of the unencrypted `setupComplete` key (`SETUP_KEY`) parses null to `setupDone = false`, and `resolveFramePhase` then shows the setup flow - so a forbidden read sends an install that has finished setup back into onboarding setup. CANDIDATE CAUSE (unconfirmed) of the 2026-10-26 Live Preview report that the app opened on the setup flow instead of the app; confirm live by checking the status of the `setupComplete` KV read in the network panel before closing this card on it. The new `PlatformKvDocumentStore` distinguishes `absent` from `unknown` and never enables a save after `unknown`; the two older adapters were deliberately NOT changed in AZR-18 because every current consumer depends on null. Fix: tell the encrypted-key 403 (\"Cannot read encrypted value\") apart from any other 403, and surface the other as a failure, with pins on both. WIDENED 2026-10-26: the 403 fold is only one way in. The boot read in App.tsx runs Promise.allSettled over the setupComplete read and used to treat a REJECTED read as null too, so a 5xx (PlatformSecretsStore.get throws on it), a fetchWithTimeout timeout or a bridge error all parsed to setupDone = false and showed the setup flow. SECOND EXPLANATION to rule out live: kvUrl is window.CRIBL_API_URL/kvstore/... (http.ts), so if the __local__ Live Preview app has its own KV namespace, setupComplete is a genuine 404 there and the setup flow is CORRECT. Read the status of GET kvstore/setupComplete in the network panel: 404 = separate or empty namespace, 403 / 5xx / timeout = this defect. SLICE 1 (in progress): LoadableSetup gains an unreadable state; a rejected setupComplete read renders a could-not-read message with a retry instead of the setup flow (frame-state pins). Still open after slice 1: the 403 fold itself, which arrives as a fulfilled null and so still lands in setup."
+      "detail": "FOUND 2026-10-21 by the AZR-18 design workflow (ADR 0005 section 3). `PlatformSecretsStore.get` and `KvContentCache.get` (both in `apps/cribl-app/src/platform/adapters.ts`) return null on a 403 through their `status === 404 || status === 403` fold, on the reasoning that a 403 means \"written encrypted, unreadable by design\". On an UNENCRYPTED key a 403 is a permission failure, so the caller is told the value does not exist and may offer to create it or overwrite it. `PlatformGithubPat.status` has the same fold. The worst consequence is the frame itself: `PlatformSecretsStore` backs `appStateStore` in `apps/cribl-app/src/App.tsx`, the boot read of the unencrypted `setupComplete` key (`SETUP_KEY`) parses null to `setupDone = false`, and `resolveFramePhase` then shows the setup flow - so a forbidden read sends an install that has finished setup back into onboarding setup. CANDIDATE CAUSE (unconfirmed) of the 2026-10-26 Live Preview report that the app opened on the setup flow instead of the app; confirm live by checking the status of the `setupComplete` KV read in the network panel before closing this card on it. The new `PlatformKvDocumentStore` distinguishes `absent` from `unknown` and never enables a save after `unknown`; the two older adapters were deliberately NOT changed in AZR-18 because every current consumer depends on null. Fix: tell the encrypted-key 403 (\"Cannot read encrypted value\") apart from any other 403, and surface the other as a failure, with pins on both. WIDENED 2026-10-26: the 403 fold is only one way in. The boot read in App.tsx runs Promise.allSettled over the setupComplete read and used to treat a REJECTED read as null too, so a 5xx (PlatformSecretsStore.get throws on it), a fetchWithTimeout timeout or a bridge error all parsed to setupDone = false and showed the setup flow. SECOND EXPLANATION to rule out live: kvUrl is window.CRIBL_API_URL/kvstore/... (http.ts), so if the __local__ Live Preview app has its own KV namespace, setupComplete is a genuine 404 there and the setup flow is CORRECT. Read the status of GET kvstore/setupComplete in the network panel: 404 = separate or empty namespace, 403 / 5xx / timeout = this defect. SLICE 1 (in progress): LoadableSetup gains an unreadable state; a rejected setupComplete read renders a could-not-read message with a retry instead of the setup flow (frame-state pins). Still open after slice 1: the 403 fold itself, which arrives as a fulfilled null and so still lands in setup.\n\nNOTE 2026-10-27: Second half started: only the encrypted-value 403 ('Cannot read encrypted value') folds to null in PlatformSecretsStore.get and KvContentCache.get; any other 403 throws. PlatformGithubPat.status reads a never-encrypted key, so any 403 there throws. The App.tsx silent setup-write half follows separately."
     },
     {
       "id": "DBT-146",
@@ -1817,7 +1817,7 @@
       "feature": "DBT-F1",
       "title": "listAllPages reads a 2xx page with no `value` array as zero items",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "priorityWhy": "Latent: no caller has been seen to receive a 2xx list page without a value array, so nothing is costing anyone today. It is still a bug because when it happens seven callers would state an unverified zero as fact; it outranks features once any live read shows the shape.",
       "settled": "settled",
@@ -1855,7 +1855,7 @@
       "feature": "DBT-F1",
       "title": "Cribl secret writers send `type`, where the API schema names the field `secretType`",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -1892,7 +1892,7 @@
       "feature": "DBT-F1",
       "title": "The lab blob source passes queueName unquoted where Cribl expects a JS expression",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -1905,11 +1905,11 @@
       "feature": "DBT-F1",
       "title": "The Sentinel destination is created with the client secret in clear in the output body",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/domain/sentinel-destination/sentinel-destination.ts:203-237 puts `secret` (the ingestion app's client secret, when one is supplied) straight into the destination config, and onboard-table.ts:940-955 POSTs that body to /system/outputs. The secret then lives in the group's outputs.yml and in its git history, readable by anyone who can read the config, instead of in a Cribl secret referenced by id. The wiring path already stores the same value as a Cribl secret, so the two paths disagree. FIX: create or reuse the Cribl text secret and reference it (authType secret / textSecret, per the vendored OpenAPI), pin that no request body carries the value except the secret POST, and decide what to do about destinations already created this way."
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/domain/sentinel-destination/sentinel-destination.ts:203-237 puts `secret` (the ingestion app's client secret, when one is supplied) straight into the destination config, and onboard-table.ts:940-955 POSTs that body to /system/outputs. The secret then lives in the group's outputs.yml and in its git history, readable by anyone who can read the config, instead of in a Cribl secret referenced by id. The wiring path already stores the same value as a Cribl secret, so the two paths disagree. FIX: create or reuse the Cribl text secret and reference it (authType secret / textSecret, per the vendored OpenAPI), pin that no request body carries the value except the secret POST, and decide what to do about destinations already created this way.\n\nNOTE 2026-10-27: DEFAULT TAKEN (operator did not answer the existing-destinations question): new writes send the client secret as a Cribl secret reference, never in clear; destinations that already carry a clear secret are detected and flagged on screen, never migrated by the app. Migration stays an operator action."
     },
     {
       "id": "DBT-156",

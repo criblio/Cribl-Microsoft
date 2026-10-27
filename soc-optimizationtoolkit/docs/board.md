@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**78 in the backlog, 16 in progress, 47 done.**
+**71 in the backlog, 23 in progress, 47 done.**
 
 ## By menu item
 
@@ -135,9 +135,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (16)
+## In progress (23)
 
 Started. Anything here with an unfinished dependency is called out on its card.
+
+- **CAP-1** Add `resourcegraph.read` and its probe
+  `CAP-F1` `enabler` `settled`
+  The gap recorded in backlog items 1 and 4 and again under 6d.
+  `backlog.md#1`, `:321-329`, `:786-808`.
 
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled` `blocked by AZR-18`
@@ -232,11 +237,32 @@ Started. Anything here with an unfinished dependency is called out on its card.
   ManagementGroups drilldown blade, so the management-group link is
   unverified. If it opens a not-found blade, build a management-group-specific
   URL and re-pin both shapes.
-  DECISION (unanswered): Which marker identifies a policy assignment the
-  toolkit wrote? (ADR 0006, Proposed)
-    [ ] `criblSocToolkit` Reserved metadata key criblSocToolkit = { version } (recommended) - Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker.
+  DECISION: Which marker identifies a policy assignment the toolkit wrote?
+  (ADR 0006, Proposed)
+    [x] `criblSocToolkit` Reserved metadata key criblSocToolkit = { version } (recommended) - Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker.
     [ ] `createdBy-principal` metadata.createdBy equal to the toolkit service principal object id - Azure writes createdBy on EVERY assignment, so presence proves nothing; only a match against the toolkit principal could. That principal is shared with whatever else the operator runs under it, so a match overclaims ownership, and assignments the legacy PowerShell wrote under a person's login never match.
     [ ] `name-prefix` Assignment name prefix only (Cribl-*) - What the legacy toolkit relied on (Run-AzureLogCollection.ps1:1963). Cheap, but a customer can name their own assignment Cribl-*, and the 24-character MG-scope name cap forces truncations that collide.
+
+- **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
+  `AZR-F8` `decision` `undecided`
+  SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by
+  the implementer. The approved interactive mockup (the operator-approved UX
+  spec for the logging map) has no drag. The house standard requires it for
+  on-screen diagrams. The CLAUDE.md precedence rule decides between
+  superpowers skills and standards, not between a standard and an
+  operator-approved spec, so it does not settle this. Phase 1 shipped the
+  approved spec (no drag, no Reset layout), pinned by a test so the choice
+  cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md.
+  NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty
+  canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test "the
+  same gesture on the empty canvas does pan the view"), which the mockup did
+  not list either; only CARD drag is absent. keep-fixed with strict mockup
+  parity would also remove the pan.
+  DECISION: Should the Azure Logging Map add draggable cards and a Reset
+  layout button per the house diagram standard, or keep the approved mockup's
+  fixed layout?
+    [x] `add-drag` Add drag + Reset layout (house standard) - claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted.
+    [ ] `keep-fixed` Keep the fixed layout (approved mockup) - The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams.
 
 - **AZR-30** Onboarding dataflow diagram: how each selected source's logs reach Cribl and Sentinel
   `AZR-F9` `story` `settled`
@@ -629,6 +655,27 @@ Started. Anything here with an unfinished dependency is called out on its card.
   report, the nonce guard, the request consumption, and each of the three
   parent props. NOT YET confirmed in Live Preview - close as both once it is.
 
+- **CAP-7** Add the Defender export and Event Hub listKeys capabilities plus probes
+  `CAP-F1` `enabler` `settled`
+  FILED 2026-10-21 as a follow-up of AZR-18
+  (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
+  decided here"). No existing capability covers
+  `Microsoft.Security/pricings/read`, `Microsoft.Security/automations/read`
+  and `/write`, the namespace authorization rule `listKeys/action`, or Event
+  Hub namespace write (`Microsoft.EventHub/namespaces/write`). Until this
+  lands, `ROUTE_CAPABILITIES['azure-onboarding']` is an explicit `[]` with a
+  comment naming CAP-7, and the screen lists `DEFENDER_SUBSCRIPTION_ACTIONS`
+  and `DEFENDER_NAMESPACE_ACTIONS` as "needed, not yet measured" (ADR 0005
+  section 7). Each addition needs a real probe, or the step-2 mapping rule
+  drops it; no probe ever grants a write. CORRECTS CAP-6's note that namespace
+  creation is `arm.deploy`: it is not measured by any capability today
+  (backlog.md 6h). NOTE 2026-10-27: Started as CAP-7a only: Defender
+  pricings/read and automations read+write, measured by subscription-scope
+  RBAC evaluation. CAP-7b (Event Hub listKeys and namespace write) waits for a
+  persisted namespace target (AZR-11/AZR-24): those rights can be granted on
+  the namespace itself, so a subscription-scope evaluation would wrongly read
+  them as denied.
+
 - **DBT-145** A failed or forbidden KV read reads as absent, and sends a finished install back to setup
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-21 by the AZR-18 design workflow (ADR 0005 section 3).
@@ -665,7 +712,11 @@ Started. Anything here with an unfinished dependency is called out on its card.
   rejected setupComplete read renders a could-not-read message with a retry
   instead of the setup flow (frame-state pins). Still open after slice 1: the
   403 fold itself, which arrives as a fulfilled null and so still lands in
-  setup.
+  setup. NOTE 2026-10-27: Second half started: only the encrypted-value 403
+  ('Cannot read encrypted value') folds to null in PlatformSecretsStore.get
+  and KvContentCache.get; any other 403 throws. PlatformGithubPat.status reads
+  a never-encrypted key, so any 403 there throws. The App.tsx silent
+  setup-write half follows separately.
 
 - **DBT-146** Live Preview dev server serves the first browser's init script to every browser
   `DBT-F1` `bug` `settled`
@@ -700,9 +751,76 @@ Started. Anything here with an unfinished dependency is called out on its card.
   in Live Preview what the wizard and capability chips show when Cribl is
   unreachable - the behaviour change is that they finally notice.
 
+- **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
+  `DBT-F1` `bug` `settled`
+  Not now because: Latent: no caller has been seen to receive a 2xx list page
+  without a value array, so nothing is costing anyone today. It is still a bug
+  because when it happens seven callers would state an unverified zero as
+  fact; it outranks features once any live read shows the shape.
+  FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery
+  listAllPages collects `value` only when it is an array and otherwise adds
+  nothing, so a 2xx page with a missing or non-array `value` becomes zero
+  items. Its callers (assign-dcr-role, azure-discovery listings,
+  content-install, available-content, deployment-preview, manage-labs,
+  workspace-tables) then render 'none' for what is really unknown - the
+  inventory-honesty failure. AZR-19 wrote its own verdict-returning pager
+  (read-logging-map/arm-pager.ts) precisely because of this and left the
+  shared one unchanged. FIX: make listAllPages throw on a 2xx page whose
+  `value` is not an array (it already throws on non-2xx, so every caller
+  handles a throw), pin it, and consider whether arm-pager can then share the
+  page walk. Check the callers' empty states against inventory-honesty while
+  there.
+
+- **DBT-151** Cribl secret writers send `type`, where the API schema names the field `secretType`
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
+  NOT fixed by that work.
+  packages/core/src/usecases/guided-deploy/secret-provisioning.ts:65 and :88
+  (POST and PATCH of the Sentinel client secret) and
+  packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:71 and :81
+  send `{id, type: 'text', value}`. The vendored OpenAPI RestSecret schema
+  (packages/core/assets/cribl-openapi.json) requires `secretType`. UNVERIFIED
+  LIVE: Cribl may accept or ignore the unknown field and default the type, so
+  this may work today by accident or may store a secret of the wrong type.
+  FIX: confirm on a test group what GET /system/secrets/:id returns for a
+  secret written each way, then send `secretType` and pin the request body.
+
+- **DBT-154** The lab blob source passes queueName unquoted where Cribl expects a JS expression
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
+  NOT fixed by that work. packages/core/src/domain/labs/lab-cribl.ts:140
+  (buildLabBlobQueueSource) sets `queueName` to the raw queue name. Cribl's
+  azure_blob input evaluates queueName as a JavaScript expression, so a plain
+  name like `flowlogs` is read as an identifier rather than a string, and a
+  name with a hyphen as a subtraction. UNVERIFIED LIVE: the legacy
+  Generate-CriblConfigs output it was ported from may have worked because
+  Cribl falls back to the literal. FIX: wrap it in backticks (as the AZR-34
+  onboarding blob input does), pin it, and confirm on a lab that the input
+  reads its queue.
+
+- **DBT-155** The Sentinel destination is created with the client secret in clear in the output body
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
+  NOT fixed by that work.
+  packages/core/src/domain/sentinel-destination/sentinel-destination.ts:203-237
+  puts `secret` (the ingestion app's client secret, when one is supplied)
+  straight into the destination config, and onboard-table.ts:940-955 POSTs
+  that body to /system/outputs. The secret then lives in the group's
+  outputs.yml and in its git history, readable by anyone who can read the
+  config, instead of in a Cribl secret referenced by id. The wiring path
+  already stores the same value as a Cribl secret, so the two paths disagree.
+  FIX: create or reuse the Cribl text secret and reference it (authType secret
+  / textSecret, per the vendored OpenAPI), pin that no request body carries
+  the value except the secret POST, and decide what to do about destinations
+  already created this way. NOTE 2026-10-27: DEFAULT TAKEN (operator did not
+  answer the existing-destinations question): new writes send the client
+  secret as a Cribl secret reference, never in clear; destinations that
+  already carry a clear secret are detected and flagged on screen, never
+  migrated by the app. Migration stays an operator action.
+
 ---
 
-## Backlog - now (9)
+## Backlog - now (6)
 
 Next to pick up. Nothing blocks these.
 
@@ -815,20 +933,6 @@ Next to pick up. Nothing blocks these.
   (POST /system/metrics/query, within the proxy budget), static otherwise; the
   onboarding diagram's measured-only AnimatedEdge (AZR-33) is the pattern.
 
-- **DBT-151** Cribl secret writers send `type`, where the API schema names the field `secretType`
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
-  NOT fixed by that work.
-  packages/core/src/usecases/guided-deploy/secret-provisioning.ts:65 and :88
-  (POST and PATCH of the Sentinel client secret) and
-  packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:71 and :81
-  send `{id, type: 'text', value}`. The vendored OpenAPI RestSecret schema
-  (packages/core/assets/cribl-openapi.json) requires `secretType`. UNVERIFIED
-  LIVE: Cribl may accept or ignore the unknown field and default the type, so
-  this may work today by accident or may store a secret of the wrong type.
-  FIX: confirm on a test group what GET /system/secrets/:id returns for a
-  secret written each way, then send `secretType` and pin the request body.
-
 - **DBT-152** Ensure-secret overwrites an existing Cribl secret on a 409, including one another admin owns
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -860,35 +964,6 @@ Next to pick up. Nothing blocks these.
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
 
-- **DBT-154** The lab blob source passes queueName unquoted where Cribl expects a JS expression
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
-  NOT fixed by that work. packages/core/src/domain/labs/lab-cribl.ts:140
-  (buildLabBlobQueueSource) sets `queueName` to the raw queue name. Cribl's
-  azure_blob input evaluates queueName as a JavaScript expression, so a plain
-  name like `flowlogs` is read as an identifier rather than a string, and a
-  name with a hyphen as a subtraction. UNVERIFIED LIVE: the legacy
-  Generate-CriblConfigs output it was ported from may have worked because
-  Cribl falls back to the literal. FIX: wrap it in backticks (as the AZR-34
-  onboarding blob input does), pin it, and confirm on a lab that the input
-  reads its queue.
-
-- **DBT-155** The Sentinel destination is created with the client secret in clear in the output body
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
-  NOT fixed by that work.
-  packages/core/src/domain/sentinel-destination/sentinel-destination.ts:203-237
-  puts `secret` (the ingestion app's client secret, when one is supplied)
-  straight into the destination config, and onboard-table.ts:940-955 POSTs
-  that body to /system/outputs. The secret then lives in the group's
-  outputs.yml and in its git history, readable by anyone who can read the
-  config, instead of in a Cribl secret referenced by id. The wiring path
-  already stores the same value as a Cribl secret, so the two paths disagree.
-  FIX: create or reuse the Cribl text secret and reference it (authType secret
-  / textSecret, per the vendored OpenAPI), pin that no request body carries
-  the value except the secret POST, and decide what to do about destinations
-  already created this way.
-
 - **DBT-156** UI tests time out or miscount under full-suite load and pass alone
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in
@@ -906,7 +981,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (32)
+## Backlog - next (28)
 
 Settled and unblocked, sequenced behind now.
 
@@ -935,11 +1010,6 @@ Settled and unblocked, sequenced behind now.
     [x] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
     [ ] `lint-rule` Write a custom lint rule - A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on.
 
-- **CAP-1** Add `resourcegraph.read` and its probe
-  `CAP-F1` `enabler` `settled`
-  The gap recorded in backlog items 1 and 4 and again under 6d.
-  `backlog.md#1`, `:321-329`, `:786-808`.
-
 - **CAP-2** Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic
   `CAP-F1` `enabler` `settled`
   rosoft.PolicyInsights`). Gates AZR-4.
@@ -965,27 +1035,6 @@ Settled and unblocked, sequenced behind now.
   (CORRECTED 2026-10-21: Event Hub namespace creation is NOT `arm.deploy` -
   that is measured from deployments/write only; namespace write is filed under
   CAP-7.) ---
-
-- **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
-  `AZR-F8` `decision` `undecided`
-  SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by
-  the implementer. The approved interactive mockup (the operator-approved UX
-  spec for the logging map) has no drag. The house standard requires it for
-  on-screen diagrams. The CLAUDE.md precedence rule decides between
-  superpowers skills and standards, not between a standard and an
-  operator-approved spec, so it does not settle this. Phase 1 shipped the
-  approved spec (no drag, no Reset layout), pinned by a test so the choice
-  cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md.
-  NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty
-  canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test "the
-  same gesture on the empty canvas does pan the view"), which the mockup did
-  not list either; only CARD drag is absent. keep-fixed with strict mockup
-  parity would also remove the pan.
-  DECISION (unanswered): Should the Azure Logging Map add draggable cards and
-  a Reset layout button per the house diagram standard, or keep the approved
-  mockup's fixed layout?
-    [ ] `add-drag` Add drag + Reset layout (house standard) - claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted.
-    [ ] `keep-fixed` Keep the fixed layout (approved mockup) - The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams.
 
 - **AZR-29** Logging map: optional Cribl Lakehouse Engine lane as an alternative to Splunk/Elastic
   `AZR-F8` `story` `undecided` `blocked by AZR-19`
@@ -1317,42 +1366,6 @@ Settled and unblocked, sequenced behind now.
   Batch, Architecture and the flow-log panel. Its only test passes
   preferred="". Unpinned: the saved default wins when it is listed, and an
   existing pick is never overridden. Fix: two hook pins, mutation-checked.
-
-- **CAP-7** Add the Defender export and Event Hub listKeys capabilities plus probes
-  `CAP-F1` `enabler` `settled`
-  FILED 2026-10-21 as a follow-up of AZR-18
-  (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, "What is NOT
-  decided here"). No existing capability covers
-  `Microsoft.Security/pricings/read`, `Microsoft.Security/automations/read`
-  and `/write`, the namespace authorization rule `listKeys/action`, or Event
-  Hub namespace write (`Microsoft.EventHub/namespaces/write`). Until this
-  lands, `ROUTE_CAPABILITIES['azure-onboarding']` is an explicit `[]` with a
-  comment naming CAP-7, and the screen lists `DEFENDER_SUBSCRIPTION_ACTIONS`
-  and `DEFENDER_NAMESPACE_ACTIONS` as "needed, not yet measured" (ADR 0005
-  section 7). Each addition needs a real probe, or the step-2 mapping rule
-  drops it; no probe ever grants a write. CORRECTS CAP-6's note that namespace
-  creation is `arm.deploy`: it is not measured by any capability today
-  (backlog.md 6h).
-
-- **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
-  `DBT-F1` `bug` `settled`
-  Not now because: Latent: no caller has been seen to receive a 2xx list page
-  without a value array, so nothing is costing anyone today. It is still a bug
-  because when it happens seven callers would state an unverified zero as
-  fact; it outranks features once any live read shows the shape.
-  FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery
-  listAllPages collects `value` only when it is an array and otherwise adds
-  nothing, so a 2xx page with a missing or non-array `value` becomes zero
-  items. Its callers (assign-dcr-role, azure-discovery listings,
-  content-install, available-content, deployment-preview, manage-labs,
-  workspace-tables) then render 'none' for what is really unknown - the
-  inventory-honesty failure. AZR-19 wrote its own verdict-returning pager
-  (read-logging-map/arm-pager.ts) precisely because of this and left the
-  shared one unchanged. FIX: make listAllPages throw on a 2xx page whose
-  `value` is not an array (it already throws on non-2xx, so every caller
-  handles a throw), pin it, and consider whether arm-pager can then share the
-  page walk. Check the callers' empty states against inventory-honesty while
-  there.
 
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
