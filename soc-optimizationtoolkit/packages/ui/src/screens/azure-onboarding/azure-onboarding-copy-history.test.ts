@@ -5,8 +5,8 @@
  *
  * It reads SOURCE, because most of this copy appears only after an Azure read
  * or a deploy. Broader than the Integrate gate on purpose: after comments are
- * stripped it takes EVERY string literal and template body in the three
- * screen files, plus every JSX text run - this screen's tips and messages are
+ * stripped it takes EVERY string literal and template body in the screen
+ * files listed below, plus every JSX text run - this screen's tips and messages are
  * mostly named constants and template strings, and a collector that read only
  * `text=` attributes would see almost none of them. Class names and ARM paths
  * come along too; neither has the shape of an id, a date or a phase.
@@ -32,6 +32,15 @@ export const AZURE_ONBOARDING_COPY_FILES = [
   "azure-onboarding-screen.tsx",
   "eventhub-prerequisite-section.tsx",
   "defender-export-section.tsx",
+  // The How-to, Validate, Cribl source and dataflow sections the screen composes.
+  "howto/howto-panel.tsx",
+  "howto/source-chooser.tsx",
+  "howto/plan-values-form.tsx",
+  "howto/step-list.tsx",
+  "howto/step-dialog.tsx",
+  "validate/validate-panel.tsx",
+  "cribl-source/cribl-source-panel.tsx",
+  "dataflow/onboarding-dataflow.tsx",
 ];
 
 /** Comments out, line breaks kept, so a failure names the real line. */
@@ -74,6 +83,13 @@ describe("Azure Native Source Onboarding copy carries no project history", () =>
     const texts = all.map((e) => e.text);
     expect(texts.some((t) => t.startsWith("Every source on this page sends to an Event Hub"))).toBe(true);
     expect(texts.some((t) => t.startsWith("This build of the app has no storage"))).toBe(true);
+    // The four sections the How-to path adds, and their (i) text, are read too.
+    for (const title of ["Dataflow", "How to set it up yourself", "Check the Azure configuration", "Cribl Stream source"]) {
+      expect(texts).toContain(title);
+    }
+    expect(texts.some((t) => t.startsWith("For each source you would rather set up in Azure yourself"))).toBe(true);
+    expect(texts.some((t) => t.startsWith("Reads the Azure side of every chosen source"))).toBe(true);
+    expect(texts.some((t) => t.startsWith("The app creates the Cribl source for each lane"))).toBe(true);
   });
 
   it("the rule finds history when it is there (the gate can fail)", () => {

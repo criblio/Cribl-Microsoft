@@ -6543,6 +6543,693 @@ details[open] > summary::before {
   margin: 4px 0 8px;
 }
 
+/* ------------------------------------------------------------------------
+ * Azure Native Source Onboarding, How-to / Validate / Cribl source / Dataflow
+ * (AZR-30..34, screens/azure-onboarding/{howto,validate,cribl-source,dataflow}).
+ * Tokens only, so the dark theme follows; no hex here. Every state is shown
+ * as a WORD as well as a colour or a border style, so nothing here is the only
+ * carrier of meaning. The pipe animation is the one moving thing and it is
+ * drawn only on a measured flowing edge (the component renders .azo-flow-pipe
+ * only then); reduced motion stops the dash here and drops the packets in JS
+ * (components/diagram/animated-edge.tsx).
+ * ------------------------------------------------------------------------ */
+
+/* How-to: chooser, mode toggle, plan values, steps. */
+.azo-howto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.azo-howto-chooser {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.azo-howto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The selection document could not be read: the row says so in words; the
+ * dashed edge only reinforces it. */
+.azo-howto-row[data-chosen='unknown'] {
+  border-left: 3px dashed var(--text-faint);
+  padding-left: 8px;
+}
+
+.azo-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.azo-mode-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.azo-mode-toggle label + label {
+  border-left: 1px solid var(--border);
+}
+
+.azo-mode-toggle label:has(input:checked) {
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.azo-mode-toggle label:has(input:disabled) {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.azo-mode-toggle input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.azo-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.azo-step-list {
+  margin: 0;
+  padding: 0 0 0 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.azo-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.azo-step-row[data-tick='done'] {
+  border-left: 3px solid var(--ok);
+  padding-left: 8px;
+}
+
+.azo-step-row[data-tick='stale'] {
+  border-left: 3px dashed var(--warn);
+  padding-left: 8px;
+}
+
+/* "not yet confirmed against live Azure": a dashed pill, the words inside. */
+.azo-step-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 8px;
+  border: 1px dashed var(--warn-border);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.azo-step-stale {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.azo-step-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px var(--shadow);
+}
+
+.azo-step-dialog::backdrop {
+  background: var(--shadow);
+}
+
+.azo-step-dialog h3,
+.azo-step-dialog h4 {
+  margin: 10px 0 4px;
+  color: var(--text-strong);
+}
+
+.azo-step-cli {
+  margin: 4px 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.azo-step-values {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azo-step-values th,
+.azo-step-values td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azo-step-values th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.azo-step-values td {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* Validate: verdict rows carry data-tone; the verdict word is always in the
+ * row text. */
+.azo-validate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.azo-validate ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.azo-verdict {
+  padding: 6px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  border-left: 3px solid var(--border);
+  color: var(--text);
+}
+
+.azo-verdict[data-tone='ok'] {
+  border-left-color: var(--ok);
+}
+
+.azo-verdict[data-tone='warning'] {
+  border-left-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.azo-verdict[data-tone='error'] {
+  border-left-color: var(--error);
+  background: var(--error-bg);
+}
+
+/* Unknown is never drawn as absent: dashed and muted, never the error red
+ * (inventory-honesty). */
+.azo-verdict[data-tone='unknown'] {
+  border-left-style: dashed;
+  border-left-color: var(--text-faint);
+  color: var(--text-muted);
+}
+
+.azo-verdict-diffs {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azo-verdict-diffs th,
+.azo-verdict-diffs td {
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azo-verdict-diffs th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.azo-verdict-diffs td {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* Cribl source: one row per lane, then the two-step confirm. */
+.azo-cribl-source {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.azo-cribl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.azo-cribl-row [data-tone='ok'] {
+  color: var(--ok-strong);
+}
+
+.azo-cribl-row [data-tone='warning'] {
+  color: var(--warn);
+}
+
+.azo-cribl-row [data-tone='error'] {
+  color: var(--error-strong);
+}
+
+.azo-confirm {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--text);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+/* Dataflow diagram (hand SVG on the components/diagram shell). */
+.azo-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.azo-flow-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.azo-flow-perspective {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.azo-flow-perspective-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.azo-flow-perspective-option label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.azo-flow-btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+.azo-flow-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.azo-flow-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.azo-flow-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.azo-flow-watch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.azo-flow-watch-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-asof {
+  margin: 0;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-empty {
+  padding: 24px 14px;
+  color: var(--text-muted);
+}
+
+.azo-flow-canvas {
+  position: relative;
+  height: 560px;
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.azo-flow-section {
+  fill: var(--surface-raised);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.azo-flow-section-caption {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.azo-flow-card {
+  cursor: grab;
+}
+
+.azo-flow-card:focus {
+  outline: none;
+}
+
+.azo-flow-card-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+
+.azo-flow-card:focus-visible .azo-flow-card-box,
+.azo-flow-card[aria-expanded='true'] .azo-flow-card-box {
+  stroke: var(--border-focus);
+  stroke-width: 2.4;
+}
+
+.azo-flow-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.azo-flow-card-status {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text-muted);
+}
+
+.azo-flow-card-fact {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+/* Card states (CardStatusKind, core onboarding-dataflow/lanes.ts). Colour plus
+ * a border style; the status word is always drawn on the card. */
+.azo-flow-card.is-as-expected .azo-flow-card-box,
+.azo-flow-card.is-created .azo-flow-card-box,
+.azo-flow-card.is-present .azo-flow-card-box,
+.azo-flow-card.is-consumes .azo-flow-card-box {
+  stroke: var(--ok);
+  stroke-width: 1.8;
+}
+
+.azo-flow-card.is-as-expected .azo-flow-card-status,
+.azo-flow-card.is-created .azo-flow-card-status,
+.azo-flow-card.is-present .azo-flow-card-status,
+.azo-flow-card.is-consumes .azo-flow-card-status {
+  fill: var(--ok-strong);
+}
+
+.azo-flow-card.is-partly-checked .azo-flow-card-box,
+.azo-flow-card.is-differs .azo-flow-card-box,
+.azo-flow-card.is-other-name .azo-flow-card-box,
+.azo-flow-card.is-missing .azo-flow-card-box,
+.azo-flow-card.is-not-routed .azo-flow-card-box,
+.azo-flow-card.is-named-by-route .azo-flow-card-box {
+  stroke: var(--warn);
+  stroke-width: 1.8;
+  stroke-dasharray: 8 3;
+}
+
+.azo-flow-card.is-partly-checked .azo-flow-card-status,
+.azo-flow-card.is-differs .azo-flow-card-status,
+.azo-flow-card.is-other-name .azo-flow-card-status,
+.azo-flow-card.is-missing .azo-flow-card-status,
+.azo-flow-card.is-not-routed .azo-flow-card-status,
+.azo-flow-card.is-named-by-route .azo-flow-card-status {
+  fill: var(--warn);
+}
+
+.azo-flow-card.is-absent .azo-flow-card-box {
+  stroke: var(--error);
+  stroke-width: 1.8;
+}
+
+.azo-flow-card.is-absent .azo-flow-card-status {
+  fill: var(--error-strong);
+}
+
+/* Unknown, unread and not-yet-checked are dotted and faint: never drawn as
+ * absent (inventory-honesty). */
+.azo-flow-card.is-unknown .azo-flow-card-box,
+.azo-flow-card.is-cannot-evaluate .azo-flow-card-box,
+.azo-flow-card.is-not-read .azo-flow-card-box,
+.azo-flow-card.is-not-checked .azo-flow-card-box,
+.azo-flow-card.is-no-check .azo-flow-card-box,
+.azo-flow-card.is-not-created .azo-flow-card-box {
+  stroke: var(--text-faint);
+  stroke-dasharray: 3 3;
+}
+
+/* Edges. The base path never moves; .azo-flow-pipe is an overlay the
+ * component draws only on a measured flowing edge. */
+.azo-flow-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.6;
+}
+
+.azo-flow-edge.is-flowing {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.azo-flow-edge.is-idle {
+  stroke: var(--text-muted);
+}
+
+.azo-flow-edge.is-never-seen,
+.azo-flow-edge.is-not-measured,
+.azo-flow-edge.is-no-counter {
+  stroke: var(--text-faint);
+  stroke-dasharray: 4 4;
+}
+
+/* A step-to-target edge configures something; it never carries logs. Every
+ * configures edge also carries .is-no-counter, so this rule must come AFTER
+ * that group and out-specify it, or the faint 4 4 dash wins and a configures
+ * edge reads exactly like an unmeasured data edge. Dotted, round caps, muted. */
+.azo-flow-edge.is-configures,
+.azo-flow-edge.is-configures.is-no-counter {
+  stroke: var(--text-muted);
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+}
+
+.azo-flow-edge.is-blocked {
+  stroke: var(--error);
+}
+
+.azo-flow-edge-label {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+}
+
+.azo-flow-pipe {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.6;
+  stroke-dasharray: 7 9;
+  animation: azo-flow-dash 1s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes azo-flow-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .azo-flow-pipe {
+    animation: none;
+  }
+}
+
+.azo-flow-packet {
+  fill: var(--accent-strong);
+  pointer-events: none;
+}
+
+/* The in-SVG (i), drawn as a sibling of its card or section caption. */
+.azo-flow-info {
+  cursor: pointer;
+}
+
+.azo-flow-info:focus {
+  outline: none;
+}
+
+.azo-flow-info-hit {
+  fill: transparent;
+}
+
+.azo-flow-info-glyph {
+  fill: var(--surface);
+  stroke: var(--text-muted);
+}
+
+.azo-flow-info:focus-visible .azo-flow-info-glyph,
+.azo-flow-info[aria-expanded='true'] .azo-flow-info-glyph {
+  stroke: var(--border-focus);
+  stroke-width: 2;
+}
+
+.azo-flow-info-i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+.azo-flow-popover {
+  position: absolute;
+  z-index: 3;
+  width: 280px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.azo-flow-popover-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.azo-flow-popover-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.azo-flow-popover-status {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.azo-flow-popover-facts {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.azo-flow-popover-close {
+  justify-self: end;
+}
+
+.azo-flow-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 8px 14px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ===================================================================
  * Azure Logging Map (screens/azure-logging-map). Hand SVG, no animation:
  * policy coverage is configuration, not measured flow. Every state carries

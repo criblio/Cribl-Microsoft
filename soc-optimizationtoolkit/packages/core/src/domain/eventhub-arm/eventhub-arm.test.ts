@@ -255,3 +255,32 @@ describe("eventhub-arm: barrel names do not collide", () => {
     expect(armNames.filter((n) => others.has(n))).toEqual([]);
   });
 });
+
+describe("eventhub-arm: Listen and Kafka checks (AZR-32, AZR-34)", () => {
+  it("ruleCanListen accepts Listen or Manage and refuses Send-only", () => {
+    expect(arm.ruleCanListen(["Listen"])).toBe(true);
+    expect(arm.ruleCanListen(["Manage"])).toBe(true);
+    expect(arm.ruleCanListen(["manage", "send", "listen"])).toBe(true);
+    expect(arm.ruleCanListen(["Send"])).toBe(false);
+    expect(arm.ruleCanListen([])).toBe(false);
+  });
+
+  it("ruleCanManage is true only for Manage", () => {
+    expect(arm.ruleCanManage(["Manage", "Send", "Listen"])).toBe(true);
+    expect(arm.ruleCanManage(["Send", "Listen"])).toBe(false);
+  });
+
+  it("namespaceSupportsKafka: Basic false, Standard/Premium true, unknown null", () => {
+    expect(arm.namespaceSupportsKafka("Basic")).toBe(false);
+    expect(arm.namespaceSupportsKafka("Standard")).toBe(true);
+    expect(arm.namespaceSupportsKafka("premium")).toBe(true);
+    expect(arm.namespaceSupportsKafka("")).toBeNull();
+    expect(arm.namespaceSupportsKafka("Mystery")).toBeNull();
+  });
+
+  it("the new names are reachable through the domain barrel (index)", () => {
+    expect(typeof arm.ruleCanListen).toBe("function");
+    expect(typeof arm.ruleCanManage).toBe("function");
+    expect(typeof arm.namespaceSupportsKafka).toBe("function");
+  });
+});

@@ -53,6 +53,7 @@ import {
 import { parseResourceId } from "../azure-resource-id/azure-resource-id";
 import type { Listing } from "../inventory-listing/inventory-listing";
 import { listingRows, listingWasRead, toListing } from "../inventory-listing/inventory-listing";
+import type { StepVerdict, VerdictDiff } from "../onboarding-howto/check-kinds";
 
 /**
  * api-version for Microsoft.Security/automations, verbatim from legacy :236.
@@ -431,4 +432,117 @@ export function findSameTargetExports(
   return listingRows(listing).filter(
     (a) => !sameId(a.name, DEFENDER_EXPORT_NAME) && a.eventHubTargets.some(hits),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Validate (AZR-32): classify the subscription's exports against a PLAN
+// ---------------------------------------------------------------------------
+
+/**
+ * The structured form of {@link automationDiffs} with an expected export: one
+ * entry per field that falls short. Same comparisons, same order; the field
+ * names are what the Validate panel shows in its diffs table.
+ */
+function planDiffs(expected: ExpectedExport, observed: DefenderAutomation): VerdictDiff[] {
+  const diffs: VerdictDiff[] = [];
+  if (!observed.isEnabled) {
+    diffs.push({ field: "isEnabled", expected: "true", actual: "false" });
+  }
+  if (!observed.sources.some((s) => s.toLowerCase() === ALERTS_EVENT_SOURCE.toLowerCase())) {
+    diffs.push({
+      field: "sources",
+      expected: ALERTS_EVENT_SOURCE,
+      actual: observed.sources.length === 0 ? "(none)" : observed.sources.join(", "),
+    });
+  }
+  const hubActions = observed.actions.filter(isEventHubAction);
+  if (!hubActions.some((a) => sameId(a.eventHubResourceId, expected.eventHubResourceId))) {
+    diffs.push({
+      field: "eventHubResourceId",
+      expected: expected.eventHubResourceId,
+      actual:
+        hubActions.length === 0
+          ? "(no Event Hub action)"
+          : hubActions.map((a) => a.eventHubResourceId || "(none)").join(", "),
+    });
+  }
+  if (!observed.scopePaths.some((p) => sameId(p, expected.scopePath))) {
+    diffs.push({
+      field: "scopes",
+      expected: expected.scopePath,
+      actual: observed.scopePaths.length === 0 ? "(none)" : observed.scopePaths.join(", "),
+    });
+  }
+  return diffs;
+}
+
+/**
+ * The plan's export, as {@link automationDiffs} judges it, in field form.
+ * automationDiffs is the authority on WHETHER it differs; if it reports a
+ * difference planDiffs cannot place in a field, the sentence is kept as-is.
+ */
+function verdictDiffs(expected: ExpectedExport, observed: DefenderAutomation): VerdictDiff[] {
+  const sentences = automationDiffs(expected, observed);
+  if (sentences.length === 0) return [];
+  const fields = planDiffs(expected, observed);
+  return fields.length > 0
+    ? fields
+    : sentences.map((s) => ({ field: "export", expected: "as planned", actual: s }));
+}
+
+/**
+ * Classify the subscription's continuous exports against the plan (Validate,
+ * AZR-32). READ-ONLY, and a different question from {@link classifyOurs}:
+ * that one guards the AZR-18 create; this one asks "is the plan satisfied, by
+ * whatever name".
+ *
+ *   as-expected         ours ({@link DEFENDER_EXPORT_NAME}) matches the plan
+ *   present-differs     ours exists and falls short (or is duplicated)
+ *   present-other-name  ours is absent, but another export targets the plan's
+ *                       hub - or another hub in its namespace - so alerts are
+ *                       (or would be) delivered under that name
+ *   absent              the list was READ (rows or a verified none) and holds
+ *                       neither
+ *   unknown             the listing is `empty` - unverified, so never absent
+ *
+ * The listing must come from `toListingFromRead` over the per-subscription
+ * read: a refused read is `empty` there, and only a completed read can be
+ * `none`. A raw `toListing` of zero rows is also `empty`, and reads unknown.
+ */
+export function classifyExportForPlan(
+  listing: Listing<DefenderAutomation>,
+  expected: ExpectedExport,
+): StepVerdict {
+  if (listing.kind === "empty") {
+    return {
+      kind: "unknown",
+      reason: "failed",
+      detail: "The subscription's continuous exports could not be read, so whether one exists is not known.",
+    };
+  }
+  const ours = classifyOurs(listing, expected);
+  if (ours.kind === "present-matching") return { kind: "as-expected" };
+  if (ours.kind === "present-differs") {
+    const diffs = verdictDiffs(expected, ours.automation);
+    const count = listingRows(listing).filter((a) => sameId(a.name, DEFENDER_EXPORT_NAME)).length;
+    if (count > 1) {
+      diffs.unshift({
+        field: "name",
+        expected: `one export named ${DEFENDER_EXPORT_NAME}`,
+        actual: `${count} exports named ${DEFENDER_EXPORT_NAME}`,
+      });
+    }
+    return { kind: "present-differs", diffs };
+  }
+  const others = findSameTargetExports(listing, expected.eventHubResourceId);
+  // Prefer one that targets the plan's hub exactly over one that only shares
+  // its namespace: the exact one is the export the plan describes.
+  const exact = others.find((a) =>
+    a.eventHubTargets.some((t) => sameId(t, expected.eventHubResourceId)),
+  );
+  const other = exact ?? others[0];
+  if (other !== undefined) {
+    return { kind: "present-other-name", name: other.name, diffs: verdictDiffs(expected, other) };
+  }
+  return { kind: "absent" };
 }

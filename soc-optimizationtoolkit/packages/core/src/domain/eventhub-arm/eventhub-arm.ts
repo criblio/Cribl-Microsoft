@@ -244,6 +244,37 @@ export function ruleCanSend(rights: readonly string[]): boolean {
 }
 
 /**
+ * True when a rule with these rights can LISTEN (read events). Manage implies
+ * Listen in Azure, so either qualifies. This is the right a Cribl Event Hub
+ * SOURCE needs; a Send-only rule - the one the Defender export writes with -
+ * authenticates and then reads nothing, so it must be refused before a write.
+ */
+export function ruleCanListen(rights: readonly string[]): boolean {
+  return rights.some((r) => {
+    const lower = r.toLowerCase();
+    return lower === "listen" || lower === "manage";
+  });
+}
+
+/** True when a rule with these rights can MANAGE the namespace. */
+export function ruleCanManage(rights: readonly string[]): boolean {
+  return rights.some((r) => r.toLowerCase() === "manage");
+}
+
+/**
+ * Whether a namespace of this SKU speaks the Kafka protocol Cribl's Event Hub
+ * source reads with. Basic does not; Standard and Premium do (and Dedicated,
+ * which is Premium-class). `null` when the SKU is empty or not one of those:
+ * an unknown SKU is never guessed either way, and callers treat it as unknown.
+ */
+export function namespaceSupportsKafka(sku: string): boolean | null {
+  const lower = sku.trim().toLowerCase();
+  if (lower === "basic") return false;
+  if (lower === "standard" || lower === "premium" || lower === "dedicated") return true;
+  return null;
+}
+
+/**
  * POST listKeys on a NAMESPACE rule. Returns a SAS key - callers fetch it only
  * after the operator's confirm, and never probe it as a permission check.
  */

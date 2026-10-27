@@ -823,6 +823,18 @@ export type {
   ConsolidatedPoll,
   ConsolidatedPollingOptions,
 } from "./polling/use-consolidated-polling";
+// The poll registry (AZR-33): a screen registers its poll here and the shell's
+// ONE useConsolidatedPolling runs it, so the proxy budget keeps one
+// enforcement point. main.tsx wraps <App/> in the provider.
+export {
+  PollRegistryProvider,
+  useMergedPolls,
+  useRegisterPoll,
+} from "./polling/poll-registry";
+export type {
+  DuplicatePollPolicy,
+  PollRegistryProviderProps,
+} from "./polling/poll-registry";
 
 // Workspace table picker (backlog item 2): choosing an existing Log Analytics
 // table to run DCR gap analysis against. First feature to exercise the

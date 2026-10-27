@@ -66,5 +66,20 @@ export * from "./domain/siem-migration";
 export * from "./domain/content-install";
 export * from "./domain/labs";
 export * from "./domain/logging-map";
+// AZR-30..34 (ADR 0007): the Azure onboarding How-to, Validate, dataflow and
+// Cribl source domains. The eventhub-arm, defender-export and entra-diagnostics
+// additions (ruleCanListen, classifyExportForPlan, listSettingsRequest, ...)
+// reach the root through those barrels above.
+export * from "./domain/onboarding-howto";
+export * from "./domain/onboarding-howto-steps";
+export * from "./domain/onboarding-validation";
+export * from "./domain/cribl-onboarding-source";
+export * from "./domain/onboarding-flow";
+export * from "./domain/onboarding-dataflow";
+// The adopted claude-kit code stays internal: only the request description a
+// screen shows in its (i) and the two transport types cross the package edge.
+// Never the kit wholesale - in particular never a clock (core stays pure).
+export { describeMetricsRequest } from "./kit/metrics/metricsQuery";
+export type { ApiResponse, Clock } from "./kit/config-writes/transport";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

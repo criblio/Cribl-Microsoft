@@ -33,6 +33,7 @@ export {
   buildAutomationGetByIdRequest,
   buildAutomationPutRequest,
   buildSubscriptionAutomationsListRequest,
+  classifyExportForPlan,
   classifyOurs,
   defenderExportPath,
   expectedExportFor,

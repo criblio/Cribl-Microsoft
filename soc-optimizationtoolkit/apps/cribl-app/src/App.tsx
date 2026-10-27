@@ -36,6 +36,7 @@ import {
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
+  useMergedPolls,
 } from '@soc/ui';
 import type {
   AppFrameNav,
@@ -894,11 +895,14 @@ function App() {
   const getRecentLogs = useCallback(async () => appLogger.getRecent(), []);
 
   // The ONE budgeted status poller (@soc/ui hook over the @soc/core
-  // poll-scheduler). For this unit only the connection-status poll registers:
-  // a KV key listing once a minute proves the platform bridge and the leader
-  // are reachable. Every future poll (health, data-flow, drift) registers
-  // HERE with a priority - never its own setInterval - so the shared
-  // ~100 req/min proxy budget has one enforcement point.
+  // poll-scheduler). The shell's own poll is connection-status: a KV key
+  // listing once a minute proves the platform bridge and the leader are
+  // reachable. SCREENS register their polls through the poll registry
+  // (useRegisterPoll; the Azure onboarding live flow is the first), and
+  // useMergedPolls folds those registrations into this one call - main.tsx
+  // wraps <App/> in PollRegistryProvider so this hook sees them. Nothing
+  // runs its own setInterval, so the shared ~100 req/min proxy budget keeps
+  // one enforcement point.
   const connectionPolls = useMemo(
     () => [
       {
@@ -924,7 +928,7 @@ function App() {
     []
   );
   useConsolidatedPolling({
-    polls: connectionPolls,
+    polls: useMergedPolls(connectionPolls),
     maxPerMinute: 30,
     enabled: phase.phase === 'ready',
   });
@@ -2036,7 +2040,7 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <AzureOnboardingScreen />
+        <AzureOnboardingScreen pacing={BATCH_PACING} />
       </PortsProvider>
     </>
   );

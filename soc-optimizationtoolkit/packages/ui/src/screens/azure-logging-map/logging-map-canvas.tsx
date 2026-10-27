@@ -24,6 +24,12 @@
  * useId(); fit floors the zoom at a legible 0.55; every colour is a class
  * whose value is a var(--...) token in styles.css.
  *
+ * The viewport (pan, zoom, wheel, fit), the (i) circle and the popover's
+ * dismissal come from the shared diagram shell in components/diagram
+ * (AZR-30), so this canvas and the onboarding dataflow share one engine. It
+ * passes its own lm-* class names and uses neither the shell's drag nor its
+ * animated edge.
+ *
  * Every state is drawn with more than colour (the mockup's visual encoding):
  * ours is a solid chip with an "ours" pill, other owners a grey chip,
  * inherited a dotted italic chip saying where it is from, excluded or exempt
@@ -31,28 +37,17 @@
  * remaining gap states each have their own pill.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type PointerEvent,
-  type WheelEvent,
-} from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 
+import { DiagramInfoPopover, InfoHitCircle, useDiagramViewport } from "../../components/diagram";
 import {
   CARD,
   CARD_LINE_CHARS,
   MAX_CHIPS,
   NODE_W,
   applyPositions,
-  clampZoom,
   edgeAnchors,
   edgePath,
-  fit as fitLayout,
   fitLine,
   layoutLoggingMap,
   type LaidOutCard,
@@ -91,15 +86,13 @@ export interface LoggingMapCanvasProps {
   readonly onToggleFolded: (scopeId: string) => void;
 }
 
-const ZOOM_STEP = 1.2;
-const WHEEL_STEP = 1.12;
-const PAN_THRESHOLD_PX = 4;
-
-interface View {
-  readonly x: number;
-  readonly y: number;
-  readonly k: number;
-}
+/** A press on any of these starts no pan (and never moves a card: there is no drag). */
+const PAN_IGNORE = "[data-lm-card], [data-lm-info], [data-lm-caret], [data-lm-popover]";
+/** A pointerdown on these leaves the popover open (the (i) toggles it itself). */
+const POPOVER_KEEP = "[data-lm-popover], [data-lm-info]";
+const INFO_CLASSES = { group: "lm-info", hit: "lm-info-hit", glyph: "lm-info-glyph", letter: "lm-info-i" } as const;
+const INFO_ATTRS = { "data-lm-info": "" } as const;
+const POPOVER_ATTRS = { "data-lm-popover": "" } as const;
 
 function exemptionsUnknown(map: UiLoggingMap, scopeId: string): boolean {
   const n = map.nodesById.get(scopeId);
@@ -218,91 +211,23 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
   const marks = useMemo(() => traceView(map, { tracedAssignment: state.tracedAssignment }), [map, state.tracedAssignment]);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const hatchId = `${uid}-hatch`;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [infoId, setInfoId] = useState<string | null>(null);
-  const panRef = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
 
   const closeInfo = useCallback(() => setInfoId(null), []);
   const cardsById = useMemo(() => new Map(laid.cards.map((c) => [c.id, c])), [laid.cards]);
 
-  const sizeRef = useRef(laid);
-  sizeRef.current = laid;
-  const fit = useCallback(() => {
-    const el = containerRef.current;
-    const t = fitLayout(sizeRef.current, { width: el?.clientWidth ?? 0, height: el?.clientHeight ?? 0 });
-    setView({ x: t.panX, y: t.panY, k: t.zoom });
-  }, []);
+  // Panning the EMPTY canvas only (PAN_IGNORE): a press that lands on a card,
+  // its (i) or its caret starts nothing, so pressing and moving on a card
+  // neither moves the card nor pans the view. Every zoom, wheel, fit and pan
+  // closes the popover through onViewChange.
+  const viewport = useDiagramViewport({ layout: laid, onViewChange: closeInfo, panIgnoreSelector: PAN_IGNORE });
+  const { containerRef, view, fit } = viewport;
 
   // Re-fit only when the layout itself changes (collapse, fold, filters).
   useEffect(() => {
     fit();
     closeInfo();
   }, [laid, fit, closeInfo]);
-
-  useEffect(() => {
-    if (infoId === null) return;
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") closeInfo();
-    };
-    const onDown = (e: globalThis.PointerEvent) => {
-      const target = e.target as Element | null;
-      if (target?.closest?.("[data-lm-popover], [data-lm-info]")) return;
-      closeInfo();
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-    };
-  }, [infoId, closeInfo]);
-
-  const zoomBy = useCallback((factor: number, origin?: { x: number; y: number }) => {
-    setView((prev) => {
-      const k = clampZoom(prev.k * factor);
-      if (origin === undefined) return { ...prev, k };
-      const r = k / prev.k;
-      return { k, x: origin.x - (origin.x - prev.x) * r, y: origin.y - (origin.y - prev.y) * r };
-    });
-  }, []);
-
-  const onWheel = (e: WheelEvent<HTMLDivElement>) => {
-    closeInfo();
-    const rect = containerRef.current?.getBoundingClientRect();
-    const origin = rect === undefined ? undefined : { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    zoomBy(e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP, origin);
-  };
-
-  // Panning the EMPTY canvas only. A press that lands on a card, its (i) or
-  // its caret starts nothing, so pressing and moving on a card neither moves
-  // the card nor pans the view. (Not stopPropagation: the popover's outside-
-  // pointerdown close must still hear a press on another card.)
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    const target = e.target as Element | null;
-    if (target?.closest?.("[data-lm-card], [data-lm-info], [data-lm-caret], [data-lm-popover]")) return;
-    panRef.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
-  };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const pan = panRef.current;
-    if (pan === null) return;
-    if ((e.buttons & 1) === 0) {
-      panRef.current = null;
-      return;
-    }
-    const dx = e.clientX - pan.x;
-    const dy = e.clientY - pan.y;
-    if (!pan.moved) {
-      if (Math.hypot(dx, dy) < PAN_THRESHOLD_PX) return;
-      pan.moved = true;
-      closeInfo();
-    }
-    setView((prev) => ({ ...prev, x: pan.vx + dx, y: pan.vy + dy }));
-  };
-  const endPan = () => {
-    panRef.current = null;
-  };
 
   const activate = (card: LaidOutCard) => {
     if (card.kind === "count") {
@@ -330,25 +255,17 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
   return (
     <div className="lm-canvas-root">
       <div className="lm-zoom" role="group" aria-label="Zoom">
-        <button type="button" className="lm-btn" aria-label="Zoom out" onClick={() => { closeInfo(); zoomBy(1 / ZOOM_STEP); }}>
+        <button type="button" className="lm-btn" aria-label="Zoom out" onClick={viewport.zoomOut}>
           -
         </button>
-        <button type="button" className="lm-btn" onClick={() => { closeInfo(); fit(); }}>
+        <button type="button" className="lm-btn" onClick={fit}>
           Fit
         </button>
-        <button type="button" className="lm-btn" aria-label="Zoom in" onClick={() => { closeInfo(); zoomBy(ZOOM_STEP); }}>
+        <button type="button" className="lm-btn" aria-label="Zoom in" onClick={viewport.zoomIn}>
           +
         </button>
       </div>
-      <div
-        ref={containerRef}
-        className="lm-canvas"
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
-      >
+      <div ref={containerRef} className="lm-canvas" onWheel={viewport.onWheel} {...viewport.panHandlers}>
         <svg width="100%" height="100%" role="group" aria-label="Management group tree with policy assignments">
           <defs>
             <pattern id={hatchId} width={8} height={8} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -356,7 +273,7 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
               <line x1={0} y1={0} x2={0} y2={8} className="lm-hatch-line" />
             </pattern>
           </defs>
-          <g data-lm-viewport="" transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          <g data-lm-viewport="" transform={viewport.transform}>
             {laid.edges.map((edge) => {
               const from = cardsById.get(edge.from);
               const to = cardsById.get(edge.to);
@@ -382,15 +299,14 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
           </g>
         </svg>
         {infoCard !== undefined && (
-          <div
+          <DiagramInfoPopover
             className="lm-popover"
-            data-lm-popover=""
-            role="dialog"
-            aria-label={`About ${infoCard.title}`}
-            style={{
-              left: view.x + (infoCard.x + infoCard.width) * view.k + 8,
-              top: view.y + infoCard.y * view.k,
-            }}
+            attrs={POPOVER_ATTRS}
+            label={`About ${infoCard.title}`}
+            left={view.x + (infoCard.x + infoCard.width) * view.k + 8}
+            top={view.y + infoCard.y * view.k}
+            onClose={closeInfo}
+            keepOpenSelector={POPOVER_KEEP}
           >
             <div className="lm-popover-kind">
               {infoCard.kind === "count"
@@ -410,7 +326,7 @@ export function LoggingMapCanvas({ map, state, onSelect, onToggleCollapsed, onTo
             <button type="button" className="lm-btn lm-popover-close" aria-label="Close" onClick={closeInfo}>
               x
             </button>
-          </div>
+          </DiagramInfoPopover>
         )}
       </div>
     </div>
@@ -541,31 +457,15 @@ function CardGroup({ map, state, card, mark, hatchId, infoOpen, onActivate, onKe
         </g>
       )}
       {/* A sibling of the card, not inside it: nested interactive roles are invalid. */}
-      <g
-        className="lm-info"
-        data-lm-info=""
-        role="button"
-        tabIndex={0}
-        aria-label={`About ${card.title}`}
-        aria-expanded={infoOpen}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleInfo();
-        }}
-        onKeyDown={(e) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          e.preventDefault();
-          e.stopPropagation();
-          onToggleInfo();
-        }}
-      >
-        {/* ~1.5x hit area around the visible glyph. */}
-        <circle className="lm-info-hit" cx={infoX} cy={infoY} r={10} />
-        <circle className="lm-info-glyph" cx={infoX} cy={infoY} r={6.5} />
-        <text className="lm-info-i" x={infoX} y={infoY + 3.5} textAnchor="middle">
-          i
-        </text>
-      </g>
+      <InfoHitCircle
+        cx={infoX}
+        cy={infoY}
+        label={`About ${card.title}`}
+        expanded={infoOpen}
+        onToggle={onToggleInfo}
+        classes={INFO_CLASSES}
+        attrs={INFO_ATTRS}
+      />
     </g>
   );
 }

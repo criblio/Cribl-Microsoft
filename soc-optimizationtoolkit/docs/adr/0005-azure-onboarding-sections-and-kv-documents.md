@@ -270,3 +270,27 @@ in the repo:
 
 All four are on the AZR-18 live-verification list. AZR-18, AZR-11 and AZR-3
 close only after Live Preview.
+
+## Addendum 2026-10-26: ADR 0007 (AZR-30 to AZR-34)
+
+Appended; nothing above is edited. ADR 0007
+(`docs/adr/0007-onboarding-cribl-source-and-howto-progress.md`) extends this
+screen and changes four things this ADR stated:
+
+- **The Cribl Event Hub source (AZR-S2) is decided there.** It leaves "What is
+  NOT decided here". The app creates an `eventhub` or `azure_blob` input,
+  create-only, behind a confirm, with the credential in a Cribl secret and a
+  Listen-capable rule (not the Send rule this ADR's picker chooses).
+- **Mount makes two KV loads, not one.** How-to progress is a second document,
+  `azure-onboarding-progress`, read through the same gate as section 3. The
+  `azure-coverage-selection` document is unchanged, and Save still never runs
+  automatically.
+- **Section 3's write rule now covers both documents.** A progress write is
+  allowed only after an `absent` or `ok` progress load, independently of the
+  selection document.
+- **Section 4's "listKeys runs only inside the deploy" holds for the new
+  write too.** The Cribl source create calls listKeys only inside its
+  confirmed apply, and the new read-only Validate never calls it.
+
+Persisting the Event Hub picker's choice is still not done (AZR-24): the How-to
+plan values are persisted, but they do not seed the picker.

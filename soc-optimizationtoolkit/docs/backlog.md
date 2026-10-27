@@ -1066,6 +1066,14 @@ Two things worth drawing honestly, because they are where a generic
   the pull collectors are Cribl reaching into Azure on a schedule. A diagram set
   that draws them all left-to-right identically teaches the wrong model.
 
+> AMENDED 2026-10-26 (ADR 0007, `docs/adr/0007-onboarding-cribl-source-and-howto-progress.md`):
+> the onboarding screen now has its OWN per-source dataflow diagram (AZR-30), so
+> "do not build a new diagram implementation" was answered by lifting the Logging
+> Map's hand-SVG canvas into one shared shell,
+> `packages/ui/src/components/diagram/`, which both screens use. No third engine
+> was written. This section's ask - reference patterns on the Dataflow page - is
+> still open and still belongs in `domain/architecture-patterns`. See section 24.
+
 ### 6h. Shared concerns
 
 **Unchecking - DECIDED 2026-08-12 (user): ADDITIVE-ONLY, with a separate Remove
@@ -1184,6 +1192,15 @@ already exists in `usecases/guided-deploy/wire-source.ts` and
 The connectedness test must be the SAME one the rest of the app uses, not a new
 probe: two answers to "is there a Cribl here" is the duplicated-decision shape
 the capability model was built to end.
+
+> AS BUILT 2026-10-26 (ADR 0007, `docs/adr/0007-onboarding-cribl-source-and-howto-progress.md`):
+> the WRITE half shipped for the onboarding screen (AZR-34) as a new create-only
+> usecase, `packages/core/src/usecases/create-cribl-source/`, and NOT on
+> `wire-source.ts` or `secret-provisioning.ts`, whose commit, deploy and
+> secret handling are bug cards (DBT-149, DBT-151, DBT-152). Two parts of this
+> decision were not built: the EXPORT fallback when no Cribl is connected, and
+> the `source.manage` gate - a role without the grant learns it from Cribl's own
+> refusal. Both stay open. See section 24.
 
 **Prerequisite ordering is real and mostly implicit.** Nearly every section needs
 an Event Hub namespace (LOG-03) to exist first, and the policy sections need
@@ -3060,3 +3077,68 @@ stands NOW (`deployedUnreadReason`, which checks the group listing before any
 snapshot); otherwise it says "Deployed status not read - <why>". Each read
 also clears the last snapshot first, so either guard alone closes the
 Refresh case.
+
+## 24. Azure onboarding: How-to, Validate, live dataflow and the Cribl source (AZR-30 to AZR-34) - 2026-10-26
+
+**The ask (operator, 2026-10-26).** On the Azure Native Source Onboarding
+screen: a dataflow diagram per source, readable from each side; a How-to path
+for customers who will not let the app configure Azure (choose what to onboard,
+instructions in a dialog, a done box per step); a read-only check of the Azure
+side; a new live flow once data reaches Cribl; and the Cribl source always
+created by the app. Decisions are in ADR 0007,
+`docs/adr/0007-onboarding-cribl-source-and-howto-progress.md` (Accepted - not
+verified live). ADR 0005 carries an addendum.
+
+**What it chose, in one line each.**
+
+- How-to progress is a SECOND KV document, `azure-onboarding-progress`, because
+  the AZR-18 selection codec strips unknown keys and would erase it. The mount
+  pin moved from one load to two, deliberately.
+- Automated is only offered where `isAutomatable(id)` - a function over ADR
+  0005's item availability - says so. Today that is the Defender export.
+- Validate is GET-only and reuses the Logging Map's `readAllPages`; `unknown` is
+  never `absent`, and a measured zero arrival is never `unknown`.
+- The Cribl Event Hub INPUT type is `eventhub`. `azure_eventhub` is the
+  destination; reading the two as one would have failed at the API.
+- The source needs a LISTEN rule. The AZR-18 picker chooses a Send rule for the
+  Defender export, so the source has its own picker, or a pasted connection
+  string reduced to a non-secret descriptor and checked before any write.
+- The write is create-only through the claude-kit config-writes code, adopted
+  verbatim into `packages/core/src/kit/` except its clocked transport.
+- The live flow is opt-in, one metrics query a minute through the shared
+  poller, and animates only a measured, non-zero intake.
+- One hand-SVG canvas shell, `packages/ui/src/components/diagram/`, now serves
+  both the Logging Map and this diagram.
+
+**Cards filed before the code (CLAUDE.md rule 2).** Defects found in committed
+code while planning, none fixed by this work:
+
+- DBT-149 - three Cribl writers treat commit and deploy failure as a warning and
+  commit the whole group unchecked.
+- DBT-150 - the Dataflow screen animates every edge from configuration, with no
+  metrics read.
+- DBT-151 - the secret writers send `type` where the schema names `secretType`.
+- DBT-152 - ensure-secret overwrites an existing secret on a 409.
+- DBT-153 - policies.yml wildcards and pre-existing coverage gaps. The new
+  coverage test's `KNOWN_EXCEPTIONS` cites it.
+- DBT-154 - the lab blob source passes `queueName` unquoted.
+- DBT-155 - the Sentinel destination carries the client secret in clear.
+
+Follow-up stories: AZR-35 (route the source to the Sentinel destination, with
+records unrolled - the route is only read today), AZR-36 (create a Listen rule
+and a dedicated consumer group), AZR-37 (a persisted last-seen beyond the
+24-hour lookback) and AZR-38 (one definition of the Defender item id).
+
+**What is still open from earlier decisions.** AZR-S2 (section 6h) asked for an
+export fallback when no Cribl is connected and a `source.manage` gate; neither
+was built. AZR-24, persisting the Event Hub picker's choice, stays open: the
+How-to plan values persist but do not seed the picker. Section 6g's reference
+patterns on the Dataflow page are untouched.
+
+**Not verified live.** Nothing here has met a real tenant or worker group. The
+riskiest unknowns are which files a secret and an input create dirty (the
+commit markers are a guess, and a wrong guess refuses rather than commits),
+whether the `/products/stream/groups` routes answer through the app proxy, the
+metrics label form for the new input, and whether Cribl accepts the
+`queueName` expression. ADR 0007's live-verification list is the full set;
+AZR-30 to AZR-34 close only after it.

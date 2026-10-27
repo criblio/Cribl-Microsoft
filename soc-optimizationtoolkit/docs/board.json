@@ -337,7 +337,7 @@
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md#6g`."
+      "detail": "Do not build a new diagram implementation - the renderer and layout exist and the work is data, new entries in `architecture-patterns.ts`. Draw the manual portal step in AZR-6 as a step, and draw AZR-7 flowing the other way. Trail each section by one. `backlog.md#6g`.\n\nNOTE 2026-10-26 (implementation plan for AZR-30..34): the AZR-F9 onboarding dataflow (AZR-30) is NOT built on architecture-patterns.ts or the React Flow renderer. It is a hand-SVG section-per-flow layout on a new shared canvas shell in packages/ui/src/components/diagram (viewport, (i) popover, card drag, measured-only animated edge), lifted from the Azure Logging Map and the claude-kit cribl-dataflow-diagram reference. Whoever picks this card up should decide whether the per-category diagrams belong on that shell or on the architecture renderer this card names."
     },
     {
       "status": "in-progress",
@@ -475,7 +475,7 @@
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a diagram on the AZR-18 screen, one lane per selected source, from the Azure emitter (diagnostic setting, Defender export, flow logs, Entra export...) through its transport (Event Hub or Storage Blob) to the Cribl source, Cribl routing and the destination. DEFAULT TAKEN for \"each perspective\" (operator said build now): each lane can be read from the Azure side (what is configured where), the Cribl side (source, route, destination) or end to end. House diagram standard (claude-kit standards/cribl-dataflow-diagram.md and its reference implementation): hand SVG + dagre, tokens, (i) on every card, keyboard-focusable, no animation unless the flow is MEASURED (AZR-33)."
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a diagram on the AZR-18 screen, one lane per selected source, from the Azure emitter (diagnostic setting, Defender export, flow logs, Entra export...) through its transport (Event Hub or Storage Blob) to the Cribl source, Cribl routing and the destination. DEFAULT TAKEN for \"each perspective\" (operator said build now): each lane can be read from the Azure side (what is configured where), the Cribl side (source, route, destination) or end to end. House diagram standard (claude-kit standards/cribl-dataflow-diagram.md and its reference implementation): hand SVG + dagre, tokens, (i) on every card, keyboard-focusable, no animation unless the flow is MEASURED (AZR-33).\n\nNOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not verified live. Core lane model `domain/onboarding-dataflow/lanes.ts` (buildOnboardingLanes: one lane per chosen source, Automated and How-to combined, in ONBOARDING_SOURCES order; the Azure side, Cribl side and end-to-end perspectives fold the other half into one card; a shared namespace or storage account is computed once). The canvas shell was lifted into `packages/ui/src/components/diagram/` (geometry, pan/zoom/fit viewport with the 0.55 legible floor, sibling (i) hit circle, role=dialog popover, 4px card drag with Reset, measured-only AnimatedEdge), and the Azure Logging Map now runs its viewport, popover and info circle on it under its unmodified pins, still with no drag (AZR-20). The onboarding diagram is `screens/azure-onboarding/dataflow/onboarding-dataflow.tsx` over the pure left-to-right `lane-layout.ts`, shown as the screen's new Dataflow section. Pins: lanes.test.ts, diagram-shell.dom.test.tsx, geometry.test.ts, lane-layout.test.ts (zero crossings and every edge inside its section for 1, 3 and 8 lanes in every perspective), onboarding-dataflow.dom.test.tsx, edge-styles.test.ts (cascade pin), and the logging-map tests unmodified. Decisions in ADR 0007 sections 8 and 9. Live verification is OUTSTANDING (ADR 0007, \"Live verification\"): the card stays in-progress until the operator runs that list in Cribl Live Preview and records verified live or both.\n\nCORRECTION 2026-10-26 (final review): the SCOPE line above says 'hand SVG + dagre'. The build does not use dagre: the layout is a pure section-per-flow, left-to-right column layout (packages/ui/src/screens/azure-onboarding/dataflow/lane-layout.ts) on the shared components/diagram shell, per ADR 0007 section 8."
     },
     {
       "id": "AZR-31",
@@ -489,7 +489,7 @@
       "dependsOn": [
         "AZR-30"
       ],
-      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: for an operator who will not let the app write Azure, a How-to mode on the same screen: pick sources, each source expands into the steps the app would have automated (portal or CLI instructions in a dialog, with the exact names, scopes and values the app computed), and a done checkbox per step persisted in the coverage KV document. Nothing in this mode writes Azure. Must cover every Azure aspect the automated path performs for the sources the screen offers, Event Hub and Blob transports both."
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: for an operator who will not let the app write Azure, a How-to mode on the same screen: pick sources, each source expands into the steps the app would have automated (portal or CLI instructions in a dialog, with the exact names, scopes and values the app computed), and a done checkbox per step persisted in the coverage KV document. Nothing in this mode writes Azure. Must cover every Azure aspect the automated path performs for the sources the screen offers, Event Hub and Blob transports both.\n\nNOTE 2026-10-26 (implementation plan for AZR-30..34): CORRECTION to the scope above: the done ticks are NOT persisted in the coverage KV document. They live in a SEPARATE KV document, key `azure-onboarding-progress` (kind `azure-onboarding-progress`, version 1), because the AZR-18 `azure-coverage-selection` v1 encoder strips unknown keys and drops ids outside the catalog, so extending it would either lose the ticks or change its bytes. The selection document stays byte-for-byte unchanged. Consequence: the screen's mount makes TWO KV loads instead of one, and the AZR-18 mount pin (azure-onboarding-screen.dom.test.tsx, the 'one load' assertion) is edited deliberately to expect both keys - recorded in ADR 0007. A tick stores a fingerprint of the plan values its step depends on, and reads 'done against older values' when they change.\n\nNOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not verified live. Source catalog, isAutomatable (a function over ITEM_AVAILABILITY; only defenderExport today), plan values and the `azure-onboarding-progress` v1 codec in `domain/onboarding-howto/`; the per-source step catalog and renderer in `domain/onboarding-howto-steps/` (ported builders, never retyped; inferred steps carry a visible 'not yet confirmed against live Azure' tag). UI in `screens/azure-onboarding/howto/`: a chooser with an Automate | How-to toggle, a plan values form with Apply, a step list with a persisted done tick, provenance tag and stale note, and a native dialog with portal steps, CLI and Copy. Ticks, mode and choice save at once, serialized; a failed or foreign progress load blocks ticks while AZR-18 Save still works. The AZR-18 mount pin was edited deliberately, one assertion and its title, to two KV loads. Pins: the sources, plan-values, check-kinds and progress-document tests, steps.test.ts, render-instruction.test.ts, howto-state.test.ts, howto-panel.dom.test.tsx and azure-onboarding-howto.dom.test.tsx. ADR 0007 sections 1 and 2. Live verification is OUTSTANDING (ADR 0007, \"Live verification\"): the card stays in-progress until the operator runs that list in Cribl Live Preview and records verified live or both."
     },
     {
       "id": "AZR-32",
@@ -503,7 +503,7 @@
       "dependsOn": [
         "AZR-30"
       ],
-      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a Validate action that READS Azure (no writes) and reports per step: configured as expected, present but different (what differs), absent, or unknown because the read was refused (inventory-honesty: a refused read is never 'absent'). Works the same whether the app or the operator did the configuration; feeds the diagram's lane states."
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: a Validate action that READS Azure (no writes) and reports per step: configured as expected, present but different (what differs), absent, or unknown because the read was refused (inventory-honesty: a refused read is never 'absent'). Works the same whether the app or the operator did the configuration; feeds the diagram's lane states.\n\nNOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not verified live. GET-only request builders and ListRead-based classifiers in `domain/onboarding-validation/`: as-expected, present-differs, present-other-name, absent (only from a by-name 404 or a complete listing), or unknown with denied, failed, truncated, unregistered, unmeasurable or missing-value. XDR streaming is always unmeasurable. Hub IncomingMessages is an ArrivalReading, in which a measured 0 is its own state. The usecase `usecases/validate-azure-onboarding/` reuses readAllPages and readSingle from read-logging-map, never calls listKeys, and runs on an Azure port the screen wraps with paceAzureManagement at 40 a minute, from the new `pacing` prop (App passes BATCH_PACING); without it Validate is disabled. Additions to eventhub-arm (ruleCanListen, ruleCanManage, namespaceSupportsKafka), defender-export (classifyExportForPlan) and entra-diagnostics (listSettingsRequest). UI in `screens/azure-onboarding/validate/`. Pins: classify.test.ts and requests.test.ts (every request a GET; a 403 is unknown denied for every check kind), validate-azure-onboarding.test.ts (the recording fake fails on any non-GET), validate-state.test.ts and validate-panel.dom.test.tsx. The budget is per run, not global (ADR 0007 section 3). Live verification is OUTSTANDING (ADR 0007, \"Live verification\"): the card stays in-progress until the operator runs that list in Cribl Live Preview and records verified live or both."
     },
     {
       "id": "AZR-33",
@@ -517,7 +517,7 @@
       "dependsOn": [
         "AZR-30"
       ],
-      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: per lane, read Cribl's own metrics for the Cribl source the lane maps to (claude-kit standards/cribl-metrics.md) and draw the Azure -> Cribl hop as flowing only when events were measured in the window; idle, never-seen and unmeasurable are distinct states, and polling respects the shared proxy budget. Animation is allowed only on a measured flow."
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: per lane, read Cribl's own metrics for the Cribl source the lane maps to (claude-kit standards/cribl-metrics.md) and draw the Azure -> Cribl hop as flowing only when events were measured in the window; idle, never-seen and unmeasurable are distinct states, and polling respects the shared proxy budget. Animation is allowed only on a measured flow.\n\nNOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not verified live. Flow query planning and lane flow states in `domain/onboarding-flow/`: a 24h cumulative lookback first, then a 300s window, with a failed lookback retried every 5th run. flowing is the only animated state; idle, never seen, and not measured (waiting, no-permission, http-error, unexpected-shape, no-source, lookback-failed) are distinct, and a 403 is never 0. `usecases/read-source-flow/` sends exactly one POST /m/<g>/system/metrics/query per run through the adopted kit metricsQuery (`packages/core/src/kit/metrics/`) and the kit-to-CriblClient adapter `kit/cribl-request.ts`. The UI poll is opt-in (Watch for data) and registers through the new PollRegistry (`packages/ui/src/polling/poll-registry.tsx`) into App's single useConsolidatedPolling, with main.tsx wrapping App in PollRegistryProvider: 60s, priority 5, paused when the tab is hidden. policies.yml grants `/m/:gid/system/metrics/query` POST. Pins: flow-query.test.ts, flow-state.test.ts (the full state table), metrics-subset.test.ts, read-source-flow.test.ts, poll-registry.dom.test.tsx, use-document-visible.dom.test.tsx, use-live-flow.dom.test.tsx and main-provider.test.ts. The metrics label form for the new input is UNMEASURED until a real answer is captured as a fixture. ADR 0007 section 9. Live verification is OUTSTANDING (ADR 0007, \"Live verification\"): the card stays in-progress until the operator runs that list in Cribl Live Preview and records verified live or both."
     },
     {
       "id": "AZR-34",
@@ -531,7 +531,7 @@
       "dependsOn": [
         "AZR-30"
       ],
-      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: the Cribl side is always automated: for each selected source, build and create the Cribl input it needs (azure_eventhub for Event Hub transports with a Listen-capable rule, azure_blob for storage transports) in the chosen worker group, credentials stored as Cribl secrets, behind a confirm, read-modify-write, create-only with refusal on a differing existing input, then commit and deploy per claude-kit standards/config-plane-writes.md. Adds the input write policies to config/policies.yml (input creation is not shipped today). Live verification must NOT click Deploy against the operator's real leader without the operator."
+      "detail": "OPERATOR REQUEST 2026-10-26: \"a diagram in the Azure Native Source Onboarding page to show the dataflows of how these logs work from each perspective. Also a How to experience for customers that do not want to use the app to automate the Azure configurations. It should walk them through how to configure each aspect the app would have done: choose what to onboard, popup instructions, check box when done. Then a read-only option to validate the configuration, and a dataflow updated to show a new flow when the data is coming into Cribl. The Cribl side should be automated to create the source needed to onboard the data from Blob or Event Hub as needed.\"\n\nSCOPE: the Cribl side is always automated: for each selected source, build and create the Cribl input it needs (azure_eventhub for Event Hub transports with a Listen-capable rule, azure_blob for storage transports) in the chosen worker group, credentials stored as Cribl secrets, behind a confirm, read-modify-write, create-only with refusal on a differing existing input, then commit and deploy per claude-kit standards/config-plane-writes.md. Adds the input write policies to config/policies.yml (input creation is not shipped today). Live verification must NOT click Deploy against the operator's real leader without the operator.\n\nNOTE 2026-10-26 (implementation plan for AZR-30..34): CORRECTION to the scope above. The Cribl Event Hub INPUT type is `eventhub`; `azure_eventhub` is the DESTINATION type (live-architecture.ts and the vendored OpenAPI InputEventhub). Storage transports use the queue-driven `azure_blob` input. The source needs a LISTEN-capable rule (Listen or Manage); the AZR-18 prerequisite picks a SEND-capable rule for the Defender export, so its key is not reused unless that rule also has Listen. This slice uses an EXISTING Listen-capable rule chosen in a picker, or a pasted connection string whose host, key name and EntityPath are checked against the namespace and its rules before any write. Creating a Listen rule and a dedicated consumer group is [[AZR-36]]. Commit and deploy go through the adopted claude-kit cribl-config-writes code: deploy on /products/stream/groups/:g, falling back to /master/groups/:g only on a 404, then configVersion compared with the commit. The secret body uses `secretType`, not `type` (the existing writers' mistake is [[DBT-151]]). Routing the new input to the Sentinel destination is [[AZR-35]], not this card.\n\nNOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not verified live, and NOTHING has been written to a real worker group. Input and secret bodies, the non-secret connection-string descriptor with checkPastedCredential, the existing-object classifiers, laneTopics and COMMIT_MARKERS are in `domain/cribl-onboarding-source/`. The usecase `usecases/create-cribl-source/`: planCriblSource makes GETs only; applyCriblSource re-checks the commit scope, secret and input, then runs listKeys or re-parses the paste, POSTs the secret with secretType text (a 409 refuses and is never PATCHed), POSTs the input, reads it back, and runs the adopted kit commitAndDeploy and deployedVersion unedited. Every kit outcome is kept by name, the literal 'committed' is never produced, and a refusal after the secret landed reports the secret as left behind. The kit code is adopted verbatim under `packages/core/src/kit/config-writes/` with a core-local, clock-free transport.ts, which kit-purity.test.ts holds. policies.yml gains exactly the ADR 0007 section 7 grants, held by the two-direction policies-coverage.test.ts (KNOWN_EXCEPTIONS must equal the policies.yml wildcard set, under DBT-153) and request-scan.test.ts. UI in `screens/azure-onboarding/cribl-source/`: a Listen rule picker, the paste held in a ref, a two-click confirm naming the group, input id, secret id, key name and commit files, and worker groups listed only on click. Pins: the input-bodies, connection-string and classify-existing tests, create-cribl-source.test.ts (exact apply call order, the products deploy with the master fallback only on a 404, the paste value only in the secrets POST), configWrites.test.ts, cribl-request.test.ts, cribl-source-state.test.ts and cribl-source-panel.dom.test.tsx. COMMIT_MARKERS (`local/cribl/inputs.yml`, `local/cribl/secrets.yml`, `local/cribl/auth/cribl.secret`) are a GUESS until measured, so a real pending path outside them makes the plan refuse. Also unverified: whether /products/stream/groups/:g answers through the app proxy, secretType, the backtick queueName and configVersion matching by prefix. ADR 0007 sections 4 to 7. Live verification is OUTSTANDING (ADR 0007, \"Live verification\"): the card stays in-progress until the operator runs that list in Cribl Live Preview and records verified live or both."
     },
     {
       "id": "AZR-11",
@@ -1826,6 +1826,105 @@
       "detail": "FOUND by the 2026-10-26 architecture audit. usecases/azure-discovery listAllPages collects `value` only when it is an array and otherwise adds nothing, so a 2xx page with a missing or non-array `value` becomes zero items. Its callers (assign-dcr-role, azure-discovery listings, content-install, available-content, deployment-preview, manage-labs, workspace-tables) then render 'none' for what is really unknown - the inventory-honesty failure. AZR-19 wrote its own verdict-returning pager (read-logging-map/arm-pager.ts) precisely because of this and left the shared one unchanged.\n\nFIX: make listAllPages throw on a 2xx page whose `value` is not an array (it already throws on non-2xx, so every caller handles a throw), pin it, and consider whether arm-pager can then share the page walk. Check the callers' empty states against inventory-honesty while there."
     },
     {
+      "id": "DBT-149",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Three Cribl writers treat commit and deploy failure as a warning and commit the whole group unchecked",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/usecases/guided-deploy/wire-source.ts:124-154, onboard-table/onboard-table.ts:981-1035 and provision-lab/deploy-flowlog-pack.ts:99-126 each POST /version/commit with only a message - no `files` scope, no read of /version/status first, no HEAD check - so they commit EVERY pending change in the worker group, including another admin's unfinished edits. A commit or deploy failure is pushed as a warning or a 'nonfatal' step and the run carries on. wire-source.ts:134 falls back to the literal string 'committed' when the commit response has no version, then deploys `{version: 'committed'}`. None reads configVersion back, so 'deployed' is a 2xx, not a fact. claude-kit standards/config-plane-writes.md and the cribl-config-writes kit (adopted into core by the AZR-34 work) define the honest sequence: scoped commit of the files this write dirtied, HEAD re-read, deploy, configVersion compared with the commit, with every non-deployed outcome kept by name. FIX: move all three onto the adopted kit's commitAndDeploy and deployedVersion, and render each outcome distinctly. Live-verify on a test group."
+    },
+    {
+      "id": "DBT-150",
+      "epic": "DBT",
+      "feature": "DBT-F3",
+      "title": "The Dataflow screen animates every edge from configuration, with no metrics read",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/ui/src/screens/architecture/architecture-flow.tsx:646-668 draws three animateMotion packets on every edge that is not muted and not over the animation budget, and the edge's class `arch-flow-pipe` runs a CSS dash animation unconditionally (packages/ui/src/styles.css:4940-4947). Neither depends on any measurement, so a route that has carried nothing for a month looks exactly like one carrying data. claude-kit standards/cribl-dataflow-diagram.md and cribl-metrics.md allow motion ONLY on a measured flow, with idle, never-seen and unmeasurable drawn distinctly. FIX: drive `animate` and the pipe class from a metrics reading per edge (POST /system/metrics/query, within the proxy budget), static otherwise; the onboarding diagram's measured-only AnimatedEdge (AZR-33) is the pattern."
+    },
+    {
+      "id": "DBT-151",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Cribl secret writers send `type`, where the API schema names the field `secretType`",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/usecases/guided-deploy/secret-provisioning.ts:65 and :88 (POST and PATCH of the Sentinel client secret) and packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:71 and :81 send `{id, type: 'text', value}`. The vendored OpenAPI RestSecret schema (packages/core/assets/cribl-openapi.json) requires `secretType`. UNVERIFIED LIVE: Cribl may accept or ignore the unknown field and default the type, so this may work today by accident or may store a secret of the wrong type. FIX: confirm on a test group what GET /system/secrets/:id returns for a secret written each way, then send `secretType` and pin the request body."
+    },
+    {
+      "id": "DBT-152",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "Ensure-secret overwrites an existing Cribl secret on a 409, including one another admin owns",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/ui/src/screens/integrate/wiring-section.tsx:163-166 PATCHes the named secret when its POST returns 409, and packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:75-81 does the same on a 409 OR a 400. Neither checks who created the secret or what it holds, so a fixed secret id that another admin or another app already uses is silently replaced, breaking whatever reads it. A 400 is not a conflict at all - it can be a malformed body - and is still answered with an overwrite. config-plane-writes.md: create-only, and refuse on an existing object the app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove ownership (description stamp, as the AZR-34 work does with the kit's ownership helpers), and refuse otherwise; treat 400 as a failure."
+    },
+    {
+      "id": "DBT-153",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "policies.yml wildcards and pre-existing coverage gaps",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "none",
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. apps/cribl-app/config/policies.yml grants four wildcard objects - '/m/:gid/system/outputs/*' (:121), '/m/:gid/packs/*' (:140), '/m/:gid/system/secrets/*' (:153) and '/m/:gid/search/jobs/*' (:215) - each of which authorises every path under it, broader than any call the app makes. The AZR-34 work adds a strict two-direction policy coverage test (every call registered, every grant used); it waives exactly these wildcards, and any pre-existing literal gap it surfaces, under THIS card via KNOWN_EXCEPTIONS, so the test can land green without hiding them. FIX: replace each wildcard with the literal paths and actions its callers use, list them in API_CALLS, and remove the exception; the coverage test fails if an exception goes stale."
+    },
+    {
+      "id": "DBT-154",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "The lab blob source passes queueName unquoted where Cribl expects a JS expression",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "labs",
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/domain/labs/lab-cribl.ts:140 (buildLabBlobQueueSource) sets `queueName` to the raw queue name. Cribl's azure_blob input evaluates queueName as a JavaScript expression, so a plain name like `flowlogs` is read as an identifier rather than a string, and a name with a hyphen as a subtraction. UNVERIFIED LIVE: the legacy Generate-CriblConfigs output it was ported from may have worked because Cribl falls back to the literal. FIX: wrap it in backticks (as the AZR-34 onboarding blob input does), pin it, and confirm on a lab that the input reads its queue."
+    },
+    {
+      "id": "DBT-155",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "The Sentinel destination is created with the client secret in clear in the output body",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/domain/sentinel-destination/sentinel-destination.ts:203-237 puts `secret` (the ingestion app's client secret, when one is supplied) straight into the destination config, and onboard-table.ts:940-955 POSTs that body to /system/outputs. The secret then lives in the group's outputs.yml and in its git history, readable by anyone who can read the config, instead of in a Cribl secret referenced by id. The wiring path already stores the same value as a Cribl secret, so the two paths disagree. FIX: create or reuse the Cribl text secret and reference it (authType secret / textSecret, per the vendored OpenAPI), pin that no request body carries the value except the secret POST, and decide what to do about destinations already created this way."
+    },
+    {
+      "id": "DBT-156",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "title": "UI tests time out or miscount under full-suite load and pass alone",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "menu": "none",
+      "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet."
+    },
+    {
       "id": "AZR-22",
       "epic": "AZR",
       "feature": "AZR-F9",
@@ -1866,7 +1965,7 @@
       "dependsOn": [
         "AZR-11"
       ],
-      "detail": "FILED 2026-10-21 as a follow-up of AZR-18 (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, \"What is NOT decided here\"). The namespace, rule and hub choice is held in screen state and lost on reload (AZR-11 slice). Persist it beside the onboarding selection in the KV document store, with the same absent/unknown/foreign/unreadable read discipline."
+      "detail": "FILED 2026-10-21 as a follow-up of AZR-18 (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, \"What is NOT decided here\"). The namespace, rule and hub choice is held in screen state and lost on reload (AZR-11 slice). Persist it beside the onboarding selection in the KV document store, with the same absent/unknown/foreign/unreadable read discipline.\n\nNOTE 2026-10-26 (implementation plan for AZR-30..34): the How-to path (AZR-31) persists its own plan values (namespace, hub, send and listen rule, consumer group and so on) in the `azure-onboarding-progress` KV document, and offers a 'Use the Event Hub picked above' action that copies the picker's names into them. The AZR-18 picker itself is still NOT seeded from KV and still forgets its choice on reload, so this card stays open."
     },
     {
       "id": "AZR-25",
@@ -1923,6 +2022,74 @@
         "AZR-3"
       ],
       "detail": "FILED 2026-10-21 as a follow-up of AZR-18 (docs/adr/0005-azure-onboarding-sections-and-kv-documents.md, \"What is NOT decided here\"). There is no Remove today; a legacy or app-created `CriblDefenderExport` must be deleted by hand, and until then it blocks a new deploy with `already-exists`."
+    },
+    {
+      "id": "AZR-35",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-34"
+      ],
+      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the `eventhub` / `azure_blob` input but writes no route: the onboarding screen only READS GET /system/inputs and GET /routes and reports whether an existing route consumes the input (or 'cannot check' when the filter cannot be evaluated). The data therefore reaches Cribl and stops at whatever the existing routes do with it. This card adds the route (and the pipeline that unrolls the Azure diagnostic envelope `records[]` into one event per record) to the Sentinel destination for the matching table, through the same confirm, read-modify-write, create-only and kit commit-and-deploy discipline AZR-34 uses. A route is a shared, ordered table other admins own, so the insert position and the refusal when an equal filter already exists need deciding first."
+    },
+    {
+      "id": "AZR-36",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-34"
+      ],
+      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 requires an EXISTING Listen-capable shared access rule (or a pasted connection string) and defaults the consumer group to `cribl`, which in the How-to path the operator creates by hand. Never `$Default`, which shares partitions with other readers. This card lets the Automated path create both on the namespace or hub (ARM PUT authorizationRules with rights [Listen], PUT consumergroups) behind the screen's confirm, create-only, refusing a differing existing rule or group. It also adds the How-to step text for doing it by hand if AZR-31 has not already covered it."
+    },
+    {
+      "id": "AZR-37",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Persist when each onboarding source was last seen flowing, beyond the metrics lookback",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-33"
+      ],
+      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's own metrics for each lane: a 300s window for 'flowing' / 'idle' and a cumulative -24h lookback for 'never seen in the last 24 hours'. Anything older than the lookback is invisible, so a source that last delivered three days ago reads 'never seen in 24h', true but less useful than 'last seen 3 days ago'. This card persists a lastSeen per input (KV, written only from a MEASURED non-zero row, never from an unknown) and shows it beside the lookback verdict, labelled as remembered rather than measured."
+    },
+    {
+      "id": "AZR-38",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "One definition of the Defender coverage item id",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. The Defender export's coverage-catalog id `defenderExport` is declared twice: DEFENDER_ITEM_ID in packages/ui/src/screens/azure-onboarding/azure-onboarding-state.ts:383 and DEFENDER_EXPORT_ITEM_ID in packages/core/src/usecases/defender-export/defender-export.ts:85. Both are typed OnboardingItemId so a typo is caught, but a rename of the catalog id would have to find both. Keep the core one, make the UI import it, and pin that the screen uses the core export. Not a bug: the two values agree today."
+    },
+    {
+      "id": "AZR-39",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "title": "Validate the How-to steps that have no check kind yet",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-32"
+      ],
+      "detail": "FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry checkKinds [] so the read-only Validate never reports them; the UI says 'confirm by hand' (howto-state.ts) and the diagram says 'not checked by Validate' (lanes.ts). They are: eh-rule-diagnostic (eventhub-steps.ts, the Manage rule the auto-created-hub sources need), eh-network (eventhub-steps.ts), activity-log-definition (entra-activity-steps.ts) and policy-community-definitions (policy-steps.ts). SCOPE: add check kind 'eh-rule-manage', classified with the existing and pinned ruleCanManage (eventhub-arm.ts; nothing calls it yet), so a Send-only rule is never reported as done for a step that grants Manage; and add check kind 'policy-definition', a GET of the expected definitions at the management group, absent only from a by-name 404 or a complete listing, a 403 unknown. eh-network stays confirm-only by design (plan step P6): networking cannot be judged from one read. Pins: the classify table (403 is unknown denied for both new kinds), a Send-only rule is present-differs under eh-rule-manage, and the steps test asserts the two steps now carry their kinds."
     }
   ],
   "features": [

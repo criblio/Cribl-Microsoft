@@ -329,3 +329,70 @@ describe("findSameTargetExports", () => {
     expect(findSameTargetExports(listing(item()), HUB_ID)).toEqual([]);
   });
 });
+
+describe("classifyExportForPlan (AZR-32 Validate)", () => {
+  // Imported through the barrel: Validate reaches it there.
+  const verdictFor = async (l: Listing<DefenderAutomation>) =>
+    (await import("./index")).classifyExportForPlan(l, EXPECTED);
+  const verified = (...items: unknown[]): Listing<DefenderAutomation> => {
+    const rows = parseAutomations(items);
+    return rows.kind === "rows" ? rows : { kind: "none" };
+  };
+
+  it("ours matching the plan is as-expected", async () => {
+    expect(await verdictFor(verified(item()))).toEqual({ kind: "as-expected" });
+  });
+
+  it("ours targeting another hub is present-differs on eventHubResourceId", async () => {
+    const v = await verdictFor(
+      verified(item({ properties: { actions: [{ actionType: "EventHub", eventHubResourceId: `${NS_ID}/eventhubs/other` }] } })),
+    );
+    expect(v.kind).toBe("present-differs");
+    expect(v.kind === "present-differs" && v.diffs.map((d) => d.field)).toEqual(["eventHubResourceId"]);
+  });
+
+  it("ours disabled and duplicated names both fields", async () => {
+    const v = await verdictFor(
+      verified(item({ properties: { isEnabled: false } }), item({ resourceGroup: "CriblSecurityExport" })),
+    );
+    expect(v.kind === "present-differs" && v.diffs.map((d) => d.field)).toEqual(["name", "isEnabled"]);
+  });
+
+  it("another name on the plan hub is present-other-name, with that name", async () => {
+    const v = await verdictFor(verified(item({ name: "PortalExport" })));
+    expect(v).toEqual({ kind: "present-other-name", name: "PortalExport", diffs: [] });
+  });
+
+  it("prefers the exact-hub export over one that only shares the namespace", async () => {
+    const v = await verdictFor(
+      verified(
+        item({ name: "NamespaceOnly", properties: { actions: [{ actionType: "EventHub", eventHubResourceId: NS_ID }] } }),
+        item({ name: "ExactHub" }),
+      ),
+    );
+    expect(v.kind === "present-other-name" && v.name).toBe("ExactHub");
+  });
+
+  it("no target match plus a read listing is absent", async () => {
+    const unrelated = item({
+      name: "Elsewhere",
+      properties: {
+        actions: [
+          {
+            actionType: "EventHub",
+            eventHubResourceId: `/subscriptions/${SUB}/resourceGroups/x/providers/Microsoft.EventHub/namespaces/other/eventhubs/h`,
+          },
+        ],
+      },
+    });
+    expect(await verdictFor(verified(unrelated))).toEqual({ kind: "absent" });
+    expect(await verdictFor({ kind: "none" })).toEqual({ kind: "absent" });
+  });
+
+  it("a denied (unverified) listing is unknown, never absent", async () => {
+    const v = await verdictFor({ kind: "empty" });
+    expect(v.kind).toBe("unknown");
+    // and a raw toListing of zero rows is unverified too
+    expect((await verdictFor(toListing([]))).kind).toBe("unknown");
+  });
+});

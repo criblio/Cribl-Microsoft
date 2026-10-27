@@ -22,6 +22,18 @@ import * as discoverEventHubs from "./usecases/discover-event-hubs";
 import * as eventHubTarget from "./usecases/eventhub-target";
 import * as defenderUsecase from "./usecases/defender-export";
 import * as fakeKvDocumentStore from "./testing/fake-kv-document-store";
+import * as onboardingHowto from "./domain/onboarding-howto";
+import * as onboardingHowtoSteps from "./domain/onboarding-howto-steps";
+import * as onboardingValidation from "./domain/onboarding-validation";
+import * as criblOnboardingSource from "./domain/cribl-onboarding-source";
+import * as onboardingFlow from "./domain/onboarding-flow";
+import * as onboardingDataflow from "./domain/onboarding-dataflow";
+import * as entraDiagnostics from "./domain/entra-diagnostics";
+import * as createCriblSource from "./usecases/create-cribl-source";
+import * as validateAzureOnboarding from "./usecases/validate-azure-onboarding";
+import * as readSourceFlow from "./usecases/read-source-flow";
+import * as onboardBatch from "./usecases/onboard-batch";
+import * as kitMetricsQuery from "./kit/metrics/metricsQuery";
 
 type Entry = readonly [name: string, source: Record<string, unknown>, kind: string];
 
@@ -40,6 +52,37 @@ const ROOT_NAMES: readonly Entry[] = [
   ["DEFENDER_EXPORT_NAME", defenderDomain, "string"],
   ["parsePricings", defenderDomain, "function"],
   ["FakeKvDocumentStore", fakeKvDocumentStore, "function"],
+];
+
+// AZR-30..34 (ADR 0007): the How-to, Validate, dataflow, live-flow and Cribl
+// source surface the onboarding screen imports from @soc/core.
+const HOWTO_ROOT_NAMES: readonly Entry[] = [
+  ["ONBOARDING_SOURCES", onboardingHowto, "object"],
+  ["isAutomatable", onboardingHowto, "function"],
+  ["readProgressDocument", onboardingHowto, "function"],
+  ["ONBOARDING_PROGRESS_KEY", onboardingHowto, "string"],
+  ["stepsFor", onboardingHowtoSteps, "function"],
+  ["renderStep", onboardingHowtoSteps, "function"],
+  ["classifyCheck", onboardingValidation, "function"],
+  ["classifyArrival", onboardingValidation, "function"],
+  ["requestsFor", onboardingValidation, "function"],
+  ["ruleCanListen", eventHubArm, "function"],
+  ["namespaceSupportsKafka", eventHubArm, "function"],
+  ["classifyExportForPlan", defenderDomain, "function"],
+  ["listSettingsRequest", entraDiagnostics, "function"],
+  ["buildEventHubInputBody", criblOnboardingSource, "function"],
+  ["parseEventHubConnectionString", criblOnboardingSource, "function"],
+  ["checkPastedCredential", criblOnboardingSource, "function"],
+  ["classifyLaneFlow", onboardingFlow, "function"],
+  ["nextFlowQuery", onboardingFlow, "function"],
+  ["buildOnboardingLanes", onboardingDataflow, "function"],
+  ["planCriblSource", createCriblSource, "function"],
+  ["applyCriblSource", createCriblSource, "function"],
+  ["validateAzureOnboarding", validateAzureOnboarding, "function"],
+  ["readSourceFlow", readSourceFlow, "function"],
+  ["readOnboardingCriblSide", readSourceFlow, "function"],
+  ["paceAzureManagement", onboardBatch, "function"],
+  ["describeMetricsRequest", kitMetricsQuery, "function"],
 ];
 
 describe("@soc/core entry point exports the Azure onboarding surface", () => {
@@ -65,5 +108,26 @@ describe("@soc/core entry point exports the Azure onboarding surface", () => {
   it("the testing barrel carries FakeKvDocumentStore and it constructs", () => {
     expect(testing.FakeKvDocumentStore).toBe(fakeKvDocumentStore.FakeKvDocumentStore);
     expect(new core.FakeKvDocumentStore()).toBeInstanceOf(fakeKvDocumentStore.FakeKvDocumentStore);
+  });
+
+  it.each(HOWTO_ROOT_NAMES)("%s (onboarding How-to surface) is exported from the package root", (name, source, kind) => {
+    const value = (core as Record<string, unknown>)[name];
+    expect(typeof value).toBe(kind);
+    expect(value).toBe(source[name]);
+  });
+
+  it("the usecases barrel carries the three onboarding usecases", () => {
+    expect(usecases.planCriblSource).toBe(createCriblSource.planCriblSource);
+    expect(usecases.applyCriblSource).toBe(createCriblSource.applyCriblSource);
+    expect(usecases.validateAzureOnboarding).toBe(validateAzureOnboarding.validateAzureOnboarding);
+    expect(usecases.readSourceFlow).toBe(readSourceFlow.readSourceFlow);
+    expect(usecases.readOnboardingCriblSide).toBe(readSourceFlow.readOnboardingCriblSide);
+  });
+
+  it("the kit is never re-exported wholesale: no clock and no kit transport reach the root", () => {
+    const keys = Object.keys(core);
+    for (const name of ["systemClock", "commitAndDeploy", "readModifyWrite", "queryMetrics", "isOk", "abortError"]) {
+      expect(keys).not.toContain(name);
+    }
   });
 });

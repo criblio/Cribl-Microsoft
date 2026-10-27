@@ -44,6 +44,7 @@
  * performs the request.
  */
 
+import type { AzureManagementRequest } from "../../ports/azure-management";
 import type { EntraCategoryName } from "./entra-categories";
 import { ENTRA_CATEGORIES } from "./entra-categories";
 
@@ -119,6 +120,23 @@ function settingUrl(name: string): string {
 /** The GET that lists what already exists, from script line 179. */
 export function listSettingsUrl(): string {
   return `https://management.azure.com/providers/microsoft.aadiam/diagnosticSettings?api-version=${AADIAM_API_VERSION}`;
+}
+
+/** The tenant-level ARM path the settings live under, without host or query. */
+export const ENTRA_DIAGNOSTIC_SETTINGS_PATH = "/providers/microsoft.aadiam/diagnosticSettings";
+
+/**
+ * The same list as {@link listSettingsUrl}, in the PATH form the
+ * AzureManagement port takes (the adapter adds the host and the api-version).
+ * Validate (AZR-32) reads through the port, so it needs this form; the URL form
+ * stays for its existing callers. A GET: listing never changes anything.
+ */
+export function listSettingsRequest(): AzureManagementRequest {
+  return {
+    method: "GET",
+    path: ENTRA_DIAGNOSTIC_SETTINGS_PATH,
+    apiVersion: AADIAM_API_VERSION,
+  };
 }
 
 /**

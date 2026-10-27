@@ -10,9 +10,11 @@
 # @soc/core onboardTable use-case. Path shapes match the vendored
 # packages/core/assets/cribl-openapi.json:
 #   /master/groups (get)               - listGroups() group picker
-#   /master/groups/{id} (get)          - not called directly: the per-group
-#                                        grant the collection listing needs
-#                                        (see the entry below, DBT-134)
+#   /master/groups/{id} (get)          - the kit's deployedVersion 404
+#                                        fallback (create-cribl-source), and
+#                                        the per-group grant the collection
+#                                        listing needs (see the entry below,
+#                                        DBT-134)
 #   /system/outputs (post)             - in /m/{groupId} context: create the
 #                                        Sentinel destination
 #   /system/outputs/{id} (get)         - in /m/{groupId} context: verify step
@@ -54,8 +56,29 @@
 #                                              leader route, no /m/ prefix
 # The wiring's commit (/m/{groupId}/version/commit) and deploy
 # (/master/groups/{groupId}/deploy) reuse the routes ALREADY declared below and
-# are not redeclared. Live input creation (/system/inputs) is NOT shipped, so
-# only its READ is declared (least privilege).
+# are not redeclared.
+#
+# Azure Native Source Onboarding (AZR-33, AZR-34; ADR 0007) ADDS exactly the
+# paths its code calls. Live input creation IS now shipped, CREATE-ONLY: the
+# app POSTs one new eventhub / azure_blob input and never PATCHes or DELETEs
+# one, so no input write beyond POST is granted.
+#   /m/{groupId}/system/inputs (post)       - create-cribl-source: create the
+#                                             onboarding input
+#   /m/{groupId}/system/inputs/{id} (get)   - the kit's verifyStored read-back
+#   /m/{groupId}/system/secrets/{id} (get)  - create-cribl-source plan: is the
+#                                             secret id free, ours or foreign
+#   /m/{groupId}/version/status (get)       - the kit's commitScope /
+#                                             commitAndDeploy status reads
+#   /m/{groupId}/version (get)              - the kit's HEAD read
+#                                             (?offset=0&limit=1)
+#   /m/{groupId}/system/metrics/query (post)- read-source-flow: ONE intake
+#                                             query per poll; it writes nothing
+#   /products/stream/groups/{id}/deploy (patch) - the kit's commitAndDeploy
+#                                             deploys here first ...
+#   /products/stream/groups/{id} (get)      - ... and reads configVersion here
+#                                             first (deployedVersion)
+# The kit falls back to the /master/groups/{id}[/deploy] routes declared below
+# only on a 404, which is why both pairs are granted.
 #
 # Live Architecture (2026-07-29, Architecture page's Live view) READS the
 # group's configured flow to draw it - five GET-only additions plus the
@@ -77,10 +100,12 @@ policies:
   # List Worker Groups / Edge Fleets (CriblClient.listGroups group picker).
   - object: '/master/groups'
     actions: ['GET']
-  # Per-group READ, declared although no code calls /master/groups/{id}
-  # directly (DBT-134) - so it is NOT surplus under the least-privilege note
-  # above. The platform's own app-authoring doc (apps/cribl-app/AGENTS.md:230)
-  # says a collection declaration "covers that exact collection path only. If
+  # Per-group READ. Since AZR-34 it IS called: the kit's deployedVersion
+  # (create-cribl-source) reads configVersion from /products/stream/groups/:id
+  # first and falls back to this /master route only on a 404.
+  # Separately, it was declared before any code called it, and would stay
+  # declared without that caller (DBT-134): the platform's own app-authoring
+  # doc (apps/cribl-app/AGENTS.md:230) says a collection declaration "covers that exact collection path only. If
   # your app reads individual groups, include ... /:gid; otherwise group
   # results can be empty." A tester whose access comes from the app share
   # saw an empty worker-group picker while an Org admin (whose own role
@@ -88,6 +113,11 @@ policies:
   # this deprecated /master route or only on /products/stream/groups[/:id] is
   # NOT yet measured - that is DBT-134's live check, with a non-admin user.
   - object: '/master/groups/:id'
+    actions: ['GET']
+  # The kit's deployedVersion (create-cribl-source, AZR-34) reads the group's
+  # configVersion here first; the /master/groups/:id route above is its
+  # fallback on a 404.
+  - object: '/products/stream/groups/:id'
     actions: ['GET']
   # Edge fleet inventory (2026-07-30): the leader's worker/edge-node roster,
   # read-only, so cribl_tcp/cribl_http offload hosts resolve to the Stream
@@ -99,8 +129,12 @@ policies:
   # destination listing (read-only flow drawing).
   - object: '/m/:gid/system/outputs'
     actions: ['GET', 'POST']
-  # Live Architecture reads of the group's configured flow (all GET-only).
+  # Live Architecture reads of the group's configured flow (GET); POST is the
+  # Azure onboarding create-cribl-source input create (create-only, AZR-34).
   - object: '/m/:gid/system/inputs'
+    actions: ['GET', 'POST']
+  # The kit's verifyStored read-back of the created onboarding input (AZR-34).
+  - object: '/m/:gid/system/inputs/:id'
     actions: ['GET']
   - object: '/m/:gid/pipelines'
     actions: ['GET']
@@ -124,9 +158,21 @@ policies:
   # the top-level /version/commit route called in /m/{groupId} context).
   - object: '/m/:gid/version/commit'
     actions: ['POST']
+  # The kit's commit sequence (create-cribl-source, AZR-34): the pending-files
+  # status read before and after the commit, and the HEAD read
+  # (/version?offset=0&limit=1) whose hash the deploy and configVersion check use.
+  - object: '/m/:gid/version/status'
+    actions: ['GET']
+  - object: '/m/:gid/version'
+    actions: ['GET']
   # Deploy the committed version to the group. This is a LEADER route (no
   # /m/ prefix), called as PATCH /master/groups/{groupId}/deploy.
   - object: '/master/groups/:id/deploy'
+    actions: ['PATCH']
+  # The kit's commitAndDeploy (create-cribl-source, AZR-34) deploys on the
+  # /products route first; the /master route above is its fallback on a 404
+  # and the route the older callers use.
+  - object: '/products/stream/groups/:id/deploy'
     actions: ['PATCH']
   # Pack inventory + two-step install in a Worker Group context
   # (PlatformPackInstall): GET lists the group's installed packs (the
@@ -152,6 +198,16 @@ policies:
   # named secret in place.
   - object: '/m/:gid/system/secrets/*'
     actions: ['PATCH']
+  # create-cribl-source plan (AZR-34): read one named secret to classify it as
+  # absent, ours or foreign before any write. A 409 on create refuses; it is
+  # never PATCHed.
+  - object: '/m/:gid/system/secrets/:id'
+    actions: ['GET']
+  # read-source-flow (AZR-33): the per-input intake query behind the onboarding
+  # dataflow's live flow. A POST because the query travels in the body; it
+  # creates nothing.
+  - object: '/m/:gid/system/metrics/query'
+    actions: ['POST']
   # Unit 20 CLOUD-ONLY Cribl Lake dataset create (full-fidelity federation);
   # 409/exists is treated as success. A LEADER route (no /m/ prefix).
   - object: '/system/lake/datasets'

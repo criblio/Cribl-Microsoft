@@ -40,6 +40,7 @@ import {
   DEFENDER_PLANS,
   FakeKvDocumentStore,
   FakeLogger,
+  ONBOARDING_PROGRESS_KEY,
   UNSUPPORTED_SOURCES,
 } from "@soc/core";
 import type {
@@ -321,10 +322,10 @@ async function readyToDeployFrom(target: () => Promise<void>): Promise<void> {
 }
 
 describe("AzureOnboardingScreen - mount and the saved selection", () => {
-  it("mounts with exactly one selection load and zero Azure calls", async () => {
+  it("mounts with exactly two loads (selection and progress) and zero Azure calls", async () => {
     const { azure, store } = mount();
     await loaded();
-    expect(store?.loads).toEqual([COVERAGE_SELECTION_KEY]);
+    expect(store?.loads).toEqual([COVERAGE_SELECTION_KEY, ONBOARDING_PROGRESS_KEY]);
     expect(azure.calls).toEqual([]);
   });
 
