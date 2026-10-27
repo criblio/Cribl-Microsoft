@@ -676,3 +676,63 @@ describe("SampleIntakeSection - removing one log type", () => {
     expect(store.remove).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * A REFUSED READ OF THE OPERATOR'S VENDOR NAME (DBT-159).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403. The VND-1 effect
+ * awaited definitionCache.get inside a `void (async () => ...)()` with no
+ * catch, so a refused read became an UNHANDLED REJECTION: nothing on screen,
+ * an empty Vendor name box that looked like "never named", and an error only
+ * the console saw. A failed read is a miss for the box - and it is SAID, since
+ * "we could not read it" and "you never named it" ask different things of the
+ * operator.
+ */
+describe("SampleIntakeSection - a refused vendor-name read (DBT-159)", () => {
+  // Not in the curated vendor list, so the operator-name box is what applies.
+  const UNLISTED = "Acme Widget Telemetry";
+
+  it("says the saved name could not be read, and rejects nothing unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+      const refusingCache = {
+        get: vi.fn(async () => {
+          throw new Error("KV read refused (403)");
+        }),
+        set: vi.fn(async () => undefined),
+      } as unknown as ContentCache;
+      const onSamplesChange = vi.fn();
+      const view = render(
+        <SampleIntakeSection
+          store={store}
+          solutionName={UNLISTED}
+          definitionCache={refusingCache}
+          onSamplesChange={onSamplesChange}
+        />,
+      );
+      await waitFor(() => {
+        expect(
+          view.container.querySelectorAll(".sample-intake-vendor-unread"),
+        ).toHaveLength(1);
+      });
+      expect(
+        view.container.querySelector(".sample-intake-vendor-unread")?.textContent,
+      ).toContain("KV read refused (403)");
+      // The box still works: empty, and the operator can name the vendor.
+      const input = view.container.querySelector<HTMLInputElement>("#operator-vendor");
+      expect(input?.value).toBe("");
+      // Let any stray rejection reach the process before counting.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+});

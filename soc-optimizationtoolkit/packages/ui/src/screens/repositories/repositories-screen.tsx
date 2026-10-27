@@ -90,9 +90,14 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         if (!cancelled) {
           dispatch({ type: "hydrate", status });
         }
-      } catch {
-        // A failed status read leaves the form in its no-PAT default; the
-        // reachability check surfaces any real connectivity problem.
+      } catch (err) {
+        // DBT-159: a failed status read is UNKNOWN, not "no PAT". It used to be
+        // swallowed here, leaving the no-PAT default to tell a hosted-app
+        // operator a token was required and nothing was connected - about a
+        // token that may well be saved - with the reason thrown away.
+        if (!cancelled) {
+          dispatch({ type: "hydrate-error", message: String(err) });
+        }
       }
     })();
     return () => {
@@ -199,6 +204,7 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const reachability = deriveReachabilityStatus({
     platform,
     hasPat: view.hasPat,
+    patStatusError: view.statusUnknown,
     solutionCount,
     error: reachError,
   });
@@ -248,7 +254,17 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         </div>
         <p className="panel-desc">{policy.rationale}</p>
         <p className="panel-desc">{policy.scopeGuidance}</p>
-        {policy.required && !view.hasPat && (
+        {view.statusUnknown !== "" && (
+          <div className="status-bar status-bar-error repositories-pat-unknown">
+            <span className="status-bar-dot" aria-hidden="true" />
+            <span className="status-bar-text">
+              Could not read whether a GitHub token is saved (
+              {view.statusUnknown}). One may be stored; saving a token below
+              replaces it either way.
+            </span>
+          </div>
+        )}
+        {policy.required && !view.hasPat && view.statusUnknown === "" && (
           <p className="connection-notice">
             A token is required on this hosted app before you can browse
             solutions or fetch content.

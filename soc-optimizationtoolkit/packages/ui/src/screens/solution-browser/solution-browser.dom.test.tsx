@@ -928,3 +928,97 @@ describe("SolutionBrowser list holds the wheel only while it overflows (DBT-14)"
     expect(scrollable[0].trim()).toBe("overscroll-behavior: contain;");
   });
 });
+
+/**
+ * A REFUSED CACHE READ IS A MISS (DBT-159).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403 (a 5xx always did),
+ * and both cache reads here sat inside the same try as the GitHub fetch. One
+ * refused read therefore failed the whole index load - "Could not load the
+ * solution index" with a GitHub-token hint, about a store that is only an
+ * optimisation - or the whole connector fetch. The cache can make the page
+ * faster; it must never be what makes it fail. A failed read falls through to
+ * the content port, and is SAID (a warn log and an on-screen note), because a
+ * cache that silently stopped working is a slow page nobody can explain.
+ */
+describe("SolutionBrowser a refused cache read (DBT-159)", () => {
+  const NAME = "Palo Alto Cortex XDR";
+  const FILE: SolutionFileRef = {
+    name: "connector.json",
+    path: `Solutions/${NAME}/Data Connectors/connector.json`,
+    size: 10,
+  };
+  const PUSH_JSON = JSON.stringify({ kind: "Push", properties: { title: "x" } });
+
+  function harness() {
+    const listSolutions = vi.fn(async () => SOLUTIONS);
+    const listConnectorFiles = vi.fn(async () => [FILE]);
+    const content = {
+      async getCommitSha(): Promise<string | null> {
+        return "abcdef012345";
+      },
+      listSolutions,
+      listConnectorFiles,
+      readFile: async () => PUSH_JSON,
+    } as unknown as SentinelContent;
+    const contentCache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    };
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    render(
+      <PortsProvider
+        ports={{ content, contentCache, logger } as unknown as UiPorts}
+        config={CONFIG}
+      >
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+    return { listSolutions, listConnectorFiles, contentCache, logger };
+  }
+
+  const notes = () =>
+    [...document.querySelectorAll(".solution-browser-cache-note")].map(
+      (n) => n.textContent ?? "",
+    );
+
+  it("loads the index from GitHub instead of failing the load", async () => {
+    const h = harness();
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list .solution-browser-item")
+          .length,
+      ).toBe(SOLUTIONS.length);
+    });
+    expect(h.contentCache.get).toHaveBeenCalledTimes(1);
+    expect(h.listSolutions).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Could not load the solution index/)).toBeNull();
+    // Said, not swallowed: once in the log, once on the page, with the reason.
+    expect(h.logger.warn).toHaveBeenCalledTimes(1);
+    expect(notes()).toHaveLength(1);
+    expect(notes()[0]).toContain("KV read refused (403)");
+  });
+
+  it("fetches a selected solution's connectors instead of failing the card", async () => {
+    const h = harness();
+    await waitFor(() => {
+      expect(screen.getByText(NAME)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText(NAME));
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected .ingestion-badge")
+          ?.textContent,
+      ).toBe("Recommended");
+    });
+    expect(h.contentCache.get).toHaveBeenCalledTimes(2);
+    expect(h.listConnectorFiles).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Could not fetch this solution/)).toBeNull();
+    expect(h.logger.warn).toHaveBeenCalledTimes(2);
+    // ONE note however many reads were refused: it describes the cache, not
+    // each key, and two copies of one sentence read as two problems.
+    expect(notes()).toHaveLength(1);
+  });
+});
