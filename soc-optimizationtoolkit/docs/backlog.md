@@ -709,15 +709,17 @@ The port instead treats every per-scope list read as a verdict: read rows, a
 verified zero, or refused (http, transport, unexpected shape, too many pages).
 A refusal is UNKNOWN and counted, never "none".
 
-**Why the usecase has its own pager.** `listAllPages`
-(`packages/core/src/usecases/azure-discovery/azure-discovery.ts:155-161`)
-quietly skips a 2xx page whose `value` is missing or not an array, and returns
-only the concatenated items. Its caller cannot tell "zero rows" from "a body it
+**Why the usecase has its own pager.** When this was written, `listAllPages`
+(`packages/core/src/usecases/azure-discovery/azure-discovery.ts`) quietly
+skipped a 2xx page whose `value` is missing or not an array, and returned only
+the concatenated items. Its caller could not tell "zero rows" from "a body it
 did not understand". The map needs that distinction to mint a verified zero, so
 `packages/core/src/usecases/read-logging-map/arm-pager.ts` checks every page
-and refuses the whole list on a bad one. `listAllPages` is shared and was left
-unchanged; whether its other callers have the same blind spot is a separate
-question, not answered here.
+and refuses the whole list on a bad one. DBT-148 later made `listAllPages`
+throw on such a page, naming its URL, so its other callers no longer read it
+as zero. The pagers stay separate: the map needs a classified verdict rather
+than a throw, and `arm-pager` refuses a nextLink it cannot follow where
+`listAllPages` returns the first page alone.
 
 **What a verified zero rests on.** A per-scope ARM read (policyAssignments with
 `atScope()`, policyExemptions, roleAssignments) answers 403 when the caller

@@ -311,9 +311,51 @@ describe("listAllPages", () => {
     ).rejects.toThrow(/list resource groups \(page 2\): HTTP 500/);
   });
 
-  it("tolerates a body with no value array", async () => {
+  // DBT-148: a 2xx page without an array `value` is a body we did not
+  // understand, not zero items. It used to be read as [] and every caller
+  // then stated an unverified "none"; it now throws, naming the URL.
+  it("throws on a 2xx first page with no value array, naming the request path", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith({ status: 200, body: {} });
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },
+        "list subscriptions",
+      ),
+    ).rejects.toThrow("list subscriptions: HTTP 200 body from /subscriptions has no array 'value'");
+  });
+
+  it("throws on a 2xx first page whose value is not an array", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: { name: "rg-1" } } });
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: `/subscriptions/${SUB}/resourcegroups`, apiVersion: RESOURCE_GROUP_API_VERSION },
+        "list resource groups",
+      ),
+    ).rejects.toThrow(/has no array 'value'/);
+  });
+
+  it("throws on a 2xx follow-up page with no value array, naming the nextLink and dropping page 1", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [{ name: "rg-1" }], nextLink: NEXT } },
+      { status: 200, body: { nextLink: "" } },
+    );
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: `/subscriptions/${SUB}/resourcegroups`, apiVersion: RESOURCE_GROUP_API_VERSION },
+        "list resource groups",
+      ),
+    ).rejects.toThrow(`list resource groups (page 2): HTTP 200 body from ${NEXT} has no array 'value'`);
+  });
+
+  it("a 2xx page with value [] is still a completed read of zero items", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: [] } });
     const items = await listAllPages(
       azure,
       { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },

@@ -1,14 +1,15 @@
 /**
  * A VERDICT-RETURNING ARM pager for the Azure Logging Map (AZR-19).
  *
- * WHY NOT `listAllPages`. The shared pager in `../azure-discovery` returns
- * only the concatenated `value` items and silently skips a 2xx page whose body
- * has no array `value` (`collect` in azure-discovery.ts, the
- * `if (Array.isArray(value))` branch), so its caller cannot tell "zero rows"
- * from "a body we did not understand". The logging map mints a VERIFIED zero
- * from a completed per-scope read (`toListingFromRead` in
- * `domain/logging-map/list-read.ts`), so a misread body must be a refusal,
- * never zero rows. `listAllPages` is shared and is left unchanged.
+ * WHY NOT `listAllPages`. The shared pager in `../azure-discovery` THROWS on
+ * a bad page (non-2xx, or since DBT-148 a 2xx body with no array `value`) and
+ * otherwise returns only the concatenated `value` items. The logging map needs
+ * a VERDICT rather than a throw: it mints a verified zero from a completed
+ * per-scope read (`toListingFromRead` in `domain/logging-map/list-read.ts`)
+ * and must classify every failure (http / transport / unexpected-shape /
+ * too-many-pages) to count it as unknown, without try/catch at every scope.
+ * It also refuses a nextLink it cannot follow, where `listAllPages` returns
+ * the first page alone. The two pagers are deliberately kept separate.
  *
  * THE CONTRACT of {@link readAllPages}:
  * - every page is checked with is2xx; a non-2xx is refused `http`, carrying
