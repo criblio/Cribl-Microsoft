@@ -8,8 +8,8 @@
  * per-scope read (`toListingFromRead` in `domain/logging-map/list-read.ts`)
  * and must classify every failure (http / transport / unexpected-shape /
  * too-many-pages) to count it as unknown, without try/catch at every scope.
- * It also refuses a nextLink it cannot follow, where `listAllPages` returns
- * the first page alone. The two pagers are deliberately kept separate.
+ * Both refuse a nextLink they cannot follow (`listAllPages` throws since
+ * DBT-160). The two pagers are deliberately kept separate.
  *
  * THE CONTRACT of {@link readAllPages}:
  * - every page is checked with is2xx; a non-2xx is refused `http`, carrying
