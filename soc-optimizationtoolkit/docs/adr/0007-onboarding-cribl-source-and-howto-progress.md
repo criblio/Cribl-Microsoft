@@ -258,7 +258,9 @@ cribl-dataflow-diagram reference and from the Logging Map canvas.
 
 **The Logging Map now runs on the shared shell.** It uses the viewport, the
 popover and the info circle under its existing, unmodified pins. It does NOT
-use drag, so its recorded no-drag deviation (AZR-20) is unchanged. The
+use drag, so its recorded no-drag deviation (AZR-20) is unchanged. (Since
+2026-10-27 it does: the owner answered AZR-20 with the standard, and the map
+now uses the shell's card drag and Reset layout.) The
 onboarding diagram uses the whole shell with its own pure left-to-right
 column layout (`dataflow/lane-layout.ts`), one band per source. React Flow
 and the Dataflow screen are untouched; that screen's
@@ -364,8 +366,9 @@ None of these ran during the build:
    permission".
 7. **Blob**: Cribl accepts the backtick `queueName` expression, and a new
    flow-log blob lights the lane.
-8. **Logging Map regression**: zoom, fit, the (i) popovers and no-drag are
-   unchanged after the shell migration.
+8. **Logging Map regression**: zoom, fit and the (i) popovers are unchanged
+   after the shell migration, and (AZR-20) a card drags with its edges
+   following, a click still selects, and Reset layout restores the tree.
 
 AZR-30 to AZR-34 close only after this pass, with `verified` set to `live` or
 `both`.

@@ -2,8 +2,9 @@
 /**
  * Canvas pins for the Azure Logging Map (AZR-19): the house diagram
  * standard's interaction contract (sibling (i), keyboard select, scoped ids,
- * popover dismissal, no animation) and the approved mockup's NO-DRAG rule,
- * which deviates from that standard pending its decision card.
+ * popover dismissal, no animation) and its movable cards (AZR-20, which
+ * replaced the approved mockup's no-drag rule once the owner chose the
+ * standard).
  *
  * happy-dom cannot lay out or paint, so these pin structure and behaviour;
  * how it looks is the Live Preview check.
@@ -15,8 +16,9 @@ import { useState } from "react";
 import { normaliseScopeId, type ReadLoggingMapResult } from "@soc/core";
 
 import { LoggingMapCanvas } from "./logging-map-canvas";
+import { NODE_W } from "./logging-map-layout";
 import { initialState, loggingMapReducer, type LoggingMapUiState } from "./logging-map-state";
-import { MG_ALPHA, SUB_A, SUB_C, fixtureResult } from "./logging-map-test-fixture";
+import { MG_ALPHA, MG_BETA, SUB_A, SUB_C, fixtureResult } from "./logging-map-test-fixture";
 
 afterEach(cleanup);
 
@@ -156,25 +158,7 @@ describe("LoggingMapCanvas - configuration, not flow", () => {
     expect(container.querySelectorAll("[class*='anim'], [class*='pipe'], [class*='packet']").length).toBe(0);
   });
 
-  it("has no drag: pressing and moving 20px on a card moves neither the card nor the view", async () => {
-    // Pins the APPROVED MOCKUP (no drag) until the drag-vs-standard decision card is answered.
-    const result = await fixtureResult();
-    const { container } = render(<Harness result={result} />);
-    const card = cardEl(container, SUB_A);
-    const box = card.querySelector(".lm-card-box") as SVGRectElement;
-    const before = { x: box.getAttribute("x"), y: box.getAttribute("y") };
-    const viewport = container.querySelector("[data-lm-viewport]") as SVGGElement;
-    const viewBefore = viewport.getAttribute("transform");
-    fireEvent.pointerDown(card, { button: 0, buttons: 1, clientX: 100, clientY: 100, pointerId: 1 });
-    fireEvent.pointerMove(card, { button: 0, buttons: 1, clientX: 120, clientY: 100, pointerId: 1 });
-    fireEvent.pointerMove(card, { button: 0, buttons: 1, clientX: 120, clientY: 120, pointerId: 1 });
-    fireEvent.pointerUp(card, { button: 0, buttons: 0, clientX: 120, clientY: 120, pointerId: 1 });
-    const after = cardEl(container, SUB_A).querySelector(".lm-card-box") as SVGRectElement;
-    expect({ x: after.getAttribute("x"), y: after.getAttribute("y") }).toEqual(before);
-    expect(viewport.getAttribute("transform")).toBe(viewBefore);
-  });
-
-  it("the same gesture on the empty canvas does pan the view (so the pin above can fail)", async () => {
+  it("the same gesture on the empty canvas does pan the view (so the drag pins below can fail)", async () => {
     const result = await fixtureResult();
     const { container } = render(<Harness result={result} />);
     const canvas = container.querySelector(".lm-canvas") as HTMLElement;
@@ -183,6 +167,180 @@ describe("LoggingMapCanvas - configuration, not flow", () => {
     fireEvent.pointerDown(canvas, { button: 0, buttons: 1, clientX: 5, clientY: 5, pointerId: 1 });
     fireEvent.pointerMove(canvas, { button: 0, buttons: 1, clientX: 25, clientY: 25, pointerId: 1 });
     expect(viewport.getAttribute("transform")).not.toBe(viewBefore);
+  });
+});
+
+// AZR-20: the owner chose the house standard's "Movable cards" over the
+// mockup's no-drag. These replace the no-drag pin, inverted.
+describe("LoggingMapCanvas - movable cards (AZR-20)", () => {
+  const press = (el: Element, x: number, y: number) =>
+    fireEvent.pointerDown(el, { button: 0, buttons: 1, clientX: x, clientY: y, pointerId: 1 });
+  const move = (el: Element, x: number, y: number) =>
+    fireEvent.pointerMove(el, { button: 0, buttons: 1, clientX: x, clientY: y, pointerId: 1 });
+  const up = (el: Element, x: number, y: number) =>
+    fireEvent.pointerUp(el, { button: 0, buttons: 0, clientX: x, clientY: y, pointerId: 1 });
+
+  function boxOf(container: HTMLElement, scopeId: string) {
+    const rect = cardEl(container, scopeId).querySelector(".lm-card-box") as SVGRectElement;
+    return { x: Number(rect.getAttribute("x")), y: Number(rect.getAttribute("y")) };
+  }
+  function edgeDs(container: HTMLElement): string[] {
+    return [...container.querySelectorAll(".lm-edge")].map((p) => p.getAttribute("d") ?? "");
+  }
+  /** The edge into a card ends at the card's top middle (layout edgeAnchors). */
+  function edgeEndingAt(container: HTMLElement, box: { x: number; y: number }): string | undefined {
+    return edgeDs(container).find((d) => d.endsWith(` ${box.x + NODE_W / 2} ${box.y}`));
+  }
+  function zoomOf(container: HTMLElement): number {
+    const t = container.querySelector("[data-lm-viewport]")?.getAttribute("transform") ?? "";
+    return Number(/scale\(([^)]+)\)/.exec(t)?.[1]);
+  }
+
+  it("a drag past the threshold moves the card by the pointer delta over the zoom, its edge follows, and the view does not pan", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    // Zoom away from 1 first, so a drag that ignored the zoom would fail.
+    fireEvent.click(getByRole("button", { name: "Zoom in" }));
+    const card = cardEl(container, SUB_A);
+    const start = boxOf(container, SUB_A);
+    expect(edgeEndingAt(container, start)).toBeDefined();
+    const viewport = container.querySelector("[data-lm-viewport]") as SVGGElement;
+    const viewBefore = viewport.getAttribute("transform");
+    const k = zoomOf(container);
+    expect(k).toBeGreaterThan(0);
+    expect(Math.abs(k - 1)).toBeGreaterThan(0.05);
+
+    press(card, 100, 100);
+    move(card, 120, 100);
+    move(card, 120, 130);
+    up(card, 120, 130);
+
+    const moved = boxOf(container, SUB_A);
+    expect(moved.x).toBeCloseTo(start.x + 20 / k, 6);
+    expect(moved.y).toBeCloseTo(start.y + 30 / k, 6);
+    expect(edgeEndingAt(container, moved)).toBeDefined();
+    expect(edgeEndingAt(container, start)).toBeUndefined();
+    expect(viewport.getAttribute("transform")).toBe(viewBefore);
+  });
+
+  it("a press that moves less than the threshold is a click: it selects and moves nothing", async () => {
+    const result = await fixtureResult();
+    const { container } = render(<Harness result={result} initial={{ selectedScope: null }} />);
+    const card = cardEl(container, SUB_A);
+    const start = boxOf(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 102, 101);
+    up(card, 102, 101);
+    fireEvent.click(card);
+    expect(boxOf(container, SUB_A)).toEqual(start);
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("a drag keeps the same focused card element, swallows only its closing click, and every (i) stays keyboard-reachable", async () => {
+    const result = await fixtureResult();
+    const { container } = render(<Harness result={result} initial={{ selectedScope: null }} />);
+    const card = cardEl(container, SUB_A);
+    act(() => card.focus());
+    expect(document.activeElement).toBe(card);
+
+    press(card, 100, 100);
+    move(card, 140, 140);
+    up(card, 140, 140);
+    fireEvent.click(card);
+
+    // Same node, still focused, and the click that ended the drag did not select.
+    expect(cardEl(container, SUB_A)).toBe(card);
+    expect(document.activeElement).toBe(card);
+    expect(card.getAttribute("aria-pressed")).toBe("false");
+    // The keyboard path is untouched by the drag.
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+    const cards = container.querySelectorAll("[data-lm-card]");
+    const infos = container.querySelectorAll("[data-lm-info]");
+    expect(infos.length).toBe(cards.length);
+    for (const info of infos) {
+      expect(info.getAttribute("role")).toBe("button");
+      expect(info.getAttribute("tabindex")).toBe("0");
+    }
+    fireEvent.keyDown(infoOf(container, SUB_A), { key: "Enter" });
+    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Sub A");
+  });
+
+  it("Reset layout is disabled until a card moves, then restores the computed positions and edges", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    const reset = getByRole("button", { name: "Reset layout" }) as HTMLButtonElement;
+    expect(reset.disabled).toBe(true);
+    const start = boxOf(container, SUB_A);
+    const startC = boxOf(container, SUB_C);
+    const d0 = edgeDs(container);
+
+    const card = cardEl(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 160, 150);
+    up(card, 160, 150);
+    expect(boxOf(container, SUB_A)).not.toEqual(start);
+    expect(edgeDs(container)).not.toEqual(d0);
+    // Only the dragged card moved.
+    expect(boxOf(container, SUB_C)).toEqual(startC);
+    expect(reset.disabled).toBe(false);
+
+    fireEvent.click(reset);
+    expect(boxOf(container, SUB_A)).toEqual(start);
+    expect(edgeDs(container)).toEqual(d0);
+    expect(reset.disabled).toBe(true);
+  });
+
+  it("a new layout (expand, then collapse back) drops the moved positions: they were placed against the old tree", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    const reset = getByRole("button", { name: "Reset layout" }) as HTMLButtonElement;
+    const start = boxOf(container, SUB_A);
+    const d0 = edgeDs(container);
+    const card = cardEl(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 160, 150);
+    up(card, 160, 150);
+    expect(boxOf(container, SUB_A)).not.toEqual(start);
+
+    // Expand Beta through its count card (a fresh press, so the click is not
+    // the one that ended the drag), then collapse it again with its caret:
+    // the tree is back to the one SUB_A was computed in.
+    const count = container.querySelector(".lm-card-count") as SVGGElement;
+    press(count, 10, 10);
+    up(count, 10, 10);
+    fireEvent.click(count);
+    expect(container.querySelector(".lm-card-count")).toBeNull();
+    const caret = container.querySelector(`[data-lm-card-group="${normaliseScopeId(MG_BETA)}"] [data-lm-caret]`);
+    expect(caret).not.toBeNull();
+    fireEvent.click(caret as Element);
+    expect(container.querySelectorAll(".lm-card-count").length).toBe(1);
+
+    expect(boxOf(container, SUB_A)).toEqual(start);
+    expect(edgeDs(container)).toEqual(d0);
+    expect(reset.disabled).toBe(true);
+  });
+
+  it("Fit frames the cards where they are drawn, a moved card included", async () => {
+    const result = await fixtureResult();
+    const { container, getByRole } = render(<Harness result={result} />);
+    // happy-dom has no layout: give the canvas a size so Fit has something to fit into.
+    const canvas = container.querySelector(".lm-canvas") as HTMLElement;
+    Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 800 });
+    Object.defineProperty(canvas, "clientHeight", { configurable: true, value: 600 });
+    const viewport = container.querySelector("[data-lm-viewport]") as SVGGElement;
+    fireEvent.click(getByRole("button", { name: "Fit" }));
+    const fitted = viewport.getAttribute("transform");
+
+    const card = cardEl(container, SUB_A);
+    press(card, 100, 100);
+    move(card, 3100, 2100);
+    up(card, 3100, 2100);
+    // A drag never re-fits the view by itself.
+    expect(viewport.getAttribute("transform")).toBe(fitted);
+    fireEvent.click(getByRole("button", { name: "Fit" }));
+    // Fitting the computed layout instead would give the same transform as before the drag.
+    expect(viewport.getAttribute("transform")).not.toBe(fitted);
   });
 });
 

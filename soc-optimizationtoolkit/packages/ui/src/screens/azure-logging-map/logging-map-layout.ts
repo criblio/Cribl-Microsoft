@@ -11,11 +11,10 @@
  *   of the parent to top-mid of the child;
  * - a collapsed group is ONE count card (built by `diagramGraph` in
  *   logging-map-state.ts), not its hidden children;
- * - NO DRAG in phase 1: the approved mockup's interaction model has zoom, fit,
- *   collapse, outline and trace, and no drag. That deviates from the house
- *   standard (standards/cribl-dataflow-diagram.md, "Movable cards"), and the
- *   choice is a recorded decision card. {@link applyPositions} is kept as the
- *   ONE seam hand-placed positions would feed, so adding drag stays local.
+ * - no stage bands or sections, so a dragged card needs no corridor clamp;
+ *   {@link applyPositions} only keeps it off negative coordinates. It is the
+ *   ONE seam the canvas's card drag (AZR-20, the standard's "Movable cards")
+ *   feeds.
  */
 
 import Dagre from "@dagrejs/dagre";
@@ -175,8 +174,8 @@ export function edgeAnchors(from: LaidOutCard, to: LaidOutCard): { start: Point;
 export type NodePositions = Readonly<Record<string, Point>>;
 
 /**
- * The computed layout with hand-placed cards applied. THE SEAM drag would
- * feed (phase 1 has no drag - see the header). A moved card's edges drop
+ * The computed layout with hand-placed cards applied. THE SEAM the canvas's
+ * card drag feeds (see the header). A moved card's edges drop
  * dagre's waypoints and are re-drawn between the cards' anchors; positions
  * are clamped to the margin so nothing is drawn at negative coordinates;
  * ids not in the layout are ignored, so positions survive a re-read that

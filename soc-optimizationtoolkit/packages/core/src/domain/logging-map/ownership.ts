@@ -10,7 +10,9 @@
  *   AZR-19 card default).
  * - The toolkit writes no policy yet. {@link TOOLKIT_MARKER_KEY} is RESERVED:
  *   `metadata.criblSocToolkit = { version }` is what a future writer (AZR-4)
- *   must set, and the strongest evidence once it does.
+ *   must set, and the strongest evidence once it does. The How-to steps tell
+ *   an operator who creates an assignment by hand to set it too
+ *   (onboarding-howto-steps/policy-steps.ts, `version: "manual"`).
  * - The legacy PowerShell writer passed no `-Metadata` to any
  *   New-AzPolicyAssignment call (frozen copies in `./legacy/`), so its
  *   assignments are recognised by SHAPE: name family + definition + the scope
@@ -34,7 +36,7 @@
 import type { PolicyAssignment } from "./logging-map-types";
 import { isManagementGroupId, isSubscriptionId, normaliseScopeId } from "./scope-tree";
 
-/** The reserved metadata key a toolkit writer must set (ADR 0006, Proposed). */
+/** The reserved metadata key a toolkit writer must set (ADR 0006, Accepted 2026-10-27). */
 export const TOOLKIT_MARKER_KEY = "criblSocToolkit";
 
 /** The scope kinds an assignment can be set at. */

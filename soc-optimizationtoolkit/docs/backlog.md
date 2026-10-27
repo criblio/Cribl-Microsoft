@@ -682,8 +682,10 @@ byte-for-byte copy in `packages/core/src/domain/logging-map/legacy/`.
 **Ownership: `createdBy` is not usable.** Azure stamps `metadata.createdBy` on
 every assignment. The card's default ("ours = createdBy set by the toolkit") is
 replaced by a reserved key plus ranked legacy evidence; see
-`docs/adr/0006-policy-assignment-ownership-marker.md` (Proposed). The key is an
-open decision on AZR-19.
+`docs/adr/0006-policy-assignment-ownership-marker.md` (Accepted 2026-10-27).
+The owner chose the key `criblSocToolkit` (`metadata.criblSocToolkit =
+{ version }`) on AZR-19, and the How-to assignment steps tell an operator who
+creates an assignment by hand to set it, with `version: "manual"`.
 
 **Legacy defects deliberately NOT ported.** Each one turns a failed or
 truncated read into an answer that looks real:
@@ -764,10 +766,13 @@ where an assignment APPLIES, not whether resources comply. Compliance lags
 instead of reporting it. The legacy's own gap categories
 (`Analyze-ComplianceGaps.ps1:314-373`) are kept as reference data and not used.
 
-**Drag is not built, pending a decision.** The approved mockup has no drag; the
-house diagram standard requires movable cards and Reset layout. Phase 1 ships
-the mockup and the conflict is a decision card under AZR-F8. Background pan
-(dragging on the empty canvas) is built; only card drag is not.
+**Drag follows the standard (AZR-20, decided 2026-10-27).** The approved mockup
+had no drag; the house diagram standard requires movable cards and Reset
+layout, and the owner chose the standard. Every card drags on the shared
+`components/diagram` drag hook, its edges follow it through `applyPositions`,
+and Reset layout restores the computed tree. Positions are session-only, as
+the standard asks, and a collapse, fold or filter drops them. Background pan
+(dragging on the empty canvas) is unchanged.
 
 **Portal link for a management group is unverified.** The panel links every
 scope as `#resource<scopeId>/overview`. That is known for subscriptions; the

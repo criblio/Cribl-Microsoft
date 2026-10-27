@@ -4,12 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildAutomationPutRequest, expectedExportFor } from "../defender-export/defender-automation";
 import { ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
-import { LEGACY_WRITER } from "../logging-map/ownership";
+import { LEGACY_WRITER, TOOLKIT_MARKER_KEY, recogniseOwner } from "../logging-map/ownership";
 import { PLAN_VALUE_KEYS, isPlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
 import { ONBOARDING_SOURCES, isOnboardingSourceId } from "../onboarding-howto/sources";
 import { CHECK_KINDS } from "../onboarding-howto/check-kinds";
 import { CONNECTION_STRING_STAND_IN } from "./defender-steps";
-import { LEGACY_POLICY_NAMES } from "./policy-steps";
+import { LEGACY_POLICY_NAMES, MARKER_FILE, MARKER_ROW_LABEL } from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
 import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
 
@@ -196,6 +196,48 @@ describe("how-to step catalog", () => {
     ).toBe(true);
     const auditRows = renderStep(howToStep("policy-audit-assign")!, FULL).values;
     expect(auditRows.find((r) => r.label === "Initiative ID")?.value).toBe(LEGACY_WRITER.builtInSetIds.audit);
+  });
+
+  it("tells every hand-created policy assignment to carry metadata.criblSocToolkit, which the Logging Map reads as ours (ADR 0006)", () => {
+    const assigning = ALL_HOWTO_STEPS.filter((s) => s.cli.includes("az policy assignment create"));
+    // The Audit, community and Activity Log assignments: an empty list would pass vacuously.
+    expect(assigning.map((s) => s.id).sort()).toEqual(["activity-log-assign", "policy-audit-assign", "policy-community-assign"]);
+    for (const step of assigning) {
+      expect(step.cli, step.id).toContain(`--metadata @${MARKER_FILE}`);
+      expect(step.portal.join("\n"), step.id).toContain(`metadata.${TOOLKIT_MARKER_KEY}`);
+      expect(step.portal.join("\n"), step.id).toContain(`az policy assignment update --name`);
+      // The portal user's command must set the marker on THIS assignment, at
+      // the scope the step created it at: a sentence that merely names the key
+      // would satisfy the line above.
+      const rendered = renderStep(step, FULL);
+      const name = rendered.values.find((r) => r.label === "Assignment name")?.value;
+      const scope = /--scope (\S+)/.exec(rendered.cli)?.[1];
+      expect(name, step.id).toBeTruthy();
+      expect(scope, step.id).toBeTruthy();
+      expect(rendered.portal.join("\n"), step.id).toContain(
+        `az policy assignment update --name ${name} --scope ${scope} --metadata @${MARKER_FILE}`,
+      );
+      const row = rendered.values.find((r) => r.label === MARKER_ROW_LABEL);
+      expect(row, step.id).toBeDefined();
+      // Run the metadata through the recogniser on an assignment with NO legacy
+      // shape, so only the marker can make it ours.
+      const owner = recogniseOwner({
+        id: "/providers/Microsoft.Management/managementGroups/mg/providers/Microsoft.Authorization/policyAssignments/Hand-Made",
+        name: "Hand-Made",
+        displayName: "",
+        scope: "/providers/Microsoft.Management/managementGroups/mg",
+        policyDefinitionId: "/providers/Microsoft.Authorization/policyDefinitions/not-legacy",
+        definitionKind: "policy",
+        notScopes: [],
+        parameters: {},
+        metadata: JSON.parse(row!.value) as Record<string, unknown>,
+        identity: { type: "None", principalId: null, userAssigned: [] },
+        enforcementMode: "Default",
+        resourceSelectors: [],
+      });
+      expect(owner.owner, step.id).toBe("ours");
+      expect(owner.strength, step.id).toBe("toolkit-marker");
+    }
   });
 
   it("enables exactly the Standard categories for Entra Standard (and by default), without NonInteractiveUserSignInLogs", () => {

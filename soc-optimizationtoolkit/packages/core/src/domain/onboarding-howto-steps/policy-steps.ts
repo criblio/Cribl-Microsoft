@@ -19,7 +19,7 @@
 
 import { eventHubNamespacePath } from "../eventhub-arm/eventhub-arm";
 import { coverageItem } from "../coverage-model";
-import { LEGACY_WRITER } from "../logging-map/ownership";
+import { LEGACY_WRITER, TOOLKIT_MARKER_KEY } from "../logging-map/ownership";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 import { planRuleId } from "./eventhub-steps";
 import type { HowToStep } from "./steps";
@@ -85,6 +85,41 @@ export function policyAssignmentParameters(v: PlanValues): string {
     2,
   );
 }
+
+/**
+ * The ownership marker a HAND-CREATED assignment carries (ADR 0006,
+ * Accepted 2026-10-27): `metadata.criblSocToolkit = { version }`. The Logging
+ * Map reads it as the strongest evidence that an assignment is ours, ahead of
+ * the legacy name/definition/scope shape. "manual" says no toolkit release
+ * wrote it, which is the truth for an assignment made from these steps.
+ */
+export const MANUAL_MARKER_VERSION = "manual";
+/** The file the CLI reads the marker metadata from. */
+export const MARKER_FILE = "marker-metadata.json";
+/** The values row carrying the marker metadata. */
+export const MARKER_ROW_LABEL = "Assignment metadata";
+
+/** The marker metadata, as the JSON an operator saves to {@link MARKER_FILE}. */
+export function markerMetadata(): string {
+  return JSON.stringify({ [TOOLKIT_MARKER_KEY]: { version: MANUAL_MARKER_VERSION } }, null, 2);
+}
+
+/**
+ * The portal line that tells an operator to mark an assignment they created
+ * by hand. The portal's assignment form has no metadata field, so the marker
+ * is added with the CLI once the assignment exists.
+ */
+export function markerPortalLine(assignment: string): string {
+  return (
+    `Mark it as the toolkit's: the portal's assignment form has no metadata field, so once ${assignment} exists run ` +
+    `az policy assignment update --name ${assignment} --scope ${managementGroupScope("{{managementGroupId}}")} --metadata @${MARKER_FILE}` +
+    ` with the assignment metadata below saved as ${MARKER_FILE}. Without metadata.${TOOLKIT_MARKER_KEY} the Azure Logging Map can recognise it only by its name and shape.`
+  );
+}
+
+/** The CLI flag and note that set the marker at creation. */
+export const MARKER_CLI = `--metadata @${MARKER_FILE}`;
+export const MARKER_CLI_NOTE = `# ${MARKER_FILE} holds the assignment metadata below (metadata.${TOOLKIT_MARKER_KEY}), so the Azure Logging Map recognises the assignment as the toolkit's.`;
 
 /** A plan namespace path written with placeholders, for CLI templates. */
 const NS_TEMPLATE = eventHubNamespacePath({
@@ -201,14 +236,16 @@ export const POLICY_STEPS: readonly HowToStep[] = [
       `Assign it at the management group {{managementGroupId}}. Assignment name: ${AUDIT}.`,
       PARAMS_NOTE,
       `Remediation: choose the user-assigned identity ${LEGACY_WRITER.identityName} and location {{region}}.`,
+      markerPortalLine(AUDIT),
     ],
-    cli: `az policy assignment create --name ${AUDIT} --scope ${MG_TEMPLATE} --policy-set-definition ${LEGACY_WRITER.builtInSetIds.audit} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @audit-params.json\n# audit-params.json holds the assignment parameters below; drop any the initiative does not declare. The rule is {{sendRule}} in {{namespace}}.`,
+    cli: `az policy assignment create --name ${AUDIT} --scope ${MG_TEMPLATE} --policy-set-definition ${LEGACY_WRITER.builtInSetIds.audit} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @audit-params.json ${MARKER_CLI}\n# audit-params.json holds the assignment parameters below; drop any the initiative does not declare. The rule is {{sendRule}} in {{namespace}}.\n${MARKER_CLI_NOTE}`,
     values: (v) => [
       { label: "Assignment name", value: AUDIT },
       { label: "Assignment ID", value: assignmentId(v.managementGroupId, AUDIT) },
       { label: "Initiative ID", value: LEGACY_WRITER.builtInSetIds.audit },
       { label: "Identity", value: policyIdentityId(v) },
       { label: "Assignment parameters", value: policyAssignmentParameters(v) },
+      { label: MARKER_ROW_LABEL, value: markerMetadata() },
     ],
     rbac: ["Microsoft.Authorization/policyAssignments/write at the management group (Resource Policy Contributor includes it)."],
     confirmHow: `Policy, Assignments shows ${AUDIT} at {{managementGroupId}} with the identity attached.`,
@@ -268,13 +305,15 @@ export const POLICY_STEPS: readonly HowToStep[] = [
       `In Policy, Definitions, open ${LEGACY_WRITER.communitySetName} and select Assign, at the management group {{managementGroupId}}. Assignment name: ${COMMUNITY}.`,
       PARAMS_NOTE,
       `Remediation: choose the user-assigned identity ${LEGACY_WRITER.identityName} and location {{region}}.`,
+      markerPortalLine(COMMUNITY),
     ],
-    cli: `az policy assignment create --name ${COMMUNITY} --scope ${MG_TEMPLATE} --policy-set-definition ${managementGroupScope("{{managementGroupId}}")}/providers/Microsoft.Authorization/policySetDefinitions/${LEGACY_WRITER.communitySetName} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @community-params.json\n# community-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}}.`,
+    cli: `az policy assignment create --name ${COMMUNITY} --scope ${MG_TEMPLATE} --policy-set-definition ${managementGroupScope("{{managementGroupId}}")}/providers/Microsoft.Authorization/policySetDefinitions/${LEGACY_WRITER.communitySetName} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @community-params.json ${MARKER_CLI}\n# community-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}}.\n${MARKER_CLI_NOTE}`,
     values: (v) => [
       { label: "Assignment name", value: COMMUNITY },
       { label: "Assignment ID", value: assignmentId(v.managementGroupId, COMMUNITY) },
       { label: "Identity", value: policyIdentityId(v) },
       { label: "Assignment parameters", value: policyAssignmentParameters(v) },
+      { label: MARKER_ROW_LABEL, value: markerMetadata() },
     ],
     rbac: ["Microsoft.Authorization/policyAssignments/write at the management group (Resource Policy Contributor includes it)."],
     confirmHow: `Policy, Assignments shows ${COMMUNITY} at {{managementGroupId}} with the identity attached.`,
