@@ -8,13 +8,12 @@
 //   GET 403, 5xx, any other non-ok, timeout,
 //   transport error                              -> unknown
 //
-// 403 is the line that matters. PlatformSecretsStore and KvContentCache read a
-// 403 as absent - correct for an encrypted secret, which is write-only - and
-// that is exactly the branch this adapter must NOT copy: an operator's saved
-// selection that the bridge refused to read would otherwise decode as "no
-// selection", and the next Save would replace it with the defaults. Changing
-// those two adapters is a separate board card; this one sidesteps the defect
-// for the documents that go through it.
+// 403 is the line that matters. PlatformSecretsStore and KvContentCache read
+// the encrypted-value 403 as absent - correct for an encrypted secret, which
+// is write-only - and reject any other 403 (DBT-145). This adapter copies
+// neither: no document is ever written encrypted, so any 403 here is a refused
+// read, and an operator's saved selection that decoded as "no selection"
+// would be replaced with the defaults by the next Save.
 //
 // Writes follow claude-kit standards/cribl-kv-store.md: PUT with
 // Content-Type text/plain and a JSON.stringify body (an application/json body
