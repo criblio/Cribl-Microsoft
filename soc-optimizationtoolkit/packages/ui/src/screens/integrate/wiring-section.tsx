@@ -202,7 +202,8 @@ export function WiringSection({
         Cribl. Create-or-update: it creates the secret, or updates it if it
         already exists. The value is transient - written once to Cribl, never
         kept by this app. Leave the deploy&apos;s destination on the placeholder
-        and provision it here, or bake it into the destination at deploy time -
+        and provision it here. A secret given at deploy time goes into a
+        per-destination Cribl secret instead, never into the destination -
         either way this is the one place the named secret is set.
       </p>
       <label className="field">

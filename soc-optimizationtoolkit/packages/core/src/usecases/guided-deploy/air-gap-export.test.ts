@@ -20,16 +20,21 @@ const ARM_REQUEST: CollectedArmRequest = {
   body: { location: "eastus", properties: { dataFlows: [] } },
 };
 
-const DESTINATION = buildSentinelDestination({
-  id: "MS-Sentinel-CommonSecurityLog-dest",
-  dcrImmutableId: "dcr-abc123",
-  ingestionEndpoint: "https://dce-x.eastus-1.ingest.monitor.azure.com",
-  streamName: "Custom-CommonSecurityLog",
-  tenantId: "11111111-2222-3333-4444-555555555555",
-  ingestionClientId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  // A REAL secret is supplied here to prove the exporter FORCES the placeholder.
-  ingestionClientSecret: "real-transient-secret",
-});
+// A REAL secret is set here to prove the exporter FORCES the placeholder.
+// DBT-155 removed the builder's value input (it now takes only a secret id),
+// so the value is put on the built config directly - the same body shape the
+// exporter must still scrub.
+const DESTINATION = {
+  ...buildSentinelDestination({
+    id: "MS-Sentinel-CommonSecurityLog-dest",
+    dcrImmutableId: "dcr-abc123",
+    ingestionEndpoint: "https://dce-x.eastus-1.ingest.monitor.azure.com",
+    streamName: "Custom-CommonSecurityLog",
+    tenantId: "11111111-2222-3333-4444-555555555555",
+    ingestionClientId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  }),
+  secret: "real-transient-secret",
+};
 
 function fileByPath(entries: ParsedTarEntry[], path: string): ParsedTarEntry | undefined {
   return entries.find((entry) => entry.path === path && !entry.isDir);

@@ -139,6 +139,12 @@ describe("finalizeFlowLogPack", () => {
     expect(outcome.commitVersion).toBe("abc123");
     expect(outcome.deployed).toBe(true);
     expect(cribl.calls[0].path).toBe("/system/secrets");
+    // DBT-151: RestSecret requires `secretType`; `type` is not its field.
+    expect(cribl.calls[0].body).toEqual({
+      id: "Azure_vNet_Flowlogs_Secret",
+      secretType: "text",
+      value: "transient-secret",
+    });
     expect(cribl.calls[2].path).toBe("/master/groups/default/deploy");
   });
 
@@ -155,6 +161,12 @@ describe("finalizeFlowLogPack", () => {
       clientSecret: "transient-secret",
     });
     expect(outcome.secret).toBe("updated");
+    expect(cribl.calls[1].method).toBe("PATCH");
+    expect(cribl.calls[1].body).toEqual({
+      id: "Azure_vNet_Flowlogs_Secret",
+      secretType: "text",
+      value: "transient-secret",
+    });
   });
 
   it("skips the secret without a value and reports commit errors nonfatally", async () => {

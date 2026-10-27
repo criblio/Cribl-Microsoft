@@ -10,6 +10,7 @@ import type { OnboardTableInput, OnboardTableOutcome } from "./onboard-table";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import { FakeJobStore } from "../../testing/fake-job-store";
+import { FakeLogger } from "../../testing/fake-logger";
 import type { JobRecord, JobStep, JobStore } from "../../ports/job-store";
 
 const WORKSPACE_ID =
@@ -138,10 +139,22 @@ describe("onboardTable happy path", () => {
       { status: 200, body: DCR_SUCCEEDED_BODY },
     );
     ports.cribl.respondWith(
+      // DBT-155: the secret POST, before the destination POST.
+      { status: 200, body: { items: [{ id: "MS_Sentinel_SecurityEvent_dest_secret" }] } },
       { status: 201, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
       { status: 200, body: { items: [{ commit: "abc123" }] } },
       { status: 200, body: { items: [{ id: "default" }] } },
-      { status: 200, body: { items: [{ id: "MS-Sentinel-SecurityEvent-dest" }] } },
+      {
+        status: 200,
+        body: {
+          items: [
+            {
+              id: "MS-Sentinel-SecurityEvent-dest",
+              secret: "!{MS_Sentinel_SecurityEvent_dest_secret}",
+            },
+          ],
+        },
+      },
     );
 
     const progress: string[] = [];
@@ -217,12 +230,24 @@ describe("onboardTable happy path", () => {
     ).toEqual([
       // The destination collision/reuse scan (2026-07-12) lists first.
       "GET /system/outputs [default]",
+      // DBT-155: the client secret becomes a Cribl secret first.
+      "POST /system/secrets [default]",
       "POST /system/outputs [default]",
       "POST /version/commit [default]",
       "PATCH /master/groups/default/deploy [leader]",
       "GET /system/outputs/MS-Sentinel-SecurityEvent-dest [default]",
     ]);
-    const destinationBody = ports.cribl.calls[1]!.body as {
+    // DBT-155: secretType (DBT-151), the stamped description, and the value -
+    // in this body and NO other.
+    expect(ports.cribl.calls[1]!.body).toEqual({
+      id: "MS_Sentinel_SecurityEvent_dest_secret",
+      secretType: "text",
+      value: "live-secret",
+      description:
+        "Client secret for Sentinel destination MS-Sentinel-SecurityEvent-dest " +
+        "[managed-by:soc-optimizationtoolkit]",
+    });
+    const destinationBody = ports.cribl.calls[2]!.body as {
       id: string;
       secret: string;
       client_id: string;
@@ -230,13 +255,27 @@ describe("onboardTable happy path", () => {
       streamName: string;
     };
     expect(destinationBody.id).toBe("MS-Sentinel-SecurityEvent-dest");
-    expect(destinationBody.secret).toBe("live-secret");
+    // DBT-155: this pin used to expect "live-secret" - the defect. The
+    // destination now carries the secret's reference.
+    expect(destinationBody.secret).toBe("!{MS_Sentinel_SecurityEvent_dest_secret}");
     expect(destinationBody.client_id).toBe(
       "'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'",
     );
     expect(destinationBody.dcrID).toBe(IMMUTABLE_ID);
     expect(destinationBody.streamName).toBe("Custom-SecurityEvent");
-    expect(ports.cribl.calls[3]!.body).toEqual({ version: "abc123" });
+    expect(ports.cribl.calls[4]!.body).toEqual({ version: "abc123" });
+    const withValue = ports.cribl.calls.filter((call) =>
+      JSON.stringify(call.body ?? null).includes("live-secret"),
+    );
+    expect(withValue.map((call) => `${call.method} ${call.path}`)).toEqual([
+      "POST /system/secrets",
+    ]);
+    // A destination that references its secret is not flagged.
+    expect(stepByName(job.steps, "verify").detail).toBeUndefined();
+    expect(stepByName(job.steps, "create-cribl-destination").detail).toBe(
+      "MS-Sentinel-SecurityEvent-dest (client secret in Cribl secret " +
+        "MS_Sentinel_SecurityEvent_dest_secret)",
+    );
 
     // The persisted job input never carries the secret value.
     expect(JSON.stringify(job.input)).not.toContain("live-secret");
@@ -549,6 +588,126 @@ describe("collision + reuse scans (user direction 2026-07-12)", () => {
     );
     const outcome = job.result as { destinationId: string };
     expect(outcome.destinationId).toBe("MS-Sentinel-SecurityEvent-dest-2");
+  });
+});
+
+describe("client secret as a Cribl secret (DBT-155)", () => {
+  function scriptAzureThroughVerify(ports: ReturnType<typeof makePorts>): void {
+    ports.azure.respondWith(
+      WORKSPACE_RESPONSE,
+      TABLE_SCHEMA_RESPONSE,
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+      { status: 200, body: DCR_SUCCEEDED_BODY },
+    );
+  }
+
+  it("refuses on a 409 from the secret create: no PATCH, no destination", async () => {
+    const ports = makePorts();
+    scriptAzureThroughVerify(ports);
+    ports.cribl.respondWith({ status: 409, body: { message: "exists" } });
+
+    const job = await onboardTable(ports, {
+      ...baseInput(),
+      ingestionClientSecret: "live-secret",
+    });
+
+    expect(job.status).toBe("failed");
+    const step = stepByName(job.steps, "create-cribl-destination");
+    expect(step.status).toBe("failed");
+    expect(step.detail).toContain("MS_Sentinel_SecurityEvent_dest_secret");
+    expect(step.detail).toContain("does not overwrite a secret");
+    expect(
+      ports.cribl.calls.map((call) => `${call.method} ${call.path}`),
+    ).toEqual(["GET /system/outputs", "POST /system/secrets"]);
+    expect(JSON.stringify(job)).not.toContain("live-secret");
+  });
+
+  it("never echoes the value when the secret create fails", async () => {
+    const ports = makePorts();
+    scriptAzureThroughVerify(ports);
+    ports.cribl.respondWith({
+      status: 400,
+      body: { message: "bad value live-secret" },
+    });
+
+    const job = await onboardTable(ports, {
+      ...baseInput(),
+      ingestionClientSecret: "live-secret",
+    });
+
+    expect(job.status).toBe("failed");
+    expect(stepByName(job.steps, "create-cribl-destination").detail).toContain(
+      "HTTP 400",
+    );
+    expect(JSON.stringify(job)).not.toContain("live-secret");
+  });
+
+  it("never echoes a value that the error text JSON-escapes", async () => {
+    // httpErrorText JSON-encodes the body, so an echoed `"` or `\` arrives
+    // escaped; redacting only the raw value would let this one through.
+    const value = 'live"se\\cret';
+    const ports = makePorts();
+    scriptAzureThroughVerify(ports);
+    ports.cribl.respondWith({
+      status: 400,
+      body: { message: `bad value ${value}` },
+    });
+
+    const job = await onboardTable(ports, {
+      ...baseInput(),
+      ingestionClientSecret: value,
+    });
+
+    expect(job.status).toBe("failed");
+    const detail = stepByName(job.steps, "create-cribl-destination").detail ?? "";
+    expect(detail).toContain("bad value <redacted>");
+    expect(detail).not.toContain(JSON.stringify(value).slice(1, -1));
+    expect(detail).not.toContain(value);
+  });
+
+  it("FLAGS a destination that embeds its secret on verify, and changes nothing", async () => {
+    // A destination created before the fix, reused because it already
+    // points at this DCR: the default taken on the card is detect, never
+    // migrate.
+    const ports = {
+      ...makePorts(),
+      logger: new FakeLogger(() => "2026-10-27T10:00:00.000Z"),
+    };
+    ports.cribl.outputsList = [
+      {
+        id: "MS-Sentinel-SecurityEvent-dest",
+        url: `https://x.ingest.monitor.azure.com/dataCollectionRules/${IMMUTABLE_ID}/streams/Custom-SecurityEvent`,
+      },
+    ];
+    scriptAzureThroughVerify(ports);
+    ports.cribl.respondWith(
+      { status: 200, body: { items: [{ commit: "abc123" }] } },
+      { status: 200, body: { items: [{ id: "default" }] } },
+      {
+        status: 200,
+        body: {
+          items: [{ id: "MS-Sentinel-SecurityEvent-dest", secret: "old-clear-secret" }],
+        },
+      },
+    );
+
+    const job = await onboardTable(ports, baseInput());
+
+    expect(job.status).toBe("succeeded");
+    const verify = stepByName(job.steps, "verify");
+    expect(verify.status).toBe("succeeded");
+    expect(verify.detail).toContain("WARNING");
+    expect(verify.detail).toContain("MS-Sentinel-SecurityEvent-dest");
+    expect(verify.detail).not.toContain("old-clear-secret");
+    expect(ports.logger.messagesAt("warn")).toEqual([
+      "onboard-table: destination embeds its client secret",
+    ]);
+    // Detection only: nothing was written to the destination or a secret.
+    expect(
+      ports.cribl.calls
+        .filter((call) => call.method !== "GET")
+        .map((call) => `${call.method} ${call.path}`),
+    ).toEqual(["POST /version/commit", "PATCH /master/groups/default/deploy"]);
   });
 });
 

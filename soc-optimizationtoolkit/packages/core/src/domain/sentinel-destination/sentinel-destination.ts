@@ -18,14 +18,16 @@
  *     single quotes to make it a string constant), the composed `url`, and
  *     the "<replace me>" secret placeholder.
  *
- * SECRET HANDLING - READ THIS: `ingestionClientSecret` is TRANSIENT input.
- * The platform's encrypted KV entries are WRITE-ONLY (GET returns 403
- * "Cannot read encrypted value"), so the app can NEVER read a stored secret
- * back to inject it here. The caller either passes the secret through from
- * live user input in the same interaction, or omits it and ships the
- * "<replace me>" placeholder for the operator to fill in inside Cribl Stream
- * (exactly what the legacy generator does). Never persist the real secret in
- * job records, artifacts, or logs.
+ * SECRET HANDLING - READ THIS: the client secret VALUE never enters this
+ * builder (DBT-155). A destination body is stored in the group's outputs.yml
+ * and its version history, readable by anyone who can read the config, so
+ * the builder takes only the id of a Cribl text secret
+ * ({@link SentinelDestinationInput.clientSecretId}) and writes its reference,
+ * `!{id}` - the same grammar as the pack's outputs.yml (pack-assembly
+ * CRIBL_SECRET_REFERENCE). The caller creates that secret first, through
+ * POST /system/secrets. With no id the config ships the "<replace me>"
+ * placeholder for the operator to fill in inside Cribl Stream (exactly what
+ * the legacy generator does).
  *
  * Pure: no IO, no fetch, no React, no Date/Math.random/crypto.
  */
@@ -102,11 +104,13 @@ export interface SentinelDestinationInput {
   /** App-registration client id used for ingestion (emitted single-quoted). */
   ingestionClientId: string;
   /**
-   * TRANSIENT client secret - see the module doc. When absent or empty the
-   * config ships {@link SENTINEL_SECRET_PLACEHOLDER} and the operator pastes
-   * the real secret into Cribl Stream manually.
+   * The id of the Cribl text secret holding the client secret, never the
+   * secret itself - see the module doc. The config carries its reference
+   * (`!{id}`). When absent or empty the config ships
+   * {@link SENTINEL_SECRET_PLACEHOLDER} and the operator pastes the real
+   * secret into Cribl Stream manually.
    */
-  ingestionClientSecret?: string | null;
+  clientSecretId?: string | null;
 }
 
 /**
@@ -145,6 +149,57 @@ export interface SentinelDestinationConfig {
   secret: string;
   loginUrl: string;
   url: string;
+}
+
+/** Upper bound on a generated secret id; the same cap as the onboarding ids. */
+export const SENTINEL_SECRET_ID_MAX = 64;
+
+/**
+ * The Cribl text secret a deployed Sentinel destination references (DBT-155):
+ * `{destinationId}_secret` with every non-alphanumeric mapped to `_`, the id
+ * truncated so the whole stays within {@link SENTINEL_SECRET_ID_MAX}. One per
+ * destination, not one shared name, because the write is create-only: a
+ * second destination never meets the first one's secret, so a 409 always
+ * means something this write did not just make.
+ */
+export function sentinelClientSecretId(destinationId: string): string {
+  const suffix = "_secret";
+  const base = destinationId.replace(/[^a-zA-Z0-9]/g, "_");
+  return `${base.slice(0, SENTINEL_SECRET_ID_MAX - suffix.length)}${suffix}`;
+}
+
+/** The reference a destination field carries for a Cribl secret: `!{id}`. */
+export function criblSecretReference(secretId: string): string {
+  return `!{${secretId}}`;
+}
+
+/**
+ * Whether a destination as Cribl returns it (GET /system/outputs/:id: an
+ * `{items: [...]}` envelope, or the bare object) embeds its client secret
+ * instead of referencing one (DBT-155). Embedded means `secret` is a
+ * non-empty string that is neither a `!{...}` reference nor the placeholder:
+ * whatever form Cribl shows the stored value in, it lives in the config, not
+ * in a secret.
+ *
+ * Detection only. The app never migrates such a destination; moving the value
+ * into a secret is the operator's action. A body this cannot read answers
+ * false - it is no evidence either way.
+ */
+export function destinationEmbedsSecret(body: unknown): boolean {
+  let record: unknown = body;
+  if (typeof body === "object" && body !== null && !Array.isArray(body)) {
+    const items = (body as Record<string, unknown>)["items"];
+    if (Array.isArray(items)) record = items[0];
+  }
+  if (typeof record !== "object" || record === null) return false;
+  const secret = (record as Record<string, unknown>)["secret"];
+  if (typeof secret !== "string") return false;
+  const trimmed = secret.trim();
+  return (
+    trimmed !== "" &&
+    trimmed !== SENTINEL_SECRET_PLACEHOLDER &&
+    !/^!\{[^}]+\}$/.test(trimmed)
+  );
 }
 
 /** Error thrown when a required input field is missing or blank. */
@@ -201,8 +256,8 @@ export function buildSentinelDestination(
   );
 
   const secret =
-    input.ingestionClientSecret != null && input.ingestionClientSecret !== ""
-      ? input.ingestionClientSecret
+    input.clientSecretId != null && input.clientSecretId !== ""
+      ? criblSecretReference(input.clientSecretId)
       : SENTINEL_SECRET_PLACEHOLDER;
 
   const host = endpointHost(ingestionEndpoint);

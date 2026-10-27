@@ -192,6 +192,8 @@ policies:
     actions: ['GET', 'PUT']
   # Unit 20 ensure-secret (connected path): create the named text secret
   # sentinel_client_secret the Sentinel destination references. POST only.
+  # Also onboard-table (DBT-155): the per-destination client secret the
+  # deployed destination references, created once and never PATCHed.
   - object: '/m/:gid/system/secrets'
     actions: ['POST']
   # Unit 20 ensure-secret update on a 409 (create-or-update): PATCH the existing

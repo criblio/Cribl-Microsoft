@@ -44,7 +44,9 @@
  *                              until provisioningState Succeeded or
  *                              maxDcrPollAttempts is exhausted; parse
  *                              immutableId + logsIngestion endpoint
- *   6 create-cribl-destination POST /system/outputs in groupId context with
+ *   6 create-cribl-destination POST /system/secrets (only when a client
+ *                              secret was given; create-only), then POST
+ *                              /system/outputs in groupId context with
  *                              buildSentinelDestination
  *   7 commit-and-deploy        POST /version/commit (group) then PATCH
  *                              /master/groups/{groupId}/deploy (leader).
@@ -62,9 +64,14 @@
  *
  * SECRET HANDLING: ingestionClientSecret is TRANSIENT input (the platform's
  * encrypted KV is write-only, so a stored secret can never be read back).
- * It is passed through to buildSentinelDestination or defaulted to the
- * "<replace me>" placeholder; the persisted job input only records WHETHER a
- * secret was provided, never its value.
+ * DBT-155: step 6 writes it to a Cribl text secret of its own
+ * (sentinelClientSecretId, POST /system/secrets, CREATE-ONLY: a 409 fails the
+ * step and nothing is ever PATCHed), and the destination body carries only
+ * the `!{id}` reference - the secret POST is the one body holding the value.
+ * Without a secret the destination ships the "<replace me>" placeholder. The
+ * persisted job input only records WHETHER a secret was provided, never its
+ * value. Step 8 FLAGS a destination that embeds a secret (one created before
+ * this, or by hand) on the verify step detail; it never migrates it.
  */
 
 import type { AzureManagement } from "../../ports/azure-management";
@@ -86,8 +93,11 @@ import {
 import {
   buildSentinelDestination,
   defaultSentinelDestinationId,
+  destinationEmbedsSecret,
   parseOutputListing,
+  sentinelClientSecretId,
 } from "../../domain/sentinel-destination";
+import { buildSecretBody } from "../../domain/cribl-onboarding-source/input-bodies";
 import {
   DEFAULT_CUSTOM_TABLE_RETENTION_DAYS,
   isCustomTableName,
@@ -227,7 +237,9 @@ export interface OnboardTableInput {
   ingestionClientId: string;
   /**
    * TRANSIENT client secret - never persisted (write-only KV; see module
-   * doc). Absent means the destination ships the "<replace me>" placeholder.
+   * doc). Written once, into a Cribl text secret the destination references
+   * (DBT-155). Absent means the destination ships the "<replace me>"
+   * placeholder.
    */
   ingestionClientSecret?: string;
   /** Cribl output id; defaults to the legacy "MS-Sentinel-{table}-dest". */
@@ -935,7 +947,50 @@ export async function onboardTable(
       // Listing is a safety net, never a gate.
     }
 
+    let clientSecretId: string | null = null;
     if (!reuseDestination) {
+      // DBT-155: the value goes into a Cribl text secret, and ONLY there; the
+      // destination carries its reference. Create-only, as AZR-34's
+      // apply-cribl-source: a 409 is a secret this write did not make (or an
+      // earlier attempt left), and overwriting it is not this app's call.
+      const secretValue = input.ingestionClientSecret ?? "";
+      if (secretValue !== "") {
+        clientSecretId = sentinelClientSecretId(destinationId);
+        const secretResponse = await cribl.request({
+          method: "POST",
+          path: "/system/secrets",
+          groupId: input.groupId,
+          body: buildSecretBody({
+            id: clientSecretId,
+            value: secretValue,
+            description: `Client secret for Sentinel destination ${destinationId}`,
+          }),
+        });
+        if (secretResponse.status === 409) {
+          throw new StepFailure(
+            `Cribl secret '${clientSecretId}' already exists; this app does not ` +
+              "overwrite a secret. Remove it in Cribl, then deploy again.",
+          );
+        }
+        if (!is2xx(secretResponse.status)) {
+          // An error body could echo the request; the value never leaves here.
+          // httpErrorText JSON-encodes the body, so a value holding `"` or `\`
+          // appears escaped there: redact that form as well as the raw one.
+          const escapedValue = JSON.stringify(secretValue).slice(1, -1);
+          throw new StepFailure(
+            httpErrorText(
+              `create Cribl secret '${clientSecretId}'`,
+              secretResponse.status,
+              secretResponse.body,
+            )
+              .split(escapedValue)
+              .join("<redacted>")
+              .split(secretValue)
+              .join("<redacted>"),
+          );
+        }
+      }
+
       const destination = buildSentinelDestination({
         id: destinationId,
         dcrImmutableId: deployment.immutableId,
@@ -943,7 +998,7 @@ export async function onboardTable(
         streamName: dcrRequest.streamName,
         tenantId: input.tenantId,
         ingestionClientId: input.ingestionClientId,
-        ingestionClientSecret: input.ingestionClientSecret,
+        clientSecretId,
       });
 
       const createResponse = await cribl.request({
@@ -958,7 +1013,10 @@ export async function onboardTable(
             `create Cribl destination '${destinationId}'`,
             createResponse.status,
             createResponse.body,
-          ),
+          ) +
+            (clientSecretId === null
+              ? ""
+              : ` (Cribl secret '${clientSecretId}' was created and is left in place)`),
         );
       }
     }
@@ -967,7 +1025,9 @@ export async function onboardTable(
       "succeeded",
       reuseDestination
         ? `${destinationId} (already points at this DCR - reusing)`
-        : destinationId,
+        : clientSecretId === null
+          ? destinationId
+          : `${destinationId} (client secret in Cribl secret ${clientSecretId})`,
     );
 
     // ---- Step 7: commit-and-deploy (REPORTED BUT NONFATAL) -----------
@@ -1071,7 +1131,27 @@ export async function onboardTable(
         ),
       );
     }
-    await setStep(currentStep, "succeeded");
+    // DBT-155 (default taken on the card): a destination that embeds its
+    // client secret - one created before the fix, or edited by hand - is
+    // FLAGGED, never migrated. Moving the value into a secret is the
+    // operator's action.
+    if (destinationEmbedsSecret(verifyOutput.body)) {
+      logger?.warn(
+        "onboard-table: destination embeds its client secret",
+        { table: input.table, destinationId, groupId: input.groupId },
+        job.id,
+      );
+      await setStep(
+        currentStep,
+        "succeeded",
+        `WARNING: destination '${destinationId}' carries its client secret in ` +
+          "its own config, readable by anyone who can read the group's " +
+          "outputs. Move it into a Cribl secret and reference it; this app " +
+          "does not change an existing destination.",
+      );
+    } else {
+      await setStep(currentStep, "succeeded");
+    }
 
     const outcome: OnboardTableOutcome = {
       dcrName,

@@ -27,6 +27,9 @@ describe("secret convention - ONE reference, two delivery paths", () => {
 });
 
 describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)", () => {
+  // DBT-151: this pin used to expect `type: "text"`, which is the defect -
+  // the vendored OpenAPI RestSecret requires `secretType`. Changed, not weakened:
+  // the whole body is still compared, so a `type` key fails it.
   it("creates the named text secret via POST /system/secrets", () => {
     const request = buildEnsureSecretRequest("s3cr3t-value", "wg-1");
     expect(request).toEqual({
@@ -35,7 +38,7 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
       groupId: "wg-1",
       body: {
         id: SENTINEL_CLIENT_SECRET_NAME,
-        type: "text",
+        secretType: "text",
         value: "s3cr3t-value",
       },
     });
@@ -52,5 +55,14 @@ describe("buildEnsureSecretRequest / buildUpdateSecretRequest (connected path)",
     expect(request.method).toBe("PATCH");
     expect(request.path).toBe(`${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`);
     expect((request.body as { value: string }).value).toBe("rotated");
+  });
+
+  it("names the secret kind `secretType` on the PATCH too (DBT-151)", () => {
+    const request = buildUpdateSecretRequest("rotated", "wg-1");
+    expect(request.body).toEqual({
+      id: SENTINEL_CLIENT_SECRET_NAME,
+      secretType: "text",
+      value: "rotated",
+    });
   });
 });
