@@ -10,14 +10,20 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ValidationPlan, ValidationResult } from "@soc/core";
+import { PLAN_VALUE_KEYS } from "@soc/core";
+import type { PlanValues, ValidationPlan, ValidationResult } from "@soc/core";
 import { ValidatePanel } from "./validate-panel";
 import { VALIDATE_IDLE } from "./validate-state";
 import type { ValidateRunState } from "./validate-state";
 
 afterEach(cleanup);
 
+const values = (over: Partial<PlanValues> = {}): PlanValues =>
+  ({ ...Object.fromEntries(PLAN_VALUE_KEYS.map((k) => [k, ""])), ...over }) as PlanValues;
+const VALUES = values({ subscriptionId: "sub-1", resourceGroup: "rg-1", namespace: "ns-live" });
+
 const PLAN = {
+  values: VALUES,
   firstPageReads: 7,
   listReads: 0,
   maxReads: 7,
@@ -89,7 +95,7 @@ describe("ValidatePanel", () => {
   });
 
   it("shows a denied read as 'could not be read', never 'not found'", () => {
-    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00" });
+    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
     const rows = Array.from(container.querySelectorAll(".azo-verdict"));
     const denied = rows.find((r) => r.textContent?.includes("could not be read") && r.getAttribute("data-tone") === "unknown");
     expect(denied).toBeDefined();
@@ -99,7 +105,7 @@ describe("ValidatePanel", () => {
   });
 
   it("tabulates the differences of a present-but-different object", () => {
-    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00" });
+    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
     const table = container.querySelector(".azo-verdict-diffs");
     expect(table).not.toBeNull();
     const cells = Array.from(table!.querySelectorAll("tbody td")).map((td) => td.textContent);
@@ -107,14 +113,42 @@ describe("ValidatePanel", () => {
   });
 
   it("keeps a measured zero arrival apart from an unreadable one", () => {
-    renderPanel({ kind: "done", result: RESULT, asOf: "10:00" });
+    renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
     const quiet = screen.getByText("quiet: no messages in the window");
     const denied = screen.getByText(/^denied: arrival could not be read/);
     expect(quiet.getAttribute("data-tone")).not.toBe(denied.getAttribute("data-tone"));
   });
 
+  // AZR-41 (found live 2026-10-28): rows printed the raw step template,
+  // "Create or pick the Event Hub namespace {{namespace}}".
+  it("titles a result row with the values the run checked, never a raw placeholder", () => {
+    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
+    expect(container.textContent).toContain("ns-live");
+    expect(container.textContent).not.toContain("{{");
+  });
+
+  // AZR-42 (found live 2026-10-28): after the namespace changed, the old run's
+  // answers stayed on screen as if they were about the new one.
+  it("marks results checked against older values, naming what changed", () => {
+    const moved = { ...PLAN, values: values({ ...VALUES, namespace: "ns-other", resourceGroup: "rg-2" }) };
+    const { container } = renderPanel(
+      { kind: "done", result: RESULT, asOf: "10:00", values: VALUES },
+      { plan: moved as unknown as ValidationPlan },
+    );
+    const note = container.querySelector('[role="note"]');
+    expect(note?.textContent).toContain("checked against older values");
+    expect(note?.textContent).toContain("Resource group");
+    expect(note?.textContent).toContain("Event Hub namespace");
+    expect(container.textContent).toContain("ns-live");
+  });
+
+  it("says nothing about older values while the run still matches the plan", () => {
+    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
+    expect(container.querySelector('[role="note"]')).toBeNull();
+  });
+
   it("puts an (i) on every verdict row", () => {
-    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00" });
+    const { container } = renderPanel({ kind: "done", result: RESULT, asOf: "10:00", values: VALUES });
     const rows = Array.from(container.querySelectorAll("li.azo-verdict"));
     const checkRows = rows.filter((r) => r.querySelector("strong") !== null);
     expect(checkRows.length).toBe(2);

@@ -365,6 +365,28 @@ describe("AzureOnboardingScreen - Validate", () => {
     expect(counted.nowCalls).toBe(azure.calls.length);
   });
 
+  // AZR-42 (found live 2026-10-28): after the plan moved to another namespace,
+  // the old run's answers stayed beside the new values in every step.
+  it("a run's answers stop describing the steps once the plan values change", async () => {
+    mount({ store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }) });
+    await loaded();
+    const validate = button("Validate (read only)");
+    await waitFor(() => expect(validate.disabled).toBe(false));
+    fireEvent.click(validate);
+    await waitFor(() => expect(screen.getByText(/^Checked as of /)).toBeTruthy());
+    const nsStep = (name: string) =>
+      Array.from(document.querySelectorAll("li")).find((li) =>
+        li.textContent?.includes(`Create or pick the Event Hub namespace ${name}`),
+      );
+    await waitFor(() => expect(nsStep(NS)?.textContent).not.toContain("Check: not checked yet"));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Event Hub namespace" }), { target: { value: "ns-other" } });
+    fireEvent.click(button("Apply"));
+
+    await waitFor(() => expect(nsStep("ns-other")?.textContent).toContain("Check: not checked yet"));
+    expect(screen.getByRole("note").textContent).toContain("changed since: Event Hub namespace");
+  });
+
   it("without a pacing, Validate is disabled with its reason and reads nothing", async () => {
     const { azure } = mount({
       store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }),

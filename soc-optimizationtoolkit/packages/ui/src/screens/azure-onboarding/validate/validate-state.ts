@@ -16,12 +16,21 @@
  * No React, no IO, no clock: the panel passes the "as of" time in.
  */
 
-import { onboardingSource } from "@soc/core";
+import {
+  PLAN_VALUE_KEYS,
+  PLAN_VALUE_LABELS,
+  fillTemplate,
+  filledPlanValues,
+  howToStep,
+  onboardingSource,
+} from "@soc/core";
 import type {
   ArrivalReading,
   CheckKind,
   CheckResult,
   OnboardingSourceId,
+  PlanValueKey,
+  PlanValues,
   StepVerdict,
   UnknownReason,
   ValidationPlan,
@@ -246,13 +255,25 @@ export function verdictGroups(result: Pick<ValidationResult, "checks">): SourceV
 export type ValidateRunState =
   | { readonly kind: "idle" }
   | { readonly kind: "running"; readonly runId: number; readonly done: number; readonly total: number }
-  | { readonly kind: "done"; readonly result: ValidationResult; readonly asOf: string }
+  | {
+      readonly kind: "done";
+      readonly result: ValidationResult;
+      readonly asOf: string;
+      /** The plan values the run checked - its answers are about these, not the current ones. */
+      readonly values: PlanValues;
+    }
   | { readonly kind: "failed"; readonly message: string };
 
 export type ValidateRunAction =
   | { readonly type: "start"; readonly runId: number; readonly total: number }
   | { readonly type: "progress"; readonly runId: number; readonly done: number; readonly total: number }
-  | { readonly type: "finish"; readonly runId: number; readonly result: ValidationResult; readonly asOf: string }
+  | {
+      readonly type: "finish";
+      readonly runId: number;
+      readonly result: ValidationResult;
+      readonly asOf: string;
+      readonly values: PlanValues;
+    }
   | { readonly type: "fail"; readonly runId: number; readonly message: string }
   | { readonly type: "reset" };
 
@@ -275,7 +296,7 @@ export function validateRunReducer(state: ValidateRunState, action: ValidateRunA
       return { kind: "running", runId: state.runId, done: action.done, total: action.total };
     case "finish":
       if (state.kind !== "running" || state.runId !== action.runId) return state;
-      return { kind: "done", result: action.result, asOf: action.asOf };
+      return { kind: "done", result: action.result, asOf: action.asOf, values: action.values };
     case "fail":
       if (state.kind !== "running" || state.runId !== action.runId) return state;
       return { kind: "failed", message: action.message };
@@ -298,4 +319,37 @@ export function runStatusText(state: ValidateRunState): string {
     case "failed":
       return `Validate stopped: ${state.message}`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Which values a result is about (AZR-41, AZR-42)
+// ---------------------------------------------------------------------------
+
+/**
+ * A step's title as it read for the values the run checked: the same
+ * {{key}} substitution the How-to steps use, so a result row never shows a raw
+ * placeholder (AZR-41). An unset value reads as its <key> stand-in.
+ */
+export function verdictTitle(stepId: string, values: PlanValues): string {
+  const step = howToStep(stepId);
+  return step === undefined ? stepId : fillTemplate(step.title, filledPlanValues(values));
+}
+
+/** The plan values that differ (trimmed) between the run and now, in key order. */
+export function changedPlanKeys(ran: PlanValues, now: PlanValues): readonly PlanValueKey[] {
+  return PLAN_VALUE_KEYS.filter((k) => (ran[k] ?? "").trim() !== (now[k] ?? "").trim());
+}
+
+/**
+ * The note over results that were checked against older values, naming what
+ * changed; null when they still describe the current plan (AZR-42). An answer
+ * about a different namespace must not read as an answer about this one.
+ */
+export function staleResultsNote(changed: readonly PlanValueKey[]): string | null {
+  if (changed.length === 0) return null;
+  return (
+    "These results were checked against older values - changed since: " +
+    changed.map((k) => PLAN_VALUE_LABELS[k].label).join(", ") +
+    ". They describe the old values, not the current ones; choose Validate to check again."
+  );
 }

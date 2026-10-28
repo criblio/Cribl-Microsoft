@@ -129,6 +129,7 @@ import { ValidatePanel } from "./validate/validate-panel";
 import {
   VALIDATE_IDLE,
   VALIDATE_REQUESTS_PER_MINUTE,
+  changedPlanKeys,
   validateRunReducer,
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
@@ -248,7 +249,10 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
   // Validate (D16).
   const [run, dispatchRun] = useReducer(validateRunReducer, VALIDATE_IDLE);
-  const [lastResult, setLastResult] = useState<ValidationResult | null>(null);
+  // The last finished run and the plan values it checked. Its answers feed the
+  // steps, the dataflow and the Cribl source only while those values are still
+  // the plan's (AZR-42): after a change they describe something else.
+  const [lastRun, setLastRun] = useState<{ result: ValidationResult; values: PlanValues } | null>(null);
   const runSeq = useRef(0);
   const runAbort = useRef<AbortController | null>(null);
 
@@ -337,6 +341,11 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
   const progress = loadedProgress(progressLoad);
   const values: PlanValues | null = progress?.planValues ?? null;
+  // The last run's answers, only while they are about the current plan (AZR-42).
+  const lastResult =
+    lastRun !== null && values !== null && changedPlanKeys(lastRun.values, values).length === 0
+      ? lastRun.result
+      : null;
   const defenderHowTo =
     progress !== null && effectiveMode(progress, DEFENDER_ITEM_ID as OnboardingSourceId) === "manual";
   const chosen = useMemo(
@@ -508,9 +517,9 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
         signal: controller.signal,
         onProgress: (done, total) => dispatchRun({ type: "progress", runId, done, total }),
       });
-      dispatchRun({ type: "finish", runId, result, asOf: new Date().toLocaleTimeString() });
+      dispatchRun({ type: "finish", runId, result, asOf: new Date().toLocaleTimeString(), values: plan.values });
       if (runSeq.current === runId) {
-        setLastResult(result);
+        setLastRun({ result, values: plan.values });
         setReadSeq((s) => s + 1);
       }
       logger?.info(`${LOG} validate finished`, { checks: result.checks.length, cancelled: result.cancelled });

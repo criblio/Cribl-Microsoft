@@ -15,15 +15,17 @@
  * Mounting it makes no call: the only thing that starts a run is the button.
  */
 
-import { howToStep } from "@soc/core";
 import type { ValidationPlan, ValidationResult } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import {
   arrivalView,
+  changedPlanKeys,
   runStatusText,
+  staleResultsNote,
   validateDisabledReason,
   validateIntro,
   verdictGroups,
+  verdictTitle,
 } from "./validate-state";
 import type { ValidateRunState } from "./validate-state";
 
@@ -49,16 +51,15 @@ const ARRIVAL_TIP =
   "the window. \"No messages in the window\" is a real answer from Azure; " +
   "\"could not be read\" means there is no answer.";
 
-function stepTitle(stepId: string): string {
-  return howToStep(stepId)?.title ?? stepId;
-}
-
 export function ValidatePanel({ plan, hasPacing, run, onValidate, onCancel }: ValidatePanelProps) {
   const running = run.kind === "running";
   const disabled = validateDisabledReason({ hasPacing, running, plan });
   const result: ValidationResult | null = run.kind === "done" ? run.result : null;
   const groups = result === null ? [] : verdictGroups(result);
   const arrival = result === null ? [] : Object.entries(result.arrival);
+  const stale =
+    run.kind === "done" && plan !== null ? staleResultsNote(changedPlanKeys(run.values, plan.values)) : null;
+  const stepTitle = (stepId: string) => (run.kind === "done" ? verdictTitle(stepId, run.values) : stepId);
 
   return (
     <div className="azo-validate">
@@ -85,6 +86,11 @@ export function ValidatePanel({ plan, hasPacing, run, onValidate, onCancel }: Va
       <p className="field-hint" role="status">
         {runStatusText(run)}
       </p>
+      {stale !== null && (
+        <p className="azo-verdict" data-tone="warn" role="note">
+          {stale}
+        </p>
+      )}
 
       {groups.map((group) => (
         <section key={group.sourceId} aria-label={`Checks for ${group.title}`}>

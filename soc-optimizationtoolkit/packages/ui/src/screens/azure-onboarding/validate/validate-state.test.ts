@@ -4,7 +4,7 @@
 // read shown as "not found", or an unreadable arrival metric shown as a zero.
 
 import { describe, expect, it } from "vitest";
-import type { CheckKind, StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
+import type { CheckKind, PlanValues, StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
 import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
   VALIDATE_IDLE,
@@ -206,7 +206,7 @@ describe("validateRunReducer", () => {
     let s = validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 1, total: 5 });
     s = validateRunReducer(s, { type: "progress", runId: 1, done: 2, total: 5 });
     expect(runStatusText(s)).toBe("Reading 2 of 5...");
-    s = validateRunReducer(s, { type: "finish", runId: 1, result: RESULT, asOf: "10:00" });
+    s = validateRunReducer(s, { type: "finish", runId: 1, result: RESULT, asOf: "10:00", values: {} as PlanValues });
     expect(s.kind).toBe("done");
     expect(runStatusText(s)).toBe("Checked as of 10:00.");
   });
@@ -214,10 +214,10 @@ describe("validateRunReducer", () => {
   it("ignores a late callback once the run is no longer running", () => {
     const done = validateRunReducer(
       validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 1, total: 1 }),
-      { type: "finish", runId: 1, result: RESULT, asOf: "10:00" },
+      { type: "finish", runId: 1, result: RESULT, asOf: "10:00", values: {} as PlanValues },
     );
     expect(validateRunReducer(done, { type: "progress", runId: 1, done: 1, total: 1 })).toBe(done);
-    expect(validateRunReducer(VALIDATE_IDLE, { type: "finish", runId: 1, result: RESULT, asOf: "x" })).toBe(
+    expect(validateRunReducer(VALIDATE_IDLE, { type: "finish", runId: 1, result: RESULT, asOf: "x", values: {} as PlanValues })).toBe(
       VALIDATE_IDLE,
     );
   });
@@ -227,7 +227,7 @@ describe("validateRunReducer", () => {
     s = validateRunReducer(s, { type: "reset" });
     const second = validateRunReducer(s, { type: "start", runId: 2, total: 7 });
     expect(second).toEqual({ kind: "running", runId: 2, done: 0, total: 7 });
-    expect(validateRunReducer(second, { type: "finish", runId: 1, result: RESULT, asOf: "09:00" })).toBe(second);
+    expect(validateRunReducer(second, { type: "finish", runId: 1, result: RESULT, asOf: "09:00", values: {} as PlanValues })).toBe(second);
     expect(validateRunReducer(second, { type: "progress", runId: 1, done: 3, total: 3 })).toBe(second);
     expect(validateRunReducer(second, { type: "fail", runId: 1, message: "old" })).toBe(second);
     // The current run's own callbacks still land.
@@ -242,7 +242,7 @@ describe("validateRunReducer", () => {
   it("says a cancelled run left checks unread, not absent", () => {
     const s = validateRunReducer(
       validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 1, total: 1 }),
-      { type: "finish", runId: 1, result: { ...RESULT, cancelled: true }, asOf: "10:00" },
+      { type: "finish", runId: 1, result: { ...RESULT, cancelled: true }, asOf: "10:00", values: {} as PlanValues },
     );
     expect(runStatusText(s)).toContain("could not be read");
   });
