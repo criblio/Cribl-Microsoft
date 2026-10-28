@@ -43,9 +43,6 @@ export const SENTINEL_CLIENT_SECRET_NAME = "sentinel_client_secret";
  */
 export const SENTINEL_CLIENT_SECRET_REFERENCE = CRIBL_SECRET_REFERENCE;
 
-/** Cribl API path for text secrets (porting-plan external surface). */
-export const SECRETS_API_PATH = "/system/secrets";
-
 /**
  * The description the named secret is written with; buildSecretBody (inside
  * ensureTextSecret) appends the app's ownership stamp to it (DBT-163), and a

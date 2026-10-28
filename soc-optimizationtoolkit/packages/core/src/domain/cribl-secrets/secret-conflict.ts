@@ -28,6 +28,7 @@
 
 import { stampFor } from "../../kit/config-writes/ownership";
 import { APP_ID } from "./secret-body";
+import { findSecretRecord } from "./secret-record";
 
 /** The GET /system/secrets/:id that followed a 409; `null` when the call itself threw. */
 export interface SecretConflictRead {
@@ -59,16 +60,16 @@ function unreadable(secretId: string, detail: string): SecretConflictDecision {
 /**
  * Decide whether the secret `secretId` that a POST answered 409 for may be
  * PATCHed, from the GET that followed (`null`: the GET threw). Only a 2xx read
- * whose `items` holds an entry with this id and a stamped description is ours.
+ * whose `items` holds exactly one entry with this id, among objects only
+ * ({@link findSecretRecord}, DBT-187), with a stamped description is ours.
  */
 export function decideSecretConflict(secretId: string, read: SecretConflictRead | null): SecretConflictDecision {
   if (read === null) return unreadable(secretId, "the read failed");
   if (read.status < 200 || read.status >= 300) return unreadable(secretId, `HTTP ${read.status}`);
-  const items = isRecord(read.body) ? read.body["items"] : undefined;
-  if (!Array.isArray(items)) return unreadable(secretId, "the read answered without an items array");
-  const found = items.find((item) => isRecord(item) && item["id"] === secretId) as Record<string, unknown> | undefined;
-  if (found === undefined) return unreadable(secretId, `the read named no secret '${secretId}'`);
-  const description = found["description"];
+  const lookup = findSecretRecord(isRecord(read.body) ? read.body["items"] : undefined, secretId);
+  if (lookup.kind === "malformed") return unreadable(secretId, `the read ${lookup.detail}`);
+  if (lookup.kind === "missing") return unreadable(secretId, `the read named no secret '${secretId}'`);
+  const description = lookup.record["description"];
   const stamp = stampFor(APP_ID);
   if (typeof description === "string" && description.includes(stamp)) return { kind: "patch" };
   // The evidence is only that the stamp is absent, so the message says that and

@@ -126,6 +126,28 @@ describe("classifyExistingSecret", () => {
     });
     expect(v).toEqual({ kind: "foreign", missing: ["id is not in this app’s manifest"] });
   });
+
+  // DBT-187: the same strict reader as decideSecretConflict (findSecretRecord).
+  it("unknown when a non-object entry follows the match, not ours", () => {
+    expect(
+      classifyExistingSecret({ read: { state: "read", items: [ours, "junk"] }, secretId: record.secretId, recorded: record }),
+    ).toEqual({ kind: "unknown", detail: "the secret read has an entry that is not an object" });
+  });
+
+  it("unknown when two entries carry the secret id, not the first one's verdict", () => {
+    const items = [ours, { id: record.secretId, secretType: "text" }];
+    expect(classifyExistingSecret({ read: { state: "read", items }, secretId: record.secretId, recorded: record })).toEqual({
+      kind: "unknown",
+      detail: `the secret read has 2 entries for secret '${record.secretId}'`,
+    });
+  });
+
+  it("absent when only other ids are listed", () => {
+    const items = [{ id: "other", description: ours.description }];
+    expect(classifyExistingSecret({ read: { state: "read", items }, secretId: record.secretId, recorded: record })).toEqual({
+      kind: "absent",
+    });
+  });
 });
 
 describe("COMMIT_MARKERS", () => {
