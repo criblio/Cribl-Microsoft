@@ -38,6 +38,7 @@ import { buildSubscriptionAutomationsListRequest } from "../defender-export/defe
 import { listSettingsRequest } from "../entra-diagnostics/entra-diagnostic-setting";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import {
+  API_VERSIONS,
   assignmentsAtScopeRequest,
   definitionRequest,
   roleAssignmentsForPrincipalRequest,
@@ -60,6 +61,11 @@ import { metricsRequest } from "../eventhub-discovery/eventhub-discovery";
 import type { CheckKind } from "../onboarding-howto/check-kinds";
 import { missingValues, type PlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
 import { onboardingSource, type OnboardingSourceId } from "../onboarding-howto/sources";
+import {
+  LEGACY_POLICY_NAMES,
+  communityDefinitionNames,
+  managementGroupDefinitionId,
+} from "../onboarding-howto-steps/policy-steps";
 
 /**
  * api-version for subscription diagnostic settings (the Activity Log export).
@@ -70,6 +76,14 @@ export const SUBSCRIPTION_DIAGNOSTIC_SETTINGS_API_VERSION = "2021-05-01-preview"
 
 /** api-version for Microsoft.PolicyInsights remediations. INFERRED; live list. */
 export const POLICY_REMEDIATIONS_API_VERSION = "2021-10-01";
+
+/**
+ * The filter on the policy definitions listing at a management group: custom
+ * definitions only, so the built-ins (thousands, many pages) are not read.
+ * INFERRED from the ARM policyDefinitions listByManagementGroup reference
+ * (`policyType eq '{value}'`); on the live-verification list.
+ */
+export const CUSTOM_POLICY_DEFINITIONS_FILTER = "policyType eq 'Custom'";
 
 /**
  * The window Azure Monitor totals IncomingMessages over when the request
@@ -120,6 +134,12 @@ export interface CheckExpectations {
   readonly entraCategories?: readonly string[];
   /** policy-*: the initiative the plan assigns. */
   readonly policy?: PolicyExpectation;
+  /**
+   * policy-definition: the full ids of the custom definitions the steps save
+   * at the management group. Independent of `policy`: the Activity Log
+   * imports a definition but assigns no initiative.
+   */
+  readonly policyDefinitions?: readonly string[];
 }
 
 /** How a request's response is read: a list (paged) or one resource. */
@@ -147,6 +167,7 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "eh-hub": SUB_RG_NS,
   "eh-rule-send": [...SUB_RG_NS, "sendRule"],
   "eh-rule-listen": [...SUB_RG_NS, "listenRule"],
+  "eh-rule-manage": [...SUB_RG_NS, "sendRule"],
   "eh-consumer-group": [...SUB_RG_NS, "hubName", "consumerGroup"],
   "defender-plans": ["subscriptionId"],
   "defender-provider": ["subscriptionId"],
@@ -155,6 +176,7 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "activity-log-setting": SUB_RG_NS,
   "policy-assignment": ["managementGroupId"],
   "policy-set-definition": ["managementGroupId"],
+  "policy-definition": ["managementGroupId"],
   "policy-identity-roles": [],
   "policy-remediation": ["managementGroupId"],
   "xdr-streaming": [],
@@ -259,6 +281,19 @@ export function checkExpectationsFor(
               assignmentName: null,
               assignmentFamily: /^Cribl-Diag-EH-.+$/i,
             },
+            // The definitions the chosen tiers import, named as the step names them.
+            policyDefinitions: communityDefinitionNames(subSelection).map((name) =>
+              managementGroupDefinitionId(mg, name),
+            ),
+          };
+    }
+    case "activityLog": {
+      const mg = v(values, "managementGroupId");
+      return mg === ""
+        ? hubs
+        : {
+            ...hubs,
+            policyDefinitions: [managementGroupDefinitionId(mg, LEGACY_POLICY_NAMES.activityLogDefinition)],
           };
     }
     case "entraId":
@@ -288,6 +323,7 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
       return [list(buildNamespaceHubsListRequest(ns), `hubs in ${ns.name}`)];
     case "eh-rule-send":
     case "eh-rule-listen":
+    case "eh-rule-manage":
       return [list(buildNamespaceAuthRulesListRequest(ns), `access rules on ${ns.name}`)];
     case "eh-consumer-group":
       return [
@@ -332,6 +368,22 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
       return ex.policy === undefined
         ? []
         : [single(definitionRequest(ex.policy.definitionId), "policy set definition")];
+    case "policy-definition":
+      // ONE listing, not a GET per definition: the community tiers name up
+      // to 44, which would spend the run's budget on one step.
+      return (ex.policyDefinitions ?? []).length === 0
+        ? []
+        : [
+            list(
+              {
+                method: "GET",
+                path: `${managementGroupScope(mg)}/providers/Microsoft.Authorization/policyDefinitions`,
+                apiVersion: API_VERSIONS.policyDefinitions,
+                query: { $filter: CUSTOM_POLICY_DEFINITIONS_FILTER },
+              },
+              `custom policy definitions at ${mg}`,
+            ),
+          ];
     case "policy-remediation":
       return ex.policy === undefined
         ? []
@@ -421,7 +473,7 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
  * The GETs one check makes, in the order {@link classifyCheck} expects their
  * reads. `{missing}` when a needed plan value is blank: nothing is sent.
  * An EMPTY request list (xdr-streaming, policy-identity-roles, a policy
- * check with no expected initiative) is not a failure - the classifier says
+ * check with no expected initiative or definitions) is not a failure - the classifier says
  * why there is nothing to read.
  */
 export function requestsFor(

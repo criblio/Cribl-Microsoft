@@ -246,6 +246,18 @@ describe("perspective folding (D14)", () => {
     for (const gone of ["cribl-source", "route", "destination", "azure-folded"]) expect(k.has(gone as never)).toBe(false);
   });
 
+  it("only the networking step card says 'not checked by Validate'; the Manage rule configures the transport (AZR-39)", () => {
+    const lanes = buildOnboardingLanes(input({ progress, perspective: "azure" }));
+    const lane = lanes.lanes[0];
+    const steps = lane.cards.filter((c) => c.kind === "step");
+    const unchecked = steps.filter((c) => c.status.label === "not checked by Validate").map((c) => c.stepId);
+    expect(unchecked).toEqual(["eh-network"]);
+    const rule = steps.find((c) => c.stepId === "eh-rule-diagnostic")!;
+    expect(rule.status.label).toBe("not checked yet");
+    const transport = lane.cards.find((c) => c.kind === "transport")!;
+    expect(lane.edges.find((e) => e.from === rule.id)?.to).toBe(transport.id);
+  });
+
   it("the Cribl side folds Azure into one card", () => {
     const lanes = buildOnboardingLanes(input({ progress, perspective: "cribl" }));
     const k = new Set(lanes.lanes[0].cards.map((c) => c.kind));

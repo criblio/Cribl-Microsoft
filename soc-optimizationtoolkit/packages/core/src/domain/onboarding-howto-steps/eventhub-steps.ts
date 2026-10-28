@@ -146,13 +146,10 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     ],
     confirmHow: "The rule {{sendRule}} is listed under Shared access policies with the claims Manage, Send, Listen.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "sendRule"],
-    // NO CHECK KIND YET. The rule must have Manage; 'eh-rule-send' accepts Send
-    // or Manage, so it would call a Send-only rule as-expected here - a false
-    // "done" on the very right this step grants. A Manage-rights check kind is
-    // a follow-up in check-kinds and the classifier (card AZR-39, check kind
-    // eh-rule-manage over ruleCanManage); until it exists, Validate reports
-    // nothing for this step rather than the wrong right.
-    checkKinds: [],
+    // 'eh-rule-manage', not 'eh-rule-send': the rule must have Manage, and
+    // 'eh-rule-send' accepts Send or Manage, so it would call a Send-only rule
+    // done here - a false "done" on the very right this step grants (AZR-39).
+    checkKinds: ["eh-rule-manage"],
     provenance: "inferred",
     warning: "If you also onboard the Defender export, this one rule can serve it: a Manage rule can also Send.",
   },
@@ -240,6 +237,9 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     rbac: ["Microsoft.EventHub/namespaces/networkRuleSets/write only if you change the rules."],
     confirmHow: "The Networking page of {{namespace}} allows public access, or lists the Cribl egress addresses and trusted Microsoft services.",
     dependsOnValues: ["namespace"],
+    // Confirm-only by design (plan step P6): whether Azure and the Cribl
+    // workers can reach the namespace is a property of networks this app
+    // cannot see, not of a resource it could GET. It reads "confirm by hand".
     checkKinds: [],
     provenance: "inferred",
   },

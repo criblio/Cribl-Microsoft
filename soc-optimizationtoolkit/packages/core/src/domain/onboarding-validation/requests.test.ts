@@ -10,6 +10,7 @@ import { ONBOARDING_SOURCES } from "../onboarding-howto/sources";
 import { ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import {
   CHECK_REQUIRED_VALUES,
+  CUSTOM_POLICY_DEFINITIONS_FILTER,
   DEFAULT_ARRIVAL_WINDOW,
   arrivalRequestFor,
   checkExpectationsFor,
@@ -50,7 +51,10 @@ describe("requestsFor: read-only by construction", () => {
     for (const kind of CHECK_KINDS) {
       all.push(...requestsOf(kind, AUDIT), ...requestsOf(kind, COMMUNITY));
     }
-    expect(all.length).toBeGreaterThanOrEqual(2 * (CHECK_KINDS.length - 2));
+    // Every kind but the two that read nothing, for each source - less one:
+    // the built-in Audit imports no definition, so policy-definition reads
+    // nothing for it.
+    expect(all.length).toBeGreaterThanOrEqual(2 * (CHECK_KINDS.length - 2) - 1);
     for (const r of all) {
       expect(r.request.method, r.context).toBe("GET");
       expect(r.request.path.toLowerCase(), r.context).not.toContain("listkeys");
@@ -103,7 +107,7 @@ describe("requestsFor: a missing value sends nothing", () => {
   });
 
   it("the kinds that read nothing are exactly xdr-streaming and policy-identity-roles", () => {
-    const empty = CHECK_KINDS.filter((k) => requestsOf(k, AUDIT).length === 0);
+    const empty = CHECK_KINDS.filter((k) => requestsOf(k, COMMUNITY).length === 0);
     expect(empty).toEqual(["policy-identity-roles", "xdr-streaming"]);
   });
 });
@@ -147,6 +151,29 @@ describe("requestsFor: the paths come from the owning builders", () => {
 
   it("a policy check with no expected initiative reads nothing", () => {
     expect(requestsOf("policy-assignment", {})).toEqual([]);
+    expect(requestsOf("policy-definition", AUDIT)).toEqual([]);
+  });
+
+  it("eh-rule-manage reads the same rules listing as eh-rule-send, so a run reads it once", () => {
+    expect(requestsOf("eh-rule-manage", {})).toEqual(requestsOf("eh-rule-send", {}));
+    expect(CHECK_REQUIRED_VALUES["eh-rule-manage"]).toEqual(["subscriptionId", "resourceGroup", "namespace", "sendRule"]);
+  });
+
+  it("policy-definition is ONE GET listing the custom definitions at the management group", () => {
+    const expected = {
+      request: {
+        method: "GET",
+        path: "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions",
+        apiVersion: "2023-04-01",
+        query: { $filter: "policyType eq 'Custom'" },
+      },
+      shape: "list",
+      context: "custom policy definitions at mg-1",
+    };
+    expect(CUSTOM_POLICY_DEFINITIONS_FILTER).toBe("policyType eq 'Custom'");
+    expect(requestsOf("policy-definition", COMMUNITY)).toEqual([expected]);
+    expect(requestsOf("policy-definition", checkExpectationsFor("activityLog", FULL))).toEqual([expected]);
+    expect(CHECK_REQUIRED_VALUES["policy-definition"]).toEqual(["managementGroupId"]);
   });
 });
 
@@ -164,6 +191,29 @@ describe("checkExpectationsFor", () => {
 
   it("the community initiative has no expectation until the management group is set", () => {
     expect(checkExpectationsFor("communityPolicyInitiative", { ...FULL, managementGroupId: "" }).policy).toBeUndefined();
+  });
+
+  it("the Activity Log expects its one community definition at the group, and no initiative", () => {
+    const ex = checkExpectationsFor("activityLog", FULL);
+    expect(ex.policyDefinitions).toEqual([
+      "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization" +
+        "/policyDefinitions/Cribl-Community-ActivityLog-DiagSettings-EventHub",
+    ]);
+    expect(ex.policy).toBeUndefined();
+    expect(checkExpectationsFor("activityLog", { ...FULL, managementGroupId: "" }).policyDefinitions).toBeUndefined();
+  });
+
+  it("the community initiative expects one definition per service of the chosen tiers", () => {
+    const base = "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions/";
+    expect(checkExpectationsFor("communityPolicyInitiative", FULL, ["Networking"]).policyDefinitions).toEqual([
+      `${base}Cribl-LoadBalancer-DiagSettings-EH`,
+      `${base}Cribl-TrafficManager-DiagSettings-EH`,
+      `${base}Cribl-CDNEndpoint-DiagSettings-EH`,
+    ]);
+    // The default (All) is the 44 resource types the catalog advertises.
+    expect(COMMUNITY.policyDefinitions).toHaveLength(44);
+    expect(new Set(COMMUNITY.policyDefinitions).size).toBe(44);
+    expect(AUDIT.policyDefinitions).toBeUndefined();
   });
 
   it("Defender expects the named hub; every source yields an object", () => {

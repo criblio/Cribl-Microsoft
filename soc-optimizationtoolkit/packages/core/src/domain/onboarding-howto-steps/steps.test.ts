@@ -9,7 +9,13 @@ import { PLAN_VALUE_KEYS, isPlanValueKey, type PlanValues } from "../onboarding-
 import { ONBOARDING_SOURCES, isOnboardingSourceId } from "../onboarding-howto/sources";
 import { CHECK_KINDS } from "../onboarding-howto/check-kinds";
 import { CONNECTION_STRING_STAND_IN } from "./defender-steps";
-import { LEGACY_POLICY_NAMES, MARKER_FILE, MARKER_ROW_LABEL } from "./policy-steps";
+import {
+  COMMUNITY_TIER_SERVICES,
+  LEGACY_POLICY_NAMES,
+  MARKER_FILE,
+  MARKER_ROW_LABEL,
+  communityDefinitionNames,
+} from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
 import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
 
@@ -115,9 +121,46 @@ describe("how-to step catalog", () => {
 
   it("never checks the Manage rule with a check that accepts Send-only", () => {
     // 'eh-rule-send' is classified as Send OR Manage, so it would pass a
-    // Send-only rule for the step whose whole point is Manage.
-    expect(howToStep("eh-rule-diagnostic")!.checkKinds).toEqual([]);
+    // Send-only rule for the step whose whole point is Manage (AZR-39).
+    expect(howToStep("eh-rule-diagnostic")!.checkKinds).toEqual(["eh-rule-manage"]);
     expect(howToStep("eh-rule-send")!.checkKinds).toEqual(["eh-rule-send"]);
+    const sendChecked = ALL_HOWTO_STEPS.filter((s) => s.checkKinds.includes("eh-rule-send")).map((s) => s.id);
+    expect(sendChecked).toEqual(["eh-rule-send"]);
+  });
+
+  it("checks the imported policy definitions; leaves only networking to confirm by hand (AZR-39)", () => {
+    expect(howToStep("policy-community-definitions")!.checkKinds).toEqual(["policy-definition"]);
+    expect(howToStep("activity-log-definition")!.checkKinds).toEqual(["policy-definition"]);
+    expect(howToStep("eh-network")!.checkKinds).toEqual([]);
+    const unchecked = ALL_HOWTO_STEPS.filter((s) => s.checkKinds.length === 0).map((s) => s.id);
+    expect(unchecked).toEqual(["eh-network"]);
+  });
+
+  it("names the community definitions per tier exactly as the frozen script groups its services", () => {
+    const script = readFileSync(
+      join(HERE, "../logging-map/legacy/Deploy-CommunityPolicyInitiative.ps1"),
+      "utf8",
+    );
+    const block = script.slice(script.indexOf("$script:CommunityPolicyTiers = @{"));
+    const fromScript: Record<string, string[]> = {};
+    for (const m of block.matchAll(/"(\w+)" = @\{[^}]*?Services = @\(([^)]*)\)/g)) {
+      fromScript[m[1]] = [...m[2].matchAll(/"(\w+)"/g)].map((s) => s[1]);
+      if (Object.keys(fromScript).length === 8) break;
+    }
+    expect(fromScript).toEqual(COMMUNITY_TIER_SERVICES);
+    expect(Object.values(COMMUNITY_TIER_SERVICES).flat()).toHaveLength(44);
+    expect(communityDefinitionNames(["AVD"])).toEqual([
+      "Cribl-AVDHostPool-DiagSettings-EH",
+      "Cribl-AVDApplicationGroup-DiagSettings-EH",
+      "Cribl-AVDWorkspace-DiagSettings-EH",
+      "Cribl-AVDScalingPlan-DiagSettings-EH",
+    ]);
+    expect(communityDefinitionNames(["All"])).toHaveLength(44);
+    expect(communityDefinitionNames([])).toHaveLength(44);
+    const rows = renderStep(howToStep("policy-community-definitions")!, FULL, ["Other"]).values;
+    expect(rows.find((r) => r.label === "Definition names")?.value).toBe(
+      "Cribl-RecoveryServicesVault-DiagSettings-EH\nCribl-AzureAPIforFHIR-DiagSettings-EH\nCribl-PowerBIEmbedded-DiagSettings-EH",
+    );
   });
 
   it("shows ONE Manage rule step when the Defender export and an auto-created-hub source are both chosen", () => {

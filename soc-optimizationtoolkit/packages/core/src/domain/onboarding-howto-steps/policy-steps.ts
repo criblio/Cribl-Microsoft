@@ -49,6 +49,65 @@ export const LEGACY_POLICY_NAMES = Object.freeze({
   effect: "DeployIfNotExists",
 });
 
+/**
+ * The community services each tier imports, as the legacy script groups them
+ * (Deploy-CommunityPolicyInitiative.ps1:213-257, `$script:CommunityPolicyTiers`).
+ * `All` is every service (its line 364). Each service becomes one definition
+ * named by {@link communityDefinitionName}. Pinned against the frozen script.
+ */
+export const COMMUNITY_TIER_SERVICES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  Storage: ["BlobServices", "FileServices", "QueueServices", "TableServices", "StorageAccounts"],
+  Security: ["Firewall", "NSG", "ApplicationGateway", "ExpressRoute", "VirtualNetwork"],
+  Data: [
+    "CosmosDB", "DataFactory", "MySQL", "PostgreSQL", "MariaDB",
+    "SynapseAnalytics", "SynapseSparkPool", "SynapseSQLPool", "DataExplorer", "Databricks",
+    "AnalysisServices", "TimeSeriesInsights",
+  ],
+  Compute: [
+    "AppService", "FunctionApp", "BatchAccount", "MachineLearning", "ApplicationInsights",
+    "AutoscaleSettings", "DevCenter",
+  ],
+  Integration: ["LogicApps", "LogicAppsISE", "EventGridTopic", "EventGridSystemTopic", "Relay"],
+  Networking: ["LoadBalancer", "TrafficManager", "CDNEndpoint"],
+  AVD: ["AVDHostPool", "AVDApplicationGroup", "AVDWorkspace", "AVDScalingPlan"],
+  Other: ["RecoveryServicesVault", "AzureAPIforFHIR", "PowerBIEmbedded"],
+});
+
+/** A community service's definition name (Deploy-CommunityPolicyInitiative.ps1:387). */
+export function communityDefinitionName(service: string): string {
+  return `${LEGACY_POLICY_NAMES.communityDefinitionPrefix}${service}${LEGACY_POLICY_NAMES.communityDefinitionSuffix}`;
+}
+
+/** The tiers a sub-selection names, or the catalog's default. */
+function tiersFrom(subSelection: readonly string[]): readonly string[] {
+  const item = coverageItem("communityPolicyInitiative");
+  const keys = new Set(item?.subSelection?.options.map((o) => o.key) ?? []);
+  const chosen = subSelection.filter((s) => keys.has(s));
+  return chosen.length > 0 ? chosen : (item?.subSelection?.defaultSelected ?? []);
+}
+
+/**
+ * The community definition names the chosen tiers import, each once, in tier
+ * order. `All` (the default) is every tier.
+ */
+export function communityDefinitionNames(subSelection: readonly string[]): readonly string[] {
+  const tiers = tiersFrom(subSelection);
+  const chosen = tiers.includes("All") ? Object.keys(COMMUNITY_TIER_SERVICES) : tiers;
+  const names: string[] = [];
+  for (const tier of chosen) {
+    for (const service of COMMUNITY_TIER_SERVICES[tier] ?? []) {
+      const name = communityDefinitionName(service);
+      if (!names.includes(name)) names.push(name);
+    }
+  }
+  return names;
+}
+
+/** The ARM id of a policy definition saved at a management group. */
+export function managementGroupDefinitionId(managementGroupId: string, name: string): string {
+  return `${managementGroupScope(managementGroupId)}/providers/Microsoft.Authorization/policyDefinitions/${name}`;
+}
+
 /** The management group scope a plan's policy assignments sit at. */
 export function managementGroupScope(managementGroupId: string): string {
   return `/providers/Microsoft.Management/managementGroups/${managementGroupId}`;
@@ -217,13 +276,6 @@ export { IDENTITY_TEMPLATE, MG_TEMPLATE, PARAMS_NOTE, remediationStep };
 const AUDIT = LEGACY_POLICY_NAMES.auditAssignment;
 const COMMUNITY = LEGACY_POLICY_NAMES.communityAssignment;
 
-function tiersFrom(subSelection: readonly string[]): readonly string[] {
-  const item = coverageItem("communityPolicyInitiative");
-  const keys = new Set(item?.subSelection?.options.map((o) => o.key) ?? []);
-  const chosen = subSelection.filter((s) => keys.has(s));
-  return chosen.length > 0 ? chosen : (item?.subSelection?.defaultSelected ?? []);
-}
-
 export const POLICY_STEPS: readonly HowToStep[] = [
   POLICY_IDENTITY_STEP,
   {
@@ -267,11 +319,14 @@ export const POLICY_STEPS: readonly HowToStep[] = [
     values: (_v, sub) => [
       { label: "Source folder", value: LEGACY_POLICY_NAMES.communityRepoFolder },
       { label: "Tiers", value: tiersFrom(sub).join(", ") },
+      { label: "Definition names", value: communityDefinitionNames(sub).join("\n") },
     ],
     rbac: ["Microsoft.Authorization/policyDefinitions/write at the management group."],
     confirmHow: `Policy, Definitions at {{managementGroupId}} lists a ${LEGACY_POLICY_NAMES.communityDefinitionPrefix}...${LEGACY_POLICY_NAMES.communityDefinitionSuffix} definition for every resource type you chose.`,
     dependsOnValues: ["managementGroupId"],
-    checkKinds: [],
+    // Validate lists the custom definitions at the management group and looks
+    // for every name above (checkExpectationsFor, from the same tiers).
+    checkKinds: ["policy-definition"],
     provenance: "repo",
   },
   {

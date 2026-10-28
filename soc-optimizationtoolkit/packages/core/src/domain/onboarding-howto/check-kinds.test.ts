@@ -14,7 +14,7 @@ const unknown: StepVerdict = { kind: "unknown", reason: "denied", detail: "403" 
 describe("CHECK_KINDS", () => {
   it("has no arrival kind: arrival is a reading, not a verdict", () => {
     expect(CHECK_KINDS as readonly string[]).not.toContain("eh-hub-arrival");
-    expect(CHECK_KINDS.length).toBe(23);
+    expect(CHECK_KINDS.length).toBe(25);
     expect(new Set(CHECK_KINDS).size).toBe(CHECK_KINDS.length);
   });
 });

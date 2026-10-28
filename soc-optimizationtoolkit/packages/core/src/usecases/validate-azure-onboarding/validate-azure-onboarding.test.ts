@@ -239,6 +239,46 @@ describe("measured hubs and verdict honesty", () => {
     expect(v?.kind === "present-other-name" && v.name).toBe("PortalExport");
     expect(verdictsForStep(result, "defender-export")).toEqual([v]);
   });
+
+  it("AZR-39: the Manage rule step is present-differs for a Send-only rule, through the run", async () => {
+    const rules = (rights: string[]): Route =>
+      onPath(`${NS_PATH}/authorizationRules`, {
+        status: 200,
+        body: { value: [{ name: "sender", properties: { rights } }] },
+      });
+    const key = checkKey("entraId", "eh-rule-diagnostic", "eh-rule-manage");
+    const sendOnly = await validateAzureOnboarding(new RecordingAzure([rules(["Send"])]), planValidation(["entraId"], FULL));
+    expect(sendOnly.verdicts[key]).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Manage", actual: "Send" }],
+    });
+    const manage = await validateAzureOnboarding(
+      new RecordingAzure([rules(["Manage", "Send", "Listen"])]),
+      planValidation(["entraId"], FULL),
+    );
+    expect(manage.verdicts[key]).toEqual({ kind: "as-expected" });
+  });
+
+  it("AZR-39: the Activity Log definition is read by one planned GET listing at the group",async () => {
+    const DEFS =
+      "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions";
+    const plan = planValidation(["activityLog"], FULL);
+    expect(plan.requests.filter((r) => r.request.path === DEFS)).toHaveLength(1);
+    const azure = new RecordingAzure([
+      onPath(DEFS, {
+        status: 200,
+        body: { value: [{ id: `${DEFS}/Cribl-Community-ActivityLog-DiagSettings-EventHub` }] },
+      }),
+    ]);
+    const result = await validateAzureOnboarding(azure, plan);
+    expect(azure.calls.filter((c) => c.path === DEFS)).toEqual([{ method: "GET", path: DEFS }]);
+    expect(result.verdicts[checkKey("activityLog", "activity-log-definition", "policy-definition")]).toEqual({
+      kind: "as-expected",
+    });
+    const denied = await validateAzureOnboarding(new RecordingAzure([onPath(DEFS, DENIED)]), plan);
+    const v = denied.verdicts[checkKey("activityLog", "activity-log-definition", "policy-definition")];
+    expect(v?.kind === "unknown" && v.reason).toBe("denied");
+  });
 });
 
 describe("arrival", () => {

@@ -51,17 +51,24 @@ function refusal(over: Partial<Refusal> = {}): Refusal {
 const denied = readRefused<unknown>(refusal());
 const one = (row: unknown): ListRead<unknown> => readRows([row]);
 
+/**
+ * The community initiative's expectations: an initiative AND the definitions
+ * it imports, so every policy kind reads (the built-in Audit imports none).
+ */
+const COMMUNITY = checkExpectationsFor("communityPolicyInitiative", FULL);
+
 /** The kinds that make at least one request. */
 const READING_KINDS = CHECK_KINDS.filter((k) => {
-  const r = requestsFor(k, FULL, AUDIT);
+  const r = requestsFor(k, FULL, COMMUNITY);
   return r.kind === "requests" && r.requests.length > 0;
 });
 
 describe("refusals are unknown with their reason, never absent", () => {
   it("a 403 is unknown 'denied' for EVERY check kind that reads", () => {
     expect(READING_KINDS.length).toBe(CHECK_KINDS.length - 2);
+    expect(READING_KINDS).toEqual(expect.arrayContaining(["eh-rule-manage", "policy-definition"]));
     for (const kind of READING_KINDS) {
-      expect(classifyCheck(kind, FULL, [denied], AUDIT), kind).toEqual({
+      expect(classifyCheck(kind, FULL, [denied], COMMUNITY), kind).toEqual({
         kind: "unknown",
         reason: "denied",
         detail: "denied at /x",
@@ -77,7 +84,7 @@ describe("refusals are unknown with their reason, never absent", () => {
   it("a too-many-pages refusal is truncated, for every list kind", () => {
     const truncated = readRefused<unknown>(refusal({ reason: "too-many-pages", status: null, code: "" }));
     for (const kind of READING_KINDS) {
-      const v = classifyCheck(kind, FULL, [truncated], AUDIT);
+      const v = classifyCheck(kind, FULL, [truncated], COMMUNITY);
       expect(v.kind === "unknown" && v.reason, kind).toBe("truncated");
     }
   });
@@ -822,6 +829,126 @@ describe("eventgrid-subscription: the plan's storage account", () => {
       kind: "unknown",
       reason: "missing-value",
       detail: "Set Storage account first.",
+    });
+  });
+});
+
+describe("eh-rule-manage: the rule Azure creates hubs with (AZR-39)", () => {
+  const rules = (rights: string[]) => readRows([{ name: "sender", properties: { rights } }]);
+
+  it("a Send-only rule is present-differs on rights, where eh-rule-send calls the same rule fine", () => {
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Send"])])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Manage", actual: "Send" }],
+    });
+    expect(classifyCheck("eh-rule-send", FULL, [rules(["Send"])])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Listen", "Send"])])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Manage", actual: "Listen, Send" }],
+    });
+  });
+
+  it("a Manage rule is as-expected; a missing one is absent; unparsed rows are unknown", () => {
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Manage", "Send", "Listen"])])).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("eh-rule-manage", { ...FULL, sendRule: "nope" }, [rules(["Manage"])])).toEqual({
+      kind: "absent",
+    });
+    const v = classifyCheck("eh-rule-manage", FULL, [readRows([42])]);
+    expect(v).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "1 authorization rule row could not be read, so the listing does not show it is missing.",
+    });
+  });
+
+  it("checks the plan's sendRule, and needs it", () => {
+    const v = classifyCheck("eh-rule-manage", { ...FULL, sendRule: "" }, [rules(["Manage"])]);
+    expect(v).toEqual({ kind: "unknown", reason: "missing-value", detail: "Set Send rule first." });
+  });
+});
+
+describe("policy-definition: absent only from a complete listing (AZR-39)", () => {
+  const MG_DEFS = "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions";
+  const ACTIVITY = checkExpectationsFor("activityLog", FULL);
+  const STORAGE = checkExpectationsFor("communityPolicyInitiative", FULL, ["Storage"]);
+  const def = (id: string) => ({ id, name: id.split("/").pop() });
+
+  it("the Activity Log definition: listed is as-expected; a complete listing without it is absent", () => {
+    const id = `${MG_DEFS}/Cribl-Community-ActivityLog-DiagSettings-EventHub`;
+    expect(classifyCheck("policy-definition", FULL, [readRows([def(id)])], ACTIVITY)).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("policy-definition", FULL, [readRows([id.toLowerCase()].map(def))], ACTIVITY)).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("policy-definition", FULL, [readRows([])], ACTIVITY)).toEqual({ kind: "absent" });
+    expect(classifyCheck("policy-definition", FULL, [readRows([def(`${MG_DEFS}/Other`)])], ACTIVITY)).toEqual({
+      kind: "absent",
+    });
+  });
+
+  it("the same name saved at ANOTHER management group is not the plan's", () => {
+    const parent = "/providers/Microsoft.Management/managementGroups/root/providers/Microsoft.Authorization/policyDefinitions";
+    const rows = readRows([def(`${parent}/Cribl-Community-ActivityLog-DiagSettings-EventHub`)]);
+    expect(classifyCheck("policy-definition", FULL, [rows], ACTIVITY)).toEqual({ kind: "absent" });
+  });
+
+  it("community: some of the chosen tier's definitions is present-differs naming exactly the missing", () => {
+    const rows = readRows([def(`${MG_DEFS}/Cribl-BlobServices-DiagSettings-EH`), def(`${MG_DEFS}/Cribl-FileServices-DiagSettings-EH`)]);
+    expect(classifyCheck("policy-definition", FULL, [rows], STORAGE)).toEqual({
+      kind: "present-differs",
+      diffs: [
+        {
+          field: "definitions",
+          expected: "5 definitions",
+          actual:
+            "missing Cribl-QueueServices-DiagSettings-EH, Cribl-TableServices-DiagSettings-EH, " +
+            "Cribl-StorageAccounts-DiagSettings-EH",
+        },
+      ],
+    });
+    const all = readRows((STORAGE.policyDefinitions ?? []).map(def));
+    expect(classifyCheck("policy-definition", FULL, [all], STORAGE)).toEqual({ kind: "as-expected" });
+  });
+
+  it("a refused listing is unknown: 403 denied, 404 failed (never absent), too many pages truncated", () => {
+    expect(classifyCheck("policy-definition", FULL, [denied], ACTIVITY)).toEqual({
+      kind: "unknown",
+      reason: "denied",
+      detail: "denied at /x",
+    });
+    const notFound = classifyCheck(
+      "policy-definition",
+      FULL,
+      [readRefused(refusal({ status: 404, code: "ManagementGroupNotFound" }))],
+      ACTIVITY,
+    );
+    expect(notFound.kind === "unknown" && notFound.reason).toBe("failed");
+    const truncated = classifyCheck(
+      "policy-definition",
+      FULL,
+      [readRefused(refusal({ reason: "too-many-pages", status: null, code: "" }))],
+      ACTIVITY,
+    );
+    expect(truncated.kind === "unknown" && truncated.reason).toBe("truncated");
+  });
+
+  it("a row without an id may be the missing one: unknown, never absent", () => {
+    const v = classifyCheck("policy-definition", FULL, [readRows([{ name: "x" }, 7])], ACTIVITY);
+    expect(v).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "2 policy definition rows could not be read, so the listing does not show it is missing.",
+    });
+  });
+
+  it("with no definitions expected (the built-in Audit) it is missing-value, whatever is read", () => {
+    expect(classifyCheck("policy-definition", FULL, [readRows([])], AUDIT)).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "No policy definition is imported for this source.",
     });
   });
 });

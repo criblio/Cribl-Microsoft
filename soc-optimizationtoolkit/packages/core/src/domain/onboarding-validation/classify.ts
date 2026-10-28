@@ -31,6 +31,7 @@ import {
   parseNamespaceAuthRules,
   eventHubNamespacePath,
   ruleCanListen,
+  ruleCanManage,
   ruleCanSend,
 } from "../eventhub-arm/eventhub-arm";
 import {
@@ -452,6 +453,34 @@ function classifyAssignment(rows: readonly unknown[], ex: CheckExpectations): St
   return { kind: "absent" };
 }
 
+/**
+ * The custom definitions the steps save at the management group, from a
+ * COMPLETE listing of them (readAllPages refuses a truncated one, which is
+ * unknown before this runs). Matched on the full id, so a same-named
+ * definition at another scope the listing returns is not the plan's. Every
+ * one present is as-expected; none is absent; some is present-differs naming
+ * the missing. A row without an id may BE a missing one: unknown, never absent.
+ */
+function classifyDefinitions(rows: readonly unknown[], ex: CheckExpectations): StepVerdict {
+  const expected = ex.policyDefinitions ?? [];
+  const ids = rows.map((r) => str(r, "id")).filter((id) => id !== "");
+  const missing = expected.filter((e) => !ids.some((id) => same(id, e)));
+  if (missing.length === 0) return { kind: "as-expected" };
+  const dropped = rows.length - ids.length;
+  if (dropped > 0) return unparsedRows(dropped, "policy definition");
+  if (missing.length === expected.length) return { kind: "absent" };
+  return {
+    kind: "present-differs",
+    diffs: [
+      {
+        field: "definitions",
+        expected: `${expected.length} definitions`,
+        actual: `missing ${missing.map(lastSegment).join(", ")}`,
+      },
+    ],
+  };
+}
+
 /** The provisioningState diffs of a set of remediations: none when one Succeeded. */
 function remediationDiffs(matches: readonly unknown[]): VerdictDiff[] {
   const states = matches.map((r) => str(rec(r, "properties"), "provisioningState"));
@@ -646,7 +675,11 @@ export function classifyCheck(
   }
   if (kind === "xdr-streaming") return unknown("unmeasurable", XDR_UNMEASURABLE_DETAIL);
   if (kind === "policy-identity-roles") return unknown("truncated", POLICY_IDENTITY_ROLES_DETAIL);
-  if (kind.startsWith("policy-") && expectations.policy === undefined) {
+  if (kind === "policy-definition") {
+    if ((expectations.policyDefinitions ?? []).length === 0) {
+      return unknown("missing-value", "No policy definition is imported for this source.");
+    }
+  } else if (kind.startsWith("policy-") && expectations.policy === undefined) {
     return unknown("missing-value", "No initiative is expected for this source.");
   }
 
@@ -667,6 +700,9 @@ export function classifyCheck(
       return classifyRule(read, value(values, "sendRule"), ruleCanSend, "Send or Manage");
     case "eh-rule-listen":
       return classifyRule(read, value(values, "listenRule"), ruleCanListen, "Listen or Manage");
+    case "eh-rule-manage":
+      // The rule Azure creates hubs with: Send alone is a difference, not done.
+      return classifyRule(read, value(values, "sendRule"), ruleCanManage, "Manage");
     case "eh-consumer-group":
       return classifyConsumerGroup(values);
     case "defender-plans":
@@ -694,6 +730,8 @@ export function classifyCheck(
       return classifyAssignment(rows, expectations);
     case "policy-set-definition":
       return { kind: "as-expected" };
+    case "policy-definition":
+      return classifyDefinitions(rows, expectations);
     case "policy-remediation":
       return classifyRemediation(rows, expectations);
     case "network-watcher":

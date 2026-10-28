@@ -324,11 +324,6 @@ Filed as cards, not built:
 - creating a Listen rule and a dedicated consumer group (AZR-36);
 - a persisted last-seen beyond the 24-hour lookback (AZR-37);
 - one definition of the Defender coverage item id (AZR-38);
-- Validate checks for the How-to steps that have no check kind yet
-  (AZR-39): `eh-rule-manage` for the diagnostic-setting Manage rule, using
-  `ruleCanManage`, and `policy-definition` for the Activity Log and community
-  definitions at the management group. Those steps read "confirm by hand"
-  until then; the networking step stays confirm-only by design;
 - the export fallback and the `source.manage` gate from AZR-S2.
 
 ## Live verification (outstanding)
@@ -348,7 +343,10 @@ None of these ran during the build:
    under another name". A quiet hub reads "no messages in the window". Record
    the real response shapes and api-versions for the aadiam and subscription
    diagnosticSettings, Event Grid, the storage queue, the flow log and
-   `IncomingMessages`.
+   `IncomingMessages`. (AZR-39) A Send-only rule named as the Azure write
+   rule reads "present but different" on the Manage rule step; the custom
+   policy definitions listing at the management group accepts
+   `$filter=policyType eq 'Custom'` and returns each definition's full `id`.
 4. **Before any write**: whether `/products/stream/groups/<g>` and its
    `/deploy` answer through the app proxy under the new grants, or 403 or 404;
    which files an input create and a secret create dirty in

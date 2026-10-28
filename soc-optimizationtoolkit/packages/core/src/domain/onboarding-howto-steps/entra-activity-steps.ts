@@ -151,7 +151,12 @@ export const ACTIVITY_LOG_STEPS: readonly HowToStep[] = [
     rbac: ["Microsoft.Authorization/policyDefinitions/write at the management group."],
     confirmHow: `Policy, Definitions at {{managementGroupId}} lists ${ACTIVITY_DEF}.`,
     dependsOnValues: ["managementGroupId"],
-    checkKinds: [],
+    // Covered by 'policy-definition': like the community definitions, this is
+    // a custom definition saved at the management group under a name the
+    // steps fix, so the same listing answers whether it is there. The built-in
+    // Activity Log definition the Logging Map also accepts is not what this
+    // step imports, so it does not satisfy the check.
+    checkKinds: ["policy-definition"],
     provenance: "repo",
   },
   {

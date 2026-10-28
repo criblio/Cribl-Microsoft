@@ -47,6 +47,7 @@ import {
   setMode,
   stepDialogView,
   stepRows,
+  stepVerdictWord,
   toggleTick,
   withSavedProgress,
 } from "./howto-state";
@@ -366,6 +367,15 @@ describe("step dialog view", () => {
 
   it("unknown step id is null", () => {
     expect(stepDialogView("nope", emptyProgress(), SELECTION, { canWrite: true })).toBeNull();
+  });
+});
+
+describe("which steps Validate reports (AZR-39)", () => {
+  it("only networking reads 'confirm by hand'; the Manage rule and the definitions wait for a run", () => {
+    expect(stepVerdictWord(howToStep("eh-network")!, null)).toBe("confirm by hand");
+    for (const id of ["eh-rule-diagnostic", "policy-community-definitions", "activity-log-definition"]) {
+      expect(stepVerdictWord(howToStep(id)!, null), id).toBe("not checked yet");
+    }
   });
 });
 
