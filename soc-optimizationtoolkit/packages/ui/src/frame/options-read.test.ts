@@ -179,6 +179,41 @@ describe("planOptionsSave keeps what the codec does not manage (DBT-172)", () =>
     expect(JSON.parse(second.serialized)).toEqual(JSON.parse(STORED_WITH_UNMANAGED));
   });
 
+  it("a record an older version wrote gains ONLY the toggled field, not the screen's defaults", () => {
+    // The toggle hands over the whole operation section as the screen shows
+    // it: parsed, so a field the record never held, or held as junk, arrives
+    // as its DEFAULT. Writing those would freeze today's defaults into the
+    // record and overwrite the junk the operator never touched; only the
+    // field that changed may be written.
+    const older = JSON.stringify({
+      _comments: "keep",
+      operation: { createDCE: false, deploymentTimeoutSeconds: "soon" },
+    });
+    const read = optionsReadFromSettled({ status: "fulfilled", value: older });
+    const plan = planOptionsSave(read, {
+      operation: { ...read.options.operation, createDCE: true },
+    });
+    expect(plan).toEqual({
+      kind: "write",
+      serialized: JSON.stringify({
+        _comments: "keep",
+        operation: { createDCE: true, deploymentTimeoutSeconds: "soon" },
+      }),
+    });
+    // The cribl section narrows the same way.
+    const criblPlan = planOptionsSave(read, {
+      cribl: { ...read.options.cribl, workerGroup: "prod" },
+    });
+    expect(criblPlan).toEqual({
+      kind: "write",
+      serialized: JSON.stringify({
+        _comments: "keep",
+        operation: { createDCE: false, deploymentTimeoutSeconds: "soon" },
+        cribl: { workerGroup: "prod" },
+      }),
+    });
+  });
+
   it("absent: the patch applies over the complete defaults, so every managed field is written", () => {
     const absent = optionsReadFromSettled({ status: "fulfilled", value: null });
     const plan = planOptionsSave(absent, { operation: { createDCE: true } });

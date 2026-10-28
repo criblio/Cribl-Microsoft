@@ -33,8 +33,10 @@
  * exactly the managed fields, so saving through it deleted every key the
  * codec does not manage - legacy `_comments`, a section a newer app version
  * wrote - on every toggle. The loaded read keeps the raw stored string and
- * {@link planOptionsSave} applies the edit to it through applyOptionsPatch;
- * an absent read patches the complete defaults.
+ * {@link planOptionsSave} applies the edit to it through applyOptionsPatch,
+ * narrowed to the fields that actually changed (the edit arrives as a whole
+ * parsed section, whose untouched fields may be defaults the record never
+ * held); an absent read patches the complete defaults.
  *
  * A save that FAILS changes nothing stored, so the read stays what it was
  * and the operator is told in plain words ({@link settleOptionsSave},
@@ -181,9 +183,39 @@ export function planOptionsSave(read: OptionsRead, patch: AppOptionsPatch): Opti
   if (read.state === "loading") {
     return { kind: "refused", reason: OPTIONS_LOADING_NOTICE };
   }
-  const stored: unknown =
-    read.state === "loaded" && isJsonObject(read.raw) ? read.raw : read.options;
-  return { kind: "write", serialized: JSON.stringify(applyOptionsPatch(stored, patch)) };
+  if (read.state === "loaded" && isJsonObject(read.raw)) {
+    const changed = changedFields(read.options, patch);
+    return { kind: "write", serialized: JSON.stringify(applyOptionsPatch(read.raw, changed)) };
+  }
+  return { kind: "write", serialized: JSON.stringify(applyOptionsPatch(read.options, patch)) };
+}
+
+/**
+ * Narrow a patch to the fields whose value differs from what the screen
+ * showed. The inline edit hands over a whole PARSED section, so a field the
+ * record never held (an older version wrote it) or held as junk arrives as
+ * its default; patching those into the raw record would freeze today's
+ * defaults into it and overwrite values the operator never touched.
+ */
+function changedFields(shown: AppOptions, patch: AppOptionsPatch): AppOptionsPatch {
+  const narrowed: AppOptionsPatch = {};
+  if (patch.operation !== undefined) {
+    const operation = Object.fromEntries(
+      Object.entries(patch.operation).filter(
+        ([key, value]) => shown.operation[key as keyof AppOptions["operation"]] !== value,
+      ),
+    );
+    narrowed.operation = operation;
+  }
+  if (patch.cribl !== undefined) {
+    const cribl = Object.fromEntries(
+      Object.entries(patch.cribl).filter(
+        ([key, value]) => shown.cribl[key as keyof AppOptions["cribl"]] !== value,
+      ),
+    );
+    narrowed.cribl = cribl;
+  }
+  return narrowed;
 }
 
 /** What a settled inline save leaves: the read to hold, and what to tell the operator. */
