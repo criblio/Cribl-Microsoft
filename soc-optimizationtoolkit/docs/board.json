@@ -1872,7 +1872,7 @@
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/ui/src/screens/integrate/wiring-section.tsx:163-166 PATCHes the named secret when its POST returns 409, and packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:75-81 does the same on a 409 OR a 400. Neither checks who created the secret or what it holds, so a fixed secret id that another admin or another app already uses is silently replaced, breaking whatever reads it. A 400 is not a conflict at all - it can be a malformed body - and is still answered with an overwrite. config-plane-writes.md: create-only, and refuse on an existing object the app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove ownership (description stamp, as the AZR-34 work does with the kit's ownership helpers), and refuse otherwise; treat 400 as a failure.\n\nNOTE 2026-10-27: LANDED (89f0a63 + review b264f1d, merged 0e8ec6c): one core usecase ensureTextSecret and pure decideSecretConflict serve both callers; on a 409 it GETs the secret and PATCHes only when the description carries the exact [managed-by:soc-optimizationtoolkit] stamp; a foreign or unreadable owner is refused naming the id, a 400 is an error; buildEnsureSecretRequest/buildUpdateSecretRequest removed. The review reworded the refusal (a secret this app wrote before DBT-163 is unstamped, so it now says the app cannot show it wrote it and how to proceed), pinned exact stamp matching against lookalikes, and added a WiringSection DOM test. BEHAVIOUR CHANGE for release notes: an unstamped existing secret is no longer overwritten. Awaits live: that GET /system/secrets/:id returns items[].description (if not, every rotation is refused); that a duplicate id answers 409, not 400; Ensure secret on fresh / stamped / hand-made secrets; the Labs flow-log pack with an existing secret (the pack is installed before the refusal)."
+      "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/ui/src/screens/integrate/wiring-section.tsx:163-166 PATCHes the named secret when its POST returns 409, and packages/core/src/usecases/provision-lab/deploy-flowlog-pack.ts:75-81 does the same on a 409 OR a 400. Neither checks who created the secret or what it holds, so a fixed secret id that another admin or another app already uses is silently replaced, breaking whatever reads it. A 400 is not a conflict at all - it can be a malformed body - and is still answered with an overwrite. config-plane-writes.md: create-only, and refuse on an existing object the app cannot prove it owns. FIX: on 409 read GET /system/secrets/:id, prove ownership (description stamp, as the AZR-34 work does with the kit's ownership helpers), and refuse otherwise; treat 400 as a failure.\n\nNOTE 2026-10-27: LANDED (89f0a63 + review b264f1d, merged 0e8ec6c): one core usecase ensureTextSecret and pure decideSecretConflict serve both callers; on a 409 it GETs the secret and PATCHes only when the description carries the exact [managed-by:soc-optimizationtoolkit] stamp; a foreign or unreadable owner is refused naming the id, a 400 is an error; buildEnsureSecretRequest/buildUpdateSecretRequest removed. The review reworded the refusal (a secret this app wrote before DBT-163 is unstamped, so it now says the app cannot show it wrote it and how to proceed), pinned exact stamp matching against lookalikes, and added a WiringSection DOM test. BEHAVIOUR CHANGE for release notes: an unstamped existing secret is no longer overwritten. Awaits live: that GET /system/secrets/:id returns items[].description (if not, every rotation is refused); that a duplicate id answers 409, not 400; Ensure secret on fresh / stamped / hand-made secrets; the Labs flow-log pack with an existing secret (the pack is installed before the refusal).\n\nNOTE 2026-10-28: OPERATOR DECISION: keep the refusal. An untagged existing secret, including one this app wrote before DBT-163, is never overwritten; the message tells the operator to delete it or add the stamp. Adopting by fixed id was rejected because it would overwrite a hand-made secret that happens to use the id."
     },
     {
       "id": "DBT-153",
@@ -1918,12 +1918,13 @@
       "feature": "DBT-F1",
       "title": "UI tests time out or miscount under full-suite load and pass alone",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "menu": "none",
-      "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet.\n\nNOTE 2026-10-27: hit again on the round-3 merged gate run (0e8ec6c): only \"the gap card's Remove deletes the sample, its chip and its card\" failed (2007/2008), and the file passed 43/43 alone. Worktree runs in the same round timed out in seven more files (integrate-copy-history, mapping-review-*, azure-onboarding-screen.dom, azure-onboarding-howto.dom), and apps/cribl-app check-listings.test.mjs \"the repository itself\" ran 6.9s against the 5s default. Third red gate from this flake today."
+      "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet.\n\nNOTE 2026-10-27: hit again on the round-3 merged gate run (0e8ec6c): only \"the gap card's Remove deletes the sample, its chip and its card\" failed (2007/2008), and the file passed 43/43 alone. Worktree runs in the same round timed out in seven more files (integrate-copy-history, mapping-review-*, azure-onboarding-screen.dom, azure-onboarding-howto.dom), and apps/cribl-app check-listings.test.mjs \"the repository itself\" ran 6.9s against the 5s default. Third red gate from this flake today.\n\nNOTE 2026-10-28: LANDED (d810d90 + review c2b01ae, merged 7b0357c): every failure reproduced was a time budget running out under load (about ten worktrees' vitest suites on 22 threads); old code failed 7, 39 and 72 of 2008 in three full runs. Test and waitFor budgets are now sized from that measurement in packages/ui test-budget.ts with pins that the config applies them; the review removed three explicit 3000ms waitFor timeouts that replaced, not added to, the budget. The 'expected 1, got 0' miscount was a budget expiry too. Leftovers: DBT-184, DBT-185. Closed on pins; reopen if a gate run goes red on a timeout again.",
+      "verified": "pins"
     },
     {
       "id": "DBT-157",
@@ -1950,7 +1951,7 @@
       "priority": "now",
       "menu": "none",
       "title": "A failed options read falls back to defaults, and the next inline save writes the defaults over the real options",
-      "detail": "FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not introduced by them). App.tsx:704 and :732 - when the options KV read is refused or fails, the app runs on defaults, and the next inline save of any option PUTs that whole default document over the operator's saved options. Data loss, and it predates DBT-145 (null on 403, defaults on 5xx).\n\nFIX: track the options read as loaded / unreadable; while unreadable, block (or read-modify-write) the save and say why; pin both.\n\nNOTE 2026-10-27: LANDED (73e060b, review approved without changes, merged 06f6824): packages/ui/src/frame/options-read.ts holds the options read as loading/absent/loaded/unreadable; planOptionsSave refuses while loading or unreadable and nothing is PUT; Integrate/Onboard/Batch show a notice with Retry; 11 pins, mutation-checked by both agents. Review minors left open: Retry has no in-flight state (a double click races two reads, a failed retry looks unchanged); the failure detail is not rendered (as on DBT-145's setup screen); a 'loading' refusal is not cleared on settle (unreachable today). Awaits live: a refused appOptions GET shows the notice and sends no PUT; Retry restores the real options; a 404 saves normally."
+      "detail": "FOUND 2026-10-27 by the DBT-145/DBT-148/AZR-20 reviews (pre-existing, not introduced by them). App.tsx:704 and :732 - when the options KV read is refused or fails, the app runs on defaults, and the next inline save of any option PUTs that whole default document over the operator's saved options. Data loss, and it predates DBT-145 (null on 403, defaults on 5xx).\n\nFIX: track the options read as loaded / unreadable; while unreadable, block (or read-modify-write) the save and say why; pin both.\n\nNOTE 2026-10-27: LANDED (73e060b, review approved without changes, merged 06f6824): packages/ui/src/frame/options-read.ts holds the options read as loading/absent/loaded/unreadable; planOptionsSave refuses while loading or unreadable and nothing is PUT; Integrate/Onboard/Batch show a notice with Retry; 11 pins, mutation-checked by both agents. Review minors left open: Retry has no in-flight state (a double click races two reads, a failed retry looks unchanged); the failure detail is not rendered (as on DBT-145's setup screen); a 'loading' refusal is not cleared on settle (unreachable today). Awaits live: a refused appOptions GET shows the notice and sends no PUT; Retry restores the real options; a 404 saves normally.\n\nNOTE 2026-10-28: OPERATOR DECISION: block Onboard and Batch Run while the options read is unreadable or retrying (a deploy with options the operator did not choose writes real config). Filed as DBT-180."
     },
     {
       "epic": "DBT",
@@ -2060,7 +2061,7 @@
       "menu": "azure-onboarding",
       "id": "DBT-166",
       "title": "Validate reads a remediation as configured when it ran for a different assignment of the same family",
-      "detail": "FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree). classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts any legacy-family assignment even when an assignment name was instructed, so a Succeeded remediation on Cribl-AU-Old reads as-expected while classifyAssignment calls that same assignment present-other-name. FIX: when a name is instructed, only an exact-name match is as-expected; a family match is present-other-name. Pin.\n\nNOTE 2026-10-27: LANDED (c39d6da + review 97b1c5b, merged bf8baac): with an instructed name only an exact-name remediation is as-expected; a family match is present-other-name, and its diffs cover the named assignment only (the review added that pin). Open for the operator, not a defect: the exact assignment with no remediation while a family member has one reads present-other-name; 'absent' could be argued.",
+      "detail": "FOUND 2026-10-27 by the DBT-165 pins (implementer and reviewer agree). classifyRemediation (domain/onboarding-validation/classify.ts ~:450) accepts any legacy-family assignment even when an assignment name was instructed, so a Succeeded remediation on Cribl-AU-Old reads as-expected while classifyAssignment calls that same assignment present-other-name. FIX: when a name is instructed, only an exact-name match is as-expected; a family match is present-other-name. Pin.\n\nNOTE 2026-10-27: LANDED (c39d6da + review 97b1c5b, merged bf8baac): with an instructed name only an exact-name remediation is as-expected; a family match is present-other-name, and its diffs cover the named assignment only (the review added that pin). Open for the operator, not a defect: the exact assignment with no remediation while a family member has one reads present-other-name; 'absent' could be argued.\n\nNOTE 2026-10-28: OPERATOR DECISION: keep present-other-name when the exact assignment has no remediation and a family member has one; it points the operator at the assignment that did the work. Not 'absent'.",
       "verified": "pins"
     },
     {
@@ -2115,13 +2116,13 @@
       "priority": "now",
       "menu": "architecture",
       "title": "Live Architecture computes legacyInputMatch and never shows it",
-      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. LiveFlowSummary.legacyInputMatch (live-architecture.ts:215-220, set :1179) is computed and pinned, but no code in packages/ui or apps/cribl-app reads it, so a route matched only by its bare input id is drawn as confirmed on the Dataflow screen while the onboarding screen calls the same route unconfirmed (DBT-162). FIX: render a per-flow 'unconfirmed: filter names the bare input id' badge from the field; DOM pin."
+      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. LiveFlowSummary.legacyInputMatch (live-architecture.ts:215-220, set :1179) is computed and pinned, but no code in packages/ui or apps/cribl-app reads it, so a route matched only by its bare input id is drawn as confirmed on the Dataflow screen while the onboarding screen calls the same route unconfirmed (DBT-162). FIX: render a per-flow 'unconfirmed: filter names the bare input id' badge from the field; DOM pin.\n\nNOTE 2026-10-28: LANDED (6c4b101 + review cadfefd, merged 3740ee9): the Live Workgroup View lists bare-id flows under 'Unconfirmed routes' with the suffix and an (i), and suffixes them in the flow-inventory picker; the review pinned the picker and removed a shared-fixture order dependency. The canvas still draws a bare-id edge like a confirmed one - a per-edge marker may be what is wanted. Awaits live on a group with a bare-id route."
     },
     {
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-171",
@@ -2129,7 +2130,8 @@
       "priorityWhy": "Two literals that agree today and a dead type alias; nothing an operator sees is wrong until one literal is edited alone, and the pin on each would catch a change to that one.",
       "menu": "azure-onboarding",
       "title": "The bare-id route wording is written twice, and RouteFilterInputs is a dead alias",
-      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. ' (unconfirmed: its filter names the bare input id)' is a literal in core lanes.ts:480-482 and again in the UI cribl-source-panel.tsx:490, pinned separately. live-architecture.ts:377 exports RouteFilterInputs = InputIdFilter, re-exported from the barrel, used only inside its own file. FIX: one exported wording constant from core; drop the alias."
+      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. ' (unconfirmed: its filter names the bare input id)' is a literal in core lanes.ts:480-482 and again in the UI cribl-source-panel.tsx:490, pinned separately. live-architecture.ts:377 exports RouteFilterInputs = InputIdFilter, re-exported from the barrel, used only inside its own file. FIX: one exported wording constant from core; drop the alias.\n\nNOTE 2026-10-28: LANDED (6c4b101 + review cadfefd, merged 3740ee9): LEGACY_INPUT_MATCH_SUFFIX and LEGACY_INPUT_MATCH_TIP live in core input-id.ts and feed lanes.ts, cribl-source-panel and the Dataflow note; RouteFilterInputs removed.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -2141,7 +2143,7 @@
       "id": "DBT-172",
       "priority": "now",
       "title": "Every inline options save drops keys the app does not manage",
-      "detail": "FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not introduced by it). App.tsx:143-145 says saves go through applyOptionsPatch so unmanaged keys survive, but the save serialises canonical options (serializeAppOptions, now in packages/ui/src/frame/options-read.ts planOptionsSave), dropping _comments and any section a newer version wrote. FIX: keep the raw stored string in the loaded read and save through applyOptionsPatch; pin that an unknown key survives a toggle."
+      "detail": "FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not introduced by it). App.tsx:143-145 says saves go through applyOptionsPatch so unmanaged keys survive, but the save serialises canonical options (serializeAppOptions, now in packages/ui/src/frame/options-read.ts planOptionsSave), dropping _comments and any section a newer version wrote. FIX: keep the raw stored string in the loaded read and save through applyOptionsPatch; pin that an unknown key survives a toggle.\n\nNOTE 2026-10-28: LANDED (602c7db + review d62e4ab, merged 0829b0e): a loaded read keeps the raw string and the save patches only the changed field into it (the review found the first version patched the whole parsed section, rewriting unmanaged nested keys); unknown top-level and nested keys survive a toggle. Awaits live."
     },
     {
       "epic": "DBT",
@@ -2153,7 +2155,7 @@
       "id": "DBT-173",
       "priority": "now",
       "title": "A failed options save is an unhandled rejection the operator never hears about",
-      "detail": "FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not introduced by it). App.tsx persistOperation calls `void saveAppOptions(...)`; a failed PUT rejects unhandled and the toggle looks saved. Also decide: Onboard and Batch still run with default options while the options read is unreadable (the DBT-158 notice says so, but Run is not blocked). FIX: catch, show the failure, revert the toggle; pin."
+      "detail": "FOUND 2026-10-27 by the DBT-158 implementer/reviewer (pre-existing, not introduced by it). App.tsx persistOperation calls `void saveAppOptions(...)`; a failed PUT rejects unhandled and the toggle looks saved. Also decide: Onboard and Batch still run with default options while the options read is unreadable (the DBT-158 notice says so, but Run is not blocked). FIX: catch, show the failure, revert the toggle; pin.\n\nNOTE 2026-10-28: LANDED with DBT-172: a failed PUT is caught, said, and the shown value stays what is stored; Retry has an in-flight state. Leftovers DBT-182. The Run gate is DBT-180. Awaits live."
     },
     {
       "epic": "DBT",
@@ -2178,7 +2180,7 @@
       "id": "DBT-175",
       "priority": "now",
       "title": "More KV readers and writers turn a refused store into silence or a false 'Saved'",
-      "detail": "FOUND 2026-10-27 by the DBT-159 implementer/reviewer (pre-existing, not introduced by it). (1) sample-intake-section.tsx:683 `void definitionCache.set(vendorKey, name)` has no catch and sets vendorSaved before the write lands: unhandled rejection plus a false 'Saved'; the new DBT-159 hint 'Naming it again replaces whatever is stored' is false in exactly that case. (2) siem-migration-screen.tsx:100-112 shows a refused plan-cache read as 'no saved plan'. (3) use-vendor-column-order.ts:95 swallows a refused read and :133/:145 refused writes with no reason shown. (4) pat-form-state derivePatFormView: canClear is hasPat-only, so with the status unknown a possibly stored token cannot be cleared. FIX each; pin each."
+      "detail": "FOUND 2026-10-27 by the DBT-159 implementer/reviewer (pre-existing, not introduced by it). (1) sample-intake-section.tsx:683 `void definitionCache.set(vendorKey, name)` has no catch and sets vendorSaved before the write lands: unhandled rejection plus a false 'Saved'; the new DBT-159 hint 'Naming it again replaces whatever is stored' is false in exactly that case. (2) siem-migration-screen.tsx:100-112 shows a refused plan-cache read as 'no saved plan'. (3) use-vendor-column-order.ts:95 swallows a refused read and :133/:145 refused writes with no reason shown. (4) pat-form-state derivePatFormView: canClear is hasPat-only, so with the status unknown a possibly stored token cannot be cleared. FIX each; pin each.\n\nNOTE 2026-10-28: LANDED (0220b36 + review c5ebc05, merged 198c0d6): vendor-name save is awaited (Saving / Saved / refusal) and the review tied its late answer to the solution it started under; SIEM plan-cache refusal reads unknown; column-order refusals are said; Clear works with the PAT status unknown. Remaining swallowed KV calls are DBT-181. Awaits live."
     },
     {
       "epic": "DBT",
@@ -2190,7 +2192,7 @@
       "id": "DBT-176",
       "priority": "now",
       "title": "Content Hub catalog failures read as 'not in the catalog' or 'none deprecated'",
-      "detail": "FOUND 2026-10-27 by the DBT-160 implementer/reviewer (pre-existing, not introduced by it). findSolutionCatalogEntry (usecases/content-install/available-content.ts:68-81) returns null for both unreadable and no-match, and content-install-section.tsx:600-604 then says 'Load to look up this solution in Content Hub.' after a load; listDeprecatedContentHubSolutions (:127-140, used by solution-browser.tsx:315) returns an empty set on failure; installParser (content-install.ts:611-627) swallows a failed saved-searches listing and PUTs anyway (safe, idempotent, never reported). DBT-160 adds one more cause to each. FIX: a tri-state result (found / not found / unreadable with reason) and render it; pin."
+      "detail": "FOUND 2026-10-27 by the DBT-160 implementer/reviewer (pre-existing, not introduced by it). findSolutionCatalogEntry (usecases/content-install/available-content.ts:68-81) returns null for both unreadable and no-match, and content-install-section.tsx:600-604 then says 'Load to look up this solution in Content Hub.' after a load; listDeprecatedContentHubSolutions (:127-140, used by solution-browser.tsx:315) returns an empty set on failure; installParser (content-install.ts:611-627) swallows a failed saved-searches listing and PUTs anyway (safe, idempotent, never reported). DBT-160 adds one more cause to each. FIX: a tri-state result (found / not found / unreadable with reason) and render it; pin.\n\nNOTE 2026-10-28: LANDED (76b5950 + review 31cb530, merged 3850317): readContentHubCatalog serves both lookups; findSolutionCatalogEntry is found / not-found (with packages seen) / unreadable (with reason), listDeprecated likewise, and the UI says which; installParser reports an unreadable saved-searches listing. Cosmetic left: 'among the 1 packages'. Awaits live. Older fuzzy-match defect is DBT-183."
     },
     {
       "epic": "DBT",
@@ -2209,14 +2211,15 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-178",
       "priority": "now",
       "menu": "azure-onboarding",
       "title": "Validate tells the operator a policy assignment or remediation 'targets the plan's hub'",
-      "detail": "FOUND 2026-10-27 by the DBT-166/167 implementer/reviewer (pre-existing, not introduced by it). packages/ui/src/screens/azure-onboarding/validate/validate-state.ts:127 gives every present-other-name verdict the detail 'Found as X, which targets the plan's hub.' False for policy-assignment and, since DBT-166, policy-remediation. Also: when several family assignments exist, the verdict names only the first and does not say there are more. FIX: per-check-kind wording; pin."
+      "detail": "FOUND 2026-10-27 by the DBT-166/167 implementer/reviewer (pre-existing, not introduced by it). packages/ui/src/screens/azure-onboarding/validate/validate-state.ts:127 gives every present-other-name verdict the detail 'Found as X, which targets the plan's hub.' False for policy-assignment and, since DBT-166, policy-remediation. Also: when several family assignments exist, the verdict names only the first and does not say there are more. FIX: per-check-kind wording; pin.\n\nNOTE 2026-10-28: LANDED (ad9e8d9, review approved, merged 4d9c44f): verdictView takes the check kind; each of the four present-other-name kinds says only what its classifier matched on, plus how many others were found. Leftovers: DBT-189.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -2229,7 +2232,136 @@
       "priority": "now",
       "menu": "azure-onboarding",
       "title": "Validate may read an Event Grid subscription on another account's topic as configured",
-      "detail": "FOUND 2026-10-27 by the DBT-167 implementer/reviewer (pre-existing, not introduced by it). SUSPECTED, not confirmed: eventgrid-subscription (requests.ts:168) does not require storageAccount and its classifier matches only on queueName, the same shape DBT-167 fixed for the topic. FIX after confirming: require the plan's storage account and check the subscription's topic source; pin."
+      "detail": "FOUND 2026-10-27 by the DBT-167 implementer/reviewer (pre-existing, not introduced by it). SUSPECTED, not confirmed: eventgrid-subscription (requests.ts:168) does not require storageAccount and its classifier matches only on queueName, the same shape DBT-167 fixed for the topic. FIX after confirming: require the plan's storage account and check the subscription's topic source; pin.\n\nNOTE 2026-10-28: LANDED with DBT-178 (ad9e8d9): eventgrid-subscription now checks properties.topic belongs to the plan and reads unknown when it cannot say. The reviewer notes the read is already scoped to the plan's system topic (requests.ts:394-405), so this is defence in depth. Awaits live: what properties.topic holds on a system-topic event subscription; if it is the system topic id, accept the plan's own system topic id there."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-180",
+      "title": "Onboard and Batch refuse to Run while the options read is unreadable",
+      "detail": "OPERATOR DECISION 2026-10-28 (on DBT-158): block Run while appOptions is unreadable or retrying. Today Onboard and Batch deploy with DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158 notice. FIX: derive a run gate from OptionsRead (packages/ui/src/frame/options-read.ts), disable Run with the reason and the Retry, pin it."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-181",
+      "title": "Five more KV calls swallow a refused read or write",
+      "detail": "FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() => undefined)) and :757 (its restore read, which reads as no selection); mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107 (persist and forget writes: approved edits silently not learned, Forget silently does nothing); siem-migration-screen.tsx:134 persist(); rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and logged, but nothing on screen). Also use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin each."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-182",
+      "priorityWhy": "Needs two DCE toggles within one PUT round trip or a PUT that times out after landing; both send the whole managed section, so no managed field is lost today.",
+      "title": "Inline option saves are not serialised, and a timed-out PUT is assumed not to have landed",
+      "detail": "FOUND 2026-10-28 by the DBT-172/173 implementer/reviewer (pre-existing unless said). App.tsx ~757-766: overlapping PUTs settle last-wins on the client regardless of server order; settleOptionsSave treats every rejection as 'nothing changed' though a timed-out PUT may have landed (a re-read after a failed save would settle it); the DCE checkbox gives no saving feedback, so a slow PUT looks like an ignored click (integrate-screen.tsx:2404-2412). FIX: queue saves, re-read after a failure, show saving."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-183",
+      "title": "A Content Hub package with no displayName matches every solution",
+      "detail": "FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless said). findSolutionCatalogEntry's fuzzy match (available-content.ts ~:138-141) is dn.includes(target) || target.includes(dn); a package with an empty or missing displayName gives dn === '', and target.includes('') is true, so it matches whatever is looked up first. FIX: skip empty names; pin."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-184",
+      "priorityWhy": "Test-only: it shifts the line numbers a copy-history test reports, not what it checks or anything an operator sees.",
+      "menu": "none",
+      "title": "The copy-history tests' comment stripper eats newlines",
+      "detail": "FOUND 2026-10-28 by the DBT-156 implementer/reviewer (pre-existing unless said). integrate-copy-history.test.ts:54 and azure-onboarding-copy-history.test.ts:52 use .replace(/^\\s*\\/\\/.*$/gm, ''); \\s* also matches newlines, so whole blank-line runs vanish and reported line numbers shift. FIX: [ \\t]*; pin with a fixture."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-185",
+      "priorityWhy": "No wrong result today: the budgets are pinned as applied; this is about the config files escaping typecheck and one workspace on default limits.",
+      "menu": "none",
+      "title": "Test configs: ui vitest.config.ts is not typechecked, cribl-app runs on the dev-server config's defaults",
+      "detail": "FOUND 2026-10-28 by the DBT-156 implementer/reviewer (pre-existing unless said). packages/ui/vitest.config.ts is outside tsconfig include (src only). apps/cribl-app has no vitest config; its tests run from vite.config.ts on the 5s/1s defaults, against claude-kit standards/ui-test-environments.md; check-listings.test.mjs 'the repository itself' ran 6.9s. FIX: tsconfig.node.json for the ui config; a cribl-app vitest config with measured budgets."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-186",
+      "priorityWhy": "Suspected only: seen in a test that clicked as soon as the select showed a value; an operator would have to click within the same render. Confirm in the product first.",
+      "menu": "architecture",
+      "title": "Live Workgroup View's Load stays disabled until the initial group commits",
+      "detail": "FOUND 2026-10-28 by the DBT-170 implementer/reviewer (pre-existing unless said). architecture-screen.tsx LiveArchitecturePanel: the select already shows the first group but Load is disabled (groupId === '') until useInitialWorkerGroup commits it. Also the module header (:11-14) says the screen calls nothing external and needs no ports, false since the Live Workgroup and Edge views. FIX: confirm live; fix the header regardless."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-187",
+      "title": "The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead",
+      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. decideSecretConflict (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts findById each pick the record for an id out of items, with different handling of non-object entries, so the onboarding source planner and ensureTextSecret can read the same answer differently. SECRETS_API_PATH (guided-deploy/secret-provisioning.ts:47) is used only by tests and the barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the constant or use it."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-188",
+      "title": "DBT-158's shell wiring has no pin",
+      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. options-read.ts's decisions are pinned, but App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation refusing, the DCE checkbox going read-only. A wiring regression would pass every test. FIX: a DOM pin of the frame with a refused appOptions read (DBT-180 adds the Run gate to the same path)."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-189",
+      "priorityWhy": "The extra-count wording is a refinement DBT-178 added to Validate; the How-to step word and the lane label are true as written, only less complete.",
+      "menu": "azure-onboarding",
+      "title": "How-to step word and dataflow lane ignore the 'others also found' count",
+      "detail": "FOUND 2026-10-28 by the DBT-178 implementer/reviewer (pre-existing unless said). howto-state.ts:360 stepVerdictWord names only the first present-other-name verdict and ignores alsoFound; onboarding-dataflow lanes.ts:269 renders 'exists (named <name>)' with no count. The policy-remediation count sentence ('N others like it') counts assignments, and can be read as remediations. FIX: one wording helper used by Validate, How-to and the lane."
     },
     {
       "id": "AZR-22",
