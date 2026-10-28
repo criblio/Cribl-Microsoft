@@ -247,24 +247,38 @@ export const METRICS_API_VERSION = "2018-01-01";
 /** The activity lookback the UI mints the timespan from (legacy: 7 days). */
 export const EH_ACTIVITY_LOOKBACK_DAYS = 7;
 
+/** A hub resource id split into its namespace id and hub name. */
+const HUB_RESOURCE_ID = /^(.*\/namespaces\/[^/]+)\/eventhubs\/([^/]+)$/i;
+
 /**
  * Build the per-hub IncomingMessages metrics GET (1-hour grain, Total
- * aggregation - the legacy Get-AzMetric shape). `timespan` is
- * "{startISO}/{endISO}", minted by the CALLER - core never reads a clock.
+ * aggregation). `timespan` is "{startISO}/{endISO}", minted by the CALLER -
+ * core never reads a clock.
+ *
+ * IncomingMessages is a NAMESPACE metric. Asked of the hub resource itself,
+ * Azure answers 400 "Microsoft.EventHub/namespaces/eventhubs is not a
+ * supported platform metric namespace" (measured live 2026-10-28, AZR-40), so
+ * the read goes to the hub's namespace and selects the hub with the EntityName
+ * dimension. The legacy Get-AzMetric -ResourceId $eh.id made the same mistake
+ * and hid it behind -ErrorAction SilentlyContinue (AZR-46). An id that is not
+ * a hub id is read as given, unfiltered.
  */
 export function metricsRequest(
   hubResourceId: string,
   timespan: string,
 ): AzureManagementRequest {
+  const hub = HUB_RESOURCE_ID.exec(hubResourceId);
+  const scope = hub ? hub[1] : hubResourceId;
   return {
     method: "GET",
-    path: `${hubResourceId}/providers/microsoft.insights/metrics`,
+    path: `${scope}/providers/microsoft.insights/metrics`,
     apiVersion: METRICS_API_VERSION,
     query: {
       metricnames: "IncomingMessages",
       timespan,
       interval: "PT1H",
       aggregation: "Total",
+      ...(hub ? { $filter: `EntityName eq '${hub[2].replace(/'/g, "''")}'` } : {}),
     },
   };
 }

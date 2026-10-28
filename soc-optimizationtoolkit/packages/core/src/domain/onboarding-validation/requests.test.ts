@@ -58,15 +58,16 @@ describe("requestsFor: read-only by construction", () => {
     }
   });
 
-  it("the arrival request is a GET of IncomingMessages on the hub", () => {
+  it("the arrival request is a GET of IncomingMessages on the namespace, filtered to the hub", () => {
     const r = arrivalRequestFor(FULL, "insights-logs-signinlogs");
     expect(r.kind).toBe("request");
     if (r.kind !== "request") return;
     expect(r.request.method).toBe("GET");
     expect(r.request.path).toBe(
       "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.EventHub/namespaces/ns1" +
-        "/eventhubs/insights-logs-signinlogs/providers/microsoft.insights/metrics",
+        "/providers/microsoft.insights/metrics",
     );
+    expect(r.request.query?.["$filter"]).toBe("EntityName eq 'insights-logs-signinlogs'");
     expect(r.request.query?.["metricnames"]).toBe("IncomingMessages");
     expect(r.request.query).not.toHaveProperty("timespan");
     expect(r.window).toBe(DEFAULT_ARRIVAL_WINDOW);

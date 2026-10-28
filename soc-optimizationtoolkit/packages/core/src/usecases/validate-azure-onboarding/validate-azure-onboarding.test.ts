@@ -121,9 +121,8 @@ describe("planValidation", () => {
   it("arrival hubs are the named / known hubs of Event Hub sources only", () => {
     const plan = planValidation(["defenderExport", "vnetFlowLogs"], FULL);
     expect(plan.arrivalHubs).toEqual(["defender-alerts"]);
-    expect(plan.arrival[0]?.read.request.path).toBe(
-      `${NS_PATH}/eventhubs/defender-alerts/providers/microsoft.insights/metrics`,
-    );
+    expect(plan.arrival[0]?.read.request.path).toBe(`${NS_PATH}/providers/microsoft.insights/metrics`);
+    expect(plan.arrival[0]?.read.request.query?.["$filter"]).toBe("EntityName eq 'defender-alerts'");
   });
 });
 
@@ -242,7 +241,7 @@ describe("measured hubs and verdict honesty", () => {
 });
 
 describe("arrival", () => {
-  const METRICS = `${NS_PATH}/eventhubs/defender-alerts/providers/microsoft.insights/metrics`;
+  const METRICS = `${NS_PATH}/providers/microsoft.insights/metrics`;
   const metrics = (total: number): PortHttpResponse => ({
     status: 200,
     body: { value: [{ timeseries: [{ data: [{ total }] }] }] },

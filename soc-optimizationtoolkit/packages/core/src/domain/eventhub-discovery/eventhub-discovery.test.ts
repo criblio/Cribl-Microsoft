@@ -275,14 +275,34 @@ describe("sender discovery (EVH-04)", () => {
 });
 
 describe("activity detection (EVH-07)", () => {
-  it("builds the legacy metrics GET (IncomingMessages, PT1H, Total)", () => {
-    const req = metricsRequest("/x/hub", "2026-07-01T00:00:00Z/2026-07-08T00:00:00Z");
-    expect(req.path).toBe("/x/hub/providers/microsoft.insights/metrics");
+  const NS = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1";
+
+  it("builds the metrics GET (IncomingMessages, PT1H, Total)", () => {
+    const req = metricsRequest(`${NS}/eventhubs/hub`, "2026-07-01T00:00:00Z/2026-07-08T00:00:00Z");
     expect(req.query).toMatchObject({
       metricnames: "IncomingMessages",
       interval: "PT1H",
       aggregation: "Total",
     });
+  });
+
+  // AZR-40/46: Azure refuses the hub resource as a metrics scope with 400 "not
+  // a supported platform metric namespace" (measured live 2026-10-28). The
+  // read goes to the NAMESPACE and selects the hub by the EntityName dimension.
+  it("reads a hub's IncomingMessages on its namespace, filtered to the hub", () => {
+    const req = metricsRequest(`${NS}/eventhubs/insights-logs-auditlogs`, "");
+    expect(req.path).toBe(`${NS}/providers/microsoft.insights/metrics`);
+    expect(req.path).not.toContain("/eventhubs/");
+    expect(req.query?.["$filter"]).toBe("EntityName eq 'insights-logs-auditlogs'");
+  });
+
+  it("escapes a quote in the hub name and leaves a non-hub id unfiltered", () => {
+    expect(metricsRequest(`${NS}/eventhubs/o'hub`, "").query?.["$filter"]).toBe(
+      "EntityName eq 'o''hub'",
+    );
+    const ns = metricsRequest(NS, "");
+    expect(ns.path).toBe(`${NS}/providers/microsoft.insights/metrics`);
+    expect(ns.query).not.toHaveProperty("$filter");
   });
 
   it("sums totals defensively", () => {
