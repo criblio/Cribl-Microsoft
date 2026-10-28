@@ -19,11 +19,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { PLAN_VALUE_KEYS, defaultPlanValues } from "@soc/core";
-import type { AzureConfig, OnboardingCriblSide, PlanValues, ValidationPlan, ValidationResult } from "@soc/core";
+import { FakeKvDocumentStore, PLAN_VALUE_KEYS, defaultPlanValues } from "@soc/core";
+import type {
+  AzureConfig,
+  AzureManagementRequest,
+  OnboardingCriblSide,
+  PlanValues,
+  PortHttpResponse,
+  ValidationPlan,
+  ValidationResult,
+} from "@soc/core";
 
 import { PortsProvider, type UiPorts } from "../../ports-context";
 import { AzureLoggingMapScreen } from "../azure-logging-map/azure-logging-map-screen";
+import { AzureOnboardingScreen } from "./azure-onboarding-screen";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
@@ -71,6 +80,14 @@ function overflowWrapByClass(text: string): Map<string, string> {
 
 const WRAP = overflowWrapByClass(css);
 
+/** The one innermost element whose whole text is exactly `text`. */
+function exactly(text: string): HTMLElement {
+  const all = [...document.body.querySelectorAll<HTMLElement>("*")].filter((e) => e.textContent === text);
+  const inner = all.filter((e) => ![...e.children].some((c) => c.textContent === text));
+  expect(inner.length).toBe(1);
+  return inner[0]!;
+}
+
 /** The innermost element whose text holds `token`. */
 function carrier(token: string): HTMLElement {
   const all = [...document.body.querySelectorAll<HTMLElement>("*")].filter((e) => e.textContent?.includes(token));
@@ -92,7 +109,14 @@ function wrapOf(el: HTMLElement): { cls: string; value: string } | null {
 
 describe("AZR-44 - the wrapping rules exist", () => {
   it("each class that carries a quoted body declares overflow-wrap: anywhere", () => {
-    for (const cls of ["azo-validate", "azo-cribl-row", "azure-onboarding-banner", "lm-note-unknown"]) {
+    for (const cls of [
+      "azo-validate",
+      "azo-cribl-source",
+      "azure-onboarding-banner",
+      "azure-onboarding-defender",
+      "azure-onboarding-state",
+      "lm-note-unknown",
+    ]) {
       expect([cls, WRAP.get(cls)]).toEqual([cls, "anywhere"]);
     }
   });
@@ -174,8 +198,8 @@ describe("AZR-44 - the Cribl source row wraps what Cribl answered", () => {
         {
           inputId: record.inputId,
           inputType: "eventhub",
-          input: { kind: "unknown", detail: body("input-body") },
-          route: { kind: "unknown", detail: body("route-body") },
+          input: { kind: "unknown", reason: "denied", detail: body("input-body") },
+          route: { kind: "unknown", reason: "denied", detail: body("route-body") },
         },
       ],
     };
@@ -200,7 +224,79 @@ describe("AZR-44 - the Cribl source row wraps what Cribl answered", () => {
     const line = carrier("input-body");
     expect(line.textContent).toContain("route-body");
     expect(line.closest("section")?.className).toBe("azo-cribl-row");
-    expect(wrapOf(line)).toEqual({ cls: "azo-cribl-row", value: "anywhere" });
+    expect(wrapOf(line)).toEqual({ cls: "azo-cribl-source", value: "anywhere" });
+  });
+
+  it("a worker-group list failure quotes its body in the no-wrap controls row and still wraps", () => {
+    // What worker-group-listing stores: String(err) of the adapter's
+    // "GET /master/groups: HTTP 403\n<body>" Error.
+    const error = `Error: GET /master/groups: ${body("groups-body")}`;
+    render(
+      <CriblSourcePanel
+        rows={[]}
+        modes={{}}
+        values={defaultPlanValues(null)}
+        readSeq={0}
+        workerGroups={{ kind: "failed", error }}
+        onLoadGroups={() => {}}
+        groupId=""
+        onGroupChange={() => {}}
+        rules={null}
+        topicsFor={() => ({ kind: "ok", topics: [] })}
+        principal={null}
+        onPlan={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    const line = carrier("groups-body");
+    expect(line.textContent).toBe(`Could not list worker groups: ${error}`);
+    expect(line.parentElement?.className).toBe("panel-controls");
+    expect(wrapOf(line)).toEqual({ cls: "azo-cribl-source", value: "anywhere" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The screen's Defender row and Deploy reason
+// ---------------------------------------------------------------------------
+
+describe("AZR-44 - a refused Defender read quotes Azure's message outside the banner too", () => {
+  // ARM's AuthorizationFailed message carries the scope with no space in it;
+  // defender-export quotes it as "<what>: HTTP 403 - <message>".
+  const MESSAGE =
+    "The client 'c1' with object id 'o1' does not have authorization to perform action " +
+    `'Microsoft.Security/automations/read' over scope '${SCOPE}' or the scope is invalid.`;
+  const QUOTED = `List Defender automations: HTTP 403 - ${MESSAGE}`;
+
+  it("the item row's state label and Deploy's disabled reason both wrap", async () => {
+    const refused = async (_r: AzureManagementRequest): Promise<PortHttpResponse> =>
+      ({
+        ok: false,
+        status: 403,
+        body: { error: { code: "AuthorizationFailed", message: MESSAGE } },
+      }) as unknown as PortHttpResponse;
+    const config = { tenantId: "t1", clientId: "c1", subscriptionId: "sub-1" } as unknown as AzureConfig;
+    render(
+      <PortsProvider
+        ports={{ azure: { request: refused }, kvDocuments: new FakeKvDocumentStore() } as unknown as UiPorts}
+        config={config}
+      >
+        <AzureOnboardingScreen />
+      </PortsProvider>,
+    );
+    await waitFor(() => expect(screen.queryByText("Loading the saved selection...")).toBeNull());
+    const tick = screen.getByRole("checkbox", { name: "Defender for Cloud alert export" }) as HTMLInputElement;
+    if (!tick.checked) fireEvent.click(tick);
+    expect(tick.checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Read Defender state" }));
+    await waitFor(() => expect(screen.getByText(`Deployment state could not be read - ${QUOTED}`)).toBeTruthy());
+
+    const label = exactly(`Deployment state could not be read - ${QUOTED}`);
+    expect(label.className).toBe("azure-onboarding-state azure-onboarding-state-unknown");
+    expect(wrapOf(label)).toEqual({ cls: "azure-onboarding-state", value: "anywhere" });
+
+    const reason = exactly(`The Defender state could not be read - ${QUOTED}`);
+    expect(reason.parentElement?.className).toBe("panel-controls");
+    expect(wrapOf(reason)).toEqual({ cls: "azure-onboarding-defender", value: "anywhere" });
   });
 });
 

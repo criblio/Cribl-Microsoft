@@ -6435,6 +6435,10 @@ details[open] > summary::before {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border-subtle);
+  /* Deploy's "The Defender state could not be read - ..." reason quotes
+   * Azure's message, scope id and all, inside a no-wrap controls row; the
+   * section wraps it rather than widen the page (AZR-44). */
+  overflow-wrap: anywhere;
 }
 
 .azure-onboarding-subblock {
@@ -6468,6 +6472,9 @@ details[open] > summary::before {
   font-weight: 600;
   line-height: 18px;
   color: var(--text-muted);
+  /* "Deployment state could not be read - ..." quotes Azure's message, scope
+   * id and all (AZR-44). */
+  overflow-wrap: anywhere;
 }
 
 .azure-onboarding-state-deployed {
@@ -6819,11 +6826,16 @@ details[open] > summary::before {
   word-break: break-all;
 }
 
-/* Cribl source: one row per lane, then the two-step confirm. */
+/* Cribl source: one row per lane, then the two-step confirm. The whole panel
+ * wraps anywhere: the worker-group failure ("Could not list worker groups:
+ * ...") in the controls row and every lane row's status, Cribl-side, outcome
+ * and create-error lines quote what Cribl or Azure answered, raw bodies
+ * included (AZR-44). */
 .azo-cribl-source {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-wrap: anywhere;
 }
 
 .azo-cribl-row {
@@ -6834,9 +6846,6 @@ details[open] > summary::before {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
-  /* The status, Cribl-side, outcome and create-error lines quote what Cribl
-   * or Azure answered, raw bodies included; they wrap (AZR-44). */
-  overflow-wrap: anywhere;
 }
 
 .azo-cribl-row [data-tone='ok'] {
