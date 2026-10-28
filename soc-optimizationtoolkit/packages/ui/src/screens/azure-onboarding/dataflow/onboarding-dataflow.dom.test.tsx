@@ -127,16 +127,53 @@ describe("OnboardingDataflow - measured-only animation", () => {
     const edge = pipes[0]?.closest("[data-azo-edge]")?.getAttribute("data-azo-edge");
     expect(edge).toBe("entraId:transport->entraId:cribl-source");
     expect(count(container, "animateMotion")).toBeGreaterThan(0);
-    expect(container.textContent).toContain("flowing: 42 events in the window");
+    const labels = Array.from(container.querySelectorAll(".azo-flow-edge-label")).map((n) => n.textContent);
+    expect(labels).toEqual(["idle", "flowing"]);
   });
 
-  it("a no-permission read is captioned 'not measured: no permission', never 0", () => {
-    const { container } = render(
+  it("a no-permission read is captioned 'not measured' with the reason in its (i), never 0", () => {
+    const { container, getByRole } = render(
       <OnboardingDataflow {...props({ watching: true, live: liveWith({ entraId: NOT_MEASURED, activityLog: NOT_MEASURED }) })} />,
     );
     const labels = Array.from(container.querySelectorAll(".azo-flow-edge-label")).map((n) => n.textContent);
-    expect(labels).toEqual(["not measured: no permission", "not measured: no permission"]);
+    expect(labels).toEqual(["not measured", "not measured"]);
     expect(labels.join(" ")).not.toMatch(/\b0\b/);
+    fireEvent.click(container.querySelector("[data-azo-edge-info]") as Element);
+    const dialog = getByRole("dialog");
+    expect(dialog.querySelector(".azo-flow-popover-status")?.textContent).toBe("not measured: no permission");
+    expect(dialog.textContent).toContain("HTTP 403");
+  });
+});
+
+describe("OnboardingDataflow - measured-hop labels (AZR-45)", () => {
+  it("the canvas draws only the state word; the full sentence is in that hop's (i), not on the canvas", () => {
+    const { container, getByRole, queryByRole } = render(
+      <OnboardingDataflow {...props({ watching: true, live: liveWith({ entraId: FLOWING, activityLog: IDLE }) })} />,
+    );
+    const svgText = container.querySelector("svg")?.textContent ?? "";
+    expect(svgText).not.toContain("events in the window");
+    const infos = Array.from(container.querySelectorAll("[data-azo-edge-info]"));
+    expect(infos.map((i) => i.getAttribute("aria-label"))).toEqual(["About this hop: idle", "About this hop: flowing"]);
+    fireEvent.click(infos[1] as Element);
+    const dialog = getByRole("dialog");
+    expect(dialog.querySelector(".azo-flow-popover-status")?.textContent).toBe("flowing: 42 events in the window");
+    expect(dialog.querySelector(".azo-flow-popover-title")?.textContent).toBe("Event Hub namespace to Cribl source (eventhub)");
+    fireEvent.click(infos[1] as Element);
+    expect(queryByRole("dialog")).toBeNull();
+  });
+
+  it("with no Cribl source the hop reads 'not measured' and its (i) says why", () => {
+    const { container, getByRole } = render(
+      <OnboardingDataflow
+        {...props({
+          laneInput: { selection: SELECTION, progress: progressFor(["defenderExport"], false), stepsFor, verdicts: null, arrival: null, criblSide: null },
+        })}
+      />,
+    );
+    const labels = Array.from(container.querySelectorAll(".azo-flow-edge-label")).map((n) => n.textContent);
+    expect(labels).toEqual(["not measured"]);
+    fireEvent.click(container.querySelector("[data-azo-edge-info]") as Element);
+    expect(getByRole("dialog").querySelector(".azo-flow-popover-status")?.textContent).toBe("not measured: no Cribl source yet");
   });
 });
 

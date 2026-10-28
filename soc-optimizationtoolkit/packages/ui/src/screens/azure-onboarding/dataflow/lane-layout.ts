@@ -24,18 +24,71 @@
  * column gap is wider than twice edgePathLR's minimum control offset, so each
  * curve stays monotone in x between its two columns.
  *
+ * EDGE LABELS (AZR-45). Only the measured hop carries an on-canvas label, and
+ * it is the state WORD (core FLOW_STATE_LABEL: "flowing", "not measured", ...)
+ * followed by an (i); the full sentence ("not measured: no Cribl source yet",
+ * "flowing: 42 events in the window") is in that (i). The sentence is
+ * unbounded (an event count, a lookback time) and ran under the next card when
+ * drawn on the canvas; the word set is fixed, so {@link LANE_COLUMN_GAP} is
+ * sized from it and every label fits its gap in every lane state.
+ *
  * {@link clampToSection} is the clamp G2's useCardDrag calls: a dragged card
  * stays inside its own section. {@link relayoutEdges} redraws the edges for
  * dragged positions; with no positions it returns the computed layout.
  */
 
-import type { CardStatus, DataflowPerspective, EdgeFlow, LaneCard, LaneCardKind, OnboardingLane } from "@soc/core";
+import {
+  FLOW_STATE_LABEL,
+  type CardStatus,
+  type DataflowPerspective,
+  type EdgeFlow,
+  type LaneCard,
+  type LaneCardKind,
+  type OnboardingLane,
+} from "@soc/core";
 
-import { edgePathLR, fitLine, wrapText, type Box, type Point } from "../../../components/diagram";
+import {
+  CARD_LINE_CHARS,
+  INFO_HIT_R,
+  edgePathLR,
+  fitLine,
+  wrapText,
+  type Box,
+  type Point,
+} from "../../../components/diagram";
 
 export const LANE_CARD_WIDTH = 200;
-/** Horizontal gap between columns. Must exceed 36 (2 x edgePathLR's 18px minimum offset). */
-export const LANE_COLUMN_GAP = 72;
+
+/**
+ * Estimated width of one edge-label character: geometry's documented "~30
+ * characters fit a 200px card" (CARD_LINE_CHARS), measured on the 10.5px mono
+ * card facts. The edge label is the same size in the proportional face, which
+ * is narrower, so the estimate errs wide.
+ */
+export const EDGE_LABEL_CHAR_PX = LANE_CARD_WIDTH / CARD_LINE_CHARS;
+/** Space between the label's end and its (i) hit circle. */
+export const EDGE_LABEL_INFO_GAP = 4;
+/** Clear space kept between an edge label (or its (i)) and either card. */
+export const EDGE_LABEL_CLEARANCE = 6;
+
+/** The estimated drawn width of an edge label's text. */
+export function edgeLabelWidth(text: string): number {
+  return text.length * EDGE_LABEL_CHAR_PX;
+}
+
+/** The width of a label plus its (i): the text, the gap, the (i) hit circle. */
+export function edgeLabelSlotWidth(text: string): number {
+  return edgeLabelWidth(text) + EDGE_LABEL_INFO_GAP + 2 * INFO_HIT_R;
+}
+
+/**
+ * Horizontal gap between columns: the widest on-canvas edge label (every
+ * state word the measured hop can show) plus its (i), with clearance on both
+ * sides. Always above 36 (2 x edgePathLR's 18px minimum offset).
+ */
+export const LANE_COLUMN_GAP = Math.ceil(
+  Math.max(...Object.values(FLOW_STATE_LABEL).map(edgeLabelSlotWidth)) + 2 * EDGE_LABEL_CLEARANCE,
+);
 export const SECTION_PAD = 16;
 export const SECTION_CAPTION_HEIGHT = 30;
 export const SECTION_GAP = 16;
@@ -81,6 +134,18 @@ export interface LaidCard extends Box {
   readonly card: LaneCard;
 }
 
+/** The on-canvas label of a measured edge: the state word, then its (i). */
+export interface EdgeLabel {
+  /** The state word drawn on the canvas. */
+  readonly text: string;
+  /** The full sentence, shown in the label's (i). */
+  readonly full: string;
+  /** Where the text ENDS: it is drawn right-aligned, next to its (i). */
+  readonly textEnd: Point;
+  /** Centre of the (i). */
+  readonly info: Point;
+}
+
 export interface LaidEdge {
   readonly id: string;
   readonly sourceId: string;
@@ -97,6 +162,8 @@ export interface LaidEdge {
   readonly end: Point;
   /** The SVG path, from {@link edgePathLR}. */
   readonly d: string;
+  /** Set only on a measured edge; every other edge draws no text. */
+  readonly label: EdgeLabel | null;
 }
 
 export interface LaidSection extends Box {
@@ -147,6 +214,24 @@ function columnOf(lane: OnboardingLane, card: LaneCard): LaneColumn {
   return card.kind === "step" ? stepColumn(lane, card) : card.kind;
 }
 
+/**
+ * The label of a measured edge, centred on the midpoint of its two ends and
+ * raised above the line: the estimated text width, the gap, then the (i).
+ */
+function edgeLabel(flow: EdgeFlow, start: Point, end: Point): EdgeLabel | null {
+  if (flow.kind !== "measured") return null;
+  const text = FLOW_STATE_LABEL[flow.state.kind];
+  const midX = (start.x + end.x) / 2;
+  const y = (start.y + end.y) / 2 - 6;
+  const textEndX = midX - edgeLabelSlotWidth(text) / 2 + edgeLabelWidth(text);
+  return {
+    text,
+    full: flow.label,
+    textEnd: { x: textEndX, y },
+    info: { x: textEndX + EDGE_LABEL_INFO_GAP + INFO_HIT_R, y: y - 4 },
+  };
+}
+
 function edgeGeometry(from: Box, to: Box, fromFrac: number, toFrac: number): { start: Point; end: Point; d: string } {
   // edgePathLR anchors at mid-height; a zero-height box at the anchor line
   // places the end exactly where the fraction says.
@@ -166,7 +251,8 @@ function drawEdges(cards: readonly LaidCard[], edges: readonly LaidEdge[]): Laid
     const from = byId.get(e.from);
     const to = byId.get(e.to);
     if (from === undefined || to === undefined) continue;
-    out.push({ ...e, ...edgeGeometry(from, to, e.fromFrac, e.toFrac) });
+    const g = edgeGeometry(from, to, e.fromFrac, e.toFrac);
+    out.push({ ...e, ...g, label: edgeLabel(e.flow, g.start, g.end) });
   }
   return out;
 }
@@ -260,6 +346,7 @@ export function layoutLanes(lanes: readonly OnboardingLane[], perspective: Dataf
         start: { x: 0, y: 0 },
         end: { x: 0, y: 0 },
         d: "",
+        label: null,
       });
     }
     top += height + SECTION_GAP;

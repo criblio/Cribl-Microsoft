@@ -2,24 +2,33 @@ import { describe, expect, it } from "vitest";
 
 import {
   DATAFLOW_PERSPECTIVES,
+  FLOW_STATE_LABEL,
+  NOT_MEASURED_REASON_LABEL,
   ONBOARDING_SOURCES,
   buildOnboardingLanes,
+  describeLaneFlow,
   emptyProgress,
+  shouldAnimate,
   stepsFor,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
   type CoverageSelection,
   type DataflowPerspective,
+  type LaneFlowState,
+  type NotMeasuredReason,
   type OnboardingLane,
   type OnboardingProgress,
   type OnboardingSourceId,
 } from "@soc/core";
 
-import type { Box, Point } from "../../../components/diagram";
+import { INFO_HIT_R, type Box, type Point } from "../../../components/diagram";
 import {
+  EDGE_LABEL_CLEARANCE,
   LANE_CARD_WIDTH,
+  LANE_COLUMN_GAP,
   clampToSection,
+  edgeLabelWidth,
   layoutLanes,
   relayoutEdges,
   type LaidEdge,
@@ -313,6 +322,92 @@ describe("columns line up across sections", () => {
   it("an empty lane list lays out nothing", () => {
     const layout = layoutLanes([], "end-to-end");
     expect(layout).toMatchObject({ sections: [], cards: [], edges: [], width: 0, height: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AZR-45: every on-canvas edge label fits the gap it is drawn in, for every
+// lane state. The full sentence (unbounded: event counts, lookback times) is
+// never drawn on the canvas; it travels in the label's (i).
+// ---------------------------------------------------------------------------
+
+const REASONS = Object.keys(NOT_MEASURED_REASON_LABEL) as NotMeasuredReason[];
+const EVERY_FLOW_STATE: readonly LaneFlowState[] = [
+  { kind: "flowing", events: 123456789 },
+  { kind: "idle", seenInLookback: false },
+  { kind: "idle", seenInLookback: true, seenInSession: true },
+  { kind: "never-seen", lookback: "-24h" },
+  { kind: "never-seen", lookback: "-24h", asOf: "10/28/2026, 12:34:56 PM" },
+  ...REASONS.map((reason): LaneFlowState => ({ kind: "not-measured", reason, detail: `detail for ${reason}` })),
+  { kind: "blocked" },
+];
+
+/** The lanes with their one measured edge put in `state`, as buildOnboardingLanes would. */
+function withFlow(lanes: readonly OnboardingLane[], state: LaneFlowState): OnboardingLane[] {
+  return lanes.map((l) => ({
+    ...l,
+    flow: state,
+    edges: l.edges.map((e) =>
+      e.flow.kind === "measured"
+        ? { ...e, flow: { kind: "measured", state, label: describeLaneFlow(state) }, animated: shouldAnimate(state) }
+        : e,
+    ),
+  }));
+}
+
+/** Labels whose estimated text-plus-(i) span leaves the gap between their two cards. */
+function labelsOutsideGap(layout: LaneLayout): string[] {
+  const byId = new Map(layout.cards.map((c) => [c.id, c]));
+  const found: string[] = [];
+  for (const e of layout.edges) {
+    if (e.label === null) continue;
+    const from = byId.get(e.from) as Box;
+    const to = byId.get(e.to) as Box;
+    const left = e.label.textEnd.x - edgeLabelWidth(e.label.text);
+    const right = e.label.info.x + INFO_HIT_R;
+    if (left < from.x + from.width + EDGE_LABEL_CLEARANCE || right > to.x - EDGE_LABEL_CLEARANCE) {
+      found.push(`${e.id}: "${e.label.text}" spans ${left.toFixed(1)}..${right.toFixed(1)}, gap ${from.x + from.width}..${to.x}`);
+    }
+  }
+  return found;
+}
+
+describe("edge labels fit their gap in every lane state (AZR-45)", () => {
+  it("the state list covers every flow-state kind and every not-measured reason", () => {
+    expect(new Set(EVERY_FLOW_STATE.map((s) => s.kind))).toEqual(new Set(Object.keys(FLOW_STATE_LABEL)));
+    expect(REASONS).toHaveLength(6);
+  });
+
+  it("the column gap is sized from the widest state word: 116px for 'not measured' and its (i)", () => {
+    expect(LANE_COLUMN_GAP).toBe(116);
+  });
+
+  for (const perspective of DATAFLOW_PERSPECTIVES) {
+    for (const state of EVERY_FLOW_STATE) {
+      const name = describeLaneFlow(state);
+      it(`${perspective}, "${name}": one label per lane, the state word, inside its gap; the sentence only in the (i)`, () => {
+        const lanes = withFlow(lanesFor(ALL_IDS, perspective), state);
+        const layout = layoutLanes(lanes, perspective);
+        const labelled = layout.edges.filter((e) => e.label !== null);
+        expect(labelled).toHaveLength(ALL_IDS.length);
+        for (const e of layout.edges) {
+          if (e.flow.kind === "measured") {
+            expect(e.label).toMatchObject({ text: FLOW_STATE_LABEL[state.kind], full: name });
+          } else {
+            expect(e.label).toBeNull();
+          }
+        }
+        expect(labelsOutsideGap(layout)).toEqual([]);
+      });
+    }
+  }
+
+  it("the AZR-45 case itself: 'not measured: no Cribl source yet' draws 'not measured' inside the gap", () => {
+    const layout = layoutLanes(lanesFor(["defenderExport"], "end-to-end"), "end-to-end");
+    const edge = layout.edges.find((e) => e.label !== null) as LaidEdge;
+    expect(edge.id).toBe("defenderExport:transport->defenderExport:cribl-source");
+    expect(edge.label).toMatchObject({ text: "not measured", full: "not measured: no Cribl source yet" });
+    expect(labelsOutsideGap(layout)).toEqual([]);
   });
 });
 

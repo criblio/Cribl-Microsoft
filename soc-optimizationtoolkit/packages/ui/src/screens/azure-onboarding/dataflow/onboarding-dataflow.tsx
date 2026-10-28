@@ -22,8 +22,10 @@
  * measured are static and captioned with their word. Every other edge is "not
  * measured: no counter" and drawn dashed.
  *
- * Every card, section caption and legend entry carries a visible (i)
- * (claude-kit standards/info-affordances.md); the toolbar (i) shows the
+ * Every card, section caption, legend entry and measured-hop label carries a
+ * visible (i) (claude-kit standards/info-affordances.md). The hop's label on
+ * the canvas is only its state word; its (i) holds the full sentence and the
+ * reason (AZR-45: the sentence ran under the next card). The toolbar (i) shows the
  * literal metrics request (method, path, body). Cards are keyboard reachable
  * (role=button, tabIndex 0); Enter or Space opens the card's popover.
  *
@@ -126,6 +128,7 @@ const INFO_CLASSES = {
 } as const;
 const CARD_INFO_ATTRS = { "data-azo-info": "", "data-azo-card-info": "" } as const;
 const SECTION_INFO_ATTRS = { "data-azo-info": "", "data-azo-section-info": "" } as const;
+const EDGE_INFO_ATTRS = { "data-azo-info": "", "data-azo-edge-info": "" } as const;
 const POPOVER_ATTRS = { "data-azo-popover": "" } as const;
 
 // Text metrics: these match lane-layout's card height arithmetic.
@@ -146,7 +149,7 @@ export interface OnboardingDataflowProps {
   readonly initialPerspective?: DataflowPerspective;
 }
 
-type InfoTarget = { readonly kind: "card"; readonly id: string } | { readonly kind: "section"; readonly id: string };
+type InfoTarget = { readonly kind: "card" | "section" | "edge"; readonly id: string };
 
 function requestText(label: string, r: LiveFlowRequest | null): string {
   return r === null ? `${label}: nothing is sent without a worker group.` : `${label}:\n${r.method} ${r.path}\n${r.body}`;
@@ -262,6 +265,35 @@ export function OnboardingDataflow({
         </DiagramInfoPopover>
       );
     }
+    if (info.kind === "edge") {
+      const edge = drawn.edges.find((e) => e.id === info.id);
+      if (edge === undefined || edge.label === null) return null;
+      const from = cardsById.get(edge.from);
+      const to = cardsById.get(edge.to);
+      const detail = edge.flow.kind === "measured" && edge.flow.state.kind === "not-measured" ? edge.flow.state.detail : "";
+      return (
+        <DiagramInfoPopover
+          className="azo-flow-popover"
+          attrs={POPOVER_ATTRS}
+          label={`About this hop: ${edge.label.text}`}
+          left={view.x + (edge.label.info.x + 12) * view.k}
+          top={view.y + edge.label.info.y * view.k}
+          onClose={closeInfo}
+          keepOpenSelector={POPOVER_KEEP}
+        >
+          <div className="azo-flow-popover-kind">MEASURED HOP</div>
+          <div className="azo-flow-popover-title">{`${from?.card.title ?? edge.from} to ${to?.card.title ?? edge.to}`}</div>
+          <div className="azo-flow-popover-status">{edge.label.full}</div>
+          <ul className="azo-flow-popover-facts">
+            <li>The one hop Cribl's intake metrics measure for this source. Only a flowing hop animates.</li>
+            {detail !== "" && <li>{detail}</li>}
+          </ul>
+          <button type="button" className="azo-flow-btn azo-flow-popover-close" aria-label="Close" onClick={closeInfo}>
+            x
+          </button>
+        </DiagramInfoPopover>
+      );
+    }
     const section = drawn.sections.find((s) => s.sourceId === info.id);
     const lane = laneById.get(info.id);
     if (section === undefined || lane === undefined) return null;
@@ -366,7 +398,6 @@ export function OnboardingDataflow({
                 />
               ))}
               {drawn.edges.map((e) => {
-                const measured = e.flow.kind === "measured";
                 const stateClass = e.flow.kind === "measured" ? ` is-${e.flow.state.kind}` : " is-no-counter";
                 const cls = `azo-flow-edge${e.kind === "configures" ? " is-configures" : ""}${stateClass}`;
                 return (
@@ -380,15 +411,22 @@ export function OnboardingDataflow({
                       packetClassName="azo-flow-packet"
                       attrs={{ "data-azo-edge": e.id }}
                     />
-                    {measured && (
-                      <text
-                        className="azo-flow-edge-label"
-                        x={(e.start.x + e.end.x) / 2}
-                        y={(e.start.y + e.end.y) / 2 - 6}
-                        textAnchor="middle"
-                      >
-                        {e.flow.label}
-                      </text>
+                    {e.label !== null && (
+                      <>
+                        {/* The state word only; the full sentence is in the (i) (AZR-45). */}
+                        <text className="azo-flow-edge-label" x={e.label.textEnd.x} y={e.label.textEnd.y} textAnchor="end">
+                          {e.label.text}
+                        </text>
+                        <InfoHitCircle
+                          cx={e.label.info.x}
+                          cy={e.label.info.y}
+                          label={`About this hop: ${e.label.text}`}
+                          expanded={info?.kind === "edge" && info.id === e.id}
+                          onToggle={() => toggleInfo({ kind: "edge", id: e.id })}
+                          classes={INFO_CLASSES}
+                          attrs={EDGE_INFO_ATTRS}
+                        />
+                      </>
                     )}
                   </g>
                 );
