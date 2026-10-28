@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**80 in the backlog, 37 in progress, 69 done.**
+**74 in the backlog, 43 in progress, 69 done.**
 
 ## By menu item
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (37)
+## In progress (43)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1029,6 +1029,19 @@ Started. Anything here with an unfinished dependency is called out on its card.
   every test. FIX: a DOM pin of the frame with a refused appOptions read
   (DBT-180 adds the Run gate to the same path).
 
+- **DBT-189** How-to step word and dataflow lane ignore the 'others also found' count
+  `DBT-F1` `bug` `settled`
+  Not now because: The extra-count wording is a refinement DBT-178 added to
+  Validate; the How-to step word and the lane label are true as written, only
+  less complete.
+  FOUND 2026-10-28 by the DBT-178 implementer/reviewer (pre-existing unless
+  said). howto-state.ts:360 stepVerdictWord names only the first
+  present-other-name verdict and ignores alsoFound; onboarding-dataflow
+  lanes.ts:269 renders 'exists (named <name>)' with no count. The
+  policy-remediation count sentence ('N others like it') counts assignments,
+  and can be read as remediations. FIX: one wording helper used by Validate,
+  How-to and the lane.
+
 - **DBT-190** The capture warning reads __inputId clauses, not the boolean structure around them
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base).
@@ -1045,6 +1058,76 @@ Started. Anything here with an unfinished dependency is called out on its card.
   (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on
   any clause naming another input; word-boundary the patterns; accept the
   reversed form; true wording for endsWith; repin the includes case.
+
+- **AZR-38** One definition of the Defender coverage item id
+  `AZR-F9` `story` `settled`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. The Defender
+  export's coverage-catalog id `defenderExport` is declared twice:
+  DEFENDER_ITEM_ID in
+  packages/ui/src/screens/azure-onboarding/azure-onboarding-state.ts:383 and
+  DEFENDER_EXPORT_ITEM_ID in
+  packages/core/src/usecases/defender-export/defender-export.ts:85. Both are
+  typed OnboardingItemId so a typo is caught, but a rename of the catalog id
+  would have to find both. Keep the core one, make the UI import it, and pin
+  that the screen uses the core export. Not a bug: the two values agree today.
+
+- **AZR-39** Validate the How-to steps that have no check kind yet
+  `AZR-F9` `story` `settled` `blocked by AZR-32`
+  FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
+  checkKinds [] so the read-only Validate never reports them; the UI says
+  'confirm by hand' (howto-state.ts) and the diagram says 'not checked by
+  Validate' (lanes.ts). They are: eh-rule-diagnostic (eventhub-steps.ts, the
+  Manage rule the auto-created-hub sources need), eh-network
+  (eventhub-steps.ts), activity-log-definition (entra-activity-steps.ts) and
+  policy-community-definitions (policy-steps.ts). SCOPE: add check kind
+  'eh-rule-manage', classified with the existing and pinned ruleCanManage
+  (eventhub-arm.ts; nothing calls it yet), so a Send-only rule is never
+  reported as done for a step that grants Manage; and add check kind
+  'policy-definition', a GET of the expected definitions at the management
+  group, absent only from a by-name 404 or a complete listing, a 403 unknown.
+  eh-network stays confirm-only by design (plan step P6): networking cannot be
+  judged from one read. Pins: the classify table (403 is unknown denied for
+  both new kinds), a Send-only rule is present-differs under eh-rule-manage,
+  and the steps test asserts the two steps now carry their kinds.
+
+- **AZR-44** Raw Azure error bodies in Validate results do not wrap and push the page sideways
+  `AZR-F9` `bug` `settled`
+  Not now because: Readability only: every word is still reachable by
+  scrolling, nothing is mis-stated, and it disappears once AZR-40 stops the
+  400s that produce the longest bodies.
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). The 400 bodies quoted in the Arrival at
+  the hub rows run past the right edge of the frame and give the whole page a
+  horizontal scrollbar. Fix: wrap (overflow-wrap: anywhere) or collapse the
+  raw body behind the row's (i); check the other validate kinds that quote
+  bodies.
+
+- **AZR-45** Onboarding dataflow: the namespace-to-Cribl-source edge label is clipped under the next card
+  `AZR-F9` `bug` `settled`
+  Not now because: The same words are available from the card's (i) and the
+  Validate panel; the diagram state is not wrong, only its label is
+  unreadable.
+  FOUND LIVE 2026-10-28 ([[AZR-30]]). In End to end view the label on the
+  Event Hub namespace -> Cribl source edge renders as "...ured: no Cribl
+  s...", starting before the gap and running under the Cribl source card, so
+  it cannot be read on the canvas. Fix: size the gap to the label or move the
+  label into the edge's (i); pin the label against the lane-layout column gap.
+
+- **AZR-47** Arrival reads "no messages in the window" for a hub that does not exist
+  `AZR-F9` `bug` `settled`
+  Not now because: The same panel already says the hubs are missing (the
+  consumer-group rows read "not found" from a complete hub list), so an
+  operator is not left believing the hubs exist; the arrival lines only fail
+  to say it themselves.
+  FOUND LIVE 2026-10-28 while verifying [[AZR-40]]. Azure Monitor answers an
+  EntityName filter for a hub that is not in the namespace with a zero series,
+  so against AndyEH (complete hub list: t1, t2, t3) the nine Entra
+  auto-created hubs (insights-logs-auditlogs and the rest) all read "no
+  messages in the window", exactly like the real, quiet hub t2. A missing hub
+  and a quiet hub are different answers: the first means the diagnostic
+  setting has never sent anything. Fix: when the run has a COMPLETE hub
+  listing (ValidationResult.measuredHubs) and the hub is not in it, the
+  arrival line says the hub does not exist yet instead of reporting a zero;
+  with an incomplete listing it keeps the measured wording. Pin both.
 
 ---
 
@@ -1178,7 +1261,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (39)
+## Backlog - next (34)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1650,19 +1733,6 @@ Settled and unblocked, sequenced behind now.
   screen calls nothing external and needs no ports, false since the Live
   Workgroup and Edge views. FIX: confirm live; fix the header regardless.
 
-- **DBT-189** How-to step word and dataflow lane ignore the 'others also found' count
-  `DBT-F1` `bug` `settled`
-  Not now because: The extra-count wording is a refinement DBT-178 added to
-  Validate; the How-to step word and the lane label are true as written, only
-  less complete.
-  FOUND 2026-10-28 by the DBT-178 implementer/reviewer (pre-existing unless
-  said). howto-state.ts:360 stepVerdictWord names only the first
-  present-other-name verdict and ignores alsoFound; onboarding-dataflow
-  lanes.ts:269 renders 'exists (named <name>)' with no count. The
-  policy-remediation count sentence ('N others like it') counts assignments,
-  and can be read as remediations. FIX: one wording helper used by Validate,
-  How-to and the lane.
-
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-7`
   FILED 2026-10-21 as a follow-up of AZR-18
@@ -1724,67 +1794,9 @@ Settled and unblocked, sequenced behind now.
   differing existing rule or group. It also adds the How-to step text for
   doing it by hand if AZR-31 has not already covered it.
 
-- **AZR-39** Validate the How-to steps that have no check kind yet
-  `AZR-F9` `story` `settled` `blocked by AZR-32`
-  FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
-  checkKinds [] so the read-only Validate never reports them; the UI says
-  'confirm by hand' (howto-state.ts) and the diagram says 'not checked by
-  Validate' (lanes.ts). They are: eh-rule-diagnostic (eventhub-steps.ts, the
-  Manage rule the auto-created-hub sources need), eh-network
-  (eventhub-steps.ts), activity-log-definition (entra-activity-steps.ts) and
-  policy-community-definitions (policy-steps.ts). SCOPE: add check kind
-  'eh-rule-manage', classified with the existing and pinned ruleCanManage
-  (eventhub-arm.ts; nothing calls it yet), so a Send-only rule is never
-  reported as done for a step that grants Manage; and add check kind
-  'policy-definition', a GET of the expected definitions at the management
-  group, absent only from a by-name 404 or a complete listing, a 403 unknown.
-  eh-network stays confirm-only by design (plan step P6): networking cannot be
-  judged from one read. Pins: the classify table (403 is unknown denied for
-  both new kinds), a Send-only rule is present-differs under eh-rule-manage,
-  and the steps test asserts the two steps now carry their kinds.
-
-- **AZR-44** Raw Azure error bodies in Validate results do not wrap and push the page sideways
-  `AZR-F9` `bug` `settled`
-  Not now because: Readability only: every word is still reachable by
-  scrolling, nothing is mis-stated, and it disappears once AZR-40 stops the
-  400s that produce the longest bodies.
-  FOUND LIVE 2026-10-28 ([[AZR-32]]). The 400 bodies quoted in the Arrival at
-  the hub rows run past the right edge of the frame and give the whole page a
-  horizontal scrollbar. Fix: wrap (overflow-wrap: anywhere) or collapse the
-  raw body behind the row's (i); check the other validate kinds that quote
-  bodies.
-
-- **AZR-45** Onboarding dataflow: the namespace-to-Cribl-source edge label is clipped under the next card
-  `AZR-F9` `bug` `settled`
-  Not now because: The same words are available from the card's (i) and the
-  Validate panel; the diagram state is not wrong, only its label is
-  unreadable.
-  FOUND LIVE 2026-10-28 ([[AZR-30]]). In End to end view the label on the
-  Event Hub namespace -> Cribl source edge renders as "...ured: no Cribl
-  s...", starting before the gap and running under the Cribl source card, so
-  it cannot be read on the canvas. Fix: size the gap to the label or move the
-  label into the edge's (i); pin the label against the lane-layout column gap.
-
-- **AZR-47** Arrival reads "no messages in the window" for a hub that does not exist
-  `AZR-F9` `bug` `settled`
-  Not now because: The same panel already says the hubs are missing (the
-  consumer-group rows read "not found" from a complete hub list), so an
-  operator is not left believing the hubs exist; the arrival lines only fail
-  to say it themselves.
-  FOUND LIVE 2026-10-28 while verifying [[AZR-40]]. Azure Monitor answers an
-  EntityName filter for a hub that is not in the namespace with a zero series,
-  so against AndyEH (complete hub list: t1, t2, t3) the nine Entra
-  auto-created hubs (insights-logs-auditlogs and the rest) all read "no
-  messages in the window", exactly like the real, quiet hub t2. A missing hub
-  and a quiet hub are different answers: the first means the diagnostic
-  setting has never sent anything. Fix: when the run has a COMPLETE hub
-  listing (ValidationResult.measuredHubs) and the hub is not in it, the
-  arrival line says the hub does not exist yet instead of reporting a zero;
-  with an incomplete listing it keeps the measured wording. Pin both.
-
 ---
 
-## Backlog - later (37)
+## Backlog - later (36)
 
 Settled, gated on something above.
 
@@ -2270,18 +2282,6 @@ Settled, gated on something above.
   days ago'. This card persists a lastSeen per input (KV, written only from a
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
-
-- **AZR-38** One definition of the Defender coverage item id
-  `AZR-F9` `story` `settled`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. The Defender
-  export's coverage-catalog id `defenderExport` is declared twice:
-  DEFENDER_ITEM_ID in
-  packages/ui/src/screens/azure-onboarding/azure-onboarding-state.ts:383 and
-  DEFENDER_EXPORT_ITEM_ID in
-  packages/core/src/usecases/defender-export/defender-export.ts:85. Both are
-  typed OnboardingItemId so a typo is caught, but a rename of the catalog id
-  would have to find both. Keep the core one, make the UI import it, and pin
-  that the screen uses the core export. Not a bug: the two values agree today.
 
 ---
 
