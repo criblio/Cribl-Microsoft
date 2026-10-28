@@ -10,7 +10,8 @@
  *  - STATE SURVIVES NAVIGATION: the plan persists via the ContentCache port
  *    under SIEM_MIGRATION_PLAN_KEY and restores on mount, so bouncing
  *    between this screen and Sentinel Integration loses nothing (the legacy
- *    kept the plan in volatile React state only).
+ *    kept the plan in volatile React state only). A REFUSED restore read is
+ *    said, with its reason, rather than looking like no saved plan (DBT-175).
  *  - PIVOT PER SOLUTION: "Open in Sentinel Integration" writes the EXISTING
  *    solution deep link (buildSolutionDeepLink - the contract preserved for
  *    this exact unit) and navigates via the shell callback; the Integrate
@@ -75,6 +76,10 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   const [analyzeProgress, setAnalyzeProgress] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // Why the saved plan could not be READ, "" when it could or there was none
+  // (DBT-175). "No saved plan" and "could not read the saved plan" render the
+  // same empty page and ask different things of the operator.
+  const [planReadError, setPlanReadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // LAZY per-solution rule enrichment (the 2026-07-14 stall fix: eager
@@ -109,8 +114,11 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
           setLoadedSolutions(new Set(rulesBySolutionRef.current.keys()));
           setNotice(`Restored the saved analysis of ${restored.fileName}.`);
         }
-      } catch {
-        // A failed restore reads as "no saved plan" - upload re-analyzes.
+      } catch (err) {
+        // DBT-175: since DBT-145 a refused KV read THROWS, and this used to
+        // read as "no saved plan" with the reason thrown away. Upload still
+        // re-analyzes; the page now says a saved analysis may exist.
+        if (!cancelled) setPlanReadError(String(err));
       }
     })();
     return () => {
@@ -316,6 +324,12 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
         </div>
         {error !== "" && <pre className="result">{error}</pre>}
         {notice !== "" && <p className="panel-desc">{notice}</p>}
+        {planReadError !== "" && plan === null && (
+          <p className="field-hint siem-plan-unread" role="status">
+            A saved analysis could not be read ({planReadError}), so none was
+            restored. Uploading the export again re-analyzes it.
+          </p>
+        )}
       </section>
 
       {plan !== null && (

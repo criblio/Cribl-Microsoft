@@ -24,7 +24,10 @@ import {
 } from "@soc/core";
 import type { ContentCache, VendorFieldDefinition } from "@soc/core";
 import { resolveDefinitionSource } from "./csv-resolution-state";
-import { useVendorColumnOrder } from "./use-vendor-column-order";
+import {
+  describeColumnOrderRefusal,
+  useVendorColumnOrder,
+} from "./use-vendor-column-order";
 import type { VendorColumnOrderState } from "./use-vendor-column-order";
 
 afterEach(cleanup);
@@ -252,5 +255,92 @@ describe("useVendorColumnOrder - no cache bound", () => {
     expect(seen.current?.resolved?.source).toBe("bundled");
     act(() => seen.current?.remember(operatorTraffic()));
     expect(seen.current?.resolved?.source).toBe("bundled");
+    // No store is not a refused store: nothing was asked, nothing refused.
+    expect(seen.current?.storeRefused).toBeNull();
+  });
+});
+
+/**
+ * A REFUSED STORE (DBT-175).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403 (a 5xx always did).
+ * The hook swallowed a refused read and both refused writes with nothing kept,
+ * so the screen could not say that column orders were neither being reused nor
+ * remembered - the operator named columns, was told nothing, and found them
+ * gone next session. A refusal is a SKIP (the pre-fill and the apply still
+ * work), and it is EXPOSED with its reason and which call it was.
+ */
+describe("useVendorColumnOrder - a refused store (DBT-175)", () => {
+  function refusingCache(refuse: { get?: boolean; set?: boolean }): ContentCache {
+    const inner = new FakeContentCache();
+    return {
+      get: async (key: string) => {
+        if (refuse.get === true) throw new Error("KV read refused (403)");
+        return inner.get(key);
+      },
+      set: async (key: string, value: unknown) => {
+        if (refuse.set === true) throw new Error("KV write refused (403)");
+        await inner.set(key, value);
+      },
+    } as ContentCache;
+  }
+
+  it("a healthy store reports no refusal", async () => {
+    const { seen } = mountOrder(new FakeContentCache(), PANOS, "TRAFFIC");
+    await waitFor(() => expect(seen.current?.loading).toBe(false));
+    expect(seen.current?.storeRefused).toBeNull();
+  });
+
+  it("a refused READ is exposed with its reason, and the bundled order still answers", async () => {
+    const { seen } = mountOrder(refusingCache({ get: true }), PANOS, "TRAFFIC");
+    await waitFor(() => expect(seen.current?.loading).toBe(false));
+    expect(seen.current?.storeRefused).toEqual({
+      action: "read",
+      reason: "Error: KV read refused (403)",
+    });
+    expect(seen.current?.resolved?.source).toBe("bundled");
+  });
+
+  it("a refused REMEMBER is exposed, and the order still applies this session", async () => {
+    const { seen } = mountOrder(refusingCache({ set: true }), PANOS, "TRAFFIC");
+    await waitFor(() => expect(seen.current?.loading).toBe(false));
+    expect(seen.current?.storeRefused).toBeNull();
+    act(() => seen.current?.remember(operatorTraffic()));
+    await waitFor(() =>
+      expect(seen.current?.storeRefused).toEqual({
+        action: "remember",
+        reason: "Error: KV write refused (403)",
+      }),
+    );
+    expect(seen.current?.resolved?.source).toBe("operator");
+  });
+
+  it("a refused FORGET is exposed, since the stored order may still answer later", async () => {
+    const { seen } = mountOrder(refusingCache({ set: true }), PANOS, "TRAFFIC");
+    await waitFor(() => expect(seen.current?.loading).toBe(false));
+    act(() => seen.current?.forget());
+    await waitFor(() =>
+      expect(seen.current?.storeRefused).toEqual({
+        action: "forget",
+        reason: "Error: KV write refused (403)",
+      }),
+    );
+  });
+});
+
+describe("describeColumnOrderRefusal (DBT-175)", () => {
+  it("says what is off, why, and what still works - per refused call", () => {
+    const read = describeColumnOrderRefusal({ action: "read", reason: "R" });
+    expect(read).toContain("(R)");
+    expect(read).toMatch(/could not be read/);
+    expect(read).toMatch(/still works/);
+    const remember = describeColumnOrderRefusal({ action: "remember", reason: "W" });
+    expect(remember).toContain("(W)");
+    expect(remember).toMatch(/will not be remembered/);
+    const forget = describeColumnOrderRefusal({ action: "forget", reason: "F" });
+    expect(forget).toContain("(F)");
+    expect(forget).toMatch(/may still/);
+    // Three different calls, three different consequences, three sentences.
+    expect(new Set([read, remember, forget]).size).toBe(3);
   });
 });

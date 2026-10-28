@@ -146,4 +146,25 @@ describe("Repositories screen - a refused PAT status read (DBT-159)", () => {
     expect(countOccurrences(text, "Not connected")).toBe(0);
     expect(countOccurrences(text, "GitHub token saved")).toBe(0);
   });
+
+  it("still offers to CLEAR a token that may be stored (DBT-175)", async () => {
+    // Unknown is not none: with Clear hasPat-only, an operator whose status
+    // read was refused had no way to remove a token this screen could not see.
+    const { ports } = makePorts();
+    const githubPat = ports.githubPat as unknown as {
+      status: () => Promise<never>;
+      clear: ReturnType<typeof vi.fn>;
+    };
+    githubPat.status = vi.fn(async () => {
+      throw new Error("KV read refused (403)");
+    });
+    githubPat.clear = vi.fn(async () => undefined);
+    await mount(ports);
+    const clears = screen.getAllByRole("button", { name: "Clear token" });
+    expect(clears).toHaveLength(1);
+    await act(async () => {
+      fireEvent.click(clears[0]);
+    });
+    expect(githubPat.clear).toHaveBeenCalledTimes(1);
+  });
 });
