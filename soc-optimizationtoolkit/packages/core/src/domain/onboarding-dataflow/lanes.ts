@@ -43,6 +43,7 @@
 import type { CoverageSelection } from "../coverage-model/coverage-selection";
 import {
   aggregateVerdict,
+  otherNameAlsoFound,
   type AggregateVerdict,
   type ArrivalReading,
   type CheckKind,
@@ -258,8 +259,18 @@ export const UNKNOWN_REASON_LABEL: Readonly<Record<UnknownReason, string>> = {
 const NOT_CHECKED: CardStatus = { kind: "not-checked", label: "not checked yet" };
 const NO_CHECK: CardStatus = { kind: "no-check", label: "not checked by Validate" };
 
-/** The status one verdict shows. */
-export function verdictStatus(v: StepVerdict): CardStatus {
+/** One verdict with the kind of check that reached it, which words an other-name verdict. */
+export interface CheckedVerdict {
+  readonly check: CheckKind;
+  readonly verdict: StepVerdict;
+}
+
+/**
+ * The status one verdict shows. `check` is the check's kind: an other-name
+ * label counts the other matches in that kind's unit (core otherNameAlsoFound,
+ * the same words Validate and the How-to step use - DBT-189).
+ */
+export function verdictStatus(v: StepVerdict, check?: CheckKind): CardStatus {
   switch (v.kind) {
     case "as-expected":
       return { kind: "as-expected", label: "configured as expected" };
@@ -268,8 +279,10 @@ export function verdictStatus(v: StepVerdict): CardStatus {
         kind: "differs",
         label: `present but different (${v.diffs.map((d) => d.field).join(", ") || "details in Validate"})`,
       };
-    case "present-other-name":
-      return { kind: "other-name", label: `exists (named ${v.name})` };
+    case "present-other-name": {
+      const also = otherNameAlsoFound(v.alsoFound, check);
+      return { kind: "other-name", label: `exists (named ${v.name}${also === "" ? "" : `; ${also}`})` };
+    }
     case "absent":
       return { kind: "absent", label: "not found" };
     case "unknown":
@@ -299,8 +312,9 @@ const AGGREGATE_CLASS: Readonly<Record<StepVerdict["kind"], AggregateVerdict>> =
  * (claude-kit standards/inventory-honesty.md). A worse verdict that WAS read
  * still wins, since it is the more useful thing to show.
  */
-export function groupStatus(verdicts: readonly StepVerdict[], expected: number = verdicts.length): CardStatus {
-  if (verdicts.length === 0) return NOT_CHECKED;
+export function groupStatus(checked: readonly CheckedVerdict[], expected: number = checked.length): CardStatus {
+  if (checked.length === 0) return NOT_CHECKED;
+  const verdicts = checked.map((c) => c.verdict);
   const worst = aggregateVerdict(verdicts);
   if (worst === "as-expected" && verdicts.length < expected) {
     return {
@@ -308,8 +322,8 @@ export function groupStatus(verdicts: readonly StepVerdict[], expected: number =
       label: `partly checked (${verdicts.length} of ${expected}): the rest were not checked in the last run`,
     };
   }
-  const pick = verdicts.find((v) => AGGREGATE_CLASS[v.kind] === worst) as StepVerdict;
-  return verdictStatus(pick);
+  const pick = checked.find((c) => AGGREGATE_CLASS[c.verdict.kind] === worst) as CheckedVerdict;
+  return verdictStatus(pick.verdict, pick.check);
 }
 
 /**
@@ -433,13 +447,13 @@ function verdictsOf(
   sourceId: OnboardingSourceId,
   step: HowToStep,
   include: (kind: CheckKind) => boolean,
-): StepVerdict[] {
+): CheckedVerdict[] {
   if (verdicts === null) return [];
-  const out: StepVerdict[] = [];
+  const out: CheckedVerdict[] = [];
   for (const kind of step.checkKinds) {
     if (!include(kind)) continue;
     const v = verdicts[laneCheckKey(sourceId, step.id, kind)];
-    if (v !== undefined) out.push(v);
+    if (v !== undefined) out.push({ check: kind, verdict: v });
   }
   return out;
 }
@@ -571,7 +585,7 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
   }
 
   // Shared objects: one status each, from every using lane's transport verdicts.
-  const sharedVerdicts = new Map<string, StepVerdict[]>();
+  const sharedVerdicts = new Map<string, CheckedVerdict[]>();
   const sharedChecks = new Map<string, number>();
   const sharedSources = new Map<string, OnboardingSourceId[]>();
   for (const d of drafts) {
@@ -626,9 +640,9 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
     };
 
     // Emitter: every non-transport check of the lane.
-    const emitterChecks: StepVerdict[] = [];
+    const emitterChecks: CheckedVerdict[] = [];
     let emitterCheckCount = 0;
-    const allVerdicts: StepVerdict[] = [];
+    const allVerdicts: CheckedVerdict[] = [];
     let allCheckCount = 0;
     for (const step of steps) {
       const notTransport = (k: CheckKind): boolean => !isTransportKind(source.transport, k);

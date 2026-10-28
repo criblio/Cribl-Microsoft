@@ -27,6 +27,7 @@ import {
   filledPlanValues,
   howToStep,
   onboardingSource,
+  otherNameAlsoFound,
 } from "@soc/core";
 import type {
   ArrivalReading,
@@ -139,12 +140,13 @@ const OTHER_NAME_DETAIL: Partial<Record<CheckKind, (name: string) => string>> = 
     `Found remediations of ${n}, an assignment named like the plan's but not the one the steps name.`,
 };
 
-function otherNameDetail(kind: CheckKind | undefined, name: string, alsoFound: number): string {
+function otherNameDetail(kind: CheckKind | undefined, name: string, alsoFound: number | undefined): string {
   const worded = kind === undefined ? undefined : OTHER_NAME_DETAIL[kind];
   // Without a kind's own words, claim nothing beyond the name.
   const what = worded?.(name) ?? `Found as ${name}, a name the plan does not use.`;
-  if (alsoFound <= 0) return what;
-  return `${what} ${plural(alsoFound, "other like it was", "others like it were")} also found.`;
+  // The count is core's wording, shared with the How-to step and the lane (DBT-189).
+  const also = otherNameAlsoFound(alsoFound, kind);
+  return also === "" ? what : `${what} ${also}.`;
 }
 
 /** One verdict, in words. `kind` is the check's, which words an other-name verdict. */
@@ -163,7 +165,7 @@ export function verdictView(verdict: StepVerdict, kind?: CheckKind): VerdictView
       return {
         word: "present under another name",
         tone: "warning",
-        detail: otherNameDetail(kind, verdict.name, verdict.alsoFound ?? 0),
+        detail: otherNameDetail(kind, verdict.name, verdict.alsoFound),
         diffs: verdict.diffs,
       };
     case "absent":

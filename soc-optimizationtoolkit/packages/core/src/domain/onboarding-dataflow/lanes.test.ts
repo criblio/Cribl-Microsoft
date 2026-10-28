@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CoverageSelection } from "../coverage-model/coverage-selection";
-import type { StepVerdict } from "../onboarding-howto/check-kinds";
+import { otherNameAlsoFound, type StepVerdict } from "../onboarding-howto/check-kinds";
 import {
   emptyProgress,
   withCriblSource,
@@ -122,6 +122,26 @@ describe("verdict states", () => {
     const lanes = buildOnboardingLanes(input({ progress, verdicts, perspective: "azure" }));
     const step = lanes.lanes[0].cards.find((c) => c.stepId === "defender-export");
     expect(step?.status.label).toBe("exists (named LegacyExport)");
+  });
+
+  // DBT-189: the lane counted nothing past the one it named.
+  it("present-other-name counts the others in the check kind's unit, in core's shared words", () => {
+    const progress = manual(plan(emptyProgress()), "defenderExport");
+    const verdicts = {
+      [laneCheckKey("defenderExport", "defender-export", "defender-export")]: {
+        kind: "present-other-name",
+        name: "LegacyExport",
+        diffs: [],
+        alsoFound: 2,
+      } as StepVerdict,
+    };
+    const lanes = buildOnboardingLanes(input({ progress, verdicts, perspective: "azure" }));
+    const step = lanes.lanes[0].cards.find((c) => c.stepId === "defender-export");
+    expect(otherNameAlsoFound(2, "defender-export")).toBe("2 other continuous exports were also found");
+    expect(step?.status).toEqual({
+      kind: "other-name",
+      label: "exists (named LegacyExport; 2 other continuous exports were also found)",
+    });
   });
 });
 

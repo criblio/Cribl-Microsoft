@@ -4,6 +4,7 @@
 // read shown as "not found", or an unreadable arrival metric shown as a zero.
 
 import { describe, expect, it } from "vitest";
+import { otherNameAlsoFound } from "@soc/core";
 import type { CheckKind, PlanValues, StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
 import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
@@ -86,15 +87,16 @@ describe("verdictView", () => {
     const v = (alsoFound: number): StepVerdict => ({ kind: "present-other-name", name: "A", diffs: [], alsoFound });
     expect(verdictView(v(1), "policy-assignment").detail).toBe(
       "Found as A, a policy assignment that uses the plan's initiative or is named like its assignments. " +
-        "1 other like it was also found.",
+        "1 other policy assignment was also found.",
     );
+    // DBT-189: the remediation count is of ASSIGNMENTS, and now says so.
     expect(verdictView(v(3), "policy-remediation").detail).toBe(
       "Found remediations of A, an assignment named like the plan's but not the one the steps name. " +
-        "3 others like it were also found.",
+        "3 other assignments with remediations were also found.",
     );
     expect(verdictView(v(2), "entra-setting").detail).toBe(
       "Found as A, a diagnostic setting that sends to the plan's Event Hub namespace. " +
-        "2 others like it were also found.",
+        "2 other diagnostic settings were also found.",
     );
     expect(verdictView(v(0), "defender-export").detail).toBe(
       "Found as A, a continuous export that sends to the plan's Event Hub namespace.",
@@ -117,6 +119,18 @@ describe("verdictView", () => {
       "Found as N, a policy assignment that uses the plan's initiative or is named like its assignments.",
       "Found remediations of N, an assignment named like the plan's but not the one the steps name.",
     ]);
+  });
+
+  it("a row's other-name count is core's shared wording, in the row's kind (DBT-189)", () => {
+    const verdict: StepVerdict = { kind: "present-other-name", name: "N", diffs: [], alsoFound: 2 };
+    const groups = verdictGroups({
+      checks: [{ key: "k", sourceId: "diagnosticSettingsInitiative", stepId: "s1", kind: "policy-remediation", verdict }],
+    });
+    const also = otherNameAlsoFound(2, "policy-remediation");
+    expect(also).toBe("2 other assignments with remediations were also found");
+    expect(groups[0]?.rows[0]?.view.detail).toBe(
+      `Found remediations of N, an assignment named like the plan's but not the one the steps name. ${also}.`,
+    );
   });
 
   it("gives every verdict kind a distinct word", () => {

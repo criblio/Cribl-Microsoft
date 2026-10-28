@@ -94,6 +94,33 @@ export type StepVerdict =
   | { readonly kind: "unknown"; readonly reason: UnknownReason; readonly detail: string };
 
 /**
+ * What a present-other-name verdict's `alsoFound` counts, per check kind, as
+ * [one, many]. Each is what that kind's classifier counted: a remediation
+ * verdict counts ASSIGNMENTS that have remediations, not remediations, since
+ * one assignment may have several (DBT-189). A kind without its own unit
+ * claims nothing beyond "like it".
+ */
+const OTHER_NAME_UNIT: Partial<Record<CheckKind, readonly [string, string]>> = {
+  "defender-export": ["continuous export", "continuous exports"],
+  "entra-setting": ["diagnostic setting", "diagnostic settings"],
+  "policy-assignment": ["policy assignment", "policy assignments"],
+  "policy-remediation": ["assignment with remediations", "assignments with remediations"],
+};
+
+/**
+ * The words for the objects a present-other-name verdict did NOT name - ""
+ * when there are none, else e.g. "2 other policy assignments were also found".
+ * The ONE wording Validate, the How-to step word and the dataflow lane use, so
+ * all three say the same count in the same unit (DBT-189).
+ */
+export function otherNameAlsoFound(alsoFound: number | undefined, kind?: CheckKind): string {
+  const n = alsoFound ?? 0;
+  if (n <= 0) return "";
+  const [one, many] = (kind === undefined ? undefined : OTHER_NAME_UNIT[kind]) ?? ["object like it", "objects like it"];
+  return n === 1 ? `1 other ${one} was also found` : `${n} other ${many} were also found`;
+}
+
+/**
  * A hub arrival measurement (Azure Monitor IncomingMessages).
  *
  *   measured  Azure answered; `messages` is the total over `window`, and 0 is a

@@ -14,6 +14,7 @@ import {
   encodeProgress,
   howToStep,
   isAutomatable,
+  otherNameAlsoFound,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -309,6 +310,28 @@ describe("step rows and stale ticks (D5)", () => {
     expect(word(check({ kind: "present-differs", diffs }))).toBe("present but different");
     expect(word(check({ kind: "present-other-name", name: "OldExport", diffs: [] }))).toBe(
       "exists under another name: OldExport",
+    );
+    // DBT-189: the step word counts the others too, in core's shared words
+    // and the check's own unit, as Validate and the lane do.
+    const counted = (kind: "eh-namespace" | "entra-setting") => ({
+      ...base,
+      checks: [
+        { key: "k0", sourceId: "entraId" as const, stepId: "eh-namespace", kind: "eh-namespace" as const, verdict: { kind: "as-expected" as const } },
+        {
+          key: "k1",
+          sourceId: "entraId" as const,
+          stepId: "eh-namespace",
+          kind,
+          verdict: { kind: "present-other-name" as const, name: "OldExport", diffs: [], alsoFound: 3 },
+        },
+      ],
+    });
+    expect(otherNameAlsoFound(3, "entra-setting")).toBe("3 other diagnostic settings were also found");
+    expect(word(counted("entra-setting"))).toBe(
+      "exists under another name: OldExport; 3 other diagnostic settings were also found",
+    );
+    expect(word(counted("eh-namespace"))).toBe(
+      "exists under another name: OldExport; 3 other objects like it were also found",
     );
     const words = Object.values(AGGREGATE_VERDICT_WORD);
     expect(words).toHaveLength(4);

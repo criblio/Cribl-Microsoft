@@ -42,6 +42,7 @@ import {
   canWriteProgressDocument,
   howToStep,
   isAutomatable,
+  otherNameAlsoFound,
   progressFrom,
   readProgressDocument,
   renderStep,
@@ -356,10 +357,12 @@ export function stepVerdictWord(step: HowToStep, result: ValidationResult | null
   if (aggregate === "differs") {
     // present-other-name rolls up to `differs` with present-differs, but it
     // says something different - the object exists under a name the plan did
-    // not use - so it keeps its own word and names the object.
-    const other = verdicts.find((v) => v.kind === "present-other-name");
-    if (other !== undefined && other.kind === "present-other-name") {
-      return `${OTHER_NAME_WORD}: ${other.name}`;
+    // not use - so it keeps its own word, names the object and counts the
+    // others in core's wording, the same as Validate and the lane (DBT-189).
+    const other = result.checks.find((c) => c.stepId === step.id && c.verdict.kind === "present-other-name");
+    if (other !== undefined && other.verdict.kind === "present-other-name") {
+      const also = otherNameAlsoFound(other.verdict.alsoFound, other.kind);
+      return `${OTHER_NAME_WORD}: ${other.verdict.name}${also === "" ? "" : `; ${also}`}`;
     }
   }
   return AGGREGATE_VERDICT_WORD[aggregate];

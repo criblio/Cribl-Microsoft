@@ -35,7 +35,7 @@ export {
 } from "./plan-values";
 export type { PlanValueKey, PlanValueLabel, PlanValues } from "./plan-values";
 
-export { CHECK_KINDS, aggregateVerdict } from "./check-kinds";
+export { CHECK_KINDS, aggregateVerdict, otherNameAlsoFound } from "./check-kinds";
 export type {
   AggregateVerdict,
   ArrivalReading,

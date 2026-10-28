@@ -21,6 +21,7 @@ export type {
   BuildOnboardingLanesInput,
   CardStatus,
   CardStatusKind,
+  CheckedVerdict,
   CriblInputReading,
   CriblRouteReading,
   CriblSideReading,
