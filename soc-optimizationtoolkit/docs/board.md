@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**80 in the backlog, 37 in progress, 66 done.**
+**80 in the backlog, 37 in progress, 69 done.**
 
 ## By menu item
 
@@ -27,14 +27,14 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 36 | 29 | 19 |
+| Sentinel Integration | 36 | 30 | 19 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 12 | 7 |
+| Azure Native Source Onboarding | 32 | 14 | 7 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
@@ -48,7 +48,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 23% (10/43)
+### `AZR` Azure native source onboarding - 27% (12/45)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -61,7 +61,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 8/25 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 10/27 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -113,13 +113,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 43% (46/107)
+### `DBT` Quality and technical debt _(enabler)_ - 44% (47/108)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 28/76 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 29/77 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -2285,7 +2285,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (66)
+## Done (69)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4560,3 +4560,43 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (ADX-EG-mbender-adxcluster, AndyEH, CriblSysEngNamespace, CriblTest
   observed). The per-hub results the screen renders after the full paced run
   were not watched to the end.
+
+- **AZR-48** NOT_ONBOARDABLE still carries the repository-path wording AZR-43 removed, and the screen row calls its operator text `alternative`
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the architecture audit (bba48ce..c96618f).
+  packages/core/src/domain/onboarding-howto/sources.ts NOT_ONBOARDABLE maps
+  u.alternative ("Use DCR-Automation solution in this repository"); it is
+  exported from core but nothing outside its own test imports it, so the first
+  renderer to pick it up brings [[AZR-43]] back. The screen view field holding
+  the AZR-43 `instead` text is still named `alternative`
+  (azure-onboarding-state.ts), so its own name says the opposite of what it
+  holds. Fix: delete the dead export and its test; rename the view field to
+  `instead`. DONE 2026-10-28: NOT_ONBOARDABLE and its type are deleted with
+  their test (nothing else used them); the screen's view field is renamed
+  `instead`, and the AZR-43 pins read it by that name.
+
+- **AZR-49** Two spellings of the has-a-plan-value-changed rule (How-to ticks and Validate results)
+  `AZR-F9` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-28 by the architecture audit. tickState (core
+  progress-document.ts) and changedPlanKeys (ui validate-state.ts, added by
+  [[AZR-42]]) each compare plan values with (v ?? "").trim(); planFingerprint
+  is a third spelling of the normalisation. They agree today; if one changes
+  (say, case-insensitive Azure names) a step can read done while its check
+  reads stale. Their key sets also differ on purpose but say so nowhere: a
+  tick looks at its step's own values, a Validate result at every plan value
+  (changing any value retires the whole run - the safe side, because checks
+  read values beyond their required list). Fix: one changedValueKeys(a, b,
+  keys) in core plan-values.ts used by both, with the Validate key choice
+  written down. DONE 2026-10-28: core plan-values.ts owns changedValueKeys and
+  planValueOf; tickState and the Validate changedPlanKeys both call it, and
+  planFingerprint uses the same planValueOf. The Validate key choice (every
+  plan value) is written down at changedPlanKeys with the reason. Pinned in
+  plan-values.test.ts, including agreement with planFingerprint;
+  mutation-checked by making the comparison untrimmed (3 pins fail).
+
+- **DBT-191** OPTIONS_SAVE_FAILED_NOTICE is exported from @soc/ui but no shell uses it
+  `DBT-F1` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-28 by the architecture audit. packages/ui/src/index.ts
+  re-exports it; only options-read.ts and its test use it. Fix: drop it from
+  the index. DONE 2026-10-28: dropped from packages/ui/src/index.ts; typecheck
+  confirms no shell imported it.

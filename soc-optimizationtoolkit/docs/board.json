@@ -2649,6 +2649,45 @@
       "dependsOn": [],
       "title": "Arrival reads \"no messages in the window\" for a hub that does not exist",
       "detail": "FOUND LIVE 2026-10-28 while verifying [[AZR-40]]. Azure Monitor answers an EntityName filter for a hub that is not in the namespace with a zero series, so against AndyEH (complete hub list: t1, t2, t3) the nine Entra auto-created hubs (insights-logs-auditlogs and the rest) all read \"no messages in the window\", exactly like the real, quiet hub t2. A missing hub and a quiet hub are different answers: the first means the diagnostic setting has never sent anything. Fix: when the run has a COMPLETE hub listing (ValidationResult.measuredHubs) and the hub is not in it, the arrival line says the hub does not exist yet instead of reporting a zero; with an incomplete listing it keeps the measured wording. Pin both."
+    },
+    {
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "AZR-48",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "bug",
+      "priority": "now",
+      "title": "NOT_ONBOARDABLE still carries the repository-path wording AZR-43 removed, and the screen row calls its operator text `alternative`",
+      "detail": "FOUND 2026-10-28 by the architecture audit (bba48ce..c96618f). packages/core/src/domain/onboarding-howto/sources.ts NOT_ONBOARDABLE maps u.alternative (\"Use DCR-Automation solution in this repository\"); it is exported from core but nothing outside its own test imports it, so the first renderer to pick it up brings [[AZR-43]] back. The screen view field holding the AZR-43 `instead` text is still named `alternative` (azure-onboarding-state.ts), so its own name says the opposite of what it holds. Fix: delete the dead export and its test; rename the view field to `instead`.\n\nDONE 2026-10-28: NOT_ONBOARDABLE and its type are deleted with their test (nothing else used them); the screen's view field is renamed `instead`, and the AZR-43 pins read it by that name.",
+      "verified": "pins"
+    },
+    {
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "AZR-49",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "enabler",
+      "priority": "now",
+      "title": "Two spellings of the has-a-plan-value-changed rule (How-to ticks and Validate results)",
+      "detail": "FOUND 2026-10-28 by the architecture audit. tickState (core progress-document.ts) and changedPlanKeys (ui validate-state.ts, added by [[AZR-42]]) each compare plan values with (v ?? \"\").trim(); planFingerprint is a third spelling of the normalisation. They agree today; if one changes (say, case-insensitive Azure names) a step can read done while its check reads stale. Their key sets also differ on purpose but say so nowhere: a tick looks at its step's own values, a Validate result at every plan value (changing any value retires the whole run - the safe side, because checks read values beyond their required list). Fix: one changedValueKeys(a, b, keys) in core plan-values.ts used by both, with the Validate key choice written down.\n\nDONE 2026-10-28: core plan-values.ts owns changedValueKeys and planValueOf; tickState and the Validate changedPlanKeys both call it, and planFingerprint uses the same planValueOf. The Validate key choice (every plan value) is written down at changedPlanKeys with the reason. Pinned in plan-values.test.ts, including agreement with planFingerprint; mutation-checked by making the comparison untrimmed (3 pins fail).",
+      "verified": "pins"
+    },
+    {
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "DBT-191",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "enabler",
+      "priority": "later",
+      "title": "OPTIONS_SAVE_FAILED_NOTICE is exported from @soc/ui but no shell uses it",
+      "detail": "FOUND 2026-10-28 by the architecture audit. packages/ui/src/index.ts re-exports it; only options-read.ts and its test use it. Fix: drop it from the index.\n\nDONE 2026-10-28: dropped from packages/ui/src/index.ts; typecheck confirms no shell imported it.",
+      "verified": "pins"
     }
   ],
   "features": [
