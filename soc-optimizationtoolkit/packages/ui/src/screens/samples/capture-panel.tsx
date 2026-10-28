@@ -11,7 +11,9 @@
  * Cribl evaluates the expression and returns its own message, which beats a
  * guess from here. The one thing checked is the edit that fails silently -
  * deleting the __inputId clause, which widens the capture to every source in
- * the worker group.
+ * the worker group - and, since DBT-169, naming the source by its bare id,
+ * which matches nothing. The panel hands core the whole source so its type
+ * reaches that check; the typed `<type>:<id>` form is the one that is silent.
  *
  * TWO IN-FLIGHT STATES, not one (2026-08-20 audit). The capture is awaited and
  * so is the COMMIT, and until the store write resolves the panel is showing a
@@ -187,7 +189,7 @@ export function CapturePanel({
 
   const view = deriveCaptureView(result, running, existingLogTypes);
   const commitView = deriveCaptureCommitView(outcome, committing, storeError);
-  const warning = filterWarning(filter, source.id);
+  const warning = filterWarning(filter, source);
   // One lock for the whole panel, as the Lake panel does with querying/fetching:
   // every control here describes a request that is already in flight.
   const locked = running || committing;

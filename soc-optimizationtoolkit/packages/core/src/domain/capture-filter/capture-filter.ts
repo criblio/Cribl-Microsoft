@@ -48,6 +48,8 @@ import {
   DISCRIMINATOR_FIELDS,
   HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
 } from "../sample-parsing/discriminators";
+import type { InputIdFilter, InputIdRef } from "./input-id";
+import { inputIdValue, matchInputIdFilter } from "./input-id";
 
 /**
  * The characters that may bound a log-type token, as a regex CHARACTER CLASS
@@ -192,10 +194,19 @@ export function buildCaptureFilter(input: CaptureFilterInput): string {
  * group, quietly returning a mixture they believe came from one place. A wrong
  * filter that errors is fine; this one succeeds and lies.
  *
- * MATCHED AS A QUOTED LITERAL (2026-08-20 bug-hunt). A bare substring test
- * accepted `__inputId === "in_syslog_prod"` as though it named `in_syslog`, so
- * the capture ran against a DIFFERENT source while the panel said otherwise -
- * the same succeeds-and-lies shape this function exists to catch.
+ * DECIDED BY input-id.ts (DBT-169), the one answer every route reader shares.
+ * The `__inputId` clauses are lifted out of the expression and each is asked
+ * matchInputIdFilter, so the TYPED form the events carry (`<type>:<id>`) is
+ * silent, the BARE id (`legacy`) warns that it matches nothing, and no match
+ * keeps the different-source warning. This used to be a quoted-literal regex
+ * of its own that accepted only the bare id - so the correct filter was warned
+ * and the one that matches nothing was not. Comparing whole literals also
+ * keeps the 2026-08-20 bug-hunt rule: `"in_syslog_prod"` does not name
+ * `in_syslog`.
+ *
+ * The type is OPTIONAL because a source listing may omit it. Without one only
+ * the segment clause inputPredicate writes - which needs no type - can be
+ * checked, and anything else says it cannot be, rather than guessing.
  *
  * Deliberately NOT a validator. Cribl evaluates the expression as JavaScript
  * and this app has no business deciding what is valid JS - a filter that fails
@@ -205,6 +216,7 @@ export function buildCaptureFilter(input: CaptureFilterInput): string {
 export function captureFilterWarning(
   filter: string,
   inputId: string,
+  inputType?: string,
 ): string | null {
   if (filter.trim() === "") {
     return "An empty filter captures every event from every source in the worker group.";
@@ -212,17 +224,67 @@ export function captureFilterWarning(
   if (!filter.includes("__inputId")) {
     return `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
   }
-  // The test is a quoted literal that is the bare id, or the bare id after a
-  // leading `:` (`":in_syslog"`). inputPredicate no longer emits that suffix
-  // form - it compares the second `:` segment against the bare literal, which
-  // the check accepts - so the `:?` now only spares an operator-written
-  // `__inputId.endsWith(":in_syslog")`. It does NOT admit the typed literal
-  // `'<type>:<id>'` that the events actually carry (capture-filter/input-id.ts
-  // inputIdValue, and Cribl's own Input Filters list above), so a filter
-  // written that way is warned as naming a different source.
-  const quoted = new RegExp(`["'\`]:?${escapeRegExp(inputId)}["'\`]`);
-  if (!quoted.test(filter)) {
-    return `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
+  const clauses = inputIdClauses(filter);
+  // inputPredicate's own arm: the id as the second `:` segment, which is the
+  // id in every typed shape, whatever the type.
+  if (clauses.segments.includes(inputId)) {
+    return null;
   }
-  return null;
+  const other = `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
+  if (inputType === undefined) {
+    return clauses.filters.length === 0
+      ? other
+      : `The type of source "${inputId}" is unknown, so this filter's __inputId clause cannot be checked against it.`;
+  }
+  const ref: InputIdRef = { type: inputType, id: inputId };
+  const answers = clauses.filters.map((clause) => matchInputIdFilter(clause, ref));
+  // The typed answer wins, as it does for every reader of input-id.ts.
+  if (answers.includes("match")) {
+    return null;
+  }
+  if (answers.includes("legacy")) {
+    const value = JSON.stringify(inputIdValue(ref));
+    const prefix = JSON.stringify(`${inputIdValue(ref)}:`);
+    return `This filter names the bare input id "${inputId}" (unconfirmed: events carry __inputId as ${value}, and the bare form matched nothing when captured), so it will likely capture nothing. Write __inputId === ${value} || __inputId.startsWith(${prefix}) instead.`;
+  }
+  return other;
+}
+
+/** A quoted JS string literal; group 2 is its body. No escapes inside. */
+const LITERAL = String.raw`(['"\x60])((?:(?!\1)[^\\])*)\1`;
+
+/**
+ * The `__inputId` clauses inside a capture filter, in the forms Cribl and this
+ * app write, as input-id.ts's parsed shape plus the segment ids inputPredicate
+ * compares. The filter is a conjunction the operator may have extended, so the
+ * clauses are FOUND inside it rather than parsed from the whole expression the
+ * way a route filter is (live-architecture parseRouteFilterInputs). A form not
+ * listed here contributes nothing, which reads as naming another source.
+ */
+function inputIdClauses(filter: string): {
+  filters: Exclude<InputIdFilter, { kind: "unparsed" }>[];
+  segments: string[];
+} {
+  const filters: Exclude<InputIdFilter, { kind: "unparsed" }>[] = [];
+  for (const m of filter.matchAll(new RegExp(String.raw`__inputId\s*===?\s*${LITERAL}`, "g"))) {
+    filters.push({ kind: "inputs", ids: [m[2]] });
+  }
+  for (const m of filter.matchAll(
+    new RegExp(String.raw`__inputId\.startsWith\(\s*${LITERAL}\s*\)`, "g"),
+  )) {
+    filters.push({ kind: "prefix", value: m[2] });
+  }
+  for (const m of filter.matchAll(/\[([^\]]+)\]\.includes\(\s*__inputId\s*\)/g)) {
+    const ids = [...m[1].matchAll(new RegExp(LITERAL, "g"))].map((id) => id[2]);
+    filters.push({ kind: "inputs", ids });
+  }
+  const segments = [
+    ...filter.matchAll(
+      new RegExp(
+        String.raw`__inputId\.split\(\s*(['"\x60]):\1\s*\)\[1\]\s*===?\s*(['"\x60])((?:(?!\2)[^\\])*)\2`,
+        "g",
+      ),
+    ),
+  ].map((m) => m[3]);
+  return { filters, segments };
 }
