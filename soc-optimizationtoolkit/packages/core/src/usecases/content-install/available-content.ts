@@ -14,6 +14,13 @@
  * and used to collapse into the same null / empty set. An EMPTY catalog is
  * unreadable rather than not-found: a readable Content Hub always lists its
  * packages, so an empty page measures nothing (docs/inventory-standard.md).
+ *
+ * DBT-183: the catalog entry is chosen by displayName, and an empty
+ * normalised name (on the package or in the lookup) never matches - it used to
+ * match everything. An exact case/space-normalised name wins over containment;
+ * among containments the longest shared name wins, then the closest length,
+ * and only then catalog order - so "Microsoft Defender" and "Microsoft
+ * Defender for Cloud" each find their own package whatever order they list in.
  */
 
 import type { AzureManagement } from "../../ports/azure-management";
@@ -119,8 +126,44 @@ async function readContentHubCatalog(
 }
 
 /**
+ * The catalog package whose displayName best matches `solutionName`, or
+ * undefined (DBT-183). Names are compared normalised (lower-case, letters and
+ * digits only). An EMPTY normalised name on either side - missing, non-string,
+ * whitespace- or punctuation-only - matches nothing, because `includes('')` is
+ * always true and used to make a nameless package match every lookup. Ranking,
+ * so catalog order only breaks exact ties:
+ *   1. an exact normalised match;
+ *   2. otherwise the longest containment - the name pair sharing the most
+ *      characters (the shorter name's length), so "Microsoft Defender XDR"
+ *      takes "Microsoft Defender" over "Microsoft";
+ *   3. then the smallest length difference, so "Cloudflare" takes
+ *      "Cloudflare ZT" over "Cloudflare Zero Trust Logs".
+ */
+function bestNameMatch(packages: unknown[], solutionName: string): unknown {
+  const target = normName(solutionName);
+  if (target === "") return undefined;
+  let best: unknown = undefined;
+  let bestOverlap = -1;
+  let bestDiff = Number.POSITIVE_INFINITY;
+  for (const p of packages) {
+    const dn = normName(str(prop(prop(p, "properties"), "displayName")));
+    if (dn === "") continue;
+    if (dn === target) return p;
+    if (!dn.includes(target) && !target.includes(dn)) continue;
+    const overlap = Math.min(dn.length, target.length);
+    const diff = Math.abs(dn.length - target.length);
+    if (overlap > bestOverlap || (overlap === bestOverlap && diff < bestDiff)) {
+      best = p;
+      bestOverlap = overlap;
+      bestDiff = diff;
+    }
+  }
+  return best;
+}
+
+/**
  * Find the Content Hub catalog entry for `solutionName` (fuzzy display-name
- * match, the same normalized-containment rule the rest of the app uses).
+ * match: exact first, then the closest containment - see bestNameMatch).
  * Never throws: a failed or empty catalog read is `unreadable` with the
  * reason, and only a read catalog with no match is `not-found` (DBT-176).
  */
@@ -133,11 +176,7 @@ export async function findSolutionCatalogEntry(
   const catalog = await readContentHubCatalog(azure, ws, logger, "catalog");
   if (catalog.kind === "unreadable") return catalog;
   const packages = catalog.packages;
-  const target = normName(solutionName);
-  const match = packages.find((p) => {
-    const dn = normName(str(prop(prop(p, "properties"), "displayName")));
-    return dn === target || dn.includes(target) || target.includes(dn);
-  });
+  const match = bestNameMatch(packages, solutionName);
   if (match === undefined) return { kind: "not-found", packagesSeen: packages.length };
   const props = prop(match, "properties");
   const installed = prop(props, "installedVersion");
