@@ -841,7 +841,7 @@ function OnboardingRows({
             <li key={row.id} className="azure-onboarding-row">
               <span className="field-label">{row.title}</span>
               <span className="field-hint">{row.description}</span>
-              <span className="field-hint">{`Instead: ${row.alternative}`}</span>
+              <span className="field-hint">{`Instead: ${row.instead}`}</span>
             </li>
           );
         }

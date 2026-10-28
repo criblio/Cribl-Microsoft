@@ -26,7 +26,6 @@
 import {
   COVERAGE_CATALOG,
   UNSUPPORTED_SOURCES,
-  XDR_TABLES_NOT_SUPPORTED,
   coverageItem,
 } from "../coverage-model";
 import {
@@ -34,7 +33,7 @@ import {
   ENTRA_PROFILE_CATEGORIES,
   type EntraProfile,
 } from "../entra-diagnostics/entra-categories";
-import { XDR_TABLES_ROW_ID, itemAvailability } from "../onboarding-sections";
+import { itemAvailability } from "../onboarding-sections";
 import type { PlanValues } from "./plan-values";
 
 /** The six coverage-catalog ids plus the two blob-only flow-log sources. */
@@ -248,26 +247,3 @@ export function isAutomatable(id: OnboardingSourceId): boolean {
   return itemAvailability(id).status === "available";
 }
 
-/** Something that cannot be onboarded through Event Hub or Blob, and what to do instead. */
-export interface NotOnboardable {
-  readonly id: string;
-  readonly title: string;
-  /** The catalog's own alternative, verbatim. */
-  readonly alternative: string;
-}
-
-/**
- * The reference rows: catalog entries neither path can carry. Built from
- * UNSUPPORTED_SOURCES minus the blob sources, plus the XDR tables the Streaming
- * API does not carry.
- */
-export const NOT_ONBOARDABLE: readonly NotOnboardable[] = [
-  ...UNSUPPORTED_SOURCES.filter(
-    (u) => !(BLOB_SOURCE_IDS as readonly string[]).includes(u.id),
-  ).map((u) => ({ id: u.id, title: u.title, alternative: u.alternative })),
-  {
-    id: XDR_TABLES_ROW_ID,
-    title: `Defender XDR tables: ${XDR_TABLES_NOT_SUPPORTED.tables.join(", ")}`,
-    alternative: XDR_TABLES_NOT_SUPPORTED.reason,
-  },
-];

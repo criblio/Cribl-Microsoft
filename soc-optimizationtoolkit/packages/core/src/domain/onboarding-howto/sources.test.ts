@@ -4,7 +4,6 @@ import { ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories"
 import { itemAvailability } from "../onboarding-sections";
 import { defaultPlanValues } from "./plan-values";
 import {
-  NOT_ONBOARDABLE,
   ONBOARDING_SOURCES,
   isAutomatable,
   isOnboardingSourceId,
@@ -125,14 +124,3 @@ describe("isAutomatable", () => {
   });
 });
 
-describe("NOT_ONBOARDABLE", () => {
-  it("lists resourceChangeTracking, vmGuestLogs and the XDR tables, each with an alternative", () => {
-    expect(NOT_ONBOARDABLE.map((n) => n.id)).toEqual([
-      "resourceChangeTracking",
-      "vmGuestLogs",
-      "xdrTablesNotSupported",
-    ]);
-    for (const n of NOT_ONBOARDABLE) expect(n.alternative.length).toBeGreaterThan(0);
-    expect(NOT_ONBOARDABLE[2].title).toContain("BehaviorEntities");
-  });
-});

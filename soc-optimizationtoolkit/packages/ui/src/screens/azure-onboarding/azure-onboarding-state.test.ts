@@ -547,7 +547,7 @@ describe("visible copy carries no project history", () => {
           if (r.kind === "item") add(`row.${r.id}.label`, r.label);
           else if (r.kind === "unsupported") {
             add(`row.${r.id}.description`, r.description);
-            add(`row.${r.id}.alternative`, r.alternative);
+            add(`row.${r.id}.instead`, r.instead);
           } else add(`row.${r.id}.reason`, r.reason);
         }
       }
@@ -649,7 +649,7 @@ describe("sources that cannot stream to Event Hub", () => {
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
       if (r.kind !== "unsupported") continue;
-      expect(r.alternative, r.id).not.toMatch(/repositor|Azure\/dev|deprecated\//i);
+      expect(r.instead, r.id).not.toMatch(/repositor|Azure\/dev|deprecated\//i);
     }
   });
 });

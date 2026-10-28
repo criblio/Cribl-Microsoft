@@ -271,8 +271,8 @@ export type OnboardingRowView =
       readonly id: string;
       readonly title: string;
       readonly description: string;
-      /** What to do instead (the legacy `alternative`). */
-      readonly alternative: string;
+      /** What to do instead: the catalog's operator-facing `instead` (AZR-43), never the legacy `alternative`. */
+      readonly instead: string;
     }
   | {
       readonly kind: "xdr-tables";
@@ -331,7 +331,7 @@ export function buildSections(
           id: row.id,
           title: row.item.title,
           description: row.item.description,
-          alternative: row.item.instead,
+          instead: row.item.instead,
         };
       }
       if (row.kind === "xdr-tables") {

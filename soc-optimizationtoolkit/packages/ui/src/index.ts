@@ -112,7 +112,6 @@ export type {
 // out loud (DBT-173).
 export {
   OPTIONS_LOADING,
-  OPTIONS_SAVE_FAILED_NOTICE,
   OPTIONS_UNREADABLE_NOTICE,
   beginOptionsRetry,
   optionsReadFailureLine,
