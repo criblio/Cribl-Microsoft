@@ -21,7 +21,9 @@ import {
   type CheckExpectations,
 } from "./index";
 // Module-internal (not in the barrel): pinned directly for its own guard.
-import { classifyTopic } from "./classify";
+import { classifyEventSubscription, classifyTopic } from "./classify";
+
+const BLOB = "Microsoft.Storage.BlobCreated";
 
 const FULL: PlanValues = {
   ...defaultPlanValues({ subscriptionId: "sub-1", resourceGroup: "rg-1" }),
@@ -350,9 +352,11 @@ describe("blob checks", () => {
   });
 
   it("eventgrid-subscription: a queue destination with BlobCreated is as-expected", () => {
+    const account = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
     const sub = (types: string[]) => ({
       properties: {
-        destination: { endpointType: "StorageQueue", properties: { queueName: "flowlog-queue" } },
+        topic: account,
+        destination: { endpointType: "StorageQueue", properties: { resourceId: account, queueName: "flowlog-queue" } },
         filter: { includedEventTypes: types },
       },
     });
@@ -477,6 +481,7 @@ describe("policy-remediation: outcomes", () => {
       kind: "present-other-name",
       name: "Cribl-AU-Old",
       diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+      alsoFound: 1,
     });
     // The same assignment, read by policy-assignment, is called the same thing.
     const assignment = {
@@ -617,6 +622,181 @@ describe("eventgrid-topic: outcomes", () => {
     const serverError = readRefused<unknown>(refusal({ status: 500, code: "InternalServerError" }));
     const failed = classifyCheck("eventgrid-topic", FULL, [serverError]);
     expect(failed.kind === "unknown" && failed.reason).toBe("failed");
+  });
+});
+
+// DBT-178: present-other-name named one object and said nothing of the rest,
+// so the screen read as if the named one were the only one.
+describe("present-other-name counts the others that matched the same way", () => {
+  const exportItem = (name: string, hub = "defender-alerts") => ({
+    id: `/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Security/automations/${name}`,
+    name,
+    properties: {
+      isEnabled: true,
+      scopes: [{ scopePath: "/subscriptions/sub-1" }],
+      sources: [{ eventSource: "Alerts" }],
+      actions: [{ actionType: "EventHub", eventHubResourceId: `${NS_PATH}/eventhubs/${hub}` }],
+    },
+  });
+  const setting = (name: string, ns = NS_PATH) => ({
+    name,
+    properties: {
+      eventHubAuthorizationRuleId: `${ns}/authorizationRules/sender`,
+      eventHubName: "",
+      logs: [{ category: "AuditLogs", enabled: true }],
+    },
+  });
+  const assignment = (name: string) => ({
+    name,
+    identity: { type: "UserAssigned" },
+    properties: { policyDefinitionId: AUDIT.policy?.definitionId, enforcementMode: "Default" },
+  });
+  const remediation = (name: string, provisioningState = "Succeeded") => ({
+    properties: {
+      policyAssignmentId: `/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyAssignments/${name}`,
+      provisioningState,
+    },
+  });
+  const ENTRA: CheckExpectations = {};
+
+  it("defender-export: two others on the namespace name the exact-hub one and count one more", () => {
+    const v = classifyCheck("defender-export", FULL, [
+      readRows([exportItem("NsOnly", "other-hub"), exportItem("PortalExport")]),
+    ]);
+    expect(v.kind === "present-other-name" && [v.name, v.alsoFound]).toEqual(["PortalExport", 1]);
+    const alone = classifyCheck("defender-export", FULL, [readRows([exportItem("PortalExport")])]);
+    expect(alone.kind === "present-other-name" && "alsoFound" in alone).toBe(false);
+  });
+
+  it("entra-setting: counts only the settings that send to the plan's namespace", () => {
+    const v = classifyCheck(
+      "entra-setting",
+      FULL,
+      [readRows([setting("A"), setting("Elsewhere", `${NS_PATH}2`), setting("B"), setting("C")])],
+      ENTRA,
+    );
+    expect(v).toEqual({ kind: "present-other-name", name: "A", diffs: [], alsoFound: 2 });
+  });
+
+  it("policy-assignment: counts the other family members and initiative users", () => {
+    const v = classifyCheck(
+      "policy-assignment",
+      FULL,
+      [readRows([assignment("Cribl-AU-Old"), assignment("Unrelated-Name"), { name: "SomeoneElse", properties: {} }])],
+      AUDIT,
+    );
+    // Unrelated-Name uses the plan's initiative; SomeoneElse matches neither.
+    expect(v).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [], alsoFound: 1 });
+  });
+
+  it("policy-remediation: counts other assignments, not remediations", () => {
+    const v = classifyCheck(
+      "policy-remediation",
+      FULL,
+      [
+        readRows([
+          remediation("Cribl-AU-Old"),
+          remediation("Cribl-AU-Old", "Failed"),
+          remediation("cribl-au-old", "Failed"),
+          remediation("Cribl-AU-Older"),
+          remediation("Cribl-AU-Oldest"),
+        ]),
+      ],
+      AUDIT,
+    );
+    expect(v).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [], alsoFound: 2 });
+    expect(
+      classifyCheck("policy-remediation", FULL, [readRows([remediation("Cribl-AU-Old"), remediation("cribl-au-old")])], AUDIT),
+    ).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [] });
+  });
+});
+
+// DBT-179: the subscription matched on queueName alone, so one delivering to a
+// same-named queue on another account, on another account's topic, read as
+// the plan's - the shape DBT-167 fixed for the topic.
+describe("eventgrid-subscription: the plan's storage account", () => {
+  const ACCOUNT_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
+  const OTHER_ID = ACCOUNT_ID.replace("flowlogsa", "othersa");
+  const sub = (resourceId: string | undefined, topic: string | undefined, types = [BLOB]) => ({
+    properties: {
+      ...(topic !== undefined ? { topic } : {}),
+      destination: {
+        endpointType: "StorageQueue",
+        properties: { ...(resourceId !== undefined ? { resourceId } : {}), queueName: "flowlog-queue" },
+      },
+      filter: { includedEventTypes: types },
+    },
+  });
+  const check = (values: PlanValues, rows: unknown[]) =>
+    classifyCheck("eventgrid-subscription", values, [readRows(rows)]);
+
+  it("a subscription on another account's topic, to another account's queue, differs on both", () => {
+    expect(check(FULL, [sub(OTHER_ID, OTHER_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [
+        { field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID },
+        { field: "topic", expected: ACCOUNT_ID, actual: OTHER_ID },
+      ],
+    });
+    // Either one alone is enough.
+    expect(check(FULL, [sub(ACCOUNT_ID, OTHER_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "topic", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+    expect(check(FULL, [sub(OTHER_ID, ACCOUNT_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+  });
+
+  it("the plan's account on both is as-expected, compared case-insensitively", () => {
+    expect(check(FULL, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({ kind: "as-expected" });
+    expect(check(FULL, [sub(ACCOUNT_ID.toUpperCase(), ACCOUNT_ID.toLowerCase())])).toEqual({ kind: "as-expected" });
+  });
+
+  it("prefers the subscription on the plan's account among same-queue ones", () => {
+    expect(check(FULL, [sub(OTHER_ID, OTHER_ID), sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({ kind: "as-expected" });
+  });
+
+  it("a read that does not say the account is unknown, never as-expected", () => {
+    expect(check(FULL, [sub(undefined, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "The event subscription was read, but Azure did not report which storage account its queue is on.",
+    });
+    const topicUnsaid = {
+      kind: "unknown",
+      reason: "failed",
+      detail: "The event subscription was read, but its topic does not say which storage account it belongs to.",
+    };
+    expect(check(FULL, [sub(ACCOUNT_ID, undefined)])).toEqual(topicUnsaid);
+    // A topic id that is not a storage account's (the system topic's own id) cannot say either.
+    const systemTopicId =
+      "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.EventGrid/systemTopics/flowlogsa-events";
+    expect(check(FULL, [sub(ACCOUNT_ID, systemTopicId)])).toEqual(topicUnsaid);
+    // A definite difference is still reported: it is true whatever the topic is.
+    expect(check(FULL, [sub(OTHER_ID, undefined)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+  });
+
+  it("with no storage account in the plan, it is unknown missing-value and sends nothing", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "" };
+    expect(requestsFor("eventgrid-subscription", noAccount)).toEqual({ kind: "missing", missing: ["storageAccount"] });
+    expect(check(noAccount, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
+  });
+
+  it("classifyEventSubscription itself refuses as-expected without a storage account", () => {
+    expect(classifyEventSubscription({ ...FULL, storageAccount: " " }, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
   });
 });
 

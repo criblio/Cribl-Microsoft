@@ -4,7 +4,7 @@
 // read shown as "not found", or an unreadable arrival metric shown as a zero.
 
 import { describe, expect, it } from "vitest";
-import type { StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
+import type { CheckKind, StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
 import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
   VALIDATE_IDLE,
@@ -53,6 +53,70 @@ describe("verdictView", () => {
     const other = verdictView({ kind: "present-other-name", name: "MyExport", diffs: [] });
     expect(other.word).toBe("present under another name");
     expect(other.detail).toContain("MyExport");
+  });
+
+  // DBT-178: every other-name verdict said "which targets the plan's hub",
+  // false for the policy checks, which target no hub. The words are per kind.
+  it("words an other-name verdict true for each check kind that can return one", () => {
+    const other = (name: string, alsoFound?: number): StepVerdict =>
+      alsoFound === undefined
+        ? { kind: "present-other-name", name, diffs: [] }
+        : { kind: "present-other-name", name, diffs: [], alsoFound };
+    const detail = (kind: CheckKind, v: StepVerdict) => verdictView(v, kind).detail;
+    expect(detail("defender-export", other("PortalExport"))).toBe(
+      "Found as PortalExport, a continuous export that sends to the plan's Event Hub namespace.",
+    );
+    expect(detail("entra-setting", other("Portal"))).toBe(
+      "Found as Portal, a diagnostic setting that sends to the plan's Event Hub namespace.",
+    );
+    expect(detail("policy-assignment", other("Cribl-AU-Old"))).toBe(
+      "Found as Cribl-AU-Old, a policy assignment that uses the plan's initiative or is named like its assignments.",
+    );
+    expect(detail("policy-remediation", other("Cribl-AU-Old"))).toBe(
+      "Found remediations of Cribl-AU-Old, an assignment named like the plan's but not the one the steps name.",
+    );
+    // A kind with no wording of its own claims nothing beyond the name.
+    expect(detail("eh-hub", other("x"))).toBe("Found as x, a name the plan does not use.");
+    for (const kind of ["policy-assignment", "policy-remediation"] as const) {
+      expect(detail(kind, other("x")).toLowerCase(), kind).not.toContain("hub");
+    }
+  });
+
+  it("says how many others besides the one named", () => {
+    const v = (alsoFound: number): StepVerdict => ({ kind: "present-other-name", name: "A", diffs: [], alsoFound });
+    expect(verdictView(v(1), "policy-assignment").detail).toBe(
+      "Found as A, a policy assignment that uses the plan's initiative or is named like its assignments. " +
+        "1 other like it was also found.",
+    );
+    expect(verdictView(v(3), "policy-remediation").detail).toBe(
+      "Found remediations of A, an assignment named like the plan's but not the one the steps name. " +
+        "3 others like it were also found.",
+    );
+    expect(verdictView(v(2), "entra-setting").detail).toBe(
+      "Found as A, a diagnostic setting that sends to the plan's Event Hub namespace. " +
+        "2 others like it were also found.",
+    );
+    expect(verdictView(v(0), "defender-export").detail).toBe(
+      "Found as A, a continuous export that sends to the plan's Event Hub namespace.",
+    );
+  });
+
+  it("verdictGroups words each row by its own check kind", () => {
+    const verdict: StepVerdict = { kind: "present-other-name", name: "N", diffs: [] };
+    const check = (kind: CheckKind) => ({
+      key: kind,
+      sourceId: "diagnosticSettingsInitiative" as const,
+      stepId: "s1",
+      kind,
+      verdict,
+    });
+    const groups = verdictGroups({ checks: [check("policy-assignment"), check("policy-remediation")] });
+    expect(groups.length).toBe(1);
+    const [group] = groups;
+    expect(group?.rows.map((r) => r.view.detail)).toEqual([
+      "Found as N, a policy assignment that uses the plan's initiative or is named like its assignments.",
+      "Found remediations of N, an assignment named like the plan's but not the one the steps name.",
+    ]);
   });
 
   it("gives every verdict kind a distinct word", () => {

@@ -542,7 +542,11 @@ export function classifyExportForPlan(
   );
   const other = exact ?? others[0];
   if (other !== undefined) {
-    return { kind: "present-other-name", name: other.name, diffs: verdictDiffs(expected, other) };
+    const diffs = verdictDiffs(expected, other);
+    // The rest are counted, so the screen does not imply the named one is alone (DBT-178).
+    return others.length > 1
+      ? { kind: "present-other-name", name: other.name, diffs, alsoFound: others.length - 1 }
+      : { kind: "present-other-name", name: other.name, diffs };
   }
   return { kind: "absent" };
 }
