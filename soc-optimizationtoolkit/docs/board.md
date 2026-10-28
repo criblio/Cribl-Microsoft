@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**77 in the backlog, 40 in progress, 58 done.**
+**83 in the backlog, 37 in progress, 61 done.**
 
 ## By menu item
 
@@ -33,12 +33,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
-| Azure Native Source Onboarding | 31 | 6 | 9 |
-| Azure Logging Map | 4 | 0 | 1 |
+| Azure Native Source Onboarding | 35 | 8 | 11 |
+| Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 117.
+Open work totals 120.
 
 ## Epics and features
 
@@ -47,7 +47,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 6% (2/35)
+### `AZR` Azure native source onboarding - 12% (5/41)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -59,8 +59,8 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 0/3 | AZR-S1, AZR-7, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
-| `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 0/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 1/17 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39 |
+| `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 3/23 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (40)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -185,6 +185,11 @@ Started. Anything here with an unfinished dependency is called out on its card.
   breakage. OPEN BEFORE BUILDING: whether writing
   Microsoft.Security/automations needs a capability and probe that CAP-F1 does
   not yet list. Check it; do not assume the existing Azure role covers it.
+  LIVE 2026-10-28 (Live Preview, branch feature/azure-onboarding-screen,
+  operator's admin account, lab subscription): item (1) of the ADR 0007 list
+  passed: mount reads two KV keys and nothing else. The Defender deploy itself
+  was not exercised (it writes Microsoft.Security/automations). Section 6 copy
+  names repository paths to operators (AZR-43).
 
 - **AZR-19** Azure Logging Map - where each logging setting is applied in the management group tree
   `AZR-F8` `story` `settled`
@@ -245,139 +250,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   exact az policy assignment update --metadata command, pinned. NOTE
   2026-10-27: ADR 0006 is Accepted; any text above calling it Proposed is
   history. Reasoning in backlog.md section 6a-i (ownership; alternatives in
-  docs/adr/0006-policy-assignment-ownership-marker.md).
+  docs/adr/0006-policy-assignment-ownership-marker.md). LIVE 2026-10-28 (Live
+  Preview, branch feature/azure-onboarding-screen, operator's admin account,
+  lab subscription): the map read the lab tenant honestly with a principal
+  that cannot read the Tenant Root Group (banner: root unreadable, 2 scopes
+  seen only as assignment origins, 1 subscription under Parent not read); Lab
+  showed the community diagnostic-settings assignment with its ownership
+  evidence. The management-group portal deep link was not clicked, so it stays
+  unverified.
   DECISION: Which marker identifies a policy assignment the toolkit wrote?
   (ADR 0006, Accepted 2026-10-27)
     [x] `criblSocToolkit` Reserved metadata key criblSocToolkit = { version } (recommended) - Every future writer (AZR-4) sets metadata.criblSocToolkit. Explicit, survives renames, and no other tool writes it. Nothing carries it yet, so legacy assignments are still recognised by name + scope + definition, ranked below the marker.
     [ ] `createdBy-principal` metadata.createdBy equal to the toolkit service principal object id - Azure writes createdBy on EVERY assignment, so presence proves nothing; only a match against the toolkit principal could. That principal is shared with whatever else the operator runs under it, so a match overclaims ownership, and assignments the legacy PowerShell wrote under a person's login never match.
     [ ] `name-prefix` Assignment name prefix only (Cribl-*) - What the legacy toolkit relied on (Run-AzureLogCollection.ps1:1963). Cheap, but a customer can name their own assignment Cribl-*, and the 24-character MG-scope name cap forces truncations that collide.
 
-- **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
-  `AZR-F8` `decision` `settled`
-  SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by
-  the implementer. The approved interactive mockup (the operator-approved UX
-  spec for the logging map) has no drag. The house standard requires it for
-  on-screen diagrams. The CLAUDE.md precedence rule decides between
-  superpowers skills and standards, not between a standard and an
-  operator-approved spec, so it does not settle this. Phase 1 shipped the
-  approved spec (no drag, no Reset layout), pinned by a test so the choice
-  cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md.
-  NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty
-  canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test "the
-  same gesture on the empty canvas does pan the view"), which the mockup did
-  not list either; only CARD drag is absent. keep-fixed with strict mockup
-  parity would also remove the pan. NOTE 2026-10-27: LANDED (5b9a071 + review
-  b68bb35, merged 743c611): draggable cards, Reset layout, edges follow, Fit
-  frames moved cards, layout change drops moved positions. Awaits Live
-  Preview. Kit hook click-swallow is DBT-161. Reasoning in backlog.md section
-  6a-i ("Drag follows the standard").
-  DECISION: Should the Azure Logging Map add draggable cards and a Reset
-  layout button per the house diagram standard, or keep the approved mockup's
-  fixed layout?
-    [x] `add-drag` Add drag + Reset layout (house standard) - claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted.
-    [ ] `keep-fixed` Keep the fixed layout (approved mockup) - The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams.
-
-- **AZR-30** Onboarding dataflow diagram: how each selected source's logs reach Cribl and Sentinel
-  `AZR-F9` `story` `settled`
-  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
-  Onboarding page to show the dataflows of how these logs work from each
-  perspective. Also a How to experience for customers that do not want to use
-  the app to automate the Azure configurations. It should walk them through
-  how to configure each aspect the app would have done: choose what to
-  onboard, popup instructions, check box when done. Then a read-only option to
-  validate the configuration, and a dataflow updated to show a new flow when
-  the data is coming into Cribl. The Cribl side should be automated to create
-  the source needed to onboard the data from Blob or Event Hub as needed."
-  SCOPE: a diagram on the AZR-18 screen, one lane per selected source, from
-  the Azure emitter (diagnostic setting, Defender export, flow logs, Entra
-  export...) through its transport (Event Hub or Storage Blob) to the Cribl
-  source, Cribl routing and the destination. DEFAULT TAKEN for "each
-  perspective" (operator said build now): each lane can be read from the Azure
-  side (what is configured where), the Cribl side (source, route, destination)
-  or end to end. House diagram standard (claude-kit
-  standards/cribl-dataflow-diagram.md and its reference implementation): hand
-  SVG + dagre, tokens, (i) on every card, keyboard-focusable, no animation
-  unless the flow is MEASURED (AZR-33). NOTE 2026-10-26 (implementation,
-  AZR-30..34 build): BUILT, not verified live. Core lane model
-  `domain/onboarding-dataflow/lanes.ts` (buildOnboardingLanes: one lane per
-  chosen source, Automated and How-to combined, in ONBOARDING_SOURCES order;
-  the Azure side, Cribl side and end-to-end perspectives fold the other half
-  into one card; a shared namespace or storage account is computed once). The
-  canvas shell was lifted into `packages/ui/src/components/diagram/`
-  (geometry, pan/zoom/fit viewport with the 0.55 legible floor, sibling (i)
-  hit circle, role=dialog popover, 4px card drag with Reset, measured-only
-  AnimatedEdge), and the Azure Logging Map now runs its viewport, popover and
-  info circle on it under its unmodified pins, still with no drag (AZR-20).
-  The onboarding diagram is
-  `screens/azure-onboarding/dataflow/onboarding-dataflow.tsx` over the pure
-  left-to-right `lane-layout.ts`, shown as the screen's new Dataflow section.
-  Pins: lanes.test.ts, diagram-shell.dom.test.tsx, geometry.test.ts,
-  lane-layout.test.ts (zero crossings and every edge inside its section for 1,
-  3 and 8 lanes in every perspective), onboarding-dataflow.dom.test.tsx,
-  edge-styles.test.ts (cascade pin), and the logging-map tests unmodified.
-  Decisions in ADR 0007 sections 8 and 9. Live verification is OUTSTANDING
-  (ADR 0007, "Live verification"): the card stays in-progress until the
-  operator runs that list in Cribl Live Preview and records verified live or
-  both. CORRECTION 2026-10-26 (final review): the SCOPE line above says 'hand
-  SVG + dagre'. The build does not use dagre: the layout is a pure
-  section-per-flow, left-to-right column layout
-  (packages/ui/src/screens/azure-onboarding/dataflow/lane-layout.ts) on the
-  shared components/diagram shell, per ADR 0007 section 8. CORRECTION
-  2026-10-27: the Logging Map cards are draggable since AZR-20 (743c611); any
-  text above saying the shell's drag is unused there is history.
-
-- **AZR-31** Guided manual path: choose what to onboard, step instructions in a dialog, tick each step when done
-  `AZR-F9` `story` `settled` `blocked by AZR-30`
-  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
-  Onboarding page to show the dataflows of how these logs work from each
-  perspective. Also a How to experience for customers that do not want to use
-  the app to automate the Azure configurations. It should walk them through
-  how to configure each aspect the app would have done: choose what to
-  onboard, popup instructions, check box when done. Then a read-only option to
-  validate the configuration, and a dataflow updated to show a new flow when
-  the data is coming into Cribl. The Cribl side should be automated to create
-  the source needed to onboard the data from Blob or Event Hub as needed."
-  SCOPE: for an operator who will not let the app write Azure, a How-to mode
-  on the same screen: pick sources, each source expands into the steps the app
-  would have automated (portal or CLI instructions in a dialog, with the exact
-  names, scopes and values the app computed), and a done checkbox per step
-  persisted in the coverage KV document. Nothing in this mode writes Azure.
-  Must cover every Azure aspect the automated path performs for the sources
-  the screen offers, Event Hub and Blob transports both. NOTE 2026-10-26
-  (implementation plan for AZR-30..34): CORRECTION to the scope above: the
-  done ticks are NOT persisted in the coverage KV document. They live in a
-  SEPARATE KV document, key `azure-onboarding-progress` (kind
-  `azure-onboarding-progress`, version 1), because the AZR-18
-  `azure-coverage-selection` v1 encoder strips unknown keys and drops ids
-  outside the catalog, so extending it would either lose the ticks or change
-  its bytes. The selection document stays byte-for-byte unchanged.
-  Consequence: the screen's mount makes TWO KV loads instead of one, and the
-  AZR-18 mount pin (azure-onboarding-screen.dom.test.tsx, the 'one load'
-  assertion) is edited deliberately to expect both keys - recorded in ADR
-  0007. A tick stores a fingerprint of the plan values its step depends on,
-  and reads 'done against older values' when they change. NOTE 2026-10-26
-  (implementation, AZR-30..34 build): BUILT, not verified live. Source
-  catalog, isAutomatable (a function over ITEM_AVAILABILITY; only
-  defenderExport today), plan values and the `azure-onboarding-progress` v1
-  codec in `domain/onboarding-howto/`; the per-source step catalog and
-  renderer in `domain/onboarding-howto-steps/` (ported builders, never
-  retyped; inferred steps carry a visible 'not yet confirmed against live
-  Azure' tag). UI in `screens/azure-onboarding/howto/`: a chooser with an
-  Automate | How-to toggle, a plan values form with Apply, a step list with a
-  persisted done tick, provenance tag and stale note, and a native dialog with
-  portal steps, CLI and Copy. Ticks, mode and choice save at once, serialized;
-  a failed or foreign progress load blocks ticks while AZR-18 Save still
-  works. The AZR-18 mount pin was edited deliberately, one assertion and its
-  title, to two KV loads. Pins: the sources, plan-values, check-kinds and
-  progress-document tests, steps.test.ts, render-instruction.test.ts,
-  howto-state.test.ts, howto-panel.dom.test.tsx and
-  azure-onboarding-howto.dom.test.tsx. ADR 0007 sections 1 and 2. Live
-  verification is OUTSTANDING (ADR 0007, "Live verification"): the card stays
-  in-progress until the operator runs that list in Cribl Live Preview and
-  records verified live or both.
-
 - **AZR-32** Read-only validation of the Azure configuration, automated or manual
-  `AZR-F9` `story` `settled` `blocked by AZR-30`
+  `AZR-F9` `story` `settled`
   OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
   Onboarding page to show the dataflows of how these logs work from each
   perspective. Also a How to experience for customers that do not want to use
@@ -412,10 +300,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   validate-panel.dom.test.tsx. The budget is per run, not global (ADR 0007
   section 3). Live verification is OUTSTANDING (ADR 0007, "Live
   verification"): the card stays in-progress until the operator runs that list
-  in Cribl Live Preview and records verified live or both.
+  in Cribl Live Preview and records verified live or both. LIVE 2026-10-28
+  (Live Preview, branch feature/azure-onboarding-screen, operator's admin
+  account, lab subscription): see the pass summary on AZR-30 item (3). Three
+  defects carded: the arrival check can never succeed (AZR-40), result rows
+  print raw {{placeholders}} (AZR-41), and results from previous plan values
+  stay on screen unmarked after Apply (AZR-42); raw Azure error bodies do not
+  wrap (AZR-44).
 
 - **AZR-33** Diagram shows a new live flow when data arrives in Cribl
-  `AZR-F9` `story` `settled` `blocked by AZR-30`
+  `AZR-F9` `story` `settled`
   OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
   Onboarding page to show the dataflows of how these logs work from each
   perspective. Also a How to experience for customers that do not want to use
@@ -451,10 +345,14 @@ Started. Anything here with an unfinished dependency is called out on its card.
   for the new input is UNMEASURED until a real answer is captured as a
   fixture. ADR 0007 section 9. Live verification is OUTSTANDING (ADR 0007,
   "Live verification"): the card stays in-progress until the operator runs
-  that list in Cribl Live Preview and records verified live or both.
+  that list in Cribl Live Preview and records verified live or both. LIVE
+  2026-10-28 (Live Preview, branch feature/azure-onboarding-screen, operator's
+  admin account, lab subscription): not exercised: no Cribl source exists to
+  watch, and the toggle says so instead of polling. The metrics label form is
+  still unmeasured.
 
 - **AZR-34** Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)
-  `AZR-F9` `story` `settled` `blocked by AZR-30`
+  `AZR-F9` `story` `settled`
   OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
   Onboarding page to show the dataflows of how these logs work from each
   perspective. Also a How to experience for customers that do not want to use
@@ -520,7 +418,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   backtick queueName and configVersion matching by prefix. ADR 0007 sections 4
   to 7. Live verification is OUTSTANDING (ADR 0007, "Live verification"): the
   card stays in-progress until the operator runs that list in Cribl Live
-  Preview and records verified live or both.
+  Preview and records verified live or both. LIVE 2026-10-28 (Live Preview,
+  branch feature/azure-onboarding-screen, operator's admin account, lab
+  subscription): read half only: Load worker groups and Read Cribl side work
+  (GET master/groups, /m/default/system/inputs, /m/default/routes all 200
+  through the app proxy); Create stays disabled with "No hub has appeared yet
+  in a complete hub list; run Validate (read only) first" because the chosen
+  namespace has no hubs. Every guess listed above is still a guess. Note: this
+  section uses a native select for the worker group, not the shared
+  WorkerGroupField that DBT-134 made every other picker use.
 
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18`
@@ -1141,7 +1047,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (4)
+## Backlog - now (8)
 
 Next to pick up. Nothing blocks these.
 
@@ -1269,9 +1175,60 @@ Next to pick up. Nothing blocks these.
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
 
+- **AZR-40** Validate's arrival check queries IncomingMessages on each Event Hub; Azure only serves it on the namespace
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). Every "Arrival at the hub" row reads
+  "could not be read": the check sends GET
+  .../namespaces/<ns>/eventhubs/<hub>/providers/microsoft.insights/metrics?metricnames=IncomingMessages
+  (api 2018-01-01) and Azure answers HTTP 400
+  "Microsoft.EventHub/namespaces/eventhubs is not a supported platform metric
+  namespace". IncomingMessages is a NAMESPACE metric; one hub is selected with
+  a dimension filter on EntityName. So the ADR 0007 case "a quiet hub reads no
+  messages in the window" can never be reached against real Azure, and the
+  pins pass because the fake answers whatever the request shape is. Fix: one
+  namespace-level metrics read with $filter=EntityName eq '*' (or per hub),
+  split the answer by hub; pin the request URL against the recorded 400 and a
+  recorded 200. Also: when the namespace itself is 404 the check still sends
+  one metrics read per hub - skip them.
+
+- **AZR-41** Validate result rows print raw {{namespace}}, {{listenRule}} and {{consumerGroup}} placeholders
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). The Check the Azure configuration
+  results read "Create or pick the Event Hub namespace {{namespace}}: present
+  but different" even with the namespace filled in and applied; the How-to
+  steps above render the same templates correctly ("... namespace
+  CRIBL-EVENTHUB"). The validate panel prints the step title template without
+  the plan-value substitution the steps use. Fix: render result titles through
+  the same substitution as the steps; pin that no rendered validate row
+  contains "{{".
+
+- **AZR-42** Validate results for previous plan values stay on screen, unmarked, after the plan values change
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). After Apply with a different namespace
+  and resource group, the result block still read "Checked as of 1:06:22 PM"
+  with answers about the OLD namespace (evhns-cribl-test), and each step's
+  "Check:" column kept those answers beside the NEW values - the stale-marking
+  the How-to does for ticks is missing for checks. An answer about something
+  else is shown as an answer about this. Fix: key results to the plan values
+  they were run against and mark or clear them when those values change; pin
+  it.
+
+- **AZR-43** Sources that cannot stream to Event Hub tells operators to use repository paths
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-10-28 ([[AZR-18]]). Section 6 reads "Instead: Use
+  Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration" (a path
+  that no longer exists anywhere) and "Use DCR-Automation solution in this
+  repository for AMA-based collection" - an operator in Cribl has no
+  repository. Source:
+  packages/core/src/domain/coverage-model/coverage-catalog.ts (VNet flow logs
+  and VM guest OS alternatives), ported verbatim from the frozen legacy
+  fixture legacy/resource-coverage.json, so the provenance pin that compares
+  them must record the deliberate divergence. Fix: name the app's own screens
+  (Labs flow-log panel / Azure Blob source; DCR Automation) instead.
+
 ---
 
-## Backlog - next (36)
+## Backlog - next (38)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1836,6 +1793,28 @@ Settled and unblocked, sequenced behind now.
   both new kinds), a Send-only rule is present-differs under eh-rule-manage,
   and the steps test asserts the two steps now carry their kinds.
 
+- **AZR-44** Raw Azure error bodies in Validate results do not wrap and push the page sideways
+  `AZR-F9` `bug` `settled`
+  Not now because: Readability only: every word is still reachable by
+  scrolling, nothing is mis-stated, and it disappears once AZR-40 stops the
+  400s that produce the longest bodies.
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). The 400 bodies quoted in the Arrival at
+  the hub rows run past the right edge of the frame and give the whole page a
+  horizontal scrollbar. Fix: wrap (overflow-wrap: anywhere) or collapse the
+  raw body behind the row's (i); check the other validate kinds that quote
+  bodies.
+
+- **AZR-45** Onboarding dataflow: the namespace-to-Cribl-source edge label is clipped under the next card
+  `AZR-F9` `bug` `settled`
+  Not now because: The same words are available from the card's (i) and the
+  Validate panel; the diagram state is not wrong, only its label is
+  unreadable.
+  FOUND LIVE 2026-10-28 ([[AZR-30]]). In End to end view the label on the
+  Event Hub namespace -> Cribl source edge renders as "...ured: no Cribl
+  s...", starting before the gap and running under the Cribl source card, so
+  it cannot be read on the canvas. Fix: size the gap to the label or move the
+  label into the edge's (i); pin the label against the lane-layout column gap.
+
 ---
 
 ## Backlog - later (37)
@@ -2339,7 +2318,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (58)
+## Done (61)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2445,6 +2424,173 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
     [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
     [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
+
+- **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
+  `AZR-F8` `decision` `settled` `verified: live`
+  SPEC CONFLICT found while building [[AZR-19]], raised rather than settled by
+  the implementer. The approved interactive mockup (the operator-approved UX
+  spec for the logging map) has no drag. The house standard requires it for
+  on-screen diagrams. The CLAUDE.md precedence rule decides between
+  superpowers skills and standards, not between a standard and an
+  operator-approved spec, so it does not settle this. Phase 1 shipped the
+  approved spec (no drag, no Reset layout), pinned by a test so the choice
+  cannot change silently; the deviation is recorded in packages/ui/CONTEXT.md.
+  NOTE FOR WHOEVER ANSWERS: background PAN is built - dragging on the empty
+  canvas pans the view (logging-map-canvas.tsx, pinned by the canvas test "the
+  same gesture on the empty canvas does pan the view"), which the mockup did
+  not list either; only CARD drag is absent. keep-fixed with strict mockup
+  parity would also remove the pan. NOTE 2026-10-27: LANDED (5b9a071 + review
+  b68bb35, merged 743c611): draggable cards, Reset layout, edges follow, Fit
+  frames moved cards, layout change drops moved positions. Awaits Live
+  Preview. Kit hook click-swallow is DBT-161. Reasoning in backlog.md section
+  6a-i ("Drag follows the standard"). LIVE 2026-10-28 (Live Preview, branch
+  feature/azure-onboarding-screen, operator's admin account, lab
+  subscription): a card dragged with its edge following, a click on a card
+  still selected it, Reset layout restored the tree and greyed out, and zoom
+  and Fit were unchanged. Closed live.
+  DECISION: Should the Azure Logging Map add draggable cards and a Reset
+  layout button per the house diagram standard, or keep the approved mockup's
+  fixed layout?
+    [x] `add-drag` Add drag + Reset layout (house standard) - claude-kit standards/cribl-dataflow-diagram.md requires draggable cards and Reset layout on on-screen diagrams. The layout keeps positions behind one applyPositions seam, so this is local work in logging-map-layout.ts and the canvas; the no-drag pin in logging-map-canvas.dom.test.tsx is inverted.
+    [ ] `keep-fixed` Keep the fixed layout (approved mockup) - The approved mockup's phase-1 interaction model is zoom, fit, collapse, outline and trace, with no drag. A management-group hierarchy laid out top-to-bottom by dagre may not benefit from hand placement. Choosing this should be written into the standard as a recorded exception for hierarchy diagrams.
+
+- **AZR-30** Onboarding dataflow diagram: how each selected source's logs reach Cribl and Sentinel
+  `AZR-F9` `story` `settled` `verified: both`
+  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
+  Onboarding page to show the dataflows of how these logs work from each
+  perspective. Also a How to experience for customers that do not want to use
+  the app to automate the Azure configurations. It should walk them through
+  how to configure each aspect the app would have done: choose what to
+  onboard, popup instructions, check box when done. Then a read-only option to
+  validate the configuration, and a dataflow updated to show a new flow when
+  the data is coming into Cribl. The Cribl side should be automated to create
+  the source needed to onboard the data from Blob or Event Hub as needed."
+  SCOPE: a diagram on the AZR-18 screen, one lane per selected source, from
+  the Azure emitter (diagnostic setting, Defender export, flow logs, Entra
+  export...) through its transport (Event Hub or Storage Blob) to the Cribl
+  source, Cribl routing and the destination. DEFAULT TAKEN for "each
+  perspective" (operator said build now): each lane can be read from the Azure
+  side (what is configured where), the Cribl side (source, route, destination)
+  or end to end. House diagram standard (claude-kit
+  standards/cribl-dataflow-diagram.md and its reference implementation): hand
+  SVG + dagre, tokens, (i) on every card, keyboard-focusable, no animation
+  unless the flow is MEASURED (AZR-33). NOTE 2026-10-26 (implementation,
+  AZR-30..34 build): BUILT, not verified live. Core lane model
+  `domain/onboarding-dataflow/lanes.ts` (buildOnboardingLanes: one lane per
+  chosen source, Automated and How-to combined, in ONBOARDING_SOURCES order;
+  the Azure side, Cribl side and end-to-end perspectives fold the other half
+  into one card; a shared namespace or storage account is computed once). The
+  canvas shell was lifted into `packages/ui/src/components/diagram/`
+  (geometry, pan/zoom/fit viewport with the 0.55 legible floor, sibling (i)
+  hit circle, role=dialog popover, 4px card drag with Reset, measured-only
+  AnimatedEdge), and the Azure Logging Map now runs its viewport, popover and
+  info circle on it under its unmodified pins, still with no drag (AZR-20).
+  The onboarding diagram is
+  `screens/azure-onboarding/dataflow/onboarding-dataflow.tsx` over the pure
+  left-to-right `lane-layout.ts`, shown as the screen's new Dataflow section.
+  Pins: lanes.test.ts, diagram-shell.dom.test.tsx, geometry.test.ts,
+  lane-layout.test.ts (zero crossings and every edge inside its section for 1,
+  3 and 8 lanes in every perspective), onboarding-dataflow.dom.test.tsx,
+  edge-styles.test.ts (cascade pin), and the logging-map tests unmodified.
+  Decisions in ADR 0007 sections 8 and 9. Live verification is OUTSTANDING
+  (ADR 0007, "Live verification"): the card stays in-progress until the
+  operator runs that list in Cribl Live Preview and records verified live or
+  both. CORRECTION 2026-10-26 (final review): the SCOPE line above says 'hand
+  SVG + dagre'. The build does not use dagre: the layout is a pure
+  section-per-flow, left-to-right column layout
+  (packages/ui/src/screens/azure-onboarding/dataflow/lane-layout.ts) on the
+  shared components/diagram shell, per ADR 0007 section 8. CORRECTION
+  2026-10-27: the Logging Map cards are draggable since AZR-20 (743c611); any
+  text above saying the shell's drag is unused there is history. LIVE
+  2026-10-28 (Live Preview, branch feature/azure-onboarding-screen, operator's
+  admin account, lab subscription): the Entra lane drew Entra ID diagnostics
+  -> Event Hub namespace -> Cribl source -> Route -> Destination, each with an
+  honest not-checked/not-created/not-read state, and picked up Validate's
+  answers ("cannot check: no permission"). Defect: the
+  namespace-to-Cribl-source edge label is clipped and runs under the next card
+  (AZR-45). ADR 0007 live list, items run: (1) PASS - opening the screen read
+  only the two KV keys (azure-coverage-selection, azure-onboarding-progress;
+  each read twice because main.tsx mounts under StrictMode, so a packaged
+  build reads twice) and called no Azure and no Cribl API; worker groups
+  loaded only on click. (2) PASS - CriblEntraIDLogs computed; a tick persisted
+  across a full reload; changing the namespace and choosing Apply marked the
+  ticked step "Done against older values - changed since: Event Hub namespace"
+  and the count fell to 0. (3) PARTIAL - Validate sent only GETs (12 per run,
+  well under 40 a minute); the operator principal lacks microsoft.aadiam read,
+  and Entra read "could not be read" (403 AuthorizationFailed), not absent; a
+  Basic namespace (CRIBL-EVENTHUB) read "present but different" with sku Plan
+  "Standard or Premium (Kafka)" vs Azure "Basic"; api-versions observed:
+  namespaces and eventhubs 2021-11-01, aadiam diagnosticSettings 2017-04-01,
+  metrics 2018-01-01. Not run: renamed Defender export, and the quiet-hub
+  reading, which cannot work (AZR-40). (4) READ HALF - GET
+  /m/default/system/inputs and /m/default/routes answer 200 through the app
+  proxy; /products/stream/groups/<g>, /deploy and version/status were not
+  exercised (they sit on the create path). (5)(6)(7) NOT RUN - they need a
+  real hub, a Listen-rule key and a created Cribl source; Watch for data
+  correctly refuses with "No Cribl source has been created yet". (8) PASS -
+  Logging Map zoom, Fit, card (i) popover, card drag with its edge following,
+  click-to-select and Reset layout all work; no console errors. CLOSED
+  2026-10-28: the diagram itself passed live (lanes, node states, Validate
+  answers flowing into the nodes, zoom/Fit). Its one rendering defect is
+  AZR-45; the live flow animation is AZR-33 and the per-item verification list
+  stays on AZR-32/33/34.
+
+- **AZR-31** Guided manual path: choose what to onboard, step instructions in a dialog, tick each step when done
+  `AZR-F9` `story` `settled` `verified: both`
+  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
+  Onboarding page to show the dataflows of how these logs work from each
+  perspective. Also a How to experience for customers that do not want to use
+  the app to automate the Azure configurations. It should walk them through
+  how to configure each aspect the app would have done: choose what to
+  onboard, popup instructions, check box when done. Then a read-only option to
+  validate the configuration, and a dataflow updated to show a new flow when
+  the data is coming into Cribl. The Cribl side should be automated to create
+  the source needed to onboard the data from Blob or Event Hub as needed."
+  SCOPE: for an operator who will not let the app write Azure, a How-to mode
+  on the same screen: pick sources, each source expands into the steps the app
+  would have automated (portal or CLI instructions in a dialog, with the exact
+  names, scopes and values the app computed), and a done checkbox per step
+  persisted in the coverage KV document. Nothing in this mode writes Azure.
+  Must cover every Azure aspect the automated path performs for the sources
+  the screen offers, Event Hub and Blob transports both. NOTE 2026-10-26
+  (implementation plan for AZR-30..34): CORRECTION to the scope above: the
+  done ticks are NOT persisted in the coverage KV document. They live in a
+  SEPARATE KV document, key `azure-onboarding-progress` (kind
+  `azure-onboarding-progress`, version 1), because the AZR-18
+  `azure-coverage-selection` v1 encoder strips unknown keys and drops ids
+  outside the catalog, so extending it would either lose the ticks or change
+  its bytes. The selection document stays byte-for-byte unchanged.
+  Consequence: the screen's mount makes TWO KV loads instead of one, and the
+  AZR-18 mount pin (azure-onboarding-screen.dom.test.tsx, the 'one load'
+  assertion) is edited deliberately to expect both keys - recorded in ADR
+  0007. A tick stores a fingerprint of the plan values its step depends on,
+  and reads 'done against older values' when they change. NOTE 2026-10-26
+  (implementation, AZR-30..34 build): BUILT, not verified live. Source
+  catalog, isAutomatable (a function over ITEM_AVAILABILITY; only
+  defenderExport today), plan values and the `azure-onboarding-progress` v1
+  codec in `domain/onboarding-howto/`; the per-source step catalog and
+  renderer in `domain/onboarding-howto-steps/` (ported builders, never
+  retyped; inferred steps carry a visible 'not yet confirmed against live
+  Azure' tag). UI in `screens/azure-onboarding/howto/`: a chooser with an
+  Automate | How-to toggle, a plan values form with Apply, a step list with a
+  persisted done tick, provenance tag and stale note, and a native dialog with
+  portal steps, CLI and Copy. Ticks, mode and choice save at once, serialized;
+  a failed or foreign progress load blocks ticks while AZR-18 Save still
+  works. The AZR-18 mount pin was edited deliberately, one assertion and its
+  title, to two KV loads. Pins: the sources, plan-values, check-kinds and
+  progress-document tests, steps.test.ts, render-instruction.test.ts,
+  howto-state.test.ts, howto-panel.dom.test.tsx and
+  azure-onboarding-howto.dom.test.tsx. ADR 0007 sections 1 and 2. Live
+  verification is OUTSTANDING (ADR 0007, "Live verification"): the card stays
+  in-progress until the operator runs that list in Cribl Live Preview and
+  records verified live or both. LIVE 2026-10-28 (Live Preview, branch
+  feature/azure-onboarding-screen, operator's admin account, lab
+  subscription): every How-to item in the ADR 0007 list passed: computed
+  names, the step dialog (UEBA warning, portal steps, az rest with Copy,
+  Values table), a tick persisting across reload, and the stale marking after
+  a plan-value change. Closed: pins plus live. One layout note, not carded:
+  the instructions dialog opens pinned to the frame's left edge rather than
+  centred.
 
 - **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
   `AZR-F9` `enabler` `settled` `verified: none`
