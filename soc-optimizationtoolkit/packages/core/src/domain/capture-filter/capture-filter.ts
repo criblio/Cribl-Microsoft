@@ -9,7 +9,11 @@
  *
  * So the filter conjoins two things the operator chose separately:
  *
- *     __inputId === "in_syslog" && (<the log-type test>)
+ *     (__inputId === "in_syslog" || (typeof __inputId === "string" &&
+ *       __inputId.split(":")[1] === "in_syslog")) && (<the log-type test>)
+ *
+ * (inputPredicate below explains the segment arm: the events carry
+ * `<type>:<id>`, not the bare id.)
  *
  * FOUR CORRECTNESS RULES, every one learned rather than assumed - and note that
  * three of them are the SAME failure in different clothes: a filter that matches
@@ -48,8 +52,8 @@ import {
   DISCRIMINATOR_FIELDS,
   HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
 } from "../sample-parsing/discriminators";
-import type { InputIdFilter, InputIdRef } from "./input-id";
-import { inputIdValue, matchInputIdFilter } from "./input-id";
+import type { InputIdRef, ParsedInputIdFilter } from "./input-id";
+import { findInputIdClauses, inputIdValue, matchInputIdFilter } from "./input-id";
 
 /**
  * The characters that may bound a log-type token, as a regex CHARACTER CLASS
@@ -237,47 +241,44 @@ export function captureFilterWarning(
       : `The type of source "${inputId}" is unknown, so this filter's __inputId clause cannot be checked against it.`;
   }
   const ref: InputIdRef = { type: inputType, id: inputId };
-  const answers = clauses.filters.map((clause) => matchInputIdFilter(clause, ref));
-  // The typed answer wins, as it does for every reader of input-id.ts.
-  if (answers.includes("match")) {
+  const value = inputIdValue(ref);
+  const write = `Write __inputId === ${JSON.stringify(value)} || __inputId.startsWith(${JSON.stringify(`${value}:`)})`;
+  const answers = clauses.filters.map((clause) => ({
+    clause,
+    how: matchInputIdFilter(clause, ref),
+  }));
+  // The typed answer wins, as it does for every reader of input-id.ts - but a
+  // PREFIX that stops short of `<type>:<id>:` (`startsWith('syslog:')`, or
+  // `startsWith('syslog:in_syslog')`, which also takes in_syslog_prod) selects
+  // this input AND others, the mixed capture this warning exists for. It
+  // matches here; it is not narrow enough to stay silent.
+  const narrow = (clause: ParsedInputIdFilter): boolean =>
+    clause.kind !== "prefix" || clause.value.startsWith(`${value}:`);
+  const typed = answers.filter((a) => a.how === "match");
+  if (typed.some((a) => narrow(a.clause))) {
     return null;
   }
-  if (answers.includes("legacy")) {
-    const value = JSON.stringify(inputIdValue(ref));
-    const prefix = JSON.stringify(`${inputIdValue(ref)}:`);
-    return `This filter names the bare input id "${inputId}" (unconfirmed: events carry __inputId as ${value}, and the bare form matched nothing when captured), so it will likely capture nothing. Write __inputId === ${value} || __inputId.startsWith(${prefix}) instead.`;
+  if (typed.length > 0) {
+    return `This filter's __inputId.startsWith() prefix selects "${inputId}" but also any other source whose __inputId starts with it, so it may capture a mixture. ${write} to select only this source.`;
+  }
+  if (answers.some((a) => a.how === "legacy")) {
+    return `This filter names the bare input id "${inputId}" (unconfirmed: events carry __inputId as ${JSON.stringify(value)}, and the bare form matched nothing when captured), so it will likely capture nothing. ${write} instead.`;
   }
   return other;
 }
 
-/** A quoted JS string literal; group 2 is its body. No escapes inside. */
-const LITERAL = String.raw`(['"\x60])((?:(?!\1)[^\\])*)\1`;
-
 /**
- * The `__inputId` clauses inside a capture filter, in the forms Cribl and this
- * app write, as input-id.ts's parsed shape plus the segment ids inputPredicate
- * compares. The filter is a conjunction the operator may have extended, so the
- * clauses are FOUND inside it rather than parsed from the whole expression the
- * way a route filter is (live-architecture parseRouteFilterInputs). A form not
- * listed here contributes nothing, which reads as naming another source.
+ * The `__inputId` clauses inside a capture filter: input-id.ts's clause forms
+ * (findInputIdClauses, the same set the route parser anchors on a whole
+ * filter) plus the segment ids inputPredicate compares. The filter is a
+ * conjunction the operator may have extended, so the clauses are FOUND inside
+ * it. A form not listed contributes nothing, which reads as naming another
+ * source.
  */
 function inputIdClauses(filter: string): {
-  filters: Exclude<InputIdFilter, { kind: "unparsed" }>[];
+  filters: ParsedInputIdFilter[];
   segments: string[];
 } {
-  const filters: Exclude<InputIdFilter, { kind: "unparsed" }>[] = [];
-  for (const m of filter.matchAll(new RegExp(String.raw`__inputId\s*===?\s*${LITERAL}`, "g"))) {
-    filters.push({ kind: "inputs", ids: [m[2]] });
-  }
-  for (const m of filter.matchAll(
-    new RegExp(String.raw`__inputId\.startsWith\(\s*${LITERAL}\s*\)`, "g"),
-  )) {
-    filters.push({ kind: "prefix", value: m[2] });
-  }
-  for (const m of filter.matchAll(/\[([^\]]+)\]\.includes\(\s*__inputId\s*\)/g)) {
-    const ids = [...m[1].matchAll(new RegExp(LITERAL, "g"))].map((id) => id[2]);
-    filters.push({ kind: "inputs", ids });
-  }
   const segments = [
     ...filter.matchAll(
       new RegExp(
@@ -286,5 +287,5 @@ function inputIdClauses(filter: string): {
       ),
     ),
   ].map((m) => m[3]);
-  return { filters, segments };
+  return { filters: findInputIdClauses(filter), segments };
 }

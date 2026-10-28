@@ -470,4 +470,45 @@ describe("captureFilterWarning - the typed __inputId form (DBT-169)", () => {
       'The type of source "in_syslog" is unknown, so this filter\'s __inputId clause cannot be checked against it.',
     );
   });
+
+  /**
+   * Review of DBT-169: matchInputIdFilter answers "does this prefix select the
+   * input", which a broad prefix does - along with every other input it
+   * covers. Before DBT-169 these warned (no literal named the id); a silent
+   * mixed capture is the failure this warning exists for.
+   */
+  it("warns on a prefix that also selects OTHER sources", () => {
+    const BROAD =
+      'This filter\'s __inputId.startsWith() prefix selects "in_syslog" but also any other source whose __inputId starts with it, so it may capture a mixture. Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:") to select only this source.';
+    expect(captureFilterWarning("__inputId.startsWith('syslog:')", "in_syslog", "syslog")).toBe(
+      BROAD,
+    );
+    // No trailing colon: also takes in_syslog_prod.
+    expect(
+      captureFilterWarning("__inputId.startsWith('syslog:in_syslog')", "in_syslog", "syslog"),
+    ).toBe(BROAD);
+    expect(captureFilterWarning("__inputId.startsWith('')", "in_syslog", "syslog")).toBe(BROAD);
+    // A narrow clause anywhere in the filter is enough.
+    expect(
+      captureFilterWarning(
+        "__inputId.startsWith('syslog:') && __inputId.startsWith('syslog:in_syslog:')",
+        "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("never warns about the filter the app itself writes, whatever the id", () => {
+    for (const id of ["in_syslog", "a.b*c+d", "in(x)", "it's", "a$b^c"]) {
+      expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id, "syslog")).toBeNull();
+      expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id)).toBeNull();
+      expect(
+        captureFilterWarning(
+          buildCaptureFilter({ inputId: id, logTypes: ["TRAFFIC"] }),
+          id,
+          "syslog",
+        ),
+      ).toBeNull();
+    }
+  });
 });
