@@ -153,6 +153,17 @@ describe("arrivalView", () => {
       "h1: 1 message in the window",
     );
   });
+
+  it("a hub the complete listing lacks says it does not exist; the quiet hub keeps its zero (AZR-47)", () => {
+    const missing = arrivalView("insights-logs-auditlogs", { kind: "no-hub" });
+    expect(missing).toEqual({
+      text: "insights-logs-auditlogs: the hub does not exist yet, so nothing has been sent to it",
+      tone: "error",
+      measured: true,
+    });
+    const quiet = arrivalView("t2", { kind: "measured", messages: 0, window: "PT1H" });
+    expect(quiet).toEqual({ text: "t2: no messages in the window", tone: "warning", measured: true });
+  });
 });
 
 describe("validateIntro and gating", () => {

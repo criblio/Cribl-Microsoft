@@ -331,6 +331,22 @@ describe("hub arrival on the transport card", () => {
     expect(arrivalText("h", { kind: "measured", messages: 7, window: "PT1H" })).toBe("h: 7 messages in the window");
   });
 
+  it("a hub the complete listing lacks reads as not existing, never as quiet (AZR-47)", () => {
+    expect(arrivalText("insights-logs-auditlogs", { kind: "no-hub" })).toBe(
+      "insights-logs-auditlogs: the hub does not exist yet, so nothing has been sent to it",
+    );
+    const lanes = buildOnboardingLanes(
+      input({
+        progress: manual(plan(emptyProgress()), "defenderExport"),
+        arrival: { "defender-hub": { kind: "no-hub" } },
+      }),
+    );
+    const facts = card(lanes, "defenderExport", "transport")?.facts ?? [];
+    expect(facts.filter((f) => f.startsWith("defender-hub:"))).toEqual([
+      "defender-hub: the hub does not exist yet, so nothing has been sent to it",
+    ]);
+  });
+
   it("the transport card carries the lane's hub arrival readings", () => {
     const progress = manual(plan(emptyProgress()), "defenderExport");
     const lanes = buildOnboardingLanes(

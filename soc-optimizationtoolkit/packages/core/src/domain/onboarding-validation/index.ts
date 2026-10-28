@@ -37,6 +37,7 @@ export {
   POLICY_IDENTITY_ROLES_DETAIL,
   XDR_UNMEASURABLE_DETAIL,
   classifyArrival,
+  classifyHubArrival,
   classifyCheck,
   measuredHubNames,
   refusalReason,

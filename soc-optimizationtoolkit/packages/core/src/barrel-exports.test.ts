@@ -77,6 +77,7 @@ const HOWTO_ROOT_NAMES: readonly Entry[] = [
   ["classifyLaneFlow", onboardingFlow, "function"],
   ["nextFlowQuery", onboardingFlow, "function"],
   ["buildOnboardingLanes", onboardingDataflow, "function"],
+  ["NO_HUB_ARRIVAL", onboardingDataflow, "string"],
   ["planCriblSource", createCriblSource, "function"],
   ["applyCriblSource", createCriblSource, "function"],
   ["validateAzureOnboarding", validateAzureOnboarding, "function"],

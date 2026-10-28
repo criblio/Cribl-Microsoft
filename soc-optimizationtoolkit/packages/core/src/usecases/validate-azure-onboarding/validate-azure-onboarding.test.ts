@@ -2,7 +2,8 @@
 // defects these guard against are silent: a Validate that writes, a
 // denied hub list turned into "measured: none" (D9 would then create from
 // guesses), a cancelled run rendered as absent, a hand-rolled pager that
-// stops after the first page, and a measured zero arrival shown as unknown.
+// stops after the first page, a measured zero arrival shown as unknown, and
+// (AZR-47) a hub the complete listing lacks shown as a quiet hub.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -246,16 +247,19 @@ describe("arrival", () => {
     status: 200,
     body: { value: [{ timeseries: [{ data: [{ total }] }] }] },
   });
+  const hubList = (...names: string[]): Route =>
+    onPath(HUBS_PATH, { status: 200, body: { value: names.map((name) => ({ name })) } });
+  const PLAN_HUB = hubList("defender-alerts");
 
   it("an IncomingMessages total of 0 is a MEASURED zero; a 403 is unknown; they differ", async () => {
     const zero = await validateAzureOnboarding(
-      new RecordingAzure([onPath(METRICS, metrics(0))]),
+      new RecordingAzure([PLAN_HUB, onPath(METRICS, metrics(0))]),
       planValidation(["defenderExport"], FULL),
     );
     expect(zero.arrival["defender-alerts"]).toEqual({ kind: "measured", messages: 0, window: "PT1H" });
 
     const denied = await validateAzureOnboarding(
-      new RecordingAzure([onPath(METRICS, DENIED)]),
+      new RecordingAzure([PLAN_HUB, onPath(METRICS, DENIED)]),
       planValidation(["defenderExport"], FULL),
     );
     const a = denied.arrival["defender-alerts"];
@@ -267,8 +271,64 @@ describe("arrival", () => {
     const span = "2026-10-26T00:00:00Z/2026-10-26T01:00:00Z";
     const plan = planValidation(["defenderExport"], FULL, { arrivalTimespan: span });
     expect(plan.arrival[0]?.read.request.query?.["timespan"]).toBe(span);
-    const r = await validateAzureOnboarding(new RecordingAzure([onPath(METRICS, metrics(7))]), plan);
+    const r = await validateAzureOnboarding(new RecordingAzure([PLAN_HUB, onPath(METRICS, metrics(7))]), plan);
     expect(r.arrival["defender-alerts"]).toEqual({ kind: "measured", messages: 7, window: span });
+  });
+
+  // AZR-47. Azure Monitor answers an EntityName-filtered read for a hub that
+  // is not in the namespace with a zero series, so only the hub listing can
+  // tell a missing hub from a quiet one.
+  it("a COMPLETE listing without the hub is no-hub, even though the metric reads 0", async () => {
+    const r = await validateAzureOnboarding(
+      new RecordingAzure([hubList("t1", "t2", "t3"), onPath(METRICS, metrics(0))]),
+      planValidation(["defenderExport"], FULL),
+    );
+    expect(r.measuredHubs).toEqual(["t1", "t2", "t3"]);
+    expect(r.arrival).toEqual({ "defender-alerts": { kind: "no-hub" } });
+  });
+
+  it("every Entra auto-created hub a complete listing lacks is no-hub; the listed one is measured", async () => {
+    const plan = planValidation(["entraId"], FULL);
+    expect(plan.arrivalHubs.length).toBeGreaterThan(1);
+    const [listed, ...unlisted] = plan.arrivalHubs;
+    const r = await validateAzureOnboarding(
+      new RecordingAzure([hubList("t1", "t2", "t3", listed!.toUpperCase()), onPath(METRICS, metrics(0))]),
+      plan,
+    );
+    expect(r.arrival[listed!]).toEqual({ kind: "measured", messages: 0, window: "PT1H" });
+    expect(Object.keys(r.arrival).filter((h) => r.arrival[h]?.kind === "no-hub")).toEqual(unlisted);
+  });
+
+  it("an incomplete hub listing keeps the measured zero: absence is never inferred from it", async () => {
+    let n = 0;
+    const truncated = new RecordingAzure(
+      [
+        onPath(HUBS_PATH, { status: 200, body: { value: [{ name: "t1" }], nextLink: "https://management.azure.com/p/0" } }),
+        onPath(METRICS, metrics(0)),
+      ],
+      () => {
+        n += 1;
+        return { status: 200, body: { value: [{ name: `h${n}` }], nextLink: `https://management.azure.com/p/${n}` } };
+      },
+    );
+    const plan = planValidation(["defenderExport"], FULL);
+    const cut = await validateAzureOnboarding(truncated, plan);
+    expect(cut.measuredHubs).toEqual([]);
+    expect(cut.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
+
+    const denied = await validateAzureOnboarding(
+      new RecordingAzure([onPath(HUBS_PATH, DENIED), onPath(METRICS, metrics(0))]),
+      plan,
+    );
+    expect(denied.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
+  });
+
+  it("a listing without the hub overrides even an unreadable metric, and the read is still sent", async () => {
+    const azure = new RecordingAzure([hubList("t1"), onPath(METRICS, DENIED)]);
+    const plan = planValidation(["defenderExport"], FULL);
+    const r = await validateAzureOnboarding(azure, plan);
+    expect(r.arrival).toEqual({ "defender-alerts": { kind: "no-hub" } });
+    expect(azure.calls.filter((c) => c.path === METRICS).length).toBe(1);
   });
 });
 

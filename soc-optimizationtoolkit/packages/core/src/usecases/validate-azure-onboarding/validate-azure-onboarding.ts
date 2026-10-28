@@ -30,7 +30,10 @@
  * - a run cancelled through `signal` leaves every check it had not finished
  *   unknown `failed` with detail "cancelled" - never absent;
  * - arrival is an ArrivalReading (a measured 0 is "no messages in the
- *   window"), never a verdict, never absent.
+ *   window"), never a verdict. It is `no-hub` only when the run's COMPLETE
+ *   hub listing lacks the hub (AZR-47: Azure Monitor reports a zero series
+ *   for a hub that does not exist); with a refused or truncated listing the
+ *   metric reading stands.
  *
  * Usecase layer: may import usecases (the pager); performs IO only through
  * the AzureManagement port.
@@ -60,8 +63,8 @@ import {
   type CheckReadShape,
 } from "../../domain/onboarding-validation/requests";
 import {
-  classifyArrival,
   classifyCheck,
+  classifyHubArrival,
   measuredHubNames,
 } from "../../domain/onboarding-validation/classify";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
@@ -342,6 +345,26 @@ async function perform(azure: AzureManagement, read: PlannedRead): Promise<ListR
 }
 
 /**
+ * The hub names of the run's COMPLETE hub listing (the eh-hub check's read of
+ * the plan's one namespace), or null when no eh-hub check read one to the end:
+ * denied, truncated, failed, cancelled, or not planned for want of a value.
+ */
+function completeHubListing(
+  plan: ValidationPlan,
+  reads: ReadonlyMap<string, ListRead<unknown>>,
+): readonly string[] | null {
+  for (const check of plan.checks) {
+    if (check.kind !== "eh-hub") continue;
+    for (const key of check.readKeys) {
+      const read = reads.get(key);
+      const names = read === undefined ? null : measuredHubNames(read);
+      if (names !== null) return names;
+    }
+  }
+  return null;
+}
+
+/**
  * Run a planned Validate. Sequential reads (the caller's paced port spaces
  * them), deduped, GET only. Never throws on an Azure failure: each one is a
  * refusal the classifier turns into unknown with its reason.
@@ -366,6 +389,7 @@ export async function validateAzureOnboarding(
     onProgress?.(done, plan.firstPageReads);
   }
 
+  const listedHubs = completeHubListing(plan, reads);
   const arrival: Record<string, ArrivalReading> = {};
   for (const planned of plan.arrival) {
     if (cancelled || signal?.aborted === true) {
@@ -373,7 +397,12 @@ export async function validateAzureOnboarding(
       arrival[planned.hub] = CANCELLED_ARRIVAL;
       continue;
     }
-    arrival[planned.hub] = classifyArrival(await perform(azure, planned.read), planned.window);
+    arrival[planned.hub] = classifyHubArrival(
+      planned.hub,
+      await perform(azure, planned.read),
+      listedHubs,
+      planned.window,
+    );
     done += 1;
     onProgress?.(done, plan.firstPageReads);
   }

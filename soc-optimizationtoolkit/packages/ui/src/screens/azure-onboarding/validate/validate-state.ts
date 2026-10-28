@@ -11,12 +11,15 @@
  * missing), never "not found" or "absent" - only core's `absent` verdict, a
  * GET-by-name 404 or a complete listing without the item, may say "not found".
  * An arrival reading of a measured zero is "no messages in the window", a real
- * answer, and is kept apart from an arrival that could not be read.
+ * answer, and is kept apart from an arrival that could not be read. A hub a
+ * COMPLETE listing lacks (core's `no-hub`, AZR-47) says it does not exist yet,
+ * never that it is quiet.
  *
  * No React, no IO, no clock: the panel passes the "as of" time in.
  */
 
 import {
+  NO_HUB_ARRIVAL,
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
   changedValueKeys,
@@ -184,7 +187,7 @@ export function verdictView(verdict: StepVerdict, kind?: CheckKind): VerdictView
 export interface ArrivalView {
   readonly text: string;
   readonly tone: VerdictTone;
-  /** True only when Azure answered (a measured zero included). */
+  /** True only when Azure answered (a measured zero and a missing hub included). */
   readonly measured: boolean;
 }
 
@@ -197,8 +200,14 @@ const ARRIVAL_REASON: Readonly<Record<UnknownReason, string>> = {
   "missing-value": "a plan value is missing",
 };
 
-/** One hub's IncomingMessages reading. A measured 0 is a real answer. */
+/**
+ * One hub's IncomingMessages reading. A measured 0 is a real answer; a hub
+ * the complete listing lacks is not quiet, it was never created.
+ */
 export function arrivalView(hub: string, reading: ArrivalReading): ArrivalView {
+  if (reading.kind === "no-hub") {
+    return { text: `${hub}: ${NO_HUB_ARRIVAL}`, tone: "error", measured: true };
+  }
   if (reading.kind === "measured") {
     if (reading.messages === 0) {
       return { text: `${hub}: no messages in the window`, tone: "warning", measured: true };

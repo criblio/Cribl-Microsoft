@@ -49,7 +49,8 @@ const PANEL_TIP =
 const ARRIVAL_TIP =
   "Messages Azure Monitor counted arriving at the hub (IncomingMessages) in " +
   "the window. \"No messages in the window\" is a real answer from Azure; " +
-  "\"could not be read\" means there is no answer.";
+  "\"does not exist yet\" means the namespace's full hub list has no such hub, " +
+  "so nothing has been sent to it; \"could not be read\" means there is no answer.";
 
 export function ValidatePanel({ plan, hasPacing, run, onValidate, onCancel }: ValidatePanelProps) {
   const running = run.kind === "running";

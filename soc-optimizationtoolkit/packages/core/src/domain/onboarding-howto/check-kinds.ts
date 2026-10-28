@@ -98,12 +98,17 @@ export type StepVerdict =
  *
  *   measured  Azure answered; `messages` is the total over `window`, and 0 is a
  *             real, measured zero ("no messages in the window")
+ *   no-hub    a COMPLETE hub listing of the namespace does not hold the hub,
+ *             so nothing has ever been sent to it (AZR-47: Azure Monitor
+ *             answers a read for a hub that does not exist with a zero series,
+ *             which must not read as a quiet hub)
  *   unknown   the metric could not be read; `reason` says why
  *
  * `window` is the timespan the total covers, as the request sent it.
  */
 export type ArrivalReading =
   | { readonly kind: "measured"; readonly messages: number; readonly window: string }
+  | { readonly kind: "no-hub" }
   | { readonly kind: "unknown"; readonly reason: UnknownReason; readonly detail: string };
 
 /**

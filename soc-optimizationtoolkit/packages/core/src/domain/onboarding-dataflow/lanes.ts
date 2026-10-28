@@ -34,7 +34,8 @@
  * HONESTY (claude-kit standards/inventory-honesty.md). No verdicts means "not
  * checked yet", never "not found"; an unknown verdict says "cannot check" with
  * its reason; a hub arrival of a measured 0 reads "no messages in the window",
- * distinct from "arrival could not be read".
+ * distinct from "arrival could not be read", and a hub a complete listing
+ * lacks reads "does not exist yet", never as a quiet hub (AZR-47).
  *
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto.
  */
@@ -311,8 +312,12 @@ export function groupStatus(verdicts: readonly StepVerdict[], expected: number =
   return verdictStatus(pick);
 }
 
-/** The arrival line on a transport card. A measured 0 is a real answer. */
+/**
+ * The arrival line on a transport card. A measured 0 is a real answer; a hub
+ * the complete listing lacks is not quiet, it was never created.
+ */
 export function arrivalText(hub: string, reading: ArrivalReading): string {
+  if (reading.kind === "no-hub") return `${hub}: ${NO_HUB_ARRIVAL}`;
   if (reading.kind === "measured") {
     return reading.messages === 0
       ? `${hub}: no messages in the window`
@@ -320,6 +325,13 @@ export function arrivalText(hub: string, reading: ArrivalReading): string {
   }
   return `${hub}: arrival could not be read: ${UNKNOWN_REASON_LABEL[reading.reason]}`;
 }
+
+/**
+ * The words for a `no-hub` arrival reading, shared by the transport card and
+ * the Validate panel so the two cannot drift apart.
+ */
+export const NO_HUB_ARRIVAL =
+  "the hub does not exist yet, so nothing has been sent to it";
 
 /** The tick line on a How-to step card. */
 export function tickText(tick: TickState): string {

@@ -6,6 +6,7 @@
 
 export {
   DATAFLOW_PERSPECTIVES,
+  NO_HUB_ARRIVAL,
   UNKNOWN_REASON_LABEL,
   arrivalText,
   buildOnboardingLanes,

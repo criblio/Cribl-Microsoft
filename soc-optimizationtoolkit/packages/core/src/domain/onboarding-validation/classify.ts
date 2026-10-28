@@ -20,7 +20,8 @@
  *
  * ARRIVAL IS NOT A VERDICT. {@link classifyArrival} returns an
  * {@link ArrivalReading}: a measured total (0 is a REAL zero, "no messages in
- * the window") or unknown. It never says absent.
+ * the window") or unknown. It never says absent. {@link classifyHubArrival}
+ * adds `no-hub`, and only from a COMPLETE hub listing without the hub.
  *
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto.
  */
@@ -754,4 +755,27 @@ export function classifyArrival(
   }
   if (reported === 0) return shape("no data point carries a numeric total.");
   return { kind: "measured", messages, window };
+}
+
+/**
+ * One hub's arrival reading, checked against the namespace's hub listing.
+ * `listedHubs` is the hub names of a COMPLETE listing, or null when the
+ * listing was denied, truncated, failed or not read. Azure Monitor answers an
+ * IncomingMessages read for a hub that does not exist with a zero series, so
+ * a complete listing without the hub (compared case-insensitively, as Event
+ * Hubs names are) is `no-hub` whatever the metric said. Without a complete
+ * listing the metric reading stands: absence is never inferred from a read
+ * that did not finish.
+ */
+export function classifyHubArrival(
+  hub: string,
+  read: ListRead<unknown>,
+  listedHubs: readonly string[] | null,
+  window: string = DEFAULT_ARRIVAL_WINDOW,
+): ArrivalReading {
+  if (listedHubs !== null) {
+    const wanted = hub.trim().toLowerCase();
+    if (!listedHubs.some((name) => name.toLowerCase() === wanted)) return { kind: "no-hub" };
+  }
+  return classifyArrival(read, window);
 }

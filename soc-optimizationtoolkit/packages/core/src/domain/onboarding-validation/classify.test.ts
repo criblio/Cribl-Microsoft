@@ -16,6 +16,7 @@ import {
   checkExpectationsFor,
   classifyArrival,
   classifyCheck,
+  classifyHubArrival,
   measuredHubNames,
   requestsFor,
   type CheckExpectations,
@@ -381,6 +382,31 @@ describe("blob checks", () => {
     expect(classifyCheck("flow-log", FULL, [one(fl(true, 2))])).toEqual({ kind: "as-expected" });
     const v = classifyCheck("flow-log", FULL, [one(fl(false, 1))]);
     expect(v.kind === "present-differs" && v.diffs.map((d) => d.field)).toEqual(["enabled", "format.version"]);
+  });
+});
+
+describe("classifyHubArrival: a hub a complete listing lacks is not quiet (AZR-47)", () => {
+  const zero = readRows([{ value: [{ timeseries: [{ data: [{ total: 0 }] }] }] }]);
+
+  it("complete listing without the hub -> no-hub, whatever the metric said", () => {
+    expect(classifyHubArrival("insights-logs-auditlogs", zero, ["t1", "t2", "t3"])).toEqual({ kind: "no-hub" });
+    expect(classifyHubArrival("h", denied, [])).toEqual({ kind: "no-hub" });
+  });
+
+  it("incomplete listing (null) -> the measured zero stands", () => {
+    expect(classifyHubArrival("insights-logs-auditlogs", zero, null, "PT1H")).toEqual({
+      kind: "measured",
+      messages: 0,
+      window: "PT1H",
+    });
+  });
+
+  it("hub present (case-insensitive) and zero -> the quiet measured zero", () => {
+    expect(classifyHubArrival("T2", zero, ["t1", "t2", "t3"], "PT1H")).toEqual({
+      kind: "measured",
+      messages: 0,
+      window: "PT1H",
+    });
   });
 });
 
