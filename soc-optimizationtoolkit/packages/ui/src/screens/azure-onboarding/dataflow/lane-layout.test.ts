@@ -465,4 +465,21 @@ describe("relayoutEdges", () => {
     const untouched = moved.edges.filter((e) => e.from !== card.id && e.to !== card.id);
     for (const e of untouched) expect(e.d).toBe((layout.edges.find((b) => b.id === e.id) as LaidEdge).d);
   });
+
+  it("a measured hop's label and (i) follow a dragged card: half the move, as the midpoint does (AZR-45)", () => {
+    const e2e = layoutLanes(lanesFor(["defenderExport"], "end-to-end"), "end-to-end");
+    const target = e2e.cards.find((c) => c.kind === "cribl-source") as NonNullable<(typeof e2e.cards)[number]>;
+    const before = e2e.edges.find((e) => e.label !== null) as LaidEdge;
+    expect(before.to).toBe(target.id);
+    const moved = relayoutEdges(e2e, { [target.id]: { x: target.x + 40, y: target.y + 30 } });
+    const after = moved.edges.find((e) => e.id === before.id) as LaidEdge;
+    const was = before.label as NonNullable<LaidEdge["label"]>;
+    const now = after.label as NonNullable<LaidEdge["label"]>;
+    expect([now.text, now.full]).toEqual(["not measured", "not measured: no Cribl source yet"]);
+    expect([now.text, now.full]).toEqual([was.text, was.full]);
+    expect(now.textEnd.x - was.textEnd.x).toBeCloseTo(20, 9);
+    expect(now.textEnd.y - was.textEnd.y).toBeCloseTo(15, 9);
+    expect(now.info.x - was.info.x).toBeCloseTo(20, 9);
+    expect(now.info.y - was.info.y).toBeCloseTo(15, 9);
+  });
 });
