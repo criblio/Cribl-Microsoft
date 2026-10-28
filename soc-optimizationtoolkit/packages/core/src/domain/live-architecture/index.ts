@@ -19,7 +19,6 @@ export type {
   LivePipelineFunction,
   LiveBreaker,
   LivePack,
-  RouteFilterInputs,
 } from "./live-architecture";
 export {
   buildLiveDiagram,

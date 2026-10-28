@@ -24,6 +24,24 @@
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
+/**
+ * The words EVERY screen appends to a route reached only by the bare id
+ * (DBT-171): the onboarding diagram lane (onboarding-dataflow/lanes.ts), the
+ * onboarding Cribl source panel, and the Dataflow screen's Live Workgroup
+ * View. One constant, so the screens cannot drift into calling the same route
+ * different things. Leading space and parentheses included: it is a suffix.
+ */
+export const LEGACY_INPUT_MATCH_SUFFIX = " (unconfirmed: its filter names the bare input id)";
+
+/**
+ * The (i) explanation beside LEGACY_INPUT_MATCH_SUFFIX: why the route is not
+ * confirmed and what to write instead. Customer-visible, so no project ids.
+ */
+export const LEGACY_INPUT_MATCH_TIP =
+  "This route's filter names the source by its bare id (__inputId=='<id>'). " +
+  "Cribl sets __inputId to '<type>:<id>' on every event, so the filter may match nothing " +
+  "and the route may carry no data. Write __inputId=='<type>:<id>' instead.";
+
 /** An input as `__inputId` names it: its Cribl type and its configured id. */
 export interface InputIdRef {
   /** The type segment: the input's type, or `collection` for a collector job. */

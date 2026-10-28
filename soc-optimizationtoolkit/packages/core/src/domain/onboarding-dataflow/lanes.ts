@@ -66,6 +66,7 @@ import {
 } from "../onboarding-howto/sources";
 import type { HowToStep } from "../onboarding-howto-steps/steps";
 import { onboardingInputId } from "../cribl-onboarding-source/input-bodies";
+import { LEGACY_INPUT_MATCH_SUFFIX } from "../capture-filter/input-id";
 import {
   classifyLaneFlow,
   describeLaneFlow,
@@ -477,9 +478,7 @@ function routeStatus(inputId: string | null, criblSide: CriblSideReading | null)
         status: {
           kind: "consumes",
           label:
-            r.legacyBareMatch === true
-              ? `routed by ${r.route} (unconfirmed: its filter names the bare input id)`
-              : `routed by ${r.route}`,
+            `routed by ${r.route}` + (r.legacyBareMatch === true ? LEGACY_INPUT_MATCH_SUFFIX : ""),
         },
         destination: r.destination,
         route: r.route,

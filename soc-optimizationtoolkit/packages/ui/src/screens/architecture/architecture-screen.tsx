@@ -19,6 +19,8 @@ import {
   ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
+  LEGACY_INPUT_MATCH_SUFFIX,
+  LEGACY_INPUT_MATCH_TIP,
   LOG_SOURCES,
   PRODUCT_WHEN_TO_USE,
   SOLUTION_INGESTION_ENTRIES,
@@ -45,6 +47,7 @@ import type {
   PatternDiagram,
   PatternRecommendation,
 } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
 import { SearchableMultiSelect } from "../../components/searchable-select";
 import { WorkerGroupField } from "../../components/worker-group-field";
 import {
@@ -335,6 +338,13 @@ function LiveArchitecturePanel({
     () => (liveResult?.flows ?? []).filter((flow) => !azureOnly || flow.azure),
     [liveResult, azureOnly],
   );
+  // DBT-170: a route that reaches its input only by the bare id is drawn like
+  // any other, so the flows it carries are named here as unconfirmed - the
+  // same words the Azure onboarding screen uses for the same route.
+  const legacyFlows = useMemo(
+    () => visibleFlows.filter((flow) => flow.legacyInputMatch === true),
+    [visibleFlows],
+  );
   // Latest canvas edits, for titled exports that match the arrangement.
   const liveEditsRef = useRef<DiagramEditState | null>(null);
   const onLiveCanvasState = useCallback((state: DiagramEditState) => {
@@ -416,7 +426,9 @@ function LiveArchitecturePanel({
             <SearchableMultiSelect
               options={visibleFlows.map((flow) => ({
                 value: flow.key,
-                label: flow.label,
+                label:
+                  flow.label +
+                  (flow.legacyInputMatch === true ? LEGACY_INPUT_MATCH_SUFFIX : ""),
               }))}
               values={selectedFlows}
               onChange={setSelectedFlows}
@@ -457,6 +469,22 @@ function LiveArchitecturePanel({
             onCanvasStateChange={onLiveCanvasState}
           />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
+          {legacyFlows.length > 0 && (
+            <section className="arch-live-notes" aria-label="Unconfirmed routes">
+              <span className="field-label">Unconfirmed routes</span>
+              <ul>
+                {legacyFlows.map((flow) => (
+                  <li className="field-hint" key={flow.key}>
+                    <span>
+                      {flow.label}
+                      {LEGACY_INPUT_MATCH_SUFFIX}
+                    </span>{" "}
+                    <InfoTip text={LEGACY_INPUT_MATCH_TIP} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {liveResult.notes.length > 0 && (
             <div className="arch-live-notes">
               <span className="field-label">Notes</span>
