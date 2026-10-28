@@ -97,19 +97,23 @@ export type StepVerdict =
  * What a present-other-name verdict's `alsoFound` counts, per check kind, as
  * [one, many]. Each is what that kind's classifier counted: a remediation
  * verdict counts ASSIGNMENTS that have remediations, not remediations, since
- * one assignment may have several (DBT-189). A kind without its own unit
- * claims nothing beyond "like it".
+ * one assignment may have several (DBT-189). Every unit says "like it": the
+ * count is of objects that matched the way the named one did, not of every
+ * such object in Azure - without it, "2 other policy assignments" on a lane
+ * card reads as an inventory. A kind without its own unit claims nothing
+ * beyond "like it".
  */
 const OTHER_NAME_UNIT: Partial<Record<CheckKind, readonly [string, string]>> = {
-  "defender-export": ["continuous export", "continuous exports"],
-  "entra-setting": ["diagnostic setting", "diagnostic settings"],
-  "policy-assignment": ["policy assignment", "policy assignments"],
-  "policy-remediation": ["assignment with remediations", "assignments with remediations"],
+  "defender-export": ["continuous export like it", "continuous exports like it"],
+  "entra-setting": ["diagnostic setting like it", "diagnostic settings like it"],
+  "policy-assignment": ["policy assignment like it", "policy assignments like it"],
+  "policy-remediation": ["assignment like it with remediations", "assignments like it with remediations"],
 };
 
 /**
  * The words for the objects a present-other-name verdict did NOT name - ""
- * when there are none, else e.g. "2 other policy assignments were also found".
+ * when there are none, else e.g. "2 other policy assignments like it were
+ * also found".
  * The ONE wording Validate, the How-to step word and the dataflow lane use, so
  * all three say the same count in the same unit (DBT-189).
  */

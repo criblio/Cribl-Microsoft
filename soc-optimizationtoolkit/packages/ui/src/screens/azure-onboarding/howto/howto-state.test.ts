@@ -326,9 +326,9 @@ describe("step rows and stale ticks (D5)", () => {
         },
       ],
     });
-    expect(otherNameAlsoFound(3, "entra-setting")).toBe("3 other diagnostic settings were also found");
+    expect(otherNameAlsoFound(3, "entra-setting")).toBe("3 other diagnostic settings like it were also found");
     expect(word(counted("entra-setting"))).toBe(
-      "exists under another name: OldExport; 3 other diagnostic settings were also found",
+      "exists under another name: OldExport; 3 other diagnostic settings like it were also found",
     );
     expect(word(counted("eh-namespace"))).toBe(
       "exists under another name: OldExport; 3 other objects like it were also found",

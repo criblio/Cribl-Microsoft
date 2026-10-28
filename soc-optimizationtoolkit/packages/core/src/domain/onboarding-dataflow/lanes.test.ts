@@ -137,10 +137,10 @@ describe("verdict states", () => {
     };
     const lanes = buildOnboardingLanes(input({ progress, verdicts, perspective: "azure" }));
     const step = lanes.lanes[0].cards.find((c) => c.stepId === "defender-export");
-    expect(otherNameAlsoFound(2, "defender-export")).toBe("2 other continuous exports were also found");
+    expect(otherNameAlsoFound(2, "defender-export")).toBe("2 other continuous exports like it were also found");
     expect(step?.status).toEqual({
       kind: "other-name",
-      label: "exists (named LegacyExport; 2 other continuous exports were also found)",
+      label: "exists (named LegacyExport; 2 other continuous exports like it were also found)",
     });
   });
 });

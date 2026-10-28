@@ -54,17 +54,24 @@ describe("otherNameAlsoFound", () => {
   const cases: ReadonlyArray<[number | undefined, CheckKind | undefined, string]> = [
     [undefined, "policy-assignment", ""],
     [0, "policy-assignment", ""],
-    [1, "policy-assignment", "1 other policy assignment was also found"],
-    [3, "policy-assignment", "3 other policy assignments were also found"],
+    [1, "policy-assignment", "1 other policy assignment like it was also found"],
+    [3, "policy-assignment", "3 other policy assignments like it were also found"],
     // A remediation verdict counts assignments with remediations, and says so.
-    [1, "policy-remediation", "1 other assignment with remediations was also found"],
-    [2, "policy-remediation", "2 other assignments with remediations were also found"],
-    [1, "defender-export", "1 other continuous export was also found"],
-    [4, "entra-setting", "4 other diagnostic settings were also found"],
+    [1, "policy-remediation", "1 other assignment like it with remediations was also found"],
+    [2, "policy-remediation", "2 other assignments like it with remediations were also found"],
+    [1, "defender-export", "1 other continuous export like it was also found"],
+    [4, "entra-setting", "4 other diagnostic settings like it were also found"],
     [2, "eh-hub", "2 other objects like it were also found"],
     [1, undefined, "1 other object like it was also found"],
   ];
   it.each(cases)("alsoFound %s for %s reads %j", (alsoFound, kind, expected) => {
     expect(otherNameAlsoFound(alsoFound, kind)).toBe(expected);
+  });
+  // The count is of objects that matched the way the named one did; a bare
+  // "2 other policy assignments" on a lane card reads as an inventory.
+  it("every kind's count says the others are like the one named", () => {
+    for (const kind of CHECK_KINDS) {
+      expect(otherNameAlsoFound(2, kind), kind).toMatch(/^2 other .*\blike it\b.* were also found$/);
+    }
   });
 });
