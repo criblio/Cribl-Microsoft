@@ -71,6 +71,15 @@ const SOURCE_FILES: readonly string[] = (() => {
 })();
 
 /**
+ * Those files' text, read ONCE, while the file is collected. DBT-156: the gate
+ * re-read all ~550 of them for every constant a tip names, in every test - 46s
+ * of test time for this file run alone, and two tests over the 5s timeout
+ * under full-suite load. Reading them here also keeps the one pass that is
+ * left out of any single test's time budget.
+ */
+const SOURCE_TEXTS: readonly string[] = SOURCE_FILES.map((f) => readFileSync(f, "utf8"));
+
+/**
  * The string literals of `const NAME = ...;`, looked for in the calling file
  * first and then across the ui and core sources; null when no definition
  * exists. The scan stops at the first `;` OUTSIDE a string, because tip text
@@ -78,7 +87,7 @@ const SOURCE_FILES: readonly string[] = (() => {
  */
 function resolveConstant(name: string, localSource: string): string[] | null {
   const definition = new RegExp(`(?:export\\s+)?const\\s+${name}\\b[^=]*=`);
-  const candidates = [localSource, ...SOURCE_FILES.map((f) => readFileSync(f, "utf8"))];
+  const candidates = [localSource, ...SOURCE_TEXTS];
   for (const text of candidates) {
     const found = definition.exec(text);
     if (found === null) continue;

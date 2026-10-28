@@ -158,7 +158,6 @@ describe("AzureTargetingScreen - a run torn down mid-fetch does not strand the p
           screen.getByText(/Connected - 1 subscription\(s\) visible\./),
         ).toBeTruthy();
       },
-      { timeout: 3000 },
     );
   });
 
@@ -195,7 +194,6 @@ describe("AzureTargetingScreen - a run torn down mid-fetch does not strand the p
         azure.releaseAll();
         expect(screen.queryByText("Loading workspaces...")).toBeNull();
       },
-      { timeout: 3000 },
     );
     expect(countOf(azure.calls, WORKSPACES)).toBeGreaterThanOrEqual(1);
   });

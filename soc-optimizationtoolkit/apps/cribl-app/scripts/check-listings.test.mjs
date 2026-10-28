@@ -62,11 +62,20 @@ describe("stripCommentsAndStrings", () => {
   });
 });
 
+/**
+ * The whole-repo scan reads every source file (~570 of them, ~6 MB) and does
+ * almost nothing else: about 1s alone, 6.9s under a full-suite gate run, where
+ * the disk is shared with every other test worker (DBT-156). The 5s default
+ * timed out on that work, not on a hang, so this one test gets a budget sized
+ * from the loaded figure with room to spare.
+ */
+const REPO_SCAN_TIMEOUT_MS = 30_000;
+
 describe("the repository itself", () => {
   it("is clean, and this pin is only meaningful next to the ones above", () => {
     // On its own this asserts nothing - a broken checker passes it too. It is
     // the mutation pins that establish the checker can fail, which is what
     // makes this green worth reading.
     expect(scanRepo()).toEqual([]);
-  });
+  }, REPO_SCAN_TIMEOUT_MS);
 });

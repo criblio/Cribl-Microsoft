@@ -877,7 +877,6 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
       () => {
         expect(remove).toHaveBeenCalledWith("CISCO_ASA");
       },
-      { timeout: 3000 },
     );
     expect(remove).toHaveBeenCalledTimes(1);
     // ONE SOLUTION ON THE PAGE. The pack name is derived from the HOST's
