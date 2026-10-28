@@ -1923,7 +1923,7 @@
       "settled": "settled",
       "dependsOn": [],
       "menu": "none",
-      "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet.\n\nNOTE 2026-10-27: hit again on the round-3 merged gate run (0e8ec6c): only \"the gap card's Remove deletes the sample, its chip and its card\" failed (2007/2008), and the file passed 43/43 alone. Worktree runs in the same round timed out in seven more files (integrate-copy-history, mapping-review-*, azure-onboarding-screen.dom, azure-onboarding-howto.dom), and apps/cribl-app check-listings.test.mjs \"the repository itself\" ran 6.9s against the 5s default. Third red gate from this flake today.\n\nNOTE 2026-10-28: LANDED (d810d90 + review c2b01ae, merged 7b0357c): every failure reproduced was a time budget running out under load (about ten worktrees' vitest suites on 22 threads); old code failed 7, 39 and 72 of 2008 in three full runs. Test and waitFor budgets are now sized from that measurement in packages/ui test-budget.ts with pins that the config applies them; the review removed three explicit 3000ms waitFor timeouts that replaced, not added to, the budget. The 'expected 1, got 0' miscount was a budget expiry too. Leftovers: DBT-184, DBT-185. Closed on pins; reopen if a gate run goes red on a timeout again.",
+      "detail": "FOUND 2026-10-27 by the AZR-30..34 build's final gate run. `npm test` in packages/ui failed twice with two different pairs of failures, in folders the build did not touch: integrate-screen.dom.test.tsx (\"the gap card's Remove deletes the sample, its chip and its card\", 5000ms timeout), integrate-copy-history.test.ts (timeout) and mapping-review-aws-names.dom.test.tsx (expected 1, got 0). Each passes when run alone, and a third full run passed (1971/1971). A gate that fails at random trains people to rerun it until green, which hides a real failure.\n\nFIX: reproduce under load (vitest --sequence.shuffle, or a reduced pool), find which wait or shared state each test relies on, replace fixed timeouts with awaited conditions, and mutation-check that the repaired pins still fail on the behaviour they guard. Not proven on main yet.\n\nNOTE 2026-10-27: hit again on the round-3 merged gate run (0e8ec6c): only \"the gap card's Remove deletes the sample, its chip and its card\" failed (2007/2008), and the file passed 43/43 alone. Worktree runs in the same round timed out in seven more files (integrate-copy-history, mapping-review-*, azure-onboarding-screen.dom, azure-onboarding-howto.dom), and apps/cribl-app check-listings.test.mjs \"the repository itself\" ran 6.9s against the 5s default. Third red gate from this flake today.\n\nNOTE 2026-10-28: LANDED (d810d90 + review c2b01ae, merged 7b0357c): every failure reproduced was a time budget running out under load (about ten worktrees' vitest suites on 22 threads); old code failed 7, 39 and 72 of 2008 in three full runs. Test and waitFor budgets are now sized from that measurement in packages/ui test-budget.ts with pins that the config applies them; the review removed three explicit 3000ms waitFor timeouts that replaced, not added to, the budget. The 'expected 1, got 0' miscount was a budget expiry too. Leftovers: DBT-184, DBT-185. Closed on pins; reopen if a gate run goes red on a timeout again.\n\nNOTE 2026-10-28: the round-4 merged gate run (2dcc6a8) was fully green, ui 2056/2056 with no timeouts.",
       "verified": "pins"
     },
     {
@@ -2103,7 +2103,7 @@
       "id": "DBT-169",
       "priority": "now",
       "title": "captureFilterWarning does not recognise a filter written in the typed __inputId form",
-      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. packages/core/src/domain/capture-filter/capture-filter.ts:223 builds a quoted-literal regex (optional leading colon, then the bare id) to decide whether a capture filter names the selected input. Run under node with id in_syslog it is false for __inputId=='syslog:in_syslog' and for __inputId.startsWith('syslog:in_syslog:') - the typed form domain/capture-filter/input-id.ts (DBT-162) names as the real value - and true only for the bare id, which matches nothing in the product. So a correct filter draws the warning and the legacy one does not. FIX: decide it through input-id.ts (matchInputIdFilter); pin both forms."
+      "detail": "FOUND 2026-10-27 by the delta architecture audit (d2d248f..451ae85), adversarially verified. packages/core/src/domain/capture-filter/capture-filter.ts:223 builds a quoted-literal regex (optional leading colon, then the bare id) to decide whether a capture filter names the selected input. Run under node with id in_syslog it is false for __inputId=='syslog:in_syslog' and for __inputId.startsWith('syslog:in_syslog:') - the typed form domain/capture-filter/input-id.ts (DBT-162) names as the real value - and true only for the bare id, which matches nothing in the product. So a correct filter draws the warning and the legacy one does not. FIX: decide it through input-id.ts (matchInputIdFilter); pin both forms.\n\nNOTE 2026-10-28: LANDED (11ffaa3 + review b562085, merged 2dcc6a8; full gates green): captureFilterWarning decides through input-id.ts; input-id.ts now owns one __inputId clause grammar (parseInputIdClause anchored, findInputIdClauses searching), and parseRouteFilterInputs wraps it. Typed equality and startsWith(<type>:<id>:) are silent; the bare id gets the legacy wording with what to write; the review caught and fixed a regression where a broad prefix (startsWith('syslog:'), (''), or no trailing colon) went silent - it now warns that the prefix selects other sources. The app's own inputPredicate output is pinned silent for five ids. BEHAVIOUR CHANGE: endsWith(':<id>') now warns. Awaits live in the capture panel. Leftovers are DBT-190."
     },
     {
       "epic": "DBT",
@@ -2238,7 +2238,7 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -2250,7 +2250,7 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -2275,7 +2275,7 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -2329,7 +2329,7 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -2341,7 +2341,7 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -2362,6 +2362,18 @@
       "menu": "azure-onboarding",
       "title": "How-to step word and dataflow lane ignore the 'others also found' count",
       "detail": "FOUND 2026-10-28 by the DBT-178 implementer/reviewer (pre-existing unless said). howto-state.ts:360 stepVerdictWord names only the first present-other-name verdict and ignores alsoFound; onboarding-dataflow lanes.ts:269 renders 'exists (named <name>)' with no count. The policy-remediation count sentence ('N others like it') counts assignments, and can be read as remediations. FIX: one wording helper used by Validate, How-to and the lane."
+    },
+    {
+      "id": "DBT-190",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "The capture warning reads __inputId clauses, not the boolean structure around them",
+      "detail": "FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base). captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog') captures everything except the selected source; (2) a filter naming two inputs is silent - a || of two typed clauses, or ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin currently pins as silent; (3) endsWith(':in_syslog') gets the false 'references __inputId but not in_syslog' wording (new in DBT-169); (4) the reversed comparison 'syslog:in_syslog' == __inputId gets the different-source warning, and my__inputId==... is silent (no word boundary); (5) an id containing a double quote makes the app warn about its own filter (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on any clause naming another input; word-boundary the patterns; accept the reversed form; true wording for endsWith; repin the includes case."
     },
     {
       "id": "AZR-22",

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**82 in the backlog, 34 in progress, 58 done.**
+**77 in the backlog, 40 in progress, 58 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 35 | 29 | 18 |
+| Sentinel Integration | 36 | 29 | 19 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -38,7 +38,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 116.
+Open work totals 117.
 
 ## Epics and features
 
@@ -112,13 +112,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 43% (46/106)
+### `DBT` Quality and technical debt _(enabler)_ - 43% (46/107)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 28/75 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189* |
+| `DBT-F1` Verification gaps | Sentinel Integration | 28/76 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
@@ -135,7 +135,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (34)
+## In progress (40)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -961,7 +961,18 @@ Started. Anything here with an unfinished dependency is called out on its card.
   domain/capture-filter/input-id.ts (DBT-162) names as the real value - and
   true only for the bare id, which matches nothing in the product. So a
   correct filter draws the warning and the legacy one does not. FIX: decide it
-  through input-id.ts (matchInputIdFilter); pin both forms.
+  through input-id.ts (matchInputIdFilter); pin both forms. NOTE 2026-10-28:
+  LANDED (11ffaa3 + review b562085, merged 2dcc6a8; full gates green):
+  captureFilterWarning decides through input-id.ts; input-id.ts now owns one
+  __inputId clause grammar (parseInputIdClause anchored, findInputIdClauses
+  searching), and parseRouteFilterInputs wraps it. Typed equality and
+  startsWith(<type>:<id>:) are silent; the bare id gets the legacy wording
+  with what to write; the review caught and fixed a regression where a broad
+  prefix (startsWith('syslog:'), (''), or no trailing colon) went silent - it
+  now warns that the prefix selects other sources. The app's own
+  inputPredicate output is pinned silent for five ids. BEHAVIOUR CHANGE:
+  endsWith(':<id>') now warns. Awaits live in the capture panel. Leftovers are
+  DBT-190.
 
 - **DBT-170** Live Architecture computes legacyInputMatch and never shows it
   `DBT-F1` `bug` `settled`
@@ -1058,9 +1069,79 @@ Started. Anything here with an unfinished dependency is called out on its card.
   subscription; if it is the system topic id, accept the plan's own system
   topic id there.
 
+- **DBT-180** Onboard and Batch refuse to Run while the options read is unreadable
+  `DBT-F1` `story` `settled`
+  OPERATOR DECISION 2026-10-28 (on DBT-158): block Run while appOptions is
+  unreadable or retrying. Today Onboard and Batch deploy with
+  DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158
+  notice. FIX: derive a run gate from OptionsRead
+  (packages/ui/src/frame/options-read.ts), disable Run with the reason and the
+  Retry, pin it.
+
+- **DBT-181** Five more KV calls swallow a refused read or write
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless
+  said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() =>
+  undefined)) and :757 (its restore read, which reads as no selection);
+  mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107
+  (persist and forget writes: approved edits silently not learned, Forget
+  silently does nothing); siem-migration-screen.tsx:134 persist();
+  rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and
+  logged, but nothing on screen). Also
+  use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under
+  a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin
+  each.
+
+- **DBT-183** A Content Hub package with no displayName matches every solution
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless
+  said). findSolutionCatalogEntry's fuzzy match (available-content.ts
+  ~:138-141) is dn.includes(target) || target.includes(dn); a package with an
+  empty or missing displayName gives dn === '', and target.includes('') is
+  true, so it matches whatever is looked up first. FIX: skip empty names; pin.
+
+- **DBT-187** The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
+  adversarially verified. decideSecretConflict
+  (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts
+  findById each pick the record for an id out of items, with different
+  handling of non-object entries, so the onboarding source planner and
+  ensureTextSecret can read the same answer differently. SECRETS_API_PATH
+  (guided-deploy/secret-provisioning.ts:47) is used only by tests and the
+  barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the
+  constant or use it.
+
+- **DBT-188** DBT-158's shell wiring has no pin
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
+  adversarially verified. options-read.ts's decisions are pinned, but
+  App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx
+  ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation
+  refusing, the DCE checkbox going read-only. A wiring regression would pass
+  every test. FIX: a DOM pin of the frame with a refused appOptions read
+  (DBT-180 adds the Run gate to the same path).
+
+- **DBT-190** The capture warning reads __inputId clauses, not the boolean structure around them
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base).
+  captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what
+  surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog')
+  captures everything except the selected source; (2) a filter naming two
+  inputs is silent - a || of two typed clauses, or
+  ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin
+  currently pins as silent; (3) endsWith(':in_syslog') gets the false
+  'references __inputId but not in_syslog' wording (new in DBT-169); (4) the
+  reversed comparison 'syslog:in_syslog' == __inputId gets the
+  different-source warning, and my__inputId==... is silent (no word boundary);
+  (5) an id containing a double quote makes the app warn about its own filter
+  (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on
+  any clause naming another input; word-boundary the patterns; accept the
+  reversed form; true wording for endsWith; repin the includes case.
+
 ---
 
-## Backlog - now (9)
+## Backlog - now (4)
 
 Next to pick up. Nothing blocks these.
 
@@ -1187,59 +1268,6 @@ Next to pick up. Nothing blocks these.
   replace each wildcard with the literal paths and actions its callers use,
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
-
-- **DBT-180** Onboard and Batch refuse to Run while the options read is unreadable
-  `DBT-F1` `story` `settled`
-  OPERATOR DECISION 2026-10-28 (on DBT-158): block Run while appOptions is
-  unreadable or retrying. Today Onboard and Batch deploy with
-  DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158
-  notice. FIX: derive a run gate from OptionsRead
-  (packages/ui/src/frame/options-read.ts), disable Run with the reason and the
-  Retry, pin it.
-
-- **DBT-181** Five more KV calls swallow a refused read or write
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless
-  said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() =>
-  undefined)) and :757 (its restore read, which reads as no selection);
-  mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107
-  (persist and forget writes: approved edits silently not learned, Forget
-  silently does nothing); siem-migration-screen.tsx:134 persist();
-  rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and
-  logged, but nothing on screen). Also
-  use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under
-  a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin
-  each.
-
-- **DBT-183** A Content Hub package with no displayName matches every solution
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless
-  said). findSolutionCatalogEntry's fuzzy match (available-content.ts
-  ~:138-141) is dn.includes(target) || target.includes(dn); a package with an
-  empty or missing displayName gives dn === '', and target.includes('') is
-  true, so it matches whatever is looked up first. FIX: skip empty names; pin.
-
-- **DBT-187** The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
-  adversarially verified. decideSecretConflict
-  (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts
-  findById each pick the record for an id out of items, with different
-  handling of non-object entries, so the onboarding source planner and
-  ensureTextSecret can read the same answer differently. SECRETS_API_PATH
-  (guided-deploy/secret-provisioning.ts:47) is used only by tests and the
-  barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the
-  constant or use it.
-
-- **DBT-188** DBT-158's shell wiring has no pin
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
-  adversarially verified. options-read.ts's decisions are pinned, but
-  App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx
-  ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation
-  refusing, the DCE checkbox going read-only. A wiring regression would pass
-  every test. FIX: a DOM pin of the frame with a refused appOptions read
-  (DBT-180 adds the Run gate to the same path).
 
 ---
 
@@ -4187,7 +4215,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   three explicit 3000ms waitFor timeouts that replaced, not added to, the
   budget. The 'expected 1, got 0' miscount was a budget expiry too. Leftovers:
   DBT-184, DBT-185. Closed on pins; reopen if a gate run goes red on a timeout
-  again.
+  again. NOTE 2026-10-28: the round-4 merged gate run (2dcc6a8) was fully
+  green, ui 2056/2056 with no timeouts.
 
 - **DBT-157** AZR-34's connection-string.ts was never committed: .gitignore *connection-string* dropped it
   `DBT-F1` `bug` `settled` `verified: pins`
