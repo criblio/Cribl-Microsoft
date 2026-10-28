@@ -10,7 +10,8 @@
  *   patch   the secret's description carries this app's ownership stamp
  *           ({@link stampFor} of {@link APP_ID}, written by buildSecretBody)
  *   refuse  foreign: it does not; unreadable: the read was refused, failed,
- *           or did not name the secret. An unknown owner is not ours.
+ *           or did not name the secret exactly once among objects only
+ *           (findSecretRecord, DBT-187). An unknown owner is not ours.
  *
  * WHY THE STAMP ALONE, not proveOwnership's three signals: these ids
  * (sentinel_client_secret, Azure_vNet_Flowlogs_Secret) are fixed by the

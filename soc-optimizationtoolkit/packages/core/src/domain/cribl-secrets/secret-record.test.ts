@@ -42,6 +42,13 @@ describe("findSecretRecord", () => {
     expect(findSecretRecord([{ id: "other" }, { name: ID }], ID)).toEqual({ kind: "missing" });
   });
 
+  // The id matches exactly: a near-miss id is another secret, never this one.
+  it("near-miss ids (suffixed, other case, prefix): missing", () => {
+    expect(findSecretRecord([{ id: `${ID}_old` }, { id: ID.toUpperCase() }, { id: "sentinel" }], ID)).toEqual({
+      kind: "missing",
+    });
+  });
+
   it("the right id among others: found, that exact record", () => {
     const result = findSecretRecord([{ id: "other" }, ours], ID);
     expect(result).toEqual({ kind: "found", record: ours });
