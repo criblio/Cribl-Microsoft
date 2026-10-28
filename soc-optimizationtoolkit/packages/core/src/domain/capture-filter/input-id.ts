@@ -102,3 +102,68 @@ export function matchInputIdFilter(
   }
   return ref.id.startsWith(filter.value) ? "legacy" : "none";
 }
+
+/** A filter form input-id.ts can match: every kind but `unparsed`. */
+export type ParsedInputIdFilter = Exclude<InputIdFilter, { kind: "unparsed" }>;
+
+/**
+ * A quoted JS string literal; group 2 is its body. Escapes are not read, so a
+ * literal containing a backslash is not recognised (it reads as no clause).
+ */
+const LITERAL = String.raw`(['"\x60])((?:(?!\1)[^\\])*)\1`;
+
+/**
+ * The three `__inputId` clause forms Cribl and this app write, as regex
+ * SOURCES so the same form can be anchored on a whole route filter or found
+ * inside a larger capture filter. One set, two callers (DBT-169): the route
+ * parser (live-architecture parseRouteFilterInputs) and the capture warning
+ * (capture-filter.ts captureFilterWarning) used to carry a copy each.
+ */
+const EQUALITY = String.raw`__inputId\s*===?\s*${LITERAL}`;
+const LIST = String.raw`\[([^\]]+)\]\.includes\(\s*__inputId\s*\)`;
+const PREFIX = String.raw`__inputId\.startsWith\(\s*${LITERAL}\s*\)`;
+
+function listIds(body: string): string[] {
+  return [...body.matchAll(new RegExp(LITERAL, "g"))].map((m) => m[2]);
+}
+
+/** The expression read as exactly ONE clause, or null when it is not one. */
+export function parseInputIdClause(expression: string): ParsedInputIdFilter | null {
+  const trimmed = expression.trim();
+  const single = new RegExp(`^${EQUALITY}$`).exec(trimmed);
+  if (single !== null) {
+    return { kind: "inputs", ids: [single[2]] };
+  }
+  const list = new RegExp(`^${LIST}$`).exec(trimmed);
+  if (list !== null) {
+    const ids = listIds(list[1]);
+    if (ids.length > 0) {
+      return { kind: "inputs", ids };
+    }
+  }
+  const prefix = new RegExp(`^${PREFIX}$`).exec(trimmed);
+  if (prefix !== null) {
+    return { kind: "prefix", value: prefix[2] };
+  }
+  return null;
+}
+
+/**
+ * Every clause FOUND inside a larger expression, which an operator may have
+ * extended with `&&` and other tests. Reads the clauses only: it does not
+ * evaluate the boolean structure around them, so a negated or `||`-joined
+ * clause is reported the same as a plain one.
+ */
+export function findInputIdClauses(expression: string): ParsedInputIdFilter[] {
+  const found: ParsedInputIdFilter[] = [];
+  for (const m of expression.matchAll(new RegExp(EQUALITY, "g"))) {
+    found.push({ kind: "inputs", ids: [m[2]] });
+  }
+  for (const m of expression.matchAll(new RegExp(PREFIX, "g"))) {
+    found.push({ kind: "prefix", value: m[2] });
+  }
+  for (const m of expression.matchAll(new RegExp(LIST, "g"))) {
+    found.push({ kind: "inputs", ids: listIds(m[1]) });
+  }
+  return found;
+}

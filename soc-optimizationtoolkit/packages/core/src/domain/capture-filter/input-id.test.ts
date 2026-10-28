@@ -4,7 +4,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { inputIdValue, matchInputIdFilter } from "./input-id";
+import {
+  findInputIdClauses,
+  inputIdValue,
+  matchInputIdFilter,
+  parseInputIdClause,
+} from "./input-id";
 
 const EH = { type: "eventhub", id: "hub" };
 
@@ -43,5 +48,44 @@ describe("matchInputIdFilter", () => {
 
   it("a prefix only the bare id satisfies is legacy", () => {
     expect(matchInputIdFilter({ kind: "prefix", value: "hu" }, EH)).toBe("legacy");
+  });
+});
+
+/**
+ * One clause grammar, two callers (DBT-169 review): the route parser anchors
+ * it on the whole filter, the capture warning finds it inside a larger one.
+ */
+describe("parseInputIdClause / findInputIdClauses", () => {
+  it("reads each form, in any quote", () => {
+    expect(parseInputIdClause("__inputId=='syslog:a'")).toEqual({ kind: "inputs", ids: ["syslog:a"] });
+    expect(parseInputIdClause(' __inputId === "a" ')).toEqual({ kind: "inputs", ids: ["a"] });
+    expect(parseInputIdClause("__inputId==`a`")).toEqual({ kind: "inputs", ids: ["a"] });
+    expect(parseInputIdClause("['a',\"b\"].includes(__inputId)")).toEqual({
+      kind: "inputs",
+      ids: ["a", "b"],
+    });
+    expect(parseInputIdClause("__inputId.startsWith( 'syslog:a:' )")).toEqual({
+      kind: "prefix",
+      value: "syslog:a:",
+    });
+  });
+
+  it("parse is anchored; find is not", () => {
+    const extended = "__inputId=='syslog:a' && status >= 400";
+    expect(parseInputIdClause(extended)).toBeNull();
+    expect(findInputIdClauses(extended)).toEqual([{ kind: "inputs", ids: ["syslog:a"] }]);
+    expect(
+      findInputIdClauses("__inputId.startsWith('x:') || ['a'].includes(__inputId) || __inputId=='b'"),
+    ).toEqual([
+      { kind: "inputs", ids: ["b"] },
+      { kind: "prefix", value: "x:" },
+      { kind: "inputs", ids: ["a"] },
+    ]);
+  });
+
+  it("does not read a mismatched quote or an inequality as a clause", () => {
+    expect(parseInputIdClause("__inputId=='a\"")).toBeNull();
+    expect(findInputIdClauses("__inputId!='a'")).toEqual([]);
+    expect(findInputIdClauses("__inputId !== 'a'")).toEqual([]);
   });
 });

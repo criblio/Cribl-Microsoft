@@ -345,8 +345,10 @@ describe("captureFilterWarning - the edit that costs you", () => {
   });
 
   it("warns when __inputId is present but names a DIFFERENT source", () => {
-    const warning = captureFilterWarning('__inputId === "in_other"', "in_syslog");
-    expect(warning).toContain("different source");
+    const warning = captureFilterWarning('__inputId === "in_other"', "in_syslog", "syslog");
+    expect(warning).toBe(
+      'This filter references __inputId but not "in_syslog", so it may capture from a different source than the one selected.',
+    );
   });
 
   it("warns on an empty filter", () => {
@@ -355,10 +357,20 @@ describe("captureFilterWarning - the edit that costs you", () => {
 
   it("is SILENT for a sound filter, including one the operator extended", () => {
     expect(captureFilterWarning(buildCaptureFilter({ inputId: "in_syslog" }), "in_syslog")).toBeNull();
+    // The composed filter selects by the `:` segment, which needs no type, so
+    // it is silent with or without one.
     expect(
       captureFilterWarning(
-        '__inputId === "in_syslog" && status >= 400',
+        buildCaptureFilter({ inputId: "in_syslog", logTypes: ["TRAFFIC"] }),
         "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+    expect(
+      captureFilterWarning(
+        "__inputId === 'syslog:in_syslog' && status >= 400",
+        "in_syslog",
+        "syslog",
       ),
     ).toBeNull();
   });
@@ -368,7 +380,135 @@ describe("captureFilterWarning - the edit that costs you", () => {
     // is valid JS - a filter that fails to compile comes back as an HTTP error
     // carrying Cribl's own message, which is more accurate than a guess here.
     expect(
-      captureFilterWarning('__inputId === "in_syslog" && ((((', "in_syslog"),
+      captureFilterWarning("__inputId === 'syslog:in_syslog' && ((((", "in_syslog", "syslog"),
     ).toBeNull();
+  });
+});
+
+/**
+ * DBT-169: the warning decides through input-id.ts, not a regex of its own.
+ *
+ * It used to accept only a quoted literal that WAS the bare id, so the typed
+ * form the events really carry (`<type>:<id>`, verified 2026-08-21) drew the
+ * "different source" warning while the bare form - which matched nothing in a
+ * capture - drew none. Each case below is one answer matchInputIdFilter gives.
+ */
+describe("captureFilterWarning - the typed __inputId form (DBT-169)", () => {
+  const LEGACY =
+    'This filter names the bare input id "in_syslog" (unconfirmed: events carry __inputId as "syslog:in_syslog", and the bare form matched nothing when captured), so it will likely capture nothing. Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:") instead.';
+  const otherFor = (id: string) =>
+    `This filter references __inputId but not "${id}", so it may capture from a different source than the one selected.`;
+  const OTHER = otherFor("in_syslog");
+
+  it("is SILENT for typed equality, in either quote and either operator", () => {
+    expect(captureFilterWarning("__inputId=='syslog:in_syslog'", "in_syslog", "syslog")).toBeNull();
+    expect(captureFilterWarning('__inputId === "syslog:in_syslog"', "in_syslog", "syslog")).toBeNull();
+  });
+
+  it("is SILENT for Cribl's own multi-segment startsWith form", () => {
+    expect(
+      captureFilterWarning(
+        "__inputId.startsWith('syslog:in_syslog:') && /TRAFFIC/i.test(_raw)",
+        "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("is SILENT for an includes list naming the typed value", () => {
+    expect(
+      captureFilterWarning(
+        "['http:in_http','syslog:in_syslog'].includes(__inputId)",
+        "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("warns on the BARE id, naming the typed form to write instead", () => {
+    expect(captureFilterWarning("__inputId=='in_syslog'", "in_syslog", "syslog")).toBe(LEGACY);
+    expect(
+      captureFilterWarning('__inputId === "in_syslog" && status >= 400', "in_syslog", "syslog"),
+    ).toBe(LEGACY);
+  });
+
+  it("lets the typed answer win when a filter names both forms", () => {
+    expect(
+      captureFilterWarning(
+        "__inputId=='in_syslog' || __inputId=='syslog:in_syslog'",
+        "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps today's warning for a filter naming an unrelated source", () => {
+    expect(captureFilterWarning("__inputId=='http:in_http'", "in_syslog", "syslog")).toBe(OTHER);
+    // Same id, different TYPE: a different input.
+    expect(captureFilterWarning("__inputId=='tcp:in_syslog'", "in_syslog", "syslog")).toBe(OTHER);
+  });
+
+  it("does not let an id that is a PREFIX of another id match it", () => {
+    // in_sys is a prefix of in_syslog; neither may stand in for the other.
+    expect(captureFilterWarning("__inputId=='syslog:in_syslog'", "in_sys", "syslog")).toBe(
+      otherFor("in_sys"),
+    );
+    expect(
+      captureFilterWarning("__inputId.startsWith('syslog:in_syslog:')", "in_sys", "syslog"),
+    ).toBe(otherFor("in_sys"));
+    expect(captureFilterWarning("__inputId=='syslog:in_sys'", "in_syslog", "syslog")).toBe(OTHER);
+    expect(
+      captureFilterWarning("__inputId.startsWith('syslog:in_sys:')", "in_syslog", "syslog"),
+    ).toBe(OTHER);
+    expect(captureFilterWarning("__inputId === 'in_syslog_prod'", "in_syslog", "syslog")).toBe(
+      OTHER,
+    );
+  });
+
+  it("says it cannot check a typed clause when the source type is unknown", () => {
+    expect(captureFilterWarning("__inputId=='syslog:in_syslog'", "in_syslog")).toBe(
+      'The type of source "in_syslog" is unknown, so this filter\'s __inputId clause cannot be checked against it.',
+    );
+  });
+
+  /**
+   * Review of DBT-169: matchInputIdFilter answers "does this prefix select the
+   * input", which a broad prefix does - along with every other input it
+   * covers. Before DBT-169 these warned (no literal named the id); a silent
+   * mixed capture is the failure this warning exists for.
+   */
+  it("warns on a prefix that also selects OTHER sources", () => {
+    const BROAD =
+      'This filter\'s __inputId.startsWith() prefix selects "in_syslog" but also any other source whose __inputId starts with it, so it may capture a mixture. Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:") to select only this source.';
+    expect(captureFilterWarning("__inputId.startsWith('syslog:')", "in_syslog", "syslog")).toBe(
+      BROAD,
+    );
+    // No trailing colon: also takes in_syslog_prod.
+    expect(
+      captureFilterWarning("__inputId.startsWith('syslog:in_syslog')", "in_syslog", "syslog"),
+    ).toBe(BROAD);
+    expect(captureFilterWarning("__inputId.startsWith('')", "in_syslog", "syslog")).toBe(BROAD);
+    // A narrow clause anywhere in the filter is enough.
+    expect(
+      captureFilterWarning(
+        "__inputId.startsWith('syslog:') && __inputId.startsWith('syslog:in_syslog:')",
+        "in_syslog",
+        "syslog",
+      ),
+    ).toBeNull();
+  });
+
+  it("never warns about the filter the app itself writes, whatever the id", () => {
+    for (const id of ["in_syslog", "a.b*c+d", "in(x)", "it's", "a$b^c"]) {
+      expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id, "syslog")).toBeNull();
+      expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id)).toBeNull();
+      expect(
+        captureFilterWarning(
+          buildCaptureFilter({ inputId: id, logTypes: ["TRAFFIC"] }),
+          id,
+          "syslog",
+        ),
+      ).toBeNull();
+    }
   });
 });

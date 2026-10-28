@@ -26,6 +26,7 @@
 import type {
   CaptureSamplesResult,
   LogTypeEvidence,
+  SampleSourceRef,
   SplitSample,
   TaggedSample,
 } from "@soc/core";
@@ -96,9 +97,18 @@ export function composeFilter(
   return buildCaptureFilter({ inputId, logTypes: selectedValues(choices) });
 }
 
-/** A warning about an operator-edited filter, or null. Re-exported for the UI. */
-export function filterWarning(filter: string, inputId: string): string | null {
-  return captureFilterWarning(filter, inputId);
+/**
+ * A warning about an operator-edited filter, or null. Re-exported for the UI.
+ *
+ * Takes the SOURCE, not just its id (DBT-169): recognising the typed
+ * `__inputId` form needs the input's type, which a Cribl source carries as
+ * `detail` (core sample-sources/inventory.ts parseCriblSources).
+ */
+export function filterWarning(
+  filter: string,
+  source: Pick<SampleSourceRef, "id" | "detail">,
+): string | null {
+  return captureFilterWarning(filter, source.id, source.detail);
 }
 
 // ---------------------------------------------------------------------------

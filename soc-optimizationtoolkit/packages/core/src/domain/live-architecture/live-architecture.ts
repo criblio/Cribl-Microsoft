@@ -36,6 +36,7 @@ import type {
 import {
   inputIdValue,
   matchInputIdFilter,
+  parseInputIdClause,
   type InputIdFilter,
   type InputIdRef,
 } from "../capture-filter/input-id";
@@ -374,30 +375,16 @@ function asRecord(value: unknown): Record<string, unknown> {
  * `__inputId=='x'` / `__inputId==="x"`, `['a','b'].includes(__inputId)`,
  * `__inputId.startsWith('collection:')`, missing or `true` = all inputs;
  * anything else = unparsed (treated as all, with a note - honest
- * over-approximation). The result's shape is owned by
- * capture-filter/input-id.ts, which matches it against an input (DBT-162).
+ * over-approximation). The clause forms are input-id.ts parseInputIdClause,
+ * shared with the capture warning (DBT-169); the result shape (InputIdFilter)
+ * is owned there too, and matched against an input there (DBT-162).
  */
 export function parseRouteFilterInputs(filter: string | undefined): InputIdFilter {
   const trimmed = (filter ?? "").trim();
   if (trimmed === "" || trimmed === "true") {
     return { kind: "all" };
   }
-  const single = /^__inputId\s*===?\s*['"]([^'"]+)['"]$/.exec(trimmed);
-  if (single !== null) {
-    return { kind: "inputs", ids: [single[1]] };
-  }
-  const list = /^\[([^\]]+)\]\.includes\(\s*__inputId\s*\)$/.exec(trimmed);
-  if (list !== null) {
-    const ids = [...list[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    if (ids.length > 0) {
-      return { kind: "inputs", ids };
-    }
-  }
-  const prefix = /^__inputId\.startsWith\(\s*['"]([^'"]+)['"]\s*\)$/.exec(trimmed);
-  if (prefix !== null) {
-    return { kind: "prefix", value: prefix[1] };
-  }
-  return { kind: "unparsed" };
+  return parseInputIdClause(trimmed) ?? { kind: "unparsed" };
 }
 
 /** Is a Cribl input/output TYPE Azure-related? (prefix rule + known names) */

@@ -125,10 +125,13 @@ describe("toggle + compose", () => {
   });
 
   it("surfaces the __inputId warning for an edited filter", () => {
-    expect(filterWarning("/,TRAFFIC,/i.test(_raw)", "in_syslog")).toContain(
+    const source = { id: "in_syslog", detail: "syslog" };
+    expect(filterWarning("/,TRAFFIC,/i.test(_raw)", source)).toContain(
       "EVERY source",
     );
-    expect(filterWarning(composeFilter("in_syslog", choices), "in_syslog")).toBeNull();
+    expect(filterWarning(composeFilter("in_syslog", choices), source)).toBeNull();
+    // DBT-169: the source's type reaches core, so the typed form is silent.
+    expect(filterWarning("__inputId=='syslog:in_syslog'", source)).toBeNull();
   });
 });
 

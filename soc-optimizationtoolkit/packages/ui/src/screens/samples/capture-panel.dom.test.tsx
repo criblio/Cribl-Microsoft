@@ -357,6 +357,30 @@ describe("CapturePanel - the filter belongs to the operator", () => {
       container.querySelector(".capture-filter-warning")?.textContent,
     ).toContain("An empty filter captures every event");
   });
+
+  /**
+   * DBT-169: the warning needs the source's TYPE to recognise the typed
+   * `__inputId` form, and a Cribl source carries it as `detail` (inventory.ts
+   * parseCriblSources). A panel that passed only the id would warn on the
+   * correct filter and say the type is unknown.
+   */
+  it("is silent for the typed form and flags the bare id, using the source's type", () => {
+    const { container } = renderPanel({ source: { ...SOURCE, detail: "syslog" } });
+
+    fireEvent.change(filterBox(container), {
+      target: { value: "__inputId=='syslog:in_syslog' && /TRAFFIC/i.test(_raw)" },
+    });
+    expect(container.querySelectorAll(".capture-filter-warning")).toHaveLength(0);
+
+    fireEvent.change(filterBox(container), {
+      target: { value: "__inputId=='in_syslog'" },
+    });
+    const warnings = container.querySelectorAll(".capture-filter-warning");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].textContent).toBe(
+      'This filter names the bare input id "in_syslog" (unconfirmed: events carry __inputId as "syslog:in_syslog", and the bare form matched nothing when captured), so it will likely capture nothing. Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:") instead.',
+    );
+  });
 });
 
 describe("CapturePanel - running a capture", () => {
