@@ -847,6 +847,74 @@ describe("SampleIntakeSection - naming the vendor (DBT-175)", () => {
     ).toHaveLength(0);
   });
 
+  it("a write that lands AFTER the solution changed claims nothing for the new one", async () => {
+    // Review of DBT-175: the awaited write outlived a solution switch, and its
+    // late answer set "Saved" (or the refusal note) on the NEXT solution,
+    // whose box the switch had just reset.
+    const answers: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            answers.push({ resolve, reject });
+          }),
+      ),
+    } as unknown as ContentCache;
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const onSamplesChange = vi.fn();
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={onSamplesChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(view.container.querySelectorAll("#operator-vendor")).toHaveLength(1);
+    });
+    const typeAndSave = async (value: string) => {
+      fireEvent.change(
+        view.container.querySelector("#operator-vendor") as HTMLInputElement,
+        { target: { value } },
+      );
+      await act(async () => {
+        fireEvent.click(vendorButton(view.container));
+      });
+    };
+    const switchTo = async (solutionName: string) => {
+      await act(async () => {
+        view.rerender(
+          <SampleIntakeSection
+            store={store}
+            solutionName={solutionName}
+            definitionCache={cache}
+            onSamplesChange={onSamplesChange}
+          />,
+        );
+      });
+    };
+
+    await typeAndSave("Acme Corp");
+    await switchTo("Quuxbar Unlisted Gadget Feed");
+    await act(async () => {
+      answers[0]?.resolve();
+    });
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+
+    await typeAndSave("Quuxbar Corp");
+    await switchTo(UNLISTED);
+    await act(async () => {
+      answers[1]?.reject(new Error("KV write refused (403)"));
+    });
+    expect(answers).toHaveLength(2);
+    expect(
+      view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+    ).toHaveLength(0);
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+  });
+
   it("the unread-name hint no longer promises the next save will land", async () => {
     const cache = {
       get: vi.fn(async () => {

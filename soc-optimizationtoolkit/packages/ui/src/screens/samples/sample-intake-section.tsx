@@ -76,8 +76,9 @@
  * non-encrypted 403. Naming the vendor wrote fire-and-forget and showed "Saved"
  * before the write landed - an unhandled rejection under a false "Saved" - and
  * a refused column-order read or write left reuse silently off. "Saved" now
- * waits for the store's answer, and one note says when column orders are not
- * being reused or remembered, and why.
+ * waits for the store's answer - and only for the solution it was asked under,
+ * so a write that lands after a switch claims nothing for the next one - and
+ * one note says when column orders are not being reused or remembered, and why.
  *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
@@ -279,11 +280,17 @@ export function SampleIntakeSection({
   const [vendorSaving, setVendorSaving] = useState(false);
   const [vendorSaveError, setVendorSaveError] = useState("");
   const vendorKey = useMemo(() => operatorVendorKey(solutionName), [solutionName]);
+  // The scope a name write's answer must still belong to when it lands: the
+  // write is awaited, and a solution switch while it is in flight must not
+  // let its late "Saved" (or refusal) land on the next solution's box.
+  const vendorScopeRef = useRef<object>({});
 
   useEffect(() => {
     let cancelled = false;
+    vendorScopeRef.current = {};
     setOperatorVendor("");
     setVendorSaved(false);
+    setVendorSaving(false);
     setVendorReadError("");
     setVendorSaveError("");
     if (definitionCache === undefined || vendorKey === null || detectedVendor !== "") {
@@ -334,17 +341,20 @@ export function SampleIntakeSection({
   const saveVendorName = useCallback(async () => {
     if (definitionCache === undefined || vendorKey === null) return;
     const name = operatorVendor.trim();
+    const scope = vendorScopeRef.current;
     setOperatorVendor(name);
     setVendorSaveError("");
     setVendorSaving(true);
     try {
       await definitionCache.set(vendorKey, name);
-      setVendorSaved(true);
+      if (vendorScopeRef.current === scope) setVendorSaved(true);
     } catch (err) {
-      setVendorSaved(false);
-      setVendorSaveError(String(err));
+      if (vendorScopeRef.current === scope) {
+        setVendorSaved(false);
+        setVendorSaveError(String(err));
+      }
     } finally {
-      setVendorSaving(false);
+      if (vendorScopeRef.current === scope) setVendorSaving(false);
     }
   }, [definitionCache, vendorKey, operatorVendor]);
 
