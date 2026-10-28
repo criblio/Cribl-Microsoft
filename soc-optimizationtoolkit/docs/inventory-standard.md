@@ -216,8 +216,12 @@ for Resource Graph.
   found" rendered off an RBAC-filtered empty, and forced the `none` variant
   above. Deliberately NOT converted, because none of them has an ambiguous
   empty: `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out
-  of the repo, and `listDeprecatedContentHubSolutions` returns a `Set` used as
-  a lookup.
+  of the repo. `listDeprecatedContentHubSolutions` was on this list as "a `Set`
+  used as a lookup", and that was wrong: a failed catalog read returned the
+  same empty set as "nothing deprecated". FIXED 2026-10-27 as DBT-176 - it and
+  `findSolutionCatalogEntry` now answer found / not-found / unreadable (with
+  the reason), an EMPTY catalog counts as unreadable, and both screens say
+  which. Not a `Listing<T>`: the answer is a lookup, not rows to count.
 - **The Cribl worker-group read was NOT converted by DBT-62, although this
   file said it was. FIXED 2026-10-20 as DBT-134 / DBT-135.** DBT-62 wrapped the
   result inside `discover-sample-sources` only; the port kept returning a bare

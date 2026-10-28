@@ -2708,7 +2708,10 @@ having remembered a call site.
 **What is NOT converted, by the same rule read the other way.**
 `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the
 repo; `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
-None has an ambiguous empty. Wrapping them would teach the codebase that
+None has an ambiguous empty. (Wrong for the last one: a failed catalog read
+returned the same empty set as "nothing deprecated". DBT-176 gave it, and
+`findSolutionCatalogEntry`, a found / not-found / unreadable answer - still not
+a `Listing`, because the answer is a lookup, not rows to count.) Wrapping them would teach the codebase that
 `Listing` means "any list", and a type that marks everything marks nothing.
 
 ## 18. Nine decisions settled - the answers were recorded, the reasoning was not

@@ -48,6 +48,7 @@ import {
 } from "@soc/core";
 import type {
   DeliveryFitEvidence,
+  DeprecatedSolutionsLookup,
   IngestionClass,
   SolutionRef,
   WorkspaceScope,
@@ -267,9 +268,11 @@ export function SolutionBrowser({
   const cache = ports.contentCache;
 
   const [solutions, setSolutions] = useState<SolutionRef[] | null>(null);
-  // Authoritative Content Hub deprecation keys (populated when a scope is
-  // committed); merged into the repo deprecation signal below.
-  const [hubDeprecated, setHubDeprecated] = useState<Set<string>>(new Set());
+  // The authoritative Content Hub deprecation lookup, merged into the repo
+  // deprecation signal below; null while no scope is committed (or the read is
+  // in flight). Three answers (DBT-176): an unreadable catalog must not read as
+  // "none deprecated".
+  const [hubLookup, setHubLookup] = useState<DeprecatedSolutionsLookup | null>(null);
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   // The reason the content cache last refused a read or write, "" while it has
@@ -363,7 +366,8 @@ export function SolutionBrowser({
 
   // Cross-reference the Content Hub catalog for authoritative deprecation once
   // a scope is committed (the repo folder heuristics miss Hub-deprecated
-  // solutions like Cloudflare). Best-effort: a failure leaves the set empty.
+  // solutions like Cloudflare). Never fails the browser: an unreadable catalog
+  // tags nothing and SAYS so beside the counts (DBT-176).
   useEffect(() => {
     if (
       scopeCommitted !== true ||
@@ -371,7 +375,7 @@ export function SolutionBrowser({
       config.resourceGroup === "" ||
       config.workspaceName === ""
     ) {
-      setHubDeprecated(new Set());
+      setHubLookup(null);
       return;
     }
     let cancelled = false;
@@ -382,8 +386,8 @@ export function SolutionBrowser({
       location: "",
     };
     void listDeprecatedContentHubSolutions(ports.azure, scope, ports.logger).then(
-      (set) => {
-        if (!cancelled) setHubDeprecated(set);
+      (lookup) => {
+        if (!cancelled) setHubLookup(lookup);
       },
     );
     return () => {
@@ -402,13 +406,14 @@ export function SolutionBrowser({
   // the Hub flags is marked deprecated even when the repo folder is not.
   const mergedSolutions = useMemo<SolutionRef[] | null>(() => {
     if (solutions === null) return null;
-    if (hubDeprecated.size === 0) return solutions;
+    if (hubLookup?.kind !== "found") return solutions;
+    const hubKeys = hubLookup.keys;
     return solutions.map((s) =>
-      s.deprecated !== true && hubDeprecated.has(deprecatedSolutionKey(s.name))
+      s.deprecated !== true && hubKeys.has(deprecatedSolutionKey(s.name))
         ? { ...s, deprecated: true, deprecationReason: "Deprecated in the Microsoft Content Hub" }
         : s,
     );
-  }, [solutions, hubDeprecated]);
+  }, [solutions, hubLookup]);
 
   // Fetch (and cache) one solution's connector detail on demand.
   const loadDetail = useCallback(
@@ -958,6 +963,15 @@ export function SolutionBrowser({
             <p className="solution-browser-counts">
               {counts.total} solutions - {counts.active} active,{" "}
               {counts.deprecated} deprecated. Showing {visible.length}.
+            </p>
+          )}
+          {/* DBT-176: without this an unreadable catalog and "the Hub deprecated
+              nothing extra" render identically - the same counts, no tags. */}
+          {hubLookup?.kind === "unreadable" && (
+            <p className="field-hint solution-browser-hub-note" role="status">
+              Could not read the Content Hub catalog ({hubLookup.reason}), so
+              deprecation here comes from the repository alone - a solution the
+              Content Hub deprecated may not be flagged.
             </p>
           )}
           <p className="solution-browser-legend">

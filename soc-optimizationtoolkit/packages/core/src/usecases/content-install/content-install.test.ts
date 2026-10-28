@@ -216,6 +216,41 @@ describe("installParser (duplicate-alias safety)", () => {
     expect(azure.calls[1].method).toBe("DELETE");
     expect(azure.calls[1].path).toContain("/savedSearches/parser-cloudflare");
   });
+
+  // DBT-176: a failed savedSearches listing used to be swallowed - the PUT
+  // went ahead (right: it is idempotent) and the outcome read a plain
+  // "installed", hiding that the duplicate-alias check never ran.
+  it("still PUTs when the listing cannot be read, and SAYS the duplicate check did not run", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 403, body: "denied" }, // list savedSearches: refused
+      { status: 200, body: {} }, // PUT ours
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+    expect(outcome).toEqual({
+      name: "Cloudflare (parser)",
+      ok: true,
+      detail:
+        "installed, but the saved searches could not be read " +
+        '(list saved searches: HTTP 403 "denied"), so another function with ' +
+        "the alias Cloudflare was not checked for - if a query reports " +
+        "multiple functions with the same name, remove the duplicate",
+    });
+  });
+
+  it("carries the unread-listing note onto a failed PUT too", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 403, body: "denied" },
+      { status: 400, body: { error: { code: "BadRequest", message: "bad" } } },
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toMatch(
+      /; the saved searches could not be read \(list saved searches: HTTP 403 "denied"\)$/,
+    );
+  });
 });
 
 describe("installedContentState", () => {
