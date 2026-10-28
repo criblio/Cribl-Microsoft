@@ -208,6 +208,17 @@ describe("COVERAGE_CATALOG - ported, not invented", () => {
     }
   });
 
+  // AZR-43 (found live 2026-10-28): the screen told operators to use
+  // "Azure/dev/vNetFlowLogDiscovery" and "DCR-Automation solution in this
+  // repository". The legacy line stays as provenance; the screen line may not
+  // name a repository or a path in one.
+  it("tells an operator what to use instead without naming a repository", () => {
+    for (const u of UNSUPPORTED_SOURCES) {
+      expect(u.instead.trim(), `${u.id} instead`).not.toBe("");
+      expect(u.instead, `${u.id} instead`).not.toMatch(/repositor|Azure\/dev|deprecated\/|\w\/\w+\//i);
+    }
+  });
+
   it("ports the XDR unsupported-tables list and its reason verbatim", () => {
     const src = legacy();
     const node = at(src, "defenderXDR.xdrStreaming.tablesNotSupported");

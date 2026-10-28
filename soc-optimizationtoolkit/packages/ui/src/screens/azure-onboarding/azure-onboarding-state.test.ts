@@ -637,3 +637,19 @@ describe("criblSideReadingOf", () => {
     });
   });
 });
+
+// AZR-43 (found live 2026-10-28): the unsupported rows read "Use
+// Azure/dev/vNetFlowLogDiscovery..." and "Use DCR-Automation solution in this
+// repository..." - the legacy provenance line rendered as screen copy.
+describe("sources that cannot stream to Event Hub", () => {
+  it("say what to use instead without naming a repository or a path in one", () => {
+    const rows = buildSections(defaultSelection(), [], new Map())
+      .flatMap((s) => s.rows)
+      .filter((r) => r.kind === "unsupported");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      if (r.kind !== "unsupported") continue;
+      expect(r.alternative, r.id).not.toMatch(/repositor|Azure\/dev|deprecated\//i);
+    }
+  });
+});

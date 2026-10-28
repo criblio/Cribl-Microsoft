@@ -331,7 +331,7 @@ export function buildSections(
           id: row.id,
           title: row.item.title,
           description: row.item.description,
-          alternative: row.item.alternative,
+          alternative: row.item.instead,
         };
       }
       if (row.kind === "xdr-tables") {

@@ -147,8 +147,15 @@ export interface UnsupportedItem {
   readonly source: string;
   readonly title: string;
   readonly description: string;
-  /** What to do instead. The legacy `alternative`, verbatim. */
+  /** What to do instead. The legacy `alternative`, verbatim - provenance, not screen copy. */
   readonly alternative: string;
+  /**
+   * What the screen tells an operator to do instead (AZR-43). The legacy line
+   * pointed at paths in the old repository ("Azure/dev/vNetFlowLogDiscovery",
+   * "DCR-Automation solution in this repository"); an operator in Cribl has no
+   * repository, so the screen says what to use in Azure or in this app.
+   */
+  readonly instead: string;
 }
 
 const COMMUNITY_TIERS: readonly SubSelectionOption[] = [
@@ -309,6 +316,8 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     description: "VNet Flow Logs - Storage Account only, use Cribl Azure Blob source",
     alternative:
       "Use Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration",
+    instead:
+      "Read them with a Cribl Azure Blob source on the flow-log storage account - the VNet Flow Logs How-to below walks through it.",
   },
   {
     id: "nsgFlowLogs",
@@ -316,6 +325,7 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "NSG Flow Logs",
     description: "NSG Flow Logs - Storage Account only, use Cribl Azure Blob source",
     alternative: "Use Cribl Azure Blob source with NSG flow log storage account",
+    instead: "Use a Cribl Azure Blob source on the NSG flow log storage account.",
   },
   {
     id: "resourceChangeTracking",
@@ -323,6 +333,7 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "Resource change tracking",
     description: "Azure Resource Graph Change Analysis - Query-based only, no streaming",
     alternative: "Use scheduled Azure Resource Graph queries for change history",
+    instead: "Use scheduled Azure Resource Graph queries for change history.",
   },
   {
     id: "vmGuestLogs",
@@ -330,6 +341,8 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "VM guest OS logs",
     description: "VM Guest OS Logs - Requires Azure Monitor Agent + DCR (not policy-based)",
     alternative: "Use DCR-Automation solution in this repository for AMA-based collection",
+    instead:
+      "Collect them with Azure Monitor Agent and a data collection rule, set up in Azure. This app does not set that up.",
   },
 ];
 
