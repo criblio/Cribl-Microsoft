@@ -6493,6 +6493,10 @@ details[open] > summary::before {
   background: var(--surface-raised);
   color: var(--text);
   max-width: 96ch;
+  /* An error banner can quote a raw Azure or Cribl response body (a JSON
+   * error with an unbroken resource id); it wraps instead of widening the
+   * page inside the Cribl frame (AZR-44). */
+  overflow-wrap: anywhere;
 }
 
 .azure-onboarding-banner-info {
@@ -6743,11 +6747,14 @@ details[open] > summary::before {
 }
 
 /* Validate: verdict rows carry data-tone; the verdict word is always in the
- * row text. */
+ * row text. A verdict, an arrival line or the "Validate stopped" line can
+ * quote a raw Azure response body, so the whole panel wraps anywhere rather
+ * than let one unbroken resource id push the page sideways (AZR-44). */
 .azo-validate {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-wrap: anywhere;
 }
 
 .azo-validate ul {
@@ -6827,6 +6834,9 @@ details[open] > summary::before {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
+  /* The status, Cribl-side, outcome and create-error lines quote what Cribl
+   * or Azure answered, raw bodies included; they wrap (AZR-44). */
+  overflow-wrap: anywhere;
 }
 
 .azo-cribl-row [data-tone='ok'] {
@@ -7854,6 +7864,9 @@ details[open] > summary::before {
   font-style: italic;
   border-left: 2px dashed var(--text-faint);
   padding-left: 8px;
+  /* "The map could not be read: ..." quotes the error, raw body and all
+   * (AZR-44). */
+  overflow-wrap: anywhere;
 }
 
 .lm-unread-block {
