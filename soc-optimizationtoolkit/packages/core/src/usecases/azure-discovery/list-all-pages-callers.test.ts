@@ -118,18 +118,23 @@ describe("listAllPages callers, given a nextLink they cannot follow (DBT-160)", 
     expect(state.notes[2]).toMatch(/^Could not read installed workbooks: list workbooks: list incomplete - /);
   });
 
-  it("findSolutionCatalogEntry treats the incomplete catalog as unreadable (null), not as page 1", async () => {
+  it("findSolutionCatalogEntry treats the incomplete catalog as unreadable, not as page 1", async () => {
     // Page 1 HAS the match; returning it would mean trusting a list we know
     // is unfinished, so the catalog is reported unreadable like any failure.
     const { azure } = unpaginatable([
       [{ name: "pkg", properties: { displayName: "Cloudflare", contentId: "c", version: "1" } }],
     ]);
-    expect(await findSolutionCatalogEntry(azure, WS, "Cloudflare")).toBeNull();
+    const lookup = await findSolutionCatalogEntry(azure, WS, "Cloudflare");
+    expect(lookup.kind).toBe("unreadable");
+    if (lookup.kind !== "unreadable") return;
+    expect(lookup.reason).toMatch(/^list content product packages: list incomplete - /);
   });
 
-  it("listDeprecatedContentHubSolutions returns no tags rather than page 1's tags", async () => {
+  it("listDeprecatedContentHubSolutions reports unreadable rather than page 1's tags", async () => {
     const { azure } = unpaginatable([[{ properties: { displayName: "Cloudflare (Deprecated)" } }]]);
-    const keys = await listDeprecatedContentHubSolutions(azure, WS);
-    expect(keys.size).toBe(0);
+    const lookup = await listDeprecatedContentHubSolutions(azure, WS);
+    expect(lookup.kind).toBe("unreadable");
+    if (lookup.kind !== "unreadable") return;
+    expect(lookup.reason).toMatch(/^list content product packages: list incomplete - /);
   });
 });

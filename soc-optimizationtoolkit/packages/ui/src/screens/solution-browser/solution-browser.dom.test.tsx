@@ -1050,3 +1050,85 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
     expect(notes()).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// DBT-176: an unreadable Content Hub catalog is not "none deprecated"
+// ---------------------------------------------------------------------------
+
+/**
+ * listDeprecatedContentHubSolutions used to answer an empty set for a failed
+ * read, so the browser rendered "the Hub deprecated nothing" and "the Hub could
+ * not be read" identically - the same counts and no tags. The unreadable case
+ * now carries a note with the reason; the read cases carry none.
+ */
+describe("SolutionBrowser Content Hub deprecation lookup (DBT-176)", () => {
+  const SCOPED = {
+    subscriptionId: "sub-1",
+    resourceGroup: "rg-1",
+    workspaceName: "law-1",
+  } as unknown as AzureConfig;
+
+  function harness(catalog: { status: number; body: unknown }) {
+    const request = vi.fn(async () => ({ ok: true, ...catalog }));
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    render(
+      <PortsProvider
+        ports={{ content, azure: { request }, logger } as unknown as UiPorts}
+        config={SCOPED}
+      >
+        <SolutionBrowser scopeCommitted={true} />
+      </PortsProvider>,
+    );
+    return { request };
+  }
+
+  const hubNotes = () =>
+    [...document.querySelectorAll(".solution-browser-hub-note")].map(
+      (n) => n.textContent ?? "",
+    );
+  const countsLine = () =>
+    document.querySelector(".solution-browser-counts")?.textContent ?? "";
+
+  it("says the catalog could not be read, with the reason, when the listing fails", async () => {
+    harness({ status: 403, body: "denied" });
+    await waitFor(() => {
+      expect(hubNotes()).toHaveLength(1);
+    });
+    expect(hubNotes()[0]).toContain('(list content product packages: HTTP 403 "denied")');
+    expect(hubNotes()[0]).toContain("deprecation here comes from the repository alone");
+    expect(countsLine()).toContain("0 deprecated");
+  });
+
+  it("carries no note, and tags the Hub-deprecated row, when the catalog was read", async () => {
+    harness({
+      status: 200,
+      body: {
+        value: [
+          { properties: { displayName: "1Password (Deprecated)" } },
+          { properties: { displayName: "AbnormalSecurity" } },
+        ],
+      },
+    });
+    await waitFor(() => {
+      expect(countsLine()).toContain("1 deprecated");
+    });
+    expect(hubNotes()).toHaveLength(0);
+  });
+
+  it("carries no note when the catalog was read and deprecates nothing", async () => {
+    const { request } = harness({
+      status: 200,
+      body: { value: [{ properties: { displayName: "AbnormalSecurity" } }] },
+    });
+    await waitFor(() => {
+      expect(countsLine()).toContain(`${SOLUTIONS.length} solutions`);
+    });
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    // Let the resolved lookup land before asserting the absence.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(hubNotes()).toHaveLength(0);
+    expect(countsLine()).toContain("0 deprecated");
+  });
+});

@@ -592,6 +592,11 @@ export async function installWorkbook(
  * creating ours, look for an EXISTING function with this alias from another
  * source; if one exists, delete our deterministic copy (if any) and defer to
  * it - leaving exactly one provider.
+ *
+ * When that listing cannot be read the PUT still goes ahead (it is idempotent
+ * and creates nothing that was not asked for), but the outcome SAYS the
+ * duplicate check did not run (DBT-176) - a plain "installed" over an unread
+ * listing hid the one failure this function exists to prevent.
  */
 export async function installParser(
   azure: AzureManagement,
@@ -602,12 +607,13 @@ export async function installParser(
   const searchPath = `${workspaceResourceId(ws)}/savedSearches/${searchId}`;
   const label = `${parser.displayName} (parser)`;
   const arm = safeAzureManagement(azure);
-  // Which resources already provide this alias? (Best-effort: if the listing
-  // fails, fall through to a plain idempotent PUT.) listAllPages needs the
-  // port's requestUrl, which the safe view deliberately lacks, so this one
-  // keeps its own guard.
+  // Which resources already provide this alias? (If the listing fails, fall
+  // through to a plain idempotent PUT and report the unread listing.)
+  // listAllPages needs the port's requestUrl, which the safe view deliberately
+  // lacks, so this one keeps its own guard.
   const aliasLc = parser.alias.toLowerCase();
   let othersProvideAlias = false;
+  let listingUnread = "";
   try {
     const all = await listAllPages(
       azure,
@@ -623,8 +629,8 @@ export async function installParser(
       const alias = str(prop(prop(s, "properties"), "functionAlias")).toLowerCase();
       return alias === aliasLc && name !== searchId;
     });
-  } catch {
-    /* listing unavailable - fall through to the plain PUT below */
+  } catch (err) {
+    listingUnread = err instanceof Error ? err.message : String(err);
   }
   if (othersProvideAlias) {
     // Another resource already provides this function. Remove OUR own copy
@@ -643,11 +649,28 @@ export async function installParser(
     apiVersion: SAVED_SEARCHES_API_VERSION,
     body: parserResourceBody(parser),
   });
-  if (!attempt.ok) return { name: label, ok: false, detail: attempt.error };
+  const unreadNote =
+    listingUnread === ""
+      ? ""
+      : `the saved searches could not be read (${listingUnread})`;
+  const failed = (detail: string): ContentInstallOutcome => ({
+    name: label,
+    ok: false,
+    detail: unreadNote === "" ? detail : `${detail}; ${unreadNote}`,
+  });
+  if (!attempt.ok) return failed(attempt.error);
   const res = attempt.response;
-  return is2xx(res.status)
-    ? { name: label, ok: true, detail: "installed" }
-    : { name: label, ok: false, detail: failDetail(res) };
+  if (!is2xx(res.status)) return failed(failDetail(res));
+  return {
+    name: label,
+    ok: true,
+    detail:
+      unreadNote === ""
+        ? "installed"
+        : `installed, but ${unreadNote}, so another function with the alias ` +
+          `${parser.alias} was not checked for - if a query reports multiple ` +
+          "functions with the same name, remove the duplicate",
+  };
 }
 
 // ---------------------------------------------------------------------------

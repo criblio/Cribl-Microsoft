@@ -43,7 +43,7 @@ import type {
   InstalledContentState,
   ParsedAnalyticRule,
   ParserResource,
-  SolutionCatalogEntry,
+  SolutionCatalogLookup,
   WorkspaceScope,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -112,7 +112,10 @@ export function ContentInstallSection({
 
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [catalog, setCatalog] = useState<SolutionCatalogEntry | null>(null);
+  // The Content Hub lookup, null until a load with a committed scope ran it.
+  // Three answers (DBT-176): a failed read is NOT "not in the catalog".
+  const [catalogLookup, setCatalogLookup] = useState<SolutionCatalogLookup | null>(null);
+  const catalog = catalogLookup?.kind === "found" ? catalogLookup.entry : null;
   const [installed, setInstalled] = useState<InstalledContentState | null>(null);
   const [rules, setRules] = useState<ParsedAnalyticRule[]>([]);
   const [workbooks, setWorkbooks] = useState<AvailableWorkbook[]>([]);
@@ -186,12 +189,13 @@ export function ContentInstallSection({
     setLoadError("");
     if (!keepOutcomes) setOutcomes([]);
     try {
-      const entry = scopeCommitted
+      const lookup = scopeCommitted
         ? await findSolutionCatalogEntry(ports.azure, scope, solutionName, ports.logger)
         : null;
-      setCatalog(entry);
+      setCatalogLookup(lookup);
+      const contentId = lookup?.kind === "found" ? lookup.entry.contentId : undefined;
       const state = scopeCommitted
-        ? await installedContentState(ports.azure, scope, entry?.contentId, ports.logger)
+        ? await installedContentState(ports.azure, scope, contentId, ports.logger)
         : null;
       setInstalled(state);
       const [repoRules, repoWorkbooks, repoParsers] = await Promise.all([
@@ -221,7 +225,7 @@ export function ContentInstallSection({
 
   // Reset when the solution changes (the section is keyed by solution too).
   useEffect(() => {
-    setCatalog(null);
+    setCatalogLookup(null);
     setInstalled(null);
     setRules([]);
     setWorkbooks([]);
@@ -597,13 +601,29 @@ export function ContentInstallSection({
           Solution{" "}
           <InfoTip text="Install the Content Hub solution package itself (its ARM template, deployed to your workspace). This brings in the solution's own rule/workbook/parser definitions the same way the portal Content Hub does." />
         </h3>
-        {catalog === null ? (
+        {/* DBT-176: three different answers, three different sentences. Before,
+            a failed catalog read and a genuine miss both left `catalog` null,
+            and the section kept saying "Load to look up..." after a load. */}
+        {catalogLookup === null ? (
           <p className="panel-desc">
             {scopeCommitted
               ? "Load to look up this solution in Content Hub."
               : "Commit a target scope, then load to look up the Content Hub package."}
           </p>
-        ) : solutionIsInstalled ? (
+        ) : catalogLookup.kind === "unreadable" ? (
+          <p className="field-hint content-install-catalog-unreadable">
+            Could not read the Content Hub catalog ({catalogLookup.reason}), so
+            whether this solution has a Content Hub package is unknown. Load
+            again to retry; its rules and workbooks below can still be installed.
+          </p>
+        ) : catalogLookup.kind === "not-found" ? (
+          <p className="panel-desc content-install-catalog-missing">
+            No Content Hub package matches this solution among the{" "}
+            {catalogLookup.packagesSeen} packages in this workspace&apos;s
+            catalog, so the solution package itself cannot be installed from
+            here. Its rules and workbooks below can still be installed.
+          </p>
+        ) : catalog === null ? null : solutionIsInstalled ? (
           <p className="content-install-installed">
             Installed
             {solutionInstalledVersion !== null
