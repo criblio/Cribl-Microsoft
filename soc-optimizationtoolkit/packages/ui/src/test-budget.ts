@@ -9,8 +9,8 @@
  * tests here are CPU-bound - React development builds rendering a few
  * thousand happy-dom nodes per action - so their wall time scales with how
  * busy the machine is, not with anything the test does. Run alone they take
- * 1-3s; under a full-suite gate run (667 files across every core, often with
- * other suites running beside it) the same tests took 5-37s.
+ * 1-3s; under a full-suite gate run (126 files and ~2000 tests across every
+ * core, often with other suites running beside it) the same tests took 5-37s.
  *
  * MEASURED, 2026-10-27, the full packages/ui suite on a 22-thread Windows host
  * shared with other suites:
