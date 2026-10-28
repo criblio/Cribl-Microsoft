@@ -29,6 +29,7 @@
 
 import type { KvDocumentLoad } from "../../ports/kv-document-store";
 import {
+  changedValueKeys,
   PLAN_VALUE_KEYS,
   defaultPlanValues,
   isPlanValueKey,
@@ -413,9 +414,7 @@ export function tickState(
   if (tick.fingerprint === planFingerprint(p.planValues, dependsOnValues)) {
     return { status: "done" };
   }
-  const changedKeys = [...new Set(dependsOnValues)]
-    .sort()
-    .filter((k) => (tick.values[k] ?? "").trim() !== (p.planValues[k] ?? "").trim());
+  const changedKeys = changedValueKeys(tick.values, p.planValues, [...new Set(dependsOnValues)].sort());
   // A fingerprint mismatch with no named key means the step's dependency list
   // itself changed; every listed key is then reported rather than none.
   return {

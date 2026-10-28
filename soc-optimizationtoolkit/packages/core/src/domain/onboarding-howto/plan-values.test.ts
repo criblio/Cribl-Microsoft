@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
+  changedValueKeys,
   defaultPlanValues,
   missingValues,
   planFingerprint,
@@ -65,6 +66,30 @@ describe("planFingerprint", () => {
     expect(planFingerprint({ ...base, hubName: " h1 " }, ["hubName"])).toBe(
       planFingerprint(base, ["hubName"]),
     );
+  });
+});
+
+// AZR-49: the one has-this-value-changed rule, shared by How-to tick staleness
+// (progress-document tickState) and Validate result staleness (validate-state).
+describe("changedValueKeys", () => {
+  it("names only the listed keys whose trimmed values differ, in the order given", () => {
+    const a = { ...defaultPlanValues(null), namespace: "ns1", resourceGroup: "rg1", hubName: "h" };
+    const b = { ...a, namespace: " ns1 ", resourceGroup: "rg2", hubName: "h2" };
+    expect(changedValueKeys(a, b, ["hubName", "namespace", "resourceGroup"])).toEqual(["hubName", "resourceGroup"]);
+    expect(changedValueKeys(a, b, ["namespace"])).toEqual([]);
+  });
+
+  it("reads an unset value as blank, so unset and spaces are the same", () => {
+    expect(changedValueKeys({}, { namespace: "  " }, ["namespace"])).toEqual([]);
+    expect(changedValueKeys({}, { namespace: "x" }, ["namespace"])).toEqual(["namespace"]);
+  });
+
+  it("agrees with planFingerprint: same fingerprint exactly when nothing listed changed", () => {
+    const a = { ...defaultPlanValues(null), namespace: "ns1" };
+    for (const b of [{ ...a }, { ...a, namespace: "ns1 " }, { ...a, namespace: "NS1" }, { ...a, hubName: "z" }]) {
+      const keys = ["namespace"] as const;
+      expect(changedValueKeys(a, b, keys).length === 0).toBe(planFingerprint(a, keys) === planFingerprint(b, keys));
+    }
   });
 });
 

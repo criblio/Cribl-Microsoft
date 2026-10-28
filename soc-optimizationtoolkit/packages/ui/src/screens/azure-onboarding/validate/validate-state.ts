@@ -19,6 +19,7 @@
 import {
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
+  changedValueKeys,
   fillTemplate,
   filledPlanValues,
   howToStep,
@@ -335,9 +336,18 @@ export function verdictTitle(stepId: string, values: PlanValues): string {
   return step === undefined ? stepId : fillTemplate(step.title, filledPlanValues(values));
 }
 
-/** The plan values that differ (trimmed) between the run and now, in key order. */
+/**
+ * The plan values that differ between the run and now, in key order - core's
+ * changedValueKeys, the same rule a How-to tick uses (AZR-49).
+ *
+ * EVERY plan value counts, on purpose. A tick only watches its own step's
+ * values; a Validate run is retired by any change, because its checks also
+ * read values beyond each check's required list (expectations, arrival hubs,
+ * the Defender export name) and missing one would show an answer about other
+ * values as current. The cost is a re-run after an unrelated edit.
+ */
 export function changedPlanKeys(ran: PlanValues, now: PlanValues): readonly PlanValueKey[] {
-  return PLAN_VALUE_KEYS.filter((k) => (ran[k] ?? "").trim() !== (now[k] ?? "").trim());
+  return changedValueKeys(ran, now, PLAN_VALUE_KEYS);
 }
 
 /**

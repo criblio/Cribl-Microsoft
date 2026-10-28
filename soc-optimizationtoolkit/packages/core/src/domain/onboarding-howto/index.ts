@@ -6,7 +6,6 @@
  */
 
 export {
-  NOT_ONBOARDABLE,
   ONBOARDING_SOURCES,
   isAutomatable,
   isOnboardingSourceId,
@@ -16,7 +15,6 @@ export type {
   CriblInputType,
   EmitterKind,
   HubNaming,
-  NotOnboardable,
   OnboardingSource,
   OnboardingSourceId,
   OnboardingTransport,
@@ -27,10 +25,12 @@ export {
   DEFAULT_FLOW_LOG_CONTAINER,
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
+  changedValueKeys,
   defaultPlanValues,
   isPlanValueKey,
   missingValues,
   planFingerprint,
+  planValueOf,
   sanitizePlanValue,
 } from "./plan-values";
 export type { PlanValueKey, PlanValueLabel, PlanValues } from "./plan-values";

@@ -101,7 +101,26 @@ export function defaultPlanValues(
  */
 export function planFingerprint(values: PlanValues, keys: readonly PlanValueKey[]): string {
   const sorted = [...new Set(keys)].sort();
-  return JSON.stringify(sorted.map((k) => [k, (values[k] ?? "").trim()]));
+  return JSON.stringify(sorted.map((k) => [k, planValueOf(values, k)]));
+}
+
+/** A plan value as every comparison reads it: unset is "", and spaces at either end do not count. */
+export function planValueOf(values: Partial<PlanValues>, key: PlanValueKey): string {
+  return (values[key] ?? "").trim();
+}
+
+/**
+ * The listed keys whose value differs between `a` and `b`, in the order given.
+ * THE one has-this-value-changed rule (AZR-49): a How-to tick's staleness and a
+ * Validate result's staleness both ask it, so a step can never read done while
+ * its check reads stale over a difference only one of them counts.
+ */
+export function changedValueKeys(
+  a: Partial<PlanValues>,
+  b: Partial<PlanValues>,
+  keys: readonly PlanValueKey[],
+): readonly PlanValueKey[] {
+  return keys.filter((k) => planValueOf(a, k) !== planValueOf(b, k));
 }
 
 /** The listed keys that are unset (blank after trimming), in the order given. */
