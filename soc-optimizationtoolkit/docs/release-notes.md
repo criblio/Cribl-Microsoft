@@ -72,6 +72,58 @@ fetches from GitHub when its content cache refuses a read or a write, and shows
 a note saying so; it no longer fails the index load with a message that blamed
 the GitHub token. Sample intake says when a saved vendor name could not be read.
 
+**A DCE toggle no longer deletes options it does not show, and a failed save is
+said (DBT-172, DBT-173).** Each Sentinel Integration DCE toggle used to rewrite
+the whole saved options record, dropping any key the app does not manage (older
+`_comments`, a section a newer version wrote). It now changes only the one
+value. When the save fails, the page says the change was not saved, with the
+reason, and the toggle shows the saved value again instead of looking saved.
+"Retry reading options" shows "Retrying..." while it runs, and a retry that
+fails again says how many reads have failed in a row.
+
+**More refused saves and reads are said (DBT-175).** In Sentinel Integration,
+"Use this vendor" shows "Saving..." and turns to "Saved" only once the name is
+stored; a refused save is shown with its reason. When a saved column order
+cannot be read, saved or removed, one note under sample intake says which, and
+what that means for the next sample. SIEM Migration says when a saved analysis
+could not be read, rather than showing an empty page as if none was saved.
+Repositories offers "Clear token" when it cannot read whether a token is saved.
+
+**An unreadable Content Hub catalog is no longer "not in the catalog" (DBT-176).**
+Sentinel Integration's Enable Sentinel Content section used to keep saying
+"Load to look up this solution in Content Hub" after a load when the catalog
+could not be read. It now says the catalog could not be read, with the reason,
+or that no package matches among the packages it read. An empty catalog counts
+as unreadable. The solution browser says when it could not read the catalog, so
+its deprecation flags come from the repository alone. A parser install whose
+check for an existing function of the same name could not run now says so.
+
+**The capture filter warning recognises the form Cribl's events carry
+(DBT-169).** In Sentinel Integration's capture from Cribl, a filter written as
+`__inputId === "<type>:<id>"` or `__inputId.startsWith("<type>:<id>:")` used to
+draw the "may capture from a different source" warning, and a filter naming the
+bare input id, which matched nothing when captured, drew none. Now the typed
+forms are silent. The bare id gets a warning that the capture will likely be
+empty, with the filter to write instead. A `startsWith` prefix that also selects
+other sources (`startsWith("syslog:")`) warns that the capture may be a mixture.
+A filter written with `__inputId.endsWith(":<id>")`, silent before, now gets
+the different-source warning.
+
+**The Dataflow screen marks routes it cannot confirm (DBT-170).** The Live
+Workgroup View lists, under "Unconfirmed routes", each flow whose route filter
+names its source only by the bare input id, with an (i) saying why and what to
+write instead. The flow picker adds the same words. Azure Native Source
+Onboarding already used them for the same route.
+
+**Validate words a look-alike object by what it is (DBT-178, DBT-179).** On
+Azure Native Source Onboarding, a result found under another name used to read
+"which targets the plan's hub" for every check, which was not true for policy
+assignments and remediations. Each check now says what it matched on, and how
+many others like it were found. The Event Grid subscription check now needs the
+plan's storage account. It reports a subscription whose queue or topic is on
+another account as different. When Azure does not say which account it uses,
+the result reads as could not be read.
+
 ## 1.12.9
 
 **An empty worker-group list now says why (DBT-134).** A tester saw a worker

@@ -463,6 +463,14 @@ Two correctness rules, both learned the hard way and both easy to get wrong:
 > place. `captureFilterWarning` deliberately does NOT validate the JavaScript;
 > Cribl evaluates the expression, and a filter that fails to compile comes back
 > carrying Cribl's own message, which beats a guess from here.
+>
+> **[SUPERSEDED in part 2026-10-28 - DBT-169]** It no longer checks only that
+> the clause is there. It reads the `__inputId` clauses through
+> `capture-filter/input-id.ts` and also warns when a clause names the source by
+> its bare id (which matched nothing when captured), when a `startsWith` prefix
+> also takes in other sources, and when the clause names another source -
+> `endsWith(":<id>")` included, which used to be silent. It still does not
+> validate the JavaScript.
 
 Filter expressions are **generated into the same vendor-knowledge asset as the
 packs** (`generate-vendor-packs.mjs`, extended to keep the `data_stream`
