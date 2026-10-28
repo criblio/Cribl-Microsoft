@@ -35,9 +35,11 @@ import {
   mergeJourneyLinks,
   OPTIONS_LOADING,
   OPTIONS_UNREADABLE_NOTICE,
-  optionsReadFromSave,
+  beginOptionsRetry,
+  optionsReadFailureLine,
   optionsReadFromSettled,
   planOptionsSave,
+  settleOptionsSave,
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
@@ -140,8 +142,10 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const SETUP_KEY = 'setupComplete';
 // Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
-// persisted through the same SecretsStore adapter as appMode. Saves go
-// through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
+// persisted through the same SecretsStore adapter as appMode. An inline save
+// is planned by @soc/ui planOptionsSave, which applies the edit with @soc/core
+// applyOptionsPatch to the RAW record the read returned (the defaults when it
+// was never written), so unmanaged keys in the blob survive (DBT-172).
 const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
@@ -645,17 +649,18 @@ function App() {
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
-  // refreshed by saveAppOptions (the Integrate page's DCE toggle persists
-  // through it). The read is held WITH what it said - loaded, absent or
-  // unreadable - because the tolerant codec turns a failed read into the
+  // refreshed by persistOperation's save (the Integrate page's DCE toggle).
+  // The read is held WITH what it said - loaded, absent, unreadable or
+  // retrying - because the tolerant codec turns a failed read into the
   // defaults, and saving over a failed read wrote those defaults over the
   // operator's real options (DBT-158). appOptions is what screens render;
   // whether it may be saved over is planOptionsSave's decision.
   const [optionsRead, setOptionsRead] = useState<OptionsRead>(OPTIONS_LOADING);
   const appOptions = optionsRead.options;
-  // Why the last inline options save was refused, when the read had not
-  // settled yet (the unreadable case renders from optionsRead itself).
-  const [optionsSaveRefusal, setOptionsSaveRefusal] = useState<string | null>(null);
+  // Why the last inline options save did not land: refused because the read
+  // had not settled, or its PUT failed (DBT-173). The unreadable case renders
+  // from optionsRead itself.
+  const [optionsSaveNotice, setOptionsSaveNotice] = useState<string | null>(null);
 
   // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
   // (light | dark | system) persists as the plain appTheme KV entry (the
@@ -732,39 +737,51 @@ function App() {
     };
   }, []);
 
-  // The options save callback (the small shared save this shell owns): one
-  // plain KV entry, with the shell's parsed copy refreshed on every save so
-  // onboarding defaults follow immediately. The dedicated Options screen was
-  // RETIRED (2026-07-14, never used); deployment/naming defaults apply from
-  // DEFAULT_APP_OPTIONS and the surviving inline edits persist through here.
-  const saveAppOptions = useCallback(async (serialized: string) => {
-    await appStateStore.set(APP_OPTIONS_KEY, serialized);
-    setOptionsRead(optionsReadFromSave(serialized));
-  }, []);
   // Persist an inline OperationOptions edit (the Integrate page's DCE capability
-  // toggle) through the same appOptions entry - only over a read that
-  // answered. While the read is loading or unreadable planOptionsSave refuses
-  // and NOTHING is PUT: the stored options may exist, and the document this
-  // shell holds is the defaults (DBT-158).
+  // toggle) through the one appOptions KV entry - only over a read that
+  // answered. While the read is loading, unreadable or retrying planOptionsSave
+  // refuses and NOTHING is PUT: the stored options may exist, and the document
+  // this shell holds is the defaults (DBT-158). The PUT writes the stored
+  // record PATCHED, not a canonical rewrite (DBT-172). A failed PUT is caught:
+  // settleOptionsSave keeps the read as it was, so the controlled toggle shows
+  // the stored value again, and the notice says the change was not saved
+  // (DBT-173). The dedicated Options screen was RETIRED (2026-07-14); this is
+  // the only options write the shell owns.
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
-      const plan = planOptionsSave(optionsRead, (options) => ({ ...options, operation }));
+      const plan = planOptionsSave(optionsRead, { operation });
       if (plan.kind === 'refused') {
-        setOptionsSaveRefusal(plan.reason);
+        setOptionsSaveNotice(plan.reason);
         return;
       }
-      setOptionsSaveRefusal(null);
-      void saveAppOptions(plan.serialized);
+      setOptionsSaveNotice(null);
+      void (async () => {
+        const [result] = await Promise.allSettled([
+          appStateStore.set(APP_OPTIONS_KEY, plan.serialized),
+        ]);
+        // The read settles against the CURRENT state (another save may have
+        // landed meanwhile); the notice depends only on the PUT's result.
+        setOptionsRead((current) => settleOptionsSave(current, plan.serialized, result).read);
+        setOptionsSaveNotice(settleOptionsSave(optionsRead, plan.serialized, result).notice);
+      })();
     },
-    [optionsRead, saveAppOptions],
+    [optionsRead],
   );
-  // Retry an unreadable options read: re-read ONLY that key. A read that
-  // answers lifts the save block; another refusal keeps it.
+  // Retry an unreadable options read: re-read ONLY that key. beginOptionsRetry
+  // holds 'retrying' while the read is in flight (the retrySetupRead
+  // 'loading' pattern) and returns null for a second click, so two reads never
+  // race. A read that answers lifts the save block; another failure counts as
+  // a new one (optionsReadFailureLine says so).
   const retryOptionsRead = useCallback(async () => {
-    setOptionsSaveRefusal(null);
+    const retrying = beginOptionsRetry(optionsRead);
+    if (retrying === null) {
+      return;
+    }
+    setOptionsSaveNotice(null);
+    setOptionsRead(retrying);
     const [read] = await Promise.allSettled([appStateStore.get(APP_OPTIONS_KEY)]);
-    setOptionsRead(optionsReadFromSettled(read));
-  }, []);
+    setOptionsRead(optionsReadFromSettled(read, retrying));
+  }, [optionsRead]);
 
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
@@ -1805,20 +1822,28 @@ function App() {
   // The options-read notice (DBT-158), rendered on every route that shows the
   // persisted options: while the appOptions read is unreadable the values on
   // screen are the defaults, not the operator's, and inline saves are
-  // refused - say so, and offer the retry that lifts the block.
-  const optionsNotice =
-    optionsRead.state === 'unreadable' ? (
-      <div className="connection-notice" role="status">
-        <p>{OPTIONS_UNREADABLE_NOTICE}</p>
-        <div className="panel-controls">
-          <button className="run-button" onClick={() => void retryOptionsRead()}>
-            Retry reading options
-          </button>
-        </div>
+  // refused - say so, and offer the retry that lifts the block. While the
+  // retry is in flight the button is disabled; a retry that failed adds its
+  // own line, so it reads as a new failure (DBT-173).
+  const optionsUnreadable = optionsRead.state === 'unreadable' || optionsRead.state === 'retrying';
+  const optionsFailureLine = optionsReadFailureLine(optionsRead);
+  const optionsNotice = optionsUnreadable ? (
+    <div className="connection-notice" role="status">
+      <p>{OPTIONS_UNREADABLE_NOTICE}</p>
+      {optionsFailureLine !== null && <p>{optionsFailureLine}</p>}
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          disabled={optionsRead.state === 'retrying'}
+          onClick={() => void retryOptionsRead()}
+        >
+          {optionsRead.state === 'retrying' ? 'Retrying...' : 'Retry reading options'}
+        </button>
       </div>
-    ) : optionsSaveRefusal !== null ? (
-      <p className="connection-notice" role="status">{optionsSaveRefusal}</p>
-    ) : null;
+    </div>
+  ) : optionsSaveNotice !== null ? (
+    <p className="connection-notice" role="status">{optionsSaveNotice}</p>
+  ) : null;
 
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
@@ -1858,7 +1883,7 @@ function App() {
           operationDefaults={appOptions.operation}
           // Unreadable options: the toggle is read-only (optionsNotice says
           // why); persistOperation refuses regardless (DBT-158).
-          {...(optionsRead.state === 'unreadable' ? {} : { onOperationChange: persistOperation })}
+          {...(optionsUnreadable ? {} : { onOperationChange: persistOperation })}
           roleGuidance={ROLE_GUIDANCE}
         />
       </PortsProvider>
