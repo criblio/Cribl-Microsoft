@@ -5,11 +5,11 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  findInputIdClauses,
   inputIdValue,
   inputRouteFilter,
   matchInputIdFilter,
   parseInputIdClause,
+  readInputIdTest,
 } from "./input-id";
 
 const EH = { type: "eventhub", id: "hub" };
@@ -80,10 +80,11 @@ describe("matchInputIdFilter", () => {
 });
 
 /**
- * One clause grammar, two callers (DBT-169 review): the route parser anchors
- * it on the whole filter, the capture warning finds it inside a larger one.
+ * One clause grammar, two callers (DBT-169 review): the route parser reads a
+ * whole filter with it, the capture warning each operand filter-structure.ts
+ * splits a capture filter into (DBT-190).
  */
-describe("parseInputIdClause / findInputIdClauses", () => {
+describe("parseInputIdClause / readInputIdTest", () => {
   it("reads each form, in any quote", () => {
     expect(parseInputIdClause("__inputId=='syslog:a'")).toEqual({ kind: "inputs", ids: ["syslog:a"] });
     expect(parseInputIdClause(' __inputId === "a" ')).toEqual({ kind: "inputs", ids: ["a"] });
@@ -98,22 +99,70 @@ describe("parseInputIdClause / findInputIdClauses", () => {
     });
   });
 
-  it("parse is anchored; find is not", () => {
-    const extended = "__inputId=='syslog:a' && status >= 400";
-    expect(parseInputIdClause(extended)).toBeNull();
-    expect(findInputIdClauses(extended)).toEqual([{ kind: "inputs", ids: ["syslog:a"] }]);
-    expect(
-      findInputIdClauses("__inputId.startsWith('x:') || ['a'].includes(__inputId) || __inputId=='b'"),
-    ).toEqual([
-      { kind: "inputs", ids: ["b"] },
-      { kind: "prefix", value: "x:" },
-      { kind: "inputs", ids: ["a"] },
-    ]);
+  it("is anchored: an extended filter is not one clause", () => {
+    expect(parseInputIdClause("__inputId=='syslog:a' && status >= 400")).toBeNull();
+    expect(parseInputIdClause("my__inputId=='syslog:a'")).toBeNull();
+    expect(readInputIdTest("__inputId=='syslog:a' && status >= 400")).toBeNull();
+  });
+
+  it("reads the reversed equality (DBT-190)", () => {
+    expect(parseInputIdClause("'syslog:a' == __inputId")).toEqual({ kind: "inputs", ids: ["syslog:a"] });
+    expect(parseInputIdClause('"a" === __inputId')).toEqual({ kind: "inputs", ids: ["a"] });
+  });
+
+  it("decodes escapes in a literal, and refuses a template substitution (DBT-190)", () => {
+    expect(parseInputIdClause(String.raw`__inputId=="syslog:say \"hi\""`)).toEqual({
+      kind: "inputs",
+      ids: ['syslog:say "hi"'],
+    });
+    expect(parseInputIdClause(String.raw`__inputId=='a\\b\x41B\n'`)).toEqual({
+      kind: "inputs",
+      ids: ["a\\bAB\n"],
+    });
+    expect(parseInputIdClause(String.raw`['it\'s', "b"].includes(__inputId)`)).toEqual({
+      kind: "inputs",
+      ids: ["it's", "b"],
+    });
+    expect(parseInputIdClause("__inputId==`syslog:${x}`")).toBeNull();
   });
 
   it("does not read a mismatched quote or an inequality as a clause", () => {
     expect(parseInputIdClause("__inputId=='a\"")).toBeNull();
-    expect(findInputIdClauses("__inputId!='a'")).toEqual([]);
-    expect(findInputIdClauses("__inputId !== 'a'")).toEqual([]);
+    expect(parseInputIdClause("__inputId!='a'")).toBeNull();
+    expect(parseInputIdClause("__inputId !== 'a'")).toBeNull();
+  });
+
+  it("reads the capture-only tests, each with its own negation", () => {
+    expect(readInputIdTest("__inputId=='syslog:a'")).toEqual({
+      kind: "clause",
+      clause: { kind: "inputs", ids: ["syslog:a"] },
+      negated: false,
+    });
+    expect(readInputIdTest("__inputId !== 'syslog:a'")).toEqual({
+      kind: "clause",
+      clause: { kind: "inputs", ids: ["syslog:a"] },
+      negated: true,
+    });
+    expect(readInputIdTest("'syslog:a' != __inputId")).toEqual({
+      kind: "clause",
+      clause: { kind: "inputs", ids: ["syslog:a"] },
+      negated: true,
+    });
+    expect(readInputIdTest("__inputId.endsWith(':a')")).toEqual({ kind: "suffix", value: ":a" });
+    expect(readInputIdTest('__inputId.split(":")[1] === "a"')).toEqual({
+      kind: "segment",
+      id: "a",
+      negated: false,
+    });
+    expect(readInputIdTest("__inputId.split(':')[1] != 'a'")).toEqual({
+      kind: "segment",
+      id: "a",
+      negated: true,
+    });
+    expect(readInputIdTest('typeof __inputId === "string"')).toEqual({ kind: "guard", holds: true });
+    expect(readInputIdTest("typeof __inputId !== 'undefined'")).toEqual({ kind: "guard", holds: true });
+    expect(readInputIdTest("typeof __inputId === 'undefined'")).toEqual({ kind: "guard", holds: false });
+    expect(readInputIdTest("typeof __inputId !== 'string'")).toEqual({ kind: "guard", holds: false });
+    expect(readInputIdTest("__inputId.length > 3")).toBeNull();
   });
 });

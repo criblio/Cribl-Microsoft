@@ -415,10 +415,10 @@ describe("captureFilterWarning - the typed __inputId form (DBT-169)", () => {
     ).toBeNull();
   });
 
-  it("is SILENT for an includes list naming the typed value", () => {
+  it("is SILENT for an includes list naming only this source's forms", () => {
     expect(
       captureFilterWarning(
-        "['http:in_http','syslog:in_syslog'].includes(__inputId)",
+        "['in_syslog','syslog:in_syslog'].includes(__inputId)",
         "in_syslog",
         "syslog",
       ),
@@ -499,7 +499,9 @@ describe("captureFilterWarning - the typed __inputId form (DBT-169)", () => {
   });
 
   it("never warns about the filter the app itself writes, whatever the id", () => {
-    for (const id of ["in_syslog", "a.b*c+d", "in(x)", "it's", "a$b^c"]) {
+    // The last two need escapes in the literal JSON.stringify writes (DBT-190:
+    // the grammar read no escapes, so the app warned about its own filter).
+    for (const id of ["in_syslog", "a.b*c+d", "in(x)", "it's", "a$b^c", 'say "hi"', "a\\b"]) {
       expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id, "syslog")).toBeNull();
       expect(captureFilterWarning(buildCaptureFilter({ inputId: id }), id)).toBeNull();
       expect(
@@ -510,5 +512,116 @@ describe("captureFilterWarning - the typed __inputId form (DBT-169)", () => {
         ),
       ).toBeNull();
     }
+  });
+});
+
+/**
+ * DBT-190: the warning reads the boolean STRUCTURE around the __inputId
+ * clauses, not just the clauses. DBT-169 lifted each clause out and asked
+ * whether it named the source, so a negated clause, or one joined by || to a
+ * clause naming another source, read the same as a plain one and went silent
+ * while the capture took a mixture.
+ */
+describe("captureFilterWarning - the structure around __inputId (DBT-190)", () => {
+  const WRITE =
+    'Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:")';
+  const NEGATED = `This filter negates its __inputId test for "in_syslog", so it captures from other sources rather than only this one. ${WRITE} without the negation.`;
+  const alsoOther = (names: string) =>
+    `This filter's __inputId test names another source as well as "in_syslog" (${names}), so it may capture from more than the one selected. ${WRITE} to select only this source.`;
+  const OTHER =
+    'This filter references __inputId but not "in_syslog", so it may capture from a different source than the one selected.';
+  const UNCHECKED = `This filter's __inputId test is in a form this app does not read, so it was not checked against "in_syslog". ${WRITE} if it should select only this source.`;
+  const warn = (filter: string) => captureFilterWarning(filter, "in_syslog", "syslog");
+
+  it("warns on a negated clause that names the selected source", () => {
+    expect(warn("!(__inputId=='syslog:in_syslog')")).toBe(NEGATED);
+    expect(warn("!__inputId.startsWith('syslog:in_syslog:')")).toBe(NEGATED);
+    expect(warn("__inputId != 'syslog:in_syslog'")).toBe(NEGATED);
+    expect(warn("status >= 400 && !(__inputId=='syslog:in_syslog' && x)")).toBe(NEGATED);
+    // Negating the bare form, which matches nothing, captures everything.
+    expect(warn("!(__inputId=='in_syslog')")).toBe(NEGATED);
+    // Without a type, the segment form inputPredicate writes still decides.
+    const own = buildCaptureFilter({ inputId: "in_syslog" });
+    expect(captureFilterWarning(`!${own}`, "in_syslog")).toBe(
+      `This filter negates its __inputId test for "in_syslog", so it captures from other sources rather than only this one. Write ${own} without the negation.`,
+    );
+  });
+
+  it("stays silent when negations cancel or exclude only OTHER sources", () => {
+    expect(warn("!!(__inputId=='syslog:in_syslog')")).toBeNull();
+    expect(warn("__inputId=='syslog:in_syslog' && __inputId != 'http:in_http'")).toBeNull();
+    expect(
+      warn("__inputId=='syslog:in_syslog' && !(__inputId=='syslog:in_syslog' && status >= 400)"),
+    ).toBeNull();
+  });
+
+  it("warns when the filter names a second source", () => {
+    expect(warn("__inputId=='syslog:in_syslog' || __inputId=='http:in_http'")).toBe(
+      alsoOther('"http:in_http"'),
+    );
+    // The DBT-169 pin had this silent: the list takes in_http as well.
+    expect(warn("['http:in_http','syslog:in_syslog'].includes(__inputId)")).toBe(
+      alsoOther('"http:in_http"'),
+    );
+    expect(
+      warn("__inputId.startsWith('syslog:in_syslog:') || __inputId.startsWith('http:')"),
+    ).toBe(alsoOther('"http:"'));
+  });
+
+  it("says a conjunction with another source captures nothing", () => {
+    expect(warn("__inputId=='syslog:in_syslog' && __inputId=='http:in_http'")).toBe(
+      `This filter's __inputId tests cannot all hold for "in_syslog", so it will likely capture nothing. ${WRITE} instead.`,
+    );
+  });
+
+  it("warns when || lets events that name no source through", () => {
+    expect(warn("__inputId=='syslog:in_syslog' || status >= 400")).toBe(
+      `This filter's __inputId test for "in_syslog" does not hold on every branch (an || or ! lets other events through), so it may capture from other sources too. ${WRITE} and join any other test with &&.`,
+    );
+  });
+
+  it("gives endsWith a true message", () => {
+    const ENDS = `This filter's __inputId.endsWith() test selects "in_syslog" but also any other source whose __inputId ends the same way, and misses events whose __inputId carries a further segment after the id (syslog adds the sender). ${WRITE} instead.`;
+    expect(warn("__inputId.endsWith(':in_syslog')")).toBe(ENDS);
+    expect(warn("__inputId.endsWith(':in_syslog') && /TRAFFIC/.test(_raw)")).toBe(ENDS);
+    // A suffix this source's value does not end with names another source.
+    expect(warn("__inputId.endsWith(':in_http')")).toBe(OTHER);
+  });
+
+  it("reads the reversed comparison", () => {
+    expect(warn("'syslog:in_syslog' == __inputId")).toBeNull();
+    expect(warn('"syslog:in_syslog" === __inputId && status >= 400')).toBeNull();
+    expect(warn("'http:in_http' == __inputId")).toBe(OTHER);
+  });
+
+  it("does not read an identifier that merely ends in __inputId", () => {
+    expect(warn("my__inputId=='syslog:in_syslog'")).toBe(
+      `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "in_syslog". Add ${buildCaptureFilter({ inputId: "in_syslog" })} unless that is what you want.`,
+    );
+  });
+
+  it("reads quotes and backslashes escaped inside a literal", () => {
+    expect(captureFilterWarning("__inputId=='syslog:it\\'s'", "it's", "syslog")).toBeNull();
+    expect(
+      captureFilterWarning('__inputId=="syslog:say \\"hi\\""', 'say "hi"', "syslog"),
+    ).toBeNull();
+  });
+
+  it("says it could not check a structure it does not read, rather than guess", () => {
+    expect(warn("x ? __inputId=='syslog:in_syslog' : true")).toBe(UNCHECKED);
+    expect(warn("__inputId=='syslog:in_syslog' && a ? b : c")).toBe(UNCHECKED);
+    expect(warn("__inputId=='syslog:in_syslog') || (x")).toBe(UNCHECKED);
+    // An unread __inputId test the structure still bounds stays silent: the
+    // conjunction with the typed clause holds whatever it says.
+    expect(warn("__inputId=='syslog:in_syslog' && __inputId.length > 3")).toBeNull();
+    expect(warn("__inputId.length > 3")).toBe(UNCHECKED);
+    // Parenthesised, a ternary is one opaque test.
+    expect(warn("__inputId=='syslog:in_syslog' && (a ? b : c)")).toBeNull();
+  });
+
+  it("is not fooled by operators inside strings and regex literals", () => {
+    expect(warn("__inputId=='syslog:in_syslog' && /a||b/.test(_raw)")).toBeNull();
+    expect(warn("__inputId=='syslog:in_syslog' && _raw.includes(') || (')")).toBeNull();
+    expect(warn("__inputId=='syslog:in_syslog' && /[)]/.test(_raw)")).toBeNull();
   });
 });

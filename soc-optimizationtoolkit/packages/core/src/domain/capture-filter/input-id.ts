@@ -138,63 +138,163 @@ export function matchInputIdFilter(
 export type ParsedInputIdFilter = Exclude<InputIdFilter, { kind: "unparsed" }>;
 
 /**
- * A quoted JS string literal; group 2 is its body. Escapes are not read, so a
- * literal containing a backslash is not recognised (it reads as no clause).
+ * A quoted JS string literal: named group `q` is the quote, `body` the text
+ * between, ESCAPES INCLUDED (DBT-190). JSON.stringify writes `"a\"b"` for an
+ * id holding a double quote, and a grammar that stopped at the backslash read
+ * the app's own filter as no clause and warned about it. decodeLiteral turns
+ * the body into the value.
  */
-const LITERAL = String.raw`(['"\x60])((?:(?!\1)[^\\])*)\1`;
+const LITERAL = String.raw`(?<q>['"\x60])(?<body>(?:\\[\s\S]|(?!\k<q>)[^\\])*)\k<q>`;
 
 /**
- * The three `__inputId` clause forms Cribl and this app write, as regex
- * SOURCES so the same form can be anchored on a whole route filter or found
- * inside a larger capture filter. One set, two callers (DBT-169): the route
- * parser (live-architecture parseRouteFilterInputs) and the capture warning
- * (capture-filter.ts captureFilterWarning) used to carry a copy each.
+ * The `__inputId` clause forms Cribl and this app write, as regex SOURCES
+ * anchored on one expression. One set, two callers (DBT-169): the route parser
+ * (live-architecture parseRouteFilterInputs) reads a whole route filter as one
+ * clause, and the capture warning (capture-filter.ts captureFilterWarning)
+ * reads each operand filter-structure.ts splits a capture filter into. The
+ * equality is read in either order (`'x' == __inputId` is the same test).
  */
 const EQUALITY = String.raw`__inputId\s*===?\s*${LITERAL}`;
-const LIST = String.raw`\[([^\]]+)\]\.includes\(\s*__inputId\s*\)`;
+const EQUALITY_REVERSED = String.raw`${LITERAL}\s*===?\s*__inputId`;
+const LIST = String.raw`\[(?<list>[^\]]+)\]\.includes\(\s*__inputId\s*\)`;
 const PREFIX = String.raw`__inputId\.startsWith\(\s*${LITERAL}\s*\)`;
 
-function listIds(body: string): string[] {
-  return [...body.matchAll(new RegExp(LITERAL, "g"))].map((m) => m[2]);
+/**
+ * The tests only a capture filter is read for (readInputIdTest): inequality,
+ * the suffix, the `:` segment inputPredicate compares, and the `typeof` guard
+ * in front of it.
+ */
+const INEQUALITY = String.raw`__inputId\s*!==?\s*${LITERAL}`;
+const INEQUALITY_REVERSED = String.raw`${LITERAL}\s*!==?\s*__inputId`;
+const SUFFIX = String.raw`__inputId\.endsWith\(\s*${LITERAL}\s*\)`;
+const SEGMENT = String.raw`__inputId\.split\(\s*(?<sq>['"\x60]):\k<sq>\s*\)\[1\]\s*(?<op>[!=]==?)\s*${LITERAL}`;
+const GUARD = String.raw`typeof\s+__inputId\s*(?<op>[!=]==?)\s*${LITERAL}`;
+
+const ESCAPES: Readonly<Record<string, string>> = {
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  b: "\b",
+  f: "\f",
+  v: "\v",
+  0: "\0",
+  "\n": "",
+  "\r\n": "",
+};
+
+/**
+ * A literal's VALUE, or null when it is not a constant: a template literal
+ * with a `${}` substitution depends on something this reader cannot see.
+ */
+function decodeLiteral(quote: string, body: string): string | null {
+  if (quote === "`" && body.includes("${")) {
+    return null;
+  }
+  return body.replace(
+    /\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g,
+    (_, e: string) => {
+      if (e.length > 1 && (e[0] === "u" || e[0] === "x")) {
+        return String.fromCodePoint(parseInt(e.replace(/[ux{}]/g, ""), 16));
+      }
+      return ESCAPES[e] ?? e;
+    },
+  );
+}
+
+/** One form matched against the WHOLE expression (anchored), or null. */
+function matchedLiteral(pattern: string, expression: string): RegExpExecArray | null {
+  return new RegExp(`^${pattern}$`).exec(expression);
+}
+
+function literalOf(m: RegExpExecArray): string | null {
+  return decodeLiteral(m.groups?.q ?? "", m.groups?.body ?? "");
+}
+
+function listIds(body: string): string[] | null {
+  const ids: string[] = [];
+  for (const m of body.matchAll(new RegExp(LITERAL, "g"))) {
+    const id = decodeLiteral(m.groups?.q ?? "", m.groups?.body ?? "");
+    if (id === null) {
+      return null;
+    }
+    ids.push(id);
+  }
+  return ids;
 }
 
 /** The expression read as exactly ONE clause, or null when it is not one. */
 export function parseInputIdClause(expression: string): ParsedInputIdFilter | null {
   const trimmed = expression.trim();
-  const single = new RegExp(`^${EQUALITY}$`).exec(trimmed);
-  if (single !== null) {
-    return { kind: "inputs", ids: [single[2]] };
+  for (const form of [EQUALITY, EQUALITY_REVERSED]) {
+    const single = matchedLiteral(form, trimmed);
+    if (single !== null) {
+      const id = literalOf(single);
+      return id === null ? null : { kind: "inputs", ids: [id] };
+    }
   }
-  const list = new RegExp(`^${LIST}$`).exec(trimmed);
+  const list = matchedLiteral(LIST, trimmed);
   if (list !== null) {
-    const ids = listIds(list[1]);
-    if (ids.length > 0) {
+    const ids = listIds(list.groups?.list ?? "");
+    if (ids !== null && ids.length > 0) {
       return { kind: "inputs", ids };
     }
   }
-  const prefix = new RegExp(`^${PREFIX}$`).exec(trimmed);
+  const prefix = matchedLiteral(PREFIX, trimmed);
   if (prefix !== null) {
-    return { kind: "prefix", value: prefix[2] };
+    const value = literalOf(prefix);
+    return value === null ? null : { kind: "prefix", value };
   }
   return null;
 }
 
 /**
- * Every clause FOUND inside a larger expression, which an operator may have
- * extended with `&&` and other tests. Reads the clauses only: it does not
- * evaluate the boolean structure around them, so a negated or `||`-joined
- * clause is reported the same as a plain one.
+ * One operand of a capture filter read as an `__inputId` TEST: a route clause
+ * (parseInputIdClause), its inequality (`negated`), a suffix, the `:` segment
+ * inputPredicate writes, or the `typeof __inputId` guard in front of it, with
+ * whether the guard holds for the string every event carries. Null when the
+ * operand is none of these; what an unread test means is the caller's call.
  */
-export function findInputIdClauses(expression: string): ParsedInputIdFilter[] {
-  const found: ParsedInputIdFilter[] = [];
-  for (const m of expression.matchAll(new RegExp(EQUALITY, "g"))) {
-    found.push({ kind: "inputs", ids: [m[2]] });
+export type InputIdTest =
+  | { kind: "clause"; clause: ParsedInputIdFilter; negated: boolean }
+  | { kind: "suffix"; value: string }
+  | { kind: "segment"; id: string; negated: boolean }
+  | { kind: "guard"; holds: boolean };
+
+export function readInputIdTest(expression: string): InputIdTest | null {
+  const trimmed = expression.trim();
+  const clause = parseInputIdClause(trimmed);
+  if (clause !== null) {
+    return { kind: "clause", clause, negated: false };
   }
-  for (const m of expression.matchAll(new RegExp(PREFIX, "g"))) {
-    found.push({ kind: "prefix", value: m[2] });
+  for (const form of [INEQUALITY, INEQUALITY_REVERSED]) {
+    const m = matchedLiteral(form, trimmed);
+    if (m !== null) {
+      const id = literalOf(m);
+      return id === null
+        ? null
+        : { kind: "clause", clause: { kind: "inputs", ids: [id] }, negated: true };
+    }
   }
-  for (const m of expression.matchAll(new RegExp(LIST, "g"))) {
-    found.push({ kind: "inputs", ids: listIds(m[1]) });
+  const suffix = matchedLiteral(SUFFIX, trimmed);
+  if (suffix !== null) {
+    const value = literalOf(suffix);
+    return value === null ? null : { kind: "suffix", value };
   }
-  return found;
+  const segment = matchedLiteral(SEGMENT, trimmed);
+  if (segment !== null) {
+    const id = literalOf(segment);
+    return id === null
+      ? null
+      : { kind: "segment", id, negated: segment.groups?.op.startsWith("!") === true };
+  }
+  const guard = matchedLiteral(GUARD, trimmed);
+  if (guard !== null) {
+    const type = literalOf(guard);
+    if (type === null) {
+      return null;
+    }
+    const equal = guard.groups?.op.startsWith("=") === true;
+    return { kind: "guard", holds: equal === (type === "string") };
+  }
+  return null;
 }

@@ -52,8 +52,10 @@ import {
   DISCRIMINATOR_FIELDS,
   HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
 } from "../sample-parsing/discriminators";
-import type { InputIdRef, ParsedInputIdFilter } from "./input-id";
-import { findInputIdClauses, inputIdValue, matchInputIdFilter } from "./input-id";
+import type { FilterNode } from "./filter-structure";
+import { readFilterStructure } from "./filter-structure";
+import type { InputIdRef, InputIdTest } from "./input-id";
+import { inputIdValue, matchInputIdFilter, readInputIdTest } from "./input-id";
 
 /**
  * The characters that may bound a log-type token, as a regex CHARACTER CLASS
@@ -198,19 +200,29 @@ export function buildCaptureFilter(input: CaptureFilterInput): string {
  * group, quietly returning a mixture they believe came from one place. A wrong
  * filter that errors is fine; this one succeeds and lies.
  *
- * DECIDED BY input-id.ts (DBT-169), the one answer every route reader shares.
- * The `__inputId` clauses are lifted out of the expression and each is asked
- * matchInputIdFilter, so the TYPED form the events carry (`<type>:<id>`) is
- * silent, the BARE id (`legacy`) warns that it matches nothing, and no match
- * keeps the different-source warning. This used to be a quoted-literal regex
- * of its own that accepted only the bare id - so the correct filter was warned
- * and the one that matches nothing was not. Comparing whole literals also
- * keeps the 2026-08-20 bug-hunt rule: `"in_syslog_prod"` does not name
+ * DECIDED BY input-id.ts (DBT-169), the one answer every route reader shares:
+ * the TYPED form the events carry (`<type>:<id>`) selects the source, the BARE
+ * id (`legacy`) was verified to match nothing, and comparing whole literals
+ * keeps the 2026-08-20 bug-hunt rule that `"in_syslog_prod"` does not name
  * `in_syslog`.
  *
+ * ...AND BY THE STRUCTURE AROUND THE CLAUSES (DBT-190). filter-structure.ts
+ * splits the filter on `&&`, `||` and `!`, each operand naming `__inputId` is
+ * read as a test (readInputIdTest), and the tree is folded into whether events
+ * from THIS source, and from OTHER sources, can pass ({@link Reach}). It is
+ * silent only when no other source can and this one may. Before, each clause
+ * was asked alone, so `!(<the right clause>)` and `<the right clause> ||
+ * <another source>` were silent while the capture took a mixture.
+ *
+ * WHAT IT CANNOT READ, IT SAYS IT DID NOT CHECK. A structure the split would
+ * misread (a ternary outside parentheses), or an `__inputId` test in a form
+ * input-id.ts does not know, gets "not checked" rather than a guess - unless
+ * the structure bounds it anyway (`<the right clause> && <anything>`).
+ *
  * The type is OPTIONAL because a source listing may omit it. Without one only
- * the segment clause inputPredicate writes - which needs no type - can be
- * checked, and anything else says it cannot be, rather than guessing.
+ * what needs no type is decided - the segment clause inputPredicate writes,
+ * the bare id, a value whose id segment is another source's - and anything
+ * else says it cannot be, rather than guessing.
  *
  * Deliberately NOT a validator. Cribl evaluates the expression as JavaScript
  * and this app has no business deciding what is valid JS - a filter that fails
@@ -225,67 +237,253 @@ export function captureFilterWarning(
   if (filter.trim() === "") {
     return "An empty filter captures every event from every source in the worker group.";
   }
-  if (!filter.includes("__inputId")) {
+  // Word-bounded: `my__inputId` is another name (DBT-190).
+  if (!/(?<![\w$])__inputId(?![\w$])/.test(filter)) {
     return `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
   }
-  const clauses = inputIdClauses(filter);
-  // inputPredicate's own arm: the id as the second `:` segment, which is the
-  // id in every typed shape, whatever the type.
-  if (clauses.segments.includes(inputId)) {
+  const value = inputType === undefined ? undefined : inputIdValue({ type: inputType, id: inputId });
+  const write =
+    value === undefined
+      ? `Write ${inputPredicate(inputId)}`
+      : `Write __inputId === ${JSON.stringify(value)} || __inputId.startsWith(${JSON.stringify(`${value}:`)})`;
+  const unchecked = `This filter's __inputId test is in a form this app does not read, so it was not checked against "${inputId}". ${write} if it should select only this source.`;
+  const tree = readFilterStructure(filter);
+  if (tree === null) {
+    return unchecked;
+  }
+  const facts: Facts = {
+    namesSelf: false,
+    negatesSelf: false,
+    otherNames: [],
+    broad: false,
+    suffix: false,
+    typeUnknown: false,
+    unread: false,
+  };
+  const ref: SelectedInput = { id: inputId, type: inputType };
+  const r = reach(tree, ref, false, facts);
+  if (r.others === "no" && (r.self === "yes" || r.self === "maybe")) {
     return null;
   }
-  const other = `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
-  if (inputType === undefined) {
-    return clauses.filters.length === 0
-      ? other
-      : `The type of source "${inputId}" is unknown, so this filter's __inputId clause cannot be checked against it.`;
+  const mixed = r.others !== "no";
+  if (facts.negatesSelf) {
+    return `This filter negates its __inputId test for "${inputId}", so it captures from other sources rather than only this one. ${write} without the negation.`;
   }
-  const ref: InputIdRef = { type: inputType, id: inputId };
-  const value = inputIdValue(ref);
-  const write = `Write __inputId === ${JSON.stringify(value)} || __inputId.startsWith(${JSON.stringify(`${value}:`)})`;
-  const answers = clauses.filters.map((clause) => ({
-    clause,
-    how: matchInputIdFilter(clause, ref),
-  }));
-  // The typed answer wins, as it does for every reader of input-id.ts - but a
-  // PREFIX that stops short of `<type>:<id>:` (`startsWith('syslog:')`, or
+  if (facts.typeUnknown) {
+    return `The type of source "${inputId}" is unknown, so this filter's __inputId clause cannot be checked against it.`;
+  }
+  if (facts.unread) {
+    return unchecked;
+  }
+  if (!facts.namesSelf) {
+    return `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
+  }
+  if (mixed && facts.otherNames.length > 0) {
+    const names = facts.otherNames.map((n) => JSON.stringify(n)).join(", ");
+    return `This filter's __inputId test names another source as well as "${inputId}" (${names}), so it may capture from more than the one selected. ${write} to select only this source.`;
+  }
+  // A PREFIX that stops short of `<type>:<id>:` (`startsWith('syslog:')`, or
   // `startsWith('syslog:in_syslog')`, which also takes in_syslog_prod) selects
-  // this input AND others, the mixed capture this warning exists for. It
-  // matches here; it is not narrow enough to stay silent.
-  const narrow = (clause: ParsedInputIdFilter): boolean =>
-    clause.kind !== "prefix" || clause.value.startsWith(`${value}:`);
-  const typed = answers.filter((a) => a.how === "match");
-  if (typed.some((a) => narrow(a.clause))) {
-    return null;
-  }
-  if (typed.length > 0) {
+  // this input AND others, the mixed capture this warning exists for.
+  if (mixed && facts.broad) {
     return `This filter's __inputId.startsWith() prefix selects "${inputId}" but also any other source whose __inputId starts with it, so it may capture a mixture. ${write} to select only this source.`;
   }
-  if (answers.some((a) => a.how === "legacy")) {
+  if (mixed && facts.suffix) {
+    return `This filter's __inputId.endsWith() test selects "${inputId}" but also any other source whose __inputId ends the same way, and misses events whose __inputId carries a further segment after the id (syslog adds the sender). ${write} instead.`;
+  }
+  if (r.self === "legacy" && !mixed && value !== undefined) {
     return `This filter names the bare input id "${inputId}" (unconfirmed: events carry __inputId as ${JSON.stringify(value)}, and the bare form matched nothing when captured), so it will likely capture nothing. ${write} instead.`;
   }
-  return other;
+  if (mixed) {
+    return `This filter's __inputId test for "${inputId}" does not hold on every branch (an || or ! lets other events through), so it may capture from other sources too. ${write} and join any other test with &&.`;
+  }
+  return `This filter's __inputId tests cannot all hold for "${inputId}", so it will likely capture nothing. ${write} instead.`;
 }
 
 /**
- * The `__inputId` clauses inside a capture filter: input-id.ts's clause forms
- * (findInputIdClauses, the same set the route parser anchors on a whole
- * filter) plus the segment ids inputPredicate compares. The filter is a
- * conjunction the operator may have extended, so the clauses are FOUND inside
- * it. A form not listed contributes nothing, which reads as naming another
- * source.
+ * Can an event pass a test? Ordered, so `&&` takes the lower answer and `||`
+ * the higher: no < legacy < maybe < yes. `legacy` is "only by the bare id",
+ * which was verified to match nothing in a capture.
  */
-function inputIdClauses(filter: string): {
-  filters: ParsedInputIdFilter[];
-  segments: string[];
-} {
-  const segments = [
-    ...filter.matchAll(
-      new RegExp(
-        String.raw`__inputId\.split\(\s*(['"\x60]):\1\s*\)\[1\]\s*===?\s*(['"\x60])((?:(?!\2)[^\\])*)\2`,
-        "g",
-      ),
-    ),
-  ].map((m) => m[3]);
-  return { filters: findInputIdClauses(filter), segments };
+type Pass = "no" | "legacy" | "maybe" | "yes";
+
+const RANK: Readonly<Record<Pass, number>> = { no: 0, legacy: 1, maybe: 2, yes: 3 };
+
+/** Whether events from the selected source, and from any other, can pass. */
+interface Reach {
+  self: Pass;
+  others: Pass;
+}
+
+const ANYTHING: Reach = { self: "maybe", others: "maybe" };
+
+/** What the fold saw on the way, so the warning can say WHY. */
+interface Facts {
+  /** A test that selects this source, not under negation. */
+  namesSelf: boolean;
+  /** A test that selects this source under an odd number of negations. */
+  negatesSelf: boolean;
+  /** The values non-negated tests name for OTHER sources. */
+  otherNames: string[];
+  /** A non-negated startsWith() that takes this source and others. */
+  broad: boolean;
+  /** A non-negated endsWith() that takes this source. */
+  suffix: boolean;
+  /** A test that cannot be decided without the source's type. */
+  typeUnknown: boolean;
+  /** An operand that names __inputId in a form input-id.ts does not read. */
+  unread: boolean;
+}
+
+interface SelectedInput {
+  id: string;
+  type: string | undefined;
+}
+
+function pick(a: Pass, b: Pass, higher: boolean): Pass {
+  return RANK[a] >= RANK[b] === higher ? a : b;
+}
+
+function combine(parts: readonly Reach[], higher: boolean): Reach {
+  return parts.reduce((acc, r) => ({
+    self: pick(acc.self, r.self, higher),
+    others: pick(acc.others, r.others, higher),
+  }));
+}
+
+/**
+ * `!` of an answer. The negation of `legacy` is `maybe`, not `yes`: the bare
+ * form matching nothing is verified for one capture, not proven.
+ */
+function negate(p: Pass): Pass {
+  return p === "yes" ? "no" : p === "no" ? "yes" : "maybe";
+}
+
+function reach(node: FilterNode, ref: SelectedInput, negated: boolean, facts: Facts): Reach {
+  switch (node.kind) {
+    case "and":
+    case "or":
+      return combine(
+        node.items.map((item) => reach(item, ref, negated, facts)),
+        node.kind === "or",
+      );
+    case "not": {
+      const r = reach(node.item, ref, !negated, facts);
+      return { self: negate(r.self), others: negate(r.others) };
+    }
+    case "operand": {
+      if (!node.namesInputId) {
+        return ANYTHING;
+      }
+      const test = readInputIdTest(node.text);
+      if (test === null) {
+        facts.unread = true;
+        return ANYTHING;
+      }
+      return testReach(test, ref, negated, facts);
+    }
+  }
+}
+
+/** One `__inputId` test's answer, recording what it names. */
+function testReach(test: InputIdTest, ref: SelectedInput, negated: boolean, facts: Facts): Reach {
+  const own = test.kind === "clause" || test.kind === "segment" ? test.negated : false;
+  const polarity = negated !== own;
+  const named: string[] = [];
+  const r = positiveReach(test, ref, named, facts, polarity);
+  if (r.self === "yes" || r.self === "legacy") {
+    if (polarity) {
+      facts.negatesSelf = true;
+    } else {
+      facts.namesSelf = true;
+    }
+  }
+  if (!polarity) {
+    facts.otherNames.push(...named);
+  }
+  return own ? { self: negate(r.self), others: negate(r.others) } : r;
+}
+
+/**
+ * A test's answer read without its own negation. `named` collects the values
+ * it names for other sources; `polarity` true means it sits under negation,
+ * where a broad prefix or a suffix EXCLUDES rather than takes a mixture.
+ */
+function positiveReach(
+  test: InputIdTest,
+  ref: SelectedInput,
+  named: string[],
+  facts: Facts,
+  polarity: boolean,
+): Reach {
+  const other = (name: string): Reach => {
+    named.push(name);
+    return { self: "no", others: "yes" };
+  };
+  const unknown = (): Reach => {
+    facts.typeUnknown = true;
+    return ANYTHING;
+  };
+  switch (test.kind) {
+    case "guard":
+      return test.holds ? { self: "yes", others: "yes" } : { self: "no", others: "no" };
+    case "segment":
+      return test.id === ref.id ? { self: "yes", others: "no" } : other(test.id);
+    case "suffix": {
+      const takes =
+        ref.type === undefined
+          ? `:${ref.id}`.endsWith(test.value)
+            ? true
+            : undefined
+          : inputIdValue({ type: ref.type, id: ref.id }).endsWith(test.value);
+      if (takes === undefined) {
+        return unknown();
+      }
+      if (!takes) {
+        return other(test.value);
+      }
+      facts.suffix ||= !polarity;
+      return { self: "yes", others: "yes" };
+    }
+    case "clause": {
+      const clause = test.clause;
+      if (clause.kind === "inputs") {
+        // A list is the OR of one equality per id.
+        return combine(
+          clause.ids.map((v) => {
+            if (v === ref.id) {
+              return { self: "legacy", others: "no" };
+            }
+            if (ref.type === undefined) {
+              return v.split(":")[1] === ref.id ? unknown() : other(v);
+            }
+            return matchInputIdFilter({ kind: "inputs", ids: [v] }, { type: ref.type, id: ref.id }) ===
+              "match"
+              ? { self: "yes", others: "no" }
+              : other(v);
+          }),
+          true,
+        );
+      }
+      if (clause.kind === "all") {
+        return { self: "yes", others: "yes" };
+      }
+      if (ref.type === undefined) {
+        return unknown();
+      }
+      const typed: InputIdRef = { type: ref.type, id: ref.id };
+      const how = matchInputIdFilter(clause, typed);
+      if (how === "legacy") {
+        return { self: "legacy", others: "no" };
+      }
+      if (how === "none") {
+        return other(clause.value);
+      }
+      if (clause.value.startsWith(`${inputIdValue(typed)}:`)) {
+        return { self: "yes", others: "no" };
+      }
+      facts.broad ||= !polarity;
+      return { self: "yes", others: "yes" };
+    }
+  }
 }
