@@ -239,4 +239,11 @@ describe("findSolutionCatalogEntry name matching (DBT-183)", () => {
     expect(await lookupId([far, near], "Cloud flare")).toBe("cfz");
     expect(await lookupId([near, far], "Cloud flare")).toBe("cfz");
   });
+
+  it("breaks a full tie (same shared length, same difference) by catalog order", async () => {
+    const a = pkg("cfa", "Cloudflare A");
+    const b = pkg("cfb", "Cloudflare B");
+    expect(await lookupId([a, b], "Cloudflare")).toBe("cfa");
+    expect(await lookupId([b, a], "Cloudflare")).toBe("cfb");
+  });
 });
