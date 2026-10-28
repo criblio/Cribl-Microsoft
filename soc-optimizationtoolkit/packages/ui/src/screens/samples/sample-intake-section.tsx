@@ -72,6 +72,14 @@
  * also gained the control the notice implied: `forget`, documented as the way
  * back from a mistaken paste, had been written and wired to nothing.
  *
+ * A REFUSED STORE IS SAID (DBT-175). Since DBT-145 the KV store throws on a
+ * non-encrypted 403. Naming the vendor wrote fire-and-forget and showed "Saved"
+ * before the write landed - an unhandled rejection under a false "Saved" - and
+ * a refused column-order read or write left reuse silently off. "Saved" now
+ * waits for the store's answer - and only for the solution it was asked under,
+ * so a write that lands after a switch claims nothing for the next one - and
+ * one note says when column orders are not being reused or remembered, and why.
+ *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
  * decisions (chip derivation, dedupe, rename re-key, validation) live in
@@ -117,7 +125,11 @@ import {
   singleItemQueue,
 } from "./csv-resolution-state";
 import type { CsvResolutionQueue } from "./csv-resolution-state";
-import { useVendorColumnOrder } from "./use-vendor-column-order";
+import {
+  describeColumnOrderRefusal,
+  useVendorColumnOrder,
+} from "./use-vendor-column-order";
+import type { ColumnOrderRefusal } from "./use-vendor-column-order";
 
 /**
  * One batch of samples a SIBLING panel just wrote to the store, announced to
@@ -263,13 +275,24 @@ export function SampleIntakeSection({
   // under the box: "never named" and "could not read the name" look the same
   // in an empty input and ask different things of the operator.
   const [vendorReadError, setVendorReadError] = useState("");
+  // The name WRITE (DBT-175): in flight, and why the store refused it ("" when
+  // it did not). "Saved" is shown only once the store has said yes.
+  const [vendorSaving, setVendorSaving] = useState(false);
+  const [vendorSaveError, setVendorSaveError] = useState("");
   const vendorKey = useMemo(() => operatorVendorKey(solutionName), [solutionName]);
+  // The scope a name write's answer must still belong to when it lands: the
+  // write is awaited, and a solution switch while it is in flight must not
+  // let its late "Saved" (or refusal) land on the next solution's box.
+  const vendorScopeRef = useRef<object>({});
 
   useEffect(() => {
     let cancelled = false;
+    vendorScopeRef.current = {};
     setOperatorVendor("");
     setVendorSaved(false);
+    setVendorSaving(false);
     setVendorReadError("");
+    setVendorSaveError("");
     if (definitionCache === undefined || vendorKey === null || detectedVendor !== "") {
       return;
     }
@@ -302,6 +325,38 @@ export function SampleIntakeSection({
   // than on the state object, which is rebuilt every render.
   const { remember: rememberColumnOrder, forget: forgetColumnOrder } =
     columnOrder;
+  // A refusal reported by a chip's own column-order read (DBT-175). Kept
+  // beside the queued item's so ONE note describes the store however many
+  // chips asked it; reset when the scope they read under changes.
+  const [chipOrderRefusal, setChipOrderRefusal] =
+    useState<ColumnOrderRefusal | null>(null);
+  useEffect(() => {
+    setChipOrderRefusal(null);
+  }, [definitionCache, vendor]);
+  const columnOrderRefusal = columnOrder.storeRefused ?? chipOrderRefusal;
+
+  // Persist the operator's vendor name, and claim "Saved" only once the store
+  // has answered (DBT-175). A refusal is a skip: the name stays in the box,
+  // nothing is filed under it, and the reason is shown.
+  const saveVendorName = useCallback(async () => {
+    if (definitionCache === undefined || vendorKey === null) return;
+    const name = operatorVendor.trim();
+    const scope = vendorScopeRef.current;
+    setOperatorVendor(name);
+    setVendorSaveError("");
+    setVendorSaving(true);
+    try {
+      await definitionCache.set(vendorKey, name);
+      if (vendorScopeRef.current === scope) setVendorSaved(true);
+    } catch (err) {
+      if (vendorScopeRef.current === scope) {
+        setVendorSaved(false);
+        setVendorSaveError(String(err));
+      }
+    } finally {
+      if (vendorScopeRef.current === scope) setVendorSaving(false);
+    }
+  }, [definitionCache, vendorKey, operatorVendor]);
 
   const forgetSavedOrder = useCallback(() => {
     forgetColumnOrder();
@@ -672,26 +727,33 @@ export function SampleIntakeSection({
             onChange={(e) => {
               setOperatorVendor(e.target.value);
               setVendorSaved(false);
+              setVendorSaveError("");
             }}
           />
           <button
             className="run-button"
-            disabled={!isUsableVendorName(operatorVendor) || definitionCache === undefined}
-            onClick={() => {
-              if (definitionCache === undefined || vendorKey === null) return;
-              const name = operatorVendor.trim();
-              void definitionCache.set(vendorKey, name);
-              setOperatorVendor(name);
-              setVendorSaved(true);
-            }}
+            disabled={
+              !isUsableVendorName(operatorVendor) ||
+              definitionCache === undefined ||
+              vendorSaving
+            }
+            onClick={() => void saveVendorName()}
           >
-            {vendorSaved ? "Saved" : "Use this vendor"}
+            {vendorSaving ? "Saving..." : vendorSaved ? "Saved" : "Use this vendor"}
           </button>
+          {vendorSaveError !== "" && (
+            <p className="field-hint sample-intake-vendor-unsaved" role="status">
+              The vendor name could not be saved ({vendorSaveError}), so column
+              orders still cannot be remembered for this solution. Try again
+              once the store accepts writes.
+            </p>
+          )}
           {vendorReadError !== "" && (
             <p className="field-hint sample-intake-vendor-unread" role="status">
               A vendor name saved for this solution could not be read (
               {vendorReadError}), so the box starts empty. Naming it again
-              replaces whatever is stored.
+              saves over whatever is stored, if the store accepts the write -
+              the button says whether it did.
             </p>
           )}
           <p className="field-hint">
@@ -826,6 +888,7 @@ export function SampleIntakeSection({
                     cache={definitionCache}
                     vendor={vendor}
                     sample={sample}
+                    onStoreRefused={setChipOrderRefusal}
                   />
                 )}
                 {/*
@@ -912,6 +975,13 @@ export function SampleIntakeSection({
           unable to fill it without overwriting whatever the operator had
           started typing. The wait is one KV read, and only when a cache is
           bound and the scope can be named. */}
+      {/* DBT-175. One note for the store, not one per key: the queued item
+          and every chip read it, and a refusal is about all of them. */}
+      {columnOrderRefusal !== null && (
+        <p className="field-hint sample-intake-column-order-refused" role="status">
+          {describeColumnOrderRefusal(columnOrderRefusal)}
+        </p>
+      )}
       {csvQueue !== null &&
         !columnOrder.loading &&
         csvItem !== null && (
@@ -961,21 +1031,27 @@ function SampleChipColumnOrder({
   cache,
   vendor,
   sample,
+  onStoreRefused,
 }: {
   cache: ContentCache | undefined;
   vendor: string;
   sample: TaggedSample;
+  /** Hands a refused store call up to the section's single note (DBT-175). */
+  onStoreRefused: (refusal: ColumnOrderRefusal) => void;
 }) {
   // VND-3: the field count comes from the sample this chip is already about, so
   // the sentence can MEASURE the shortfall instead of asking the operator to
   // eyeball it. The chip prints "35 fields" two lines up; the order prints "120
   // columns". Both numbers were already on screen and neither was compared.
-  const { resolved, notice, loading } = useVendorColumnOrder(
+  const { resolved, notice, loading, storeRefused } = useVendorColumnOrder(
     cache,
     vendor,
     sample.logType,
     sample.parsed.fields.length,
   );
+  useEffect(() => {
+    if (storeRefused !== null) onStoreRefused(storeRefused);
+  }, [storeRefused, onStoreRefused]);
   if (
     loading ||
     resolved === null ||

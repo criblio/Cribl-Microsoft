@@ -133,7 +133,11 @@ export interface PatFormView {
   busy: boolean;
   /** Whether the Save/Validate action is enabled. */
   canSubmit: boolean;
-  /** Whether the Clear action is enabled (only when a PAT is stored). */
+  /**
+   * Whether the Clear action is enabled: when a PAT is stored, AND when the
+   * stored status is unknown (DBT-175) - a token this screen could not see may
+   * still be there, and clearing an absent one is harmless.
+   */
   canClear: boolean;
   /** The label for the primary action (Save vs Replace, per stored state). */
   submitLabel: string;
@@ -163,17 +167,20 @@ export function derivePatFormView(state: PatFormState): PatFormView {
   const trimmed = state.value.trim();
   const formatIssue = patFormatIssue(state.value);
   const hasPat = state.status?.hasPat === true;
+  const statusUnknown = state.status === null ? state.statusError : "";
   return {
     busy,
     canSubmit: !busy && formatIssue === null,
-    canClear: !busy && hasPat,
+    // DBT-175: hasPat-only left a possibly stored token unclearable while the
+    // status read was refused. Unknown is not none, so Clear stays offered.
+    canClear: !busy && (hasPat || statusUnknown !== ""),
     submitLabel: hasPat ? "Replace token" : "Validate and save token",
     // Only nag once the user has typed something.
     formatHint: trimmed === "" ? "" : (formatIssue ?? ""),
     error: state.error,
     hasPat,
     login: state.status?.login ?? "",
-    statusUnknown: state.status === null ? state.statusError : "",
+    statusUnknown,
   };
 }
 

@@ -9,14 +9,16 @@
  * core module):
  *
  *   load    - read the stored definition for the scope and decode it
- *             defensively; a failed read only disables reuse for this session.
+ *             defensively; a failed read only disables reuse for this session,
+ *             and SAYS so (storeRefused - DBT-175).
  *   resolve - a stored operator order BEATS the bundled one, and the override is
  *             re-derived live so the notice can never go stale (decision 3).
  *             With nothing stored, the bundled order answers, which is what
  *             PRE-FILLS the dialog for the operator to confirm (decision 2).
  *   remember- persist an operator-supplied order. A merely CONFIRMED pre-fill
  *             builds to null and writes NOTHING - see the trap argued at length
- *             in the core module header. A failed write never blocks the apply.
+ *             in the core module header. A failed write never blocks the apply,
+ *             and is exposed the same way.
  *   forget  - drop the stored order so the bundled one answers again; the way
  *             back from a mistaken paste that decision 3 makes visible.
  *
@@ -24,6 +26,13 @@
  * sample may be tagged with a log type that folds to nothing. Then there is NO
  * key, nothing is read, and nothing is written: absent is absent, and two
  * un-named vendors never share a slot.
+ *
+ * A REFUSED STORE IS A SKIP, NOT SILENCE (DBT-175). Since DBT-145 the KV store
+ * throws on a non-encrypted 403 (a 5xx always did). Every call here already
+ * survived that, but by swallowing it: the operator named columns, was told
+ * nothing, and found them gone next session. The hook now keeps the LAST
+ * refusal - which call, and why - for the screen to say; the pre-fill and the
+ * apply carry on exactly as before.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -40,6 +49,42 @@ import type {
   VendorFieldDefinition,
 } from "@soc/core";
 
+/** Which store call was refused, and why (DBT-175). */
+export interface ColumnOrderRefusal {
+  /** The call the store refused: the load, a remember, or a forget. */
+  action: "read" | "remember" | "forget";
+  /** The thrown error, stringified. */
+  reason: string;
+}
+
+/**
+ * The operator-facing sentence for a refusal. Each call has its own
+ * consequence, so each gets its own sentence: a refused read means a saved
+ * order may exist and is not being used; a refused remember means the order
+ * applies now and is gone next session; a refused forget means the order the
+ * operator just dropped may come back.
+ */
+export function describeColumnOrderRefusal(refusal: ColumnOrderRefusal): string {
+  switch (refusal.action) {
+    case "read":
+      return (
+        `A column order saved for this vendor and log type could not be read ` +
+        `(${refusal.reason}), so none is being reused. Naming the columns ` +
+        "still works; any saved order is simply not applied."
+      );
+    case "remember":
+      return (
+        `This column order could not be saved (${refusal.reason}). It applies ` +
+        "to this sample now but will not be remembered for the next one."
+      );
+    case "forget":
+      return (
+        `The saved column order could not be removed (${refusal.reason}). It ` +
+        "is ignored for now, but it may still pre-fill the next sample."
+      );
+  }
+}
+
 export interface VendorColumnOrderState {
   /** The order to pre-fill with, or null when nothing is known about the scope. */
   resolved: ResolvedColumnOrder | null;
@@ -55,6 +100,12 @@ export interface VendorColumnOrderState {
   remember: (columns: readonly string[]) => void;
   /** Drop the stored order for this scope; the bundled one answers again. */
   forget: () => void;
+  /**
+   * The last call the store REFUSED for this scope, or null while none has
+   * (DBT-175). Reset when the scope changes, since the next read is a fresh
+   * question. Describe it with {@link describeColumnOrderRefusal}.
+   */
+  storeRefused: ColumnOrderRefusal | null;
 }
 
 /**
@@ -77,10 +128,14 @@ export function useVendorColumnOrder(
   const key = vendorFieldDefinitionKey(vendor, logType);
   const [stored, setStored] = useState<VendorFieldDefinition | null>(null);
   const [loading, setLoading] = useState(false);
+  const [storeRefused, setStoreRefused] = useState<ColumnOrderRefusal | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
     setStored(null);
+    setStoreRefused(null);
     if (cache === undefined || key === null) {
       setLoading(false);
       return;
@@ -92,9 +147,13 @@ export function useVendorColumnOrder(
         if (!cancelled) {
           setStored(parseVendorFieldDefinition(raw, vendor, logType));
         }
-      } catch {
+      } catch (err) {
         // A failed load only disables reuse for this session; the bundled
         // order still pre-fills and the operator can still supply their own.
+        // It is KEPT, not swallowed (DBT-175): a saved order may exist.
+        if (!cancelled) {
+          setStoreRefused({ action: "read", reason: String(err) });
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -130,7 +189,11 @@ export function useVendorColumnOrder(
         return;
       }
       setStored(definition);
-      void cache.set(key, definition).catch(() => undefined);
+      // A refused write is a skip - the order is in hand and applies - but
+      // it is said, since it will not be there next session (DBT-175).
+      void cache.set(key, definition).catch((err: unknown) => {
+        setStoreRefused({ action: "remember", reason: String(err) });
+      });
     },
     [cache, key, vendor, logType],
   );
@@ -142,8 +205,10 @@ export function useVendorColumnOrder(
     }
     // Written as null rather than deleted: the port has no delete, and a stored
     // null decodes as absent, so the bundled order answers again.
-    void cache.set(key, null).catch(() => undefined);
+    void cache.set(key, null).catch((err: unknown) => {
+      setStoreRefused({ action: "forget", reason: String(err) });
+    });
   }, [cache, key]);
 
-  return { resolved, notice, loading, remember, forget };
+  return { resolved, notice, loading, remember, forget, storeRefused };
 }

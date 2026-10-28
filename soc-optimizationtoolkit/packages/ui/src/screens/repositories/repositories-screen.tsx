@@ -260,7 +260,7 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
             <span className="status-bar-text">
               Could not read whether a GitHub token is saved (
               {view.statusUnknown}). One may be stored; saving a token below
-              replaces it either way.
+              replaces it either way, and Clear token removes it.
             </span>
           </div>
         )}

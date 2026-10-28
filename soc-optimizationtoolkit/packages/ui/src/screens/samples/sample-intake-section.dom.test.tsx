@@ -736,3 +736,287 @@ describe("SampleIntakeSection - a refused vendor-name read (DBT-159)", () => {
     }
   });
 });
+
+/**
+ * NAMING THE VENDOR AGAINST A STORE THAT REFUSES THE WRITE (DBT-175).
+ *
+ * The button handler was `void definitionCache.set(...)` followed at once by
+ * setVendorSaved(true): no catch, and "Saved" before the write had landed. A
+ * refused write was therefore an UNHANDLED REJECTION under a button reading
+ * "Saved" - and column orders, which only key under a saved name, quietly went
+ * unremembered. The DBT-159 hint beside it ("Naming it again replaces whatever
+ * is stored") was false in exactly that case. "Saved" now means the store said
+ * yes, and a refusal is said with its reason.
+ */
+describe("SampleIntakeSection - naming the vendor (DBT-175)", () => {
+  const UNLISTED = "Acme Widget Telemetry";
+
+  function vendorButton(c: HTMLElement): HTMLButtonElement {
+    const input = c.querySelector<HTMLInputElement>("#operator-vendor");
+    const button = input?.parentElement?.querySelector<HTMLButtonElement>(
+      "button.run-button",
+    );
+    if (button === null || button === undefined) throw new Error("no vendor button");
+    return button;
+  }
+
+  async function mountUnlisted(cache: ContentCache) {
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(view.container.querySelectorAll("#operator-vendor")).toHaveLength(1);
+    });
+    fireEvent.change(
+      view.container.querySelector("#operator-vendor") as HTMLInputElement,
+      { target: { value: "  Acme Corp  " } },
+    );
+    return view;
+  }
+
+  it("a refused write never reads 'Saved', says why, and rejects nothing unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const cache = {
+        get: vi.fn(async () => null),
+        set: vi.fn(async () => {
+          throw new Error("KV write refused (403)");
+        }),
+      } as unknown as ContentCache;
+      const view = await mountUnlisted(cache);
+      await act(async () => {
+        fireEvent.click(vendorButton(view.container));
+      });
+      await waitFor(() => {
+        expect(
+          view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+        ).toHaveLength(1);
+      });
+      expect(
+        view.container.querySelector(".sample-intake-vendor-unsaved")?.textContent,
+      ).toContain("KV write refused (403)");
+      expect(cache.set).toHaveBeenCalledTimes(1);
+      expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  it("says 'Saved' only once the write has LANDED", async () => {
+    let land!: () => void;
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            land = resolve;
+          }),
+      ),
+    } as unknown as ContentCache;
+    const view = await mountUnlisted(cache);
+    await act(async () => {
+      fireEvent.click(vendorButton(view.container));
+    });
+    // In flight: the store has not answered, so nothing is claimed yet.
+    expect(vendorButton(view.container).textContent).toBe("Saving...");
+    expect(cache.set).toHaveBeenCalledTimes(1);
+    expect(cache.set).toHaveBeenCalledWith(
+      "operator-vendor-v1-acmewidgettelemetry",
+      "Acme Corp",
+    );
+    await act(async () => {
+      land();
+    });
+    expect(vendorButton(view.container).textContent).toBe("Saved");
+    expect(
+      view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+    ).toHaveLength(0);
+  });
+
+  it("a write that lands AFTER the solution changed claims nothing for the new one", async () => {
+    // Review of DBT-175: the awaited write outlived a solution switch, and its
+    // late answer set "Saved" (or the refusal note) on the NEXT solution,
+    // whose box the switch had just reset.
+    const answers: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            answers.push({ resolve, reject });
+          }),
+      ),
+    } as unknown as ContentCache;
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const onSamplesChange = vi.fn();
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={onSamplesChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(view.container.querySelectorAll("#operator-vendor")).toHaveLength(1);
+    });
+    const typeAndSave = async (value: string) => {
+      fireEvent.change(
+        view.container.querySelector("#operator-vendor") as HTMLInputElement,
+        { target: { value } },
+      );
+      await act(async () => {
+        fireEvent.click(vendorButton(view.container));
+      });
+    };
+    const switchTo = async (solutionName: string) => {
+      await act(async () => {
+        view.rerender(
+          <SampleIntakeSection
+            store={store}
+            solutionName={solutionName}
+            definitionCache={cache}
+            onSamplesChange={onSamplesChange}
+          />,
+        );
+      });
+    };
+
+    await typeAndSave("Acme Corp");
+    await switchTo("Quuxbar Unlisted Gadget Feed");
+    await act(async () => {
+      answers[0]?.resolve();
+    });
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+
+    await typeAndSave("Quuxbar Corp");
+    await switchTo(UNLISTED);
+    await act(async () => {
+      answers[1]?.reject(new Error("KV write refused (403)"));
+    });
+    expect(answers).toHaveLength(2);
+    expect(
+      view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+    ).toHaveLength(0);
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+  });
+
+  it("the unread-name hint no longer promises the next save will land", async () => {
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-vendor-unread"),
+      ).toHaveLength(1);
+    });
+    const hint =
+      view.container.querySelector(".sample-intake-vendor-unread")?.textContent ?? "";
+    // The store that refused the read may refuse the write too.
+    expect(hint.split("replaces whatever is stored").length - 1).toBe(0);
+    expect(hint).toMatch(/if the store accepts/);
+  });
+});
+
+/**
+ * COLUMN-ORDER REUSE AGAINST A REFUSING STORE (DBT-175).
+ *
+ * useVendorColumnOrder swallowed a refused read, so the dialog opened with no
+ * remembered order and nothing said that one might exist. The section now
+ * says reuse is off and why - ONCE, though the queued item and every chip each
+ * read the store, because the note describes the store, not a key.
+ */
+describe("SampleIntakeSection - a refused column-order store (DBT-175)", () => {
+  it("says column-order reuse is off, with the reason, once", async () => {
+    const { store } = makeStore();
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const view = await mountWithVendor(store, cache);
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-column-order-refused"),
+      ).toHaveLength(1);
+    });
+    const note =
+      view.container.querySelector(".sample-intake-column-order-refused")
+        ?.textContent ?? "";
+    expect(note).toContain("KV read refused (403)");
+    expect(note).toMatch(/could not be read/);
+  });
+
+  it("keeps saying so once the dialog closes, from the chips' own reads", async () => {
+    // With the queue empty the section's own hook has no scope and asks the
+    // store nothing; the chips still do, and their refusal is the same news.
+    const { store } = makeStore();
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const view = await mountWithVendor(store, cache);
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    await act(async () => {
+      clickButton(view.container, "Skip");
+    });
+    expect(dialogs(view.container)).toHaveLength(0);
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-column-order-refused"),
+      ).toHaveLength(1);
+    });
+    expect(
+      view.container.querySelector(".sample-intake-column-order-refused")
+        ?.textContent,
+    ).toContain("KV read refused (403)");
+  });
+
+  it("says nothing when the store answers", async () => {
+    const { store } = makeStore();
+    const view = await mountWithVendor(store, new FakeContentCache());
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    expect(
+      view.container.querySelectorAll(".sample-intake-column-order-refused"),
+    ).toHaveLength(0);
+  });
+});

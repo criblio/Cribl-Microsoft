@@ -171,8 +171,31 @@ describe("derivePatFormView", () => {
     );
     expect(view.statusUnknown).toBe("KV read refused (403)");
     expect(view.hasPat).toBe(false);
-    expect(view.canClear).toBe(false);
     expect(derivePatFormView(initialPatFormState()).statusUnknown).toBe("");
+  });
+
+  it("allows Clear while the status is UNKNOWN - a token may be stored (DBT-175)", () => {
+    // DBT-159 kept canClear hasPat-only, so with the status unread a token that
+    // may well be saved could not be removed from this screen at all.
+    const unknown = patFormReducer(initialPatFormState(), {
+      type: "hydrate-error",
+      message: "KV read refused (403)",
+    });
+    expect(derivePatFormView(unknown).canClear).toBe(true);
+    // ...but not mid round-trip, and not when the status is KNOWN to be empty.
+    expect(
+      derivePatFormView(patFormReducer(unknown, { type: "clear-start" })).canClear,
+    ).toBe(false);
+    expect(
+      derivePatFormView(
+        patFormReducer(initialPatFormState(), {
+          type: "hydrate",
+          status: { hasPat: false },
+        }),
+      ).canClear,
+    ).toBe(false);
+    // Not yet hydrated is not unknown: nothing has failed, so nothing to offer.
+    expect(derivePatFormView(initialPatFormState()).canClear).toBe(false);
   });
 
   it("disables everything while a round-trip is in flight", () => {
