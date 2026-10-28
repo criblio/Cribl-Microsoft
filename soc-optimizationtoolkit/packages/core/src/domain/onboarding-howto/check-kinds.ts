@@ -83,6 +83,12 @@ export type StepVerdict =
       readonly kind: "present-other-name";
       readonly name: string;
       readonly diffs: readonly VerdictDiff[];
+      /**
+       * How many more objects matched the same way besides `name` (DBT-178),
+       * so the screen can say the named one is not the only one. Set only
+       * when there is at least one.
+       */
+      readonly alsoFound?: number;
     }
   | { readonly kind: "absent" }
   | { readonly kind: "unknown"; readonly reason: UnknownReason; readonly detail: string };

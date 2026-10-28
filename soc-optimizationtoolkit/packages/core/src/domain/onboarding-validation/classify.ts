@@ -108,6 +108,16 @@ function verdictOf(diffs: readonly VerdictDiff[]): StepVerdict {
   return diffs.length === 0 ? { kind: "as-expected" } : { kind: "present-differs", diffs };
 }
 
+/**
+ * present-other-name for `name`, one of `matches` objects that matched the
+ * same way; the rest are counted in `alsoFound` (DBT-178).
+ */
+function otherName(name: string, diffs: readonly VerdictDiff[], matches: number): StepVerdict {
+  return matches > 1
+    ? { kind: "present-other-name", name, diffs, alsoFound: matches - 1 }
+    : { kind: "present-other-name", name, diffs };
+}
+
 function unknown(reason: UnknownReason, detail: string): StepVerdict {
   return { kind: "unknown", reason, detail };
 }
@@ -381,13 +391,10 @@ function classifyEntra(values: PlanValues, rows: readonly unknown[], ex: CheckEx
   const autoHub = "(none: Azure creates one hub per category)";
   const ours = settings.find((s) => same(s.name, DEFAULT_SETTING_NAME));
   if (ours !== undefined) return verdictOf(settingDiffs(values, ours, categories, autoHub));
-  const other = settings.find((s) => targetsPlanNamespace(values, s));
+  const others = settings.filter((s) => targetsPlanNamespace(values, s));
+  const other = others[0];
   if (other !== undefined) {
-    return {
-      kind: "present-other-name",
-      name: other.name,
-      diffs: settingDiffs(values, other, categories, autoHub),
-    };
+    return otherName(other.name, settingDiffs(values, other, categories, autoHub), others.length);
   }
   return { kind: "absent" };
 }
@@ -436,13 +443,10 @@ function classifyAssignment(rows: readonly unknown[], ex: CheckExpectations): St
     const ours = rows.find((r) => usesDefinition(r) && inFamily(r)) ?? rows.find(usesDefinition);
     if (ours !== undefined) return verdictOf(assignmentDiffs(ours, policy.definitionId));
   }
-  const other = rows.find((r) => usesDefinition(r) || inFamily(r));
+  const others = rows.filter((r) => usesDefinition(r) || inFamily(r));
+  const other = others[0];
   if (other !== undefined) {
-    return {
-      kind: "present-other-name",
-      name: str(other, "name"),
-      diffs: assignmentDiffs(other, policy.definitionId),
-    };
+    return otherName(str(other, "name"), assignmentDiffs(other, policy.definitionId), others.length);
   }
   return { kind: "absent" };
 }
@@ -474,11 +478,9 @@ function classifyRemediation(rows: readonly unknown[], ex: CheckExpectations): S
   const first = other[0];
   if (first === undefined) return { kind: "absent" };
   const name = assignmentOf(first);
-  return {
-    kind: "present-other-name",
-    name,
-    diffs: remediationDiffs(other.filter((r) => same(assignmentOf(r), name))),
-  };
+  // Counted by assignment, not by remediation: one assignment may have several.
+  const assignments = new Set(other.map((r) => assignmentOf(r).toLowerCase()));
+  return otherName(name, remediationDiffs(other.filter((r) => same(assignmentOf(r), name))), assignments.size);
 }
 
 function classifyFlowLog(values: PlanValues, row: unknown): StepVerdict {
@@ -526,28 +528,69 @@ export function classifyTopic(values: PlanValues, row: unknown): StepVerdict {
 
 const BLOB_CREATED = "Microsoft.Storage.BlobCreated";
 
-function classifyEventSubscription(values: PlanValues, rows: readonly unknown[]): StepVerdict {
+/** A storage account's ARM id: the only topic id that names an account. */
+const STORAGE_ACCOUNT_ID = /\/providers\/Microsoft\.Storage\/storageAccounts\/[^/]+$/i;
+
+/** The storage account a StorageQueue destination delivers to, '' when unsaid. */
+function queueAccountOf(row: unknown): string {
+  return str(rec(rec(rec(row, "properties"), "destination"), "properties"), "resourceId");
+}
+
+/**
+ * The plan's BlobCreated subscription to its queue. A queue name is not
+ * enough: the subscription is the plan's only if its queue is on the plan's
+ * storage account and its topic is that account's (DBT-179, the shape DBT-167
+ * fixed for the topic). A definite difference is reported as one; a read that
+ * does not say the account (no destination resourceId, or a topic id that is
+ * not a storage account's) is unknown, never as-expected. Without a storage
+ * account in the plan it cannot be as-expected: classifyCheck already stops
+ * on the missing value, and this guard holds if CHECK_REQUIRED_VALUES drifts.
+ * Exported for that pin only, not the barrel.
+ */
+export function classifyEventSubscription(values: PlanValues, rows: readonly unknown[]): StepVerdict {
+  if (value(values, "storageAccount") === "") {
+    return unknown("missing-value", `Set ${PLAN_VALUE_LABELS.storageAccount.label} first.`);
+  }
   const queue = value(values, "queueName");
-  const match = rows.find((r) => {
+  const accountId = planStorageAccountId(values);
+  const candidates = rows.filter((r) => {
     const dest = rec(rec(r, "properties"), "destination");
     return same(str(dest, "endpointType"), "StorageQueue") && same(str(rec(dest, "properties"), "queueName"), queue);
   });
+  // Several may share the queue name: the one on the plan's account is the plan's.
+  const match = candidates.find((r) => same(queueAccountOf(r), accountId)) ?? candidates[0];
   if (match === undefined) return { kind: "absent" };
-  const types = rec(rec(match, "properties"), "filter")["includedEventTypes"];
+  const props = rec(match, "properties");
+  const diffs: VerdictDiff[] = [];
+  const queueAccount = queueAccountOf(match);
+  if (queueAccount !== "" && !same(queueAccount, accountId)) {
+    diffs.push({ field: "destination.resourceId", expected: accountId, actual: queueAccount });
+  }
+  const topic = str(props, "topic").trim();
+  const topicNamesAccount = STORAGE_ACCOUNT_ID.test(topic);
+  if (topicNamesAccount && !same(topic, accountId)) {
+    diffs.push({ field: "topic", expected: accountId, actual: topic });
+  }
+  const types = rec(props, "filter")["includedEventTypes"];
   // No includedEventTypes means every event type, BlobCreated among them.
-  const ok = !Array.isArray(types) || types.some((t) => typeof t === "string" && same(t, BLOB_CREATED));
-  return ok
-    ? { kind: "as-expected" }
-    : {
-        kind: "present-differs",
-        diffs: [
-          {
-            field: "includedEventTypes",
-            expected: BLOB_CREATED,
-            actual: Array.isArray(types) ? types.join(", ") : "(all)",
-          },
-        ],
-      };
+  if (Array.isArray(types) && !types.some((t) => typeof t === "string" && same(t, BLOB_CREATED))) {
+    diffs.push({ field: "includedEventTypes", expected: BLOB_CREATED, actual: types.join(", ") });
+  }
+  // A definite difference is true whatever the read leaves unsaid.
+  if (diffs.length > 0) return { kind: "present-differs", diffs };
+  if (queueAccount === "") {
+    return unknown(
+      "failed",
+      "The event subscription was read, but Azure did not report which storage account its queue is on.",
+    );
+  }
+  if (!topicNamesAccount) {
+    return unknown(
+      "failed",
+      "The event subscription was read, but its topic does not say which storage account it belongs to.",
+    );
+  }
+  return { kind: "as-expected" };
 }
 
 function classifyStorageRbac(rows: readonly unknown[]): StepVerdict {

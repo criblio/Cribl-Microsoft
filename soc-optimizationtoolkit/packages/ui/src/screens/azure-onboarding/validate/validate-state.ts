@@ -19,6 +19,7 @@
 import { onboardingSource } from "@soc/core";
 import type {
   ArrivalReading,
+  CheckKind,
   CheckResult,
   OnboardingSourceId,
   StepVerdict,
@@ -108,8 +109,33 @@ const UNKNOWN_DETAIL: Readonly<Record<UnknownReason, string>> = {
   "missing-value": "A plan value this check needs is not filled in, so nothing was sent.",
 };
 
-/** One verdict, in words. */
-export function verdictView(verdict: StepVerdict): VerdictView {
+/**
+ * What an other-name object IS, per check kind - only what that kind's
+ * classifier matched it on, so each is true (DBT-178: one sentence for all
+ * said "targets the plan's hub", false for the policy checks). A Defender
+ * export or Entra setting matches on the namespace (an export may target
+ * another hub in it); an assignment on the initiative OR the legacy name
+ * family; a remediation only on the family, with a name instructed.
+ */
+const OTHER_NAME_DETAIL: Partial<Record<CheckKind, (name: string) => string>> = {
+  "defender-export": (n) => `Found as ${n}, a continuous export that sends to the plan's Event Hub namespace.`,
+  "entra-setting": (n) => `Found as ${n}, a diagnostic setting that sends to the plan's Event Hub namespace.`,
+  "policy-assignment": (n) =>
+    `Found as ${n}, a policy assignment that uses the plan's initiative or is named like its assignments.`,
+  "policy-remediation": (n) =>
+    `Found remediations of ${n}, an assignment named like the plan's but not the one the steps name.`,
+};
+
+function otherNameDetail(kind: CheckKind | undefined, name: string, alsoFound: number): string {
+  const worded = kind === undefined ? undefined : OTHER_NAME_DETAIL[kind];
+  // Without a kind's own words, claim nothing beyond the name.
+  const what = worded?.(name) ?? `Found as ${name}, a name the plan does not use.`;
+  if (alsoFound <= 0) return what;
+  return `${what} ${plural(alsoFound, "other like it was", "others like it were")} also found.`;
+}
+
+/** One verdict, in words. `kind` is the check's, which words an other-name verdict. */
+export function verdictView(verdict: StepVerdict, kind?: CheckKind): VerdictView {
   switch (verdict.kind) {
     case "as-expected":
       return { word: "as expected", tone: "ok", detail: "", diffs: [] };
@@ -124,7 +150,7 @@ export function verdictView(verdict: StepVerdict): VerdictView {
       return {
         word: "present under another name",
         tone: "warning",
-        detail: `Found as ${verdict.name}, which targets the plan's hub.`,
+        detail: otherNameDetail(kind, verdict.name, verdict.alsoFound ?? 0),
         diffs: verdict.diffs,
       };
     case "absent":
@@ -203,7 +229,7 @@ export function verdictGroups(result: Pick<ValidationResult, "checks">): SourceV
   const groups = new Map<OnboardingSourceId, VerdictRow[]>();
   for (const c of result.checks) {
     const rows = groups.get(c.sourceId) ?? [];
-    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict) });
+    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict, c.kind) });
     groups.set(c.sourceId, rows);
   }
   return [...groups].map(([sourceId, rows]) => ({
