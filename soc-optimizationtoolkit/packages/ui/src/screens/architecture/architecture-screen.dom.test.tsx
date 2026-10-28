@@ -99,7 +99,9 @@ describe("ArchitectureScreen - live views and an empty groups listing (DBT-134)"
  * screen already calls the same route unconfirmed.
  */
 describe("ArchitectureScreen - Live Workgroup View flags a bare-id route (DBT-170)", () => {
-  const SECTIONS: Record<string, unknown> = {
+  // Read-only: a test that needs other routes passes its own (see liveCribl),
+  // so the pins do not depend on the order they run in.
+  const SECTIONS: Readonly<Record<string, unknown>> = {
     "/system/inputs": {
       items: [
         { id: "syslog_bare", type: "syslog" },
@@ -115,11 +117,12 @@ describe("ArchitectureScreen - Live Workgroup View flags a bare-id route (DBT-17
       ],
     },
   };
-  function liveCribl(): CriblClient {
+  function liveCribl(overrides: Record<string, unknown> = {}): CriblClient {
+    const sections = { ...SECTIONS, ...overrides };
     return {
       listGroups: vi.fn().mockResolvedValue(toListing([{ id: "prod", product: "stream" }])),
       request: vi.fn(({ path }: { path: string }) =>
-        Promise.resolve({ status: 200, body: SECTIONS[path] ?? { items: [] } }),
+        Promise.resolve({ status: 200, body: sections[path] ?? { items: [] } }),
       ),
     } as unknown as CriblClient;
   }
@@ -144,14 +147,33 @@ describe("ArchitectureScreen - Live Workgroup View flags a bare-id route (DBT-17
     expect(region.textContent).not.toContain("syslog_typed");
   });
 
+  it("suffixes the bare-id flow, and only it, in the flow-inventory picker", async () => {
+    render(<ArchitectureScreen cribl={liveCribl()} />);
+    openTab("Live Workgroup View");
+    fireEvent.click(screen.getByRole("button", { name: "Load worker groups" }));
+    const load = screen.getByRole<HTMLButtonElement>("button", { name: "Load Live Workgroup View" });
+    await waitFor(() => expect(load.disabled).toBe(false));
+    fireEvent.click(load);
+    fireEvent.click(await screen.findByText("All flows drawn - select to narrow..."));
+    const options = [...document.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (o) => o.textContent,
+    );
+    expect(options).toEqual([
+      `syslog_bare -> bare -> sentinel_dest${LEGACY_INPUT_MATCH_SUFFIX}`,
+      "syslog_typed -> typed -> sentinel_dest",
+    ]);
+  });
+
   it("renders no unconfirmed-routes note when every route is typed", async () => {
-    SECTIONS["/routes"] = {
-      id: "default",
-      routes: [
-        { id: "r2", name: "typed", filter: "__inputId=='syslog:syslog_typed'", output: "sentinel_dest", final: true },
-      ],
+    const typedOnly = {
+      "/routes": {
+        id: "default",
+        routes: [
+          { id: "r2", name: "typed", filter: "__inputId=='syslog:syslog_typed'", output: "sentinel_dest", final: true },
+        ],
+      },
     };
-    const { container } = render(<ArchitectureScreen cribl={liveCribl()} />);
+    const { container } = render(<ArchitectureScreen cribl={liveCribl(typedOnly)} />);
     openTab("Live Workgroup View");
     fireEvent.click(screen.getByRole("button", { name: "Load worker groups" }));
     // The load button enables once the listed group is picked.
