@@ -348,6 +348,8 @@ async function perform(azure: AzureManagement, read: PlannedRead): Promise<ListR
  * The hub names of the run's COMPLETE hub listing (the eh-hub check's read of
  * the plan's one namespace), or null when no eh-hub check read one to the end:
  * denied, truncated, failed, cancelled, or not planned for want of a value.
+ * A listing with a row whose name could not be read is not complete either:
+ * that row may BE the hub, so it shows nothing missing (the classifyRule rule).
  */
 function completeHubListing(
   plan: ValidationPlan,
@@ -358,7 +360,9 @@ function completeHubListing(
     for (const key of check.readKeys) {
       const read = reads.get(key);
       const names = read === undefined ? null : measuredHubNames(read);
-      if (names !== null) return names;
+      if (names !== null && read?.state === "read" && names.length === read.rows.length) {
+        return names;
+      }
     }
   }
   return null;

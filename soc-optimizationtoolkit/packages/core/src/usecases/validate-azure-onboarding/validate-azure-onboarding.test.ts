@@ -323,6 +323,17 @@ describe("arrival", () => {
     expect(denied.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
   });
 
+  it("a listing with a nameless row is not complete: that row may be the hub, so the zero stands", async () => {
+    const r = await validateAzureOnboarding(
+      new RecordingAzure([
+        onPath(HUBS_PATH, { status: 200, body: { value: [{ name: "t1" }, { id: "x" }] } }),
+        onPath(METRICS, metrics(0)),
+      ]),
+      planValidation(["defenderExport"], FULL),
+    );
+    expect(r.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
+  });
+
   it("a listing without the hub overrides even an unreadable metric, and the read is still sent", async () => {
     const azure = new RecordingAzure([hubList("t1"), onPath(METRICS, DENIED)]);
     const plan = planValidation(["defenderExport"], FULL);
