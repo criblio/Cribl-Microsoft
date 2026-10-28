@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
+  LEGACY_INPUT_MATCH_SUFFIX,
   checkPastedCredential,
   isInvalidConnection,
   parseEventHubConnectionString,
@@ -487,7 +488,7 @@ function routeText(r: RouteConsumption): string {
         ? "routed"
         : `routed by ${last.name}${last.output === undefined ? "" : ` to ${last.output}`}` +
             // DBT-162: a bare-id filter is drawn, never presented as confirmed.
-            (last.legacyBareMatch === true ? " (unconfirmed: its filter names the bare input id)" : "");
+            (last.legacyBareMatch === true ? LEGACY_INPUT_MATCH_SUFFIX : "");
     }
     case "cannot-evaluate":
       return `cannot check: route ${r.routeId} has a filter the app cannot evaluate`;

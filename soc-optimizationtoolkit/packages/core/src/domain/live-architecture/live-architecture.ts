@@ -370,20 +370,14 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 /**
- * The route filter's consumed inputs, parsed from the cheap known forms. The
- * shape is owned by capture-filter/input-id.ts, which matches it against an
- * input (DBT-162).
- */
-export type RouteFilterInputs = InputIdFilter;
-
-/**
  * Parse the filter forms this app (and common configs) write:
  * `__inputId=='x'` / `__inputId==="x"`, `['a','b'].includes(__inputId)`,
  * `__inputId.startsWith('collection:')`, missing or `true` = all inputs;
  * anything else = unparsed (treated as all, with a note - honest
- * over-approximation).
+ * over-approximation). The result's shape is owned by
+ * capture-filter/input-id.ts, which matches it against an input (DBT-162).
  */
-export function parseRouteFilterInputs(filter: string | undefined): RouteFilterInputs {
+export function parseRouteFilterInputs(filter: string | undefined): InputIdFilter {
   const trimmed = (filter ?? "").trim();
   if (trimmed === "" || trimmed === "true") {
     return { kind: "all" };
