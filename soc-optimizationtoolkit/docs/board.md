@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**79 in the backlog, 41 in progress, 61 done.**
+**80 in the backlog, 37 in progress, 66 done.**
 
 ## By menu item
 
@@ -33,12 +33,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
-| Azure Native Source Onboarding | 35 | 8 | 11 |
+| Event Hub Discovery | 0 | 1 | 0 |
+| Azure Native Source Onboarding | 32 | 12 | 7 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 120.
+Open work totals 117.
 
 ## Epics and features
 
@@ -47,7 +48,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 12% (5/41)
+### `AZR` Azure native source onboarding - 23% (10/43)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -60,7 +61,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 3/23 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 8/25 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -135,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (41)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1045,57 +1046,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   any clause naming another input; word-boundary the patterns; accept the
   reversed form; true wording for endsWith; repin the includes case.
 
-- **AZR-40** Validate's arrival check queries IncomingMessages on each Event Hub; Azure only serves it on the namespace
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-10-28 ([[AZR-32]]). Every "Arrival at the hub" row reads
-  "could not be read": the check sends GET
-  .../namespaces/<ns>/eventhubs/<hub>/providers/microsoft.insights/metrics?metricnames=IncomingMessages
-  (api 2018-01-01) and Azure answers HTTP 400
-  "Microsoft.EventHub/namespaces/eventhubs is not a supported platform metric
-  namespace". IncomingMessages is a NAMESPACE metric; one hub is selected with
-  a dimension filter on EntityName. So the ADR 0007 case "a quiet hub reads no
-  messages in the window" can never be reached against real Azure, and the
-  pins pass because the fake answers whatever the request shape is. Fix: one
-  namespace-level metrics read with $filter=EntityName eq '*' (or per hub),
-  split the answer by hub; pin the request URL against the recorded 400 and a
-  recorded 200. Also: when the namespace itself is 404 the check still sends
-  one metrics read per hub - skip them.
-
-- **AZR-41** Validate result rows print raw {{namespace}}, {{listenRule}} and {{consumerGroup}} placeholders
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-10-28 ([[AZR-32]]). The Check the Azure configuration
-  results read "Create or pick the Event Hub namespace {{namespace}}: present
-  but different" even with the namespace filled in and applied; the How-to
-  steps above render the same templates correctly ("... namespace
-  CRIBL-EVENTHUB"). The validate panel prints the step title template without
-  the plan-value substitution the steps use. Fix: render result titles through
-  the same substitution as the steps; pin that no rendered validate row
-  contains "{{".
-
-- **AZR-42** Validate results for previous plan values stay on screen, unmarked, after the plan values change
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-10-28 ([[AZR-32]]). After Apply with a different namespace
-  and resource group, the result block still read "Checked as of 1:06:22 PM"
-  with answers about the OLD namespace (evhns-cribl-test), and each step's
-  "Check:" column kept those answers beside the NEW values - the stale-marking
-  the How-to does for ticks is missing for checks. An answer about something
-  else is shown as an answer about this. Fix: key results to the plan values
-  they were run against and mark or clear them when those values change; pin
-  it.
-
-- **AZR-43** Sources that cannot stream to Event Hub tells operators to use repository paths
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-10-28 ([[AZR-18]]). Section 6 reads "Instead: Use
-  Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration" (a path
-  that no longer exists anywhere) and "Use DCR-Automation solution in this
-  repository for AMA-based collection" - an operator in Cribl has no
-  repository. Source:
-  packages/core/src/domain/coverage-model/coverage-catalog.ts (VNet flow logs
-  and VM guest OS alternatives), ported verbatim from the frozen legacy
-  fixture legacy/resource-coverage.json, so the provenance pin that compares
-  them must record the deliberate divergence. Fix: name the app's own screens
-  (Labs flow-log panel / Azure Blob source; DCR Automation) instead.
-
 ---
 
 ## Backlog - now (4)
@@ -1228,7 +1178,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (38)
+## Backlog - next (39)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1815,6 +1765,23 @@ Settled and unblocked, sequenced behind now.
   it cannot be read on the canvas. Fix: size the gap to the label or move the
   label into the edge's (i); pin the label against the lane-layout column gap.
 
+- **AZR-47** Arrival reads "no messages in the window" for a hub that does not exist
+  `AZR-F9` `bug` `settled`
+  Not now because: The same panel already says the hubs are missing (the
+  consumer-group rows read "not found" from a complete hub list), so an
+  operator is not left believing the hubs exist; the arrival lines only fail
+  to say it themselves.
+  FOUND LIVE 2026-10-28 while verifying [[AZR-40]]. Azure Monitor answers an
+  EntityName filter for a hub that is not in the namespace with a zero series,
+  so against AndyEH (complete hub list: t1, t2, t3) the nine Entra
+  auto-created hubs (insights-logs-auditlogs and the rest) all read "no
+  messages in the window", exactly like the real, quiet hub t2. A missing hub
+  and a quiet hub are different answers: the first means the diagnostic
+  setting has never sent anything. Fix: when the run has a COMPLETE hub
+  listing (ValidationResult.measuredHubs) and the hub is not in it, the
+  arrival line says the hub does not exist yet instead of reporting a zero;
+  with an incomplete listing it keeps the measured wording. Pin both.
+
 ---
 
 ## Backlog - later (37)
@@ -2318,7 +2285,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (61)
+## Done (66)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4498,3 +4465,98 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   4d9c44f): verdictView takes the check kind; each of the four
   present-other-name kinds says only what its classifier matched on, plus how
   many others were found. Leftovers: DBT-189.
+
+- **AZR-40** Validate's arrival check queries IncomingMessages on each Event Hub; Azure only serves it on the namespace
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). Every "Arrival at the hub" row reads
+  "could not be read": the check sends GET
+  .../namespaces/<ns>/eventhubs/<hub>/providers/microsoft.insights/metrics?metricnames=IncomingMessages
+  (api 2018-01-01) and Azure answers HTTP 400
+  "Microsoft.EventHub/namespaces/eventhubs is not a supported platform metric
+  namespace". IncomingMessages is a NAMESPACE metric; one hub is selected with
+  a dimension filter on EntityName. So the ADR 0007 case "a quiet hub reads no
+  messages in the window" can never be reached against real Azure, and the
+  pins pass because the fake answers whatever the request shape is. Fix: one
+  namespace-level metrics read with $filter=EntityName eq '*' (or per hub),
+  split the answer by hub; pin the request URL against the recorded 400 and a
+  recorded 200. Also: when the namespace itself is 404 the check still sends
+  one metrics read per hub - skip them. DONE 2026-10-28 (branch
+  feature/azure-onboarding-screen): metricsRequest reads the hub's NAMESPACE
+  with $filter=EntityName eq '<hub>' (04ad59b). Live: every arrival read
+  answered 200 through the app proxy (ARM accepts the URLSearchParams-encoded
+  %24filter), and the existing hub t2 in AndyEH read "no messages in the
+  window" - the quiet-hub case ADR 0007 asked for. Measured: with the
+  dimension filter Azure answers a quiet hub with a zero series, not an empty
+  one. When the namespace itself is 404 the per-hub reads are still sent; left
+  as is (one read per hub, inside the 40/min pace). New finding from the same
+  run: AZR-47.
+
+- **AZR-41** Validate result rows print raw {{namespace}}, {{listenRule}} and {{consumerGroup}} placeholders
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). The Check the Azure configuration
+  results read "Create or pick the Event Hub namespace {{namespace}}: present
+  but different" even with the namespace filled in and applied; the How-to
+  steps above render the same templates correctly ("... namespace
+  CRIBL-EVENTHUB"). The validate panel prints the step title template without
+  the plan-value substitution the steps use. Fix: render result titles through
+  the same substitution as the steps; pin that no rendered validate row
+  contains "{{". DONE 2026-10-28 (branch feature/azure-onboarding-screen): a
+  finished run keeps the plan values it checked and fills row titles from them
+  (4390ddd). Live: "Create or pick the Event Hub namespace AndyEH: as
+  expected", "Create the Event Hub t2", "CriblDefenderExport to t2"; unset
+  values read <listenRule>, no {{ anywhere.
+
+- **AZR-42** Validate results for previous plan values stay on screen, unmarked, after the plan values change
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-10-28 ([[AZR-32]]). After Apply with a different namespace
+  and resource group, the result block still read "Checked as of 1:06:22 PM"
+  with answers about the OLD namespace (evhns-cribl-test), and each step's
+  "Check:" column kept those answers beside the NEW values - the stale-marking
+  the How-to does for ticks is missing for checks. An answer about something
+  else is shown as an answer about this. Fix: key results to the plan values
+  they were run against and mark or clear them when those values change; pin
+  it. DONE 2026-10-28 (branch feature/azure-onboarding-screen): results are
+  tied to the values they checked (4390ddd); after a change the panel says so
+  and the screen stops feeding them to the steps, dataflow and Cribl source.
+  Pinned at panel and screen level, mutation-checked. Live: changing the
+  resource group and choosing Apply turned the namespace step's "Check: as
+  expected" back to "Check: not checked yet" and the panel read "These results
+  were checked against older values - changed since: Resource group."
+
+- **AZR-43** Sources that cannot stream to Event Hub tells operators to use repository paths
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-10-28 ([[AZR-18]]). Section 6 reads "Instead: Use
+  Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration" (a path
+  that no longer exists anywhere) and "Use DCR-Automation solution in this
+  repository for AMA-based collection" - an operator in Cribl has no
+  repository. Source:
+  packages/core/src/domain/coverage-model/coverage-catalog.ts (VNet flow logs
+  and VM guest OS alternatives), ported verbatim from the frozen legacy
+  fixture legacy/resource-coverage.json, so the provenance pin that compares
+  them must record the deliberate divergence. Fix: name the app's own screens
+  (Labs flow-log panel / Azure Blob source; DCR Automation) instead. DONE
+  2026-10-28 (branch feature/azure-onboarding-screen): unsupported items carry
+  an operator-facing `instead` line; the legacy `alternative` stays as pinned
+  provenance (0c87da9). Live: section 6 reads "Read them with a Cribl Azure
+  Blob source on the flow-log storage account..." and "Collect them with Azure
+  Monitor Agent and a data collection rule, set up in Azure. This app does not
+  set that up."
+
+- **AZR-46** Event Hub Discovery activity check reads IncomingMessages per hub, which Azure refuses, so every hub reads inactive
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND 2026-10-28 while fixing [[AZR-40]], which reused the same builder.
+  eventhub-discovery.ts metricsRequest puts the metrics GET on the HUB
+  resource id; Azure answers 400 "Microsoft.EventHub/namespaces/eventhubs is
+  not a supported platform metric namespace" (measured live on AZR-40).
+  checkEventHubActivity turns a non-2xx into incomingMessages 0, isActive
+  false with error "HTTP 400", so the opt-in activity check on the Event Hub
+  Discovery screen reports every hub inactive. Ported faithfully from the
+  legacy PowerShell (Get-AzMetric -ResourceId $eh.id -ErrorAction
+  SilentlyContinue), which hid the same failure. Fix together with AZR-40: the
+  metrics read goes to the NAMESPACE with $filter=EntityName eq <hub>. DONE
+  2026-10-28 (branch feature/azure-onboarding-screen): fixed by the same
+  change as AZR-40 (04ad59b). Live: Event Hub Discovery's activity check now
+  sends namespace-scoped, EntityName-filtered reads and they answer 200
+  (ADX-EG-mbender-adxcluster, AndyEH, CriblSysEngNamespace, CriblTest
+  observed). The per-hub results the screen renders after the full paced run
+  were not watched to the end.
