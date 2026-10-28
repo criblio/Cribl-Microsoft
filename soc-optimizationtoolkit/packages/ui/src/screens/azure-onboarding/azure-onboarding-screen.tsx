@@ -44,6 +44,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   COVERAGE_SELECTION_KEY,
+  DEFENDER_EXPORT_ITEM_ID,
   ONBOARDING_PROGRESS_KEY,
   applyCriblSource,
   buildNamespaceAuthRulesListRequest,
@@ -93,7 +94,6 @@ import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
 import { useStreamWorkerGroups } from "../../components/worker-group-listing";
 import {
-  DEFENDER_ITEM_ID,
   buildSections,
   canSave,
   criblSideReadingOf,
@@ -328,7 +328,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   const unknown = useMemo(() => {
     const map = new Map<OnboardingItemId, string>();
     if (defenderState?.unknownReason !== undefined) {
-      map.set(DEFENDER_ITEM_ID, defenderState.unknownReason);
+      map.set(DEFENDER_EXPORT_ITEM_ID, defenderState.unknownReason);
     }
     return map;
   }, [defenderState]);
@@ -347,7 +347,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
       ? lastRun.result
       : null;
   const defenderHowTo =
-    progress !== null && effectiveMode(progress, DEFENDER_ITEM_ID as OnboardingSourceId) === "manual";
+    progress !== null && effectiveMode(progress, DEFENDER_EXPORT_ITEM_ID) === "manual";
   const chosen = useMemo(
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
@@ -743,7 +743,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
             notBuiltBody={status === "coming-soon" ? rows : undefined}
           >
             {rows}
-            {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_ITEM_ID) &&
+            {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_EXPORT_ITEM_ID) &&
               (defenderHowTo ? (
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
               ) : (

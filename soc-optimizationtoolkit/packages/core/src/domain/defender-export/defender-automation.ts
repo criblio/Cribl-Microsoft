@@ -54,6 +54,7 @@ import { parseResourceId } from "../azure-resource-id/azure-resource-id";
 import type { Listing } from "../inventory-listing/inventory-listing";
 import { listingRows, listingWasRead, toListing } from "../inventory-listing/inventory-listing";
 import type { StepVerdict, VerdictDiff } from "../onboarding-howto/check-kinds";
+import type { OnboardingSourceId } from "../onboarding-howto/sources";
 
 /**
  * api-version for Microsoft.Security/automations, verbatim from legacy :236.
@@ -61,6 +62,13 @@ import type { StepVerdict, VerdictDiff } from "../onboarding-howto/check-kinds";
  * answer 2026-10-21).
  */
 export const SECURITY_AUTOMATIONS_API_VERSION = "2019-01-01-preview";
+
+/**
+ * The coverage-catalog item (and How-to source) this export deploys - the ONE
+ * declaration of the id (AZR-38). Typed as the source-id union so a misspelling
+ * fails typecheck; the usecase barrel re-exports it for the UI.
+ */
+export const DEFENDER_EXPORT_ITEM_ID = "defenderExport" satisfies OnboardingSourceId;
 
 /** The automation's name, verbatim from the legacy parameter default (:52). */
 export const DEFENDER_EXPORT_NAME = "CriblDefenderExport";

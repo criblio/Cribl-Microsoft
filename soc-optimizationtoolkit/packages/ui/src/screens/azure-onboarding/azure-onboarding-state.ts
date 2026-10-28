@@ -59,6 +59,7 @@
 
 import {
   DEFAULT_NAMESPACE_RULE,
+  DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   ONBOARDING_SECTIONS,
   anyStandard,
@@ -383,9 +384,6 @@ export function buildSections(
  */
 export const ZERO_PLANS_DEPLOY_ALLOWED = true;
 
-/** The Defender item's id in the coverage catalog. */
-export const DEFENDER_ITEM_ID: OnboardingItemId = "defenderExport";
-
 /** Everything the deploy gate looks at. No capability set, on purpose. */
 export interface DefenderDeployGate {
   /** A deploy is in flight. */
@@ -418,7 +416,7 @@ export function defenderDeployDisabledReason(gate: DefenderDeployGate): string |
   if (gate.selection === null) {
     return "The saved selection has not loaded, so whether the alert export is ticked is not known.";
   }
-  if (!selectedItemIds(gate.selection).includes(DEFENDER_ITEM_ID)) {
+  if (!selectedItemIds(gate.selection).includes(DEFENDER_EXPORT_ITEM_ID)) {
     return "Tick the Defender for Cloud alert export to deploy it.";
   }
   const state = gate.state;

@@ -1,9 +1,17 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { COVERAGE_CATALOG } from "../../domain/coverage-model/coverage-catalog";
+import * as defenderAutomation from "../../domain/defender-export/defender-automation";
+import { ONBOARDING_SOURCES } from "../../domain/onboarding-howto/sources";
+import { DEFENDER_STEPS } from "../../domain/onboarding-howto-steps/defender-steps";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeLogger } from "../../testing/fake-logger";
 import type { AzureManagement } from "../../ports/azure-management";
 import {
   DEFENDER_AUTOMATIONS_MAX_PAGES,
+  DEFENDER_EXPORT_ITEM_ID,
   deployDefenderExport,
   readDefenderState,
 } from "./defender-export";
@@ -516,4 +524,54 @@ describe("deployDefenderExport", () => {
       expect(azure.calls.filter((c) => c.method === "PUT").length).toBeLessThanOrEqual(1);
     }
   });
+});
+
+// AZR-38: the Defender export's id was declared twice (here and in the UI
+// state module) and a third time as the How-to steps' source tuple. One
+// declaration now lives in the defender-export domain; everything else imports
+// it. The scan pins WHERE the literal may appear, so a re-declaration anywhere
+// in core, ui or the app shell fails here rather than drifting silently.
+describe("DEFENDER_EXPORT_ITEM_ID is the one Defender id", () => {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const TOOLKIT = join(HERE, "..", "..", "..", "..", "..");
+  const ROOTS = [
+    join(TOOLKIT, "packages", "core", "src"),
+    join(TOOLKIT, "packages", "ui", "src"),
+    join(TOOLKIT, "apps", "cribl-app", "src"),
+  ].filter((root) => existsSync(root));
+  const QUOTED = /["'`]defenderExport["'`]/g;
+
+  it("is the usecase's export by identity, and names the catalog item and the How-to source", () => {
+    expect(DEFENDER_EXPORT_ITEM_ID).toBe("defenderExport");
+    expect(DEFENDER_EXPORT_ITEM_ID).toBe(defenderAutomation.DEFENDER_EXPORT_ITEM_ID);
+    expect(COVERAGE_CATALOG.filter((i) => i.id === DEFENDER_EXPORT_ITEM_ID).map((i) => i.method)).toEqual([
+      "script",
+    ]);
+    expect(ONBOARDING_SOURCES.filter((s) => s.id === DEFENDER_EXPORT_ITEM_ID)).toHaveLength(1);
+  });
+
+  it("is the source of every Defender How-to step", () => {
+    expect(DEFENDER_STEPS.length).toBeGreaterThan(0);
+    for (const step of DEFENDER_STEPS) expect(step.sourceIds).toEqual([DEFENDER_EXPORT_ITEM_ID]);
+  });
+
+  it("appears as a literal only in its declaration and the two catalogs it names", () => {
+    const hits: Record<string, number> = {};
+    let scanned = 0;
+    for (const root of ROOTS) {
+      for (const f of readdirSync(root, { recursive: true }) as string[]) {
+        if (!/\.tsx?$/.test(f) || /\.test\.tsx?$/.test(f) || f.includes("node_modules")) continue;
+        scanned += 1;
+        const count = readFileSync(join(root, f), "utf8").match(QUOTED)?.length ?? 0;
+        if (count > 0) hits[relative(TOOLKIT, join(root, f)).replace(/\\/g, "/")] = count;
+      }
+    }
+    // Guards the scan against passing because it read nothing.
+    expect(scanned).toBeGreaterThan(100);
+    expect(hits).toEqual({
+      "packages/core/src/domain/coverage-model/coverage-catalog.ts": 1,
+      "packages/core/src/domain/defender-export/defender-automation.ts": 1,
+      "packages/core/src/domain/onboarding-howto/sources.ts": 2,
+    });
+  }, 30000);
 });

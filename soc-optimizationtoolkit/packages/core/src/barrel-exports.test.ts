@@ -43,6 +43,7 @@ const ROOT_NAMES: readonly Entry[] = [
   ["listNamespaceAuthRules", eventHubTarget, "function"],
   ["readDefenderState", defenderUsecase, "function"],
   ["deployDefenderExport", defenderUsecase, "function"],
+  ["DEFENDER_EXPORT_ITEM_ID", defenderUsecase, "string"],
   ["ONBOARDING_SECTIONS", onboardingSections, "object"],
   ["itemAvailability", onboardingSections, "function"],
   ["readCoverageDocument", coverageModel, "function"],

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   FakeKvDocumentStore,
   ITEM_AVAILABILITY,
@@ -29,12 +30,12 @@ import type {
   NamespaceRef,
 } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
+import * as onboardingState from "./azure-onboarding-state";
 import {
   unmeasuredInventoryMessage,
   verifiedNoneInventoryMessage,
 } from "../../capabilities/empty-inventory";
 import {
-  DEFENDER_ITEM_ID,
   DELIVERY_NOT_VERIFIED,
   NEVER_ENABLES_PLAN_NOTE,
   PLAN_ENABLEMENT_STEPS,
@@ -157,10 +158,10 @@ describe("buildSections - an unread state is never a confident negative", () => 
   const unticked: CoverageSelection = { ...defaultSelection(), enabled: [] };
 
   it("an unknown Defender row never reads 'will be deployed' or 'Not selected', ticked or not", () => {
-    const unknown = new Map([[DEFENDER_ITEM_ID, "HTTP 403 listing automations"]]);
+    const unknown = new Map([[DEFENDER_EXPORT_ITEM_ID, "HTTP 403 listing automations"]]);
     for (const selection of [ticked, unticked]) {
-      for (const deployed of [[], [DEFENDER_ITEM_ID], null]) {
-        const row = itemRow(buildSections(selection, deployed, unknown), DEFENDER_ITEM_ID);
+      for (const deployed of [[], [DEFENDER_EXPORT_ITEM_ID], null]) {
+        const row = itemRow(buildSections(selection, deployed, unknown), DEFENDER_EXPORT_ITEM_ID);
         expect(row.label).not.toMatch(/will be deployed|Not selected/);
         expect(row.label).toBe("Deployment state could not be read - HTTP 403 listing automations");
         expect(row.state).toBe("unknown");
@@ -170,7 +171,7 @@ describe("buildSections - an unread state is never a confident negative", () => 
 
   it("before any read, the Defender row makes no deployment claim either", () => {
     for (const selection of [ticked, unticked]) {
-      const row = itemRow(buildSections(selection, null, new Map()), DEFENDER_ITEM_ID);
+      const row = itemRow(buildSections(selection, null, new Map()), DEFENDER_EXPORT_ITEM_ID);
       expect(row.label).not.toMatch(/will be deployed|Not selected/);
       expect(row.state).toBe("unread");
     }
@@ -178,12 +179,12 @@ describe("buildSections - an unread state is never a confident negative", () => 
 
   it("labels the four read states, and deployed-unselected always says it is still running", () => {
     const at = (sel: CoverageSelection, deployed: string[]) =>
-      itemRow(buildSections(sel, deployed, new Map()), DEFENDER_ITEM_ID);
+      itemRow(buildSections(sel, deployed, new Map()), DEFENDER_EXPORT_ITEM_ID);
 
     expect(at(ticked, []).label).toBe("Selected - will be deployed");
     expect(at(unticked, []).label).toBe("Not selected");
-    expect(at(ticked, [DEFENDER_ITEM_ID]).label).toBe("Deployed");
-    const left = at(unticked, [DEFENDER_ITEM_ID]);
+    expect(at(ticked, [DEFENDER_EXPORT_ITEM_ID]).label).toBe("Deployed");
+    const left = at(unticked, [DEFENDER_EXPORT_ITEM_ID]);
     expect(left.state).toBe("deployed-unselected");
     expect(left.label).toMatch(/still running/);
   });
@@ -193,11 +194,11 @@ describe("buildSections - an unread state is never a confident negative", () => 
 
     expect(row.label).toBe("Selected - not available yet");
     expect(row.tickable).toBe(false);
-    expect(itemRow(buildSections(defaultSelection(), [], new Map()), DEFENDER_ITEM_ID).tickable).toBe(true);
+    expect(itemRow(buildSections(defaultSelection(), [], new Map()), DEFENDER_EXPORT_ITEM_ID).tickable).toBe(true);
   });
 
   it("with no selection loaded, nothing is tickable", () => {
-    const row = itemRow(buildSections(null, [], new Map()), DEFENDER_ITEM_ID);
+    const row = itemRow(buildSections(null, [], new Map()), DEFENDER_EXPORT_ITEM_ID);
     expect(row.tickable).toBe(false);
   });
 
@@ -266,7 +267,7 @@ function state(over: Partial<DefenderState> = {}): DefenderState {
 // deployable. Its uncertainty is surfaced by defenderStateNote, not the gate.
 const READY: DefenderDeployGate = {
   running: false,
-  selection: { ...defaultSelection(), enabled: [DEFENDER_ITEM_ID] },
+  selection: { ...defaultSelection(), enabled: [DEFENDER_EXPORT_ITEM_ID] },
   state: state(),
   namespace: NS,
   hubName: "defender",
@@ -279,11 +280,19 @@ describe("defenderDeployDisabledReason", () => {
     expect(defenderDeployDisabledReason(READY)).toBeNull();
   });
 
+  it("reads the tick by core's DEFENDER_EXPORT_ITEM_ID, and declares no id of its own (AZR-38)", () => {
+    expect(DEFENDER_EXPORT_ITEM_ID).toBe("defenderExport");
+    expect(Object.keys(onboardingState)).not.toContain("DEFENDER_ITEM_ID");
+    expect(defenderDeployDisabledReason({ ...READY, selection: { ...defaultSelection(), enabled: ["entraId"] } })).toBe(
+      "Tick the Defender for Cloud alert export to deploy it.",
+    );
+  });
+
   it("refuses when ours is already deployed", () => {
     const ours = automation({ name: DEFENDER_EXPORT_NAME, resourceGroup: "CriblSecurityExport" });
     const reason = defenderDeployDisabledReason({
       ...READY,
-      state: state({ ours: { kind: "present-matching", automation: ours }, deployed: [DEFENDER_ITEM_ID] }),
+      state: state({ ours: { kind: "present-matching", automation: ours }, deployed: [DEFENDER_EXPORT_ITEM_ID] }),
     });
     expect(reason).toMatch(/already exists in CriblSecurityExport/);
   });
@@ -539,7 +548,7 @@ describe("visible copy carries no project history", () => {
     for (const l of loads) for (const b of loadBanners(l)) add(`banner.${l.status}`, b.text);
 
     const sel = defaultSelection();
-    for (const deployed of [[], [DEFENDER_ITEM_ID], null]) {
+    for (const deployed of [[], [DEFENDER_EXPORT_ITEM_ID], null]) {
       for (const s of buildSections(sel, deployed, new Map())) {
         add(`section.${s.key}`, s.title);
         for (const r of s.rows) {
@@ -552,7 +561,7 @@ describe("visible copy carries no project history", () => {
         }
       }
     }
-    add("unknown-label", itemRow(buildSections(sel, [], new Map([[DEFENDER_ITEM_ID, "r"]])), DEFENDER_ITEM_ID).label);
+    add("unknown-label", itemRow(buildSections(sel, [], new Map([[DEFENDER_EXPORT_ITEM_ID, "r"]])), DEFENDER_EXPORT_ITEM_ID).label);
 
     const gates: Partial<DefenderDeployGate>[] = [
       { running: true },

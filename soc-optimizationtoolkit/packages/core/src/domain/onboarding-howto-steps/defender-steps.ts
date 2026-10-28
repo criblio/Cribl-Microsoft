@@ -1,6 +1,6 @@
 /**
  * The Defender for Cloud continuous export steps - the Azure side the app's
- * Automated mode writes for `defenderExport`, as steps.
+ * Automated mode writes for {@link DEFENDER_EXPORT_ITEM_ID}, as steps.
  *
  * Names, the api-version, the event source, the scope path and the hub id
  * come from defender-automation (DEFENDER_EXPORT_NAME,
@@ -14,6 +14,7 @@
 
 import {
   ALERTS_EVENT_SOURCE,
+  DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   SECURITY_AUTOMATIONS_API_VERSION,
   buildAutomationPutRequest,
@@ -49,7 +50,7 @@ export function defenderExportBody(v: PlanValues): string {
   return JSON.stringify(request.body, null, 2);
 }
 
-const DEFENDER_ID = ["defenderExport"] as const;
+const DEFENDER_ID = [DEFENDER_EXPORT_ITEM_ID] as const;
 
 export const DEFENDER_STEPS: readonly HowToStep[] = [
   {

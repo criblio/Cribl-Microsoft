@@ -69,6 +69,7 @@ import type {
   OursState,
 } from "../../domain/defender-export/defender-automation";
 import {
+  DEFENDER_EXPORT_ITEM_ID,
   automationDiffs,
   buildAutomationGetByIdRequest,
   buildAutomationPutRequest,
@@ -81,8 +82,8 @@ import {
   parseAutomations,
 } from "../../domain/defender-export/defender-automation";
 
-/** The coverage-catalog item this export deploys. */
-export const DEFENDER_EXPORT_ITEM_ID: OnboardingItemId = "defenderExport";
+/** The coverage-catalog item this export deploys; declared once, in the domain. */
+export { DEFENDER_EXPORT_ITEM_ID };
 
 /**
  * Fail-safe bound on nextLink pages of the automations list. A subscription
@@ -129,7 +130,7 @@ export interface DefenderState {
   readonly automations: DefenderAutomationsState;
   readonly ours: DefenderOursReading;
   /**
-   * `["defenderExport"]` ONLY when ours is present-matching. A broken export
+   * `[DEFENDER_EXPORT_ITEM_ID]` ONLY when ours is present-matching. A broken export
    * is not deployed, and an unreadable list proves nothing either way.
    */
   readonly deployed: readonly OnboardingItemId[];
