@@ -159,7 +159,7 @@ describe("how-to step catalog", () => {
     expect(communityDefinitionNames([])).toHaveLength(44);
     const rows = renderStep(howToStep("policy-community-definitions")!, FULL, ["Other"]).values;
     expect(rows.find((r) => r.label === "Definition names")?.value).toBe(
-      "Cribl-RecoveryServicesVault-DiagSettings-EH\nCribl-AzureAPIforFHIR-DiagSettings-EH\nCribl-PowerBIEmbedded-DiagSettings-EH",
+      "Cribl-RecoveryServicesVault-DiagSettings-EH, Cribl-AzureAPIforFHIR-DiagSettings-EH, Cribl-PowerBIEmbedded-DiagSettings-EH",
     );
   });
 

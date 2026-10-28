@@ -131,4 +131,12 @@ describe("PLAN_VALUE_LABELS", () => {
       expect(PLAN_VALUE_LABELS[k].info.length).toBeGreaterThan(0);
     }
   });
+
+  it("says the write rule needs Manage where Azure creates the hubs, as eh-rule-manage checks (AZR-39)", () => {
+    expect(PLAN_VALUE_LABELS.sendRule.info).toBe(
+      "The shared access rule Azure uses to WRITE to the hub. It needs Send rights, or Manage when Azure creates " +
+        "the hubs itself (Entra ID and Activity Log diagnostic settings, the policy initiatives). Do not use " +
+        "RootManageSharedAccessKey.",
+    );
+  });
 });

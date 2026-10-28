@@ -319,7 +319,9 @@ export const POLICY_STEPS: readonly HowToStep[] = [
     values: (_v, sub) => [
       { label: "Source folder", value: LEGACY_POLICY_NAMES.communityRepoFolder },
       { label: "Tiers", value: tiersFrom(sub).join(", ") },
-      { label: "Definition names", value: communityDefinitionNames(sub).join("\n") },
+      // Comma-separated like the tiers: the values table renders each value as
+      // inline code, which collapses newlines into spaces.
+      { label: "Definition names", value: communityDefinitionNames(sub).join(", ") },
     ],
     rbac: ["Microsoft.Authorization/policyDefinitions/write at the management group."],
     confirmHow: `Policy, Definitions at {{managementGroupId}} lists a ${LEGACY_POLICY_NAMES.communityDefinitionPrefix}...${LEGACY_POLICY_NAMES.communityDefinitionSuffix} definition for every resource type you chose.`,

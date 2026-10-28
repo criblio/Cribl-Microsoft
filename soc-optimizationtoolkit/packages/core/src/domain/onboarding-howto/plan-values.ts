@@ -165,7 +165,7 @@ export const PLAN_VALUE_LABELS: Readonly<Record<PlanValueKey, PlanValueLabel>> =
   },
   sendRule: {
     label: "Send rule",
-    info: "The shared access rule Azure uses to WRITE to the hub. It needs Send rights. Do not use RootManageSharedAccessKey.",
+    info: "The shared access rule Azure uses to WRITE to the hub. It needs Send rights, or Manage when Azure creates the hubs itself (Entra ID and Activity Log diagnostic settings, the policy initiatives). Do not use RootManageSharedAccessKey.",
   },
   listenRule: {
     label: "Listen rule",
