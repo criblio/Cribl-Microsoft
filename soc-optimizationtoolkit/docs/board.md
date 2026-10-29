@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**74 in the backlog, 38 in progress, 74 done.**
+**74 in the backlog, 42 in progress, 74 done.**
 
 ## By menu item
 
@@ -34,12 +34,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 27 | 19 | 7 |
+| Azure Native Source Onboarding | 31 | 19 | 11 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 112.
+Open work totals 116.
 
 ## Epics and features
 
@@ -48,7 +48,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 36% (16/45)
+### `AZR` Azure native source onboarding - 33% (16/49)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -61,7 +61,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 14/27 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 14/31 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (38)
+## In progress (42)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1083,6 +1083,53 @@ Started. Anything here with an unfinished dependency is called out on its card.
   api-version 2023-04-01 and return full ids. Second, a Send-only rule named
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
+
+- **AZR-50** A hub listing with a nameless row is complete to the eh-hub verdict but incomplete to the arrival line
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e).
+  completeHubListing (AZR-47) calls a listing with a nameless row incomplete,
+  but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop
+  the row and treat the rest as complete. For [{name:t1},{id:x}] one run says
+  the hub is not found (eh-hub absent), says arrival is a quiet measured zero,
+  and hands [t1] to laneTopics and plan-cribl-source as a complete list.
+  classifyRule and classifyDefinitions already return unparsedRows -> unknown.
+  Fix: the completeness rule lives in measuredHubNames (null when any row has
+  no readable name); classifyHubs returns unknown for dropped rows;
+  measuredHubs excludes incomplete listings.
+
+- **AZR-51** Community policy tier descriptions name services the tier does not import (AKS, IoT Hub, Cognitive Services)
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-10-29 by the architecture audit. AZR-39 added
+  COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen
+  Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition
+  names row and the policy-definition check. The catalog COMMUNITY_TIERS
+  details, ported verbatim from the legacy resource-coverage.json, disagree
+  with it: Security says AKS, Other says IoT Hub and Cognitive Services; none
+  is imported or validated. The two tables are joined by key with a silent `??
+  []`. Fix: one declaration of the tier services next to the catalog, details
+  derived from it, and a pin that every non-All tier has a service list. The
+  verbatim-provenance pin on the details changes on purpose: what the operator
+  reads must match what is imported.
+
+- **AZR-52** The management-group policy definition id and listing path are built inline beside managementGroupDefinitionId
+  `AZR-F9` `enabler` `settled`
+  FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step
+  renders its Definition ID inline and the policy-definition Validate listing
+  builds its path inline, next to the new managementGroupDefinitionId helper.
+  Identical today; if one changes the step shows one id while Validate looks
+  for another and reports absent. Fix: render with managementGroupDefinitionId
+  and share a managementGroupDefinitionsPath helper with the listing request.
+
+- **AZR-53** Unused public exports and a stale ADR 0007 bullet left by the AZR-38..49 work
+  `AZR-F9` `enabler` `settled`
+  FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and
+  CheckedVerdict are exported from onboarding-dataflow with no consumer
+  (verdictStatus check? has no caller that omits it); planValueOf is on the
+  @soc/core barrel with no outside consumer; communityDefinitionName,
+  edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported
+  module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop
+  the exports (keep test access where pinned), make check required, delete the
+  ADR bullet.
 
 ---
 

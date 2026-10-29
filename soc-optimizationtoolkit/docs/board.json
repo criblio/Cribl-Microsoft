@@ -2693,6 +2693,54 @@
       "title": "OPTIONS_SAVE_FAILED_NOTICE is exported from @soc/ui but no shell uses it",
       "detail": "FOUND 2026-10-28 by the architecture audit. packages/ui/src/index.ts re-exports it; only options-read.ts and its test use it. Fix: drop it from the index.\n\nDONE 2026-10-28: dropped from packages/ui/src/index.ts; typecheck confirms no shell imported it.",
       "verified": "pins"
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "id": "AZR-50",
+      "type": "bug",
+      "priority": "now",
+      "title": "A hub listing with a nameless row is complete to the eh-hub verdict but incomplete to the arrival line",
+      "detail": "FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e). completeHubListing (AZR-47) calls a listing with a nameless row incomplete, but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop the row and treat the rest as complete. For [{name:t1},{id:x}] one run says the hub is not found (eh-hub absent), says arrival is a quiet measured zero, and hands [t1] to laneTopics and plan-cribl-source as a complete list. classifyRule and classifyDefinitions already return unparsedRows -> unknown. Fix: the completeness rule lives in measuredHubNames (null when any row has no readable name); classifyHubs returns unknown for dropped rows; measuredHubs excludes incomplete listings."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "id": "AZR-51",
+      "type": "bug",
+      "priority": "now",
+      "title": "Community policy tier descriptions name services the tier does not import (AKS, IoT Hub, Cognitive Services)",
+      "detail": "FOUND 2026-10-29 by the architecture audit. AZR-39 added COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition names row and the policy-definition check. The catalog COMMUNITY_TIERS details, ported verbatim from the legacy resource-coverage.json, disagree with it: Security says AKS, Other says IoT Hub and Cognitive Services; none is imported or validated. The two tables are joined by key with a silent `?? []`. Fix: one declaration of the tier services next to the catalog, details derived from it, and a pin that every non-All tier has a service list. The verbatim-provenance pin on the details changes on purpose: what the operator reads must match what is imported."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "id": "AZR-52",
+      "type": "enabler",
+      "priority": "now",
+      "title": "The management-group policy definition id and listing path are built inline beside managementGroupDefinitionId",
+      "detail": "FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step renders its Definition ID inline and the policy-definition Validate listing builds its path inline, next to the new managementGroupDefinitionId helper. Identical today; if one changes the step shows one id while Validate looks for another and reports absent. Fix: render with managementGroupDefinitionId and share a managementGroupDefinitionsPath helper with the listing request."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "id": "AZR-53",
+      "type": "enabler",
+      "priority": "now",
+      "title": "Unused public exports and a stale ADR 0007 bullet left by the AZR-38..49 work",
+      "detail": "FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and CheckedVerdict are exported from onboarding-dataflow with no consumer (verdictStatus check? has no caller that omits it); planValueOf is on the @soc/core barrel with no outside consumer; communityDefinitionName, edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop the exports (keep test access where pinned), make check required, delete the ADR bullet."
     }
   ],
   "features": [
