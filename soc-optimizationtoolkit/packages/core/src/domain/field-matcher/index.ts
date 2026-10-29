@@ -44,7 +44,11 @@ export type { VendorMapping, SampleFieldInput } from "./match-fields";
 export { matchFields, matchSampleToSchema } from "./match-fields";
 
 // Close-match suggester (missing-field buttons in the coverage sections)
-export type { CloseMatchCandidate, CloseMatchRow } from "./close-matches";
+export type {
+  CloseMatchCandidate,
+  CloseMatchOptions,
+  CloseMatchRow,
+} from "./close-matches";
 export {
   closeMatchRowsFromReports,
   isTypeMismatch,

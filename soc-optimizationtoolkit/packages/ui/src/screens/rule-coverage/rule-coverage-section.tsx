@@ -465,10 +465,16 @@ export function RuleCoverageSection({
     (field: string) => {
       setInvestigation({
         field,
-        candidates: suggestCloseMatches(field, closeMatchRowsFromReports(reports)),
+        // The solution scopes which vendor packs count as documented.
+        candidates: suggestCloseMatches(
+          field,
+          closeMatchRowsFromReports(reports),
+          5,
+          { solutionName },
+        ),
       });
     },
-    [reports],
+    [reports, solutionName],
   );
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field

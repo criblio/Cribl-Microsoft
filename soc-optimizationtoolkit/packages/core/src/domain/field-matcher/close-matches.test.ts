@@ -45,7 +45,9 @@ describe("suggestCloseMatches", () => {
     // The matcher is deliberately conservative here (base64 content).
     expect(scoreMatch("b64url", "RequestURL").score).toBe(0);
     // The suggester is deliberately looser.
-    const suggestions = suggestCloseMatches("RequestURL", ZSCALER_WEB_ROWS);
+    const suggestions = suggestCloseMatches("RequestURL", ZSCALER_WEB_ROWS, 5, {
+      solutionName: "Zscaler Internet Access",
+    });
     // DBT-195: the Zscaler hand pack documents b64url as RequestURL's data
     // (encoded), so it leads the documented tier, and its reason says a
     // decode is needed - the founding warning, now cited.
@@ -58,6 +60,34 @@ describe("suggestCloseMatches", () => {
     // urlclass shares "url" only: offered below, as a sub-50 suggestion.
     expect(suggestions[1]?.sourceName).toBe("urlclass");
     expect(suggestions[1]?.score).toBe(35); // never reads as a match
+  });
+
+  it("cites a vendor pack only for the solution it documents", () => {
+    // DBT-195 review: the documented index used to merge every vendor's
+    // pack, so Zscaler's NSS citations were shown against any vendor's
+    // fields. Unscoped, b64url is only a token overlap.
+    const rows = [
+      ...ZSCALER_WEB_ROWS,
+      { sourceName: "location", logType: "TRAFFIC", disposition: "overflow" },
+    ];
+    const pick = (field: string, solutionName?: string) =>
+      suggestCloseMatches(
+        field,
+        rows,
+        5,
+        solutionName === undefined ? {} : { solutionName },
+      ).map((c) => [c.sourceName, c.score, c.documented]);
+    expect(pick("RequestURL")).toEqual([
+      ["b64url", 35, false],
+      ["urlclass", 35, false],
+    ]);
+    // Zscaler documents `location` as SourceUserPrivileges; a PAN-OS or
+    // Fortinet `location` is no such thing, and shares nothing by name.
+    expect(pick("SourceUserPrivileges", "Palo Alto Networks")).toEqual([]);
+    expect(pick("SourceUserPrivileges", "Zscaler Private Access")).toEqual([]);
+    expect(pick("SourceUserPrivileges", "Zscaler Internet Access")).toEqual([
+      ["location", 90, true],
+    ]);
   });
 
   it("drops fields sharing nothing with the missing field", () => {
@@ -217,21 +247,15 @@ describe("close-match ranking against the PAN-OS UAT field set", () => {
       rows,
       10,
     );
-    expect(candidates[0]?.sourceName).toBe("PanUser");
-    expect(candidates[0]?.alreadyMapped).toBe(false);
-    // Every other candidate is a move; none outranks the unmapped field
-    // although several score the same 30.
-    expect(candidates[0]?.score).toBe(30);
-    expect(candidates.slice(1).map((c) => c.alreadyMapped)).toEqual(
-      candidates.slice(1).map(() => true),
-    );
-    expect(candidates.slice(1).map((c) => c.sourceName)).toEqual([
-      "suser",
-      "DeviceEventClassID",
-      "deviceExternalId",
-      "duser",
-      "externalId",
-      "fileId",
+    // PanUser outranks suser (39) although it scores 30: suser is a move.
+    // The ids sharing only "id" (DeviceEventClassID, deviceExternalId,
+    // externalId, fileId - the UAT's noise) are not offered at all.
+    expect(
+      candidates.map((c) => [c.sourceName, c.score, c.alreadyMapped]),
+    ).toEqual([
+      ["PanUser", 30, false],
+      ["suser", 39, true],
+      ["duser", 30, true],
     ]);
   });
 
@@ -240,9 +264,12 @@ describe("close-match ranking against the PAN-OS UAT field set", () => {
       { name: "SourceUserID", type: "string" },
       PAN_ROWS,
     );
-    expect(candidates).toHaveLength(5);
-    expect(candidates.every((c) => c.alreadyMapped)).toBe(true);
-    expect(candidates[0]?.currentDest).toBe("SourceUserName");
+    expect(
+      candidates.map((c) => [c.sourceName, c.currentDest, c.alreadyMapped]),
+    ).toEqual([
+      ["suser", "SourceUserName", true],
+      ["duser", "DestinationUserName", true],
+    ]);
   });
 
   it("keeps every token-overlap score below the matcher's 50 floor", () => {
@@ -331,7 +358,7 @@ describe("closeMatchRowsFromReports", () => {
         sampleValue: "4096",
         sourceType: "int",
       },
-      { sourceName: "junk", logType: "TRAFFIC", disposition: "drop -> " },
+      { sourceName: "junk", logType: "TRAFFIC", disposition: "drop" },
       {
         sourceName: "Message",
         logType: "TRAFFIC",

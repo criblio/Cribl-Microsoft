@@ -19,12 +19,13 @@
  * CEF-documented `in`, and five already-mapped ids for SourceUserID. Order:
  *   1. DOCUMENTED first: a hand-verified / CEF / Sentinel-DCR pack entry, or
  *      an alias-table entry, that names this exact column for the field.
+ *      Vendor packs count only for the selected solution (CloseMatchOptions).
  *   2. Unmapped before already-mapped (a field that already fills another
  *      column is a "move", which costs that column).
  *   3. Score: the matcher's own scoreMatch (exact/alias/fuzzy, 50-100), then
  *      token overlap with abbreviation expansion (src/dst/in/out/..., and
- *      CEF lumps like suser = source + user; a shared direction qualifier
- *      alone does not count), scored
+ *      CEF lumps like suser = source + user; a shared qualifier - a
+ *      direction or "id" - alone does not count), scored
  *      by the fraction of the column's tokens covered: 20 + 29 * fraction.
  *      Always below the matcher's 50 acceptance floor - a suggestion is
  *      never mistaken for a match - yet PanSrcMac (source + mac) outranks
@@ -37,7 +38,8 @@
  */
 
 import { scoreMatch } from "./scoring";
-import { VENDOR_MAPPING_PACKS } from "./vendor-mapping-packs";
+import { packAppliesToSolution } from "../sentinel-content/solution-matching";
+import { CEF_CATALOG_PACK, VENDOR_MAPPING_PACKS } from "./vendor-mapping-packs";
 
 /** One sample field offered to the suggester (a GapReport mapping row). */
 export interface CloseMatchRow {
@@ -142,26 +144,58 @@ function sourceCanonicalTokens(name: string): string[] {
 }
 
 /**
- * Direction qualifiers: sharing ONLY one of these says nothing about the
- * data (PanSrcHostname is not a SourceUserID candidate), so an overlap must
+ * Qualifiers: sharing ONLY these says nothing about the data (PanSrcHostname
+ * is not a SourceUserID candidate, and neither is DeviceEventClassID, which
+ * shares only "id" - the UAT's already-mapped noise), so an overlap must
  * include at least one other token. They still count toward the score once
  * it does, which is what ranks PanSrcMac above PanDstMac.
  */
-const QUALIFIER_TOKENS: ReadonlySet<string> = new Set(["source", "destination"]);
+const QUALIFIER_TOKENS: ReadonlySet<string> = new Set([
+  "source",
+  "destination",
+  "id",
+]);
+
+/** Options shared by both entry points. */
+export interface CloseMatchOptions {
+  /**
+   * The selected Sentinel solution. Scopes the vendor packs that count as
+   * documented; without it only the CEF catalog (every CEF vendor's shared
+   * vocabulary) does.
+   */
+  solutionName?: string;
+}
 
 /**
  * Reverse index of DOCUMENTED mappings: destination column (lowercased) ->
  * source field (lowercased) -> citation. Only entries carrying a `doc` count
  * (hand-verified vendor packs, the CEF catalog, Microsoft's Sentinel DCR
- * transforms); Elastic-mined value-vote entries carry no `doc` and stay out,
- * because without a solution to scope them a generic name like `host` would
- * read as documented for every vendor. First entry wins (authority order).
+ * transforms); Elastic-mined value-vote entries carry no `doc` and stay out.
+ * Vendor packs count only for the solution they match (packAppliesToSolution,
+ * the matcher's own Phase 0 rule): Zscaler documents `location` as
+ * SourceUserPrivileges, which is not a fact about a PAN-OS `location` field.
+ * The CEF catalog always counts. First entry wins (authority order).
  */
-const DOCUMENTED: ReadonlyMap<string, ReadonlyMap<string, string>> = (() => {
+const documentedIndexCache = new Map<
+  string,
+  ReadonlyMap<string, ReadonlyMap<string, string>>
+>();
+
+function documentedIndex(
+  solutionName: string,
+): ReadonlyMap<string, ReadonlyMap<string, string>> {
+  const cached = documentedIndexCache.get(solutionName);
+  if (cached !== undefined) return cached;
   const index = new Map<string, Map<string, string>>();
   // A decode entry (Zscaler b64url) documents where the data lives, but a
   // rename would land encoded text: the citation says so.
   for (const pack of VENDOR_MAPPING_PACKS) {
+    if (
+      pack !== CEF_CATALOG_PACK &&
+      !packAppliesToSolution(solutionName, pack)
+    ) {
+      continue;
+    }
     for (const entry of pack.mappings) {
       if (entry.doc === undefined) continue;
       const dest = entry.destName.toLowerCase();
@@ -181,8 +215,9 @@ const DOCUMENTED: ReadonlyMap<string, ReadonlyMap<string, string>> = (() => {
       }
     }
   }
+  documentedIndexCache.set(solutionName, index);
   return index;
-})();
+}
 
 /** Score given to a documented mapping the name ladder scores lower. */
 const DOCUMENTED_SCORE = 90;
@@ -231,10 +266,13 @@ function rankCandidates(
   destType: string | undefined,
   rows: readonly CloseMatchRow[],
   limit: number,
+  options: CloseMatchOptions,
 ): CloseMatchCandidate[] {
   const destLower = destName.toLowerCase();
   const destTokens = nameTokens(destName);
-  const documentedHere = DOCUMENTED.get(destLower);
+  const documentedHere = documentedIndex(options.solutionName ?? "").get(
+    destLower,
+  );
   const seen = new Set<string>();
   const out: CloseMatchCandidate[] = [];
   for (const row of rows) {
@@ -319,7 +357,8 @@ export function closeMatchRowsFromReports(
       return {
         sourceName: m.source,
         logType: r.logType,
-        disposition: m.action + " -> " + m.dest,
+        // A drop row has no destination: "drop", not "drop -> ".
+        disposition: m.dest === "" ? m.action : m.action + " -> " + m.dest,
         ...(m.sampleValue !== undefined ? { sampleValue: m.sampleValue } : {}),
         ...(m.sourceType !== "" ? { sourceType: m.sourceType } : {}),
         ...(fillsColumn && m.dest !== "" ? { currentDest: m.dest } : {}),
@@ -338,8 +377,9 @@ export function suggestCloseMatches(
   missingField: string,
   rows: readonly CloseMatchRow[],
   limit = 5,
+  options: CloseMatchOptions = {},
 ): CloseMatchCandidate[] {
-  return rankCandidates(missingField, undefined, rows, limit);
+  return rankCandidates(missingField, undefined, rows, limit, options);
 }
 
 /**
@@ -351,6 +391,7 @@ export function suggestForDestColumn(
   dest: { name: string; type: string },
   rows: readonly CloseMatchRow[],
   limit = 5,
+  options: CloseMatchOptions = {},
 ): CloseMatchCandidate[] {
-  return rankCandidates(dest.name, dest.type, rows, limit);
+  return rankCandidates(dest.name, dest.type, rows, limit, options);
 }
