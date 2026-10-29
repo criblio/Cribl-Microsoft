@@ -197,7 +197,29 @@ describe("Event Hub checks", () => {
 
   it("measuredHubNames is filled only from a complete read", () => {
     expect(measuredHubNames(readRows([{ name: "a" }, { name: "b" }]))).toEqual(["a", "b"]);
+    expect(measuredHubNames(readRows([]))).toEqual([]);
     expect(measuredHubNames(denied)).toBeNull();
+    expect(measuredHubNames(readRows([{ name: "a" }, { id: "x" }]))).toBeNull();
+  });
+
+  // AZR-50: a nameless row may be the hub, so a listing with one never shows
+  // a hub missing - but a readable match is still a match.
+  it("eh-hub over a listing with a nameless row: unknown where absent would be a guess", () => {
+    const partial = readRows([{ name: "t1" }, { id: "x" }, { name: "" }]);
+    const ex: CheckExpectations = { expectedHubs: ["defender-alerts"] };
+    expect(classifyCheck("eh-hub", FULL, [partial], ex)).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "2 hub rows could not be read, so the listing does not show it is missing.",
+    });
+    expect(classifyCheck("eh-hub", FULL, [partial], AUDIT)).toMatchObject({ kind: "unknown", reason: "failed" });
+    const entra: CheckExpectations = { expectedHubs: ["insights-logs-auditlogs", "insights-logs-signinlogs"] };
+    expect(
+      classifyCheck("eh-hub", FULL, [readRows([{ name: "insights-logs-auditlogs" }, { id: "x" }])], entra),
+    ).toMatchObject({ kind: "unknown", reason: "failed" });
+    expect(classifyCheck("eh-hub", FULL, [readRows([{ name: "defender-alerts" }, { id: "x" }])], ex)).toEqual({
+      kind: "as-expected",
+    });
   });
 
   it("a Send-only listen rule differs on rights; Manage is fine; a missing rule is absent", () => {

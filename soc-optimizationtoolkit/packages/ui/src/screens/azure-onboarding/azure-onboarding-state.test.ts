@@ -16,6 +16,9 @@ import {
   DEFENDER_PLANS,
   defaultSelection,
   encodeSelection,
+  defaultPlanValues,
+  laneTopics,
+  onboardingSource,
   toListing,
 } from "@soc/core";
 import type {
@@ -28,6 +31,7 @@ import type {
   EventHubTargetRead,
   EventHubTargetRule,
   NamespaceRef,
+  ValidationResult,
 } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
 import * as onboardingState from "./azure-onboarding-state";
@@ -51,6 +55,7 @@ import {
   loadBanners,
   loadStateFrom,
   loadedSelection,
+  measuredHubsOf,
   namespaceListMessage,
   planSummary,
   ruleListMessage,
@@ -644,6 +649,38 @@ describe("criblSideReadingOf", () => {
       route: "wired",
       destination: "sentinel_out",
     });
+  });
+});
+
+// AZR-50: the screen mapped an EMPTY complete listing to null, so "a namespace
+// with no hubs" reached laneTopics as "the listing failed".
+describe("measuredHubsOf", () => {
+  const result = (measuredHubs: readonly string[] | null): ValidationResult => ({
+    verdicts: {},
+    checks: [],
+    measuredHubs,
+    arrival: {},
+    cancelled: false,
+  });
+
+  it("keeps a complete listing of no hubs apart from no listing", () => {
+    expect(measuredHubsOf(null)).toBeNull();
+    expect(measuredHubsOf(result(null))).toBeNull();
+    expect(measuredHubsOf(result([]))).toEqual([]);
+    expect(measuredHubsOf(result(["insights-activity-logs"]))).toEqual(["insights-activity-logs"]);
+  });
+
+  it("so the lane refuses a measured empty as no-hub-measured, and a failed listing as hubs-not-measured", () => {
+    const lane = (r: ValidationResult) =>
+      laneTopics({
+        source: onboardingSource("activityLog")!,
+        values: defaultPlanValues(null),
+        subSelection: [],
+        measuredHubs: measuredHubsOf(r),
+        otherLanes: [],
+      });
+    expect(lane(result([]))).toMatchObject({ kind: "refused", reason: "no-hub-measured" });
+    expect(lane(result(null))).toMatchObject({ kind: "refused", reason: "hubs-not-measured" });
   });
 });
 

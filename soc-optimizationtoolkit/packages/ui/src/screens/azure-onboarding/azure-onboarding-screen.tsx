@@ -100,6 +100,7 @@ import {
   loadBanners,
   loadStateFrom,
   loadedSelection,
+  measuredHubsOf,
   withItem,
 } from "./azure-onboarding-state";
 import type {
@@ -199,17 +200,6 @@ function sectionStatus(view: OnboardingSectionView): SectionStatus {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * The hubs the last Validate measured, or null when none were measured. An
- * empty list is read as "not measured": core leaves it empty both for a
- * denied or truncated listing and for a namespace with no hubs, and a create
- * refuses in both cases anyway.
- */
-function measuredHubsOf(result: ValidationResult | null): readonly string[] | null {
-  if (result === null || result.measuredHubs.length === 0) return null;
-  return result.measuredHubs;
 }
 
 export interface AzureOnboardingScreenProps {

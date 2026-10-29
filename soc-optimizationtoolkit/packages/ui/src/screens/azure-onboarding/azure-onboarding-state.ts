@@ -49,6 +49,8 @@
  *     read-back proves the export's shape, not that anything flows through it.
  *   - {@link criblSideReadingOf}: the "Read Cribl side" result in the lane
  *     builder's shape, keeping a bare-id route's unconfirmed flag.
+ *   - {@link measuredHubsOf}: the last Validate's hub list for the lane
+ *     builder, keeping a complete listing of NO hubs apart from no listing.
  *
  * VISIBLE COPY. Every string these functions return reaches the screen, so
  * none carries a card id, a date or a phase number; the test runs
@@ -95,6 +97,7 @@ import type {
   NamespaceRef,
   OnboardingItemId,
   SectionAvailability,
+  ValidationResult,
 } from "@soc/core";
 import {
   unmeasuredInventoryMessage,
@@ -720,6 +723,18 @@ const STEP_LABELS: Readonly<Record<DefenderDeployStep, string>> = {
   "list-keys": "reading the rule's connection string",
   "automation-put": "creating the export",
 };
+
+/**
+ * The hubs the last Validate measured, for laneTopics and planCriblSource:
+ * null when no Validate ran or no COMPLETE hub listing was read (core's
+ * measuredHubs is null for a denied, truncated or nameless-row listing), and
+ * an empty array when the namespace was read in full and holds no hubs - a
+ * measured empty, which laneTopics refuses as `no-hub-measured`, not as
+ * `hubs-not-measured`.
+ */
+export function measuredHubsOf(result: ValidationResult | null): readonly string[] | null {
+  return result === null ? null : result.measuredHubs;
+}
 
 /**
  * The Cribl-side read in the shape the lane builder takes, keyed by input id.

@@ -199,10 +199,22 @@ function refusalVerdict(kind: CheckKind, refusal: Refusal): StepVerdict {
 // Per-kind classifiers over completed reads
 // ---------------------------------------------------------------------------
 
-/** The hub names of a COMPLETE hub listing, or null when it was not read. */
+/**
+ * The hub names of a COMPLETE hub listing, or null when the listing is not
+ * complete: not read to the end, or holding a row whose name could not be
+ * read. That row may BE the hub, so such a listing shows nothing missing (the
+ * classifyRule rule). The ONE completeness rule: the eh-hub verdict, the
+ * arrival no-hub decision and ValidationResult.measuredHubs all build on it.
+ * An empty array is a complete listing of a namespace with no hubs.
+ */
 export function measuredHubNames(read: ListRead<unknown>): readonly string[] | null {
   if (read.state !== "read") return null;
-  return read.rows.map((row) => str(row, "name")).filter((n) => n !== "");
+  const names = readableHubNames(read.rows);
+  return names.length === read.rows.length ? names : null;
+}
+
+function readableHubNames(rows: readonly unknown[]): string[] {
+  return rows.map((row) => str(row, "name")).filter((n) => n !== "");
 }
 
 function classifyNamespace(values: PlanValues, row: unknown): StepVerdict {
@@ -229,8 +241,13 @@ function classifyHubs(
   read: ListRead<unknown>,
   ex: CheckExpectations,
 ): StepVerdict {
-  const names = (measuredHubNames(read) ?? []).map((n) => n.toLowerCase());
+  const rows = read.state === "read" ? read.rows : [];
+  const names = readableHubNames(rows).map((n) => n.toLowerCase());
   const has = (hub: string) => names.includes(hub.trim().toLowerCase());
+  // A listing measuredHubNames calls incomplete shows a hub present, never
+  // missing: a nameless row may be the one looked for.
+  const dropped = measuredHubNames(read) === null ? rows.length - names.length : 0;
+  const notShown = (): StepVerdict => (dropped > 0 ? unparsedRows(dropped, "hub") : { kind: "absent" });
   const expected =
     ex.expectedHubs !== undefined && ex.expectedHubs.length > 0
       ? ex.expectedHubs
@@ -240,6 +257,7 @@ function classifyHubs(
   if (expected.length > 0) {
     const missing = expected.filter((h) => !has(h));
     if (missing.length === 0) return { kind: "as-expected" };
+    if (dropped > 0) return notShown();
     if (missing.length === expected.length) return { kind: "absent" };
     return {
       kind: "present-differs",
@@ -248,7 +266,7 @@ function classifyHubs(
   }
   if (ex.expectedHubPrefix !== undefined) {
     const prefix = ex.expectedHubPrefix.toLowerCase();
-    return names.some((n) => n.startsWith(prefix)) ? { kind: "as-expected" } : { kind: "absent" };
+    return names.some((n) => n.startsWith(prefix)) ? { kind: "as-expected" } : notShown();
   }
   return unknown("missing-value", "No hub is named for this source, so there is nothing to look for.");
 }

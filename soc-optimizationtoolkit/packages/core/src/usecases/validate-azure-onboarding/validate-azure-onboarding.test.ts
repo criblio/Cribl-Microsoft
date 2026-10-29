@@ -173,13 +173,13 @@ describe("measured hubs and verdict honesty", () => {
       onPath(HUBS_PATH, { status: 200, body: { value: [{ name: "insights-logs-signinlogs" }, { name: "defender-alerts" }] } }),
     ]);
     const result = await validateAzureOnboarding(azure, planValidation(["entraId", "defenderExport"], FULL));
-    expect([...result.measuredHubs].sort()).toEqual(["defender-alerts", "insights-logs-signinlogs"]);
+    expect([...(result.measuredHubs ?? [])].sort()).toEqual(["defender-alerts", "insights-logs-signinlogs"]);
   });
 
-  it("a denied hub list gives measuredHubs [] and the eh-hub verdict unknown 'denied'", async () => {
+  it("a denied hub list gives measuredHubs null and the eh-hub verdict unknown 'denied'", async () => {
     const azure = new RecordingAzure([onPath(HUBS_PATH, DENIED)]);
     const result = await validateAzureOnboarding(azure, planValidation(["defenderExport"], FULL));
-    expect(result.measuredHubs).toEqual([]);
+    expect(result.measuredHubs).toBeNull();
     const v = result.verdicts[checkKey("defenderExport", "eh-hub", "eh-hub")];
     expect(v).toBeDefined();
     expect(v?.kind === "unknown" && v.reason).toBe("denied");
@@ -202,7 +202,7 @@ describe("measured hubs and verdict honesty", () => {
     expect(azure.calls.length + azure.urlCalls.length).toBeLessThanOrEqual(plan.maxReads);
     const v = result.verdicts[checkKey("defenderExport", "eh-hub", "eh-hub")];
     expect(v?.kind === "unknown" && v.reason).toBe("truncated");
-    expect(result.measuredHubs).toEqual([]);
+    expect(result.measuredHubs).toBeNull();
   });
 
   it("a missing value sends no request and the verdict is unknown 'missing-value'", async () => {
@@ -353,7 +353,7 @@ describe("arrival", () => {
     );
     const plan = planValidation(["defenderExport"], FULL);
     const cut = await validateAzureOnboarding(truncated, plan);
-    expect(cut.measuredHubs).toEqual([]);
+    expect(cut.measuredHubs).toBeNull();
     expect(cut.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
 
     const denied = await validateAzureOnboarding(
@@ -363,6 +363,8 @@ describe("arrival", () => {
     expect(denied.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
   });
 
+  // AZR-50: the same listing was absent to the eh-hub verdict and complete to
+  // measuredHubs; all three readers now share measuredHubNames' rule.
   it("a listing with a nameless row is not complete: that row may be the hub, so the zero stands", async () => {
     const r = await validateAzureOnboarding(
       new RecordingAzure([
@@ -372,6 +374,22 @@ describe("arrival", () => {
       planValidation(["defenderExport"], FULL),
     );
     expect(r.arrival).toEqual({ "defender-alerts": { kind: "measured", messages: 0, window: "PT1H" } });
+    expect(r.measuredHubs).toBeNull();
+    expect(r.verdicts[checkKey("defenderExport", "eh-hub", "eh-hub")]).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "1 hub row could not be read, so the listing does not show it is missing.",
+    });
+  });
+
+  it("a complete listing of no hubs is an empty measuredHubs, not the null of a failed one", async () => {
+    const empty = await validateAzureOnboarding(
+      new RecordingAzure([hubList(), onPath(METRICS, metrics(0))]),
+      planValidation(["defenderExport"], FULL),
+    );
+    expect(empty.measuredHubs).toEqual([]);
+    expect(empty.verdicts[checkKey("defenderExport", "eh-hub", "eh-hub")]).toEqual({ kind: "absent" });
+    expect(empty.arrival).toEqual({ "defender-alerts": { kind: "no-hub" } });
   });
 
   it("a listing without the hub overrides even an unreadable metric, and the read is still sent", async () => {

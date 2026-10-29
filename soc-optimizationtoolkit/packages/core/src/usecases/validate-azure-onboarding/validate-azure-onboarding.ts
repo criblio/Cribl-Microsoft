@@ -24,9 +24,10 @@
  * clock; nothing here sleeps.
  *
  * HONESTY (claude-kit standards/inventory-honesty.md):
- * - `measuredHubs` holds hub names ONLY from a COMPLETE hub listing; a denied
- *   or truncated listing leaves it empty, and D9 then refuses to create a
- *   Cribl input from guesses;
+ * - `measuredHubs` holds hub names ONLY from a COMPLETE hub listing; a denied,
+ *   truncated or nameless-row listing leaves it null, and D9 then refuses to
+ *   create a Cribl input from guesses. An empty array is a complete listing
+ *   of a namespace with no hubs (AZR-50);
  * - a run cancelled through `signal` leaves every check it had not finished
  *   unknown `failed` with detail "cancelled" - never absent;
  * - arrival is an ArrivalReading (a measured 0 is "no messages in the
@@ -304,10 +305,12 @@ export interface ValidationResult {
   /** The same verdicts, in plan order, with their source, step and kind. */
   readonly checks: readonly CheckResult[];
   /**
-   * Hub names from a COMPLETE hub listing only. Empty when the listing was
-   * denied, truncated, failed, cancelled or never asked for.
+   * Hub names from a COMPLETE hub listing only (measuredHubNames). Null when
+   * the listing was denied, truncated, failed, cancelled, never asked for, or
+   * held a row whose name could not be read; an empty array is a complete
+   * listing of a namespace with no hubs.
    */
-  readonly measuredHubs: readonly string[];
+  readonly measuredHubs: readonly string[] | null;
   /** Hub -> arrival reading. A planned hub that was not read is unknown. */
   readonly arrival: Readonly<Record<string, ArrivalReading>>;
   /** True when the run stopped early because the signal aborted. */
@@ -348,8 +351,7 @@ async function perform(azure: AzureManagement, read: PlannedRead): Promise<ListR
  * The hub names of the run's COMPLETE hub listing (the eh-hub check's read of
  * the plan's one namespace), or null when no eh-hub check read one to the end:
  * denied, truncated, failed, cancelled, or not planned for want of a value.
- * A listing with a row whose name could not be read is not complete either:
- * that row may BE the hub, so it shows nothing missing (the classifyRule rule).
+ * measuredHubNames holds the completeness rule, including the nameless row.
  */
 function completeHubListing(
   plan: ValidationPlan,
@@ -360,9 +362,7 @@ function completeHubListing(
     for (const key of check.readKeys) {
       const read = reads.get(key);
       const names = read === undefined ? null : measuredHubNames(read);
-      if (names !== null && read?.state === "read" && names.length === read.rows.length) {
-        return names;
-      }
+      if (names !== null) return names;
     }
   }
   return null;
@@ -413,7 +413,6 @@ export async function validateAzureOnboarding(
 
   const verdicts: Record<string, StepVerdict> = {};
   const checks: CheckResult[] = [];
-  const measured: string[] = [];
   for (const check of plan.checks) {
     const checkReads = check.readKeys.map((k) => reads.get(k));
     let verdict: StepVerdict;
@@ -424,13 +423,6 @@ export async function validateAzureOnboarding(
     } else {
       const complete = checkReads as ListRead<unknown>[];
       verdict = classifyCheck(check.kind, plan.values, complete, check.expectations);
-      if (check.kind === "eh-hub") {
-        for (const read of complete) {
-          for (const hub of measuredHubNames(read) ?? []) {
-            if (!measured.includes(hub)) measured.push(hub);
-          }
-        }
-      }
     }
     verdicts[check.key] = verdict;
     checks.push({
@@ -442,7 +434,7 @@ export async function validateAzureOnboarding(
     });
   }
 
-  return { verdicts, checks, measuredHubs: measured, arrival, cancelled };
+  return { verdicts, checks, measuredHubs: listedHubs, arrival, cancelled };
 }
 
 /**
