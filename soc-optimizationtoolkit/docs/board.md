@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**74 in the backlog, 42 in progress, 74 done.**
+**75 in the backlog, 53 in progress, 78 done.**
 
 ## By menu item
 
@@ -27,19 +27,19 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 36 | 30 | 19 |
+| Sentinel Integration | 52 | 30 | 34 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 19 | 11 |
+| Azure Native Source Onboarding | 27 | 23 | 7 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 116.
+Open work totals 128.
 
 ## Epics and features
 
@@ -48,7 +48,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 33% (16/49)
+### `AZR` Azure native source onboarding - 41% (20/49)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -61,7 +61,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 14/31 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 18/31 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -81,13 +81,13 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 3/4 | HON-6, D-1, DBT-137, DBT-139 |
 
-### `GEN` Pipeline and pack generation - 70% (7/10)
+### `GEN` Pipeline and pack generation - 50% (7/14)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 7/10 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 7/14 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18, GEN-19, GEN-20, GEN-21, GEN-22 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
@@ -113,14 +113,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 44% (48/108)
+### `DBT` Quality and technical debt _(enabler)_ - 40% (48/120)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 30/77 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 7/11 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 30/81 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 7/19 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (42)
+## In progress (53)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1084,52 +1084,183 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **AZR-50** A hub listing with a nameless row is complete to the eh-hub verdict but incomplete to the arrival line
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e).
-  completeHubListing (AZR-47) calls a listing with a nameless row incomplete,
-  but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop
-  the row and treat the rest as complete. For [{name:t1},{id:x}] one run says
-  the hub is not found (eh-hub absent), says arrival is a quiet measured zero,
-  and hands [t1] to laneTopics and plan-cribl-source as a complete list.
-  classifyRule and classifyDefinitions already return unparsedRows -> unknown.
-  Fix: the completeness rule lives in measuredHubNames (null when any row has
-  no readable name); classifyHubs returns unknown for dropped rows;
-  measuredHubs excludes incomplete listings.
+- **GEN-19** Changing an overflow or keep row's Dest Field never emits a Rename
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Set
+  PanSrcMac Dest Field from AdditionalExtensions to SourceMACAddress: the
+  header drops to 95 unmapped and shows Modified, but Action stays `overflow`
+  and Confidence `unmatched`. edit-mapping changes one field;
+  gapMappingToPreset passes action through; pipeline-conf emits a Rename only
+  for action rename, so the pack still serializes the field into
+  AdditionalExtensions. Fix: a pure applyRemap in core gap-analysis sets dest,
+  destType, action (rename/keep), needsCoercion and confidence and returns the
+  column it vacates; the edit-mapping dest path and the F1 apply both use it.
+  Pin through pipeline-conf: a Rename is emitted and the field is absent from
+  the serialize step.
 
-- **AZR-51** Community policy tier descriptions name services the tier does not import (AKS, IoT Hub, Cognitive Services)
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-10-29 by the architecture audit. AZR-39 added
-  COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen
-  Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition
-  names row and the policy-definition check. The catalog COMMUNITY_TIERS
-  details, ported verbatim from the legacy resource-coverage.json, disagree
-  with it: Security says AKS, Other says IoT Hub and Cognitive Services; none
-  is imported or validated. The two tables are joined by key with a silent `??
-  []`. Fix: one declaration of the tier services next to the catalog, details
-  derived from it, and a pin that every non-All tier has a service list. The
-  verbatim-provenance pin on the details changes on purpose: what the operator
-  reads must match what is imported.
+- **GEN-20** CEF `in` never maps to ReceivedBytes, though the Mapping Catalog says it does
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Row `in
+  int AdditionalExtensions unmatched overflow` beside `out -> SentBytes`; Rule
+  Coverage then reports ReceivedBytes missing. knowledge-bases.ts and
+  overflow.ts leave `in` unaliased as 'a JS reserved word', but it is a legal
+  quoted key and passes isCriblAccessorSafe, and CEF_CATALOG_PACK claims the
+  mapping is covered. Fix: alias in -> ReceivedBytes, correct both comments,
+  pin end to end through the pipeline conf; live-check Cribl's Rename of `in`.
 
-- **AZR-52** The management-group policy definition id and listing path are built inline beside managementGroupDefinitionId
-  `AZR-F9` `enabler` `settled`
-  FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step
-  renders its Definition ID inline and the policy-definition Validate listing
-  builds its path inline, next to the new managementGroupDefinitionId helper.
-  Identical today; if one changes the step shows one id while Validate looks
-  for another and reports absent. Fix: render with managementGroupDefinitionId
-  and share a managementGroupDefinitionsPath helper with the listing request.
+- **DBT-192** Field Mappings cells merge: td.match-field-type is display:block, so unmapped rows shift left
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Filter the
+  mapping table to ReceivedBytes: the column name sits under Type, its type
+  under Dest Field. styles.css sets .match-field-type { display: block } and
+  that class is on <td>s; consecutive block cells merge into one anonymous
+  cell. The existing 'aligned to seven columns' pin counts DOM cells and
+  cannot fail on this. Also affects the Mapping Catalog screen. Fix: scope
+  display:block away from td; pin the stylesheet.
 
-- **AZR-53** Unused public exports and a stale ADR 0007 bullet left by the AZR-38..49 work
-  `AZR-F9` `enabler` `settled`
-  FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and
-  CheckedVerdict are exported from onboarding-dataflow with no consumer
-  (verdictStatus check? has no caller that omits it); planValueOf is on the
-  @soc/core barrel with no outside consumer; communityDefinitionName,
-  edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported
-  module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop
-  the exports (keep test access where pinned), make check required, delete the
-  ADR bullet.
+- **DBT-193** Field Mappings header counts overflow and drop rows as mapped
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Header
+  'Field Mappings (115 mapped, 96 unmapped)' while the tiles read Passthrough
+  4, Cribl Handles 55, Overflow 56: only 59 rows land in a real column.
+  fieldMappingsLabel counts mappings.length. Fix: count rows that land in a
+  real column and name overflow and drop separately.
+
+- **DBT-194** 'Modified' stays after a mapping edit is reverted
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Edit
+  PanSrcMac's Dest Field and set it back: the count returns to 96 unmapped but
+  the Modified badge and 'Modified - your edits are applied when the pack is
+  built.' remain. isModified only checks that an edit entry exists. Fix:
+  compare the edits with the baseline field by field.
+
+- **DBT-195** Close-match suggestions miss the documented field and rank token noise above it
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). The
+  ReceivedBytes chip offers only PanOSPacketsReceived (a packet count, 'shares
+  "received"') and never `in`; the SourceUserID chip offers five
+  already-mapped ids (DeviceEventClassID, deviceExternalId, duser, externalId,
+  fileId). suggestCloseMatches ranks by name only. Fix in close-matches.ts: a
+  documented tier from the CEF keys and alias tables first, src/dst/in/out
+  abbreviation expansion, a type-compatibility mark, already-mapped candidates
+  ranked lower, keeping the 'below 50 is a suggestion, not a match' contract.
+
+- **DBT-196** Capture never splits PAN-OS CEF by log type: the CEF header is not read
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Tick
+  THREAT and TRAFFIC and Run capture: 'Captured 100 events in 1 log type
+  (cef).' 'Nothing in these events tells one log type from another'; the needs
+  list keeps saying 'You have provided none of them yet.' The header carries
+  them ('|url|THREAT|'). parseKvLine reads key=value pairs only. DECIDED
+  2026-10-29 by the operator: split PAN-OS CEF by TYPE (header field 6:
+  THREAT, TRAFFIC), for PAN-OS CEF only; other CEF vendors unchanged, and
+  DeviceEventClassID (the subtype) is not used for this vendor.
+
+- **DBT-197** A 100-event capture becomes a 9-event sample with no explanation
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Capture
+  headline 'Captured 100 events'; after 'Add these as samples' the chip reads
+  'CEF captured 9 events, 115 fields'. Nothing says why 91 events went. Cause
+  unknown: diagnose from a stored capture body first (suspects: the CEF/syslog
+  record parse, the byte cap). Fix whatever drops them, or say what was kept
+  and why.
+
+- **DBT-198** Capture log-type ticks reset to all after 'Add these as samples'
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). The
+  operator unticked all but THREAT and TRAFFIC; after adding the sample all 13
+  solution log types are ticked again. Fix: keep the operator's selection
+  across a commit in the capture panel state.
+
+- **DBT-199** Enable Sentinel Content points to a missing Options page and says 'None found' before loading
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Offline:
+  'connect Azure in Options' (identity entry is on Setup; there is no Options
+  page in the nav). Before 'Load solution content' it shows 'Analytics rules
+  None found for this solution.' and 'Workbooks None found for this solution.'
+  while Rule Coverage on the same page found 5 rules and 2 workbooks: none
+  rendered for not-loaded-yet. Fix: point at Setup; render 'Not loaded yet'
+  before the load.
+
+- **DBT-200** Deploy's client-id hint claims a default the offline connection does not have
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). 'Ingestion
+  client id' is empty with hint 'Defaults to the active connection.' while
+  Setup reads 'Identity: missing' and the gate says 'Enter an ingestion client
+  id in the Deploy section.' The sticky footer Deploy is styled as a primary
+  action while gated. Fix: hint only when an identity exists; style the gated
+  footer action as disabled.
+
+- **DBT-201** Configure Cribl prefills worker group 'default' when the samples were captured on another group
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
+  on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Capture
+  used TMNA_POV; Configure Cribl shows 'default' ('Prefilled from your saved
+  Options when that group exists'), so the pack is easy to build into the
+  wrong group. Fix: default the pack group to the capture group when it is in
+  the live list. Related: DBT-138.
+
+- **DBT-202** Click a missing destination column to see and apply the sample fields that could fill it
+  `DBT-F2` `story` `settled` `blocked by GEN-19, DBT-195, DBT-192`
+  OPERATOR REQUEST 2026-10-29: 'when a field is missing and the user clicks
+  the missing field it gives a recommendation on what fields might satisfy the
+  mapping, I want them to be able to click which field the user wants and it
+  automatically adjusts the field mapping(s) accordingly.' SCOPE: in Gap
+  Analysis, each Unmapped Destination Fields column name is a button opening
+  the ranked candidates for that log type (sample value, reason, current
+  disposition, a type note); 'Use this field' applies through applyRemap
+  (GEN-19). DECIDED 2026-10-29: when the field already maps to another column
+  it MOVES ('Move from <column>', with a warning when that column is
+  RULE-badged); applying un-approves that log type, and re-approving saves it
+  as a learned mapping; low-confidence and type-mismatched candidates are
+  shown with a warning, not hidden; a renamed row whose types differ gets a
+  coercion on the target; the empty state offers 'Add a constant' (the
+  enrichment editor). Applying clears the auto-drop key so drop-unneeded
+  cannot undo it. Pins: DOM click-to-apply, the unmapped count drops, approval
+  resets, Move vacates the old column, the pipeline conf carries the Rename.
+
+- **DBT-203** Apply a close match from the Rule and Workbook Coverage missing-field chips
+  `DBT-F2` `story` `settled` `blocked by DBT-202`
+  OPERATOR REQUEST 2026-10-29 (second entry point of DBT-202). The 'Fields
+  missing across rules' chips open a read-only close-match panel that ends 'To
+  remap one, open the Gap Analysis section...'; replace that with 'Use this
+  field', applied through the same path as DBT-202, and feed the coverage
+  sections the effective mappings so a chip clears after an apply.
+
+- **GEN-21** Offline: pick an existing Cribl Sentinel destination instead of connecting Azure, and build a routable pack for it
+  `GEN-F1` `story` `settled` `blocked by DBT-201`
+  OPERATOR REQUEST 2026-10-29: 'when an Azure connection is not used (Offline)
+  the user gets the option to select an existing Cribl Sentinel destination
+  for use with the pack and they don't have to input app registration client
+  id to get the pack deployed.' And: 'the experience I want is for the app to
+  inventory and allow the user to select which Sentinel destinations are
+  available if the user doesn't want to connect Azure to allow the app to
+  create/reuse a DCR.' SCOPE: list the group's Sentinel-type outputs (GET
+  /m/:gid/system/outputs, already granted) as id, stream, DCR and endpoint,
+  never a secret value, failed/empty/filtered stated honestly; offered always,
+  preselected when offline; the stream is shown and the operator confirms the
+  table (a custom stream like Custom-...-stream cannot be inferred); choosing
+  one forces the routable shape, skips the Azure DCR inventory, the client id
+  and scope gates, collapses Select Azure Resources to 'Not needed - using
+  <id>', and lets the routable prerequisite check count the chosen id. DECIDED
+  2026-10-29: connecting the source is ROUTE ONLY (a group route in_syslog ->
+  pack -> chosen destination, behind a confirmation showing the route and the
+  commit file list); when the source is QuickConnected (TMNA_POV in_syslog ->
+  S3) the app warns that the route will not fire until the source sends to
+  routes, and never rewrites the QuickConnect flow. The operator connects the
+  destination by hand in live testing: the app must not write the route or
+  commit during verification without asking. Out of scope: DBT-37.
 
 ---
 
@@ -1263,7 +1394,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (34)
+## Backlog - next (35)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1796,6 +1927,15 @@ Settled and unblocked, sequenced behind now.
   differing existing rule or group. It also adds the How-to step text for
   doing it by hand if AZR-31 has not already covered it.
 
+- **GEN-22** Does a routable pack's output: default deliver to the group route's destination?
+  `GEN-F1` `spike` `settled`
+  FILED 2026-10-29 from the F2 plan. route-yml.ts records (measured
+  2026-09-04) only that output: default makes the pack selectable on the
+  Routes page; that events then reach the calling group route's output is
+  unmeasured. GEN-21's route-only wiring rests on it. The operator answers it
+  by hand while connecting the destination in Cribl (2026-10-29: 'I will
+  manually do that'); record the observed delivery here. Related: GEN-15.
+
 ---
 
 ## Backlog - later (36)
@@ -2287,7 +2427,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (74)
+## Done (78)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4739,3 +4879,102 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-exports it; only options-read.ts and its test use it. Fix: drop it from
   the index. DONE 2026-10-28: dropped from packages/ui/src/index.ts; typecheck
   confirms no shell imported it.
+
+- **AZR-50** A hub listing with a nameless row is complete to the eh-hub verdict but incomplete to the arrival line
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e).
+  completeHubListing (AZR-47) calls a listing with a nameless row incomplete,
+  but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop
+  the row and treat the rest as complete. For [{name:t1},{id:x}] one run says
+  the hub is not found (eh-hub absent), says arrival is a quiet measured zero,
+  and hands [t1] to laneTopics and plan-cribl-source as a complete list.
+  classifyRule and classifyDefinitions already return unparsedRows -> unknown.
+  Fix: the completeness rule lives in measuredHubNames (null when any row has
+  no readable name); classifyHubs returns unknown for dropped rows;
+  measuredHubs excludes incomplete listings. DONE 2026-10-29 (pins,
+  adversarially reviewed): The rule for a complete hub listing now lives only
+  in measuredHubNames (core onboarding-validation classify.ts). It returns
+  null for a listing that was not read to the end or that has a row with no
+  readable name, and [] for a complete listing with no hubs. The eh-hub
+  verdict now says unknown (unparsedRows) instead of absent when rows were
+  dropped. completeHubListing and ValidationResult.measuredHubs (now string[]
+  | null) use the same rule. measuredHubsOf moved into
+  azure-onboarding-state.ts and keeps a measured empty list separate from a
+  failed listing, so laneTopics refuses it as no-hub-measured. Core classify
+  and use-case pins and UI measuredHubsOf/laneTopics pins check exact values.
+  Four implementer mutations and one independent reviewer mutation (the prefix
+  branch put back to absent) each made a pin fail. Pins only; not checked
+  live.
+
+- **AZR-51** Community policy tier descriptions name services the tier does not import (AKS, IoT Hub, Cognitive Services)
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the architecture audit. AZR-39 added
+  COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen
+  Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition
+  names row and the policy-definition check. The catalog COMMUNITY_TIERS
+  details, ported verbatim from the legacy resource-coverage.json, disagree
+  with it: Security says AKS, Other says IoT Hub and Cognitive Services; none
+  is imported or validated. The two tables are joined by key with a silent `??
+  []`. Fix: one declaration of the tier services next to the catalog, details
+  derived from it, and a pin that every non-All tier has a service list. The
+  verbatim-provenance pin on the details changes on purpose: what the operator
+  reads must match what is imported. DONE 2026-10-29 (pins, adversarially
+  reviewed): AZR-51: the community tier services are now declared once, next
+  to the catalog in coverage-catalog.ts. policy-steps imports them, and each
+  tier's detail is built from them through a service-label map. The tier text
+  no longer names AKS, IoT Hub, Cognitive Services or "etc.". The verbatim
+  legacy pin was narrowed on purpose, with a comment saying why, and the
+  script-provenance pin is unchanged. AZR-52: managementGroupDefinitionsPath
+  now feeds managementGroupDefinitionId, the Validate listing and the Activity
+  Log Definition ID row and CLI. Exact-string pins cover both uses. AZR-53:
+  the unused exports are now private to their modules, with a barrel pin, and
+  the stale ADR 0007 bullet is gone. Pinned in coverage-model, steps, requests
+  and barrel-exports tests; the implementer and the reviewer each
+  mutation-checked the pins, the reviewer by dropping a service label and by
+  inlining a wrong listing path.
+
+- **AZR-52** The management-group policy definition id and listing path are built inline beside managementGroupDefinitionId
+  `AZR-F9` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step
+  renders its Definition ID inline and the policy-definition Validate listing
+  builds its path inline, next to the new managementGroupDefinitionId helper.
+  Identical today; if one changes the step shows one id while Validate looks
+  for another and reports absent. Fix: render with managementGroupDefinitionId
+  and share a managementGroupDefinitionsPath helper with the listing request.
+  DONE 2026-10-29 (pins, adversarially reviewed): AZR-51: the community tier
+  services are now declared once, next to the catalog in coverage-catalog.ts.
+  policy-steps imports them, and each tier's detail is built from them through
+  a service-label map. The tier text no longer names AKS, IoT Hub, Cognitive
+  Services or "etc.". The verbatim legacy pin was narrowed on purpose, with a
+  comment saying why, and the script-provenance pin is unchanged. AZR-52:
+  managementGroupDefinitionsPath now feeds managementGroupDefinitionId, the
+  Validate listing and the Activity Log Definition ID row and CLI.
+  Exact-string pins cover both uses. AZR-53: the unused exports are now
+  private to their modules, with a barrel pin, and the stale ADR 0007 bullet
+  is gone. Pinned in coverage-model, steps, requests and barrel-exports tests;
+  the implementer and the reviewer each mutation-checked the pins, the
+  reviewer by dropping a service label and by inlining a wrong listing path.
+
+- **AZR-53** Unused public exports and a stale ADR 0007 bullet left by the AZR-38..49 work
+  `AZR-F9` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and
+  CheckedVerdict are exported from onboarding-dataflow with no consumer
+  (verdictStatus check? has no caller that omits it); planValueOf is on the
+  @soc/core barrel with no outside consumer; communityDefinitionName,
+  edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported
+  module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop
+  the exports (keep test access where pinned), make check required, delete the
+  ADR bullet. DONE 2026-10-29 (pins, adversarially reviewed): AZR-51: the
+  community tier services are now declared once, next to the catalog in
+  coverage-catalog.ts. policy-steps imports them, and each tier's detail is
+  built from them through a service-label map. The tier text no longer names
+  AKS, IoT Hub, Cognitive Services or "etc.". The verbatim legacy pin was
+  narrowed on purpose, with a comment saying why, and the script-provenance
+  pin is unchanged. AZR-52: managementGroupDefinitionsPath now feeds
+  managementGroupDefinitionId, the Validate listing and the Activity Log
+  Definition ID row and CLI. Exact-string pins cover both uses. AZR-53: the
+  unused exports are now private to their modules, with a barrel pin, and the
+  stale ADR 0007 bullet is gone. Pinned in coverage-model, steps, requests and
+  barrel-exports tests; the implementer and the reviewer each mutation-checked
+  the pins, the reviewer by dropping a service label and by inlining a wrong
+  listing path.

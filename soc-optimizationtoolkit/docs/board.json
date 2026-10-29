@@ -2695,7 +2695,7 @@
       "verified": "pins"
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "epic": "AZR",
@@ -2704,10 +2704,11 @@
       "type": "bug",
       "priority": "now",
       "title": "A hub listing with a nameless row is complete to the eh-hub verdict but incomplete to the arrival line",
-      "detail": "FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e). completeHubListing (AZR-47) calls a listing with a nameless row incomplete, but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop the row and treat the rest as complete. For [{name:t1},{id:x}] one run says the hub is not found (eh-hub absent), says arrival is a quiet measured zero, and hands [t1] to laneTopics and plan-cribl-source as a complete list. classifyRule and classifyDefinitions already return unparsedRows -> unknown. Fix: the completeness rule lives in measuredHubNames (null when any row has no readable name); classifyHubs returns unknown for dropped rows; measuredHubs excludes incomplete listings."
+      "detail": "FOUND 2026-10-29 by the architecture audit (fbe7707..e6e172e). completeHubListing (AZR-47) calls a listing with a nameless row incomplete, but measuredHubNames, classifyHubs and ValidationResult.measuredHubs drop the row and treat the rest as complete. For [{name:t1},{id:x}] one run says the hub is not found (eh-hub absent), says arrival is a quiet measured zero, and hands [t1] to laneTopics and plan-cribl-source as a complete list. classifyRule and classifyDefinitions already return unparsedRows -> unknown. Fix: the completeness rule lives in measuredHubNames (null when any row has no readable name); classifyHubs returns unknown for dropped rows; measuredHubs excludes incomplete listings.\n\nDONE 2026-10-29 (pins, adversarially reviewed): The rule for a complete hub listing now lives only in measuredHubNames (core onboarding-validation classify.ts). It returns null for a listing that was not read to the end or that has a row with no readable name, and [] for a complete listing with no hubs. The eh-hub verdict now says unknown (unparsedRows) instead of absent when rows were dropped. completeHubListing and ValidationResult.measuredHubs (now string[] | null) use the same rule. measuredHubsOf moved into azure-onboarding-state.ts and keeps a measured empty list separate from a failed listing, so laneTopics refuses it as no-hub-measured. Core classify and use-case pins and UI measuredHubsOf/laneTopics pins check exact values. Four implementer mutations and one independent reviewer mutation (the prefix branch put back to absent) each made a pin fail. Pins only; not checked live.",
+      "verified": "pins"
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "epic": "AZR",
@@ -2716,10 +2717,11 @@
       "type": "bug",
       "priority": "now",
       "title": "Community policy tier descriptions name services the tier does not import (AKS, IoT Hub, Cognitive Services)",
-      "detail": "FOUND 2026-10-29 by the architecture audit. AZR-39 added COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition names row and the policy-definition check. The catalog COMMUNITY_TIERS details, ported verbatim from the legacy resource-coverage.json, disagree with it: Security says AKS, Other says IoT Hub and Cognitive Services; none is imported or validated. The two tables are joined by key with a silent `?? []`. Fix: one declaration of the tier services next to the catalog, details derived from it, and a pin that every non-All tier has a service list. The verbatim-provenance pin on the details changes on purpose: what the operator reads must match what is imported."
+      "detail": "FOUND 2026-10-29 by the architecture audit. AZR-39 added COMMUNITY_TIER_SERVICES (policy-steps.ts, pinned to the frozen Deploy-CommunityPolicyInitiative.ps1), which drives the How-to Definition names row and the policy-definition check. The catalog COMMUNITY_TIERS details, ported verbatim from the legacy resource-coverage.json, disagree with it: Security says AKS, Other says IoT Hub and Cognitive Services; none is imported or validated. The two tables are joined by key with a silent `?? []`. Fix: one declaration of the tier services next to the catalog, details derived from it, and a pin that every non-All tier has a service list. The verbatim-provenance pin on the details changes on purpose: what the operator reads must match what is imported.\n\nDONE 2026-10-29 (pins, adversarially reviewed): AZR-51: the community tier services are now declared once, next to the catalog in coverage-catalog.ts. policy-steps imports them, and each tier's detail is built from them through a service-label map. The tier text no longer names AKS, IoT Hub, Cognitive Services or \"etc.\". The verbatim legacy pin was narrowed on purpose, with a comment saying why, and the script-provenance pin is unchanged. AZR-52: managementGroupDefinitionsPath now feeds managementGroupDefinitionId, the Validate listing and the Activity Log Definition ID row and CLI. Exact-string pins cover both uses. AZR-53: the unused exports are now private to their modules, with a barrel pin, and the stale ADR 0007 bullet is gone. Pinned in coverage-model, steps, requests and barrel-exports tests; the implementer and the reviewer each mutation-checked the pins, the reviewer by dropping a service label and by inlining a wrong listing path.",
+      "verified": "pins"
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "epic": "AZR",
@@ -2728,10 +2730,11 @@
       "type": "enabler",
       "priority": "now",
       "title": "The management-group policy definition id and listing path are built inline beside managementGroupDefinitionId",
-      "detail": "FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step renders its Definition ID inline and the policy-definition Validate listing builds its path inline, next to the new managementGroupDefinitionId helper. Identical today; if one changes the step shows one id while Validate looks for another and reports absent. Fix: render with managementGroupDefinitionId and share a managementGroupDefinitionsPath helper with the listing request."
+      "detail": "FOUND 2026-10-29 by the architecture audit. The Activity Log How-to step renders its Definition ID inline and the policy-definition Validate listing builds its path inline, next to the new managementGroupDefinitionId helper. Identical today; if one changes the step shows one id while Validate looks for another and reports absent. Fix: render with managementGroupDefinitionId and share a managementGroupDefinitionsPath helper with the listing request.\n\nDONE 2026-10-29 (pins, adversarially reviewed): AZR-51: the community tier services are now declared once, next to the catalog in coverage-catalog.ts. policy-steps imports them, and each tier's detail is built from them through a service-label map. The tier text no longer names AKS, IoT Hub, Cognitive Services or \"etc.\". The verbatim legacy pin was narrowed on purpose, with a comment saying why, and the script-provenance pin is unchanged. AZR-52: managementGroupDefinitionsPath now feeds managementGroupDefinitionId, the Validate listing and the Activity Log Definition ID row and CLI. Exact-string pins cover both uses. AZR-53: the unused exports are now private to their modules, with a barrel pin, and the stale ADR 0007 bullet is gone. Pinned in coverage-model, steps, requests and barrel-exports tests; the implementer and the reviewer each mutation-checked the pins, the reviewer by dropping a service label and by inlining a wrong listing path.",
+      "verified": "pins"
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "epic": "AZR",
@@ -2740,7 +2743,208 @@
       "type": "enabler",
       "priority": "now",
       "title": "Unused public exports and a stale ADR 0007 bullet left by the AZR-38..49 work",
-      "detail": "FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and CheckedVerdict are exported from onboarding-dataflow with no consumer (verdictStatus check? has no caller that omits it); planValueOf is on the @soc/core barrel with no outside consumer; communityDefinitionName, edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop the exports (keep test access where pinned), make check required, delete the ADR bullet."
+      "detail": "FOUND 2026-10-29 by the architecture audit. verdictStatus, groupStatus and CheckedVerdict are exported from onboarding-dataflow with no consumer (verdictStatus check? has no caller that omits it); planValueOf is on the @soc/core barrel with no outside consumer; communityDefinitionName, edgeLabelSlotWidth, EDGE_LABEL_CHAR_PX and EDGE_LABEL_INFO_GAP are exported module helpers. ADR 0007 still lists AZR-38 as filed, not built. Fix: drop the exports (keep test access where pinned), make check required, delete the ADR bullet.\n\nDONE 2026-10-29 (pins, adversarially reviewed): AZR-51: the community tier services are now declared once, next to the catalog in coverage-catalog.ts. policy-steps imports them, and each tier's detail is built from them through a service-label map. The tier text no longer names AKS, IoT Hub, Cognitive Services or \"etc.\". The verbatim legacy pin was narrowed on purpose, with a comment saying why, and the script-provenance pin is unchanged. AZR-52: managementGroupDefinitionsPath now feeds managementGroupDefinitionId, the Validate listing and the Activity Log Definition ID row and CLI. Exact-string pins cover both uses. AZR-53: the unused exports are now private to their modules, with a barrel pin, and the stale ADR 0007 bullet is gone. Pinned in coverage-model, steps, requests and barrel-exports tests; the implementer and the reviewer each mutation-checked the pins, the reviewer by dropping a service label and by inlining a wrong listing path.",
+      "verified": "pins"
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "GEN-19",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "bug",
+      "title": "Changing an overflow or keep row's Dest Field never emits a Rename",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Set PanSrcMac Dest Field from AdditionalExtensions to SourceMACAddress: the header drops to 95 unmapped and shows Modified, but Action stays `overflow` and Confidence `unmatched`. edit-mapping changes one field; gapMappingToPreset passes action through; pipeline-conf emits a Rename only for action rename, so the pack still serializes the field into AdditionalExtensions. Fix: a pure applyRemap in core gap-analysis sets dest, destType, action (rename/keep), needsCoercion and confidence and returns the column it vacates; the edit-mapping dest path and the F1 apply both use it. Pin through pipeline-conf: a Rename is emitted and the field is absent from the serialize step."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "GEN-20",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "bug",
+      "title": "CEF `in` never maps to ReceivedBytes, though the Mapping Catalog says it does",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Row `in int AdditionalExtensions unmatched overflow` beside `out -> SentBytes`; Rule Coverage then reports ReceivedBytes missing. knowledge-bases.ts and overflow.ts leave `in` unaliased as 'a JS reserved word', but it is a legal quoted key and passes isCriblAccessorSafe, and CEF_CATALOG_PACK claims the mapping is covered. Fix: alias in -> ReceivedBytes, correct both comments, pin end to end through the pipeline conf; live-check Cribl's Rename of `in`."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-192",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "Field Mappings cells merge: td.match-field-type is display:block, so unmapped rows shift left",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Filter the mapping table to ReceivedBytes: the column name sits under Type, its type under Dest Field. styles.css sets .match-field-type { display: block } and that class is on <td>s; consecutive block cells merge into one anonymous cell. The existing 'aligned to seven columns' pin counts DOM cells and cannot fail on this. Also affects the Mapping Catalog screen. Fix: scope display:block away from td; pin the stylesheet."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-193",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "Field Mappings header counts overflow and drop rows as mapped",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Header 'Field Mappings (115 mapped, 96 unmapped)' while the tiles read Passthrough 4, Cribl Handles 55, Overflow 56: only 59 rows land in a real column. fieldMappingsLabel counts mappings.length. Fix: count rows that land in a real column and name overflow and drop separately."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-194",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "'Modified' stays after a mapping edit is reverted",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Edit PanSrcMac's Dest Field and set it back: the count returns to 96 unmapped but the Modified badge and 'Modified - your edits are applied when the pack is built.' remain. isModified only checks that an edit entry exists. Fix: compare the edits with the baseline field by field."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-195",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "Close-match suggestions miss the documented field and rank token noise above it",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). The ReceivedBytes chip offers only PanOSPacketsReceived (a packet count, 'shares \"received\"') and never `in`; the SourceUserID chip offers five already-mapped ids (DeviceEventClassID, deviceExternalId, duser, externalId, fileId). suggestCloseMatches ranks by name only. Fix in close-matches.ts: a documented tier from the CEF keys and alias tables first, src/dst/in/out abbreviation expansion, a type-compatibility mark, already-mapped candidates ranked lower, keeping the 'below 50 is a suggestion, not a match' contract."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-196",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "title": "Capture never splits PAN-OS CEF by log type: the CEF header is not read",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Tick THREAT and TRAFFIC and Run capture: 'Captured 100 events in 1 log type (cef).' 'Nothing in these events tells one log type from another'; the needs list keeps saying 'You have provided none of them yet.' The header carries them ('|url|THREAT|'). parseKvLine reads key=value pairs only. DECIDED 2026-10-29 by the operator: split PAN-OS CEF by TYPE (header field 6: THREAT, TRAFFIC), for PAN-OS CEF only; other CEF vendors unchanged, and DeviceEventClassID (the subtype) is not used for this vendor."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-197",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "title": "A 100-event capture becomes a 9-event sample with no explanation",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Capture headline 'Captured 100 events'; after 'Add these as samples' the chip reads 'CEF captured 9 events, 115 fields'. Nothing says why 91 events went. Cause unknown: diagnose from a stored capture body first (suspects: the CEF/syslog record parse, the byte cap). Fix whatever drops them, or say what was kept and why."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-198",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "title": "Capture log-type ticks reset to all after 'Add these as samples'",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). The operator unticked all but THREAT and TRAFFIC; after adding the sample all 13 solution log types are ticked again. Fix: keep the operator's selection across a commit in the capture panel state."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-199",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "Enable Sentinel Content points to a missing Options page and says 'None found' before loading",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Offline: 'connect Azure in Options' (identity entry is on Setup; there is no Options page in the nav). Before 'Load solution content' it shows 'Analytics rules None found for this solution.' and 'Workbooks None found for this solution.' while Rule Coverage on the same page found 5 rules and 2 workbooks: none rendered for not-loaded-yet. Fix: point at Setup; render 'Not loaded yet' before the load."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-200",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "title": "Deploy's client-id hint claims a default the offline connection does not have",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). 'Ingestion client id' is empty with hint 'Defaults to the active connection.' while Setup reads 'Identity: missing' and the gate says 'Enter an ingestion client id in the Deploy section.' The sticky footer Deploy is styled as a primary action while gated. Fix: hint only when an identity exists; style the gated footer action as disabled."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-201",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "title": "Configure Cribl prefills worker group 'default' when the samples were captured on another group",
+      "detail": "FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Capture used TMNA_POV; Configure Cribl shows 'default' ('Prefilled from your saved Options when that group exists'), so the pack is easy to build into the wrong group. Fix: default the pack group to the capture group when it is in the live list. Related: DBT-138."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [
+        "GEN-19",
+        "DBT-195",
+        "DBT-192"
+      ],
+      "priority": "now",
+      "id": "DBT-202",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "story",
+      "title": "Click a missing destination column to see and apply the sample fields that could fill it",
+      "detail": "OPERATOR REQUEST 2026-10-29: 'when a field is missing and the user clicks the missing field it gives a recommendation on what fields might satisfy the mapping, I want them to be able to click which field the user wants and it automatically adjusts the field mapping(s) accordingly.' SCOPE: in Gap Analysis, each Unmapped Destination Fields column name is a button opening the ranked candidates for that log type (sample value, reason, current disposition, a type note); 'Use this field' applies through applyRemap (GEN-19). DECIDED 2026-10-29: when the field already maps to another column it MOVES ('Move from <column>', with a warning when that column is RULE-badged); applying un-approves that log type, and re-approving saves it as a learned mapping; low-confidence and type-mismatched candidates are shown with a warning, not hidden; a renamed row whose types differ gets a coercion on the target; the empty state offers 'Add a constant' (the enrichment editor). Applying clears the auto-drop key so drop-unneeded cannot undo it. Pins: DOM click-to-apply, the unmapped count drops, approval resets, Move vacates the old column, the pipeline conf carries the Rename."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-202"
+      ],
+      "priority": "now",
+      "id": "DBT-203",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "story",
+      "title": "Apply a close match from the Rule and Workbook Coverage missing-field chips",
+      "detail": "OPERATOR REQUEST 2026-10-29 (second entry point of DBT-202). The 'Fields missing across rules' chips open a read-only close-match panel that ends 'To remap one, open the Gap Analysis section...'; replace that with 'Use this field', applied through the same path as DBT-202, and feed the coverage sections the effective mappings so a chip clears after an apply."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-201"
+      ],
+      "priority": "now",
+      "id": "GEN-21",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "story",
+      "title": "Offline: pick an existing Cribl Sentinel destination instead of connecting Azure, and build a routable pack for it",
+      "detail": "OPERATOR REQUEST 2026-10-29: 'when an Azure connection is not used (Offline) the user gets the option to select an existing Cribl Sentinel destination for use with the pack and they don't have to input app registration client id to get the pack deployed.' And: 'the experience I want is for the app to inventory and allow the user to select which Sentinel destinations are available if the user doesn't want to connect Azure to allow the app to create/reuse a DCR.' SCOPE: list the group's Sentinel-type outputs (GET /m/:gid/system/outputs, already granted) as id, stream, DCR and endpoint, never a secret value, failed/empty/filtered stated honestly; offered always, preselected when offline; the stream is shown and the operator confirms the table (a custom stream like Custom-...-stream cannot be inferred); choosing one forces the routable shape, skips the Azure DCR inventory, the client id and scope gates, collapses Select Azure Resources to 'Not needed - using <id>', and lets the routable prerequisite check count the chosen id. DECIDED 2026-10-29: connecting the source is ROUTE ONLY (a group route in_syslog -> pack -> chosen destination, behind a confirmation showing the route and the commit file list); when the source is QuickConnected (TMNA_POV in_syslog -> S3) the app warns that the route will not fire until the source sends to routes, and never rewrites the QuickConnect flow. The operator connects the destination by hand in live testing: the app must not write the route or commit during verification without asking. Out of scope: DBT-37."
+    },
+    {
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "next",
+      "id": "GEN-22",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "spike",
+      "title": "Does a routable pack's output: default deliver to the group route's destination?",
+      "detail": "FILED 2026-10-29 from the F2 plan. route-yml.ts records (measured 2026-09-04) only that output: default makes the pack selectable on the Routes page; that events then reach the calling group route's output is unmeasured. GEN-21's route-only wiring rests on it. The operator answers it by hand while connecting the destination in Cribl (2026-10-29: 'I will manually do that'); record the observed delivery here. Related: GEN-15."
     }
   ],
   "features": [
