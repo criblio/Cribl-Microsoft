@@ -15,6 +15,13 @@ export {
   SENTINEL_OAUTH_SCOPE,
   SENTINEL_SECRET_PLACEHOLDER,
 } from "./sentinel-destination";
+export { parseSentinelOutputs } from "./existing-outputs";
+export type {
+  SentinelEndpointMode,
+  SentinelOutputRow,
+  SentinelOutputsResult,
+  SentinelSecretKind,
+} from "./existing-outputs";
 export type {
   ExistingOutput,
   SentinelDestinationConfig,

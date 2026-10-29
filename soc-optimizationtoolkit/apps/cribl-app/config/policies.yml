@@ -135,7 +135,9 @@ policies:
     actions: ['GET']
   # Create the Sentinel destination in a Worker Group context (onboard-table
   # step create-cribl-destination); GET added for Live Architecture's
-  # destination listing (read-only flow drawing).
+  # destination listing (read-only flow drawing), and also read by the
+  # Integrate page's routable check and its existing Sentinel destination
+  # picker (GEN-21, parsed by core existing-outputs.ts; read-only).
   - object: '/m/:gid/system/outputs'
     actions: ['GET', 'POST']
   # Live Architecture reads of the group's configured flow (GET); POST is the

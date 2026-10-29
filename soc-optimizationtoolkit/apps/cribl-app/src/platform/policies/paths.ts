@@ -43,7 +43,7 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'GET', path: '/products/lake/lakes/:lakeId/datasets', caller: 'core usecases/discover-sample-sources/discover-sample-sources.ts' },
 
   // ---- Worker group context ---------------------------------------------
-  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx` },
+  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx (routable check; GEN-21 existing Sentinel destination picker, parsed by core domain/sentinel-destination/existing-outputs.ts)` },
   { method: 'POST', path: '/m/:gid/system/outputs', caller: ONBOARD },
   { method: 'GET', path: '/m/:gid/system/outputs/:id', caller: `${ONBOARD} (verify step)` },
   { method: 'GET', path: '/m/:gid/system/inputs', caller: `${LIVE_ARCH}; ${PREFLIGHT}; discover-sample-sources.ts; ${CREATE_SOURCE}; read-source-flow/read-onboarding-cribl-side.ts` },

@@ -81,12 +81,15 @@ describe("checkRoutablePrerequisites", () => {
 
     it("carries exactly the keys of one id, with no second pack id", () => {
       const [entry] = checkRoutablePrerequisites(["My-App_CL"], []).entries;
+      // `chosen` (GEN-21) is a flag on the one id, not a second id.
       expect(Object.keys(entry ?? {}).sort()).toEqual([
+        "chosen",
         "expectedId",
         "foundId",
         "sentinelTable",
       ]);
       expect(entry?.expectedId).toBe("MS-Sentinel-My_App-dest");
+      expect(entry?.chosen).toBe(false);
     });
   });
 
@@ -181,5 +184,51 @@ describe("checkRoutablePrerequisites", () => {
     const r = checkRoutablePrerequisites([], []);
     expect(r.entries).toHaveLength(0);
     expect(r.missing).toHaveLength(0);
+  });
+  describe("a chosen existing destination (GEN-21)", () => {
+    it("counts the chosen id as found, though no naming convention produces it", () => {
+      // The UAT group: one hand-built Sentinel destination, PAN-CSL. Without
+      // the choice this table reads MISSING under MS-Sentinel-...-dest.
+      const r = checkRoutablePrerequisites(
+        ["CommonSecurityLog"],
+        ["PAN-CSL", "Cribl_POV_S3_destination"],
+        undefined,
+        { CommonSecurityLog: "PAN-CSL" },
+      );
+      expect(r.entries).toEqual([
+        {
+          sentinelTable: "CommonSecurityLog",
+          expectedId: "PAN-CSL",
+          foundId: "PAN-CSL",
+          chosen: true,
+        },
+      ]);
+      expect(r.missing).toEqual([]);
+    });
+
+    it("still reports a chosen id that is no longer in the listing as missing", () => {
+      const r = checkRoutablePrerequisites(
+        ["CommonSecurityLog", "Syslog"],
+        ["MS-Sentinel-Syslog-dest"],
+        undefined,
+        { CommonSecurityLog: "PAN-CSL", Syslog: "  " },
+      );
+      expect(r.entries).toEqual([
+        {
+          sentinelTable: "CommonSecurityLog",
+          expectedId: "PAN-CSL",
+          foundId: null,
+          chosen: true,
+        },
+        // A blank choice is no choice: the convention id applies.
+        {
+          sentinelTable: "Syslog",
+          expectedId: "MS-Sentinel-Syslog-dest",
+          foundId: "MS-Sentinel-Syslog-dest",
+          chosen: false,
+        },
+      ]);
+      expect(r.missing.map((e) => e.sentinelTable)).toEqual(["CommonSecurityLog"]);
+    });
   });
 });
