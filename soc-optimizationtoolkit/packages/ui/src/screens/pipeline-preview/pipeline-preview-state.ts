@@ -383,6 +383,10 @@ export function gapMappingToPreset(m: GapFieldMapping): PipelineFieldMapping {
     target: m.dest,
     type: m.destType,
     action: m.action as PipelineFieldMapping["action"],
+    // F1-e: a rename across types converts on the target. Without this the
+    // emitter could not tell `in` (int) -> ReceivedBytes (long) from a plain
+    // same-type rename.
+    needsCoercion: m.needsCoercion,
   };
 }
 

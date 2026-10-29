@@ -39,12 +39,14 @@
  */
 
 import type {
+  FieldRef,
   GapFieldMapping,
   GapReport,
   GapReportStat,
+  MatchAction,
   TaggedSample,
 } from "@soc/core";
-import { FIELD_EXAMPLE_MAX_CHARS } from "@soc/core";
+import { applyRemap, FIELD_EXAMPLE_MAX_CHARS, landsInColumn } from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
 // ---------------------------------------------------------------------------
@@ -112,18 +114,38 @@ export type MappingReviewAction =
   /** Reset All - clear every approval (edits and staleness untouched). */
   | { type: "reset-approvals" }
   /**
-   * Edit one mapping row's dest column or action. `baseline` is the report's
-   * current mappings for the table, used to seed the edit store on first edit
-   * (mirrors the legacy `mappingEdits[logType] || a.fieldMappings`). A no-op
-   * when no row matches `sourceField`.
+   * Edit one mapping row's action. `baseline` is the report's current mappings
+   * for the table, used to seed the edit store on first edit (mirrors the
+   * legacy `mappingEdits[logType] || a.fieldMappings`). A no-op when no row
+   * matches `sourceField`.
    */
   | {
       type: "edit-mapping";
       logType: string;
       sourceField: string;
-      field: MappingEditField;
+      field: "action";
       value: string;
       baseline: readonly GapFieldMapping[];
+    }
+  /**
+   * Point one mapping row at another destination column (GEN-19). Delegates to
+   * @soc/core applyRemap, so the row's action, destType, coercion flag and
+   * confidence follow the column instead of staying what the matcher left: an
+   * overflow row pointed at SourceMACAddress becomes a rename the pipeline
+   * emits. Choosing the baseline column restores the baseline row. A no-op
+   * when no row matches or the column is not in `destSchema`.
+   */
+  | {
+      type: "edit-mapping";
+      logType: string;
+      sourceField: string;
+      field: "dest";
+      value: string;
+      baseline: readonly GapFieldMapping[];
+      /** The report's resolved schema: the chosen column's type comes from it. */
+      destSchema: readonly FieldRef[];
+      /** The table's catch-all column; choosing it makes the row overflow. */
+      catchAllColumn?: string;
     }
   /**
    * A log type was renamed (the Unit 11 onRenameLogType seam). Re-keys the
@@ -210,12 +232,29 @@ export function mappingReviewReducer(
       const current = state.mappingEdits[action.logType] ?? [
         ...action.baseline,
       ];
+      if (action.field === "dest") {
+        const remap = applyRemap(current, {
+          sourceField: action.sourceField,
+          destColumn: action.value,
+          destSchema: action.destSchema,
+          catchAllColumn: action.catchAllColumn,
+          baseline: action.baseline,
+        });
+        if (remap.outcome !== "applied" && remap.outcome !== "reverted") {
+          return state;
+        }
+        return {
+          ...state,
+          mappingEdits: { ...state.mappingEdits, [action.logType]: remap.rows },
+        };
+      }
       const index = current.findIndex((m) => m.source === action.sourceField);
       if (index === -1) {
         return state;
       }
       const nextRows = current.map((row, i) =>
-        i === index ? { ...row, [action.field]: action.value } : row,
+        // The action dropdown offers only MatchAction values (ACTION_OPTIONS).
+        i === index ? { ...row, action: action.value as MatchAction } : row,
       );
       return {
         ...state,
@@ -347,12 +386,42 @@ export function isApproved(
   return state.approvals[logType] === true;
 }
 
-/** Whether the operator has hand-edited this table's mappings. */
+/** The row fields that carry a mapping DECISION, compared by isModified. */
+const DECISION_FIELDS = [
+  "dest",
+  "destType",
+  "action",
+  "needsCoercion",
+  "confidence",
+] as const;
+
+/**
+ * Whether the operator's edits for this table differ from the analysis
+ * (DBT-194). Compared row by row, field by field: the edit store exists from
+ * the first edit on, so asking only whether it exists kept "Modified" up after
+ * every edit had been set back. Rows are matched by source. The description
+ * and the example value are display, not decision, and a re-analysis may
+ * legitimately refresh them.
+ */
 export function isModified(
   state: MappingReviewState,
-  logType: string,
+  report: GapReport,
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(state.mappingEdits, logType);
+  const edits = state.mappingEdits[report.logType];
+  if (edits === undefined) {
+    return false;
+  }
+  if (edits.length !== report.fieldMappings.length) {
+    return true;
+  }
+  const baseline = new Map(report.fieldMappings.map((m) => [m.source, m]));
+  return edits.some((edit) => {
+    const original = baseline.get(edit.source);
+    return (
+      original === undefined ||
+      DECISION_FIELDS.some((field) => edit[field] !== original[field])
+    );
+  });
 }
 
 /**
@@ -389,12 +458,25 @@ export function unmappedDestColumns(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** The verbatim "Field Mappings (X mapped, Y unmapped)" expander label. */
+/**
+ * The "Field Mappings (...)" expander label (DBT-193). "Mapped" counts only the
+ * rows that land in a dedicated column; overflow and dropped rows are named
+ * separately, each only when there are any. It used to print every row as
+ * mapped, so the PAN-OS UAT read "115 mapped" while 56 of those went to
+ * AdditionalExtensions and only 59 reached a column.
+ */
 export function fieldMappingsLabel(
-  mappedCount: number,
+  mappings: readonly GapFieldMapping[],
   unmappedCount: number,
 ): string {
-  return `Field Mappings (${mappedCount} mapped, ${unmappedCount} unmapped)`;
+  const mapped = mappings.filter(landsInColumn).length;
+  const overflow = mappings.filter((m) => m.action === "overflow").length;
+  const dropped = mappings.filter((m) => m.action === "drop").length;
+  const parts = [`${mapped} mapped`];
+  if (overflow > 0) parts.push(`${overflow} to overflow`);
+  if (dropped > 0) parts.push(`${dropped} dropped`);
+  parts.push(`${unmappedCount} unmapped`);
+  return `Field Mappings (${parts.join(", ")})`;
 }
 
 /**
