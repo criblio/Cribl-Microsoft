@@ -53,6 +53,12 @@
       "name": "Custom table authoring and table-first DCR creation",
       "kind": "business",
       "why": "RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can already NAME, but it cannot help you create one, and it cannot show you what the workspace already has. Every schema today arrives from somewhere else - a bundled vendor entry, a pasted JSON file, or a table that already exists - so an operator with a new log source and no schema file has no path through this screen at all."
+    },
+    {
+      "key": "MIG",
+      "name": "SIEM migration analysis",
+      "kind": "business",
+      "why": "RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume."
     }
   ],
   "stories": [
@@ -2945,6 +2951,60 @@
       "type": "spike",
       "title": "Does a routable pack's output: default deliver to the group route's destination?",
       "detail": "FILED 2026-10-29 from the F2 plan. route-yml.ts records (measured 2026-09-04) only that output: default makes the pack selectable on the Routes page; that events then reach the calling group route's output is unmeasured. GEN-21's route-only wiring rests on it. The operator answers it by hand while connecting the destination in Cribl (2026-10-29: 'I will manually do that'); record the observed delivery here. Related: GEN-15."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "MIG-1",
+      "type": "spike",
+      "priority": "now",
+      "title": "Can the app run a KQL query against a workspace through its existing Azure proxy, and with what permission?",
+      "detail": "FILED 2026-10-29 for the workspace inventory. Nothing in the app queries Log Analytics today; only ARM listing exists (azure-discovery). Measure live: (1) whether the ARM-proxied query endpoint on management.azure.com answers with the token and proxy the app already has, or whether api.loganalytics.io needs a new proxy entry and token audience; (2) what a caller without query rights receives (403 vs 200 empty), so the inventory can tell a real zero from a hidden one (docs/inventory-standard.md); (3) how the Usage table reports volume (Quantity in MB, IsBillable, DataType, Solution) over 30 days."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "in-progress",
+      "dependsOn": [
+        "MIG-1"
+      ],
+      "id": "MIG-2",
+      "type": "story",
+      "priority": "now",
+      "title": "Core: inventory a workspace's tables, sources and 30-day daily average volume",
+      "detail": "FILED 2026-10-29 (user request). Pure domain + usecase in packages/core over the AzureManagement port: list the Sentinel/Log Analytics workspaces the identity can see across the tenant (reuse azure-discovery listing), then for one chosen workspace inventory every table with data in the last 30 days, the sources feeding each table, the volume per source, and the total daily average over the 30 days. Unknown is not zero: a refused or partial read is reported as such, never as an empty inventory."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "in-progress",
+      "dependsOn": [
+        "MIG-2"
+      ],
+      "id": "MIG-3",
+      "type": "story",
+      "priority": "now",
+      "title": "SIEM Migration: a button to inventory a Sentinel workspace and show tables, sources and daily volume",
+      "detail": "FILED 2026-10-29 (user request). On the SIEM Migration screen: a button starts workspace discovery across the tenant, the operator picks a workspace, and the screen inventories its tables, sources and volumes with a total daily average over the last 30 days. Honest empty, refused and partial states per docs/inventory-standard.md; info affordances on each number saying what query produced it."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-3"
+      ],
+      "id": "MIG-4",
+      "type": "enabler",
+      "priority": "now",
+      "title": "Chrome UAT of the workspace inventory in Live Preview",
+      "detail": "FILED 2026-10-29. Drive /apps/a/__local__ on the leader in Chrome with live credentials: run discovery, pick a workspace, run the inventory, and compare the totals with the Usage blade or a hand-run KQL query in the portal. Record what was observed here and set verified accordingly."
     }
   ],
   "features": [
@@ -3105,6 +3165,12 @@
       "epic": "TBL",
       "menu": "dcr-automation",
       "title": "The new surfaces work without write permission"
+    },
+    {
+      "id": "MIG-F1",
+      "epic": "MIG",
+      "menu": "siem-migration",
+      "title": "Sentinel workspace data-source inventory"
     }
   ]
 }

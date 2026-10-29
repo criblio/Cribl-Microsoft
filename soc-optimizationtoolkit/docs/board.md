@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**75 in the backlog, 53 in progress, 78 done.**
+**76 in the backlog, 56 in progress, 78 done.**
 
 ## By menu item
 
@@ -32,6 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
+| SIEM Migration | 4 | 0 | 4 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -39,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 128.
+Open work totals 132.
 
 ## Epics and features
 
@@ -134,9 +135,17 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
+### `MIG` SIEM migration analysis - 0% (0/4)
+
+RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
+
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 0/4 | MIG-1, MIG-2, MIG-3, MIG-4 |
+
 ---
 
-## In progress (53)
+## In progress (56)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1262,9 +1271,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   destination by hand in live testing: the app must not write the route or
   commit during verification without asking. Out of scope: DBT-37.
 
+- **MIG-1** Can the app run a KQL query against a workspace through its existing Azure proxy, and with what permission?
+  `MIG-F1` `spike` `settled`
+  FILED 2026-10-29 for the workspace inventory. Nothing in the app queries Log
+  Analytics today; only ARM listing exists (azure-discovery). Measure live:
+  (1) whether the ARM-proxied query endpoint on management.azure.com answers
+  with the token and proxy the app already has, or whether api.loganalytics.io
+  needs a new proxy entry and token audience; (2) what a caller without query
+  rights receives (403 vs 200 empty), so the inventory can tell a real zero
+  from a hidden one (docs/inventory-standard.md); (3) how the Usage table
+  reports volume (Quantity in MB, IsBillable, DataType, Solution) over 30
+  days.
+
+- **MIG-2** Core: inventory a workspace's tables, sources and 30-day daily average volume
+  `MIG-F1` `story` `settled` `blocked by MIG-1`
+  FILED 2026-10-29 (user request). Pure domain + usecase in packages/core over
+  the AzureManagement port: list the Sentinel/Log Analytics workspaces the
+  identity can see across the tenant (reuse azure-discovery listing), then for
+  one chosen workspace inventory every table with data in the last 30 days,
+  the sources feeding each table, the volume per source, and the total daily
+  average over the 30 days. Unknown is not zero: a refused or partial read is
+  reported as such, never as an empty inventory.
+
+- **MIG-3** SIEM Migration: a button to inventory a Sentinel workspace and show tables, sources and daily volume
+  `MIG-F1` `story` `settled` `blocked by MIG-2`
+  FILED 2026-10-29 (user request). On the SIEM Migration screen: a button
+  starts workspace discovery across the tenant, the operator picks a
+  workspace, and the screen inventories its tables, sources and volumes with a
+  total daily average over the last 30 days. Honest empty, refused and partial
+  states per docs/inventory-standard.md; info affordances on each number
+  saying what query produced it.
+
 ---
 
-## Backlog - now (4)
+## Backlog - now (5)
 
 Next to pick up. Nothing blocks these.
 
@@ -1391,6 +1431,13 @@ Next to pick up. Nothing blocks these.
   replace each wildcard with the literal paths and actions its callers use,
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
+
+- **MIG-4** Chrome UAT of the workspace inventory in Live Preview
+  `MIG-F1` `enabler` `settled` `blocked by MIG-3`
+  FILED 2026-10-29. Drive /apps/a/__local__ on the leader in Chrome with live
+  credentials: run discovery, pick a workspace, run the inventory, and compare
+  the totals with the Usage blade or a hand-run KQL query in the portal.
+  Record what was observed here and set verified accordingly.
 
 ---
 
