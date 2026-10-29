@@ -32,6 +32,7 @@ import type {
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
 import { plannedSamplesFrom, previewLines, sampleStoreKey } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 /** One log-type checkbox on the capture panel. */
@@ -262,6 +263,32 @@ export interface CaptureCommitOutcome {
    * shortfall in the commit.
    */
   returned: number;
+  /**
+   * Committed log types the store kept FEWER events of than it was handed
+   * (DBT-197), from storedEventShortfalls. Absent or empty when the store kept
+   * everything - or when the commit path could not read the store back, which
+   * is why this is a list of shortfalls FOUND rather than a claim of none.
+   */
+  trimmed?: readonly StoredEventShortfall[];
+}
+
+/**
+ * The sentence that says what the store kept and why, one per trimmed log type.
+ *
+ * WHY IT IS IN THE HEADLINE (DBT-197). A 100-event capture was reported as
+ * "Added 1 sample from this capture." while the chip beside it read "captured 9
+ * events" - two true statements that together read as 91 events lost for no
+ * reason. The reason is the store's size limit per log type, and the operator
+ * can act on it (fewer or smaller events, or simply knowing the field list is
+ * still complete), so it is said where they are already reading.
+ */
+function trimmedSentences(trimmed: readonly StoredEventShortfall[]): string {
+  return trimmed
+    .map(
+      (t) =>
+        ` "${t.logType}" kept ${t.kept} of its ${t.handed} events: the sample store limits how large one log type's sample can be, and these events are large. Its field list was still read from all ${t.handed}.`,
+    )
+    .join("");
 }
 
 /** Project a finished (or refused) commit into what the panel reports. */
@@ -293,12 +320,12 @@ export function deriveCaptureCommitView(
   if (outcome.stored < outcome.returned) {
     return {
       status: "partial",
-      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.`,
+      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.${trimmedSentences(outcome.trimmed ?? [])}`,
     };
   }
   return {
     status: "done",
-    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.`,
+    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.${trimmedSentences(outcome.trimmed ?? [])}`,
   };
 }
 

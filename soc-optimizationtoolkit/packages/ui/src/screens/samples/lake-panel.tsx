@@ -97,6 +97,7 @@ import {
 } from "./lake-panel-state";
 import type { LakeLogTypeChoice, LakeSamplePreview } from "./lake-panel-state";
 import { commitErrorText } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 // The picker's byte formatter, reused rather than reproduced - see the note at
 // its definition; it is the coarse hint register an estimate belongs in.
 import { formatBytes } from "./sample-source-picker-state";
@@ -164,8 +165,12 @@ export interface LakePanelProps {
     logTypes: readonly string[],
     eventsPerLogType: number,
   ) => Promise<FetchLakeEventsResult>;
-  /** Commit the fetched samples to the store. */
-  onCommit: (samples: TaggedSample[]) => Promise<void>;
+  /**
+   * Commit the fetched samples to the store. Shares the capture panel's commit
+   * callback, so it resolves with the store's trims (DBT-197); this panel does
+   * not report them yet.
+   */
+  onCommit: (samples: TaggedSample[]) => Promise<readonly StoredEventShortfall[] | void>;
 }
 
 export function LakePanel({

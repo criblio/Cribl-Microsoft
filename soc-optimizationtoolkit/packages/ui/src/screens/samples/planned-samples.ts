@@ -127,6 +127,56 @@ export function commitErrorText(error: unknown): string {
 }
 
 /**
+ * One committed log type the store kept FEWER events of than it was handed.
+ */
+export interface StoredEventShortfall {
+  /** The label the sample was stored under. */
+  logType: string;
+  /** Events handed to the store - the parsed records of the committed sample. */
+  handed: number;
+  /** Events the store holds for it afterwards, read back from the store. */
+  kept: number;
+}
+
+/**
+ * Which committed samples the store TRIMMED, measured by reading the store
+ * back rather than by asking the adapter what it meant to do (DBT-197).
+ *
+ * WHY THIS EXISTS. A 100-event PAN-OS CEF capture became a sample whose chip
+ * read "captured 9 events", and nothing on screen said why. The cause is the
+ * cloud KV adapter's byte cap (core cap-bytes.ts): one tagged sample is one KV
+ * entry, the leader refuses a large body with 413, and the adapter halves its
+ * budget and retries until the write fits - keeping the FIRST n events. That
+ * cap is deliberate and stays; what was wrong is that its only report was a
+ * console.warn, while the commit headline said "Added 1 sample" as if all 100
+ * had landed. Verbose CEF is exactly the shape that hits it: every event is
+ * stored three times (rawEvents, parsed.rawEvents, parsed.records).
+ *
+ * MEASURED FROM WHAT `list()` RETURNED, so it holds for any store that trims,
+ * not only the one adapter known to today, and the port stays unchanged. A
+ * handed sample ABSENT from the listing is skipped rather than reported as
+ * "kept 0": a listing that missed an entry is not evidence the entry is empty
+ * (inventory-honesty), and the commit view already owns what a missing write
+ * means. The field list is not part of this: the cap keeps `parsed.fields`
+ * whole, and those were discovered from every handed event.
+ */
+export function storedEventShortfalls(
+  handed: readonly TaggedSample[],
+  stored: readonly TaggedSample[],
+): StoredEventShortfall[] {
+  const byType = new Map(stored.map((s) => [s.logType, s] as const));
+  const out: StoredEventShortfall[] = [];
+  for (const sample of handed) {
+    const landed = byType.get(sample.logType);
+    if (landed === undefined) continue;
+    const given = sample.parsed.records.length;
+    const kept = landed.parsed.records.length;
+    if (kept < given) out.push({ logType: sample.logType, handed: given, kept });
+  }
+  return out;
+}
+
+/**
  * How many raw lines a preview shows per log type, and the ONE place either
  * acquisition panel decides it.
  *

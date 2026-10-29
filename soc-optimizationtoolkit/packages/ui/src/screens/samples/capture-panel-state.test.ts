@@ -12,7 +12,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { CaptureSamplesResult } from "@soc/core";
+import type { CaptureSamplesResult, CriblClient } from "@soc/core";
+import {
+  TAGGED_SAMPLE_MAX_BYTES,
+  capTaggedSampleBytes,
+  captureSamples,
+} from "@soc/core";
+import { panosCefCaptureBody } from "./panos-cef-capture-test-fixture";
+import { storedEventShortfalls } from "./planned-samples";
 import {
   captureLogTypeChoices,
   composeFilter,
@@ -402,5 +409,94 @@ describe("deriveCaptureCommitView", () => {
       deriveCaptureCommitView(null, false, "disk full").headline,
     ];
     expect(new Set(headlines).size).toBe(4);
+  });
+
+  it("says what the store kept and why when it trimmed a sample (DBT-197)", () => {
+    const view = deriveCaptureCommitView(
+      {
+        stored: 1,
+        returned: 1,
+        trimmed: [{ logType: "captured", handed: 100, kept: 9 }],
+      },
+      false,
+    );
+    expect(view).toEqual({
+      status: "done",
+      headline:
+        'Added 1 sample from this capture. "captured" kept 9 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+    });
+    // A partial commit carries the same sentence, after its own.
+    expect(
+      deriveCaptureCommitView(
+        {
+          stored: 1,
+          returned: 2,
+          trimmed: [{ logType: "THREAT", handed: 50, kept: 14 }],
+        },
+        false,
+      ).headline,
+    ).toBe(
+      'Added 1 of the 2 log types this capture returned; the rest held nothing this app could parse into a record. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
+    );
+  });
+});
+
+/**
+ * DBT-197, END TO END through every pure step "Add these as samples" takes.
+ *
+ * The UAT: a 100-event PAN-OS CEF capture over syslog read "Captured 100
+ * events", then the chip read "captured 9 events" and nothing said why. Pushed
+ * through the real path - captureSamples on a live-shaped NDJSON body,
+ * plannedCaptureSamples, a store that byte-caps exactly as the cloud adapter
+ * does, the read-back, the commit view - NOTHING before the store loses an
+ * event: all 100 are captured, split, parsed and handed over. The store's byte
+ * cap is where they go, and it is deliberate (the leader 413s a large KV body).
+ * So the count is pinned at every hop, and the headline must name the trim.
+ */
+describe("a verbose PAN-OS CEF capture, captured to committed", () => {
+  it("hands all 100 events to the store and names what the store kept", async () => {
+    const cribl = {
+      request: async () => ({ status: 200, body: panosCefCaptureBody(100) }),
+    } as unknown as CriblClient;
+    const result = await captureSamples(cribl, {
+      groupId: "default",
+      filter: "__inputId=='syslog:in_syslog'",
+      maxEvents: 100,
+    });
+
+    expect(result.rawEvents).toHaveLength(100);
+    expect(result.splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["captured", 100],
+    ]);
+    expect(deriveCaptureView(result, false, []).headline).toBe(
+      "Captured 100 events in 1 log type (cef).",
+    );
+
+    const handed = plannedCaptureSamples(result.splits, "capture:in_syslog");
+    expect(handed).toHaveLength(1);
+    expect(handed[0].format).toBe("cef");
+    expect(handed[0].parsed.records).toHaveLength(100);
+    expect(handed[0].parsed.eventCount).toBe(100);
+    expect(handed[0].parsed.fields).toHaveLength(135);
+
+    // The cloud adapter's first write: the 256 KiB budget. A 413 halves it; one
+    // halving is pinned here, which is the size the UAT's 9 sits beside.
+    const stored = handed.map(
+      (s) => capTaggedSampleBytes(s, TAGGED_SAMPLE_MAX_BYTES / 2).sample,
+    );
+    expect(stored[0].parsed.records).toHaveLength(14);
+    // The field list is untouched by the cap - all 135 came from all 100.
+    expect(stored[0].parsed.fields).toHaveLength(135);
+
+    const trimmed = storedEventShortfalls(handed, stored);
+    expect(trimmed).toEqual([{ logType: "captured", handed: 100, kept: 14 }]);
+    expect(
+      deriveCaptureCommitView(
+        { stored: handed.length, returned: result.splits.length, trimmed },
+        false,
+      ).headline,
+    ).toBe(
+      'Added 1 sample from this capture. "captured" kept 14 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+    );
   });
 });
