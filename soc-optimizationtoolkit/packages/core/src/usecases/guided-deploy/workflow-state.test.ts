@@ -145,6 +145,26 @@ describe("existing destination picked (GEN-21)", () => {
     expect(canWireSource(false, "full")).toBe(false);
   });
 
+  it("keeps the Workspace pill in azure-only, where the pick does not lift the scope", () => {
+    // Without this the footer showed no missing prerequisite while Deploy
+    // stayed disabled for the scope.
+    expect(readinessPillsForMode(PICKED, "azure-only").map((p) => [p.id, p.state])).toEqual([
+      ["solution", readinessPillsForMode(READY, "azure-only")[0]?.state],
+      ["samples", readinessPillsForMode(READY, "azure-only")[1]?.state],
+      ["mappings", readinessPillsForMode(READY, "azure-only")[2]?.state],
+      ["workspace", "missing"],
+      ["pack-name", "ok"],
+    ]);
+    // Where Cribl is in the run the pick does replace the scope: no pill.
+    expect(readinessPillsForMode(PICKED, "full").map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+
   it("deriveGuidedWorkflow counts an installed pack only when a destination is picked", () => {
     expect(deriveGuidedWorkflow(PICKED, "full", true).canWireSource).toBe(true);
     expect(deriveGuidedWorkflow(PICKED, "full").canWireSource).toBe(false);

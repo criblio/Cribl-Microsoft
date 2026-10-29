@@ -79,15 +79,11 @@ export function canDeployInMode(
     // Full mode defers entirely to the canonical native rule (no drift).
     return integrateCanDeploy(inputs);
   }
-  // A picked existing destination drops the scope requirement (GEN-21),
-  // exactly as integrate-arc's canDeploy does for "full" - but only while
-  // Cribl is in the run. An existing CRIBL destination cannot stand in for the
-  // scope of an azure-only run, whose whole job is the Azure writes that scope
-  // addresses.
-  const scopeOk =
-    gating.skipAzure ||
-    (!gating.skipCribl && !deployAzureRequirements(inputs).scope) ||
-    inputs.scopeCommitted;
+  // A picked existing destination (GEN-21) is NOT consulted here. The only
+  // gated mode that keeps Cribl, cribl-only, already skips the scope; and an
+  // existing CRIBL destination cannot stand in for the scope of an azure-only
+  // run, whose whole job is the Azure writes that scope addresses.
+  const scopeOk = gating.skipAzure || inputs.scopeCommitted;
   const workerGroupOk = gating.skipCribl || inputs.workerGroupSelected;
   return scopeOk && workerGroupOk && inputs.packNameSet;
 }
@@ -145,7 +141,13 @@ export function readinessPillsForMode(
   mode: DeployMode,
 ): ReadinessPill[] {
   const gating = deployModeGating(mode);
-  return deriveReadinessPills(inputs).filter((pill) => {
+  // An azure-only run ignores a pick (see canDeployInMode), so its Workspace
+  // pill must not vanish because one is set: integrate-arc drops that pill on
+  // a pick, which here would hide the one prerequisite still blocking Deploy.
+  const pillInputs: SectionInputs = gating.skipCribl
+    ? { ...inputs, existingDestination: "" }
+    : inputs;
+  return deriveReadinessPills(pillInputs).filter((pill) => {
     if (pill.id === "workspace") return !gating.skipAzure;
     if (pill.id === "worker-groups") return !gating.skipCribl;
     return true;

@@ -8,8 +8,8 @@
  *
  * This is a faithful TRANSLATION of the old coarse requirements, not a redesign:
  * `none` becomes `[]`, and `azure`/`cribl`/`both` become the specific capability
- * that route's primary purpose actually exercises. `preflight` deliberately
- * departs from the old value, as noted below.
+ * that route's primary purpose actually exercises. `preflight` and (since
+ * GEN-21) `integrate` deliberately depart from the old value, as noted below.
  *
  * Pure data: no IO, no React.
  */
