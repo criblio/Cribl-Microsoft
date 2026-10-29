@@ -30,7 +30,6 @@ export {
   isPlanValueKey,
   missingValues,
   planFingerprint,
-  planValueOf,
   sanitizePlanValue,
 } from "./plan-values";
 export type { PlanValueKey, PlanValueLabel, PlanValues } from "./plan-values";

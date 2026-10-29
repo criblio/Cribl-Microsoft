@@ -132,4 +132,13 @@ describe("@soc/core entry point exports the Azure onboarding surface", () => {
       expect(keys).not.toContain(name);
     }
   });
+
+  it("keeps module-local helpers off the barrels (AZR-53)", () => {
+    // No consumer outside their module; exporting them only widened the surface.
+    const unpublished = ["verdictStatus", "groupStatus", "planValueOf", "communityDefinitionName"];
+    expect(unpublished.filter((name) => name in core)).toEqual([]);
+    expect(["verdictStatus", "groupStatus"].filter((name) => name in onboardingDataflow)).toEqual([]);
+    expect(["planValueOf"].filter((name) => name in onboardingHowto)).toEqual([]);
+    expect(["communityDefinitionName"].filter((name) => name in onboardingHowtoSteps)).toEqual([]);
+  });
 });

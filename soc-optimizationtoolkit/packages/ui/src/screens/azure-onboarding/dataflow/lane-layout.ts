@@ -65,9 +65,9 @@ export const LANE_CARD_WIDTH = 200;
  * card facts. The edge label is the same size in the proportional face, which
  * is narrower, so the estimate errs wide.
  */
-export const EDGE_LABEL_CHAR_PX = LANE_CARD_WIDTH / CARD_LINE_CHARS;
+const EDGE_LABEL_CHAR_PX = LANE_CARD_WIDTH / CARD_LINE_CHARS;
 /** Space between the label's end and its (i) hit circle. */
-export const EDGE_LABEL_INFO_GAP = 4;
+const EDGE_LABEL_INFO_GAP = 4;
 /** Clear space kept between an edge label (or its (i)) and either card. */
 export const EDGE_LABEL_CLEARANCE = 6;
 
@@ -77,7 +77,7 @@ export function edgeLabelWidth(text: string): number {
 }
 
 /** The width of a label plus its (i): the text, the gap, the (i) hit circle. */
-export function edgeLabelSlotWidth(text: string): number {
+function edgeLabelSlotWidth(text: string): number {
   return edgeLabelWidth(text) + EDGE_LABEL_INFO_GAP + 2 * INFO_HIT_R;
 }
 

@@ -53,7 +53,7 @@ export const LEGACY_POLICY_NAMES = Object.freeze({
 });
 
 /** A community service's definition name (Deploy-CommunityPolicyInitiative.ps1:387). */
-export function communityDefinitionName(service: string): string {
+function communityDefinitionName(service: string): string {
   return `${LEGACY_POLICY_NAMES.communityDefinitionPrefix}${service}${LEGACY_POLICY_NAMES.communityDefinitionSuffix}`;
 }
 

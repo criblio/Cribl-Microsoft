@@ -260,7 +260,7 @@ const NOT_CHECKED: CardStatus = { kind: "not-checked", label: "not checked yet" 
 const NO_CHECK: CardStatus = { kind: "no-check", label: "not checked by Validate" };
 
 /** One verdict with the kind of check that reached it, which words an other-name verdict. */
-export interface CheckedVerdict {
+interface CheckedVerdict {
   readonly check: CheckKind;
   readonly verdict: StepVerdict;
 }
@@ -270,7 +270,7 @@ export interface CheckedVerdict {
  * label counts the other matches in that kind's unit (core otherNameAlsoFound,
  * the same words Validate and the How-to step use - DBT-189).
  */
-export function verdictStatus(v: StepVerdict, check?: CheckKind): CardStatus {
+function verdictStatus(v: StepVerdict, check: CheckKind): CardStatus {
   switch (v.kind) {
     case "as-expected":
       return { kind: "as-expected", label: "configured as expected" };
@@ -312,7 +312,7 @@ const AGGREGATE_CLASS: Readonly<Record<StepVerdict["kind"], AggregateVerdict>> =
  * (claude-kit standards/inventory-honesty.md). A worse verdict that WAS read
  * still wins, since it is the more useful thing to show.
  */
-export function groupStatus(checked: readonly CheckedVerdict[], expected: number = checked.length): CardStatus {
+function groupStatus(checked: readonly CheckedVerdict[], expected: number = checked.length): CardStatus {
   if (checked.length === 0) return NOT_CHECKED;
   const verdicts = checked.map((c) => c.verdict);
   const worst = aggregateVerdict(verdicts);

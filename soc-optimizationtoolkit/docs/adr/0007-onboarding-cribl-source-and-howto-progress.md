@@ -323,7 +323,6 @@ Filed as cards, not built:
   unrolled (AZR-35); the route and destination are only READ today;
 - creating a Listen rule and a dedicated consumer group (AZR-36);
 - a persisted last-seen beyond the 24-hour lookback (AZR-37);
-- one definition of the Defender coverage item id (AZR-38);
 - the export fallback and the `source.manage` gate from AZR-S2.
 
 ## Live verification (outstanding)

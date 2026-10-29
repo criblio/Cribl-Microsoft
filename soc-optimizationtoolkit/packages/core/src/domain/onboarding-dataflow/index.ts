@@ -10,18 +10,15 @@ export {
   UNKNOWN_REASON_LABEL,
   arrivalText,
   buildOnboardingLanes,
-  groupStatus,
   isLaneChosen,
   laneCheckKey,
   laneMode,
   tickText,
-  verdictStatus,
 } from "./lanes";
 export type {
   BuildOnboardingLanesInput,
   CardStatus,
   CardStatusKind,
-  CheckedVerdict,
   CriblInputReading,
   CriblRouteReading,
   CriblSideReading,

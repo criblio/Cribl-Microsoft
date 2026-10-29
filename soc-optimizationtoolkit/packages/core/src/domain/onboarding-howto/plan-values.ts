@@ -105,7 +105,7 @@ export function planFingerprint(values: PlanValues, keys: readonly PlanValueKey[
 }
 
 /** A plan value as every comparison reads it: unset is "", and spaces at either end do not count. */
-export function planValueOf(values: Partial<PlanValues>, key: PlanValueKey): string {
+function planValueOf(values: Partial<PlanValues>, key: PlanValueKey): string {
   return (values[key] ?? "").trim();
 }
 
