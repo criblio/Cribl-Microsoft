@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  COMMUNITY_SERVICE_LABELS,
+  COMMUNITY_TIER_SERVICES,
   COVERAGE_CATALOG,
   DEFAULT_ENABLED,
   UNSUPPORTED_SOURCES,
@@ -138,19 +140,48 @@ describe("COVERAGE_CATALOG - ported, not invented", () => {
     expect(ported).toEqual(legacyTiers);
   });
 
-  it("keeps every community tier's detail text verbatim", () => {
+  it("keeps a community tier's detail verbatim only where the legacy text named what it imports", () => {
+    // AZR-51: this pin used to hold EVERY tier detail verbatim to the legacy
+    // tierDetails. It is changed on purpose: what an operator reads beside a
+    // tier must match what ticking it imports and Validate checks, and the
+    // legacy text named services the script never imported (AKS, IoT Hub,
+    // Cognitive Services) or trailed off in "etc.". The tiers whose legacy
+    // text was already exact stay verbatim; the rest are derived from
+    // COMMUNITY_TIER_SERVICES (pinned below).
     const src = legacy();
     const details = at(src, "communityPolicyInitiative.tiers.tierDetails") ?? {};
     const ported = coverageItem("communityPolicyInitiative")?.subSelection?.options ?? [];
+    const verbatim = ported.filter((o) => o.detail === details[o.key]).map((o) => o.key);
 
-    for (const option of ported) {
-      if (option.key === "All") continue; // no legacy tierDetails entry; ours is a gloss
-      expect(option.detail, `tier ${option.key}`).toBe(details[option.key]);
-    }
-    // And the gloss is the only thing we added.
+    expect(verbatim).toEqual(["Storage", "Networking", "AVD"]);
+    // And the All gloss is the only option with no legacy entry.
     expect(ported.filter((o) => details[o.key] === undefined).map((o) => o.key)).toEqual([
       "All",
     ]);
+  });
+
+  it("describes each community tier by exactly the services it imports (AZR-51)", () => {
+    const options = coverageItem("communityPolicyInitiative")?.subSelection?.options ?? [];
+    const tiers = options.filter((o) => o.key !== "All");
+
+    // One declaration: every non-All tier has a non-empty service list, and
+    // no service list belongs to a tier the catalog does not offer.
+    expect(tiers.map((o) => o.key)).toEqual(Object.keys(COMMUNITY_TIER_SERVICES));
+    for (const o of tiers) {
+      const services = COMMUNITY_TIER_SERVICES[o.key] ?? [];
+      expect(services.length, `tier ${o.key}`).toBeGreaterThan(0);
+      // Each named item is the label of a service in THIS tier, once each.
+      expect(o.detail.split(", "), `tier ${o.key}`).toEqual(
+        services.map((s) => COMMUNITY_SERVICE_LABELS[s]),
+      );
+    }
+    expect(Object.keys(COMMUNITY_SERVICE_LABELS).sort()).toEqual(
+      Object.values(COMMUNITY_TIER_SERVICES).flat().sort(),
+    );
+    const detail = (key: string): string | undefined => options.find((o) => o.key === key)?.detail;
+    expect(detail("Security")).toBe("Firewall, NSG, Application Gateway, ExpressRoute, Virtual Network");
+    expect(detail("Other")).toBe("Recovery Services Vault, Azure API for FHIR, Power BI Embedded");
+    expect(options.map((o) => o.detail).join(" | ")).not.toMatch(/AKS|IoT Hub|Cognitive|etc\./);
   });
 
   it("keeps the legacy two Entra profiles, plus SecurityOnly from AZR-2", () => {

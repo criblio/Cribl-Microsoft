@@ -644,7 +644,9 @@ group, resources emit to Event Hub, Cribl reads the hub.
   which the bundled initiative deliberately EXCLUDES (incompatible
   `resourceLocation` Array type). Those two exclusions are the classic silent
   gap - an operator ticking "Security" reasonably assumes AKS came with it - so
-  they need to be visible checkboxes, not a footnote.
+  they need to be visible checkboxes, not a footnote. (The legacy tier text made
+  it worse by listing AKS under Security; since AZR-51 each tier's detail is
+  derived from the services it imports, so AKS is no longer named there.)
 
 Mechanics shared by all three, all already recorded in the census: every
 assignment needs a user-assigned managed identity plus Monitoring Contributor at

@@ -8,9 +8,9 @@ import { LEGACY_WRITER, TOOLKIT_MARKER_KEY, recogniseOwner } from "../logging-ma
 import { PLAN_VALUE_KEYS, isPlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
 import { ONBOARDING_SOURCES, isOnboardingSourceId } from "../onboarding-howto/sources";
 import { CHECK_KINDS } from "../onboarding-howto/check-kinds";
+import { COMMUNITY_TIER_SERVICES } from "../coverage-model/coverage-catalog";
 import { CONNECTION_STRING_STAND_IN } from "./defender-steps";
 import {
-  COMMUNITY_TIER_SERVICES,
   LEGACY_POLICY_NAMES,
   MARKER_FILE,
   MARKER_ROW_LABEL,

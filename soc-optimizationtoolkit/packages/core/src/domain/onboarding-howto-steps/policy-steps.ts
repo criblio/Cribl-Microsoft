@@ -19,6 +19,9 @@
 
 import { eventHubNamespacePath } from "../eventhub-arm/eventhub-arm";
 import { coverageItem } from "../coverage-model";
+// The tier services live beside the tiers they describe (AZR-51); imported
+// from the module rather than the barrel, which would publish them in @soc/core.
+import { COMMUNITY_TIER_SERVICES } from "../coverage-model/coverage-catalog";
 import { LEGACY_WRITER, TOOLKIT_MARKER_KEY } from "../logging-map/ownership";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 import { planRuleId } from "./eventhub-steps";
@@ -47,30 +50,6 @@ export const LEGACY_POLICY_NAMES = Object.freeze({
     "https://github.com/Azure/Community-Policy/tree/main/policyDefinitions/Monitoring/To%20Event%20Hub",
   /** Deploy-BuiltInPolicyInitiatives.ps1:723: the effect the legacy assigned with. */
   effect: "DeployIfNotExists",
-});
-
-/**
- * The community services each tier imports, as the legacy script groups them
- * (Deploy-CommunityPolicyInitiative.ps1:213-257, `$script:CommunityPolicyTiers`).
- * `All` is every service (its line 364). Each service becomes one definition
- * named by {@link communityDefinitionName}. Pinned against the frozen script.
- */
-export const COMMUNITY_TIER_SERVICES: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  Storage: ["BlobServices", "FileServices", "QueueServices", "TableServices", "StorageAccounts"],
-  Security: ["Firewall", "NSG", "ApplicationGateway", "ExpressRoute", "VirtualNetwork"],
-  Data: [
-    "CosmosDB", "DataFactory", "MySQL", "PostgreSQL", "MariaDB",
-    "SynapseAnalytics", "SynapseSparkPool", "SynapseSQLPool", "DataExplorer", "Databricks",
-    "AnalysisServices", "TimeSeriesInsights",
-  ],
-  Compute: [
-    "AppService", "FunctionApp", "BatchAccount", "MachineLearning", "ApplicationInsights",
-    "AutoscaleSettings", "DevCenter",
-  ],
-  Integration: ["LogicApps", "LogicAppsISE", "EventGridTopic", "EventGridSystemTopic", "Relay"],
-  Networking: ["LoadBalancer", "TrafficManager", "CDNEndpoint"],
-  AVD: ["AVDHostPool", "AVDApplicationGroup", "AVDWorkspace", "AVDScalingPlan"],
-  Other: ["RecoveryServicesVault", "AzureAPIforFHIR", "PowerBIEmbedded"],
 });
 
 /** A community service's definition name (Deploy-CommunityPolicyInitiative.ps1:387). */
