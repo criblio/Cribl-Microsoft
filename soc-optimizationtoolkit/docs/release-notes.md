@@ -10,6 +10,18 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**SIEM Migration can inventory an existing Sentinel workspace (MIG-1..3).** A
+new panel at the foot of the SIEM Migration screen finds the Log Analytics
+workspaces the connected identity can see across the tenant, marks which have
+Sentinel enabled, and inventories the one you pick. It lists every table with
+data in the last 30 complete UTC days, the daily average and billable volume
+for each table (from the Usage table), and the sources feeding each table (from
+`_BilledSize`, attributed to `_ResourceId`, `Computer` or the CEF device). The
+workspace-wide daily average is shown above the table, and the inventory
+downloads as CSV. It needs Log Analytics Reader on the workspace. A refused read
+is reported as a refusal, not as an empty workspace. A table whose source
+breakdown fails keeps its volume and says why.
+
 **Ensure Cribl secret no longer overwrites a secret it cannot show it wrote
 (DBT-152).** Sentinel Integration's "Ensure Cribl secret" and the Labs
 flow-log pack used to replace an existing secret of the same name

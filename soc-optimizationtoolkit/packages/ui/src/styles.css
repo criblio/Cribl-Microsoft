@@ -3317,6 +3317,50 @@ button.readiness-pill:focus-visible {
   background: var(--warn-bg);
 }
 
+/* SIEM Migration: existing workspace inventory (MIG-3). */
+.siem-inventory-select {
+  font-size: 12px;
+  padding: 3px 6px;
+  min-width: 320px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+.siem-inventory-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.siem-inventory-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.siem-inventory-table th,
+.siem-inventory-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.siem-inventory-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.siem-inventory-query {
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 4px 0;
+  color: var(--text);
+}
+
 /* Enable Sentinel Content (content-install section). */
 .content-install-group {
   border-top: 1px solid var(--border);

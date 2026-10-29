@@ -49,6 +49,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { buildSolutionDeepLink } from "../solution-browser/browser-state";
 import { InfoTip } from "../../components/info-tip";
+import { WorkspaceInventoryPanel } from "./workspace-inventory-panel";
 import {
   SIEM_MIGRATION_PLAN_KEY,
   confidenceTone,
@@ -549,6 +550,9 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
           </div>
         </section>
       )}
+
+      {/* MIG-3: independent of the export analysis above - no upload needed. */}
+      <WorkspaceInventoryPanel />
     </>
   );
 }
