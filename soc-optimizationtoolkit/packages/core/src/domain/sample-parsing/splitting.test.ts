@@ -421,6 +421,26 @@ describe("splitSamplesByLogType - PAN-OS CEF header type (DBT-196)", () => {
     expect(splitFoundNoDiscriminator(splits, "captured")).toBe(false);
   });
 
+  it("files each raw line under its OWN log type when another line parses to nothing", () => {
+    // A syslog line with no CEF header and no key=value pairs yields no parsed
+    // object. The groups used to index the raw lines by the parsed object's
+    // position, so every later line shifted by one: THREAT carried the sshd
+    // line, TRAFFIC carried the THREAT line, and the TRAFFIC line was lost.
+    // The unparsed line is still left out of every group (DBT-197 territory);
+    // this pins only that no line lands under another line's log type.
+    const noise = "<14>Oct 29 10:00:02 fw01 sshd: session opened for THREAT review";
+    expect(grouped([noise, PAN_THREAT, PAN_TRAFFIC])).toEqual([
+      ["THREAT", 1, [PAN_THREAT]],
+      ["TRAFFIC", 1, [PAN_TRAFFIC]],
+    ]);
+    // Same shift from a PAN-OS line whose TYPE field is empty: it falls to the
+    // KV path, fails the pair gate, and must not take the next line's slot.
+    const emptyType = "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url||1|src=1";
+    expect(grouped([emptyType, PAN_TRAFFIC])).toEqual([
+      ["TRAFFIC", 1, [PAN_TRAFFIC]],
+    ]);
+  });
+
   it("reads a bare (unwrapped) PAN-OS CEF line the same way", () => {
     const bare = PAN_THREAT.slice(PAN_THREAT.indexOf("CEF:"));
     const bareTraffic = PAN_TRAFFIC.slice(PAN_TRAFFIC.indexOf("CEF:"));

@@ -202,7 +202,15 @@ export function splitSamplesByLogType(
   format: SampleFormat,
 ): SplitSample[] {
   const eventObjects: Array<Record<string, unknown>> = [];
+  // The raw line each entry of `eventObjects` was parsed FROM (DBT-196). A line
+  // that parses to nothing (non-KV text, a KV line under the pair gate) adds no
+  // object, so indexing `rawEvents` by the object's position shifted every
+  // later line by one: measured on [sshd line, PAN THREAT, PAN TRAFFIC], the
+  // THREAT group carried the sshd line and the TRAFFIC group the THREAT line,
+  // and the tagged-sample store is keyed by that log type.
+  const sourceLines: string[] = [];
   for (const raw of rawEvents) {
+    const before = eventObjects.length;
     try {
       eventObjects.push(JSON.parse(raw) as Record<string, unknown>);
     } catch {
@@ -226,6 +234,7 @@ export function splitSamplesByLogType(
         }
       }
     }
+    if (eventObjects.length > before) sourceLines.push(raw);
   }
 
   // CSV fallback (PAN-OS headerless CSV): nothing parsed, lines look like CSV.
@@ -275,7 +284,7 @@ export function splitSamplesByLogType(
     }
     val = cleanLogTypeValue(val);
     if (!groups.has(val)) groups.set(val, []);
-    groups.get(val)!.push(rawEvents[i] ?? JSON.stringify(eventObjects[i]));
+    groups.get(val)!.push(sourceLines[i]);
   }
 
   return [...groups.entries()].map(([logType, events]) => ({
