@@ -102,10 +102,15 @@ export const DEPLOYMENT_MODES: readonly DeploymentMode[] = ["Centralized", "Mult
  */
 export type SubSelectionKind = "tiers" | "profile" | "export-tiers";
 
-/** One option inside a sub-selection, with the legacy file's own description. */
+/** One option inside a sub-selection, with what choosing it means. */
 export interface SubSelectionOption {
   readonly key: string;
-  /** The legacy `tierDetails` / profile note, verbatim where one existed. */
+  /**
+   * The legacy `tierDetails` / profile note, verbatim where one existed -
+   * except the community policy tiers, whose detail is derived from
+   * {@link COMMUNITY_TIER_SERVICES} because the legacy text named services
+   * the tier never imports (AZR-51).
+   */
   readonly detail: string;
 }
 
