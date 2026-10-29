@@ -430,6 +430,29 @@ describe("splitSamplesByLogType - PAN-OS CEF header type (DBT-196)", () => {
     ]);
   });
 
+  it("takes the header TYPE over an extension type, and needs no pair count", () => {
+    // The header is the device's own statement of the type: an extension
+    // `type=` / `log-type=` (a custom log format) does not override it, and a
+    // line with fewer than the KV probe's three pairs still splits - the header
+    // is the evidence, not the pairs.
+    const withExtType = [
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|type=end src=1 dst=2",
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|end|TRAFFIC|1|log-type=url src=1 dst=2",
+    ];
+    expect(grouped(withExtType).map((g) => g.slice(0, 2))).toEqual([
+      ["THREAT", 1],
+      ["TRAFFIC", 1],
+    ]);
+    const fewPairs = [
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|start|TRAFFIC|1|src=1",
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|general|SYSTEM|1|",
+    ];
+    expect(grouped(fewPairs).map((g) => g.slice(0, 2))).toEqual([
+      ["TRAFFIC", 1],
+      ["SYSTEM", 1],
+    ]);
+  });
+
   it("leaves every other CEF vendor and product unchanged", () => {
     // The same header shape from another vendor - and from another Palo Alto
     // product - is NOT split by its header: it falls back exactly as before.
