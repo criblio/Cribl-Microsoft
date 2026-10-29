@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**76 in the backlog, 56 in progress, 78 done.**
+**76 in the backlog, 53 in progress, 81 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| SIEM Migration | 4 | 0 | 4 |
+| SIEM Migration | 1 | 3 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 132.
+Open work totals 129.
 
 ## Epics and features
 
@@ -135,17 +135,17 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 0% (0/4)
+### `MIG` SIEM migration analysis - 75% (3/4)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 0/4 | MIG-1, MIG-2, MIG-3, MIG-4 |
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 3/4 | MIG-1, MIG-2, MIG-3, MIG-4 |
 
 ---
 
-## In progress (56)
+## In progress (53)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1271,37 +1271,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   destination by hand in live testing: the app must not write the route or
   commit during verification without asking. Out of scope: DBT-37.
 
-- **MIG-1** Can the app run a KQL query against a workspace through its existing Azure proxy, and with what permission?
-  `MIG-F1` `spike` `settled`
-  FILED 2026-10-29 for the workspace inventory. Nothing in the app queries Log
-  Analytics today; only ARM listing exists (azure-discovery). Measure live:
-  (1) whether the ARM-proxied query endpoint on management.azure.com answers
-  with the token and proxy the app already has, or whether api.loganalytics.io
-  needs a new proxy entry and token audience; (2) what a caller without query
-  rights receives (403 vs 200 empty), so the inventory can tell a real zero
-  from a hidden one (docs/inventory-standard.md); (3) how the Usage table
-  reports volume (Quantity in MB, IsBillable, DataType, Solution) over 30
-  days.
-
-- **MIG-2** Core: inventory a workspace's tables, sources and 30-day daily average volume
-  `MIG-F1` `story` `settled` `blocked by MIG-1`
-  FILED 2026-10-29 (user request). Pure domain + usecase in packages/core over
-  the AzureManagement port: list the Sentinel/Log Analytics workspaces the
-  identity can see across the tenant (reuse azure-discovery listing), then for
-  one chosen workspace inventory every table with data in the last 30 days,
-  the sources feeding each table, the volume per source, and the total daily
-  average over the 30 days. Unknown is not zero: a refused or partial read is
-  reported as such, never as an empty inventory.
-
-- **MIG-3** SIEM Migration: a button to inventory a Sentinel workspace and show tables, sources and daily volume
-  `MIG-F1` `story` `settled` `blocked by MIG-2`
-  FILED 2026-10-29 (user request). On the SIEM Migration screen: a button
-  starts workspace discovery across the tenant, the operator picks a
-  workspace, and the screen inventories its tables, sources and volumes with a
-  total daily average over the last 30 days. Honest empty, refused and partial
-  states per docs/inventory-standard.md; info affordances on each number
-  saying what query produced it.
-
 ---
 
 ## Backlog - now (5)
@@ -1433,11 +1402,15 @@ Next to pick up. Nothing blocks these.
   an exception goes stale.
 
 - **MIG-4** Chrome UAT of the workspace inventory in Live Preview
-  `MIG-F1` `enabler` `settled` `blocked by MIG-3`
+  `MIG-F1` `enabler` `settled`
   FILED 2026-10-29. Drive /apps/a/__local__ on the leader in Chrome with live
   credentials: run discovery, pick a workspace, run the inventory, and compare
   the totals with the Usage blade or a hand-run KQL query in the portal.
-  Record what was observed here and set verified accordingly.
+  Record what was observed here and set verified accordingly. ALSO OWNS MIG-1
+  question (2): with an identity lacking workspaces/query/read, record what
+  the Usage query answers (expect 403, so the panel says it could not read) -
+  if it is 200 with no rows, the measured-zero copy is wrong and becomes a bug
+  card.
 
 ---
 
@@ -2474,7 +2447,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (78)
+## Done (81)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5025,3 +4998,75 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   barrel-exports tests; the implementer and the reviewer each mutation-checked
   the pins, the reviewer by dropping a service label and by inlining a wrong
   listing path.
+
+- **MIG-1** Can the app run a KQL query against a workspace through its existing Azure proxy, and with what permission?
+  `MIG-F1` `spike` `settled` `verified: live`
+  FILED 2026-10-29 for the workspace inventory. Nothing in the app queries Log
+  Analytics today; only ARM listing exists (azure-discovery). Measure live:
+  (1) whether the ARM-proxied query endpoint on management.azure.com answers
+  with the token and proxy the app already has, or whether api.loganalytics.io
+  needs a new proxy entry and token audience; (2) what a caller without query
+  rights receives (403 vs 200 empty), so the inventory can tell a real zero
+  from a hidden one (docs/inventory-standard.md); (3) how the Usage table
+  reports volume (Quantity in MB, IsBillable, DataType, Solution) over 30
+  days. DONE 2026-10-29 (live, law-jpederson-eastus via az rest): (1) YES
+  through the existing proxy. POST {workspace ARM
+  id}/query?api-version=2017-10-01 answers 200 with the management-audience
+  token (first measured 2026-08-31 in live-verify.test.ts; api.loganalytics.io
+  answers 403 for that token), so no new proxy entry or token audience is
+  needed. (3) Usage reports Quantity in decimal MB per DataType, with
+  IsBillable and a slash-joined Solution; make_set over it comes back as a
+  JSON-encoded STRING, not an array. Summed _BilledSize agreed with Usage to
+  0.06% on AWSVPCFlow (1,932,250,284 bytes vs 1931.0 MB) and to 3.5% on
+  ThreatIntelIndicators. Server execution measured 0.04s for Usage and 0.37s
+  for a five-table 30-day source breakdown over 15.5M rows, inside the 30s
+  proxy timeout; the 47-65s seen first was az CLI startup, not the query. Also
+  learned: _ResourceId is absent from some tables (AWSVPCFlow), and a bare
+  reference fails the whole query with SEM0100, so column_ifexists is
+  required; union isfuzzy=true reports a missing table as a Warning-severity
+  PartialError naming it, with full rows for every other table. NOT MEASURED:
+  (2), the answer a caller without query rights receives - no reader-less
+  identity was at hand. The code treats any non-2xx as a refusal and a 200
+  with no rows as a measured zero; MIG-4 must confirm that belief with a
+  reader-less identity.
+
+- **MIG-2** Core: inventory a workspace's tables, sources and 30-day daily average volume
+  `MIG-F1` `story` `settled` `verified: pins`
+  FILED 2026-10-29 (user request). Pure domain + usecase in packages/core over
+  the AzureManagement port: list the Sentinel/Log Analytics workspaces the
+  identity can see across the tenant (reuse azure-discovery listing), then for
+  one chosen workspace inventory every table with data in the last 30 days,
+  the sources feeding each table, the volume per source, and the total daily
+  average over the 30 days. Unknown is not zero: a refused or partial read is
+  reported as such, never as an empty inventory. DONE 2026-10-29 (pins; both
+  KQL queries also run live on law-jpederson-eastus, and the parser fixtures
+  are trimmed copies of those answers). domain/workspace-inventory holds the
+  queries, parser and fold; usecases/workspace-inventory has
+  discoverWorkspaces (subscriptions, then workspaces plus a SecurityInsights
+  solutions list per subscription: a failed subscription is reported, a failed
+  solutions list makes Sentinel unknown, not off) and inventoryWorkspace
+  (Usage over the last 30 complete UTC days, then source breakdowns in batches
+  of 10 that fall back to one query per table when a batch fails). A source is
+  the first non-empty of _ResourceId, Computer, or DeviceVendor DeviceProduct,
+  else Unattributed; the 25 largest per table, with the rest summed. A refused
+  Usage read throws; a partial empty one is unverified, not none. Two pins
+  mutation-checked (forced none, removed batch split).
+
+- **MIG-3** SIEM Migration: a button to inventory a Sentinel workspace and show tables, sources and daily volume
+  `MIG-F1` `story` `settled` `verified: pins`
+  FILED 2026-10-29 (user request). On the SIEM Migration screen: a button
+  starts workspace discovery across the tenant, the operator picks a
+  workspace, and the screen inventories its tables, sources and volumes with a
+  total daily average over the last 30 days. Honest empty, refused and partial
+  states per docs/inventory-standard.md; info affordances on each number
+  saying what query produced it. DONE 2026-10-29 (pins; NOT yet seen in Live
+  Preview - that is MIG-4). WorkspaceInventoryPanel at the foot of the SIEM
+  Migration screen, needing no upload: a Discover workspaces button, a
+  workspace picker labelled with subscription, resource group and Sentinel
+  state, Inventory this workspace, then stat tiles (daily average all and
+  billable, 30-day total, tables), a per-table list with expandable sources,
+  the queries behind the numbers, and a CSV download through the ArtifactSink.
+  Info tips name the query behind each number. Refused Usage, measured-zero
+  Usage, failed and partial breakdowns each have their own copy, pinned in
+  workspace-inventory-panel.dom.test.tsx and
+  workspace-inventory-state.test.ts.
