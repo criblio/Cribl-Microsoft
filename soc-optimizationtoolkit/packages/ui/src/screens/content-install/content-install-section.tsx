@@ -117,6 +117,8 @@ export function ContentInstallSection({
   const [catalogLookup, setCatalogLookup] = useState<SolutionCatalogLookup | null>(null);
   const catalog = catalogLookup?.kind === "found" ? catalogLookup.entry : null;
   const [installed, setInstalled] = useState<InstalledContentState | null>(null);
+  // DBT-199: whether the repo content below has been read at all.
+  const [contentLoaded, setContentLoaded] = useState(false);
   const [rules, setRules] = useState<ParsedAnalyticRule[]>([]);
   const [workbooks, setWorkbooks] = useState<AvailableWorkbook[]>([]);
   const [parsers, setParsers] = useState<ParserResource[]>([]);
@@ -169,7 +171,7 @@ export function ContentInstallSection({
       ? "Installs are unavailable: the hosting shell did not provide an id minter."
       : !hasAzureIdentity(config)
         ? "No Azure identity is connected (tenant and client id), so nothing " +
-          "can be installed into this workspace yet - connect Azure in Options."
+          "can be installed into this workspace yet - connect Azure on the Setup page."
         : !scopeCommitted ||
             config.subscriptionId === "" ||
             config.resourceGroup === "" ||
@@ -206,6 +208,7 @@ export function ContentInstallSection({
       setRules(repoRules);
       setWorkbooks(repoWorkbooks);
       setParsers(repoParsers);
+      setContentLoaded(true);
       if (scopeCommitted) {
         setLocation(
           await fetchWorkspaceLocation(
@@ -227,6 +230,7 @@ export function ContentInstallSection({
   useEffect(() => {
     setCatalogLookup(null);
     setInstalled(null);
+    setContentLoaded(false);
     setRules([]);
     setWorkbooks([]);
     setParsers([]);
@@ -707,6 +711,7 @@ export function ContentInstallSection({
         onClear={() => setRuleSel(new Set())}
         onInstall={() => void doInstallRules()}
         installing={busy === "rules"}
+        loaded={contentLoaded}
         canInstall={canInstall}
         blockedReason={installBlockedReason}
         uploadRef={ruleFileRef}
@@ -738,6 +743,7 @@ export function ContentInstallSection({
         onClear={() => setWbSel(new Set())}
         onInstall={() => void doInstallWorkbooks()}
         installing={busy === "workbooks"}
+        loaded={contentLoaded}
         canInstall={canInstall}
         blockedReason={installBlockedReason}
         uploadRef={wbFileRef}
@@ -770,6 +776,7 @@ function ContentGroup({
   onClear,
   onInstall,
   installing,
+  loaded,
   canInstall,
   blockedReason,
   uploadRef,
@@ -794,6 +801,12 @@ function ContentGroup({
   onClear: () => void;
   onInstall: () => void;
   installing: boolean;
+  /**
+   * DBT-199: the solution's content has been read. Before that an empty group
+   * is "not loaded yet", never "none found" - the UAT read "None found" beside
+   * a Rule Coverage section that had found five rules.
+   */
+  loaded: boolean;
   canInstall: boolean;
   /**
    * DBT-47: why this group's install cannot succeed, or null. The button is
@@ -818,7 +831,11 @@ function ContentGroup({
       </h3>
       {caveat !== undefined && <p className="field-hint">{caveat}</p>}
       {installable.length === 0 && installedNames.length === 0 ? (
-        <p className="panel-desc">None found for this solution.</p>
+        <p className="panel-desc">
+          {loaded
+            ? "None found for this solution."
+            : "Not loaded yet - use Load solution content above."}
+        </p>
       ) : (
         <>
           {installable.length > 0 && (
