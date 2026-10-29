@@ -3614,6 +3614,9 @@ button.readiness-pill:focus-visible {
 .match-conf-unmatched {
   color: var(--error-strong);
 }
+.match-conf-reviewer {
+  color: var(--accent-strong);
+}
 
 .rule-badge {
   margin-left: 4px;

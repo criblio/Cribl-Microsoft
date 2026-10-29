@@ -435,6 +435,34 @@ describe("coercion emission", () => {
     expect(yaml).toContain("name: SentBytes");
     expect(yaml).toContain("Number(SentBytes) || 0");
   });
+
+  // F1-e: a rename across types used to be counted by the gap report as a
+  // coercion Cribl handles, and then never written.
+  it("emits the coercion on the TARGET for a rename that needs one", () => {
+    const fields: PipelineFieldMapping[] = [
+      { source: "in", target: "ReceivedBytes", type: "long", action: "rename", needsCoercion: true },
+    ];
+    const yaml = generatePipelineConf("p", "PAN", "CommonSecurityLog", fields, undefined, "json");
+    expect(yaml).toContain("currentName: in\n");
+    expect(yaml).toContain("newName: ReceivedBytes");
+    expect(yaml).toContain(
+      '        - name: ReceivedBytes\n          value: "Number(ReceivedBytes) || 0"',
+    );
+    // The coercion sits in the enrich eval, after the rename has run.
+    expect(yaml.indexOf("Number(ReceivedBytes)")).toBeGreaterThan(
+      yaml.indexOf("newName: ReceivedBytes"),
+    );
+    expect(checkCriblYaml(yaml, "conf.yml")).toEqual([]);
+  });
+
+  it("writes no coercion for a rename that does not need one", () => {
+    const fields: PipelineFieldMapping[] = [
+      { source: "in", target: "ReceivedBytes", type: "long", action: "rename" },
+    ];
+    const yaml = generatePipelineConf("p", "PAN", "CommonSecurityLog", fields, undefined, "json");
+    expect(yaml).toContain("newName: ReceivedBytes");
+    expect(yaml).not.toContain("Number(ReceivedBytes)");
+  });
 });
 
 describe("overflow serialize group", () => {

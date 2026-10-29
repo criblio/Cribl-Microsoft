@@ -205,6 +205,28 @@ describe("gapMappingToPreset", () => {
       target: "SourcePort",
       type: "int",
       action: "rename",
+      needsCoercion: false,
+    });
+  });
+
+  // F1-e: without the flag the emitter cannot tell an int `in` renamed to a
+  // long ReceivedBytes from a same-type rename, and writes no conversion.
+  it("carries needsCoercion so a cross-type rename converts", () => {
+    const preset = gapMappingToPreset(
+      mapping({
+        source: "in",
+        dest: "ReceivedBytes",
+        sourceType: "int",
+        destType: "long",
+        needsCoercion: true,
+      }),
+    );
+    expect(preset).toEqual({
+      source: "in",
+      target: "ReceivedBytes",
+      type: "long",
+      action: "rename",
+      needsCoercion: true,
     });
   });
 });
@@ -243,7 +265,7 @@ describe("reportToPlanInput", () => {
       "sourcetype == 'cloudflare:json'",
     );
     expect(input.presetFields).toEqual([
-      { source: "x", target: "y", type: "string", action: "rename" },
+      { source: "x", target: "y", type: "string", action: "rename", needsCoercion: false },
     ]);
   });
 

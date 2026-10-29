@@ -233,6 +233,9 @@ describe("edit-mapping", () => {
     mapping({ source: "srcA", dest: "ColA", action: "keep" }),
     mapping({ source: "srcB", dest: "ColB", action: "rename" }),
   ];
+  const destSchema = ["ColA", "ColB", "ColZ", "ColA2", "Mutated?"].map(
+    (name) => ({ name, type: "string" }),
+  );
 
   it("seeds the edit store from the baseline on first edit and updates one field", () => {
     const next = mappingReviewReducer(analyzed(), {
@@ -242,12 +245,13 @@ describe("edit-mapping", () => {
       field: "dest",
       value: "ColZ",
       baseline,
+      destSchema,
     });
     const rows = next.mappingEdits.Firewall;
     expect(rows).toHaveLength(2);
     expect(rows[1].dest).toBe("ColZ");
     expect(rows[0].dest).toBe("ColA"); // untouched row preserved
-    expect(isModified(next, "Firewall")).toBe(true);
+    expect(isModified(next, report("Firewall", baseline))).toBe(true);
   });
 
   it("edits the action column", () => {
@@ -270,6 +274,7 @@ describe("edit-mapping", () => {
       field: "dest",
       value: "ColA2",
       baseline,
+      destSchema,
     });
     const second = mappingReviewReducer(first, {
       type: "edit-mapping",
@@ -292,6 +297,7 @@ describe("edit-mapping", () => {
       field: "dest",
       value: "X",
       baseline,
+      destSchema,
     });
     expect(next).toBe(state);
   });
@@ -305,6 +311,7 @@ describe("edit-mapping", () => {
       field: "dest",
       value: "Mutated?",
       baseline,
+      destSchema,
     });
     expect(baseline).toEqual(original);
   });
@@ -501,8 +508,168 @@ describe("sortedMappings / unmappedDestColumns / fieldMappingsLabel", () => {
     expect(unmapped.map((d) => d.name)).toEqual(["OtherColumn", "TimeGenerated"]);
   });
 
-  it("formats the verbatim expander label", () => {
-    expect(fieldMappingsLabel(5, 2)).toBe("Field Mappings (5 mapped, 2 unmapped)");
+  // DBT-193: the header's three counts must agree. A dropped row is not
+  // "mapped", so the column it pointed at is empty and must read as unmapped -
+  // otherwise dropping a rename row lowers "mapped" without raising
+  // "unmapped", and the column silently disappears from the list.
+  it("lists the column of a DROPPED row as unmapped; an overflow row fills the catch-all", () => {
+    const r = report("A", [
+      mapping({ source: "s", dest: "DestColumn", action: "drop" }),
+      mapping({ source: "o", dest: "OtherColumn", action: "overflow" }),
+    ]);
+    const unmapped = unmappedDestColumns(r, r.fieldMappings);
+    expect(unmapped.map((d) => d.name)).toEqual(["DestColumn", "TimeGenerated"]);
+  });
+
+  it("formats the expander label with no overflow or drop to name", () => {
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      mapping({ source: `s${i}`, dest: `C${i}` }),
+    );
+    expect(fieldMappingsLabel(rows, 2)).toBe(
+      "Field Mappings (5 mapped, 2 unmapped)",
+    );
+  });
+
+  // DBT-193: the PAN-OS UAT (2026-10-29) read "115 mapped, 96 unmapped" while
+  // the tiles said 4 passthrough + 55 renames + 56 overflow. Same row mix here.
+  it("counts only rows landing in a column as mapped, and names overflow (UAT numbers)", () => {
+    const rows = [
+      ...Array.from({ length: 4 }, (_, i) =>
+        mapping({ source: `k${i}`, dest: `k${i}`, action: "keep" }),
+      ),
+      ...Array.from({ length: 55 }, (_, i) =>
+        mapping({ source: `r${i}`, dest: `R${i}`, action: "rename" }),
+      ),
+      ...Array.from({ length: 56 }, (_, i) =>
+        mapping({
+          source: `o${i}`,
+          dest: "AdditionalExtensions",
+          action: "overflow",
+          confidence: "unmatched",
+        }),
+      ),
+    ];
+    expect(rows).toHaveLength(115);
+    expect(fieldMappingsLabel(rows, 96)).toBe(
+      "Field Mappings (59 mapped, 56 to overflow, 96 unmapped)",
+    );
+  });
+
+  it("names dropped rows separately and never counts them as mapped", () => {
+    const rows = [
+      mapping({ source: "a", dest: "A", action: "rename" }),
+      mapping({ source: "b", dest: "B", action: "decode" }),
+      mapping({ source: "c", dest: "AdditionalExtensions", action: "overflow" }),
+      mapping({ source: "d", dest: "", action: "drop" }),
+      mapping({ source: "e", dest: "AdditionalExtensions", action: "drop" }),
+    ];
+    expect(fieldMappingsLabel(rows, 7)).toBe(
+      "Field Mappings (2 mapped, 1 to overflow, 2 dropped, 7 unmapped)",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GEN-19 / DBT-194: a Dest Field edit re-derives the row; a revert is unmodified
+// ---------------------------------------------------------------------------
+
+describe("edit-mapping dest - the PAN-OS UAT rows (GEN-19, DBT-194)", () => {
+  const panSrcMac = mapping({
+    source: "PanSrcMac",
+    dest: "AdditionalExtensions",
+    sourceType: "string",
+    destType: "string",
+    confidence: "unmatched",
+    action: "overflow",
+    description: "Collected into overflow field",
+  });
+  const inBytes = mapping({
+    source: "in",
+    dest: "AdditionalExtensions",
+    sourceType: "int",
+    destType: "string",
+    confidence: "unmatched",
+    action: "overflow",
+    description: "Collected into overflow field",
+  });
+  const baseline = [panSrcMac, inBytes];
+  const cslReport = report("PanOS", baseline, {
+    destSchema: [
+      { name: "AdditionalExtensions", type: "string" },
+      { name: "ReceivedBytes", type: "long" },
+      { name: "SourceMACAddress", type: "string" },
+    ],
+  });
+  const editDest = (
+    sourceField: string,
+    value: string,
+  ): MappingReviewAction => ({
+    type: "edit-mapping",
+    logType: "PanOS",
+    sourceField,
+    field: "dest",
+    value,
+    baseline: cslReport.fieldMappings,
+    destSchema: cslReport.destSchema,
+    catchAllColumn: "AdditionalExtensions",
+  });
+
+  it("turns an overflow row pointed at a column into a rename with the column's type", () => {
+    const next = reduce(analyzed(), editDest("PanSrcMac", "SourceMACAddress"));
+    expect(next.mappingEdits.PanOS[0]).toEqual({
+      source: "PanSrcMac",
+      dest: "SourceMACAddress",
+      sourceType: "string",
+      destType: "string",
+      confidence: "reviewer",
+      action: "rename",
+      needsCoercion: false,
+      description: "Reviewer choice: PanSrcMac -> SourceMACAddress",
+    });
+    expect(next.mappingEdits.PanOS[1]).toBe(inBytes);
+    expect(isModified(next, cslReport)).toBe(true);
+  });
+
+  it("marks a rename across types as needing coercion (in int -> ReceivedBytes long)", () => {
+    const next = reduce(analyzed(), editDest("in", "ReceivedBytes"));
+    const row = next.mappingEdits.PanOS[1];
+    expect(row.action).toBe("rename");
+    expect(row.destType).toBe("long");
+    expect(row.needsCoercion).toBe(true);
+  });
+
+  it("edit then revert reads as NOT modified (DBT-194)", () => {
+    const next = reduce(
+      analyzed(),
+      editDest("PanSrcMac", "SourceMACAddress"),
+      editDest("PanSrcMac", "AdditionalExtensions"),
+    );
+    expect(next.mappingEdits.PanOS[0]).toEqual(panSrcMac);
+    expect(isModified(next, cslReport)).toBe(false);
+  });
+
+  it("an action edit set back to its original value also reads as not modified", () => {
+    const toDrop: MappingReviewAction = {
+      type: "edit-mapping",
+      logType: "PanOS",
+      sourceField: "in",
+      field: "action",
+      value: "drop",
+      baseline: cslReport.fieldMappings,
+    };
+    const dropped = reduce(analyzed(), toDrop);
+    expect(isModified(dropped, cslReport)).toBe(true);
+    const restored = reduce(dropped, { ...toDrop, value: "overflow" });
+    expect(isModified(restored, cslReport)).toBe(false);
+  });
+
+  it("is not modified with no edit store at all", () => {
+    expect(isModified(analyzed(), cslReport)).toBe(false);
+  });
+
+  it("is a no-op for a column the schema does not have", () => {
+    const state = analyzed();
+    expect(reduce(state, editDest("PanSrcMac", "NoSuchColumn"))).toBe(state);
   });
 });
 

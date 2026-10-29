@@ -68,13 +68,21 @@ export interface GapReportStat {
   tone: GapStatTone;
 }
 
+/**
+ * A mapping row's confidence: the matcher's own four, plus `reviewer` for a
+ * column the reviewer chose (GEN-19, applyRemap). The matcher never writes
+ * `reviewer`; it exists so the review table does not show a hand-picked
+ * column as `exact`, which its help text defines as identical names.
+ */
+export type MappingConfidence = MatchConfidence | "reviewer";
+
 /** One editable field-mapping row (matched or overflow), legacy shape. */
 export interface GapFieldMapping {
   source: string;
   dest: string;
   sourceType: string;
   destType: string;
-  confidence: MatchConfidence;
+  confidence: MappingConfidence;
   action: MatchAction;
   needsCoercion: boolean;
   description: string;

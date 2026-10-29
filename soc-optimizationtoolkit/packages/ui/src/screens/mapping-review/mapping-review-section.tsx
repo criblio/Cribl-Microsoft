@@ -66,6 +66,7 @@ import {
   detectVendorIdentity,
   dropSavingsLine,
   estimateDropSavings,
+  getOverflowConfig,
   learnedToVendorMappings,
   mergeDropSavings,
   resolveSampleRouting,
@@ -872,6 +873,20 @@ export function MappingReviewSection({
       field: "dest" | "action",
       value: string,
     ) => {
+      if (field === "action") {
+        dispatch({
+          type: "edit-mapping",
+          logType: report.logType,
+          sourceField,
+          field,
+          value,
+          baseline: report.fieldMappings,
+        });
+        return;
+      }
+      // GEN-19: a Dest Field change re-derives the whole row (action, type,
+      // coercion) through core applyRemap; the catch-all is the matcher's own
+      // overflow column for this table, so choosing it means overflow.
       dispatch({
         type: "edit-mapping",
         logType: report.logType,
@@ -879,6 +894,8 @@ export function MappingReviewSection({
         field,
         value,
         baseline: report.fieldMappings,
+        destSchema: report.destSchema,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
     },
     [],
@@ -1115,7 +1132,7 @@ export function MappingReviewSection({
             ? unmapped
             : unmapped.filter((d) => d.name.toLowerCase().includes(query));
         const approved = isApproved(review, report.logType);
-        const modified = isModified(review, report.logType);
+        const modified = isModified(review, report);
         return (
           <div key={report.logType} className="mapping-review-card">
             <div className="mapping-review-card-head">
@@ -1299,7 +1316,7 @@ export function MappingReviewSection({
               <details className="mapping-review-fields">
                 <summary className="mapping-review-fields-summary">
                   <span>
-                    {fieldMappingsLabel(mappings.length, unmapped.length)}
+                    {fieldMappingsLabel(mappings, unmapped.length)}
                   </span>
                   {approved ? (
                     <span className="gap-badge gap-badge-approved">
@@ -1367,7 +1384,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Confidence
-                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), or unmatched (collected into overflow)." />
+                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), reviewer (a column you chose), or unmatched (collected into overflow)." />
                         </th>
                         <th>
                           Action
