@@ -44,6 +44,7 @@ import {
   acquireSolutionWorkbooks,
   analyticRuleToContentItem,
   analyzeContentCoverage,
+  closeMatchRowsFromReports,
   createBundledSchemaCatalog,
   createSchemaLadder,
   deriveContentRequirements,
@@ -462,20 +463,10 @@ export function RuleCoverageSection({
   } | null>(null);
   const investigate = useCallback(
     (field: string) => {
-      const rows = reports.flatMap((r) =>
-        r.fieldMappings.map((m) => ({
-          sourceName: m.source,
-          logType: r.logType,
-          disposition:
-            m.action === "overflow"
-              ? "overflow -> " + m.dest
-              : m.action + " -> " + m.dest,
-          ...(m.sampleValue !== undefined
-            ? { sampleValue: m.sampleValue }
-            : {}),
-        })),
-      );
-      setInvestigation({ field, candidates: suggestCloseMatches(field, rows) });
+      setInvestigation({
+        field,
+        candidates: suggestCloseMatches(field, closeMatchRowsFromReports(reports)),
+      });
     },
     [reports],
   );
