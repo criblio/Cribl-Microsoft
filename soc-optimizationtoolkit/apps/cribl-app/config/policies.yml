@@ -144,7 +144,9 @@ policies:
   # Azure onboarding create-cribl-source input create (create-only, AZR-34).
   - object: '/m/:gid/system/inputs'
     actions: ['GET', 'POST']
-  # The kit's verifyStored read-back of the created onboarding input (AZR-34).
+  # The kit's verifyStored read-back of the created onboarding input (AZR-34),
+  # and the GEN-21 existing-destination path's read of whether the source is
+  # QuickConnected (sendToRoutes) before it shows a route to add.
   - object: '/m/:gid/system/inputs/:id'
     actions: ['GET']
   - object: '/m/:gid/pipelines'

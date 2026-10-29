@@ -75,6 +75,12 @@ export interface IntegrateRawInputs {
    * pill, but never participates in canDeploy. Defaults false.
    */
   mappingsApproved: boolean;
+  /**
+   * The existing Cribl Sentinel destination every table was pointed at
+   * ([[GEN-21]], existing-destination-state existingDestinationForArc), or
+   * undefined. Passed straight through: the core decides what a pick drops.
+   */
+  existingDestination?: string;
 }
 
 /**
@@ -92,6 +98,9 @@ export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
     deployCompleted: raw.deployCompleted,
     samplesProvided: raw.sampleCount > 0,
     mappingsApproved: raw.mappingsApproved,
+    ...(raw.existingDestination !== undefined
+      ? { existingDestination: raw.existingDestination }
+      : {}),
   };
 }
 

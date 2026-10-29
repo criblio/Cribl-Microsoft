@@ -33,6 +33,19 @@ describe("ReadinessFooter pills (DBT-127)", () => {
     expect(clicked).toEqual(["mappings", "solution"]);
   });
 
+  it("styles a gated Deploy as disabled, not as the green call to action (DBT-200)", () => {
+    const { getByRole, rerender } = render(
+      <ReadinessFooter pills={PILLS} canDeploy={false} onDeploy={() => undefined} />,
+    );
+    const gated = getByRole("button", { name: "Deploy" }) as HTMLButtonElement;
+    expect(gated.disabled).toBe(true);
+    expect(gated.className).toBe("next-action-button next-action-button-gated");
+    rerender(<ReadinessFooter pills={PILLS} canDeploy onDeploy={() => undefined} />);
+    const ready = getByRole("button", { name: "Deploy" }) as HTMLButtonElement;
+    expect(ready.disabled).toBe(false);
+    expect(ready.className).toBe("next-action-button next-action-button-positive");
+  });
+
   it("stay plain chips when no handler is given", () => {
     const { container, queryByRole } = render(
       <ReadinessFooter pills={PILLS} canDeploy={false} onDeploy={() => undefined} />,

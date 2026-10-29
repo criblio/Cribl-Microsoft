@@ -48,7 +48,7 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'GET', path: '/m/:gid/system/outputs/:id', caller: `${ONBOARD} (verify step)` },
   { method: 'GET', path: '/m/:gid/system/inputs', caller: `${LIVE_ARCH}; ${PREFLIGHT}; discover-sample-sources.ts; ${CREATE_SOURCE}; read-source-flow/read-onboarding-cribl-side.ts` },
   { method: 'POST', path: '/m/:gid/system/inputs', caller: `${CREATE_SOURCE} apply-cribl-source.ts` },
-  { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored)` },
+  { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored); ui screens/integrate/integrate-screen.tsx (GEN-21 QuickConnect check, parsed by existing-destination-state.ts sourceRouting)` },
   { method: 'GET', path: '/m/:gid/pipelines', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/lib/breakers', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/jobs', caller: LIVE_ARCH },
