@@ -177,6 +177,27 @@ export function storedEventShortfalls(
 }
 
 /**
+ * The sentence that says what the store kept and why, one per trimmed log type,
+ * each with a leading space so it appends to a headline as-is ("" for none).
+ *
+ * ONE PLACE FOR BOTH PANELS. The capture and Lake panels share the commit
+ * callback that measures the trim, so they share the words for it too: a Lake
+ * fetch of verbose events hits the same byte cap, and before this lived here
+ * the Lake panel received the trims and said nothing about them - DBT-197 on
+ * the sibling panel.
+ */
+export function storedEventShortfallText(
+  trimmed: readonly StoredEventShortfall[],
+): string {
+  return trimmed
+    .map(
+      (t) =>
+        ` "${t.logType}" kept ${t.kept} of its ${t.handed} events: the sample store limits how large one log type's sample can be, and these events are large. Its field list was still read from all ${t.handed}.`,
+    )
+    .join("");
+}
+
+/**
  * How many raw lines a preview shows per log type, and the ONE place either
  * acquisition panel decides it.
  *
