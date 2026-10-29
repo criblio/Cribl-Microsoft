@@ -72,6 +72,33 @@ export function captureLogTypeChoices(
   });
 }
 
+/**
+ * Re-seed the checkboxes from a NEW recommendation while keeping the
+ * operator's picks (DBT-198).
+ *
+ * The recommendation is rebuilt from coverage, and committing samples always
+ * changes coverage, so "Add these as samples" hands the panel a fresh seed on
+ * the very next render. Replacing the list with it threw away every tick the
+ * operator had changed: in the UAT they unticked all but THREAT and TRAFFIC,
+ * added the capture, and all 13 solution log types came back ticked.
+ *
+ * So for a value already on screen the operator's `selected` wins, and only the
+ * seed's evidence and note are taken - those are facts that DID change (a type
+ * just committed is now "already provided", and should say so). A value the
+ * old list did not have takes the seed's default, since nobody has chosen
+ * anything about it yet. Order and membership follow the seed.
+ */
+export function reseedKeepingPicks(
+  seeded: readonly CaptureLogTypeChoice[],
+  previous: readonly CaptureLogTypeChoice[],
+): CaptureLogTypeChoice[] {
+  const picked = new Map(previous.map((c) => [c.value, c.selected]));
+  return seeded.map((c) => {
+    const selected = picked.get(c.value);
+    return selected === undefined ? c : { ...c, selected };
+  });
+}
+
 /** The values currently ticked, in the order they are offered. */
 export function selectedValues(
   choices: readonly CaptureLogTypeChoice[],
