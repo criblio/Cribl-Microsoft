@@ -2935,7 +2935,8 @@ button.readiness-pill:focus-visible {
 }
 
 /* Sits on <td> cells (Field Mappings, Mapping Catalog), so it must not set
-   display: a block <td> leaves the table, and consecutive block cells merge
+   display (nor float, nor position absolute/fixed, which blockify a cell the
+   same way): a block <td> leaves the table, and consecutive block cells merge
    into one anonymous cell that shifts the rest of the row left (DBT-192).
    Pinned in mapping-review/mapping-table-cells.dom.test.tsx. */
 .match-field-type {

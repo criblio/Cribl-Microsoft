@@ -10,11 +10,13 @@
  *
  * happy-dom does no layout and does not apply the stylesheet, so this reads
  * styles.css (comments stripped, the way raw-body-wrap.dom.test.tsx does) and
- * asks, for every <td> the REAL components render in the Field Mappings and
- * Mapping Catalog tables, whether any rule that matches it (Element.matches)
- * declares a display other than table-cell. Row and cell classes carry
- * variants (mapping-row-<action>, mapping-example-value-<kind>), so every
- * variant is rendered, not only the ones a default sample produces.
+ * asks, for every <td> and header <th> the REAL components render in the
+ * Field Mappings and Mapping Catalog tables, whether any rule that matches it
+ * (Element.matches) declares a display other than table-cell, or a float or
+ * absolute/fixed position, which blockify the cell the same way. Row and
+ * cell classes carry variants (mapping-row-<action>,
+ * mapping-example-value-<kind>), so every variant is rendered, not only the
+ * ones a default sample produces.
  *
  * Scope: styles.css only. The Cribl shell also loads its own App.css (shell
  * chrome, no table rules today); @soc/ui does not read the shell's files.
@@ -39,24 +41,43 @@ interface DisplayRule {
 }
 
 /**
- * Every selector that declares display, from plain rules at any depth (the
- * innermost-braces match also reaches rules inside @media). State
- * pseudo-classes are stripped so a :hover rule still counts against the
- * cell; pseudo-element rules style generated boxes, not the cell, and are
- * left out. When a block declares display more than once, the one the
- * browser applies is read: the last !important one, else the last one.
+ * The value a block applies for one property: the last !important
+ * declaration, else the last one; undefined when it does not declare it.
+ */
+function appliedValue(block: string, property: string): string | undefined {
+  const decls = [...block.matchAll(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, "g"))].map((d) =>
+    d[1].trim(),
+  );
+  if (decls.length === 0) return undefined;
+  const important = decls.filter((d) => /!important$/.test(d));
+  return (important.length > 0 ? important : decls).at(-1)!.replace(/\s*!important$/, "");
+}
+
+/**
+ * Every selector that decides a cell's display, from plain rules at any
+ * depth (the innermost-braces match also reaches rules inside @media). That
+ * is a display declaration, and also a float other than none or a position
+ * of absolute or fixed: either one blockifies a table-cell (CSS 2.1 9.7), so
+ * the cell leaves the table exactly as display:block does; those read as
+ * "block (float: left)" and the like. State pseudo-classes are stripped so a
+ * :hover rule still counts against the cell; pseudo-element rules style
+ * generated boxes, not the cell, and are left out.
  */
 function displayRules(text: string): DisplayRule[] {
   const out: DisplayRule[] = [];
   for (const m of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const decls = [...m[2].matchAll(/(?:^|;)\s*display\s*:\s*([^;]+)/g)].map((d) => d[1].trim());
-    if (decls.length === 0) continue;
-    const important = decls.filter((d) => /!important$/.test(d));
-    const applied = (important.length > 0 ? important : decls).at(-1)!.replace(/\s*!important$/, "");
+    const outcomes: string[] = [];
+    const display = appliedValue(m[2], "display");
+    if (display !== undefined) outcomes.push(display);
+    const float = appliedValue(m[2], "float");
+    if (float !== undefined && float !== "none") outcomes.push(`block (float: ${float})`);
+    const position = appliedValue(m[2], "position");
+    if (position === "absolute" || position === "fixed") outcomes.push(`block (position: ${position})`);
+    if (outcomes.length === 0) continue;
     for (const raw of m[1].split(",").map((s) => s.trim())) {
       if (raw === "" || raw.includes("::")) continue;
       const selector = raw.replace(/:(hover|focus-visible|focus-within|focus|active|visited)\b/g, "");
-      out.push({ selector, display: applied });
+      for (const applied of outcomes) out.push({ selector, display: applied });
     }
   }
   return out;
@@ -138,6 +159,12 @@ function bodyCells(container: HTMLElement): HTMLTableCellElement[] {
   return [...container.querySelectorAll<HTMLTableCellElement>(".mapping-review-grid tbody td")];
 }
 
+// A header cell taken out of the table misaligns every column under it, the
+// same defect from the other side.
+function headCells(container: HTMLElement): HTMLTableCellElement[] {
+  return [...container.querySelectorAll<HTMLTableCellElement>(".mapping-review-grid thead th")];
+}
+
 describe("DBT-192 - the stylesheet check itself", () => {
   it("flags a display:block rule on a td class, and passes table-cell and other elements", () => {
     const row = document.createElement("tr");
@@ -162,6 +189,20 @@ describe("DBT-192 - the stylesheet check itself", () => {
     expect(rules.map((r) => `${r.selector}=${r.display}`)).toEqual([".a td=block", ".b td=block"]);
   });
 
+  it("flags float and absolute or fixed position, which blockify a cell without naming display", () => {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td class="match-field-type">x</td>';
+    const rules = displayRules(
+      ".match-field-type { float: left } td { float: none } .a td { position: absolute } .b td { position: fixed !important; position: static } td { position: sticky } td { position: relative }",
+    );
+    expect(rules.map((r) => `${r.selector}=${r.display}`)).toEqual([
+      ".match-field-type=block (float: left)",
+      ".a td=block (position: absolute)",
+      ".b td=block (position: fixed)",
+    ]);
+    expect(offenders([...row.cells], rules)).toEqual([".match-field-type -> block (float: left)"]);
+  });
+
   it("reads display declarations out of the real stylesheet", () => {
     // A parser that found nothing would make every check below pass.
     expect(RULES.find((r) => r.selector === ".match-kind")?.display).toBe("inline-block");
@@ -178,6 +219,18 @@ describe("DBT-192 - no rule takes a mapping-table cell out of the table", () => 
     // Two per mapped row (source and dest type), five on the unmapped row.
     expect(typed.length).toBe(9);
     expect(offenders(cells, RULES)).toEqual([]);
+  });
+
+  it("Field Mappings: the header cells line up with the seven body columns", async () => {
+    const container = await renderFieldMappings();
+    const heads = headCells(container);
+    expect(heads.length).toBe(7);
+    // The rendered header cells are the ones the sheet's th rules reach
+    // (.mapping-review-grid th is position: sticky, which keeps a cell a cell).
+    expect(offenders(heads, displayRules(".match-field-table th { display: block }"))).toEqual([
+      ".match-field-table th -> block",
+    ]);
+    expect(offenders(heads, RULES)).toEqual([]);
   });
 
   it("Field Mappings: an unmapped row's column name and type land in the Dest Field and dest Type columns", async () => {
@@ -238,5 +291,8 @@ describe("DBT-192 - no rule takes a mapping-table cell out of the table", () => 
     expect(cells.length).toBe(rows * 4);
     expect(cells.filter((td) => td.classList.contains("match-field-type")).length).toBe(rows);
     expect(offenders(cells, RULES)).toEqual([]);
+    const heads = headCells(container);
+    expect(heads.length).toBe(4);
+    expect(offenders(heads, RULES)).toEqual([]);
   });
 });
