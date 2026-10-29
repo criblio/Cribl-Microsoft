@@ -99,6 +99,7 @@ import { EnrichmentEditor } from "./enrichment-editor";
 import { IdentityBlock } from "./identity-block";
 import { IdentityMismatchBlock } from "./identity-mismatch-block";
 import { OverflowTriageBlock } from "./overflow-triage-block";
+import { UnmappedColumnPanel } from "./unmapped-column-panel";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -125,6 +126,7 @@ import {
   OVERFLOW_COVERAGE_NOTE,
   analyzeButtonLabel,
   approvalBarText,
+  columnSuggestions,
   deriveLiveStats,
   deriveMappingReviewGate,
   effectiveMappings,
@@ -417,6 +419,18 @@ export function MappingReviewSection({
   const [mappingSearch, setMappingSearch] = useState<Record<string, string>>(
     {},
   );
+  // DBT-202: the unmapped column whose suggestion panel is open (one at a
+  // time), the "Add a constant" hand-off to a table's enrichment editor, and
+  // the last suggestion applied per table (announced, since applying
+  // withdraws the table's approval).
+  const [suggestFor, setSuggestFor] = useState<{
+    logType: string;
+    column: string;
+  } | null>(null);
+  const [enrichSeeds, setEnrichSeeds] = useState<
+    Record<string, { field: string; nonce: number }>
+  >({});
+  const [appliedNotes, setAppliedNotes] = useState<Record<string, string>>({});
 
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
@@ -717,6 +731,10 @@ export function MappingReviewSection({
         samples.filter((s) => live.has(s.logType)),
       );
       dispatch({ type: "analyzed" });
+      // A fresh analysis resets every approval, so a note asking to approve
+      // again after a suggestion is no longer about anything.
+      setAppliedNotes({});
+      setSuggestFor(null);
     } catch (err) {
       logger?.error(`gap-analysis: failed: ${String(err)}`);
       setAnalyzeError(String(err));
@@ -831,6 +849,9 @@ export function MappingReviewSection({
     dispatch({ type: "remove-log-type", logType });
     setTableOverrides((prev) => withoutKey(prev, logType));
     setMappingSearch((prev) => withoutKey(prev, logType));
+    setAppliedNotes((prev) => withoutKey(prev, logType));
+    setEnrichSeeds((prev) => withoutKey(prev, logType));
+    setSuggestFor((prev) => (prev?.logType === logType ? null : prev));
     forgetLogTypeEnrichments(logType);
     forgetLogTypeKeys(seededIdentityRef.current, logType);
     forgetLogTypeKeys(seededLabelRef.current, logType);
@@ -897,6 +918,31 @@ export function MappingReviewSection({
         destSchema: report.destSchema,
         catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
+    },
+    [],
+  );
+
+  // DBT-202: apply a suggested sample field to an unmapped column. The
+  // auto-drop key is forgotten FIRST: a field the drop-unneeded policy
+  // dropped is otherwise still "its" drop, and switching the policy back to
+  // preserve would restore it to overflow on top of the reviewer's choice.
+  const applySuggestion = useCallback(
+    (report: GapReport, sourceField: string, column: string) => {
+      autoDroppedRef.current.delete(`${report.logType}|${sourceField}`);
+      dispatch({
+        type: "apply-suggestion",
+        logType: report.logType,
+        sourceField,
+        destColumn: column,
+        baseline: report.fieldMappings,
+        destSchema: report.destSchema,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
+      });
+      setSuggestFor(null);
+      setAppliedNotes((prev) => ({
+        ...prev,
+        [report.logType]: `${sourceField} now fills ${column}. Approve ${report.logType} again to save it as a learned mapping.`,
+      }));
     },
     [],
   );
@@ -1495,13 +1541,21 @@ export function MappingReviewSection({
                         <tr className="mapping-unmapped-head">
                           <td colSpan={7}>
                             Unmapped Destination Fields ({shownUnmapped.length})
-                            <InfoTip text="These destination schema columns have no corresponding field in your sample data. They will be empty in Sentinel unless populated by a DCR transformation or added to your source data." />
+                            <InfoTip text="These destination schema columns have no corresponding field in your sample data, so they will be empty in Sentinel unless a DCR transformation fills them. Click a column name to see the sample fields that could fill it, with an example value and why each was suggested, and use one in a click - a field that already fills another column moves from it. Applying a suggestion withdraws this table's approval; approve again to save it as a learned mapping. When nothing in the sample fits, add the value as a constant instead." />
                           </td>
                         </tr>
                       )}
                       {shownUnmapped.map((d) => {
                         const ruleField = isRuleField(d.name, ruleFields);
-                        return (
+                        const open =
+                          suggestFor !== null &&
+                          suggestFor.logType === report.logType &&
+                          suggestFor.column === d.name;
+                        const panelId = `mapping-suggest-${report.logType}-${d.name}`.replace(
+                          /[^A-Za-z0-9_-]/g,
+                          "_",
+                        );
+                        return [
                           <tr
                             key={`unmapped-${d.name}`}
                             className="mapping-row mapping-row-unmapped"
@@ -1510,7 +1564,22 @@ export function MappingReviewSection({
                             <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
                             <td>
-                              {d.name}
+                              <button
+                                type="button"
+                                className="missing-field-button"
+                                title={`Show sample fields that could fill ${d.name}`}
+                                aria-expanded={open}
+                                aria-controls={open ? panelId : undefined}
+                                onClick={() =>
+                                  setSuggestFor(
+                                    open
+                                      ? null
+                                      : { logType: report.logType, column: d.name },
+                                  )
+                                }
+                              >
+                                {d.name}
+                              </button>
                               {ruleField && (
                                 <span
                                   className="rule-badge rule-badge-missing"
@@ -1525,12 +1594,47 @@ export function MappingReviewSection({
                               <span className="match-conf">none</span>
                             </td>
                             <td className="match-field-type">no source</td>
-                          </tr>
-                        );
+                          </tr>,
+                          open && (
+                            <UnmappedColumnPanel
+                              key={`suggest-${d.name}`}
+                              id={panelId}
+                              column={d.name}
+                              suggestions={columnSuggestions(
+                                d,
+                                report.logType,
+                                effective,
+                                ruleFields,
+                                solutionName,
+                              )}
+                              onApply={(source) =>
+                                applySuggestion(report, source, d.name)
+                              }
+                              onAddConstant={() => {
+                                setSuggestFor(null);
+                                setEnrichSeeds((prev) => ({
+                                  ...prev,
+                                  [report.logType]: {
+                                    field: d.name,
+                                    nonce:
+                                      (prev[report.logType]?.nonce ?? 0) + 1,
+                                  },
+                                }));
+                              }}
+                              onDismiss={() => setSuggestFor(null)}
+                            />
+                          ),
+                        ];
                       })}
                     </tbody>
                   </table>
                 </div>
+
+                {appliedNotes[report.logType] !== undefined && (
+                  <p className="field-hint mapping-suggest-applied" role="status">
+                    {appliedNotes[report.logType]}
+                  </p>
+                )}
 
                 <div className="enrich-table-block">
                   <span className="field-label">
@@ -1545,6 +1649,7 @@ export function MappingReviewSection({
                     onRemove={(field) =>
                       removeEnrichment(report.logType, field)
                     }
+                    seed={enrichSeeds[report.logType]}
                   />
                 </div>
 
@@ -1575,6 +1680,9 @@ export function MappingReviewSection({
                             })),
                         );
                         dispatch({ type: "approve", logType: report.logType });
+                        setAppliedNotes((prev) =>
+                          withoutKey(prev, report.logType),
+                        );
                       }}
                     >
                       Approve {report.logType}

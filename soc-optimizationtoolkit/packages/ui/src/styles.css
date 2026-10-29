@@ -5409,6 +5409,28 @@ details[open] > summary::before {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* DBT-202: the same panel, opened from an unmapped column of the Field
+   Mappings table. The row spans the grid; the panel inside it is the flex box
+   (a flex <tr> would leave the table). */
+.mapping-suggest-row > td {
+  padding: 4px 0 8px;
+}
+.mapping-suggest-type {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.mapping-suggest-warn {
+  font-size: 11px;
+  color: var(--warn);
+}
+.mapping-suggest-apply {
+  margin-left: auto;
+}
+.mapping-suggest-empty,
+.mapping-suggest-applied,
+.mapping-suggest-candidate {
+  margin: 0;
+}
 /* The two states of ONE identity row (identity-block.tsx). Both stack a row,
    a hint and the candidate chips in a column; only the framing differs, which
    is why they share a rule rather than one of them being deleted - a satisfied

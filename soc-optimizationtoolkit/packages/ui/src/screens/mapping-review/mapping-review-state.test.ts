@@ -24,6 +24,7 @@ import {
   analyzeButtonLabel,
   approvalBarText,
   autoDropPlan,
+  columnSuggestions,
   deriveMappingReviewGate,
   effectiveMappings,
   fieldMappingsLabel,
@@ -1180,5 +1181,159 @@ describe("formatExampleValue (DBT-122, the Example Value column)", () => {
     const cell = formatExampleValue("a\nb\tc\r");
     expect(cell.text).toBe("a\\nb\\tc\\r");
     expect(cell.title).toBe("a\nb\tc\r");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-202: applying a suggested field to an unmapped column
+// ---------------------------------------------------------------------------
+
+describe("apply-suggestion (DBT-202)", () => {
+  const SCHEMA = [
+    { name: "AdditionalExtensions", type: "string" },
+    { name: "ReceivedBytes", type: "long" },
+    { name: "SourceMACAddress", type: "string" },
+  ];
+  const baseline = [
+    mapping({
+      source: "in",
+      sourceType: "int",
+      dest: "AdditionalExtensions",
+      destType: "string",
+      confidence: "unmatched",
+      action: "overflow",
+    }),
+  ];
+  const apply = (
+    state: MappingReviewState,
+    destColumn: string,
+    sourceField = "in",
+  ): MappingReviewState =>
+    mappingReviewReducer(state, {
+      type: "apply-suggestion",
+      logType: "PanOS",
+      sourceField,
+      destColumn,
+      baseline,
+      destSchema: SCHEMA,
+      catchAllColumn: "AdditionalExtensions",
+    });
+
+  it("re-points the row through applyRemap and withdraws only that table's approval", () => {
+    const before = analyzed({ approvals: { PanOS: true, Other: true } });
+    const next = apply(before, "ReceivedBytes");
+    expect(next.mappingEdits.PanOS).toEqual([
+      {
+        source: "in",
+        sourceType: "int",
+        dest: "ReceivedBytes",
+        destType: "long",
+        confidence: "reviewer",
+        action: "rename",
+        needsCoercion: true,
+        description: "Reviewer choice: in -> ReceivedBytes",
+      },
+    ]);
+    expect(next.approvals).toEqual({ Other: true });
+  });
+
+  it("changes nothing - approval included - when the remap does not apply", () => {
+    const before = analyzed({ approvals: { PanOS: true } });
+    expect(apply(before, "NoSuchColumn")).toBe(before);
+    expect(apply(before, "ReceivedBytes", "nosuchfield")).toBe(before);
+  });
+});
+
+describe("columnSuggestions (DBT-202)", () => {
+  const rows = [
+    mapping({
+      source: "in",
+      sourceType: "int",
+      dest: "AdditionalExtensions",
+      action: "overflow",
+      confidence: "unmatched",
+      sampleValue: "4242",
+    }),
+    mapping({
+      source: "PanOSPacketsReceived",
+      sourceType: "int",
+      dest: "AdditionalExtensions",
+      action: "overflow",
+      confidence: "unmatched",
+      sampleValue: "7",
+    }),
+    mapping({
+      source: "SourceMACAddress",
+      dest: "SourceMACAddress",
+      action: "keep",
+      sampleValue: "00:11:22:33:44:55",
+    }),
+  ];
+
+  it("ranks the documented field first and renders its disposition, type and example", () => {
+    const out = columnSuggestions(
+      { name: "ReceivedBytes", type: "long" },
+      "PanOS",
+      rows,
+    );
+    expect(out.map((s) => s.source)).toEqual(["in", "PanOSPacketsReceived"]);
+    expect(out[0]).toEqual({
+      source: "in",
+      example: { kind: "value", text: "4242", title: "4242" },
+      reason: "Documented: CEF in: Bytes transferred inbound",
+      disposition: "now: overflow into AdditionalExtensions",
+      typeNote: "int to long",
+      typeMismatch: false,
+      lowConfidence: false,
+      moveFrom: null,
+      moveWarning: null,
+      actionLabel: "Use this field",
+    });
+    // Token overlap only: shown, but marked (F1-d).
+    expect(out[1]!.lowConfidence).toBe(true);
+  });
+
+  it("marks a type mismatch instead of hiding the candidate", () => {
+    const out = columnSuggestions(
+      { name: "ReceivedBytes", type: "long" },
+      "PanOS",
+      [
+        mapping({
+          source: "in",
+          sourceType: "string",
+          action: "overflow",
+          dest: "AdditionalExtensions",
+        }),
+      ],
+    );
+    expect(out[0]!.typeMismatch).toBe(true);
+    expect(out[0]!.typeNote).toBe(
+      "string to long: the types differ - check the example value fits the column",
+    );
+  });
+
+  it("offers a mapped field as a move, warning only when the rule column is left empty", () => {
+    const column = { name: "DestinationMACAddress", type: "string" };
+    const rules = new Set(["sourcemacaddress"]);
+    const [move] = columnSuggestions(column, "PanOS", rows, rules);
+    expect(move!.source).toBe("SourceMACAddress");
+    expect(move!.moveFrom).toBe("SourceMACAddress");
+    expect(move!.actionLabel).toBe("Move from SourceMACAddress");
+    expect(move!.disposition).toBe("now: fills SourceMACAddress (keep)");
+    expect(move!.moveWarning).toBe(
+      "SourceMACAddress is used by analytics rules and nothing else fills it: moving SourceMACAddress leaves it empty.",
+    );
+    // Not a rule column: no warning.
+    expect(columnSuggestions(column, "PanOS", rows)[0]!.moveWarning).toBeNull();
+    // Another row still fills it: the move empties nothing.
+    const shared = [
+      ...rows,
+      mapping({ source: "smac", dest: "SourceMACAddress", action: "rename" }),
+    ];
+    const sharedMove = columnSuggestions(column, "PanOS", shared, rules).find(
+      (s) => s.source === "SourceMACAddress",
+    );
+    expect(sharedMove!.moveFrom).toBe("SourceMACAddress");
+    expect(sharedMove!.moveWarning).toBeNull();
   });
 });

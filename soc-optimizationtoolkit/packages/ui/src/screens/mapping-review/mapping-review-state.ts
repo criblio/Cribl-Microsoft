@@ -46,7 +46,13 @@ import type {
   MatchAction,
   TaggedSample,
 } from "@soc/core";
-import { applyRemap, FIELD_EXAMPLE_MAX_CHARS, landsInColumn } from "@soc/core";
+import {
+  applyRemap,
+  closeMatchRowsFromReports,
+  FIELD_EXAMPLE_MAX_CHARS,
+  landsInColumn,
+  suggestForDestColumn,
+} from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
 // ---------------------------------------------------------------------------
@@ -145,6 +151,23 @@ export type MappingReviewAction =
       /** The report's resolved schema: the chosen column's type comes from it. */
       destSchema: readonly FieldRef[];
       /** The table's catch-all column; choosing it makes the row overflow. */
+      catchAllColumn?: string;
+    }
+  /**
+   * The reviewer chose a suggested sample field for an unmapped destination
+   * column (DBT-202). The SAME applyRemap derivation as a Dest Field edit, so a
+   * suggestion and a hand edit cannot disagree about the row - and the table's
+   * approval is WITHDRAWN (decision F1-c, 2026-10-29): an applied suggestion is
+   * a review decision, and approving again is what saves it as a learned
+   * mapping. A no-op (approval kept) when nothing changed.
+   */
+  | {
+      type: "apply-suggestion";
+      logType: string;
+      sourceField: string;
+      destColumn: string;
+      baseline: readonly GapFieldMapping[];
+      destSchema: readonly FieldRef[];
       catchAllColumn?: string;
     }
   /**
@@ -259,6 +282,27 @@ export function mappingReviewReducer(
       return {
         ...state,
         mappingEdits: { ...state.mappingEdits, [action.logType]: nextRows },
+      };
+    }
+
+    case "apply-suggestion": {
+      const remap = applyRemap(
+        state.mappingEdits[action.logType] ?? [...action.baseline],
+        {
+          sourceField: action.sourceField,
+          destColumn: action.destColumn,
+          destSchema: action.destSchema,
+          catchAllColumn: action.catchAllColumn,
+          baseline: action.baseline,
+        },
+      );
+      if (remap.outcome !== "applied" && remap.outcome !== "reverted") {
+        return state;
+      }
+      return {
+        ...state,
+        approvals: withoutKey(state.approvals, action.logType),
+        mappingEdits: { ...state.mappingEdits, [action.logType]: remap.rows },
       };
     }
 
@@ -559,6 +603,116 @@ export function isRuleField(
     return false;
   }
   return ruleFields.has(name.toLowerCase());
+}
+
+// ---------------------------------------------------------------------------
+// Sample fields that could fill an unmapped destination column (DBT-202)
+// ---------------------------------------------------------------------------
+
+/** How many candidates the unmapped-column panel lists. */
+export const COLUMN_SUGGESTION_LIMIT = 5;
+
+/** One candidate in the unmapped-column panel, ready to render. */
+export interface ColumnSuggestion {
+  /** The sample field (exact spelling - the apply key). */
+  source: string;
+  /** Its example value, formatted exactly as the Example Value column does. */
+  example: ExampleValueCell;
+  /** Why it was suggested (documented mapping, name ladder, or token overlap). */
+  reason: string;
+  /** Where the field goes today. */
+  disposition: string;
+  /** The source and column types, and whether they disagree. */
+  typeNote: string;
+  /** Both types are known and the column cannot take the value unchanged. */
+  typeMismatch: boolean;
+  /** Token overlap only (score below 50): a resemblance, not a match. */
+  lowConfidence: boolean;
+  /** The column the field fills today, which applying it moves it out of. */
+  moveFrom: string | null;
+  /**
+   * Set when that column is referenced by analytics rules AND no other row
+   * fills it, so the move leaves a rule column empty (decision F1-b: warn,
+   * do not refuse).
+   */
+  moveWarning: string | null;
+  /** The apply button's text: "Use this field" or "Move from <column>". */
+  actionLabel: string;
+}
+
+function dispositionText(row: GapFieldMapping | undefined): string {
+  if (row === undefined) return "";
+  if (row.action === "drop") return "now: dropped";
+  if (row.action === "overflow") return `now: overflow into ${row.dest}`;
+  return `now: fills ${row.dest} (${row.action})`;
+}
+
+function typeNoteText(
+  sourceType: string,
+  destType: string,
+  mismatch: boolean,
+): string {
+  if (sourceType === "" || destType === "" || sourceType === destType) {
+    return destType !== "" ? destType : sourceType;
+  }
+  return mismatch
+    ? `${sourceType} to ${destType}: the types differ - check the example value fits the column`
+    : `${sourceType} to ${destType}`;
+}
+
+/**
+ * The ranked sample fields that could fill one unmapped destination column of
+ * one log type, as render-ready rows. Candidates come from THIS log type's
+ * EFFECTIVE mappings (the reviewer's edits included), ranked by the core
+ * suggester (documented first, unmapped before already-mapped). Low-confidence
+ * and type-mismatched candidates are marked, never hidden (decision F1-d).
+ *
+ * Not offered: syslog transport fields (`host`, `port`) - the gap analysis
+ * strips them as Cribl internals before a mapping row exists, so there is no
+ * row to re-point. That is plan question F1-g, which no card has decided.
+ */
+export function columnSuggestions(
+  column: { name: string; type: string },
+  logType: string,
+  mappings: readonly GapFieldMapping[],
+  ruleFields?: ReadonlySet<string>,
+  solutionName?: string,
+): ColumnSuggestion[] {
+  const rows = closeMatchRowsFromReports([{ logType, fieldMappings: mappings }]);
+  const candidates = suggestForDestColumn(
+    column,
+    rows,
+    COLUMN_SUGGESTION_LIMIT,
+    solutionName === undefined ? {} : { solutionName },
+  );
+  return candidates.map((c) => {
+    const row = mappings.find((m) => m.source === c.sourceName);
+    const moveFrom = c.currentDest ?? null;
+    // The move leaves the column empty only when no other row lands there.
+    const vacates =
+      moveFrom !== null &&
+      !mappings.some(
+        (m) =>
+          m.source !== c.sourceName &&
+          landsInColumn(m) &&
+          m.dest.toLowerCase() === moveFrom.toLowerCase(),
+      );
+    return {
+      source: c.sourceName,
+      example: formatExampleValue(c.sampleValue),
+      reason: c.reason,
+      disposition: dispositionText(row),
+      typeNote: typeNoteText(c.sourceType ?? "", column.type, c.typeMismatch),
+      typeMismatch: c.typeMismatch,
+      lowConfidence: c.score < 50,
+      moveFrom,
+      moveWarning:
+        vacates && isRuleField(moveFrom, ruleFields)
+          ? `${moveFrom} is used by analytics rules and nothing else fills it: moving ${c.sourceName} leaves it empty.`
+          : null,
+      actionLabel: moveFrom === null ? "Use this field" : `Move from ${moveFrom}`,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
