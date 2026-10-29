@@ -3,7 +3,7 @@
  *
  * Ports the legacy field-matcher.test.ts "matching strategies" and "overflow
  * config" blocks and adds pins for the substring guards, the actual-sample-
- * casing rule, the 'in' reserved-word overflow-by-design behavior, the exported
+ * casing rule, the CEF 'in' -> ReceivedBytes alias (GEN-20), the exported
  * (still-unused) VALUE_NORMALIZATIONS, and the missing-overflow-field warning.
  */
 

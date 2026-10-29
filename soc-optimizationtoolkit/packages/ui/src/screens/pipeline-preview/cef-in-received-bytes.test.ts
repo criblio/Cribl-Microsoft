@@ -21,6 +21,7 @@ import {
   generatePipelineConfForPlan,
 } from "@soc/core";
 import { describe, expect, it } from "vitest";
+import { availableFieldsFromReports } from "../rule-coverage/rule-coverage-state";
 import { reportToPlanInput } from "./pipeline-preview-state";
 
 const SOLUTION = "Palo Alto Networks";
@@ -111,8 +112,25 @@ describe("CEF `in` -> ReceivedBytes, end to end (GEN-20)", () => {
     expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
   });
 
-  it("agrees with the Mapping Catalog's CEF claim", () => {
+  it("agrees with the Mapping Catalog's CEF claim", async () => {
+    // Read the claim AND what the gap analysis did, and hold them to each
+    // other: reading the catalog alone passes whether or not the matcher
+    // makes the mapping, which is exactly the disagreement GEN-20 was.
     const claim = CEF_CATALOG_PACK.mappings.filter((m) => m.sourceName === "in");
     expect(claim.map((m) => m.destName)).toEqual(["ReceivedBytes"]);
+    const report = await cefReport();
+    const made = report.fieldMappings
+      .filter((m) => m.source === "in" && m.action !== "overflow")
+      .map((m) => m.dest);
+    expect(made).toEqual(claim.map((m) => m.destName));
+  });
+
+  it("Rule Coverage counts ReceivedBytes as produced, not `in` as an overflow survivor", async () => {
+    // The UAT symptom: Rule Coverage reported ReceivedBytes missing. Its
+    // availability set is derived from these same report rows.
+    const available = availableFieldsFromReports([await cefReport()]);
+    expect(available).toContain("ReceivedBytes");
+    expect(available).toContain("SentBytes");
+    expect(available).not.toContain("in");
   });
 });
