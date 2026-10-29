@@ -124,7 +124,11 @@ describe("Field Mappings table - Example Value column (DBT-122)", () => {
     expect(byField.get("Note")!.getAttribute("title")).toBe("  padded");
   });
 
-  it("keeps the unmapped-destination rows aligned to seven columns", async () => {
+  // This counts DOM cells, which is all it can see: it cannot tell whether
+  // the stylesheet keeps those cells in the table. A display:block on a cell
+  // class merged three of them and shifted the row with seven <td>s still
+  // here (DBT-192); mapping-table-cells.dom.test.tsx pins that half.
+  it("renders seven cells per unmapped-destination row, the column name fourth", async () => {
     const { container } = await renderAnalyzed();
     const head = container.querySelector(".mapping-unmapped-head td");
     expect(head?.getAttribute("colspan")).toBe("7");

@@ -2934,8 +2934,12 @@ button.readiness-pill:focus-visible {
   word-break: break-all;
 }
 
+/* Sits on <td> cells (Field Mappings, Mapping Catalog), so it must not set
+   display (nor float, nor position absolute/fixed, which blockify a cell the
+   same way): a block <td> leaves the table, and consecutive block cells merge
+   into one anonymous cell that shifts the rest of the row left (DBT-192).
+   Pinned in mapping-review/mapping-table-cells.dom.test.tsx. */
 .match-field-type {
-  display: block;
   font-size: 11px;
   color: var(--text-faint);
 }
