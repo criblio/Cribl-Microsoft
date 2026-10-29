@@ -24,8 +24,11 @@
  *   - read, listing `empty` - the read worked but listed no legible outputs at
  *               all. Under RBAC that is indistinguishable from "filtered out",
  *               so it is an UNVERIFIED nothing.
- *   - read, listing `none`  - outputs were listed and none is of type
- *               sentinel. That is a measured zero (filterListing over rows).
+ *   - read, listing `none`  - outputs were listed, EVERY item was legible,
+ *               and none is of type sentinel. That is a measured zero
+ *               (filterListing over rows). One item that could not be read
+ *               (no id, not an object) might be the Sentinel destination, so
+ *               zero beside it is `empty`, not `none`.
  *
  * THE TABLE IS NOT GUESSED. A destination says which DCR stream it writes, not
  * which table: the DCR's transform decides that, and offline the app cannot
@@ -78,7 +81,11 @@ export interface SentinelOutputRow {
   /** The output id, verbatim. */
   id: string;
   mode: SentinelEndpointMode;
-  /** The DCR immutable id, from dcrID or (URL mode) the URL; null when neither. */
+  /**
+   * The DCR immutable id, from dcrID (ID mode) or the URL (URL mode); null when
+   * the mode's own field is missing or variable-bound. Only an unknown mode
+   * falls back from one to the other.
+   */
   dcrID: string | null;
   /**
    * The ingestion endpoint: dceEndpoint, or (URL mode) the URL's origin; null
@@ -101,7 +108,35 @@ export interface SentinelOutputRow {
    * declares no status field, so null is the expected case.
    */
   status: string | null;
+  /**
+   * The fields bound to a Cribl variable (`__template_<field>`), in a fixed
+   * order. A bound field's literal is overridden at runtime, so it is NOT read
+   * as the destination's value: a bound dcrID / dceEndpoint / streamName / url
+   * reads as null (and no table is inferred from a bound stream), a bound
+   * client_id counts as present, and a bound secret is a `reference`. The
+   * picker names these instead of showing a literal the destination never
+   * sends with. The variable's id is not copied.
+   */
+  variableBound: readonly SentinelBindableField[];
 }
+
+/** The OutputSentinel fields a `__template_<field>` binding can override that a row reads. */
+export type SentinelBindableField =
+  | "url"
+  | "dcrID"
+  | "dceEndpoint"
+  | "streamName"
+  | "client_id"
+  | "secret";
+
+const BINDABLE_FIELDS: readonly SentinelBindableField[] = [
+  "url",
+  "dcrID",
+  "dceEndpoint",
+  "streamName",
+  "client_id",
+  "secret",
+];
 
 /** The result of reading the group's outputs for Sentinel destinations. */
 export type SentinelOutputsResult =
@@ -193,22 +228,54 @@ function toRow(
   id: string,
   knownTables: readonly string[],
 ): SentinelOutputRow {
-  const url = nonBlank(record["url"]);
+  const variableBound = BINDABLE_FIELDS.filter(
+    (field) => nonBlank(record[`__template_${field}`]) !== null,
+  );
+  const bound = (field: SentinelBindableField) => variableBound.includes(field);
+  // A bound field's literal is not what the destination sends with.
+  const literal = (field: SentinelBindableField) =>
+    bound(field) ? null : nonBlank(record[field]);
+
+  const mode = endpointMode(record["endpointURLConfiguration"]);
+  const url = literal("url");
   const fromUrl = url === null ? null : DCR_URL_PATH.exec(url);
-  const dcrID = nonBlank(record["dcrID"]) ?? fromUrl?.[1] ?? null;
-  const streamName = nonBlank(record["streamName"]) ?? fromUrl?.[2] ?? null;
-  const dceEndpoint =
-    nonBlank(record["dceEndpoint"]) ?? (url === null ? null : urlOrigin(url));
+  const urlParts = {
+    dcrID: fromUrl?.[1] ?? null,
+    streamName: fromUrl?.[2] ?? null,
+    dceEndpoint: url === null ? null : urlOrigin(url),
+  };
+  const fieldParts = {
+    dcrID: literal("dcrID"),
+    streamName: literal("streamName"),
+    dceEndpoint: literal("dceEndpoint"),
+  };
+  // The endpoint configuration decides which half Cribl sends with. The other
+  // half can hold values left over from before the mode was switched, so a
+  // known mode reads ONLY its own half: a URL-mode destination with a stale
+  // streamName shows the URL's stream, and a bound or missing value in the
+  // mode's own half is null rather than a leftover. Only an unknown mode falls
+  // back from the fields to the URL.
+  const parts =
+    mode === "url"
+      ? urlParts
+      : mode === "ID"
+        ? fieldParts
+        : {
+            dcrID: fieldParts.dcrID ?? urlParts.dcrID,
+            streamName: fieldParts.streamName ?? urlParts.streamName,
+            dceEndpoint: fieldParts.dceEndpoint ?? urlParts.dceEndpoint,
+          };
   return {
     id,
-    mode: endpointMode(record["endpointURLConfiguration"]),
-    dcrID,
-    dceEndpoint,
-    streamName,
-    inferredTable: inferTableFromStream(streamName, knownTables),
-    clientIdPresent: clientIdPresent(record["client_id"]),
-    secretKind: secretKind(record),
+    mode,
+    dcrID: parts.dcrID,
+    dceEndpoint: parts.dceEndpoint,
+    streamName: parts.streamName,
+    inferredTable: inferTableFromStream(parts.streamName, knownTables),
+    clientIdPresent: bound("client_id") || clientIdPresent(record["client_id"]),
+    secretKind: bound("secret") ? "reference" : secretKind(record),
     status: statusOf(record["status"]),
+    variableBound,
   };
 }
 
@@ -246,19 +313,29 @@ export function parseSentinelOutputs(
   // read: zero Sentinel rows out of some outputs is a measured `none`; zero out
   // of nothing stays an unverified `empty`.
   const legible: Array<{ record: Record<string, unknown>; id: string }> = [];
+  let illegible = 0;
   for (const item of items) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      illegible += 1;
       continue;
     }
     const record = item as Record<string, unknown>;
-    const id = nonBlank(record["id"]);
-    if (id !== null) legible.push({ record, id });
+    // Verbatim, not trimmed: a route or a pick must name the exact id.
+    const id = nonBlank(record["id"]) === null ? null : (record["id"] as string);
+    if (id === null) illegible += 1;
+    else legible.push({ record, id });
   }
 
   const sentinelRows = legible
     .filter(({ record }) => record["type"] === "sentinel")
     .map(({ record, id }) => toRow(record, id, knownTables));
 
+  // A measured zero needs EVERY item read: an item this could not read may be
+  // the Sentinel destination, so zero Sentinel rows beside one is unverified,
+  // never `none`. (Rows that were read are still offered.)
+  if (sentinelRows.length === 0 && illegible > 0) {
+    return { status: "read", sentinel: { kind: "empty" } };
+  }
   return {
     status: "read",
     sentinel: filterListing(toListing(legible), sentinelRows),

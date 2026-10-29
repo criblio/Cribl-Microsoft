@@ -17,6 +17,7 @@ export {
 } from "./sentinel-destination";
 export { parseSentinelOutputs } from "./existing-outputs";
 export type {
+  SentinelBindableField,
   SentinelEndpointMode,
   SentinelOutputRow,
   SentinelOutputsResult,

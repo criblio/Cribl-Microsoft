@@ -56,6 +56,7 @@ describe("parseSentinelOutputs - rows", () => {
         clientIdPresent: true,
         secretKind: "reference",
         status: null,
+        variableBound: [],
       },
     ]);
   });
@@ -83,8 +84,76 @@ describe("parseSentinelOutputs - rows", () => {
         clientIdPresent: false,
         secretKind: "placeholder",
         status: null,
+        variableBound: [],
       },
     ]);
+  });
+
+  it("reads only the configured mode's half, never a leftover from the other", () => {
+    // Cribl keeps the other mode's fields when the mode is switched, so a
+    // URL-mode destination can still carry an old dcrID / streamName / DCE.
+    const leftovers = {
+      dcrID: "dcr-stale",
+      streamName: "Custom-CommonSecurityLog",
+      dceEndpoint: "https://stale.eastus-1.ingest.monitor.azure.com",
+    };
+    const url =
+      "https://now.eastus-1.ingest.monitor.azure.com/dataCollectionRules/" +
+      "dcr-now/streams/Custom-SecurityEvent";
+    const rows = rowsOf(
+      parseSentinelOutputs(
+        ok([
+          { id: "u", type: "sentinel", endpointURLConfiguration: "url", url, ...leftovers },
+          { id: "i", type: "sentinel", endpointURLConfiguration: "ID", url },
+          { id: "x", type: "sentinel", url },
+        ]),
+        KNOWN,
+      ),
+    );
+    expect(
+      rows.map((r) => [r.id, r.dcrID, r.streamName, r.dceEndpoint, r.inferredTable]),
+    ).toEqual([
+      ["u", "dcr-now", "Custom-SecurityEvent", "https://now.eastus-1.ingest.monitor.azure.com", "SecurityEvent"],
+      // ID mode with only a URL: its own fields are missing, so nothing.
+      ["i", null, null, null, null],
+      // Unknown mode falls back to the URL.
+      ["x", "dcr-now", "Custom-SecurityEvent", "https://now.eastus-1.ingest.monitor.azure.com", "SecurityEvent"],
+    ]);
+  });
+
+  it("treats a variable-bound field as unknown, never as its literal", () => {
+    const row = rowsOf(
+      parseSentinelOutputs(
+        ok([
+          {
+            ...PAN_CSL,
+            id: "bound",
+            streamName: "Custom-CommonSecurityLog",
+            __template_streamName: "cribl.stream_var",
+            __template_dcrID: "cribl.dcr_var",
+            client_id: "''",
+            __template_client_id: "cribl.client_var",
+            secret: undefined,
+            __template_secret: "cribl.secret_var",
+          },
+        ]),
+        KNOWN,
+      ),
+    )[0];
+    expect(row).toEqual({
+      id: "bound",
+      mode: "ID",
+      dcrID: null,
+      dceEndpoint:
+        "https://dce-example-eastus2.eastus2-1.ingest.monitor.azure.com",
+      streamName: null,
+      inferredTable: null,
+      clientIdPresent: true,
+      secretKind: "reference",
+      status: null,
+      variableBound: ["dcrID", "streamName", "client_id", "secret"],
+    });
+    expect(JSON.stringify(row)).not.toContain("cribl.secret_var");
   });
 
   it("infers a table only from an exact known-table stream shape", () => {
@@ -210,6 +279,28 @@ describe("parseSentinelOutputs - inventory honesty", () => {
     expect(
       parseSentinelOutputs(ok([{ type: "sentinel" }, null, "x"]), KNOWN),
     ).toEqual({ status: "read", sentinel: { kind: "empty" } });
+  });
+
+  it("never claims none while an item it could not read might be the Sentinel one", () => {
+    expect(
+      parseSentinelOutputs(ok([S3, DEVNULL, { type: "sentinel" }]), KNOWN),
+    ).toEqual({ status: "read", sentinel: { kind: "empty" } });
+    expect(parseSentinelOutputs(ok([S3, "x"]), KNOWN)).toEqual({
+      status: "read",
+      sentinel: { kind: "empty" },
+    });
+    // A row that WAS read is still offered beside an unreadable item.
+    expect(
+      rowsOf(parseSentinelOutputs(ok([PAN_CSL, { type: "sentinel" }]), KNOWN))
+        .map((r) => r.id),
+    ).toEqual(["PAN-CSL"]);
+  });
+
+  it("keeps the output id verbatim", () => {
+    expect(
+      rowsOf(parseSentinelOutputs(ok([{ ...PAN_CSL, id: " PAN-CSL" }]), KNOWN))
+        .map((r) => r.id),
+    ).toEqual([" PAN-CSL"]);
   });
 
   it("reports a failed read as failed, never as empty", () => {
