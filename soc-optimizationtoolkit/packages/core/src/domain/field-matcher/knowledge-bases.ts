@@ -85,7 +85,12 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   sentbyte: ["SentBytes"],
   rcvdbyte: ["ReceivedBytes"],
   out: ["SentBytes"], // CEF standard: outbound bytes
-  // Note: 'in' is a JS reserved word -- handled via overflow guard, not alias
+  // CEF standard: inbound bytes (GEN-20). `in` is a reserved word only as a
+  // bare identifier; as an object key it is legal, and it passes
+  // isCriblAccessorSafe, so the Rename emits `currentName: in` like any other
+  // field. Leaving it unaliased sent it to overflow while the Mapping Catalog
+  // (CEF_CATALOG_PACK) told the operator it reached ReceivedBytes.
+  in: ["ReceivedBytes"],
   packets_sent: ["SentPackets", "PacketsSent"],
   packets_received: ["ReceivedPackets", "PacketsReceived"],
   elapsed: ["Duration", "SessionDuration"],
