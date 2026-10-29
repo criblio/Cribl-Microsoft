@@ -38,7 +38,7 @@ import {
   MG_TEMPLATE,
   PARAMS_NOTE,
   assignmentId,
-  managementGroupScope,
+  managementGroupDefinitionId,
   markerMetadata,
   markerPortalLine,
   policyAssignmentParameters,
@@ -125,7 +125,7 @@ export const ENTRA_STEPS: readonly HowToStep[] = [
 
 const ACTIVITY = LEGACY_POLICY_NAMES.activityLogAssignment;
 const ACTIVITY_DEF = LEGACY_POLICY_NAMES.activityLogDefinition;
-const ACTIVITY_DEF_TEMPLATE = `${MG_TEMPLATE}/providers/Microsoft.Authorization/policyDefinitions/${ACTIVITY_DEF}`;
+const ACTIVITY_DEF_TEMPLATE = managementGroupDefinitionId("{{managementGroupId}}", ACTIVITY_DEF);
 
 const activityRemediation = remediationStep("activity-log-remediate", "activityLog", ACTIVITY);
 
@@ -145,7 +145,7 @@ export const ACTIVITY_LOG_STEPS: readonly HowToStep[] = [
       { label: "Source folder", value: LEGACY_POLICY_NAMES.communityRepoFolder },
       {
         label: "Definition ID",
-        value: `${managementGroupScope(v.managementGroupId)}/providers/Microsoft.Authorization/policyDefinitions/${ACTIVITY_DEF}`,
+        value: managementGroupDefinitionId(v.managementGroupId, ACTIVITY_DEF),
       },
     ],
     rbac: ["Microsoft.Authorization/policyDefinitions/write at the management group."],

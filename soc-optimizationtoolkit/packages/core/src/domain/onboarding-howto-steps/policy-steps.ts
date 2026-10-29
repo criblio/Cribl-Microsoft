@@ -82,9 +82,18 @@ export function communityDefinitionNames(subSelection: readonly string[]): reado
   return names;
 }
 
+/**
+ * The path of the policy definitions saved at a management group: what
+ * Validate lists, and the parent of every id {@link managementGroupDefinitionId}
+ * builds, so the two cannot disagree.
+ */
+export function managementGroupDefinitionsPath(managementGroupId: string): string {
+  return `${managementGroupScope(managementGroupId)}/providers/Microsoft.Authorization/policyDefinitions`;
+}
+
 /** The ARM id of a policy definition saved at a management group. */
 export function managementGroupDefinitionId(managementGroupId: string, name: string): string {
-  return `${managementGroupScope(managementGroupId)}/providers/Microsoft.Authorization/policyDefinitions/${name}`;
+  return `${managementGroupDefinitionsPath(managementGroupId)}/${name}`;
 }
 
 /** The management group scope a plan's policy assignments sit at. */

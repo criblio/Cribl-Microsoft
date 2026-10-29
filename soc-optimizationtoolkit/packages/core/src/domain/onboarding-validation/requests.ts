@@ -65,6 +65,7 @@ import {
   LEGACY_POLICY_NAMES,
   communityDefinitionNames,
   managementGroupDefinitionId,
+  managementGroupDefinitionsPath,
 } from "../onboarding-howto-steps/policy-steps";
 
 /**
@@ -377,7 +378,7 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
             list(
               {
                 method: "GET",
-                path: `${managementGroupScope(mg)}/providers/Microsoft.Authorization/policyDefinitions`,
+                path: managementGroupDefinitionsPath(mg),
                 apiVersion: API_VERSIONS.policyDefinitions,
                 query: { $filter: CUSTOM_POLICY_DEFINITIONS_FILTER },
               },

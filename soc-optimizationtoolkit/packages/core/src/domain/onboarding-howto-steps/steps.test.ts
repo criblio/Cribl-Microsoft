@@ -15,6 +15,8 @@ import {
   MARKER_FILE,
   MARKER_ROW_LABEL,
   communityDefinitionNames,
+  managementGroupDefinitionId,
+  managementGroupDefinitionsPath,
 } from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
 import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
@@ -161,6 +163,18 @@ describe("how-to step catalog", () => {
     expect(rows.find((r) => r.label === "Definition names")?.value).toBe(
       "Cribl-RecoveryServicesVault-DiagSettings-EH, Cribl-AzureAPIforFHIR-DiagSettings-EH, Cribl-PowerBIEmbedded-DiagSettings-EH",
     );
+  });
+
+  it("renders the Activity Log definition id with the management-group definition helpers (AZR-52)", () => {
+    const path = "/providers/Microsoft.Management/managementGroups/mg-9/providers/Microsoft.Authorization/policyDefinitions";
+    const id = `${path}/Cribl-Community-ActivityLog-DiagSettings-EventHub`;
+    expect(managementGroupDefinitionsPath("mg-9")).toBe(path);
+    expect(managementGroupDefinitionId("mg-9", LEGACY_POLICY_NAMES.activityLogDefinition)).toBe(id);
+
+    const values = { ...FULL, managementGroupId: "mg-9" };
+    const rows = renderStep(howToStep("activity-log-definition")!, values, []).values;
+    expect(rows.find((r) => r.label === "Definition ID")?.value).toBe(id);
+    expect(renderStep(howToStep("activity-log-assign")!, values, []).cli).toContain(` --policy ${id} `);
   });
 
   it("shows ONE Manage rule step when the Defender export and an auto-created-hub source are both chosen", () => {

@@ -8,6 +8,7 @@ import { CHECK_KINDS, type CheckKind } from "../onboarding-howto/check-kinds";
 import { defaultPlanValues, type PlanValues } from "../onboarding-howto/plan-values";
 import { ONBOARDING_SOURCES } from "../onboarding-howto/sources";
 import { ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
+import { managementGroupDefinitionsPath } from "../onboarding-howto-steps/policy-steps";
 import {
   CHECK_REQUIRED_VALUES,
   CUSTOM_POLICY_DEFINITIONS_FILTER,
@@ -174,6 +175,18 @@ describe("requestsFor: the paths come from the owning builders", () => {
     expect(requestsOf("policy-definition", COMMUNITY)).toEqual([expected]);
     expect(requestsOf("policy-definition", checkExpectationsFor("activityLog", FULL))).toEqual([expected]);
     expect(CHECK_REQUIRED_VALUES["policy-definition"]).toEqual(["managementGroupId"]);
+  });
+
+  it("lists the definitions at the same path every expected definition id sits under (AZR-52)", () => {
+    const path = "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions";
+    expect(managementGroupDefinitionsPath("mg-1")).toBe(path);
+    expect(requestsOf("policy-definition", COMMUNITY).map((r) => r.request.path)).toEqual([path]);
+    const ids = [
+      ...(COMMUNITY.policyDefinitions ?? []),
+      ...(checkExpectationsFor("activityLog", FULL).policyDefinitions ?? []),
+    ];
+    expect(ids).toHaveLength(45);
+    expect(ids.filter((id) => !id.startsWith(`${path}/`))).toEqual([]);
   });
 });
 
