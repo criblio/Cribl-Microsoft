@@ -18,7 +18,9 @@
  *   - `rename` whose source equals its target: the matcher emits this for a
  *     same-named column whose TYPE differs (`[{"a.b":5}]` against a string
  *     column `a.b`), and the emitter skips a rename onto its own name, so it
- *     is a keep in every way the conf can see.
+ *     is a keep in every way the conf can see - unless it carries
+ *     needsCoercion and the coercion is expressible (F1-e): then the enrich
+ *     eval writes `- name: <field>` and it is checkCriblYaml's, as below.
  *   - `coerce` whose coercion the emitter cannot express: buildCoercionExpr
  *     returns null (a guid column, say) and no line is written. A coercion it
  *     CAN express writes `- name: <field>` under the enrich eval's `add:`,
@@ -60,7 +62,16 @@ import { buildCoercionExpr } from "./pipeline-conf";
  */
 function isReadUnpresented(f: PipelineFieldMapping): boolean {
   if (f.action === "keep") return true;
-  if (f.action === "rename") return f.source === f.target;
+  if (f.action === "rename") {
+    if (f.source !== f.target) return false;
+    // A self-rename that needs a coercion the emitter CAN express writes
+    // `- name: <field>` under the enrich eval (F1-e), which checkCriblYaml
+    // refuses itself - the coerce rule, for the same reason.
+    return (
+      f.needsCoercion !== true ||
+      buildCoercionExpr(f.target, "string", f.type) === null
+    );
+  }
   if (f.action === "coerce") {
     return buildCoercionExpr(f.target || f.source, "string", f.type) === null;
   }

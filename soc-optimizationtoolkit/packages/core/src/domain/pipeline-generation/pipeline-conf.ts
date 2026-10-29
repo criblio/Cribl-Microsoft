@@ -635,9 +635,15 @@ export function generatePipelineConf(
   const vendorCoercionDests = new Set(
     vendorCoercions.map((m) => m.destName.toLowerCase()),
   );
+  // A RENAME whose types differ converts too (F1-e), on the TARGET name: the
+  // coercion eval runs in the enrich group after the rename, so by then the
+  // value lives under the column's name. It used to be dropped here - the gap
+  // report counted it under "Cribl handles: N coercion(s)" and the pipeline
+  // never wrote it.
   const presetCoercions = activeFields.filter(
     (f) =>
-      f.action === "coerce" &&
+      (f.action === "coerce" ||
+        (f.action === "rename" && f.needsCoercion === true)) &&
       !vendorCoercionDests.has((f.target || f.source).toLowerCase()),
   );
   // Base64-decode fields (2026-09 decode action): emitted as an Eval below.

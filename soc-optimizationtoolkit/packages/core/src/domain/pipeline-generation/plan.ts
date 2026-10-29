@@ -147,6 +147,7 @@ function resolveFields(input: TablePlanInput): {
       target: o.dest,
       type: o.destType,
       action: o.action as PipelineFieldMapping["action"],
+      needsCoercion: o.needsCoercion,
     }));
     return {
       fields,
@@ -199,6 +200,7 @@ function resolveFields(input: TablePlanInput): {
         target: m.destName,
         type: m.destType,
         action: mapMatchedAction(m),
+        needsCoercion: m.needsCoercion,
       })),
       ...mr.overflow.map((o) => ({
         source: o.sourceName,
