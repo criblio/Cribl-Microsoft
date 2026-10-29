@@ -22,7 +22,7 @@
  *     and one the operator believes came from the source now on screen.
  */
 
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
@@ -885,6 +885,35 @@ describe("CapturePanel - the operator's picks survive a commit (DBT-198)", () =>
     expect(select(shown, "syslog:in_syslog", "1,x,THREAT,y")).toBe(true);
     expect(select(shown, "syslog:in_syslog", "1,x,CONFIG,y")).toBe(false);
     expect(select(shown, "syslog:in_syslog", "1,x,URL,y")).toBe(false);
+  });
+
+  it("keeps them under StrictMode and across a second capture and commit", async () => {
+    // The shipped app mounts under StrictMode (apps/cribl-app/src/main.tsx), so
+    // every effect runs twice on mount; the pin above renders without it. And
+    // the UAT's next step is to capture again - the picks must survive every
+    // commit, not just the first one.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(
+      <StrictMode>
+        <Parent onCapture={onCapture} />
+      </StrictMode>,
+    );
+    fireEvent.click(boxes(container)[2]);
+    fireEvent.click(boxes(container)[3]);
+    fireEvent.click(boxes(container)[4]);
+
+    for (let round = 0; round < 2; round += 1) {
+      await act(async () => {
+        fireEvent.click(runButton(container));
+      });
+      await act(async () => {
+        fireEvent.click(commitButton(container) as HTMLButtonElement);
+      });
+      expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+    }
+    expect(onCapture).toHaveBeenCalledTimes(2);
   });
 
   it("still follows the seed when the operator never touched a tick", async () => {
