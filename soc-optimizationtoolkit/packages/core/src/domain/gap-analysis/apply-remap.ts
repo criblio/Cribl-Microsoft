@@ -22,6 +22,8 @@
  *     what the matcher emits for a same-named column and what makes the
  *     emitter write the conversion. A `decode` row stays `decode`: its source
  *     is encoded, and a rename would land base64 text in the new column.
+ *     A column the reviewer chose carries confidence `reviewer`, never the
+ *     matcher's `exact` (which the review table defines as identical names).
  *   - A column not in the schema, or a source no row carries: nothing changes,
  *     and the outcome says which.
  *
@@ -120,7 +122,7 @@ function remappedRow(
       ...row,
       dest: column.name,
       destType: column.type,
-      confidence: "exact",
+      confidence: "reviewer",
       needsCoercion: false,
       description: reviewerDescription(row.source, column.name),
     };
@@ -137,7 +139,7 @@ function remappedRow(
     ...row,
     dest: column.name,
     destType: column.type,
-    confidence: "exact",
+    confidence: "reviewer",
     action,
     needsCoercion,
     description: reviewerDescription(row.source, column.name),

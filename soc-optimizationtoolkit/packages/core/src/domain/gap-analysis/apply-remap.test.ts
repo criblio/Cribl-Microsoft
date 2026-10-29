@@ -66,7 +66,7 @@ describe("applyRemap - the row follows its column", () => {
       dest: "SourceMACAddress",
       sourceType: "string",
       destType: "string",
-      confidence: "exact",
+      confidence: "reviewer",
       action: "rename",
       needsCoercion: false,
       description: "Reviewer choice: PanSrcMac -> SourceMACAddress",
@@ -107,6 +107,7 @@ describe("applyRemap - the row follows its column", () => {
     expect(next.action).toBe("decode");
     expect(next.dest).toBe("SourceMACAddress");
     expect(next.needsCoercion).toBe(false);
+    expect(next.confidence).toBe("reviewer");
   });
 
   it("makes a row pointed at the catch-all an overflow row", () => {

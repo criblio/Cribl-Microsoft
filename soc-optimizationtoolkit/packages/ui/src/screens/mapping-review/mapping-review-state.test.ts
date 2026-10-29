@@ -508,6 +508,19 @@ describe("sortedMappings / unmappedDestColumns / fieldMappingsLabel", () => {
     expect(unmapped.map((d) => d.name)).toEqual(["OtherColumn", "TimeGenerated"]);
   });
 
+  // DBT-193: the header's three counts must agree. A dropped row is not
+  // "mapped", so the column it pointed at is empty and must read as unmapped -
+  // otherwise dropping a rename row lowers "mapped" without raising
+  // "unmapped", and the column silently disappears from the list.
+  it("lists the column of a DROPPED row as unmapped; an overflow row fills the catch-all", () => {
+    const r = report("A", [
+      mapping({ source: "s", dest: "DestColumn", action: "drop" }),
+      mapping({ source: "o", dest: "OtherColumn", action: "overflow" }),
+    ]);
+    const unmapped = unmappedDestColumns(r, r.fieldMappings);
+    expect(unmapped.map((d) => d.name)).toEqual(["DestColumn", "TimeGenerated"]);
+  });
+
   it("formats the expander label with no overflow or drop to name", () => {
     const rows = Array.from({ length: 5 }, (_, i) =>
       mapping({ source: `s${i}`, dest: `C${i}` }),
@@ -608,7 +621,7 @@ describe("edit-mapping dest - the PAN-OS UAT rows (GEN-19, DBT-194)", () => {
       dest: "SourceMACAddress",
       sourceType: "string",
       destType: "string",
-      confidence: "exact",
+      confidence: "reviewer",
       action: "rename",
       needsCoercion: false,
       description: "Reviewer choice: PanSrcMac -> SourceMACAddress",

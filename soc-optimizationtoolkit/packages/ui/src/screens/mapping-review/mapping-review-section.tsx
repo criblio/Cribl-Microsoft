@@ -1384,7 +1384,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Confidence
-                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), or unmatched (collected into overflow)." />
+                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), reviewer (a column you chose), or unmatched (collected into overflow)." />
                         </th>
                         <th>
                           Action

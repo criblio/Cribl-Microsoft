@@ -76,6 +76,7 @@ export type {
   GapStatTone,
   GapReportStat,
   GapFieldMapping,
+  MappingConfidence,
   GapReport,
   BuildGapReportInput,
 } from "./gap-report";

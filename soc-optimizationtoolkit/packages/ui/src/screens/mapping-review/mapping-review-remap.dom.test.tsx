@@ -131,4 +131,40 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
       before,
     );
   });
+
+  it("shows a chosen column as a reviewer choice, not as an exact match", async () => {
+    const { container } = await renderAnalyzed();
+    const destSelect = rowFor(container, "qqvendorfield").querySelector<HTMLSelectElement>(
+      "select.mapping-select",
+    )!;
+    fireEvent.change(destSelect, { target: { value: "SourceMACAddress" } });
+    await waitFor(() => {
+      expect(
+        rowFor(container, "qqvendorfield").querySelector(".match-conf")?.className,
+      ).toBe("match-conf match-conf-reviewer");
+    });
+    expect(
+      rowFor(container, "qqvendorfield").querySelector(".match-conf")?.textContent,
+    ).toBe("reviewer");
+  });
+
+  // The screen hands applyRemap the table's OWN catch-all. Without it, moving a
+  // column-bound row into AdditionalExtensions would be a Rename onto the
+  // catch-all, which the serialize then overwrites - the field is lost.
+  it("makes a column-bound row moved into the catch-all an overflow row", async () => {
+    const { container, effective } = await renderAnalyzed();
+    const destSelect = rowFor(container, "TimeGenerated").querySelector<HTMLSelectElement>(
+      "select.mapping-select",
+    )!;
+    fireEvent.change(destSelect, { target: { value: "AdditionalExtensions" } });
+    await waitFor(() => {
+      expect(summary(container)).toContain(
+        "Field Mappings (0 mapped, 2 to overflow, 2 unmapped)",
+      );
+    });
+    const moved = effective().PanOS?.find((m) => m.source === "TimeGenerated");
+    expect(moved?.action).toBe("overflow");
+    expect(moved?.dest).toBe("AdditionalExtensions");
+    expect(moved?.confidence).toBe("unmatched");
+  });
 });

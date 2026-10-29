@@ -446,12 +446,17 @@ export function sortedMappings(
 /**
  * Destination columns of the report's schema that no source field maps to (the
  * legacy "Unmapped Destination Fields" section). Compared case-insensitively.
+ * A dropped row fills nothing, so its column stays unmapped (DBT-193: the
+ * header's mapped and unmapped counts must agree); an overflow row's column
+ * is the catch-all, which the serialize does fill.
  */
 export function unmappedDestColumns(
   report: GapReport,
   mappings: readonly GapFieldMapping[],
 ): Array<{ name: string; type: string }> {
-  const mapped = new Set(mappings.map((m) => m.dest.toLowerCase()));
+  const mapped = new Set(
+    mappings.filter((m) => m.action !== "drop").map((m) => m.dest.toLowerCase()),
+  );
   return report.destSchema
     .filter((d) => !mapped.has(d.name.toLowerCase()))
     .map((d) => ({ name: d.name, type: d.type }))
