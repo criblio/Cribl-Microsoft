@@ -103,6 +103,55 @@ describe("canWireSource", () => {
   });
 });
 
+describe("existing destination picked (GEN-21)", () => {
+  const PICKED: SectionInputs = {
+    ...READY,
+    scopeCommitted: false,
+    existingDestination: "PAN-CSL",
+  };
+
+  it("deploys without a committed scope in every mode that keeps Cribl", () => {
+    expect(canDeployInMode(PICKED, "full")).toBe(true);
+    expect(canDeployInMode(PICKED, "cribl-only")).toBe(true);
+    // The pick does not stand in for a worker group or a pack name.
+    expect(canDeployInMode({ ...PICKED, workerGroupSelected: false }, "full")).toBe(false);
+    expect(canDeployInMode({ ...PICKED, packNameSet: false }, "cribl-only")).toBe(false);
+  });
+
+  it("keeps the scope requirement in azure-only: a Cribl destination is not a scope", () => {
+    // azure-only skips Cribl, so the run is nothing but the Azure writes the
+    // scope addresses; a stale pick must not unlock them without one.
+    expect(canDeployInMode(PICKED, "azure-only")).toBe(false);
+    expect(
+      canDeployInMode({ ...PICKED, scopeCommitted: true }, "azure-only"),
+    ).toBe(true);
+  });
+
+  it("keeps the content path a superset: approval still gates it", () => {
+    expect(canDeployContentPathInMode(PICKED, "full")).toBe(false);
+    expect(
+      canDeployContentPathInMode({ ...PICKED, mappingsApproved: true }, "full"),
+    ).toBe(true);
+  });
+
+  it("unlocks wiring from an installed pack with a picked destination, with no deploy run", () => {
+    expect(canWireSource(false, "full", true)).toBe(true);
+    expect(canWireSource(false, "cribl-only", true)).toBe(true);
+    // Cribl skipped still means no source to wire.
+    expect(canWireSource(false, "azure-only", true)).toBe(false);
+    expect(canWireSource(false, "air-gapped", true)).toBe(false);
+    // Neither driver: still locked.
+    expect(canWireSource(false, "full", false)).toBe(false);
+    expect(canWireSource(false, "full")).toBe(false);
+  });
+
+  it("deriveGuidedWorkflow counts an installed pack only when a destination is picked", () => {
+    expect(deriveGuidedWorkflow(PICKED, "full", true).canWireSource).toBe(true);
+    expect(deriveGuidedWorkflow(PICKED, "full").canWireSource).toBe(false);
+    expect(deriveGuidedWorkflow(READY, "full", true).canWireSource).toBe(false);
+  });
+});
+
 describe("readinessPillsForMode", () => {
   it("hides the Workspace pill when Azure is skipped and Worker Groups when Cribl is skipped", () => {
     const airgap = readinessPillsForMode(READY, "air-gapped").map((p) => p.id);

@@ -33,10 +33,19 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // The setup page itself must always be reachable - it is where connections
     // are made in the first place.
     home: [],
-    // The flagship deploy page: writes DCRs and creates the Sentinel destination.
+    // The flagship deploy page. Its one requirement on EVERY path is the Cribl
+    // side: a pack is installed and a destination is created or used. dcr.write
+    // was listed too until GEN-21 (decision F2-e): the page now has an offline
+    // path - pick an existing Cribl Sentinel destination, build a routable pack,
+    // never touch Azure - and with dcr.write here an operator with no Azure
+    // identity saw the whole page as `unreachable` (not attemptable) and was
+    // told to connect Azure to do something that needs no Azure. The DCR write
+    // is still gated where it happens: the page's own Deploy and its dcr.write
+    // FallbackNotice. What the nav loses is the dcr.write denial chip and its
+    // ARM-export offer on this item; the page keeps that offer in place.
     // table.write is NOT listed - custom _CL tables are a subset of the flow, and
     // requiring it would flag the whole page for operators doing native tables.
-    integrate: ["dcr.write", "destination.manage"],
+    integrate: ["destination.manage"],
     "dcr-automation": ["dcr.write"],
     packs: ["pack.manage"],
     repositories: [],

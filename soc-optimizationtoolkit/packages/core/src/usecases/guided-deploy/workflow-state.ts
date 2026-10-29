@@ -31,6 +31,7 @@
 import {
   canDeploy as integrateCanDeploy,
   canDeployContentPath as integrateCanDeployContentPath,
+  deployAzureRequirements,
   deriveReadinessPills,
   type ReadinessPill,
   type SectionInputs,
@@ -78,7 +79,15 @@ export function canDeployInMode(
     // Full mode defers entirely to the canonical native rule (no drift).
     return integrateCanDeploy(inputs);
   }
-  const scopeOk = gating.skipAzure || inputs.scopeCommitted;
+  // A picked existing destination drops the scope requirement (GEN-21),
+  // exactly as integrate-arc's canDeploy does for "full" - but only while
+  // Cribl is in the run. An existing CRIBL destination cannot stand in for the
+  // scope of an azure-only run, whose whole job is the Azure writes that scope
+  // addresses.
+  const scopeOk =
+    gating.skipAzure ||
+    (!gating.skipCribl && !deployAzureRequirements(inputs).scope) ||
+    inputs.scopeCommitted;
   const workerGroupOk = gating.skipCribl || inputs.workerGroupSelected;
   return scopeOk && workerGroupOk && inputs.packNameSet;
 }
@@ -99,15 +108,29 @@ export function canDeployContentPathInMode(
 }
 
 /**
- * Whether source wiring is unlocked: a deploy has completed AND Cribl is not
- * skipped (there is no source to wire in an Azure-only or air-gapped run). Wiring
- * completion never re-locks it (each step is re-runnable).
+ * Whether source wiring is unlocked: Cribl is not skipped (there is no source
+ * to wire in an Azure-only or air-gapped run) AND one of two things happened:
+ *
+ *   1. a deploy has completed - the native path, where Deploy creates the
+ *      group's Sentinel destination the wiring sends to; or
+ *   2. the pack is installed with an EXISTING destination picked ([[GEN-21]]).
+ *      That path has no Deploy run at all - nothing in Azure to create, and the
+ *      destination already exists - so waiting for driver 1 would lock wiring
+ *      forever. The shell passes true only when both halves hold: a picked
+ *      destination AND an installed pack; an installed pack alone has nowhere
+ *      to send to.
+ *
+ * Wiring completion never re-locks it (each step is re-runnable).
  */
 export function canWireSource(
   deployCompleted: boolean,
   mode: DeployMode,
+  packInstalledWithExistingDestination = false,
 ): boolean {
-  return deployCompleted && !deployModeGating(mode).skipCribl;
+  return (
+    (deployCompleted || packInstalledWithExistingDestination) &&
+    !deployModeGating(mode).skipCribl
+  );
 }
 
 /**
@@ -147,17 +170,26 @@ export interface GuidedWorkflowState {
  * Derive the whole guided-workflow state from the section inputs, the mode, and
  * whether a deploy has completed (the deploy-complete flag is the wiring
  * unlock's driver; SectionInputs.deployCompleted stays the section model's).
+ * `packInstalled` is wiring's second driver (GEN-21); it counts only when an
+ * existing destination is picked in `inputs`.
  */
 export function deriveGuidedWorkflow(
   inputs: SectionInputs,
   mode: DeployMode,
+  packInstalled = false,
 ): GuidedWorkflowState {
+  // A pick is exactly what drops the scope requirement (integrate-arc).
+  const existingPicked = !deployAzureRequirements(inputs).scope;
   return {
     mode,
     gating: deployModeGating(mode),
     canDeploy: canDeployInMode(inputs, mode),
     canDeployContentPath: canDeployContentPathInMode(inputs, mode),
-    canWireSource: canWireSource(inputs.deployCompleted, mode),
+    canWireSource: canWireSource(
+      inputs.deployCompleted,
+      mode,
+      packInstalled && existingPicked,
+    ),
     readinessPills: readinessPillsForMode(inputs, mode),
   };
 }
