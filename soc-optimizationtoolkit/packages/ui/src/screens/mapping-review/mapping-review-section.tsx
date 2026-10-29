@@ -67,6 +67,7 @@ import {
   dropSavingsLine,
   estimateDropSavings,
   getOverflowConfig,
+  landsInColumn,
   learnedToVendorMappings,
   mergeDropSavings,
   resolveSampleRouting,
@@ -422,7 +423,10 @@ export function MappingReviewSection({
   // DBT-202: the unmapped column whose suggestion panel is open (one at a
   // time), the "Add a constant" hand-off to a table's enrichment editor, and
   // the last suggestion applied per table (announced, since applying
-  // withdraws the table's approval).
+  // withdraws the table's approval). The note is rendered only while its
+  // claim holds - the table unapproved AND the field still filling the column
+  // - so Approve All, a later edit or another suggestion cannot leave it
+  // saying something the table no longer shows.
   const [suggestFor, setSuggestFor] = useState<{
     logType: string;
     column: string;
@@ -430,7 +434,9 @@ export function MappingReviewSection({
   const [enrichSeeds, setEnrichSeeds] = useState<
     Record<string, { field: string; nonce: number }>
   >({});
-  const [appliedNotes, setAppliedNotes] = useState<Record<string, string>>({});
+  const [appliedNotes, setAppliedNotes] = useState<
+    Record<string, { source: string; column: string; withdrew: boolean }>
+  >({});
 
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
@@ -927,7 +933,12 @@ export function MappingReviewSection({
   // dropped is otherwise still "its" drop, and switching the policy back to
   // preserve would restore it to overflow on top of the reviewer's choice.
   const applySuggestion = useCallback(
-    (report: GapReport, sourceField: string, column: string) => {
+    (
+      report: GapReport,
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+    ) => {
       autoDroppedRef.current.delete(`${report.logType}|${sourceField}`);
       dispatch({
         type: "apply-suggestion",
@@ -941,7 +952,11 @@ export function MappingReviewSection({
       setSuggestFor(null);
       setAppliedNotes((prev) => ({
         ...prev,
-        [report.logType]: `${sourceField} now fills ${column}. Approve ${report.logType} again to save it as a learned mapping.`,
+        [report.logType]: {
+          source: sourceField,
+          column,
+          withdrew: wasApproved,
+        },
       }));
     },
     [],
@@ -1608,7 +1623,7 @@ export function MappingReviewSection({
                                 solutionName,
                               )}
                               onApply={(source) =>
-                                applySuggestion(report, source, d.name)
+                                applySuggestion(report, source, d.name, approved)
                               }
                               onAddConstant={() => {
                                 setSuggestFor(null);
@@ -1630,11 +1645,29 @@ export function MappingReviewSection({
                   </table>
                 </div>
 
-                {appliedNotes[report.logType] !== undefined && (
-                  <p className="field-hint mapping-suggest-applied" role="status">
-                    {appliedNotes[report.logType]}
-                  </p>
-                )}
+                {(() => {
+                  const note = appliedNotes[report.logType];
+                  if (
+                    note === undefined ||
+                    approved ||
+                    !effective.some(
+                      (m) =>
+                        m.source === note.source &&
+                        landsInColumn(m) &&
+                        m.dest === note.column,
+                    )
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <p className="field-hint mapping-suggest-applied" role="status">
+                      {note.source} now fills {note.column}. Approve{" "}
+                      {report.logType}
+                      {note.withdrew ? " again" : ""} to save it as a learned
+                      mapping.
+                    </p>
+                  );
+                })()}
 
                 <div className="enrich-table-block">
                   <span className="field-label">

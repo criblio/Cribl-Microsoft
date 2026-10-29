@@ -36,7 +36,10 @@ export function UnmappedColumnPanel({
   const openerRef = useRef<Element | null>(null);
 
   useEffect(() => {
-    openerRef.current = document.activeElement;
+    // Record the opener ONCE. StrictMode runs this effect twice on mount, and
+    // by the second run the first has already focused the panel - recording
+    // again would make Dismiss "return" focus to the panel it removes.
+    if (openerRef.current === null) openerRef.current = document.activeElement;
     panelRef.current?.focus();
   }, []);
 

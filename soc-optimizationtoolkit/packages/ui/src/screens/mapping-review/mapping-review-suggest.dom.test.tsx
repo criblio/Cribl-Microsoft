@@ -16,6 +16,7 @@
  * enrichment editor; Escape and Dismiss close the panel.
  */
 
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import {
@@ -64,23 +65,29 @@ async function renderAnalyzed(
   extra: {
     ruleFields?: ReadonlySet<string>;
     contentRequirements?: RequirementsForAssessment;
+    /** Render under StrictMode, as the shipped app does (main.tsx). */
+    strict?: boolean;
   } = {},
 ) {
+  const { strict = false, ...props } = extra;
   let reports: GapReport[] = [];
   let effective: Readonly<Record<string, GapFieldMapping[]>> = {};
-  const { container } = render(
+  const section = (
     <MappingReviewSection
       solutionName=""
       samples={[sample()]}
       catalog={catalog}
-      {...extra}
+      {...props}
       onReportsChange={(next) => {
         reports = next;
       }}
       onEffectiveMappingsChange={(next) => {
         effective = next;
       }}
-    />,
+    />
+  );
+  const { container } = render(
+    strict ? <StrictMode>{section}</StrictMode> : section,
   );
   const button = [...container.querySelectorAll("button")].find((b) =>
     /analyze/i.test(b.textContent ?? ""),
@@ -337,5 +344,40 @@ describe("unmapped column suggestions (DBT-202)", () => {
     fireEvent.click(dismiss);
     expect(panel(container)).toBeNull();
     expect(document.activeElement).toBe(button);
+  });
+
+  it("returns focus to the column under StrictMode, whose effects run twice", async () => {
+    // The shipped app renders in StrictMode: the panel's mount effect runs,
+    // is torn down, and runs again. The second run must not record the panel
+    // (focused by the first run) as the control to return focus to.
+    const { container } = await renderAnalyzed({ strict: true });
+    const button = columnButton(container, "ReceivedBytes");
+    button.focus();
+    fireEvent.click(button);
+    expect(document.activeElement).toBe(panel(container));
+    fireEvent.keyDown(panel(container)!, { key: "Escape" });
+    expect(panel(container)).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("drops the approve note once the table is approved, including by Approve All", async () => {
+    const { container } = await renderAnalyzed();
+    fireEvent.click(columnButton(container, "ReceivedBytes"));
+    fireEvent.click(applyButton(container, "in"));
+    // Never approved, so nothing was withdrawn: no "again".
+    await waitFor(() => {
+      expect(container.querySelector(".mapping-suggest-applied")?.textContent).toBe(
+        "in now fills ReceivedBytes. Approve PanOS to save it as a learned mapping.",
+      );
+    });
+    const approveAll = [
+      ...container.querySelectorAll<HTMLButtonElement>("button.next-action-button"),
+    ].find((b) => /approve/i.test(b.textContent ?? ""));
+    if (approveAll === undefined) throw new Error("no Approve All button");
+    fireEvent.click(approveAll);
+    await waitFor(() => {
+      expect(summary(container)).toContain("Approved");
+    });
+    expect(container.querySelector(".mapping-suggest-applied")).toBeNull();
   });
 });
