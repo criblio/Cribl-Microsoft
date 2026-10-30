@@ -1500,7 +1500,7 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.9 IS CURRENT (2026-10-20).**
+**1.13.0 IS CURRENT (2026-10-30).**
 `release/soc-optimizationtoolkit-1.12.9.tgz` - worker-group pickers that say why
 they are empty (DBT-134), the permission audit's age in the connection bar
 (HON-6), and Sentinel Integration in one line per section (DBT-125). On top of

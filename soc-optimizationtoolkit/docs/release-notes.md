@@ -8,7 +8,7 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
-## Unreleased
+## 1.13.0
 
 **Sentinel Integration folds what you are not using (DBT-232).** When you work in a section - click or tab into it, press Done - next, or use a footer pill - the other open sections fold to their one-line summary. Pinned sections stay open (the Pin button on each header, remembered for you), as do the section waiting for your action and Deploy while it runs. Scrolling never folds anything. Near the top of the page, sections above the one you are in stay open, so it never jumps under the pointer (DBT-234).
 
