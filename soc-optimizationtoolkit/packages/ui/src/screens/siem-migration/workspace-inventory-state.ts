@@ -6,7 +6,7 @@
  * Pure: no IO, no React.
  */
 
-import { listingRows } from "@soc/core";
+import { listingRows, parseResourceId } from "@soc/core";
 import type {
   DiscoveredWorkspace,
   InventorySource,
@@ -35,10 +35,13 @@ export interface SourceLabel {
 export function sourceLabel(source: InventorySource): SourceLabel {
   switch (source.attribution) {
     case "resource": {
-      const segments = source.source.split("/").filter((s) => s !== "");
-      const name = segments[segments.length - 1] ?? source.source;
-      const type = segments.length >= 3 ? segments[segments.length - 2] : "";
-      return { text: name, title: source.source, kind: type || "Azure resource" };
+      // The one ARM id parser (core azure-resource-id), not a second copy.
+      const parsed = parseResourceId(source.source);
+      return {
+        text: parsed.name || source.source,
+        title: source.source,
+        kind: parsed.resourceType || "Azure resource",
+      };
     }
     case "computer":
       return { text: source.source, title: source.source, kind: "Computer" };
@@ -119,7 +122,7 @@ export function inventoryEmptyText(inventory: WorkspaceInventory): string | null
 
 /** A workspace's name from its ARM id (the last path segment). */
 export function workspaceNameOf(id: string): string {
-  return id.split("/").filter((s) => s !== "").pop() ?? id;
+  return parseResourceId(id).name || id;
 }
 
 /**

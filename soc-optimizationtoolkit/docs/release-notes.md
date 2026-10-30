@@ -10,6 +10,16 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**Rule Coverage counts a column per log type (DBT-223).** With more than one
+log type, a column used to count as covered once any one log type filled it,
+so choosing a close match for TRAFFIC cleared the missing-field chip for
+THREAT as well, and a THREAT detection reading that column was reported
+covered. A column now counts as covered only when every log type whose table
+has it fills it. A chip names the log types still missing a field ("ReceivedBytes
+- missing in THREAT"), and its close matches are offered per log type, so each
+log type gets its own choice. Coverage figures can read lower than before: they
+no longer count a column for log types that never carry it.
+
 **SIEM Migration can inventory an existing Sentinel workspace (MIG-1..3).** A
 new panel at the foot of the SIEM Migration screen finds the Log Analytics
 workspaces the connected identity can see across the tenant, marks which have

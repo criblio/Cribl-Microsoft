@@ -71,8 +71,9 @@ export {
 
 /**
  * The AVAILABILITY set fed to the analyzer: the destination fields the mapped
- * pipeline actually produces, derived from the Gap Analysis reports exactly as
- * the legacy `mappedDest` was (SentinelIntegration.tsx 2649-2655):
+ * pipeline actually produces. What ONE log type produces follows the legacy
+ * `mappedDest` rules (SentinelIntegration.tsx 2649-2655); how log types
+ * combine does not - see PER LOG TYPE below:
  *   - a `drop` mapping contributes nothing (the field is discarded);
  *   - an `overflow` mapping contributes BOTH the destination catch-all column
  *     and the source field name (the source survives inside the catch-all);

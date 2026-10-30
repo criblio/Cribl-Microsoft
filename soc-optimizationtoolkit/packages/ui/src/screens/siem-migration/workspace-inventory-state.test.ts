@@ -6,6 +6,7 @@ import {
   inventoryCsv,
   sourceLabel,
   staleInventoryNote,
+  workspaceNameOf,
 } from "./workspace-inventory-state";
 
 function source(partial: Partial<InventorySource>): InventorySource {
@@ -112,5 +113,27 @@ describe("staleInventoryNote (MIG-7)", () => {
       "Showing the inventory of law-a, not the selected workspace. " +
         "Press Inventory this workspace to read law-b.",
     );
+  });
+});
+
+describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", () => {
+  it("names a resource with no providers section by its own name, with no made-up type", () => {
+    const label = sourceLabel(
+      source({ source: "/subscriptions/s/resourceGroups/rg-lab", attribution: "resource" }),
+    );
+    // A hand split used to call this kind "resourceGroups".
+    expect(label).toEqual({
+      text: "rg-lab",
+      title: "/subscriptions/s/resourceGroups/rg-lab",
+      kind: "Azure resource",
+    });
+  });
+
+  it("takes a workspace's name from its ARM id", () => {
+    expect(
+      workspaceNameOf(
+        "/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-1",
+      ),
+    ).toBe("law-1");
   });
 });
