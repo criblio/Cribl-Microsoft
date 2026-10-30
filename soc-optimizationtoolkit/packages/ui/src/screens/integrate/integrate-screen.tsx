@@ -38,9 +38,16 @@
  *      deploy.
  *   7. Select Azure Resources - the AzureTargetingScreen cascade, capability
  *      checkboxes, Sentinel-enabled auto-check, and the operable
- *      RoleAssignmentSection (Unit 8). Additive + non-gating.
+ *      RoleAssignmentSection (Unit 8). Additive + non-gating. On the
+ *      existing-destination path (section 8) none of it renders: the section
+ *      is 'not-needed' and nothing in Azure is read ([[GEN-21]]), from the
+ *      moment the radio is on, before any pick ([[GEN-28]]).
  *   8. Configure Cribl      - Stream-only worker-group select, pack name,
- *      multi-group fan-out, and the pack overwrite check.
+ *      multi-group fan-out, the pack overwrite check, and the Sentinel
+ *      destination radio ([[GEN-21]]): create a new destination (Deploy does)
+ *      or point every detected table at an EXISTING Cribl Sentinel destination
+ *      in the group, which forces the routable pack shape. Offline starts on
+ *      the existing choice.
  *   9. Deploy               - the operable onboard (native + custom _CL
  *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
  *      content path with real DCR values in outputs.yml, gated by the
@@ -49,6 +56,15 @@
  *      saves one .tgz - an ARM deployment template, the assembled pack, and a
  *      README naming the exact deploy scope. It gates on READ prerequisites
  *      only, so it stays available when the deploy button cannot unlock.
+ *      On the existing-destination path ([[GEN-21]]) the run IS the pack: it
+ *      builds and installs the routable pack, creates nothing in Azure and no
+ *      Cribl destination, and asks for no table name or ingestion client id
+ *      (@soc/core deployAzureRequirements, [[GEN-28]]). Export stays disabled
+ *      there - there are no Azure resources to export. In place of source
+ *      wiring, a Source connection block shows the group route to add by
+ *      hand once every table has a confirmed pick - before the pack is
+ *      installed - and warns when the source is QuickConnected, so the route
+ *      would not fire. The app writes no route.
  *
  * The user validated the native-table onboard live end to end; it stays fully
  * operable THROUGH this page. NONE of the standalone Onboard / Azure

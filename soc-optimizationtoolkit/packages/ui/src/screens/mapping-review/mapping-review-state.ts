@@ -610,7 +610,7 @@ export function isRuleField(
 // ---------------------------------------------------------------------------
 
 /** How many candidates the unmapped-column panel lists. */
-export const COLUMN_SUGGESTION_LIMIT = 5;
+const COLUMN_SUGGESTION_LIMIT = 5;
 
 /** One candidate in the unmapped-column panel, ready to render. */
 export interface ColumnSuggestion {

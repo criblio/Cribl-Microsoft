@@ -37,7 +37,9 @@ const audited = (verdicts: CapabilitySet["verdicts"]): CapabilitySet => ({
 
 const ROUTES: NavItemCapabilities[] = [
   { id: "home", requires: [] },
-  { id: "integrate", requires: ["dcr.write", "pack.manage"] },
+  // As in the real table (route-capabilities.ts): GEN-21 moved integrate off
+  // dcr.write, since its existing-destination path writes nothing to Azure.
+  { id: "integrate", requires: ["destination.manage"] },
   { id: "dcr-automation", requires: ["dcr.write"] },
   { id: "packs", requires: ["pack.manage"] },
   { id: "preflight", requires: ["workspace.read"] },
@@ -171,12 +173,15 @@ describe("a denied item still works", () => {
   });
 
   it("reports which capabilities are missing", () => {
+    // A two-capability route, one denied and one granted: only the denied one
+    // is missing. (This used the integrate fixture until DBT-214, back when it
+    // modelled integrate as needing dcr.write and pack.manage.)
     const annotated = annotateNavItems(
-      ROUTES,
+      [{ id: "mixed", requires: ["dcr.write", "pack.manage"] }],
       audited({ "dcr.write": "denied", "pack.manage": "granted" }),
       connected,
     );
-    expect(byId(annotated, "integrate").missing).toEqual(["dcr.write"]);
+    expect(byId(annotated, "mixed").missing).toEqual(["dcr.write"]);
   });
 
   it("admits when a blocked READ has no substitute", () => {
@@ -221,10 +226,14 @@ describe("the worst verdict governs", () => {
 
   it("is available only when EVERY requirement is granted", () => {
     const set = audited({ "dcr.write": "granted" });
-    const annotated = annotateNavItems(ROUTES, set, connected);
+    const annotated = annotateNavItems(
+      [...ROUTES, { id: "mixed", requires: ["dcr.write", "pack.manage"] }],
+      set,
+      connected,
+    );
     expect(byId(annotated, "dcr-automation").availability).toBe("available");
-    // integrate also needs pack.manage, which is unmeasured.
-    expect(byId(annotated, "integrate").availability).toBe("unknown");
+    // mixed also needs pack.manage, which is unmeasured.
+    expect(byId(annotated, "mixed").availability).toBe("unknown");
   });
 
   it("names both sides when both are unreachable", () => {

@@ -15,7 +15,7 @@
  *
  * Two things this module makes HONEST during the MVP transition:
  *
- *   1. All seven sections are BUILT NOW. Azure Resources / Cribl Config / Deploy
+ *   1. All nine sections are BUILT NOW. Azure Resources / Cribl Config / Deploy
  *      are the native-table onboard the user validated live end to end; Sample
  *      Data joined when Unit 11 shipped, Solution when Unit 14 shipped, Gap
  *      Analysis when Unit 18 shipped, and Rule Coverage when Unit 23 shipped.
@@ -60,7 +60,7 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto.
  */
 
-/** The seven numbered sections of the single-page Integrate arc, by id. */
+/** The nine numbered sections of the single-page Integrate arc, by id. */
 export type IntegrateSectionId =
   | "solution"
   | "sample-data"
@@ -418,6 +418,10 @@ function onExistingPath(inputs: SectionInputs): boolean {
  *                 prerequisite; reason names the single unlock condition.
  *   coming-soon - the section's surface has not shipped yet (built === false);
  *                 reason is the honest not-shipped note.
+ *   informational - a read-only diagnostic with nothing to finish.
+ *   not-needed  - the operator's choices made the section unnecessary;
+ *                 reason names what replaced it.
+ * (The last two are documented in full on their members below.)
  */
 export type SectionStatus =
   | "complete"
@@ -442,14 +446,18 @@ export type SectionStatus =
   | "informational"
   /**
    * The section's job is done some other way, so there is nothing to fill in
-   * and nothing to finish: Select Azure Resources when the operator picked an
-   * existing Cribl Sentinel destination ([[GEN-21]]). Not 'complete' - no
+   * and nothing to finish: Select Azure Resources on the existing Cribl
+   * Sentinel destination path ([[GEN-21]]), from the moment that path is
+   * chosen, before any pick ([[GEN-28]]). Not 'complete' - no
    * scope was committed - and not 'informational' - the section is not a
    * diagnostic. Reason names what replaced it.
    */
   | "not-needed";
 
-/** A section's resolved status plus a reason for 'blocked' / 'coming-soon'. */
+/**
+ * A section's resolved status plus a reason for 'blocked' / 'coming-soon' /
+ * 'not-needed'.
+ */
 export interface SectionState {
   status: SectionStatus;
   /**
@@ -619,6 +627,9 @@ function currentSectionId(inputs: SectionInputs): IntegrateSectionId | null {
  *     regardless of inputs (a coming-soon section is never a working teaser).
  *   - informational      -> 'informational', ALWAYS: a read-only diagnostic
  *     has nothing to finish, so it reports no completion either way.
+ *   - not-needed         -> 'not-needed' with what replaced it, ahead of
+ *     completion and gating (Select Azure Resources on the
+ *     existing-destination path; see sectionNotNeeded).
  *   - built + complete   -> 'complete'.
  *   - built + incomplete + gated commit (Deploy only) -> 'blocked' with the
  *     single missing prerequisite.
@@ -663,9 +674,9 @@ export interface ResolvedSection extends SectionState {
 
 /**
  * Resolve every section in page order - the whole-page projection the shell
- * renders. Guarantees (pinned by tests): at most one 'current' across all
- * seven; exactly the not-built sections are 'coming-soon'; the built sections
- * are always navigable (never 'coming-soon').
+ * renders. Guarantees (pinned by tests): at most one 'current' across the
+ * page; exactly the not-built sections are 'coming-soon'; the built sections
+ * are always navigable (never 'coming-soon'), 'not-needed' ones included.
  */
 export function deriveSectionStatuses(
   inputs: SectionInputs,

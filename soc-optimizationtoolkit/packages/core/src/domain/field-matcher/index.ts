@@ -51,7 +51,6 @@ export type {
 } from "./close-matches";
 export {
   closeMatchRowsFromReports,
-  isTypeMismatch,
   nameTokens,
   suggestCloseMatches,
   suggestForDestColumn,

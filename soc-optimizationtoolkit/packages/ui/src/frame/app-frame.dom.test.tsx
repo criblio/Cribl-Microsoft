@@ -23,12 +23,15 @@ afterEach(cleanup);
 
 const ROUTES: AppRoute[] = [
   { id: "home", label: "Setup", requires: [], section: "journey", render: () => <p>home screen</p> },
+  // The one Azure-gated route these pins need. DCR Automation, as in the real
+  // table (route-capabilities.ts); Sentinel Integration stood here with
+  // dcr.write until DBT-214, but it requires destination.manage since GEN-21.
   {
-    id: "integrate",
-    label: "Sentinel Integration",
+    id: "dcr-automation",
+    label: "DCR Automation",
     requires: ["dcr.write"],
     section: "journey",
-    render: () => <p>integrate screen</p>,
+    render: () => <p>dcr automation screen</p>,
   },
   {
     id: "packs",
@@ -71,7 +74,7 @@ describe("the nav never hides a route", () => {
     // The inversion, on screen. Under filterNavItems these two vanished.
     renderFrame(audited({ "dcr.write": "denied", "pack.manage": "denied" }));
     expect(screen.getByText("Setup")).toBeTruthy();
-    expect(screen.getByText("Sentinel Integration")).toBeTruthy();
+    expect(screen.getByText("DCR Automation")).toBeTruthy();
     expect(screen.getByText("Pack Maintenance")).toBeTruthy();
   });
 
@@ -80,7 +83,7 @@ describe("the nav never hides a route", () => {
       azureIdentityPresent: false,
       criblReachable: false,
     });
-    expect(screen.getByText("Sentinel Integration")).toBeTruthy();
+    expect(screen.getByText("DCR Automation")).toBeTruthy();
     expect(screen.getByText("Pack Maintenance")).toBeTruthy();
   });
 });
@@ -89,7 +92,7 @@ describe("annotation wording", () => {
   it("flags a denied route as 'no access' and says why", () => {
     renderFrame(audited({ "dcr.write": "denied" }));
     expect(screen.getByText("no access")).toBeTruthy();
-    const button = screen.getByText("Sentinel Integration").closest("button");
+    const button = screen.getByText("DCR Automation").closest("button");
     expect(button?.getAttribute("title")).toContain("still try");
   });
 
@@ -99,7 +102,7 @@ describe("annotation wording", () => {
     // Both capability-requiring routes are unmeasured; the third needs nothing.
     expect(screen.getAllByText("unchecked")).toHaveLength(2);
     expect(screen.queryByText("no access")).toBeNull();
-    const button = screen.getByText("Sentinel Integration").closest("button");
+    const button = screen.getByText("DCR Automation").closest("button");
     expect(button?.getAttribute("title")).toContain("Not checked yet");
     expect(button?.getAttribute("title")).not.toContain("cannot");
   });
@@ -110,7 +113,7 @@ describe("annotation wording", () => {
       criblReachable: true,
     });
     expect(screen.getByText("not connected")).toBeTruthy();
-    const button = screen.getByText("Sentinel Integration").closest("button");
+    const button = screen.getByText("DCR Automation").closest("button");
     expect(button?.getAttribute("title")).toContain("Connect Azure");
   });
 
@@ -127,8 +130,8 @@ describe("the audit informs, it never forbids", () => {
     // Rule 3 on screen: annotation is not gating, and Azure's own 403 is the
     // real gate. A wrong or stale audit must not cost the operator the attempt.
     renderFrame(audited({ "dcr.write": "denied" }));
-    fireEvent.click(screen.getByText("Sentinel Integration"));
-    expect(screen.getByText("integrate screen")).toBeTruthy();
+    fireEvent.click(screen.getByText("DCR Automation"));
+    expect(screen.getByText("dcr automation screen")).toBeTruthy();
   });
 
   it("opens an unreachable route too", () => {
@@ -160,7 +163,7 @@ describe("degradation", () => {
     render(
       <AppFrame title="Toolkit" routes={ROUTES} initialRouteId="home" />,
     );
-    expect(screen.getByText("Sentinel Integration")).toBeTruthy();
+    expect(screen.getByText("DCR Automation")).toBeTruthy();
     expect(screen.queryByText("no access")).toBeNull();
   });
 });

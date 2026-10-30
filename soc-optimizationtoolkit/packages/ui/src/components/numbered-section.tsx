@@ -55,8 +55,10 @@ export interface NumberedSectionProps {
   /** Point-of-decision help fed to the InfoTip. */
   infoTip: string;
   /**
-   * The single unlock condition (status 'blocked') or the honest not-shipped
-   * note (status 'coming-soon'). Ignored for the other statuses.
+   * The single unlock condition (status 'blocked'), the honest not-shipped
+   * note (status 'coming-soon'), or what replaced the section (status
+   * 'not-needed', shown in its badge; "Not needed" when absent). Ignored for
+   * the other statuses.
    */
   reason?: string;
   /**
