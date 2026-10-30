@@ -901,7 +901,9 @@ export function RuleCoverageSection({
           {ruleCoverageQueuedNote(customCount)}
         </p>
       )}
-      {stale && (
+      {/* Only while a Re-analyze can run: with no reports the note above
+          already says what to do, and the result stays withheld either way. */}
+      {stale && hasReports && (
         <div className="status-bar status-bar-warn" data-coverage-note="stale">
           <span className="status-bar-dot" />
           <span className="status-bar-text">

@@ -75,11 +75,11 @@ const REPORT_B = report("TableB", [
 
 const RULE_KQL = 'TableA | where DeviceAction == "deny" | project SourceIP';
 
-function mount(reports: GapReport[]) {
+function mount(reports: GapReport[], schemas: SchemaCatalog = catalog) {
   const props: RuleCoverageSectionProps = {
     solutionName: "",
     reports,
-    catalog,
+    catalog: schemas,
     contentFilter: "rules",
   };
   const view = render(
@@ -166,6 +166,45 @@ describe("a custom rule uploaded before the gap reports (DBT-212)", () => {
   });
 });
 
+describe("a custom rule uploaded while a run is in flight (DBT-212)", () => {
+  it("is queued behind that run and analyzed when it finishes", async () => {
+    // The first run blocks on its schema lookup until released, so the upload
+    // lands while it is in flight - the run that cannot see the upload.
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slow: SchemaCatalog = {
+      resolveSchema: async () => {
+        await gate;
+        return COLUMNS.map((name) => ({ name, type: "string" }));
+      },
+    };
+    const { container } = mount([REPORT_A], slow);
+    fireEvent.click(runButton(container));
+    await waitFor(() => {
+      expect(runButton(container).textContent).toBe("Analyzing coverage...");
+    });
+    upload(container);
+    await waitFor(() => {
+      expect(container.querySelector(".rule-coverage-controls .field-hint")?.textContent).toBe(
+        "1 custom rule",
+      );
+    });
+    // The reports are here, so the waiting-for-reports note would be false.
+    expect(note(container, "queued")).toBeNull();
+    release();
+
+    await waitFor(() => {
+      expect(
+        [...container.querySelectorAll(".coverage-item-name")].map((n) => n.textContent),
+      ).toEqual(["denyCUSTOM"]);
+    });
+    expect(chips(container)).toEqual(["DeviceAction"]);
+    expect(runButton(container).textContent).toBe("Re-analyze coverage");
+  });
+});
+
 describe("coverage after a new gap analysis changes the tables (DBT-212)", () => {
   it("withholds the old chips behind a Re-analyze to refresh note until re-run", async () => {
     const { container, rerenderWith } = mount([REPORT_A]);
@@ -197,5 +236,28 @@ describe("coverage after a new gap analysis changes the tables (DBT-212)", () =>
     expect(
       [...container.querySelectorAll(".coverage-pct")].map((n) => n.textContent),
     ).toEqual(["100%"]);
+  });
+
+  // With NO reports the stale note would ask for a Re-analyze the disabled
+  // button cannot give ("now none"); the no-reports note already says what to
+  // do, so it speaks alone - and the old result stays withheld.
+  it("says only 'run the gap analysis first' when the reports are gone", async () => {
+    const { container, rerenderWith } = mount([REPORT_A]);
+    upload(container);
+    await waitFor(() => {
+      expect(chips(container)).toEqual(["DeviceAction"]);
+    });
+
+    rerenderWith([]);
+
+    await waitFor(() => {
+      expect(runButton(container).disabled).toBe(true);
+    });
+    expect(note(container, "stale")).toBeNull();
+    expect(container.querySelector(".coverage-sections")).toBeNull();
+    expect(
+      // The note's own text node; its (i) tip renders inside the same <p>.
+      [...container.querySelectorAll("p.field-hint")].map((p) => p.firstChild?.textContent),
+    ).toEqual(["Run the DCR Gap Analysis first."]);
   });
 });
