@@ -3598,19 +3598,20 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-229",
       "type": "story",
       "priority": "now",
       "title": "Gap Analysis: one status line above the log types; vendor identity is a one-line summary with Edit",
-      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (D) four banners then the Enrichment editor open before any log type; (E) a full Vendor identity editor repeated per log type. Build: approval banner stays; destination, learned decisions and unused fields become one status line with (i); Enrichment behind Add enrichment fields; identity as DeviceVendor = X - DeviceProduct = Y - Edit."
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (D) four banners then the Enrichment editor open before any log type; (E) a full Vendor identity editor repeated per log type. Build: approval banner stays; destination, learned decisions and unused fields become one status line with (i); Enrichment behind Add enrichment fields; identity as DeviceVendor = X - DeviceProduct = Y - Edit. DONE 2026-10-30 (pins; live check batched with DBT-228..231). (D) destination, learned decisions and unused fields render in one gap-status-line, each keeping its tip and action (Clear learned mappings, Drop unneeded fields); the destination source moved into an (i); the approval bar is unchanged; Enrichment sits behind Add enrichment fields, opening itself when entries exist. (E) a fully satisfied vendor identity block is one line (Vendor identity: field = value - ... Edit (i)); a missing field shows the full block; Edit keeps the 2026-08-12 every-value-stays-changeable rule - its five pins now press Edit first. New pins for both, mutation-checked (summary removed; enrichment forced open).",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "id": "DBT-230",
       "type": "story",

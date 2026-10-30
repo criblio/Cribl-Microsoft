@@ -8125,3 +8125,20 @@ details[open] > summary::before {
   border-style: dashed;
   border-color: var(--text-faint);
 }
+
+/* DBT-229: the Gap Analysis status line - destination, learned decisions and
+   unused fields side by side, each without its own banner chrome. */
+.gap-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  margin: 4px 0 8px;
+}
+.gap-status-line > .status-bar,
+.gap-status-line > .gap-provenance {
+  margin: 0;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+}

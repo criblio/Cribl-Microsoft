@@ -1148,17 +1148,6 @@ export function MappingReviewSection({
 
       {analyzeError !== "" && <pre className="result">{analyzeError}</pre>}
 
-      {resolution !== null && (
-        <div
-          className={`gap-provenance${provenanceDefault ? " gap-provenance-default" : ""}`}
-        >
-          <span className="gap-provenance-label">Destination: </span>
-          <span className="gap-provenance-tables">
-            {resolution.tables.join(", ")}
-          </span>
-          <span className="gap-provenance-source"> - {resolution.source}</span>
-        </div>
-      )}
 
       {solutionName.trim() === "" && (
         <div className="status-bar status-bar-warn">
@@ -1195,6 +1184,21 @@ export function MappingReviewSection({
         </p>
       )}
 
+      {/* DBT-229: destination, learned decisions and unused fields are one
+          status line - each keeps its tip and its action - rather than three
+          stacked banners above the approval bar. */}
+      <div className="gap-status-line">
+      {resolution !== null && (
+        <div
+          className={`gap-provenance${provenanceDefault ? " gap-provenance-default" : ""}`}
+        >
+          <span className="gap-provenance-label">Destination: </span>
+          <span className="gap-provenance-tables">
+            {resolution.tables.join(", ")}
+          </span>
+          <InfoTip text={`How the destination was chosen: ${resolution.source}`} />
+        </div>
+      )}
       {learned.length > 0 && (
         <div className="status-bar learned-mappings-bar">
           <span className="status-bar-dot" />
@@ -1256,6 +1260,7 @@ export function MappingReviewSection({
             </div>
           );
         })()}
+      </div>
 
       {gate.stale && reports.length > 0 && (
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>
@@ -1325,6 +1330,11 @@ export function MappingReviewSection({
       )}
 
       {reports.length > 0 && (
+        <details
+          className="gap-handles gap-enrichment-details"
+          open={globalEnrichments.length > 0 || undefined}
+        >
+          <summary>Add enrichment fields (constants added to every table)</summary>
         <div className="discovery-result">
           <span className="field-label">
             Enrichment fields (added to every table)
@@ -1336,6 +1346,7 @@ export function MappingReviewSection({
             onRemove={(field) => removeEnrichment(null, field)}
           />
         </div>
+        </details>
       )}
 
       {reports.map((report) => {

@@ -36,6 +36,10 @@ function renderBlock(statuses: IdentityFieldStatus[], onAdd = vi.fn(() => true))
       onAdd={onAdd}
     />,
   );
+  // DBT-229: a fully satisfied block starts as a one-line summary; Edit opens
+  // the editor these pins exercise. A block with a MISSING field opens itself.
+  const edit = screen.queryByRole("button", { name: "Edit" });
+  if (edit !== null) fireEvent.click(edit);
   return onAdd;
 }
 
@@ -109,5 +113,40 @@ describe("IdentityBlock - a set value stays changeable", () => {
     expect(onAdd).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "NSSWeblog" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "NSSFWlog" })).toBeTruthy();
+  });
+});
+
+describe("IdentityBlock - one line until edited (DBT-229)", () => {
+  it("summarises a satisfied block and opens the editor on Edit", () => {
+    const { container } = render(
+      <IdentityBlock
+        tableName="CommonSecurityLog"
+        statuses={[
+          { field: "DeviceVendor", status: "sample", value: "Palo Alto Networks" },
+          { field: "DeviceProduct", status: "enrichment", value: "PAN-OS" },
+        ]}
+        identity={ZSCALER}
+        onAdd={vi.fn(() => true)}
+      />,
+    );
+    expect(container.querySelector(".identity-block-summary")?.textContent).toMatch(
+      /^Vendor identity: DeviceVendor = Palo Alto Networks - DeviceProduct = PAN-OS/,
+    );
+    expect(container.querySelector("input")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(container.querySelectorAll("input")).toHaveLength(2);
+  });
+
+  it("shows the full block straight away when a field is missing", () => {
+    const { container } = render(
+      <IdentityBlock
+        tableName="CommonSecurityLog"
+        statuses={[{ field: "DeviceProduct", status: "missing" }]}
+        identity={ZSCALER}
+        onAdd={vi.fn(() => true)}
+      />,
+    );
+    expect(container.querySelector(".identity-block-summary")).toBeNull();
+    expect(container.querySelector(".identity-missing-hint")).not.toBeNull();
   });
 });

@@ -132,3 +132,17 @@ describe("mapping review - remove one log type (DBT-143)", () => {
     ).toBe(0);
   });
 });
+
+describe("mapping review - one status line, enrichment on request (DBT-229)", () => {
+  it("puts destination and unused fields in one status line and keeps enrichment closed", async () => {
+    const { container } = await analyzedAndApproved();
+    const line = container.querySelector(".gap-status-line");
+    expect(line).not.toBeNull();
+    // The destination and the unused-fields policy are IN the line, not stacked above it.
+    expect(line!.querySelector(".gap-provenance")).not.toBeNull();
+    expect(line!.querySelector(".unused-policy-bar")).not.toBeNull();
+    const enrichment = container.querySelector("details.gap-enrichment-details") as HTMLDetailsElement;
+    expect(enrichment).not.toBeNull();
+    expect(enrichment.open).toBe(false);
+  });
+});

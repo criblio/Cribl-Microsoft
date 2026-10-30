@@ -28,6 +28,27 @@ export function IdentityBlock({
   onAdd: (field: string, value: string) => boolean;
 }) {
   const missing = statuses.filter((s) => s.status === "missing");
+  // DBT-229: when every required field is satisfied the block is one line -
+  // the values and an Edit - instead of the full editor repeated per log type.
+  // A MISSING field always shows the full block: it gates the build. Edit
+  // keeps the 2026-08-12 rule that every value stays changeable.
+  const [editing, setEditing] = useState(false);
+  if (missing.length === 0 && !editing) {
+    return (
+      <div className="identity-block identity-block-summary">
+        <span className="field-hint">
+          Vendor identity:{" "}
+          {statuses
+            .map((st) => `${st.field} = ${st.value ?? "(from sample)"}`)
+            .join(" - ")}{" "}
+          <InfoTip text="The fields Sentinel content filters this table on, and how each is satisfied - from the sample or as a constant the pipeline adds. Edit to change a value." />
+        </span>{" "}
+        <button type="button" className="link-button" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+      </div>
+    );
+  }
   return (
     <div
       className={`identity-block${missing.length > 0 ? " identity-block-missing" : ""}`}

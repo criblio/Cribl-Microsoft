@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**92 in the backlog, 38 in progress, 126 done.**
+**91 in the backlog, 38 in progress, 127 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 53 | 70 | 27 |
+| Sentinel Integration | 52 | 71 | 26 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 129.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 53% (78/148)
+### `DBT` Quality and technical debt _(enabler)_ - 53% (79/148)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 31/42 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 32/42 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -1068,22 +1068,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **DBT-229** Gap Analysis: one status line above the log types; vendor identity is a one-line summary with Edit
+- **DBT-230** Select Azure Resources: Create what is missing waits; Always-on facts and the early role step fold away
   `DBT-F2` `story` `settled`
   AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
   TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
   states that appear only after an action. Operator chose to build it. Rule
   kept from DBT-224..227: warnings and gate reasons stay visible; anything
-  collapsed opens itself when it needs action. (D) four banners then the
-  Enrichment editor open before any log type; (E) a full Vendor identity
-  editor repeated per log type. Build: approval banner stays; destination,
-  learned decisions and unused fields become one status line with (i);
-  Enrichment behind Add enrichment fields; identity as DeviceVendor = X -
-  DeviceProduct = Y - Edit.
+  collapsed opens itself when it needs action. (F) the Create what is missing
+  form shows with everything already selected; (G) Always on rows are facts
+  not choices, and the role-assignment controls show while saying Deploy a DCR
+  first. Build: create form behind Create a new resource group or workspace;
+  Always-on facts into the capabilities (i); role assignment one line until a
+  DCR exists.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1291,19 +1291,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **DBT-230** Select Azure Resources: Create what is missing waits; Always-on facts and the early role step fold away
-  `DBT-F2` `story` `settled`
-  AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
-  TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
-  states that appear only after an action. Operator chose to build it. Rule
-  kept from DBT-224..227: warnings and gate reasons stay visible; anything
-  collapsed opens itself when it needs action. (F) the Create what is missing
-  form shows with everything already selected; (G) Always on rows are facts
-  not choices, and the role-assignment controls show while saying Deploy a DCR
-  first. Build: create form behind Create a new resource group or workspace;
-  Always-on facts into the capabilities (i); role assignment one line until a
-  DCR exists.
 
 - **DBT-231** Deploy: prefilled table, client id and secret as one summary line with Change
   `DBT-F2` `story` `settled`
@@ -2447,7 +2434,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (126)
+## Done (127)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6272,3 +6259,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   earlier filter is visible and the operator's position is annotated beside
   its pin rather than silently contradicted. Mutation-checked: forcing the
   filter open fails the new pin.
+
+- **DBT-229** Gap Analysis: one status line above the log types; vendor identity is a one-line summary with Edit
+  `DBT-F2` `story` `settled` `verified: pins`
+  AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
+  TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
+  states that appear only after an action. Operator chose to build it. Rule
+  kept from DBT-224..227: warnings and gate reasons stay visible; anything
+  collapsed opens itself when it needs action. (D) four banners then the
+  Enrichment editor open before any log type; (E) a full Vendor identity
+  editor repeated per log type. Build: approval banner stays; destination,
+  learned decisions and unused fields become one status line with (i);
+  Enrichment behind Add enrichment fields; identity as DeviceVendor = X -
+  DeviceProduct = Y - Edit. DONE 2026-10-30 (pins; live check batched with
+  DBT-228..231). (D) destination, learned decisions and unused fields render
+  in one gap-status-line, each keeping its tip and action (Clear learned
+  mappings, Drop unneeded fields); the destination source moved into an (i);
+  the approval bar is unchanged; Enrichment sits behind Add enrichment fields,
+  opening itself when entries exist. (E) a fully satisfied vendor identity
+  block is one line (Vendor identity: field = value - ... Edit (i)); a missing
+  field shows the full block; Edit keeps the 2026-08-12
+  every-value-stays-changeable rule - its five pins now press Edit first. New
+  pins for both, mutation-checked (summary removed; enrichment forced open).
