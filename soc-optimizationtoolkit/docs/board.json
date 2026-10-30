@@ -3514,6 +3514,19 @@
         "chosen": "per-log-type"
       },
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-9",
+      "type": "enabler",
+      "priority": "now",
+      "title": "The inventory panel parsed ARM ids by hand beside core parseResourceId",
+      "detail": "FOUND 2026-10-30 by the architecture audit, in 8ed1d43 and a230f02: workspaceNameOf and the resource branch of sourceLabel split ARM ids themselves, while core azure-resource-id owns that parse. They disagreed on an id with no providers section (a bare resource group read as kind resourceGroups). No live effect seen - the _ResourceId values measured all carry providers - but it is the second-copy shape the audit exists to catch. Filed AFTER the fix, in breach of board rule 2; recorded here so the card exists.\n\nDONE 2026-10-30 (pins, 94ecb87): both now call parseResourceId; workspace-inventory-state.test.ts pins the bare resource-group case (fails on the hand split by construction) and the workspace-name case.",
+      "verified": "pins"
     }
   ],
   "features": [

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 38 in progress, 119 done.**
+**90 in the backlog, 38 in progress, 120 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| SIEM Migration | 1 | 7 | 1 |
+| SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -135,13 +135,13 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 88% (7/8)
+### `MIG` SIEM migration analysis - 89% (8/9)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 7/8 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8 |
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 
 ---
 
@@ -2435,7 +2435,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (119)
+## Done (120)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6080,3 +6080,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   DECISION: How should Rule Coverage scope a column to log types?
     [x] `per-log-type` Per log type - A column is covered only in the log types whose mappings fill it. The missing-field chip names the log types still missing it (SourceUserID - missing in THREAT), and the close-match panel lists candidates per log type, each with its own Apply. Simple and exact about mappings, but a column a rule never needs from THREAT still shows as missing there.
     [ ] `per-rule` Per rule - Each rule only needs the column from the log types its detections target (the needs list already attributes detections: THREAT - Activity - 3). Most accurate coverage figure, but depends on that attribution being right for every rule, and rules that do not filter by log type fall back to needing all.
+
+- **MIG-9** The inventory panel parsed ARM ids by hand beside core parseResourceId
+  `MIG-F1` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-30 by the architecture audit, in 8ed1d43 and a230f02:
+  workspaceNameOf and the resource branch of sourceLabel split ARM ids
+  themselves, while core azure-resource-id owns that parse. They disagreed on
+  an id with no providers section (a bare resource group read as kind
+  resourceGroups). No live effect seen - the _ResourceId values measured all
+  carry providers - but it is the second-copy shape the audit exists to catch.
+  Filed AFTER the fix, in breach of board rule 2; recorded here so the card
+  exists. DONE 2026-10-30 (pins, 94ecb87): both now call parseResourceId;
+  workspace-inventory-state.test.ts pins the bare resource-group case (fails
+  on the hand split by construction) and the workspace-name case.
