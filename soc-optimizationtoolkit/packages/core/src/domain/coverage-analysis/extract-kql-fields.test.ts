@@ -147,6 +147,154 @@ describe("KQL Field Extraction (re-pointed at the real impl)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DBT-215: EVERY operand of a where predicate, not just the first token after
+// `where`. The legacy pattern read `where A > 1 and B == "x"` as referencing A
+// alone, so a rule needing B read as satisfied when B was missing. Exact lists
+// (toEqual), because a stray extra or a dropped operand is the whole defect.
+// Single-letter names are filtered by the extractor (length > 1), so the
+// card's `A`/`B` shape is written with real column names.
+// ---------------------------------------------------------------------------
+describe("where-predicate operands (DBT-215)", () => {
+  it("reads both sides of `and`: where A > 1 and B == \"x\"", () => {
+    expect(
+      extractKqlFields('T | where EventCount > 1 and DeviceAction == "x"'),
+    ).toEqual(["DeviceAction", "EventCount"]);
+  });
+
+  it("reads every operand through nested parentheses and `or`", () => {
+    expect(
+      extractKqlFields(
+        'T | where (SrcIp == "1" or (DstIp != "2" and DstPort in (80, 443))) | project Action',
+      ),
+    ).toEqual(["Action", "DstIp", "DstPort", "SrcIp"]);
+  });
+
+  it("reads inside not(), and drops the function name around an operand", () => {
+    expect(
+      extractKqlFields(
+        'T | where not(UserName has "svc") and isnotempty(ProcessName)',
+      ),
+    ).toEqual(["ProcessName", "UserName"]);
+  });
+
+  it("covers the comparison and string operators, both sides of a column compare", () => {
+    expect(
+      extractKqlFields(
+        [
+          "T",
+          '| where Url contains "x" or Path startswith "/a" or Agent endswith "b"',
+          '    or Method =~ "get" or Verb !~ "post" or Status >= 400',
+          "    or Bytes <= 0 or Port < 1024 or Retries > 2",
+          '    or Host !contains "z" or Tag in~ ("a") or Zone !in ("b")',
+          '    or Act has_any ("c") or Msg matches regex "d" or Level between (1 .. 3)',
+          "    or SentBytes == ReceivedBytes",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "Act",
+      "Agent",
+      "Bytes",
+      "Host",
+      "Level",
+      "Method",
+      "Msg",
+      "Path",
+      "Port",
+      "ReceivedBytes",
+      "Retries",
+      "SentBytes",
+      "Status",
+      "Tag",
+      "Url",
+      "Verb",
+      "Zone",
+    ]);
+  });
+
+  it("excludes string, number and time literals and every function name", () => {
+    expect(
+      extractKqlFields(
+        'T | where Status == "Failed" and strlen(CommandLine) > 100 and Ts > ago(1d) and ipv6_is_match(SrcIpv6, "::1")',
+      ),
+    ).toEqual(["CommandLine", "SrcIpv6", "Status", "Ts"]);
+  });
+
+  it("takes the column, not the property, of a dotted access", () => {
+    expect(
+      extractKqlFields('T | where AdditionalFields.Foo == "x" and tostring(Props.Bar) == "y"'),
+    ).toEqual(["AdditionalFields", "Props"]);
+  });
+
+  it("still excludes let/extend names used as operands", () => {
+    expect(
+      extractKqlFields(
+        'let threshold = 5; T | extend Ratio = SentBytes / 2 | where Ratio > threshold and DeviceName == "x"',
+      ),
+    ).toEqual(["DeviceName"]);
+  });
+
+  // Reading every operand reaches the computed columns AFTER the first one an
+  // operator creates. The legacy detection took only the first assignment of
+  // an extend or summarize, which the first-token where never got past, so
+  // these used to be invisible; now they would be reported as missing
+  // destination fields unless every assignment counts as computed.
+  // A comparison inside the assignment (`DeviceName ==`) is not an assignment.
+  it("excludes every column an extend creates, not only the first", () => {
+    expect(
+      extractKqlFields(
+        'T | extend AcctName = tostring(Upn), HostLabel = iff(DeviceName == "z", Dev, "") | where AcctName has "x" and HostLabel != "" and DeviceName == "y"',
+      ),
+    ).toEqual(["DeviceName"]);
+  });
+
+  it("excludes every column a summarize creates, not only the first", () => {
+    expect(
+      extractKqlFields(
+        "T | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Total = count() by DeviceHost | where Total > 5 and EndTime > StartTime",
+      ),
+    ).toEqual(["DeviceHost"]);
+  });
+
+  it("excludes the columns a project-rename, mv-expand or parse creates", () => {
+    expect(
+      extractKqlFields(
+        [
+          "T",
+          "| project-rename SrcName = SourceName, DstName = DestName",
+          "| mv-expand Entry = Entries",
+          '| parse SyslogMessage with * "src=" SrcAddr " user=" UserText:string " " *',
+          '| where SrcName == "a" and DstName == "b" and Entry != "" and SrcAddr != "" and UserText != "" and Proto == "c"',
+        ].join("\n"),
+      ),
+    ).toEqual(["Proto"]);
+  });
+
+  it("stops at the pipe, and reads a where inside a join subquery", () => {
+    expect(
+      extractKqlFields(
+        'T | where Alpha == 1 | summarize count() by Beta | join (S | where Gamma == "x") on Delta',
+      ),
+    ).toEqual(["Alpha", "Beta", "Delta", "Gamma"]);
+  });
+
+  it("reads past a parenthesized subquery, without taking its table for a column", () => {
+    expect(
+      extractKqlFields(
+        "T | where Alpha in ((Syslog | where Gamma == 1 | project Gamma)) and Beta > 0",
+      ),
+    ).toEqual(["Alpha", "Beta", "Gamma"]);
+  });
+
+  it("ends a subquery's predicate at the paren that closes it", () => {
+    expect(
+      extractKqlFields(
+        "union (Syslog | where Gamma == 1 and Epsilon == 2), Heartbeat",
+      ),
+    ).toEqual(["Epsilon", "Gamma"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The pinned difference: the FULL set excludes more builtins than the reduced
 // inline copy. All seven original vectors are IDENTICAL under both sets (none
 // reference an extra builtin), but a query referencing a builtin present ONLY

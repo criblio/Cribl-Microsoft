@@ -96,7 +96,8 @@ async function renderCovered() {
   // The FIRST coverage panel is the rules instance (section 4).
   const rules = container.querySelector<HTMLElement>(".rule-coverage")!;
   // The reports reach coverage one render after the table appears; an upload
-  // before that analyzes nothing (the section blocks without reports).
+  // before that is queued until they arrive (DBT-212). Waiting keeps this flow
+  // on the direct run path, which is the one under test here.
   await waitFor(() => {
     expect(
       rules.querySelector<HTMLButtonElement>(".rule-coverage-controls .run-button")
