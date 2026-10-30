@@ -3331,7 +3331,7 @@
       "detail": "FOUND 2026-10-30 by the priority-now bug review (wf_f7edac02-12e). After DBT-204 a different-suffix column scores 68 and a same-suffix or no-suffix column scores 70, so deviceWidgetName against [Widget, WidgetName] ties and column order decides. Order same-suffix > no-suffix > different-suffix. Also re-check the side effects DBT-204 caused, which have no pins of their own: CrowdStrike_Additional_Events_CL severity_id now maps to Severity (was SeverityName); CommonSecurityLog user_name/src_user_name now map to *UserName (were *UserID); the ASim tables' username/app_name/processName now map to *Name columns."
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3340,10 +3340,11 @@
       "feature": "GEN-F1",
       "type": "bug",
       "title": "The CEF vendor/product override is written as bare text, not a JS string literal",
-      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). buildCefIdentityOverrideFn (pipeline-conf.ts) emits value: \"${JSON.stringify(v).slice(1,-1).replace(/\"/g, ...)}\": the slice strips the JS quotes, so DeviceVendor \"Palo Alto Networks\" becomes the Eval expression Palo Alto Networks, which does not parse; a value containing \" produces malformed YAML. Its own doc says values are quoted JS literals. The pins only check toContain, which the YAML quotes satisfy. Predates the F1/F2 work (47d088f). Fix: escapeYamlFilter(JSON.stringify(v)); pin with a YAML read-back that evaluates to the original value."
+      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). buildCefIdentityOverrideFn (pipeline-conf.ts) emits value: \"${JSON.stringify(v).slice(1,-1).replace(/\"/g, ...)}\": the slice strips the JS quotes, so DeviceVendor \"Palo Alto Networks\" becomes the Eval expression Palo Alto Networks, which does not parse; a value containing \" produces malformed YAML. Its own doc says values are quoted JS literals. The pins only check toContain, which the YAML quotes satisfy. Predates the F1/F2 work (47d088f). Fix: escapeYamlFilter(JSON.stringify(v)); pin with a YAML read-back that evaluates to the original value.\n\nDONE 2026-10-30: buildCefIdentityOverrideFn now writes escapeYamlFilter(JSON.stringify(value)), so the Eval value is a quoted JS literal inside a valid YAML scalar. Pinned in pipeline-conf.test.ts: five values (spaces, a double quote, an apostrophe, a backslash, a hyphen) are read back with a strict YAML double-quoted reader and evaluated; each must equal JSON.stringify(value) and evaluate to the original. All five failed on the old line (the mutation). The reader moved from coercion-expr.test.ts to the test-only yaml-double-quoted.test-util.ts. Not verified in Cribl.",
+      "verified": "pins"
     },
     {
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3352,7 +3353,8 @@
       "feature": "GEN-F1",
       "type": "enabler",
       "title": "Architecture audit r8 maintenance: one remap-acceptance rule, a GEN-25 screen pin, stale comments, over-wide exports",
-      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). (1) reviewerRemap and the DBT-210 replayEdit write the remap-acceptance rule twice; share one predicate. (2) The GEN-25 integrate-screen wiring (routable flag, definitionDestinationFields) has no pin that can fail; move the option choice into a pure helper in build-destinations.ts and pin it. (3) extract-kql-fields WHERE_OPERATOR_WORDS doc says other patterns are unchanged, but the filter applies to every pattern; scope it to where operands. (4) rule-coverage-section header misdescribes a clear with no reports. (5) COLUMN_ACTIONS and rebaseEdits are exported with no outside consumer."
+      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). (1) reviewerRemap and the DBT-210 replayEdit write the remap-acceptance rule twice; share one predicate. (2) The GEN-25 integrate-screen wiring (routable flag, definitionDestinationFields) has no pin that can fail; move the option choice into a pure helper in build-destinations.ts and pin it. (3) extract-kql-fields WHERE_OPERATOR_WORDS doc says other patterns are unchanged, but the filter applies to every pattern; scope it to where operands. (4) rule-coverage-section header misdescribes a clear with no reports. (5) COLUMN_ACTIONS and rebaseEdits are exported with no outside consumer.\n\nDONE 2026-10-30: remapAccepted/remapChanged give reviewerRemap, the DBT-210 replay and destClaim one rule. buildDestinationPath (build-destinations.ts) makes the build callback's existing/routable choice pure; pinned for native, existing, unpicked and shapeless plans, and two mutants (routable always false, inverted inventory test) fail it. extract-kql-fields applies the where-only operator words to where operands only, pinned by project Regex (fails on the old code) and a has_cs predicate (fails with the filter removed). The Rule Coverage header is corrected; COLUMN_ACTIONS and rebaseEdits are no longer exported.",
+      "verified": "pins"
     }
   ],
   "features": [

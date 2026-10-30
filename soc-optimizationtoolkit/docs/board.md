@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**89 in the backlog, 40 in progress, 108 done.**
+**89 in the backlog, 38 in progress, 110 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 53 | 60 | 27 |
+| Sentinel Integration | 51 | 62 | 25 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -39,7 +39,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 129.
+Open work totals 127.
 
 ## Epics and features
 
@@ -81,13 +81,13 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 3/4 | HON-6, D-1, DBT-137, DBT-139 |
 
-### `GEN` Pipeline and pack generation - 56% (15/27)
+### `GEN` Pipeline and pack generation - 63% (17/27)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 15/27 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18, GEN-19, GEN-20, GEN-21, GEN-22, GEN-23, GEN-24, GEN-25, GEN-26, GEN-27, GEN-28, GEN-29, GEN-30, GEN-31, GEN-32, GEN-33, GEN-34, GEN-35 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 17/27 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18, GEN-19, GEN-20, GEN-21, GEN-22, GEN-23, GEN-24, GEN-25, GEN-26, GEN-27, GEN-28, GEN-29, GEN-30, GEN-31, GEN-32, GEN-33, GEN-34, GEN-35 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (40)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1083,31 +1083,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   api-version 2023-04-01 and return full ids. Second, a Send-only rule named
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
-
-- **GEN-34** The CEF vendor/product override is written as bare text, not a JS string literal
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5).
-  buildCefIdentityOverrideFn (pipeline-conf.ts) emits value:
-  "${JSON.stringify(v).slice(1,-1).replace(/"/g, ...)}": the slice strips the
-  JS quotes, so DeviceVendor "Palo Alto Networks" becomes the Eval expression
-  Palo Alto Networks, which does not parse; a value containing " produces
-  malformed YAML. Its own doc says values are quoted JS literals. The pins
-  only check toContain, which the YAML quotes satisfy. Predates the F1/F2 work
-  (47d088f). Fix: escapeYamlFilter(JSON.stringify(v)); pin with a YAML
-  read-back that evaluates to the original value.
-
-- **GEN-35** Architecture audit r8 maintenance: one remap-acceptance rule, a GEN-25 screen pin, stale comments, over-wide exports
-  `GEN-F1` `enabler` `settled`
-  FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). (1)
-  reviewerRemap and the DBT-210 replayEdit write the remap-acceptance rule
-  twice; share one predicate. (2) The GEN-25 integrate-screen wiring (routable
-  flag, definitionDestinationFields) has no pin that can fail; move the option
-  choice into a pure helper in build-destinations.ts and pin it. (3)
-  extract-kql-fields WHERE_OPERATOR_WORDS doc says other patterns are
-  unchanged, but the filter applies to every pattern; scope it to where
-  operands. (4) rule-coverage-section header misdescribes a clear with no
-  reports. (5) COLUMN_ACTIONS and rebaseEdits are exported with no outside
-  consumer.
 
 ---
 
@@ -2438,7 +2413,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (108)
+## Done (110)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5809,3 +5784,44 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   expression, and the accessor refusal must be the only issue reported. The
   implementer killed 6 mutants and the reviewer independently killed 5 more.
   Not checked in a live Cribl instance.
+
+- **GEN-34** The CEF vendor/product override is written as bare text, not a JS string literal
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5).
+  buildCefIdentityOverrideFn (pipeline-conf.ts) emits value:
+  "${JSON.stringify(v).slice(1,-1).replace(/"/g, ...)}": the slice strips the
+  JS quotes, so DeviceVendor "Palo Alto Networks" becomes the Eval expression
+  Palo Alto Networks, which does not parse; a value containing " produces
+  malformed YAML. Its own doc says values are quoted JS literals. The pins
+  only check toContain, which the YAML quotes satisfy. Predates the F1/F2 work
+  (47d088f). Fix: escapeYamlFilter(JSON.stringify(v)); pin with a YAML
+  read-back that evaluates to the original value. DONE 2026-10-30:
+  buildCefIdentityOverrideFn now writes
+  escapeYamlFilter(JSON.stringify(value)), so the Eval value is a quoted JS
+  literal inside a valid YAML scalar. Pinned in pipeline-conf.test.ts: five
+  values (spaces, a double quote, an apostrophe, a backslash, a hyphen) are
+  read back with a strict YAML double-quoted reader and evaluated; each must
+  equal JSON.stringify(value) and evaluate to the original. All five failed on
+  the old line (the mutation). The reader moved from coercion-expr.test.ts to
+  the test-only yaml-double-quoted.test-util.ts. Not verified in Cribl.
+
+- **GEN-35** Architecture audit r8 maintenance: one remap-acceptance rule, a GEN-25 screen pin, stale comments, over-wide exports
+  `GEN-F1` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). (1)
+  reviewerRemap and the DBT-210 replayEdit write the remap-acceptance rule
+  twice; share one predicate. (2) The GEN-25 integrate-screen wiring (routable
+  flag, definitionDestinationFields) has no pin that can fail; move the option
+  choice into a pure helper in build-destinations.ts and pin it. (3)
+  extract-kql-fields WHERE_OPERATOR_WORDS doc says other patterns are
+  unchanged, but the filter applies to every pattern; scope it to where
+  operands. (4) rule-coverage-section header misdescribes a clear with no
+  reports. (5) COLUMN_ACTIONS and rebaseEdits are exported with no outside
+  consumer. DONE 2026-10-30: remapAccepted/remapChanged give reviewerRemap,
+  the DBT-210 replay and destClaim one rule. buildDestinationPath
+  (build-destinations.ts) makes the build callback's existing/routable choice
+  pure; pinned for native, existing, unpicked and shapeless plans, and two
+  mutants (routable always false, inverted inventory test) fail it.
+  extract-kql-fields applies the where-only operator words to where operands
+  only, pinned by project Regex (fails on the old code) and a has_cs predicate
+  (fails with the filter removed). The Rule Coverage header is corrected;
+  COLUMN_ACTIONS and rebaseEdits are no longer exported.
