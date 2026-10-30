@@ -3318,14 +3318,11 @@ button.readiness-pill:focus-visible {
 }
 
 /* SIEM Migration: existing workspace inventory (MIG-3). */
-.siem-inventory-select {
-  font-size: 12px;
-  padding: 3px 6px;
-  min-width: 320px;
-  max-width: 100%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-strong);
+/* MIG-8: holds the SearchableSelect, which fills its container. */
+.siem-inventory-picker {
+  flex: 1 1 420px;
+  min-width: 280px;
+  max-width: 720px;
 }
 
 .siem-inventory-table-wrap {

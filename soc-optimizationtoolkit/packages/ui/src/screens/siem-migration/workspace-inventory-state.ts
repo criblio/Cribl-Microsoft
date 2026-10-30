@@ -14,6 +14,7 @@ import type {
   WorkspaceDiscovery,
   WorkspaceInventory,
 } from "@soc/core";
+import type { SelectOption } from "../../components/searchable-select";
 
 /** Decimal units, matching Usage's MB (10^6 bytes) and the Azure portal. */
 export function formatMB(mb: number): string {
@@ -60,14 +61,24 @@ export function sourceLabel(source: InventorySource): SourceLabel {
   }
 }
 
-export function workspaceOptionLabel(ws: DiscoveredWorkspace): string {
+/**
+ * MIG-8: one workspace as a filterable picker option. The filter matches the
+ * label, the hint AND the value, so the ARM id as value makes the resource
+ * group and subscription id searchable too, and the hint adds the
+ * subscription name and Sentinel state.
+ */
+export function workspaceSelectOption(ws: DiscoveredWorkspace): SelectOption {
   const sentinel =
     ws.sentinel === "enabled"
       ? "Sentinel"
       : ws.sentinel === "unknown"
         ? "Sentinel unknown"
         : "Log Analytics only";
-  return `${ws.name} - ${ws.subscriptionName || ws.subscriptionId} / ${ws.resourceGroup} (${sentinel})`;
+  return {
+    value: ws.id,
+    label: ws.name,
+    hint: `${ws.subscriptionName || ws.subscriptionId} / ${ws.resourceGroup} - ${sentinel}`,
+  };
 }
 
 /** The line under the discovery button. Never says "none" for an RBAC-filtered list. */

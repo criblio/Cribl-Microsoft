@@ -75,10 +75,23 @@ function renderPanel(request: ReturnType<typeof armStub>) {
   return ports;
 }
 
+/**
+ * MIG-8: pick a workspace through the filter box - open the picker, type, click
+ * the one remaining option. Throws unless the filter narrowed to exactly one.
+ */
+function pickWorkspace(filter: string) {
+  fireEvent.click(document.querySelector(".searchable-select-control")!);
+  fireEvent.change(screen.getByLabelText("Filter workspaces"), { target: { value: filter } });
+  const options = screen.getAllByRole("option");
+  expect(options).toHaveLength(1);
+  fireEvent.click(options[0]!);
+}
+
 async function discoverAndInventory() {
   fireEvent.click(screen.getByText("Discover workspaces"));
   await screen.findByText(/Found 1 workspace\(s\) across 1 subscription\(s\), 1 with Sentinel/);
-  expect(screen.getByRole("option").textContent).toContain("law-1 - Prod / rg-1 (Sentinel)");
+  // The first workspace is preselected, and the control shows its name.
+  expect(document.querySelector(".searchable-select-control")!.textContent).toBe("law-1");
   fireEvent.click(screen.getByText("Inventory this workspace"));
 }
 
@@ -162,10 +175,10 @@ describe("WorkspaceInventoryPanel - MIG-7", () => {
     renderPanel(armStub(USAGE_OK, usage2));
     fireEvent.click(screen.getByText("Discover workspaces"));
     await screen.findByText(/Found 2 workspace\(s\)/);
-    fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: WS_ID } });
+    pickWorkspace("law-1");
     fireEvent.click(screen.getByText("Inventory this workspace"));
     await screen.findByText("Syslog");
-    fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: WS2_ID } });
+    pickWorkspace("law-2");
   }
 
   it("keeps the shown inventory on a workspace change and says it is NOT the selected one", async () => {
@@ -193,5 +206,30 @@ describe("WorkspaceInventoryPanel - MIG-7", () => {
     await screen.findByText(/law-2: read Usage: HTTP 403/);
     expect(screen.queryByText("Syslog")).toBeNull();
     expect(screen.queryByText("tables with data")).toBeNull();
+  });
+});
+
+describe("WorkspaceInventoryPanel - the workspace filter (MIG-8)", () => {
+  it("narrows by name, resource group, subscription and Sentinel state, and says when nothing matches", async () => {
+    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, []) }, { status: 200, body: table(USAGE_COLS, []) }));
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\)/);
+    fireEvent.click(document.querySelector(".searchable-select-control")!);
+    const filter = screen.getByLabelText("Filter workspaces");
+    const shown = () => screen.queryAllByRole("option").map((o) => o.textContent);
+
+    expect(shown()).toHaveLength(2);
+    // Each option carries subscription, resource group and Sentinel state.
+    expect(shown()[0]).toContain("Prod / rg-1 - Sentinel");
+    fireEvent.change(filter, { target: { value: "law-2" } });
+    expect(shown()).toEqual([expect.stringContaining("law-2")]);
+    // Resource group and subscription match too: both workspaces share them.
+    fireEvent.change(filter, { target: { value: "rg-1" } });
+    expect(shown()).toHaveLength(2);
+    fireEvent.change(filter, { target: { value: "prod" } });
+    expect(shown()).toHaveLength(2);
+    fireEvent.change(filter, { target: { value: "no-such-workspace" } });
+    expect(shown()).toEqual([]);
+    expect(screen.getByText("No matches")).toBeTruthy();
   });
 });

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**76 in the backlog, 54 in progress, 83 done.**
+**76 in the backlog, 53 in progress, 85 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| SIEM Migration | 2 | 5 | 2 |
+| SIEM Migration | 1 | 7 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 129.
 
 ## Epics and features
 
@@ -135,17 +135,17 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 71% (5/7)
+### `MIG` SIEM migration analysis - 88% (7/8)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 5/7 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7 |
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 7/8 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8 |
 
 ---
 
-## In progress (54)
+## In progress (53)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1270,20 +1270,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   routes, and never rewrites the QuickConnect flow. The operator connects the
   destination by hand in live testing: the app must not write the route or
   commit during verification without asking. Out of scope: DBT-37.
-
-- **MIG-7** The inventory panel jumps on workspace change, wraps its source lines, and says nothing after a download
-  `MIG-F1` `bug` `settled`
-  FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1)
-  Picking a different workspace cleared the shown inventory, so the page
-  shrank and scrolled under the pointer - two clicks in the UAT landed on the
-  wrong control because of it. (2) The Sources column is the narrowest in the
-  table, so each source line wraps its event count onto a line of its own. (3)
-  Download inventory CSV saved the file (verified: 618-byte Systest CSV
-  matching the screen) but the panel showed nothing, so an operator cannot
-  tell a save from a dead button. Fix: keep the shown inventory on a selection
-  change and say which workspace it belongs to and that it is not the selected
-  one; give the Sources column a minimum width; name the saved file (or the
-  save error) beside the button.
 
 ---
 
@@ -2463,7 +2449,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (83)
+## Done (85)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5138,3 +5124,41 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   barrel-exports.test.ts asserts both usecases reach the root by identity and
   that twelve internals do not; mutation-checked by re-adding the wholesale
   export, which fails the pin.
+
+- **MIG-7** The inventory panel jumps on workspace change, wraps its source lines, and says nothing after a download
+  `MIG-F1` `bug` `settled` `verified: both`
+  FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1)
+  Picking a different workspace cleared the shown inventory, so the page
+  shrank and scrolled under the pointer - two clicks in the UAT landed on the
+  wrong control because of it. (2) The Sources column is the narrowest in the
+  table, so each source line wraps its event count onto a line of its own. (3)
+  Download inventory CSV saved the file (verified: 618-byte Systest CSV
+  matching the screen) but the panel showed nothing, so an operator cannot
+  tell a save from a dead button. Fix: keep the shown inventory on a selection
+  change and say which workspace it belongs to and that it is not the selected
+  one; give the Sources column a minimum width; name the saved file (or the
+  save error) beside the button. DONE 2026-10-30 (both: 7 new pins, two
+  mutation-checked - re-adding the clear-on-select fails the keep pin,
+  dropping the clear-on-refusal fails the refusal pin; and live in Chrome on
+  /apps/a/__local__ at 8ed1d43): after inventorying law-jpederson-eastus,
+  picking Systest left the panel in place with the warning naming both
+  workspaces; the header reads Inventory of law-jpederson-eastus; Sources
+  lines fit on one line; Download printed Saved
+  law-jpederson-eastus-inventory.csv - the SHOWN inventory, not the selection.
+
+- **MIG-8** The workspace picker needs a filter box, not only a dropdown
+  `MIG-F1` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-10-30 during the MIG-4 UAT: "The workspace selection
+  needs a filter box not just a drop down." With 80 workspaces in one tenant
+  the native select is only navigable by typing a name prefix blind; an
+  operator who knows part of a name, a resource group or a subscription cannot
+  narrow the list. DONE 2026-10-30 (both): the native select is replaced by
+  the app's standard SearchableSelect - a control that opens a bounded popover
+  with a filter box - with each workspace as name, plus subscription /
+  resource group / Sentinel state as the hint and the ARM id as the value, so
+  all of them filter. Pinned in workspace-inventory-panel.dom.test.tsx (name,
+  resource group, subscription name, and No matches); mutation-checked by
+  dropping the hint, which fails the subscription-name case. Live in Chrome on
+  /apps/a/__local__: typing quickstart narrowed 80 workspaces to
+  law-jpederson-cribl and law-jpederson-eastus (a resource-group match),
+  ArrowDown + Enter picked eastus, and the inventory ran as before.

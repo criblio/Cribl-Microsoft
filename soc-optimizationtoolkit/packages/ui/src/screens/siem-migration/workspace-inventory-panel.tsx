@@ -12,11 +12,12 @@
  * tables, against a proxy budget of 100 requests a minute.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { discoverWorkspaces, inventoryWorkspace, listingCount, listingRows } from "@soc/core";
 import type { WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   discoveryHeadline,
   formatMB,
@@ -27,7 +28,7 @@ import {
   sourceLabel,
   staleInventoryNote,
   workspaceNameOf,
-  workspaceOptionLabel,
+  workspaceSelectOption,
 } from "./workspace-inventory-state";
 
 const USAGE_TIP =
@@ -116,6 +117,7 @@ export function WorkspaceInventoryPanel() {
   };
 
   const workspaces = discovery === null ? [] : listingRows(discovery.workspaces);
+  const workspaceOptions = useMemo(() => workspaces.map(workspaceSelectOption), [workspaces]);
   const gaps = inventory === null ? null : sourceGaps(inventory);
   const emptyText = inventory === null ? null : inventoryEmptyText(inventory);
   const staleNote = inventory === null ? null : staleInventoryNote(inventory.workspaceId, selectedId);
@@ -175,25 +177,20 @@ export function WorkspaceInventoryPanel() {
 
       {workspaces.length > 0 && (
         <div className="panel-controls">
-          <label className="field-hint" htmlFor="siem-inventory-workspace">
-            Workspace
-          </label>
-          <select
-            id="siem-inventory-workspace"
-            className="siem-inventory-select"
-            value={selectedId}
-            disabled={busy !== null}
-            onChange={(e) => {
+          <span className="field-hint">Workspace</span>
+          {/* MIG-8: 80 workspaces in one tenant - a filter box, not a bare
+              dropdown. Matches name, subscription, resource group, Sentinel. */}
+          <div className="siem-inventory-picker">
+            <SearchableSelect
+              options={workspaceOptions}
+              value={selectedId}
+              disabled={busy !== null}
               // MIG-7: the shown inventory stays; staleNote says it is not this one.
-              setSelectedId(e.target.value);
-            }}
-          >
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {workspaceOptionLabel(w)}
-              </option>
-            ))}
-          </select>
+              onChange={setSelectedId}
+              placeholder="Select a workspace..."
+              ariaLabel="Filter workspaces"
+            />
+          </div>
           <button
             className="run-button"
             disabled={busy !== null || selectedId === ""}

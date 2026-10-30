@@ -3041,13 +3041,27 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F1",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-7",
       "type": "bug",
       "priority": "now",
       "title": "The inventory panel jumps on workspace change, wraps its source lines, and says nothing after a download",
-      "detail": "FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1) Picking a different workspace cleared the shown inventory, so the page shrank and scrolled under the pointer - two clicks in the UAT landed on the wrong control because of it. (2) The Sources column is the narrowest in the table, so each source line wraps its event count onto a line of its own. (3) Download inventory CSV saved the file (verified: 618-byte Systest CSV matching the screen) but the panel showed nothing, so an operator cannot tell a save from a dead button. Fix: keep the shown inventory on a selection change and say which workspace it belongs to and that it is not the selected one; give the Sources column a minimum width; name the saved file (or the save error) beside the button."
+      "detail": "FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1) Picking a different workspace cleared the shown inventory, so the page shrank and scrolled under the pointer - two clicks in the UAT landed on the wrong control because of it. (2) The Sources column is the narrowest in the table, so each source line wraps its event count onto a line of its own. (3) Download inventory CSV saved the file (verified: 618-byte Systest CSV matching the screen) but the panel showed nothing, so an operator cannot tell a save from a dead button. Fix: keep the shown inventory on a selection change and say which workspace it belongs to and that it is not the selected one; give the Sources column a minimum width; name the saved file (or the save error) beside the button. DONE 2026-10-30 (both: 7 new pins, two mutation-checked - re-adding the clear-on-select fails the keep pin, dropping the clear-on-refusal fails the refusal pin; and live in Chrome on /apps/a/__local__ at 8ed1d43): after inventorying law-jpederson-eastus, picking Systest left the panel in place with the warning naming both workspaces; the header reads Inventory of law-jpederson-eastus; Sources lines fit on one line; Download printed Saved law-jpederson-eastus-inventory.csv - the SHOWN inventory, not the selection.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-8",
+      "type": "story",
+      "priority": "now",
+      "title": "The workspace picker needs a filter box, not only a dropdown",
+      "detail": "RAISED BY THE USER 2026-10-30 during the MIG-4 UAT: \"The workspace selection needs a filter box not just a drop down.\" With 80 workspaces in one tenant the native select is only navigable by typing a name prefix blind; an operator who knows part of a name, a resource group or a subscription cannot narrow the list. DONE 2026-10-30 (both): the native select is replaced by the app's standard SearchableSelect - a control that opens a bounded popover with a filter box - with each workspace as name, plus subscription / resource group / Sentinel state as the hint and the ARM id as the value, so all of them filter. Pinned in workspace-inventory-panel.dom.test.tsx (name, resource group, subscription name, and No matches); mutation-checked by dropping the hint, which fails the subscription-name case. Live in Chrome on /apps/a/__local__: typing quickstart narrowed 80 workspaces to law-jpederson-cribl and law-jpederson-eastus (a resource-group match), ArrowDown + Enter picked eastus, and the inventory ran as before.",
+      "verified": "both"
     }
   ],
   "features": [

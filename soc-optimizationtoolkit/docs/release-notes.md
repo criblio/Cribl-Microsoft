@@ -18,7 +18,7 @@ data in the last 30 complete UTC days, the daily average and billable volume
 for each table (from the Usage table), and the sources feeding each table (from
 `_BilledSize`, attributed to `_ResourceId`, `Computer` or the CEF device). The
 workspace-wide daily average is shown above the table, and the inventory
-downloads as CSV. It needs Log Analytics Reader on the workspace. A refused read
+downloads as CSV. The workspace picker has a filter box that matches name, subscription, resource group and Sentinel state, and switching workspace keeps the shown inventory until the next one is read, saying which workspace it belongs to. It needs Log Analytics Reader on the workspace. A refused read
 is reported as a refusal, not as an empty workspace. A table whose source
 breakdown fails keeps its volume and says why.
 
