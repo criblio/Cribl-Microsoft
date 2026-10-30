@@ -97,6 +97,7 @@ const result = (over: Partial<CaptureSamplesResult> = {}): CaptureSamplesResult 
   rawEvents: [],
   format: "ndjson",
   noDiscriminator: false,
+  leftOutEvents: 0,
   notes: [],
   ok: true,
   ...over,

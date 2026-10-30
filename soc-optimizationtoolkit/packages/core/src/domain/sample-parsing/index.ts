@@ -130,9 +130,11 @@ export {
 
 // Log-type SPLITTING of a mixed stream (rehomed 2026-08-18 from the deleted
 // sample-acquisition domain; load-bearing for capture and mixed uploads).
+export type { SplitOutcome } from "./splitting";
 export {
   parseKvLine,
   splitSamplesByLogType,
+  splitSamplesWithLeftOut,
   splitFoundNoDiscriminator,
   splitSampleId,
   hasNamedFields,

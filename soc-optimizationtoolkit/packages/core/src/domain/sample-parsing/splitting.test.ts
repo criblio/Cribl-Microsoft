@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   splitSamplesByLogType,
+  splitSamplesWithLeftOut,
   splitFoundNoDiscriminator,
   hasNamedFields,
   splitSampleId,
@@ -526,5 +527,89 @@ describe("splitSamplesByLogType - PAN-OS CEF header type (DBT-196)", () => {
     );
     expect(coverage.missing).toEqual([]);
     expect(coverage.matched).toEqual(["THREAT", "TRAFFIC"]);
+  });
+});
+
+// DBT-205 (F1/F2 build review, 2026-10-29). A key=value line under the probe's
+// three-pair gate, or a line that parses to nothing at all, adds no record to
+// the discriminator's input. Two failures followed from that: raw lines filed
+// by the RECORD's position shift by one after such a line (DBT-196 measured
+// the shift on PAN-OS CEF), and the skipped line itself vanished from every
+// group with no word, so the group counts summed below the captured count.
+describe("splitSamplesWithLeftOut (DBT-205)", () => {
+  const TRAFFIC_1 = "log-type=TRAFFIC src=10.0.0.1 dst=1.2.3.4 action=allow";
+  const SHORT_KV = "a=1 b=2";
+  const THREAT_1 = "log-type=THREAT src=10.0.0.2 dst=5.6.7.8 action=alert";
+  const TRAFFIC_2 = "log-type=TRAFFIC src=10.0.0.3 dst=9.9.9.9 action=deny";
+  const NOISE = "sshd: session opened for user root";
+  const THREAT_2 = "log-type=THREAT src=10.0.0.4 dst=4.4.4.4 action=drop";
+  const MIXED = [TRAFFIC_1, SHORT_KV, THREAT_1, TRAFFIC_2, NOISE, THREAT_2];
+
+  it("files every raw line after a short kv line under its OWN log type", () => {
+    const { splits } = splitSamplesWithLeftOut(MIXED, "fb", "kv");
+    expect(splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["TRAFFIC", [TRAFFIC_1, TRAFFIC_2]],
+      ["THREAT", [THREAT_1, THREAT_2]],
+    ]);
+  });
+
+  it("reports the lines it left out, so groups plus left-out equal the input", () => {
+    const { splits, leftOut } = splitSamplesWithLeftOut(MIXED, "fb", "kv");
+    expect(leftOut).toBe(2);
+    const grouped = splits.reduce((n, s) => n + s.eventCount, 0);
+    expect(grouped + leftOut).toBe(MIXED.length);
+  });
+
+  it("agrees with splitSamplesByLogType, which returns only the groups", () => {
+    expect(splitSamplesByLogType(MIXED, "fb", "kv")).toEqual(
+      splitSamplesWithLeftOut(MIXED, "fb", "kv").splits,
+    );
+  });
+
+  it("leaves nothing out when every line falls into the fallback group", () => {
+    // The fallback paths carry every input line, so there is no shortfall to
+    // report - only the no-discriminator fact, which the caller already says.
+    for (const raw of [[NOISE, NOISE], [SHORT_KV, NOISE], ['{"a":1}', '{"a":2}']]) {
+      const { splits, leftOut } = splitSamplesWithLeftOut(raw, "fb", "unknown");
+      expect(leftOut).toBe(0);
+      expect(splits).toEqual([
+        { logType: "fb", rawEvents: raw, format: "unknown", eventCount: raw.length },
+      ]);
+    }
+  });
+
+  it("leaves nothing out of the PAN-OS CSV grouping, which files every line", () => {
+    // The headerless-CSV path names real log types from position 3, so it is
+    // not the fallback group - but it groups EVERY input line, so its shortfall
+    // is 0 too. Pinned separately because no other case here reaches it.
+    const CSV_TRAFFIC = "1,2026/10/29 10:00:00,0123,TRAFFIC,end,2049,2026/10/29 10:00:00,10.0.0.1";
+    const CSV_THREAT = "1,2026/10/29 10:00:01,0123,THREAT,url,2049,2026/10/29 10:00:01,10.0.0.2";
+    const { splits, leftOut } = splitSamplesWithLeftOut(
+      [CSV_TRAFFIC, CSV_THREAT, CSV_TRAFFIC],
+      "fb",
+      "csv",
+    );
+    expect(splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["TRAFFIC", [CSV_TRAFFIC, CSV_TRAFFIC]],
+      ["THREAT", [CSV_THREAT]],
+    ]);
+    expect(leftOut).toBe(0);
+  });
+
+  it("does not change the PAN-OS CEF split, and leaves none of it out", () => {
+    const PAN_THREAT =
+      "<14>Oct 29 10:00:00 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|rt=Oct 29 2026 10:00:00 GMT deviceExternalId=0123 src=10.0.0.1 dst=1.2.3.4 act=alert";
+    const PAN_TRAFFIC =
+      "<14>Oct 29 10:00:01 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|end|TRAFFIC|1|rt=Oct 29 2026 10:00:01 GMT deviceExternalId=0123 src=10.0.0.2 dst=5.6.7.8 act=allow";
+    const { splits, leftOut } = splitSamplesWithLeftOut(
+      [PAN_THREAT, PAN_TRAFFIC, PAN_THREAT],
+      "captured",
+      "cef",
+    );
+    expect(leftOut).toBe(0);
+    expect(splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["THREAT", [PAN_THREAT, PAN_THREAT]],
+      ["TRAFFIC", [PAN_TRAFFIC]],
+    ]);
   });
 });
