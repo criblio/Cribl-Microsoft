@@ -261,13 +261,11 @@ describe("CEF catalog-only pack", () => {
         );
       }
     }
-    // ONE known disagreement, measured during GEN-20's review and reported
-    // there for its own card: deviceProcessName has no alias, so the fuzzy
-    // ladder lands it on ProcessID. This list must shrink to [] when that is
-    // fixed - and grow only by a deliberate edit, never silently.
-    expect(disagreements).toEqual([
-      "deviceProcessName: claims ProcessName, matcher ProcessID",
-    ]);
+    // Empty since DBT-204: deviceProcessName, the one disagreement GEN-20's
+    // review measured, had no alias and tied ProcessID on the stripped-affix
+    // rung, which the schema order then handed to ProcessID. It is aliased
+    // now. This list grows only by a deliberate edit, never silently.
+    expect(disagreements).toEqual([]);
   });
 });
 

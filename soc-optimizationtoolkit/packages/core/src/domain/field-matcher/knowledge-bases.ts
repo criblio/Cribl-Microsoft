@@ -305,6 +305,10 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   fsize: ["FileSize"],
   oldFileName: ["OldFileName"],
   oldFilePath: ["OldFilePath"],
+  // DBT-204: the Mapping Catalog (CEF_CATALOG_PACK) claimed this while the
+  // matcher had no alias, so the stripped-affix rung tied it with ProcessID
+  // and the schema order handed ProcessID the name.
+  deviceProcessName: ["ProcessName"],
 
   // FortiGate key=value fields
   devname: ["DeviceName", "Computer"],
