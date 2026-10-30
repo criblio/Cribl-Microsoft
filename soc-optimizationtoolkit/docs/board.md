@@ -5095,7 +5095,20 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   30 days. No console errors. NOT covered here: the reader-less identity,
   moved to MIG-5. The portal Usage blade was not opened; the comparison is
   against the same Usage table queried by hand, which is what that blade
-  reads.
+  reads. SECOND UAT 2026-10-30 (live, Chrome on /apps/a/__local__, working
+  tree at 95494f0 with MIG-6): discovery again 80/61, with progress shown at
+  the control. law-jpederson-cribl, AminDemo and SentinelDemoWorkspace each
+  rendered the measured-zero copy; AminDemo's Usage was confirmed empty by a
+  hand-run query, and a cross-workspace Usage ranking of all 80 workspaces
+  placed none of the three in the top 8. law-jpederson-eastus matched the
+  ranking exactly (2327.6 MB = 2.33 GB). Systest-log-analytics-workspace, the
+  largest in the tenant at 24,732 MB/30d (about 10x eastus), completed in
+  under 10s and matched the ranking (24.73 GB); its Syslog source
+  CriblStreamWorker read 739.2 MB/day against 751.5 MB/day from Usage (1.6%,
+  the _BilledSize gap the tip discloses). Info tip and the queries section
+  render. NOT EXERCISED LIVE: the multi-batch path (no workspace in this
+  tenant bills more than 7 tables), a failed or partial breakdown, a refused
+  Usage read (MIG-5), and the CSV download.
 
 - **MIG-6** The workspace inventory published its KQL internals on the @soc/core barrel
   `MIG-F1` `enabler` `settled` `verified: pins`
