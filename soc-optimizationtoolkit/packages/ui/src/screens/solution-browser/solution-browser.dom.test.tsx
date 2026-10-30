@@ -68,12 +68,21 @@ const CONFIG = {
   workspaceName: "",
 } as unknown as AzureConfig;
 
+/**
+ * DBT-227: the list waits for the operator - it shows once they type a filter
+ * or press Browse all. Open it the way they would.
+ */
+async function openBrowseList(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
+}
+
 async function renderList(): Promise<HTMLElement[]> {
   render(
     <PortsProvider ports={{ content } as unknown as UiPorts} config={CONFIG}>
       <SolutionBrowser />
     </PortsProvider>,
   );
+  await openBrowseList();
   await waitFor(() => {
     expect(screen.getByText("Palo Alto Cortex XDR")).toBeTruthy();
   });
@@ -195,6 +204,7 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
         <SolutionBrowser />
       </PortsProvider>,
     );
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(name)).toBeTruthy();
     });
@@ -303,6 +313,7 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
         <SolutionBrowser />
       </PortsProvider>,
     );
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(ABSENT)).toBeTruthy();
     });
@@ -637,7 +648,9 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     // switched away from and no samples were touched.
     expect(text.toLowerCase()).toMatch(/nothing was changed/);
     // The browser fell back to the browse list rather than to an empty pane.
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse STATE (search, Browse all) - not an empty pane, and
+    // the list itself waits for the operator to filter or browse.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(document.querySelector(".solution-browser-selected")).toBeNull();
   });
 
@@ -656,6 +669,7 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     cleanup();
 
     renderBrowser("#/");
+    await openBrowseList();
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-list")).toBeTruthy();
     });
@@ -668,6 +682,7 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     await waitFor(() => {
       expect(notice()).toBeTruthy();
     });
+    await openBrowseList();
     fireEvent.click(screen.getByText("Zscaler"));
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-selected")).toBeTruthy();
@@ -716,7 +731,9 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     });
     // The browse list is what the operator is left with - the notice sits above
     // it rather than replacing it.
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse STATE (search, Browse all) - not an empty pane, and
+    // the list itself waits for the operator to filter or browse.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(document.querySelector(".solution-browser-selected")).toBeNull();
   });
 
@@ -834,6 +851,7 @@ describe("SolutionBrowser list holds the wheel only while it overflows (DBT-14)"
         <SolutionBrowser />
       </PortsProvider>,
     );
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(solutions[solutions.length - 1].name)).toBeTruthy();
     });
@@ -991,6 +1009,7 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
 
   it("loads the index from GitHub instead of failing the load", async () => {
     const h = harness();
+    await openBrowseList();
     await waitFor(() => {
       expect(
         document.querySelectorAll(".solution-browser-list .solution-browser-item")
@@ -1008,6 +1027,7 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
 
   it("fetches a selected solution's connectors instead of failing the card", async () => {
     const h = harness();
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(NAME)).toBeTruthy();
     });
@@ -1029,6 +1049,7 @@ describe("SolutionBrowser a refused cache read (DBT-159)", () => {
 
   it("still loads, and still fetches connectors, when the store refuses WRITES too", async () => {
     const h = harness(true);
+    await openBrowseList();
     await waitFor(() => {
       expect(
         document.querySelectorAll(".solution-browser-list .solution-browser-item")
@@ -1130,5 +1151,46 @@ describe("SolutionBrowser Content Hub deprecation lookup (DBT-176)", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(hubNotes()).toHaveLength(0);
     expect(countsLine()).toContain("0 deprecated");
+  });
+});
+
+describe("SolutionBrowser waits for a filter before listing (DBT-227)", () => {
+  function mount() {
+    render(
+      <PortsProvider ports={{ content } as unknown as UiPorts} config={CONFIG}>
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+  }
+  const rows = () =>
+    [...document.querySelectorAll(".solution-browser-list .solution-browser-item")].map(
+      (r) => r.querySelector(".solution-browser-item-name")?.textContent,
+    );
+
+  it("shows the counts and Browse all, but no list, until the operator acts", async () => {
+    mount();
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-counts")?.textContent).toContain(
+        "Type to filter, or browse them all.",
+      );
+    });
+    expect(document.querySelector(".solution-browser-list")).toBeNull();
+    expect(document.querySelector(".solution-browser-legend")).toBeNull();
+    expect(screen.getByRole("button", { name: "Browse all" })).toBeTruthy();
+  });
+
+  it("lists only the matches once a filter is typed", async () => {
+    mount();
+    await screen.findByRole("button", { name: "Browse all" });
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), { target: { value: "palo" } });
+    expect(rows()).toEqual(["Palo Alto Cortex XDR"]);
+    expect(document.querySelector(".solution-browser-counts")?.textContent).toContain("Showing 1.");
+    expect(screen.queryByRole("button", { name: "Browse all" })).toBeNull();
+  });
+
+  it("lists everything on Browse all", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
+    expect(rows()).toHaveLength(SOLUTIONS.length);
   });
 });

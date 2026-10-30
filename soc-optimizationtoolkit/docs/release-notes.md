@@ -10,6 +10,8 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**Select Sentinel Solution waits for a search (DBT-227).** Before you pick a solution the section shows the search box and how many solutions there are, not the whole list. Type to filter, or press Browse all to see every solution.
+
 **One coverage step, and Enable Sentinel Content waits for a load (DBT-226).** Review Analytics Rule Coverage and Review Workbook Coverage are now one step, Review Coverage, with an Analytics rules / Workbooks switch, so Sentinel Integration has eight sections instead of nine. Enable Sentinel Content shows only its Load button until the solution content has been read.
 
 **Configure Cribl asks where events go first (DBT-225).** The Sentinel destination question (new or existing) now opens the section. With an existing destination, Pack wiring is a single line and Select Azure Resources says only that it is not needed, with the detail behind (i). Adding more worker groups, the overwrite check and Rebuild pack only are under More pack options, which opens by itself when one of them needs your attention.

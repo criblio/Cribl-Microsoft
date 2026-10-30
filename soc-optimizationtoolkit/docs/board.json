@@ -3567,6 +3567,19 @@
       "title": "Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step",
       "detail": "RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: \"There are too many words on the screen. I feel like we need more selections for the user to choose before we reveal some information.\" Audit (2026-10-30, TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural - content shown before the choice that makes it relevant. DECIDED: every section stays open (no accordion); reveal inside sections only. Enable Sentinel Content shows a warning plus three Not loaded yet subsections; Rule Coverage and Workbook Coverage are two steps of the same shape. Build: one line plus Load until loaded; one Coverage step with a Rules / Workbooks switch. DONE 2026-10-30 (both). Enable Sentinel Content shows only its notices and Load until content, a catalog answer, a load or an install outcome exists; the DBT-199 pin (never None found before a load) was rewritten to the stronger form - no group renders before a load - and mutation-checked. Rule and Workbook Coverage are one step, Review Coverage, with an Analytics rules / Workbooks switch (the Dataflow tab style); both RuleCoverageSection instances stay mounted and the hidden one is only hidden, because the rules panel feeds the RULE badges and both feed coverage requirements (pinned; mutation-checked by unmounting the hidden panel). Core: INTEGRATE_SECTIONS is eight sections - workbook-coverage removed from IntegrateSectionId, the merged step keeps the rule-coverage id, later sections renumbered (content 5, Azure 6, Cribl 7, Deploy 8); the merged tip keeps the DBT-58 exclusion clause verbatim and its fragment pin now reads that section. No reason for the original split was recorded anywhere (searched board, backlog, ADRs). Pins updated deliberately for the count, the ids and the numbering. LIVE on TMNA: 4 Review Coverage with the two tabs, Workbooks switching to Analyze workbook coverage; 5 Enable Sentinel Content reduced to its warning and Load.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "DBT-227",
+      "type": "story",
+      "priority": "now",
+      "title": "Select Sentinel Solution lists every solution before the operator has typed a filter",
+      "detail": "RAISED BY THE USER 2026-10-30: \"I still see a ton of solutions listed in the Select Sentinel Solution section when I have yet to start a filter.\" MISSED BY THE 2026-10-30 UX audit (DBT-224..226): the audit walked the page with a solution already selected, so the unselected browse state was never seen. Same principle as DBT-224: show the filter and a count first; reveal the list once the operator starts filtering (or asks to browse). DONE 2026-10-30 (pins; the live check was cut short when the Chrome extension disconnected - NOT YET SEEN LIVE). Before any input the browser shows the search box, Hide deprecated, the counts line ending Type to filter, or browse them all, and a Browse all button; the list and its badge legend appear once a filter is typed or Browse all is pressed. Three new pins (nothing listed before input; typing lists only matches; Browse all lists everything), mutation-checked by forcing the list on (all three fail). Existing pins that waited on rows now press Browse all first, the way an operator would; the two DBT-28 pins and the DBT-102 integrate pin that asserted the browse LIST as the fallback now assert the browse STATE (search box, nothing selected), same intent - not an empty pane.",
+      "verified": "pins"
     }
   ],
   "features": [

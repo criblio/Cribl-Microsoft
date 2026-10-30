@@ -978,12 +978,15 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-unresolved")).toBeTruthy();
     });
-    // The split the notice describes: the browse list is up here while the
+    // The split the notice describes: the browse state is up here while the
     // host is still scoped to the restored name (the pack name proves it).
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse state is the search box; the list waits for a
+    // filter or Browse all.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(
       (screen.getByDisplayValue(/^MS-Sentinel/) as HTMLInputElement).value,
     ).toBe("MS-Sentinel-Cisco-ASA");
+    fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
     fireEvent.click(screen.getByText("Zscaler"));
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith("CISCO_ASA");

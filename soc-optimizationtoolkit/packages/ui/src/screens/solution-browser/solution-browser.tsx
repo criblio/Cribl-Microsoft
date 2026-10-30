@@ -280,6 +280,9 @@ export function SolutionBrowser({
   // not a key, so a second refusal replaces the first rather than adding a line.
   const [cacheRefused, setCacheRefused] = useState("");
   const [query, setQuery] = useState("");
+  // DBT-227: the list waits for the operator - it shows once they type a
+  // filter or ask to browse everything, not on arrival (436 rows did).
+  const [browseAll, setBrowseAll] = useState(false);
   const [hideDeprecated, setHideDeprecated] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState>({ phase: "idle" });
@@ -613,6 +616,7 @@ export function SolutionBrowser({
   // `visible` is the content key: every filter or index change re-measures
   // (DBT-14). Declared before the early returns below - it is a hook.
   const [listRef, listScrollable] = useOverflowsY<HTMLUListElement>(visible);
+  const listShown = browseAll || query.trim() !== "";
   const selected = useMemo(
     () => resolveSelectedSolution(mergedSolutions ?? [], selectedName),
     [mergedSolutions, selectedName],
@@ -962,8 +966,16 @@ export function SolutionBrowser({
           {counts !== null && (
             <p className="solution-browser-counts">
               {counts.total} solutions - {counts.active} active,{" "}
-              {counts.deprecated} deprecated. Showing {visible.length}.
+              {counts.deprecated} deprecated.{" "}
+              {listShown ? `Showing ${visible.length}.` : "Type to filter, or browse them all."}
             </p>
+          )}
+          {!listShown && counts !== null && (
+            <div className="panel-controls">
+              <button type="button" className="run-button" onClick={() => setBrowseAll(true)}>
+                Browse all
+              </button>
+            </div>
           )}
           {/* DBT-176: without this an unreadable catalog and "the Hub deprecated
               nothing extra" render identically - the same counts, no tags. */}
@@ -974,6 +986,8 @@ export function SolutionBrowser({
               Content Hub deprecated may not be flagged.
             </p>
           )}
+          {listShown && (
+          <>
           <p className="solution-browser-legend">
             Cribl delivery fit (Azure Logs Ingestion API):{" "}
             <span className="ingestion-badge ingestion-badge-recommended">
@@ -1060,6 +1074,8 @@ export function SolutionBrowser({
               </li>
             )}
           </ul>
+          </>
+          )}
         </>
       )}
     </div>
