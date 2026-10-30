@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { resolveBuildDestinations } from "./build-destinations";
+import { definitionDestinationFields, resolveBuildDestinations } from "./build-destinations";
 
 describe("resolveBuildDestinations", () => {
   it("never calls the Azure inventory read on the existing path", async () => {
@@ -44,6 +44,41 @@ describe("resolveBuildDestinations", () => {
     ]);
   });
 
+  it("never reads Azure for a native-path ROUTABLE pack, which ships no destination (GEN-25)", async () => {
+    // A routable pack writes no outputs.yml, so DCR values resolved from the
+    // inventory were thrown away - and an empty or failed read logged that
+    // tables "will ship placeholder destination values", which a routable
+    // pack never does. The session's own deploys are still matched, at no cost.
+    const readInventory = vi.fn(async () => {
+      throw new Error("Azure must not be read for a routable pack");
+    });
+    const lines: string[] = [];
+    const resolved = await resolveBuildDestinations({
+      existing: null,
+      routable: true,
+      planTables: ["CommonSecurityLog", "Syslog"],
+      sessionDestinations: [
+        {
+          table: "Syslog",
+          dcrImmutableId: "dcr-1",
+          ingestionEndpoint: "https://e",
+          dcrName: "dcr-syslog",
+        },
+      ],
+      readInventory,
+      push: (line) => lines.push(line),
+    });
+    expect(readInventory).not.toHaveBeenCalled();
+    expect(lines).toEqual([
+      "The pack is routable and ships no destination, so the Azure DCR inventory " +
+        "is not read and no DCR values are written into the pack.",
+    ]);
+    expect(resolved?.map((r) => [r.table, r.source])).toEqual([
+      ["CommonSecurityLog", "unresolved"],
+      ["Syslog", "session"],
+    ]);
+  });
+
   it("reports a failed native read and builds on", async () => {
     const lines: string[] = [];
     const resolved = await resolveBuildDestinations({
@@ -60,5 +95,30 @@ describe("resolveBuildDestinations", () => {
         "session will ship placeholder destination values.",
     ]);
     expect(resolved).toHaveLength(1);
+  });
+});
+
+describe("definitionDestinationFields (GEN-25)", () => {
+  // The build definition is stored and replayed by a Packs-screen rebuild, so
+  // what it carries decides the README both times. The build callback is out of
+  // a mount's reach, so the choice is pinned here.
+  const identity = { tenantId: "tenant-1", ingestionClientId: "client-1" };
+
+  it("carries the PICKED id, and no Azure identity, on the existing path", () => {
+    expect(
+      definitionDestinationFields({ resolved: null, existingDestination: "PAN-CSL", ...identity }),
+    ).toEqual({ existingDestinationId: "PAN-CSL" });
+  });
+
+  it("carries nothing on the existing path before a pick", () => {
+    expect(
+      definitionDestinationFields({ resolved: null, existingDestination: undefined, ...identity }),
+    ).toEqual({});
+  });
+
+  it("stamps the Azure identity, and never a pick, on the native path", () => {
+    expect(
+      definitionDestinationFields({ resolved: [], existingDestination: "PAN-CSL", ...identity }),
+    ).toEqual({ outputsDefaults: { tenantId: "tenant-1", ingestionClientId: "client-1" } });
   });
 });

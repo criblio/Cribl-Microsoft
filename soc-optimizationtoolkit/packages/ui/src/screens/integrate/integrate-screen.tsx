@@ -262,7 +262,7 @@ import type {
   SourceRouting,
 } from "./existing-destination-state";
 import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
-import { resolveBuildDestinations } from "./build-destinations";
+import { definitionDestinationFields, resolveBuildDestinations } from "./build-destinations";
 import { WiringSection } from "./wiring-section";
 
 /**
@@ -1719,6 +1719,9 @@ export function IntegrateScreen({
         existing: azureNeeds.dcrInventory
           ? null
           : { destination: existingDestination ?? "(not picked)" },
+        // GEN-25: a native-path routable pack writes no outputs.yml either, so
+        // it reads no inventory and logs no placeholders it will not ship.
+        routable: plan.packShape === "routable",
         planTables,
         sessionDestinations,
         // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
@@ -1823,16 +1826,12 @@ export function IntegrateScreen({
         // id, and a routable pack writes no outputs.yml - nothing is stamped.
         // GEN-25: its id goes in instead, so the README names the destination
         // the route will send to rather than convention ids that do not exist.
-        ...(resolved === null
-          ? existingDestination !== undefined
-            ? { existingDestinationId: existingDestination }
-            : {}
-          : {
-              outputsDefaults: {
-                tenantId: config.tenantId,
-                ingestionClientId: ingestId,
-              },
-            }),
+        ...definitionDestinationFields({
+          resolved,
+          existingDestination,
+          tenantId: config.tenantId,
+          ingestionClientId: ingestId,
+        }),
       };
 
       // 4. Assemble deterministically and persist the build record.
