@@ -7,7 +7,7 @@
  *
  * Ported VERBATIM from the legacy implementation: same cleaning passes, same
  * computed-variable detection, same extraction patterns, same filtering rules.
- * Two changes since. Where KQL_BUILTINS comes from (the shared module) - which
+ * Two changes since, the second with a consequence (DBT-215). Where KQL_BUILTINS comes from (the shared module) - which
  * is the FULL set the legacy real code always used (the legacy TEST ran a
  * reduced inline copy; see extract-kql-fields.test.ts for the pinned diff).
  * And the WHERE PREDICATE (DBT-215): the legacy `where\s+(\w+)` read only the
@@ -15,7 +15,10 @@
  * and Rule Coverage read a rule as satisfied when B was missing. Every operand
  * of the predicate is now read (see wherePredicateOperands), and a function
  * name the old pattern took for a column (`where ipv4_is_in_range(...)`) no
- * longer is.
+ * longer is. Reading every operand also reaches computed columns past the
+ * first one a statement creates, so the computed-variable detection now takes
+ * every assignment and parse capture too (see createdColumns); otherwise
+ * `extend A = .., B = .. | where A > 0 and B > 0` would report B as missing.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
@@ -73,6 +76,41 @@ function wherePredicateOperands(cleaned: string): string[] {
 }
 
 /**
+ * Every column a pipe segment CREATES, in an already-cleaned query: each
+ * `Name =` assignment (not `==` or `=~`) of an extend, summarize, project,
+ * project-rename, mv-expand or make-series, and each name a parse or
+ * parse-where pattern captures after `with` (a `:type` suffix is not a name).
+ * Segments split on `|` and `;`, so a subquery's operators are read too. A
+ * column assigned over itself (`extend Account = tolower(Account)`) counts as
+ * created - the legacy first-assignment detection already behaved that way.
+ */
+function createdColumns(cleaned: string): string[] {
+  const created: string[] = [];
+  for (const segment of cleaned.split(/[|;]/)) {
+    const head = /^\s*\(*\s*([a-z-]+)\b/i.exec(segment);
+    const op = head?.[1]?.toLowerCase();
+    if (
+      op === "extend" ||
+      op === "summarize" ||
+      op === "project" ||
+      op === "project-rename" ||
+      op === "mv-expand" ||
+      op === "make-series"
+    ) {
+      for (const m of segment.matchAll(/(?<![\w.$])([A-Za-z_]\w*)\s*=(?![=~])/g)) {
+        if (m[1] !== undefined) created.push(m[1]);
+      }
+    } else if (op === "parse" || op === "parse-where") {
+      const pattern = /\bwith\b([\s\S]*)$/i.exec(segment)?.[1] ?? "";
+      for (const m of pattern.matchAll(/(?<![\w.$:])([A-Za-z_]\w*)/g)) {
+        if (m[1] !== undefined) created.push(m[1]);
+      }
+    }
+  }
+  return created;
+}
+
+/**
  * Extract field/column names referenced in a KQL query. Identifies computed
  * variables (let, extend, summarize assignments) and excludes them so only
  * actual table columns are returned. Returns a sorted, de-duplicated list with
@@ -107,6 +145,11 @@ export function extractKqlFields(kql: string): string[] {
   for (const m of sumAssignMatches) {
     if (m[1]) computed.add(m[1]);
   }
+  // Every other column an operator creates (DBT-215). The three patterns above
+  // take only the FIRST assignment of a statement, which was enough while the
+  // where pattern read only the first operand; the predicate scan reads them
+  // all, so `extend A = .., B = .. | where A > 0 and B > 0` must not report B.
+  for (const m of createdColumns(cleaned)) computed.add(m);
 
   // Step 2: Extract field references. The where predicate is read by
   // wherePredicateOperands (DBT-215), not by a pattern here.

@@ -233,6 +233,42 @@ describe("where-predicate operands (DBT-215)", () => {
     ).toEqual(["DeviceName"]);
   });
 
+  // Reading every operand reaches the computed columns AFTER the first one an
+  // operator creates. The legacy detection took only the first assignment of
+  // an extend or summarize, which the first-token where never got past, so
+  // these used to be invisible; now they would be reported as missing
+  // destination fields unless every assignment counts as computed.
+  // A comparison inside the assignment (`DeviceName ==`) is not an assignment.
+  it("excludes every column an extend creates, not only the first", () => {
+    expect(
+      extractKqlFields(
+        'T | extend AcctName = tostring(Upn), HostLabel = iff(DeviceName == "z", Dev, "") | where AcctName has "x" and HostLabel != "" and DeviceName == "y"',
+      ),
+    ).toEqual(["DeviceName"]);
+  });
+
+  it("excludes every column a summarize creates, not only the first", () => {
+    expect(
+      extractKqlFields(
+        "T | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Total = count() by DeviceHost | where Total > 5 and EndTime > StartTime",
+      ),
+    ).toEqual(["DeviceHost"]);
+  });
+
+  it("excludes the columns a project-rename, mv-expand or parse creates", () => {
+    expect(
+      extractKqlFields(
+        [
+          "T",
+          "| project-rename SrcName = SourceName, DstName = DestName",
+          "| mv-expand Entry = Entries",
+          '| parse SyslogMessage with * "src=" SrcAddr " user=" UserText:string " " *',
+          '| where SrcName == "a" and DstName == "b" and Entry != "" and SrcAddr != "" and UserText != "" and Proto == "c"',
+        ].join("\n"),
+      ),
+    ).toEqual(["Proto"]);
+  });
+
   it("stops at the pipe, and reads a where inside a join subquery", () => {
     expect(
       extractKqlFields(
