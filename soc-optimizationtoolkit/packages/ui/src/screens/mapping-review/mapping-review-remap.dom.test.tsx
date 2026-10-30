@@ -168,3 +168,51 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
     expect(moved?.confidence).toBe("unmatched");
   });
 });
+
+// DBT-209: the Action select on a row in the catch-all. Setting it to rename
+// used to emit a Rename onto AdditionalExtensions; the screen now hands the
+// reducer the table's catch-all, which refuses it, and the select says why.
+describe("mapping review - the Action select on an overflow row (DBT-209)", () => {
+  const actionSelect = (container: HTMLElement, source: string) =>
+    rowFor(container, source).querySelectorAll<HTMLSelectElement>(
+      "select.mapping-select",
+    )[1]!;
+
+  it("disables the actions that need a column and says to choose one in Dest Field", async () => {
+    const { container } = await renderAnalyzed();
+    const select = actionSelect(container, "qqvendorfield");
+    const disabled = [...select.options]
+      .filter((o) => o.disabled)
+      .map((o) => o.value);
+    expect(disabled).toEqual(["keep", "rename", "coerce", "decode"]);
+    const rename = [...select.options].find((o) => o.value === "rename")!;
+    expect(rename.textContent).toBe("rename (choose a Dest Field first)");
+    expect(select.title).toBe(
+      "keep, rename, coerce and decode need a destination column, and " +
+        "AdditionalExtensions is the catch-all: choose a column in Dest Field " +
+        "first, which sets the action for you.",
+    );
+    // A row in a real column keeps every action.
+    expect(
+      [...actionSelect(container, "TimeGenerated").options].some((o) => o.disabled),
+    ).toBe(false);
+  });
+
+  it("refuses a rename that reaches the reducer anyway: the row stays overflow, unmodified", async () => {
+    const { container, report, effective } = await renderAnalyzed();
+    const before = report.fieldMappings.find((m) => m.source === "qqvendorfield");
+    fireEvent.change(actionSelect(container, "qqvendorfield"), {
+      target: { value: "rename" },
+    });
+    // Drop goes through, so the refusal is not the select ignoring changes.
+    fireEvent.change(actionSelect(container, "TimeGenerated"), {
+      target: { value: "drop" },
+    });
+    await waitFor(() => {
+      expect(effective().PanOS?.find((m) => m.source === "TimeGenerated")?.action).toBe(
+        "drop",
+      );
+    });
+    expect(effective().PanOS?.find((m) => m.source === "qqvendorfield")).toEqual(before);
+  });
+});

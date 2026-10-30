@@ -15,7 +15,9 @@
  *     dest-column dropdown and an action dropdown (incl. base64 decode) per
  *     source field, plus the unmapped destination columns. A dest choice onto
  *     a column another row fills opens the claim panel (DBT-208) instead of
- *     applying;
+ *     applying. On a row in the catch-all the actions that need a column
+ *     (keep, rename, coerce, decode) are disabled with the reason: Dest Field
+ *     is the one way such a row comes to land in a column (DBT-209);
  *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
  *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
  *     enrichment / forced-input resolution with curated auto-seeding;
@@ -43,8 +45,9 @@
  * the "Approval Required" / "Approved" badges, the staleness prompt, and the
  * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis, and
  * a table's on any re-point of its rows (Dest Field or suggestion, DBT-213); edits
- * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
- * optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
+ * survive a re-analysis re-applied to the new rows - one whose field is gone is
+ * dropped, and a notice says how many (DBT-210) - and re-key on a log-type
+ * rename (the Unit 11 seam, threaded via the optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
  * only its own card and review; the other tables keep their approvals. A
  * close match chosen in a coverage section (remapEvent, DBT-203) applies
  * through the same path as this section's own unmapped-column suggestions.
@@ -65,7 +68,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import {
   DEFAULT_GAP_PROFILE,
   FIELD_EXAMPLE_MAX_CHARS,
+  actionEditRefusal,
   collectGapReports,
+  columnActionsRefusal,
   createBundledSchemaCatalog,
   createSchemaLadder,
   detectVendorIdentity,
@@ -138,6 +143,7 @@ import {
   deriveLiveStats,
   deriveMappingReviewGate,
   destClaim,
+  droppedEditsNotice,
   effectiveMappings,
   fieldMappingsLabel,
   formatExampleValue,
@@ -661,6 +667,16 @@ export function MappingReviewSection({
   // (Move). The claim panel promises their value is kept, so the policy's
   // drop must not take them (autoDropPlan's `reviewerKept`).
   const reviewerKeptRef = useRef(new Set<string>());
+  // DBT-210: an edit a re-analysis dropped is no longer the policy's drop or
+  // the reviewer's move, so forget its keys - declared BEFORE the auto-drop
+  // effect, which must not see them on the same commit (a table change would
+  // otherwise never re-drop a field the old table's policy had dropped).
+  useEffect(() => {
+    for (const { logType, source } of review.droppedEdits) {
+      autoDroppedRef.current.delete(`${logType}|${source}`);
+      reviewerKeptRef.current.delete(`${logType}|${source}`);
+    }
+  }, [review.droppedEdits]);
   useEffect(() => {
     for (const report of reports) {
       const assessment = assessments.get(report.logType);
@@ -707,6 +723,15 @@ export function MappingReviewSection({
   // removal landed: its results must not resurrect the removed log type.
   const samplesRef = useRef(samples);
   samplesRef.current = samples;
+  // The reports the edit store was made against, for the re-base a completed
+  // run dispatches (DBT-210). Latest render's, not the run's closure.
+  const reportsRef = useRef(reports);
+  reportsRef.current = reports;
+  // A rename re-keys the edit store but not `reports`, so the re-base must find
+  // a renamed table's old rows under the name it had: new name -> report name,
+  // for every rename since the last analysis. Without it the new analysis's
+  // own rows stand in, and every row it decides differently reads as an edit.
+  const renamedSinceAnalysisRef = useRef(new Map<string, string>());
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
   const runAnalysis = useCallback(async (
@@ -792,6 +817,12 @@ export function MappingReviewSection({
       // list, not this closure's, which still holds it.
       const live = new Set(samplesRef.current.map((s) => s.logType));
       const kept = produced.filter((r) => live.has(r.logType));
+      const renamed = renamedSinceAnalysisRef.current;
+      const previous = reportsRef.current.map((r) => {
+        const to = [...renamed].find(([, from]) => from === r.logType)?.[0];
+        return to === undefined ? r : { ...r, logType: to };
+      });
+      renamed.clear();
       setReports(kept);
       logger?.info("gap-analysis: finished", {
         tables: kept.map((r) => r.tableName).join(","),
@@ -801,7 +832,9 @@ export function MappingReviewSection({
         solutionName,
         samples.filter((s) => live.has(s.logType)),
       );
-      dispatch({ type: "analyzed" });
+      // DBT-210: the edits are re-based onto `kept`; the ones that no longer
+      // fit are dropped and counted (the notice under the approval bar).
+      dispatch({ type: "analyzed", previous, reports: kept });
       // A fresh analysis resets every approval, so a note asking to approve
       // again after a suggestion is no longer about anything.
       setAppliedNotes({});
@@ -893,6 +926,11 @@ export function MappingReviewSection({
       return;
     }
     lastRenameNonce.current = renameEvent.nonce;
+    // A chain (A -> B -> C) still points at the report name, A.
+    const renamed = renamedSinceAnalysisRef.current;
+    const reportName = renamed.get(renameEvent.from) ?? renameEvent.from;
+    renamed.delete(renameEvent.from);
+    renamed.set(renameEvent.to, reportName);
     dispatch({
       type: "rename-log-type",
       from: renameEvent.from,
@@ -929,6 +967,7 @@ export function MappingReviewSection({
     forgetLogTypeKeys(seededIdentityRef.current, logType);
     forgetLogTypeKeys(seededLabelRef.current, logType);
     forgetLogTypeKeys(autoDroppedRef.current, logType);
+    renamedSinceAnalysisRef.current.delete(logType);
     analyzedSigRef.current = signatureWithout(analyzedSigRef.current, logType);
     logger?.info("gap-analysis: log type removed", { logType });
   }, [removeEvent, forgetLogTypeEnrichments, logger]);
@@ -960,6 +999,9 @@ export function MappingReviewSection({
     onEffectiveMappingsChange(byLogType);
   }, [reports, review, onEffectiveMappingsChange]);
 
+  // DBT-209: the table's catch-all rides along, so the reducer refuses an
+  // action that needs a column on a row that has none (the select also
+  // disables those options and says why).
   const updateAction = useCallback(
     (report: GapReport, sourceField: string, value: string) => {
       dispatch({
@@ -969,6 +1011,7 @@ export function MappingReviewSection({
         field: "action",
         value,
         baseline: report.fieldMappings,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
     },
     [],
@@ -1218,6 +1261,18 @@ export function MappingReviewSection({
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>
       )}
 
+      {review.droppedEdits.length > 0 && (
+        <p
+          className="field-hint mapping-review-dropped-edits"
+          role="status"
+          title={review.droppedEdits
+            .map((d) => `${d.logType}: ${d.source}`)
+            .join("\n")}
+        >
+          {droppedEditsNotice(review.droppedEdits)}
+        </p>
+      )}
+
       {hasMappings && (
         <div
           className={`gap-approval-bar ${gate.allApproved ? "gap-approval-bar-ok status-bar-ready" : "status-bar-warn"}`}
@@ -1309,6 +1364,7 @@ export function MappingReviewSection({
             : unmapped.filter((d) => d.name.toLowerCase().includes(query));
         const approved = isApproved(review, report.logType);
         const modified = isModified(review, report);
+        const catchAllColumn = getOverflowConfig(report.tableName).fieldName;
         return (
           <div key={report.logType} className="mapping-review-card">
             <div className="mapping-review-card-head">
@@ -1564,7 +1620,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Action
-                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop." />
+                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop. A field in the catch-all has no column of its own, so keep, rename, coerce and decode wait until you choose one in Dest Field, which sets the action for you." />
                         </th>
                       </tr>
                     </thead>
@@ -1581,6 +1637,10 @@ export function MappingReviewSection({
                         // the pure state module (truncation, escaping, and
                         // the empty-vs-missing distinction live there).
                         const example = formatExampleValue(m.sampleValue);
+                        const columnlessReason = columnActionsRefusal(
+                          m,
+                          catchAllColumn,
+                        );
                         const claim =
                           pendingClaim !== null &&
                           pendingClaim.logType === report.logType &&
@@ -1659,15 +1719,22 @@ export function MappingReviewSection({
                               <select
                                 className="mapping-select"
                                 value={m.action}
+                                title={columnlessReason ?? undefined}
                                 onChange={(e) =>
                                   updateAction(report, m.source, e.target.value)
                                 }
                               >
-                                {ACTION_OPTIONS.map((act) => (
-                                  <option key={act} value={act}>
-                                    {act}
-                                  </option>
-                                ))}
+                                {ACTION_OPTIONS.map((act) => {
+                                  // DBT-209: the reducer refuses these here.
+                                  const refused =
+                                    act !== m.action &&
+                                    actionEditRefusal(m, act, catchAllColumn) !== null;
+                                  return (
+                                    <option key={act} value={act} disabled={refused}>
+                                      {refused ? `${act} (choose a Dest Field first)` : act}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </td>
                           </tr>,

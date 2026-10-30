@@ -2,7 +2,9 @@
  * Tests for the mapping-review approval state machine (porting-plan Unit 18).
  * The gap-analysis TRUTH (tiles, mappings, handles split) is pinned in
  * @soc/core; these pin the REVIEW STATE this package owns:
- *   - approvals reset on re-analysis; edits survive; staleness clears
+ *   - approvals reset on re-analysis; staleness clears; edits survive,
+ *     re-based onto the new rows, and an edit whose row is gone is dropped
+ *     and counted (DBT-210)
  *   - edits are keyed by logType and re-key on rename (the Unit 11 seam)
  *   - approvals re-key on rename too (no orphaned approval)
  *   - the content-path deploy gate (blocks until every table approved and
@@ -27,6 +29,7 @@ import {
   columnSuggestions,
   deriveMappingReviewGate,
   destClaim,
+  droppedEditsNotice,
   effectiveMappings,
   fieldMappingsLabel,
   isApproved,
@@ -115,6 +118,7 @@ function analyzed(
     mappingEdits: {},
     stale: false,
     analysisRevision: 1,
+    droppedEdits: [],
     ...overrides,
   };
 }
@@ -134,18 +138,254 @@ describe("analyzed", () => {
   it("advances the revision and clears staleness", () => {
     const next = mappingReviewReducer(INITIAL_MAPPING_REVIEW_STATE, {
       type: "analyzed",
+      previous: [],
+      reports: [],
     });
     expect(next.analysisRevision).toBe(1);
     expect(next.stale).toBe(false);
   });
 
-  it("RESETS approvals but PRESERVES edits", () => {
-    const edits = { Firewall: [mapping({ source: "a" })] };
+  // DBT-210 changed this pin: it asserted the edit store came through as the
+  // SAME reference, which is the defect - edits made against the old rows were
+  // applied to the new analysis as they stood. Edits still survive a re-run
+  // (hand edits are not discarded), now re-based onto the new rows.
+  it("RESETS approvals but PRESERVES an edit whose source the new analysis still has", () => {
+    const old = report("Firewall", [mapping({ source: "a" })]);
+    const fresh = report("Firewall", [mapping({ source: "a", sampleValue: "new" })]);
+    const edits = { Firewall: [mapping({ source: "a", action: "drop" })] };
     const start = analyzed({ approvals: { Firewall: true }, mappingEdits: edits });
-    const next = mappingReviewReducer(start, { type: "analyzed" });
+    const next = mappingReviewReducer(start, {
+      type: "analyzed",
+      previous: [old],
+      reports: [fresh],
+    });
     expect(next.approvals).toEqual({});
-    expect(next.mappingEdits).toBe(edits); // same reference: survived untouched
+    expect(next.mappingEdits.Firewall).toEqual([
+      mapping({ source: "a", sampleValue: "new", action: "drop" }),
+    ]);
+    expect(next.droppedEdits).toEqual([]);
     expect(next.analysisRevision).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-210: the edit store is re-based onto a re-analysis, not carried over
+// ---------------------------------------------------------------------------
+
+describe("analyzed - edits re-based onto the new analysis (DBT-210)", () => {
+  const schema = [
+    { name: "AdditionalExtensions", type: "string" },
+    { name: "DestColumn", type: "string" },
+    { name: "SourceMACAddress", type: "string" },
+  ];
+  const overflow = (source: string, extra: Partial<GapFieldMapping> = {}) =>
+    mapping({
+      source,
+      dest: "AdditionalExtensions",
+      confidence: "unmatched",
+      action: "overflow",
+      description: "Collected into overflow field",
+      ...extra,
+    });
+  const kept = mapping({ source: "kept", dest: "DestColumn" });
+  const old = report("PanOS", [kept, overflow("mac"), overflow("gone")], {
+    destSchema: schema,
+  });
+  const editDest = (sourceField: string, value: string): MappingReviewAction => ({
+    type: "edit-mapping",
+    logType: "PanOS",
+    sourceField,
+    field: "dest",
+    value,
+    baseline: old.fieldMappings,
+    destSchema: old.destSchema,
+    catchAllColumn: "AdditionalExtensions",
+  });
+  const editAction = (sourceField: string, value: string): MappingReviewAction => ({
+    type: "edit-mapping",
+    logType: "PanOS",
+    sourceField,
+    field: "action",
+    value,
+    baseline: old.fieldMappings,
+    catchAllColumn: "AdditionalExtensions",
+  });
+  // Two edits: mac re-pointed at SourceMACAddress, `gone` dropped.
+  const edited = reduce(
+    analyzed(),
+    editDest("mac", "SourceMACAddress"),
+    editAction("gone", "drop"),
+  );
+
+  it("keeps the edit whose source survives, drops the one whose source is gone, and names it", () => {
+    // The new sample no longer carries `gone`, and its values changed.
+    const fresh = report(
+      "PanOS",
+      [{ ...kept, sampleValue: "v2" }, overflow("mac", { sampleValue: "v2" })],
+      { destSchema: schema },
+    );
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "gone" }]);
+    const rows = effectiveMappings(next, fresh);
+    expect(rows.map((m) => m.source)).toEqual(["kept", "mac"]);
+    // The surviving edit, on the NEW row (its new sample value).
+    expect(rows[1]).toMatchObject({
+      source: "mac",
+      dest: "SourceMACAddress",
+      action: "rename",
+      confidence: "reviewer",
+      sampleValue: "v2",
+    });
+    // An unedited row is the new analysis's, not the old copy in the store.
+    expect(rows[0]).toEqual(fresh.fieldMappings[0]);
+    expect(isModified(next, fresh)).toBe(true);
+  });
+
+  it("takes the new analysis's decision for a row the reviewer never edited", () => {
+    // The stored copy of `kept` is the OLD analysis's row, not an edit.
+    const movedKept = mapping({
+      source: "kept",
+      dest: "SourceMACAddress",
+      action: "rename",
+      confidence: "alias",
+    });
+    const fresh = report("PanOS", [movedKept, overflow("mac"), overflow("gone")], {
+      destSchema: schema,
+    });
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(effectiveMappings(next, fresh)[0]).toEqual(movedKept);
+    // mac's edit now collides with the new analysis's kept -> SourceMACAddress.
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+  });
+
+  it("reads as unmodified when no edit survives, and clears the store for that table", () => {
+    const fresh = report("PanOS", [kept], { destSchema: schema });
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([
+      { logType: "PanOS", source: "mac" },
+      { logType: "PanOS", source: "gone" },
+    ]);
+    expect(next.mappingEdits.PanOS).toBeUndefined();
+    expect(isModified(next, fresh)).toBe(false);
+  });
+
+  it("drops every edit when the log type now goes to a different table", () => {
+    const fresh = report("PanOS", old.fieldMappings, {
+      destSchema: schema,
+      tableName: "Syslog",
+    });
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toHaveLength(2);
+    expect(isModified(next, fresh)).toBe(false);
+  });
+
+  it("drops an edit whose column the new schema no longer has", () => {
+    const fresh = report("PanOS", old.fieldMappings, {
+      destSchema: schema.filter((c) => c.name !== "SourceMACAddress"),
+    });
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+    expect(effectiveMappings(next, fresh).find((m) => m.source === "gone")?.action).toBe(
+      "drop",
+    );
+  });
+
+  it("drops the whole edit, not just its column, when that column is gone", () => {
+    // mac re-pointed at SourceMACAddress and then dropped: the row the reviewer
+    // decided on names a column the new schema lacks, so none of it is applied.
+    const repointedThenDropped = reduce(edited, editAction("mac", "drop"));
+    const fresh = report("PanOS", old.fieldMappings, {
+      destSchema: schema.filter((c) => c.name !== "SourceMACAddress"),
+    });
+    const next = reduce(repointedThenDropped, {
+      type: "analyzed",
+      previous: [old],
+      reports: [fresh],
+    });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+    expect(effectiveMappings(next, fresh).find((m) => m.source === "mac")).toEqual(
+      overflow("mac"),
+    );
+  });
+
+  it("drops a stored column action on a catch-all row rather than replaying it (DBT-209)", () => {
+    // The live reducer refuses mac as `rename` onto the catch-all, so this store
+    // is built by hand: the replay checks the action itself rather than trust
+    // the store. Replayed as it stands it is a Rename onto AdditionalExtensions.
+    const stale = analyzed({
+      mappingEdits: { PanOS: [kept, overflow("mac", { action: "rename" }), overflow("gone")] },
+    });
+    const next = reduce(stale, { type: "analyzed", previous: [old], reports: [old] });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+    expect(next.mappingEdits.PanOS).toBeUndefined();
+  });
+
+  it("keeps a chain of moves whatever order the rows are stored in", () => {
+    // b moved ColY -> ColZ, then a moved ColX -> the ColY b had vacated. a's
+    // row comes first, so replaying in row order puts a onto ColY while the
+    // new analysis still has b there: neither edit is lost, both replay.
+    const chainSchema = ["ColX", "ColY", "ColZ"].map((name) => ({ name, type: "string" }));
+    const a = mapping({ source: "a", dest: "ColX", action: "rename" });
+    const b = mapping({ source: "b", dest: "ColY", action: "rename" });
+    const base = report("Chain", [a, b], { destSchema: chainSchema });
+    const remap = (sourceField: string, value: string): MappingReviewAction => ({
+      type: "edit-mapping",
+      logType: "Chain",
+      sourceField,
+      field: "dest",
+      value,
+      baseline: base.fieldMappings,
+      destSchema: chainSchema,
+    });
+    const chained = reduce(analyzed(), remap("b", "ColZ"), remap("a", "ColY"));
+    const fresh = report("Chain", [a, b], { destSchema: chainSchema });
+    const next = reduce(chained, { type: "analyzed", previous: [base], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([]);
+    expect(effectiveMappings(next, fresh).map((m) => [m.source, m.dest])).toEqual([
+      ["a", "ColY"],
+      ["b", "ColZ"],
+    ]);
+  });
+
+  it("drops an edit onto a column the new analysis already fills from another field", () => {
+    const fresh = report(
+      "PanOS",
+      [kept, overflow("mac"), overflow("gone"), mapping({ source: "srcmac", dest: "SourceMACAddress", action: "rename" })],
+      { destSchema: schema },
+    );
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+  });
+
+  it("drops the edits of a log type the new analysis has no report for", () => {
+    const next = reduce(edited, { type: "analyzed", previous: [old], reports: [] });
+    expect(next.droppedEdits).toHaveLength(2);
+    expect(next.mappingEdits).toEqual({});
+  });
+
+  it("keeps edits re-keyed by a log-type rename (no previous report under the new name)", () => {
+    const renamed = reduce(edited, { type: "rename-log-type", from: "PanOS", to: "Traffic" });
+    const fresh = report("Traffic", old.fieldMappings, { destSchema: schema });
+    const next = reduce(renamed, { type: "analyzed", previous: [old], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([]);
+    expect(effectiveMappings(next, fresh).map((m) => [m.source, m.action])).toEqual([
+      ["kept", "keep"],
+      ["mac", "rename"],
+      ["gone", "drop"],
+    ]);
+  });
+
+  it("says how many were dropped in one sentence", () => {
+    expect(droppedEditsNotice([])).toBe("");
+    expect(droppedEditsNotice([{ logType: "PanOS", source: "gone" }])).toBe(
+      "1 mapping edit no longer matches a field in the new analysis and was dropped.",
+    );
+    expect(
+      droppedEditsNotice([
+        { logType: "PanOS", source: "gone" },
+        { logType: "PanOS", source: "mac" },
+      ]),
+    ).toBe("2 mapping edits no longer match a field in the new analysis and were dropped.");
   });
 });
 
@@ -172,7 +412,7 @@ describe("inputs-changed", () => {
     const next = reduce(
       start,
       { type: "inputs-changed" },
-      { type: "analyzed" },
+      { type: "analyzed", previous: [], reports: [] },
     );
     expect(next.stale).toBe(false);
     expect(next.approvals).toEqual({});
@@ -395,6 +635,17 @@ describe("remove-log-type", () => {
     // The other table's review is untouched, and nothing is marked stale.
     expect(next.stale).toBe(false);
     expect(next.analysisRevision).toBe(start.analysisRevision);
+  });
+
+  it("stops counting the removed log type's dropped edits (DBT-210)", () => {
+    const start = analyzed({
+      droppedEdits: [
+        { logType: "Gone", source: "x" },
+        { logType: "Keep", source: "y" },
+      ],
+    });
+    const next = mappingReviewReducer(start, { type: "remove-log-type", logType: "Gone" });
+    expect(next.droppedEdits).toEqual([{ logType: "Keep", source: "y" }]);
   });
 
   it("leaves the content gate READY when every remaining table is approved", () => {
