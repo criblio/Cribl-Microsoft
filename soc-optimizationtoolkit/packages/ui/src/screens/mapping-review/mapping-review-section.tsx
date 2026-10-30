@@ -13,7 +13,9 @@
  *     summaries;
  *   - an EDITABLE field-mapping table (with a per-card FIELD SEARCH): a
  *     dest-column dropdown and an action dropdown (incl. base64 decode) per
- *     source field, plus the unmapped destination columns;
+ *     source field, plus the unmapped destination columns. A dest choice onto
+ *     a column another row fills opens the claim panel (DBT-208) instead of
+ *     applying;
  *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
  *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
  *     enrichment / forced-input resolution with curated auto-seeding;
@@ -39,7 +41,8 @@
  * The APPROVAL STATE MACHINE lives in the pure mapping-review-state module; this
  * component only drives it: Auto-Approve All / Reset All / per-table Approve,
  * the "Approval Required" / "Approved" badges, the staleness prompt, and the
- * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis; edits
+ * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis, and
+ * a table's on any re-point of its rows (Dest Field or suggestion, DBT-213); edits
  * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
  * optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
  * only its own card and review; the other tables keep their approvals. A
@@ -91,6 +94,7 @@ import type {
   IdentityFieldStatus,
   MatchAction,
   Logger,
+  RemapRequest,
   SchemaCatalog,
   SentinelContent,
   TaggedSample,
@@ -113,7 +117,6 @@ import {
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
 import type {
   AnalysisSignature,
-  DestClaim,
   RequirementsForAssessment,
 } from "./mapping-review-state";
 import {
@@ -173,6 +176,24 @@ const ACTION_OPTIONS: readonly MatchAction[] = [
   "overflow",
   "drop",
 ];
+
+/**
+ * DBT-208: a Dest Field choice as destClaim takes it. The catch-all is the
+ * matcher's own overflow column for the table, as the reducer's re-point uses.
+ */
+function claimRequest(
+  report: GapReport,
+  sourceField: string,
+  column: string,
+): Omit<RemapRequest, "moveClaimed"> {
+  return {
+    sourceField,
+    destColumn: column,
+    destSchema: report.destSchema,
+    catchAllColumn: getOverflowConfig(report.tableName).fieldName,
+    baseline: report.fieldMappings,
+  };
+}
 
 /** A rename signal from the Sample Data section (the Unit 11 seam). */
 export interface MappingReviewRenameEvent {
@@ -467,11 +488,14 @@ export function MappingReviewSection({
     Record<string, { source: string; column: string; withdrew: boolean }>
   >({});
   // DBT-208: a Dest Field choice onto a column another row fills, waiting on
-  // the reviewer's answer (one at a time).
+  // the reviewer's answer (one at a time). Only the QUESTION is held: the
+  // claim itself is re-derived from the current rows on every render, so the
+  // panel closes once it no longer holds (the other row left the column, or a
+  // re-analysis changed the rows) instead of naming a row Move would not move.
   const [pendingClaim, setPendingClaim] = useState<{
     logType: string;
     source: string;
-    claim: DestClaim;
+    column: string;
   } | null>(null);
 
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
@@ -633,6 +657,10 @@ export function MappingReviewSection({
   // `mappingEdits` untouched (mapping-review-state.ts:187-191), so it never
   // reverted these. Corrected 2026-08-26.
   const autoDroppedRef = useRef(new Set<string>());
+  // DBT-208: fields the reviewer moved OUT of a column into the catch-all
+  // (Move). The claim panel promises their value is kept, so the policy's
+  // drop must not take them (autoDropPlan's `reviewerKept`).
+  const reviewerKeptRef = useRef(new Set<string>());
   useEffect(() => {
     for (const report of reports) {
       const assessment = assessments.get(report.logType);
@@ -643,6 +671,7 @@ export function MappingReviewSection({
         assessment,
         effectiveMappings(review, report),
         autoDroppedRef.current,
+        reviewerKeptRef.current,
       );
       for (const source of drop) {
         autoDroppedRef.current.add(`${report.logType}|${source}`);
@@ -777,6 +806,7 @@ export function MappingReviewSection({
       // again after a suggestion is no longer about anything.
       setAppliedNotes({});
       setSuggestFor(null);
+      setPendingClaim(null);
     } catch (err) {
       logger?.error(`gap-analysis: failed: ${String(err)}`);
       setAnalyzeError(String(err));
@@ -998,25 +1028,14 @@ export function MappingReviewSection({
       column: string,
       wasApproved: boolean,
     ) => {
-      const claim = destClaim(
-        rows,
-        {
-          sourceField,
-          destColumn: column,
-          destSchema: report.destSchema,
-          catchAllColumn: getOverflowConfig(report.tableName).fieldName,
-          baseline: report.fieldMappings,
-        },
-        ruleFields,
-      );
-      if (claim !== null) {
-        setPendingClaim({ logType: report.logType, source: sourceField, claim });
+      if (destClaim(rows, claimRequest(report, sourceField, column)) !== null) {
+        setPendingClaim({ logType: report.logType, source: sourceField, column });
         return;
       }
       setPendingClaim(null);
       repoint(report, sourceField, column, wasApproved, "dest");
     },
-    [repoint, ruleFields],
+    [repoint],
   );
 
   // DBT-202: apply a suggested sample field to an unmapped column.
@@ -1562,10 +1581,16 @@ export function MappingReviewSection({
                         // the pure state module (truncation, escaping, and
                         // the empty-vs-missing distinction live there).
                         const example = formatExampleValue(m.sampleValue);
-                        const claimOpen =
+                        const claim =
                           pendingClaim !== null &&
                           pendingClaim.logType === report.logType &&
-                          pendingClaim.source === m.source;
+                          pendingClaim.source === m.source
+                            ? destClaim(
+                                effective,
+                                claimRequest(report, m.source, pendingClaim.column),
+                                ruleFields,
+                              )
+                            : null;
                         return [
                           <tr
                             key={m.source}
@@ -1646,7 +1671,7 @@ export function MappingReviewSection({
                               </select>
                             </td>
                           </tr>,
-                          claimOpen && (
+                          claim !== null && (
                             <DestClaimPanel
                               key={`claim-${m.source}`}
                               id={`mapping-claim-${report.logType}-${m.source}`.replace(
@@ -1654,13 +1679,18 @@ export function MappingReviewSection({
                                 "_",
                               )}
                               source={m.source}
-                              claim={pendingClaim.claim}
+                              claim={claim}
                               onMove={() => {
                                 setPendingClaim(null);
+                                for (const moved of claim.moves) {
+                                  reviewerKeptRef.current.add(
+                                    `${report.logType}|${moved}`,
+                                  );
+                                }
                                 repoint(
                                   report,
                                   m.source,
-                                  pendingClaim.claim.column,
+                                  claim.column,
                                   approved,
                                   "dest",
                                   true,

@@ -264,6 +264,61 @@ describe("Dest Field re-point onto a column another row fills (DBT-208)", () => 
     expect(conf).not.toContain("currentName: in\n");
   });
 
+  it("closes the question once the claim no longer holds (the other row left the column)", async () => {
+    const { container, effective } = await renderAnalyzed();
+    pointAt(container, "qqzz", "ReceivedBytes");
+    expect(claimPanel(container)).not.toBeNull();
+
+    // `in` leaves ReceivedBytes by its OWN Action select while the question
+    // is open: "already filled by in" is no longer true.
+    fireEvent.change(
+      rowFor(container, "in").querySelectorAll<HTMLSelectElement>("select.mapping-select")[1]!,
+      { target: { value: "drop" } },
+    );
+    await waitFor(() => {
+      expect(rowOf(effective, "in")?.action).toBe("drop");
+    });
+    expect(claimPanel(container)).toBeNull();
+  });
+
+  it("keeps the moved field in overflow when the drop policy is on", async () => {
+    const { container, effective } = await renderAnalyzed({
+      contentRequirements: {
+        columns: new Set(["receivedbytes"]),
+        catchAllKeys: new Set(),
+        opaqueCatchAll: false,
+        itemCount: 1,
+      },
+    });
+    fireEvent.click(button(container, "Drop unneeded fields")!);
+    await waitFor(() => {
+      expect(rowOf(effective, "qqzz")?.action).toBe("drop");
+    });
+    pointAt(container, "qqzz", "DestinationMACAddress");
+    await waitFor(() => {
+      expect(rowOf(effective, "qqzz")?.action).toBe("rename");
+    });
+
+    // qqyy takes the column; the panel promises qqzz's value is kept.
+    pointAt(container, "qqyy", "DestinationMACAddress");
+    expect(claimPanel(container)?.querySelector(".mapping-claim-text")?.textContent).toBe(
+      "Using qqyy there moves qqzz out of DestinationMACAddress into AdditionalExtensions (overflow), so its value is kept.",
+    );
+    fireEvent.click(button(container, "Move DestinationMACAddress from qqzz")!);
+    await waitFor(() => {
+      expect(rowOf(effective, "qqyy")).toMatchObject({
+        dest: "DestinationMACAddress",
+        action: "rename",
+      });
+    });
+    // The policy must not drop what the reviewer just moved to overflow.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(rowOf(effective, "qqzz")).toMatchObject({
+      dest: "AdditionalExtensions",
+      action: "overflow",
+    });
+  });
+
   it("warns, as a DBT-202 move does, when the re-pointed field leaves a rule column empty", async () => {
     const { container } = await renderAnalyzed({
       ruleFields: new Set(["sourcemacaddress"]),

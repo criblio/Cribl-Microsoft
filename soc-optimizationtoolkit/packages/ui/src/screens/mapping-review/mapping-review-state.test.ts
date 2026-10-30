@@ -1047,6 +1047,24 @@ describe("autoDropPlan", () => {
     expect(plan.drop).toEqual([]);
   });
 
+  it("does NOT drop a field the reviewer moved into overflow (DBT-208 Move)", () => {
+    // The claim panel promises the moved field's value is kept; the policy
+    // has never dropped it, so only `reviewerKept` separates it from a fresh
+    // overflow field. Preserve has nothing of its to restore.
+    const kept = new Set(["traffic|spare"]);
+    expect(
+      autoDropPlan("drop", "traffic", assessment(["spare", "other"]), [
+        row("spare", "overflow"),
+        row("other", "overflow"),
+      ], new Set(), kept).drop,
+    ).toEqual(["other"]);
+    expect(
+      autoDropPlan("preserve", "traffic", assessment(["spare"]), [
+        row("spare", "overflow"),
+      ], new Set(), kept).restore,
+    ).toEqual([]);
+  });
+
   it("keys the memory per LOG TYPE, not per field name", () => {
     // Two tables can carry the same source field. Dropping it in one must not
     // silently exempt it in the other.
@@ -1327,6 +1345,15 @@ describe("Dest Field re-point and apply-suggestion agree (DBT-213, DBT-208)", ()
     expect(reduce(before, suggest("qqbytes", "ReceivedBytes"))).toBe(before);
   });
 
+  it("refuses the move too when the table has no catch-all to move the other row into", () => {
+    const before = analyzed({ approvals: { PanOS: true } });
+    const noCatchAll: MappingReviewAction = {
+      ...editDest("qqbytes", "ReceivedBytes", true),
+      catchAllColumn: "NotInTheSchema",
+    } as MappingReviewAction;
+    expect(reduce(before, noCatchAll)).toBe(before);
+  });
+
   it("moves the column on the reviewer's answer: one row lands there, the other falls back to overflow", () => {
     const before = analyzed({ approvals: { PanOS: true } });
     const next = reduce(before, editDest("qqbytes", "ReceivedBytes", true));
@@ -1387,7 +1414,26 @@ describe("destClaim (DBT-208)", () => {
       fallback: "AdditionalExtensions",
       actionLabel: "Move ReceivedBytes from in",
       moveWarning: null,
+      moves: ["in"],
     });
+  });
+
+  it("lists every row Move would send to the catch-all, and none without one", () => {
+    const doubled = [
+      ...rows,
+      mapping({ source: "in2", dest: "ReceivedBytes", action: "rename" }),
+    ];
+    const ask = (schema: typeof SCHEMA) =>
+      destClaim(doubled, {
+        sourceField: "qq",
+        destColumn: "ReceivedBytes",
+        destSchema: schema,
+        catchAllColumn: "AdditionalExtensions",
+      });
+    expect(ask(SCHEMA)?.moves).toEqual(["in", "in2"]);
+    expect(
+      ask(SCHEMA.filter((c) => c.name !== "AdditionalExtensions"))?.moves,
+    ).toEqual([]);
   });
 
   it("carries the DBT-202 move warning when the moving row leaves a rule column empty", () => {

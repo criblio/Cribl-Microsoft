@@ -784,6 +784,13 @@ export interface DestClaim {
    * row leaves, when it is a rule column nothing else fills.
    */
   moveWarning: string | null;
+  /**
+   * Every source Move sends to the catch-all - `claimedBy` first, then any
+   * other row the analysis already left in the column. Empty when there is no
+   * catch-all. The screen keeps these from the drop policy (autoDropPlan's
+   * `reviewerKept`), since the panel promises their value is kept.
+   */
+  moves: string[];
 }
 
 /**
@@ -821,6 +828,17 @@ export function destClaim(
       rows,
       ruleFields,
     ),
+    moves:
+      remap.moved === null
+        ? []
+        : rows
+            .filter(
+              (m) =>
+                m.source !== request.sourceField &&
+                landsInColumn(m) &&
+                m.dest.toLowerCase() === column.toLowerCase(),
+            )
+            .map((m) => m.source),
   };
 }
 
@@ -1067,6 +1085,12 @@ export interface RequirementsForAssessment {
  * `alreadyDropped` is the memory that makes this idempotent: drop acts once per
  * field, and only a switch to preserve (which forgets the field) lets it act
  * again. Keys are `logType|source`.
+ *
+ * `reviewerKept` (DBT-208) holds fields the reviewer MOVED into the catch-all
+ * from a column (the Dest Field claim's Move). The policy never dropped them,
+ * so `alreadyDropped` cannot tell them from a fresh overflow field, but the
+ * claim panel promised their value is kept: drop skips them, and preserve has
+ * nothing of theirs to restore.
  */
 export function autoDropPlan(
   policy: "drop" | "preserve",
@@ -1074,6 +1098,7 @@ export function autoDropPlan(
   assessment: UnusedFieldAssessment,
   effective: readonly GapFieldMapping[],
   alreadyDropped: ReadonlySet<string>,
+  reviewerKept: ReadonlySet<string> = new Set(),
 ): { drop: string[]; restore: string[] } {
   const drop: string[] = [];
   const restore: string[] = [];
@@ -1081,6 +1106,7 @@ export function autoDropPlan(
   if (policy === "drop" && assessment.blocked === null) {
     for (const source of assessment.droppable) {
       if (alreadyDropped.has(`${logType}|${source}`)) continue;
+      if (reviewerKept.has(`${logType}|${source}`)) continue;
       const row = effective.find((m) => m.source === source);
       if (row === undefined || row.action !== "overflow") continue;
       drop.push(source);
