@@ -1280,7 +1280,9 @@ describe("columnSuggestions (DBT-202)", () => {
     expect(out[0]).toEqual({
       source: "in",
       example: { kind: "value", text: "4242", title: "4242" },
-      reason: "Documented: CEF in: Bytes transferred inbound",
+      // GEN-20: the alias ladder now names `in` (score 90) before the CEF
+      // citation could, so the reason is the alias, not the citation.
+      reason: "Known alias: in -> ReceivedBytes",
       disposition: "now: overflow into AdditionalExtensions",
       typeNote: "int to long",
       typeMismatch: false,

@@ -202,7 +202,10 @@ describe("close-match ranking against the PAN-OS UAT field set", () => {
     expect(candidates[0]).toEqual({
       ...overflow("in", "int"),
       score: 90,
-      reason: "Documented: CEF in: Bytes transferred inbound",
+      // GEN-20 aliased `in` -> ReceivedBytes, so the alias ladder scores it
+      // 90 first and the CEF citation (also 90) no longer overrides the
+      // reason. Still documented; the ranking below is unchanged.
+      reason: "Known alias: in -> ReceivedBytes",
       documented: true,
       alreadyMapped: false,
       typeMismatch: false,

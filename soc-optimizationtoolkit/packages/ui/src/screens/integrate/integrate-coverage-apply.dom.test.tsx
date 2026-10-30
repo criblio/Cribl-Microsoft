@@ -11,11 +11,13 @@
  * operator to go and find the row in another section. The apply itself travels
  * page -> mapping review as a nonce event, exactly like "Drop unneeded fields".
  *
- * The fixture is the PAN-OS UAT shape (2026-10-29): CEF `in` sits in
- * AdditionalExtensions while ReceivedBytes stays empty, and a rule needs
- * ReceivedBytes. No solution is selected and no content port is wired - the
- * rule arrives as a custom KQL upload, which the rules section analyzes
- * without fetching anything.
+ * The fixture is the PAN-OS UAT shape (2026-10-29): PanSrcMac sits in
+ * AdditionalExtensions while SourceMACAddress stays empty - the edit the UAT
+ * operator made by hand (apply-remap.ts) - and a rule needs SourceMACAddress.
+ * The same rule also reads ReceivedBytes, which CEF `in` now fills on its own
+ * (GEN-20 aliased it), so it must NOT surface as a chip. No solution is
+ * selected and no content port is wired - the rule arrives as a custom KQL
+ * upload, which the rules section analyzes without fetching anything.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -88,7 +90,7 @@ async function renderCovered() {
   });
   fireEvent.click(analyze);
   await waitFor(() => {
-    expect(gapRow(container, "in")).not.toBeNull();
+    expect(gapRow(container, "PanSrcMac")).not.toBeNull();
   });
 
   // The FIRST coverage panel is the rules instance (section 4).
@@ -105,13 +107,16 @@ async function renderCovered() {
     ".rule-coverage-upload input[type=file]",
   )!;
   const rule = new File(
-    ["CommonSecurityLog | where ReceivedBytes > 1000000 | project SourceIP"],
+    [
+      'CommonSecurityLog | where ReceivedBytes > 1000000 | where SourceMACAddress == "00:11:22:33:44:55" | project SourceIP',
+    ],
     "exfil.kql",
     { type: "text/plain" },
   );
   fireEvent.change(upload, { target: { files: [rule] } });
+  // Only SourceMACAddress: ReceivedBytes is filled by the `in` rename.
   await waitFor(() => {
-    expect(chips(rules)).toEqual(["ReceivedBytes"]);
+    expect(chips(rules)).toEqual(["SourceMACAddress"]);
   });
   return { container, rules };
 }
@@ -156,13 +161,25 @@ const fieldsSummary = (container: HTMLElement): string =>
   container.querySelector(".mapping-review-fields-summary")?.textContent ?? "";
 
 describe("Rule Coverage chips apply a close match (DBT-203)", () => {
+  it("arrives with CEF `in` renamed to ReceivedBytes, so the rule's ReceivedBytes is no chip (GEN-20)", async () => {
+    const { container, rules } = await renderCovered();
+    expect(gapRow(container, "in")?.className).toBe(
+      "mapping-row mapping-row-rename",
+    );
+    expect(gapRow(container, "in")!.querySelectorAll("select")[0]!.value).toBe(
+      "ReceivedBytes",
+    );
+    expect(unmappedColumns(container)).not.toContain("ReceivedBytes");
+    expect(chips(rules)).not.toContain("ReceivedBytes");
+  });
+
   it("offers 'Use this field' for the overflow field that fills the missing column", async () => {
     const { rules } = await renderCovered();
-    fireEvent.click(chip(rules, "ReceivedBytes"));
-    const apply = candidateApply(rules, "in");
+    fireEvent.click(chip(rules, "SourceMACAddress"));
+    const apply = candidateApply(rules, "PanSrcMac");
     expect(apply.textContent).toBe("Use this field");
     expect(apply.getAttribute("aria-label")).toBe(
-      "Use this field: in into ReceivedBytes (PanOS)",
+      "Use this field: PanSrcMac into SourceMACAddress (PanOS)",
     );
     // The old dead end is gone: nothing tells the operator to go hunting.
     expect(rules.querySelector(".close-match-panel")?.textContent).not.toContain(
@@ -179,24 +196,24 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
     await waitFor(() => {
       expect(fieldsSummary(container)).toContain("Approved");
     });
-    expect(gapRow(container, "in")?.className).toBe(
+    expect(gapRow(container, "PanSrcMac")?.className).toBe(
       "mapping-row mapping-row-overflow",
     );
-    expect(unmappedColumns(container)).toContain("ReceivedBytes");
+    expect(unmappedColumns(container)).toContain("SourceMACAddress");
 
-    fireEvent.click(chip(rules, "ReceivedBytes"));
-    fireEvent.click(candidateApply(rules, "in"));
+    fireEvent.click(chip(rules, "SourceMACAddress"));
+    fireEvent.click(candidateApply(rules, "PanSrcMac"));
 
     // The Gap Analysis row is now the rename the pack build receives.
     await waitFor(() => {
-      expect(gapRow(container, "in")?.className).toBe(
+      expect(gapRow(container, "PanSrcMac")?.className).toBe(
         "mapping-row mapping-row-rename",
       );
     });
-    const selects = gapRow(container, "in")!.querySelectorAll("select");
-    expect(selects[0]!.value).toBe("ReceivedBytes");
+    const selects = gapRow(container, "PanSrcMac")!.querySelectorAll("select");
+    expect(selects[0]!.value).toBe("SourceMACAddress");
     expect(selects[1]!.value).toBe("rename");
-    expect(unmappedColumns(container)).not.toContain("ReceivedBytes");
+    expect(unmappedColumns(container)).not.toContain("SourceMACAddress");
     // Same path as the Unmapped Destination Fields panel: approval withdrawn.
     expect(fieldsSummary(container)).toContain("Approval Required");
 
@@ -206,14 +223,14 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
     });
     expect(rules.querySelector(".close-match-panel")).toBeNull();
     expect(rules.querySelector(".mapping-suggest-applied")?.textContent).toBe(
-      "in now fills ReceivedBytes (PanOS) in the DCR Gap Analysis.",
+      "PanSrcMac now fills SourceMACAddress (PanOS) in the DCR Gap Analysis.",
     );
   });
 
   it("keeps the applied note true after the table is approved again, and focuses it", async () => {
     const { container, rules } = await renderCovered();
-    fireEvent.click(chip(rules, "ReceivedBytes"));
-    const apply = candidateApply(rules, "in");
+    fireEvent.click(chip(rules, "SourceMACAddress"));
+    const apply = candidateApply(rules, "PanSrcMac");
     apply.focus();
     fireEvent.click(apply);
     const note = await waitFor(() => {
@@ -235,7 +252,7 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
       expect(fieldsSummary(container)).toContain("Approved");
     });
     expect(rules.querySelector(".mapping-suggest-applied")?.textContent).toBe(
-      "in now fills ReceivedBytes (PanOS) in the DCR Gap Analysis.",
+      "PanSrcMac now fills SourceMACAddress (PanOS) in the DCR Gap Analysis.",
     );
   });
 });

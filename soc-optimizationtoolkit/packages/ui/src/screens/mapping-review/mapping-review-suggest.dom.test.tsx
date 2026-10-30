@@ -2,12 +2,19 @@
 /**
  * DBT-202 through the REAL component: an Unmapped Destination Fields column
  * name opens the sample fields that could fill it, and one click applies the
- * choice. The PAN-OS UAT (2026-10-29) shape: the CEF `in` key sat in
- * AdditionalExtensions while ReceivedBytes stayed empty, and the only fix was
- * to find the row and re-point its Dest Field by hand.
+ * choice. The PAN-OS UAT (2026-10-29) shape: vendor extensions such as
+ * PanSrcHostname sat in AdditionalExtensions while the CommonSecurityLog
+ * column they describe stayed empty, and the only fix was to find the row and
+ * re-point its Dest Field by hand.
+ *
+ * The UAT's original example, CEF `in` -> ReceivedBytes, is no longer an
+ * unmapped column: GEN-20 aliased `in`, so it arrives renamed (pinned below).
+ * The column exercised here is SourceHostName, filled by PanSrcHostname - the
+ * strongest candidate the matcher still leaves in overflow (token overlap 49,
+ * just under its 50 floor, so it is shown and marked as a name resemblance).
  *
  * Pinned here, each against the screen rather than the reducer: the panel
- * lists the documented candidate first with its example value; applying makes
+ * lists the best candidate first with its example value; applying makes
  * the row a rename the pack build receives (and the generated pipeline
  * renames), drops the unmapped count by one, and withdraws the approval; a
  * field that already fills a column MOVES and vacates it, warning when that
@@ -40,6 +47,7 @@ const catalog: SchemaCatalog = {
     { name: "TimeGenerated", type: "datetime" },
     { name: "AdditionalExtensions", type: "string" },
     { name: "ReceivedBytes", type: "long" },
+    { name: "SourceHostName", type: "string" },
     { name: "SourceMACAddress", type: "string" },
     { name: "DestinationMACAddress", type: "string" },
     { name: "DeviceVendor", type: "string" },
@@ -50,6 +58,7 @@ function sample(): TaggedSample {
   const content = JSON.stringify({
     TimeGenerated: "2026-10-29T12:00:00Z",
     in: 4242,
+    PanSrcHostname: "ws-0001",
     SourceMACAddress: "00:11:22:33:44:55",
     qqzz: "zz",
   });
@@ -154,9 +163,23 @@ const approveButton = (container: HTMLElement) =>
   );
 
 describe("unmapped column suggestions (DBT-202)", () => {
-  it("lists the documented field first, with its example value and disposition", async () => {
+  it("arrives with CEF `in` already renamed to ReceivedBytes, so no unmapped button for it (GEN-20)", async () => {
+    const { container, effective } = await renderAnalyzed();
+    expect(unmappedColumns(container)).toEqual([
+      "DestinationMACAddress",
+      "DeviceVendor",
+      "SourceHostName",
+    ]);
+    expect(effective().PanOS?.find((m) => m.source === "in")).toMatchObject({
+      dest: "ReceivedBytes",
+      action: "rename",
+      confidence: "alias",
+    });
+  });
+
+  it("lists the best candidate first, with its example value and disposition", async () => {
     const { container } = await renderAnalyzed();
-    const button = columnButton(container, "ReceivedBytes");
+    const button = columnButton(container, "SourceHostName");
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(panel(container)).toBeNull();
 
@@ -168,20 +191,29 @@ describe("unmapped column suggestions (DBT-202)", () => {
     const heading = container.querySelector(
       `#${opened.getAttribute("aria-labelledby")}`,
     );
-    expect(heading?.textContent).toBe("Sample fields that could fill ReceivedBytes");
+    expect(heading?.textContent).toBe("Sample fields that could fill SourceHostName");
     expect(opened.getAttribute("role")).toBe("region");
     expect(document.activeElement).toBe(opened);
 
-    expect(candidates(container)[0]).toBe("in");
-    const top = candidate(container, "in");
-    expect(top.querySelector(".close-match-sample")?.textContent).toBe("e.g. 4242");
+    expect(candidates(container)[0]).toBe("PanSrcHostname");
+    const top = candidate(container, "PanSrcHostname");
+    expect(top.querySelector(".close-match-sample")?.textContent).toBe(
+      "e.g. ws-0001",
+    );
     expect(top.querySelector(".close-match-disposition")?.textContent).toBe(
       "now: overflow into AdditionalExtensions",
     );
-    expect(top.textContent).toContain("Documented: CEF in: Bytes transferred inbound");
-    expect(applyButton(container, "in").textContent).toBe("Use this field");
-    expect(applyButton(container, "in").getAttribute("aria-label")).toBe(
-      "Use this field: in into ReceivedBytes",
+    expect(top.querySelector(".field-hint")?.textContent).toBe(
+      'Shares "source", "host", "name" with SourceHostName',
+    );
+    // Token overlap only (49, under the matcher's 50 floor): offered, but
+    // the operator is told to check the value.
+    expect(top.querySelector(".mapping-suggest-warn")?.textContent).toBe(
+      "Name resemblance only - check the example value",
+    );
+    expect(applyButton(container, "PanSrcHostname").textContent).toBe("Use this field");
+    expect(applyButton(container, "PanSrcHostname").getAttribute("aria-label")).toBe(
+      "Use this field: PanSrcHostname into SourceHostName",
     );
   });
 
@@ -193,20 +225,23 @@ describe("unmapped column suggestions (DBT-202)", () => {
       expect(summary(container)).toContain("Approved");
     });
 
-    fireEvent.click(columnButton(container, "ReceivedBytes"));
-    fireEvent.click(applyButton(container, "in"));
+    fireEvent.click(columnButton(container, "SourceHostName"));
+    fireEvent.click(applyButton(container, "PanSrcHostname"));
 
     await waitFor(() => {
       expect(unmappedHead(container)).toContain("Unmapped Destination Fields (2)");
     });
-    expect(unmappedColumns(container)).not.toContain("ReceivedBytes");
+    expect(unmappedColumns(container)).toEqual([
+      "DestinationMACAddress",
+      "DeviceVendor",
+    ]);
     expect(panel(container)).toBeNull();
-    const applied = effective().PanOS?.find((m) => m.source === "in");
+    const applied = effective().PanOS?.find((m) => m.source === "PanSrcHostname");
     expect(applied).toMatchObject({
-      dest: "ReceivedBytes",
-      destType: "long",
+      dest: "SourceHostName",
+      destType: "string",
       action: "rename",
-      needsCoercion: true,
+      needsCoercion: false,
       confidence: "reviewer",
     });
     // F1-c: the approval is withdrawn, and the screen says why.
@@ -214,10 +249,11 @@ describe("unmapped column suggestions (DBT-202)", () => {
     expect(summary(container)).toContain("Approval Required");
     expect(summary(container)).toContain("Modified");
     expect(container.querySelector(".mapping-suggest-applied")?.textContent).toBe(
-      "in now fills ReceivedBytes. Approve PanOS again to save it as a learned mapping.",
+      "PanSrcHostname now fills SourceHostName. Approve PanOS again to save it as a learned mapping.",
     );
 
-    // What the pack build receives renames `in` and converts it on the target.
+    // What the pack build receives renames PanSrcHostname out of overflow,
+    // beside the `in` rename GEN-20's alias makes on its own.
     const plan = buildPipelinePlan({
       solutionName: "Palo Alto Networks",
       packName: "MS-Sentinel-PANOS",
@@ -233,11 +269,14 @@ describe("unmapped column suggestions (DBT-202)", () => {
     }).tables[0]!;
     expect(plan.overflowConfig.sourceFields).toEqual(["qqzz"]);
     const conf = generatePipelineConfForPlan(plan, "Palo Alto Networks");
+    expect(conf).toContain("currentName: PanSrcHostname\n");
+    expect(conf).toContain("newName: SourceHostName\n");
     expect(conf).toContain("currentName: in\n");
-    expect(conf).toContain("newName: ReceivedBytes");
-    expect(report().fieldMappings.find((m) => m.source === "in")?.action).toBe(
-      "overflow",
-    );
+    expect(conf).toContain("newName: ReceivedBytes\n");
+    // The baseline report is untouched: the choice lives in the edits.
+    expect(
+      report().fieldMappings.find((m) => m.source === "PanSrcHostname")?.action,
+    ).toBe("overflow");
   });
 
   it("moves a field that already fills a column, vacating it and warning when rules use it", async () => {
@@ -270,7 +309,7 @@ describe("unmapped column suggestions (DBT-202)", () => {
   it("keeps an applied field applied when the drop policy it was dropped by is switched off", async () => {
     const { container, effective } = await renderAnalyzed({
       contentRequirements: {
-        columns: new Set(["receivedbytes"]),
+        columns: new Set(["sourcehostname"]),
         catchAllKeys: new Set(),
         opaqueCatchAll: false,
         itemCount: 1,
@@ -282,16 +321,21 @@ describe("unmapped column suggestions (DBT-202)", () => {
       )!;
     fireEvent.click(policyButton("Drop unneeded fields"));
     await waitFor(() => {
-      expect(effective().PanOS?.find((m) => m.source === "in")?.action).toBe("drop");
+      expect(
+        effective().PanOS?.find((m) => m.source === "PanSrcHostname")?.action,
+      ).toBe("drop");
     });
 
-    fireEvent.click(columnButton(container, "ReceivedBytes"));
+    fireEvent.click(columnButton(container, "SourceHostName"));
     expect(
-      candidate(container, "in").querySelector(".close-match-disposition")?.textContent,
+      candidate(container, "PanSrcHostname").querySelector(".close-match-disposition")
+        ?.textContent,
     ).toBe("now: dropped");
-    fireEvent.click(applyButton(container, "in"));
+    fireEvent.click(applyButton(container, "PanSrcHostname"));
     await waitFor(() => {
-      expect(effective().PanOS?.find((m) => m.source === "in")?.action).toBe("rename");
+      expect(
+        effective().PanOS?.find((m) => m.source === "PanSrcHostname")?.action,
+      ).toBe("rename");
     });
 
     // Restoring what the policy dropped must not reach the reviewer's choice.
@@ -301,9 +345,11 @@ describe("unmapped column suggestions (DBT-202)", () => {
         effective().PanOS?.find((m) => m.source === "qqzz")?.action,
       ).toBe("overflow");
     });
-    expect(effective().PanOS?.find((m) => m.source === "in")).toMatchObject({
+    expect(
+      effective().PanOS?.find((m) => m.source === "PanSrcHostname"),
+    ).toMatchObject({
       action: "rename",
-      dest: "ReceivedBytes",
+      dest: "SourceHostName",
     });
   });
 
@@ -329,7 +375,7 @@ describe("unmapped column suggestions (DBT-202)", () => {
 
   it("closes on Escape and on Dismiss, returning focus to the column", async () => {
     const { container } = await renderAnalyzed();
-    const button = columnButton(container, "ReceivedBytes");
+    const button = columnButton(container, "SourceHostName");
     button.focus();
     fireEvent.click(button);
     fireEvent.keyDown(panel(container)!, { key: "Escape" });
@@ -339,7 +385,7 @@ describe("unmapped column suggestions (DBT-202)", () => {
 
     fireEvent.click(button);
     const dismiss = panel(container)!.querySelector<HTMLButtonElement>(
-      'button[aria-label="Dismiss the suggestions for ReceivedBytes"]',
+      'button[aria-label="Dismiss the suggestions for SourceHostName"]',
     )!;
     fireEvent.click(dismiss);
     expect(panel(container)).toBeNull();
@@ -351,7 +397,7 @@ describe("unmapped column suggestions (DBT-202)", () => {
     // is torn down, and runs again. The second run must not record the panel
     // (focused by the first run) as the control to return focus to.
     const { container } = await renderAnalyzed({ strict: true });
-    const button = columnButton(container, "ReceivedBytes");
+    const button = columnButton(container, "SourceHostName");
     button.focus();
     fireEvent.click(button);
     expect(document.activeElement).toBe(panel(container));
@@ -362,12 +408,12 @@ describe("unmapped column suggestions (DBT-202)", () => {
 
   it("drops the approve note once the table is approved, including by Approve All", async () => {
     const { container } = await renderAnalyzed();
-    fireEvent.click(columnButton(container, "ReceivedBytes"));
-    fireEvent.click(applyButton(container, "in"));
+    fireEvent.click(columnButton(container, "SourceHostName"));
+    fireEvent.click(applyButton(container, "PanSrcHostname"));
     // Never approved, so nothing was withdrawn: no "again".
     await waitFor(() => {
       expect(container.querySelector(".mapping-suggest-applied")?.textContent).toBe(
-        "in now fills ReceivedBytes. Approve PanOS to save it as a learned mapping.",
+        "PanSrcHostname now fills SourceHostName. Approve PanOS to save it as a learned mapping.",
       );
     });
     const approveAll = [
