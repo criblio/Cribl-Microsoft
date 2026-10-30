@@ -215,3 +215,117 @@ describe("buildCoercionExpr - dynamic never throws on text (GEN-23)", () => {
     expect(checkPlanFieldAccessors(table)).toEqual([]);
   });
 });
+
+/**
+ * The emitted conf for a vendor-research mapping of `field` from `sourceType`
+ * to `destType`, and the `value:` body of its ONE `- name: <field>` add, still
+ * YAML-escaped. The string branch is reached only through this channel: the
+ * preset path (coerce, and the matcher's cross-type rename) passes "string" as
+ * the source type, so a string column there is never a coercion at all.
+ */
+function vendorValueOf(
+  field: string,
+  sourceType: string,
+  destType: string,
+): { conf: string; table: TablePlan; body: string } {
+  const table: TablePlan = {
+    ...tableWith([{ source: field, target: field, type: destType, action: "keep" }]),
+    vendorMappings: [{ sourceName: field, destName: field, sourceType, destType, action: "map" }],
+  };
+  const conf = generatePipelineConfForPlan(table, "Test Solution");
+  const lines = conf.split("\n");
+  const nameLine = `        - name: ${field}`;
+  expect(lines.filter((l) => l === nameLine), `name lines for ${field}`).toHaveLength(1);
+  const m = /^ {10}value: "(.*)"$/.exec(lines[lines.indexOf(nameLine) + 1] ?? "");
+  expect(m, `value line for ${field}`).not.toBeNull();
+  return { conf, table, body: m?.[1] ?? "" };
+}
+
+/**
+ * YAML 1.2 double-quoted scalar body -> its value, refusing any escape the
+ * spec does not define (so `\'`, which a JS author reaches for, is an ERROR
+ * here as it is in a YAML parser) and any bare `"`, which would end the scalar
+ * early. Only the escapes this emitter could plausibly write are decoded.
+ */
+function readYamlDoubleQuoted(body: string): string {
+  let out = "";
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '"') throw new Error(`unescaped " at ${i}: ${body}`);
+    if (c !== "\\") {
+      out += c;
+      continue;
+    }
+    const next = body[++i];
+    if (next === "\\" || next === '"' || next === "/") out += next;
+    else if (next === "t") out += "\t";
+    else if (next === "n") out += "\n";
+    else throw new Error(`invalid YAML escape \\${String(next)} at ${i - 1}: ${body}`);
+  }
+  return out;
+}
+
+/**
+ * GEN-29 - the string branch. buildCoercionExpr shipped `String(x || '')`, so
+ * every falsy value - an int 0, a boolean false - arrived in a string column
+ * as '' instead of '0' / 'false'. The same rule as GEN-23's: absent stays
+ * absent (null and undefined pass through), everything else is String(value).
+ */
+describe("buildCoercionExpr - string keeps 0 and false (GEN-29)", () => {
+  for (const sourceType of ["int", "boolean"]) {
+    it(`${sourceType} -> string: every present value is stringified, absent stays absent`, () => {
+      const { conf, table, body } = vendorValueOf("DstPort", sourceType, "string");
+      const run = new Function("DstPort", `return (${readYamlDoubleQuoted(body)});`) as (
+        v: unknown,
+      ) => unknown;
+      expect([0, false, true, 12, "", null, "abc"].map(run)).toEqual([
+        "0",
+        "false",
+        "true",
+        "12",
+        "", // already a string, and an empty one
+        null,
+        "abc",
+      ]);
+      expect(run(undefined)).toBe(undefined);
+      expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+      expect(checkPlanFieldAccessors(table)).toEqual([]);
+    });
+  }
+});
+
+/**
+ * GEN-29's second point - a field name holding a quote. buildCoercionExpr
+ * escaped a single quote as `\'`, which is not a YAML double-quoted escape (so
+ * the `value:` scalar did not parse) and did not make the name a valid JS
+ * identifier either: the name is read as a bare identifier, never inside a
+ * string literal, so there is no quote to escape. The emitter now writes the
+ * name verbatim and YAML-escapes the whole expression, so the scalar reads
+ * back to exactly the expression for ANY name. Whether Cribl can address that
+ * name is the accessor rule's question, and these pins hold that it still
+ * refuses the build.
+ */
+describe("a coercion value line is valid YAML for any field name (GEN-29)", () => {
+  for (const field of ["O'Brien", 'Say"Hi', "back\\slash"]) {
+    it(`${JSON.stringify(field)}: the value reads back verbatim, and the build is refused`, () => {
+      const { conf, body } = vendorValueOf(field, "int", "string");
+      expect(readYamlDoubleQuoted(body)).toBe(`${field} == null ? ${field} : String(${field})`);
+      const issues = checkCriblYaml(conf, "conf.yml");
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toContain(`field name "${field}" is not a valid Cribl property accessor`);
+    });
+
+    it(`${JSON.stringify(field)}: the preset coerce line is escaped the same way`, () => {
+      const table = tableWith([{ source: field, target: field, type: "int", action: "coerce" }]);
+      const conf = generatePipelineConfForPlan(table, "Test Solution");
+      const lines = conf.split("\n");
+      const nameLine = `        - name: ${field}`;
+      expect(lines.filter((l) => l === nameLine), `name lines for ${field}`).toHaveLength(1);
+      const m = /^ {10}value: "(.*)"$/.exec(lines[lines.indexOf(nameLine) + 1] ?? "");
+      expect(readYamlDoubleQuoted(m?.[1] ?? "")).toBe(
+        `(${field} != null && String(${field}).trim() !== '' && isFinite(${field})) ? Number(${field}) : undefined`,
+      );
+      expect(checkCriblYaml(conf, "conf.yml")).toHaveLength(1);
+    });
+  }
+});
