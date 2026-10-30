@@ -25,6 +25,8 @@ import {
   sourceCount,
   sourceGaps,
   sourceLabel,
+  staleInventoryNote,
+  workspaceNameOf,
   workspaceOptionLabel,
 } from "./workspace-inventory-state";
 
@@ -50,6 +52,7 @@ export function WorkspaceInventoryPanel() {
   const [inventoryError, setInventoryError] = useState("");
   const [busy, setBusy] = useState<"discover" | "inventory" | null>(null);
   const [progress, setProgress] = useState("");
+  const [saveNote, setSaveNote] = useState("");
 
   const discover = async () => {
     setBusy("discover");
@@ -73,20 +76,28 @@ export function WorkspaceInventoryPanel() {
     }
   };
 
+  // MIG-7: the previous inventory stays on screen while the next one is read,
+  // and is replaced only by an answer - clearing it first made the page shrink
+  // and scroll under the pointer. A failed read does clear it, so a refusal
+  // for one workspace never sits beside another workspace's numbers.
   const runInventory = async () => {
     if (selectedId === "") return;
+    const target = selectedId;
     setBusy("inventory");
     setInventoryError("");
-    setInventory(null);
+    setSaveNote("");
     try {
       setInventory(
-        await inventoryWorkspace(ports.azure, selectedId, {
+        await inventoryWorkspace(ports.azure, target, {
           logger: ports.logger,
           onProgress: setProgress,
         }),
       );
     } catch (err) {
-      setInventoryError(err instanceof Error ? err.message : String(err));
+      setInventory(null);
+      setInventoryError(
+        `${workspaceNameOf(target)}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setBusy(null);
       setProgress("");
@@ -95,13 +106,19 @@ export function WorkspaceInventoryPanel() {
 
   const exportCsv = async () => {
     if (inventory === null) return;
-    const name = inventory.workspaceId.split("/").pop() ?? "workspace";
-    await ports.artifacts.save(`${name}-inventory.csv`, "text/csv", inventoryCsv(inventory));
+    const file = `${workspaceNameOf(inventory.workspaceId)}-inventory.csv`;
+    try {
+      await ports.artifacts.save(file, "text/csv", inventoryCsv(inventory));
+      setSaveNote(`Saved ${file}.`);
+    } catch (err) {
+      setSaveNote(`Could not save ${file}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   const workspaces = discovery === null ? [] : listingRows(discovery.workspaces);
   const gaps = inventory === null ? null : sourceGaps(inventory);
   const emptyText = inventory === null ? null : inventoryEmptyText(inventory);
+  const staleNote = inventory === null ? null : staleInventoryNote(inventory.workspaceId, selectedId);
   // Narrowed on kind, never counted: an unverified empty Usage answer has no
   // table count to show (docs/inventory-standard.md).
   const tableRows = inventory !== null && inventory.tables.kind === "rows" ? inventory.tables.rows : null;
@@ -167,9 +184,8 @@ export function WorkspaceInventoryPanel() {
             value={selectedId}
             disabled={busy !== null}
             onChange={(e) => {
+              // MIG-7: the shown inventory stays; staleNote says it is not this one.
               setSelectedId(e.target.value);
-              setInventory(null);
-              setInventoryError("");
             }}
           >
             {workspaces.map((w) => (
@@ -191,13 +207,17 @@ export function WorkspaceInventoryPanel() {
 
       {inventoryError !== "" && (
         <p className="match-warning">
-          Could not read this workspace's Usage table, so there is no inventory to show:{" "}
-          {inventoryError}
+          Could not read the Usage table, so there is no inventory to show - {inventoryError}
         </p>
       )}
 
       {inventory !== null && (
         <>
+          <p className="panel-desc">
+            Inventory of <code className="code-chip">{workspaceNameOf(inventory.workspaceId)}</code>,
+            last {inventory.windowDays} complete UTC days.
+          </p>
+          {staleNote !== null && <p className="match-warning">{staleNote}</p>}
           <div className="match-stat-grid">
             <div className="match-stat match-stat-info">
               <span className="match-stat-value">
@@ -252,7 +272,7 @@ export function WorkspaceInventoryPanel() {
                     <th>Daily avg</th>
                     <th>Billable (30d)</th>
                     <th>Days with data</th>
-                    <th>
+                    <th className="siem-inventory-sources">
                       Sources <InfoTip text={SOURCES_TIP} />
                     </th>
                   </tr>
@@ -321,6 +341,7 @@ export function WorkspaceInventoryPanel() {
               <button className="run-button" onClick={() => void exportCsv()}>
                 Download inventory CSV
               </button>
+              {saveNote !== "" && <span className="field-hint">{saveNote}</span>}
             </div>
           )}
         </>

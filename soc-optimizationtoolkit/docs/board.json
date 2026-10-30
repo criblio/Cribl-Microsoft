@@ -3036,6 +3036,18 @@
       "title": "The workspace inventory published its KQL internals on the @soc/core barrel",
       "detail": "FOUND 2026-10-30 by the architecture audit, in a230f02. core/index.ts re-exported domain/workspace-inventory wholesale, and the usecase index exported runWorkspaceQuery, workspaceArmId, SOURCE_BATCH_SIZE and WORKSPACE_QUERY_API_VERSION: about 25 names with no consumer outside the feature and its tests - the shape AZR-53 removed a day earlier. Fix: drop the domain from the root barrel; the usecase index publishes discoverWorkspaces, inventoryWorkspace and the result types (re-exporting InventorySource, InventoryTable and TableSources, which the panel needs); runWorkspaceQuery becomes module-local.\n\nDONE 2026-10-30 (pins): barrel-exports.test.ts asserts both usecases reach the root by identity and that twelve internals do not; mutation-checked by re-adding the wholesale export, which fails the pin.",
       "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "MIG-7",
+      "type": "bug",
+      "priority": "now",
+      "title": "The inventory panel jumps on workspace change, wraps its source lines, and says nothing after a download",
+      "detail": "FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1) Picking a different workspace cleared the shown inventory, so the page shrank and scrolled under the pointer - two clicks in the UAT landed on the wrong control because of it. (2) The Sources column is the narrowest in the table, so each source line wraps its event count onto a line of its own. (3) Download inventory CSV saved the file (verified: 618-byte Systest CSV matching the screen) but the panel showed nothing, so an operator cannot tell a save from a dead button. Fix: keep the shown inventory on a selection change and say which workspace it belongs to and that it is not the selected one; give the Sources column a minimum width; name the saved file (or the save error) beside the button."
     }
   ],
   "features": [

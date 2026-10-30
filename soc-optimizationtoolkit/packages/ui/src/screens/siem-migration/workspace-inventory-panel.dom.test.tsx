@@ -23,14 +23,23 @@ function table(columns: string[], rows: unknown[][]) {
   return { tables: [{ name: "PrimaryResult", columns: columns.map((name) => ({ name })), rows }] };
 }
 
-/** Route ARM calls by path; `usage` decides the Usage query's answer. */
-function armStub(usage: { status: number; body: unknown }) {
+const WS2_ID = WS_ID.replace(/law-1$/, "law-2");
+
+type Answer = { status: number; body: unknown };
+
+/**
+ * Route ARM calls by path. `usage` decides the Usage query's answer; a second
+ * workspace (law-2, answered by `usage2`) is listed only when `usage2` is given.
+ */
+function armStub(usage: Answer, usage2?: Answer) {
   return vi.fn(async (req: AzureManagementRequest) => {
     if (req.path === "/subscriptions") {
       return { status: 200, body: { value: [{ subscriptionId: "sub-1", displayName: "Prod", state: "Enabled" }] } };
     }
     if (req.path.endsWith("/Microsoft.OperationalInsights/workspaces")) {
-      return { status: 200, body: { value: [{ name: "law-1", id: WS_ID, location: "eastus" }] } };
+      const value = [{ name: "law-1", id: WS_ID, location: "eastus" }];
+      if (usage2 !== undefined) value.push({ name: "law-2", id: WS2_ID, location: "eastus" });
+      return { status: 200, body: { value } };
     }
     if (req.path.endsWith("/Microsoft.OperationsManagement/solutions")) {
       return {
@@ -38,9 +47,9 @@ function armStub(usage: { status: number; body: unknown }) {
         body: { value: [{ name: "SecurityInsights(law-1)", properties: { workspaceResourceId: WS_ID } }] },
       };
     }
-    if (req.path === `${WS_ID}/query`) {
+    if (req.path === `${WS_ID}/query` || req.path === `${WS2_ID}/query`) {
       const query = (req.body as { query: string }).query;
-      if (query.startsWith("Usage")) return usage;
+      if (query.startsWith("Usage")) return req.path.startsWith(WS2_ID) ? usage2! : usage;
       return {
         status: 200,
         body: table(
@@ -108,7 +117,7 @@ describe("WorkspaceInventoryPanel", () => {
     const request = armStub({ status: 403, body: { error: { code: "InsufficientAccessError" } } });
     renderPanel(request);
     await discoverAndInventory();
-    await screen.findByText(/Could not read this workspace's Usage table.*HTTP 403/);
+    await screen.findByText(/Could not read the Usage table.*law-1: read Usage: HTTP 403/);
     expect(screen.queryByText(/no ingested data/)).toBeNull();
     expect(screen.queryByText("tables with data")).toBeNull();
   });
@@ -129,5 +138,60 @@ describe("WorkspaceInventoryPanel", () => {
     const [name, mime, data] = vi.mocked(ports.artifacts.save).mock.calls[0]!;
     expect([name, mime]).toEqual(["law-1-inventory.csv", "text/csv"]);
     expect(String(data)).toContain("Syslog,3.000,90.000,30,,fw-01,Computer,0.100,1200,read");
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-7", () => {
+  const USAGE_OK: Answer = {
+    status: 200,
+    body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]),
+  };
+
+  it("names the saved file beside the button, and a failed save too", async () => {
+    const ports = renderPanel(armStub(USAGE_OK));
+    await discoverAndInventory();
+    fireEvent.click(await screen.findByText("Download inventory CSV"));
+    await screen.findByText("Saved law-1-inventory.csv.");
+
+    vi.mocked(ports.artifacts.save).mockRejectedValueOnce(new Error("blocked by policy"));
+    fireEvent.click(screen.getByText("Download inventory CSV"));
+    await screen.findByText("Could not save law-1-inventory.csv: blocked by policy");
+  });
+
+  async function inventoryFirstThenPickSecond(usage2: Answer) {
+    renderPanel(armStub(USAGE_OK, usage2));
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\)/);
+    fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: WS_ID } });
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    await screen.findByText("Syslog");
+    fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: WS2_ID } });
+  }
+
+  it("keeps the shown inventory on a workspace change and says it is NOT the selected one", async () => {
+    await inventoryFirstThenPickSecond(USAGE_OK);
+    expect(screen.getByText("Syslog")).toBeTruthy();
+    expect(
+      screen.getByText(/Showing the inventory of law-1, not the selected workspace.*read law-2/),
+    ).toBeTruthy();
+  });
+
+  it("drops the note, and the old rows, once the selected workspace has been read", async () => {
+    await inventoryFirstThenPickSecond({
+      status: 200,
+      body: table(USAGE_COLS, [["AzureActivity", 30, 30, 30, "[]"]]),
+    });
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    await screen.findByText("AzureActivity");
+    expect(screen.queryByText(/Showing the inventory of/)).toBeNull();
+    expect(screen.queryByText("Syslog")).toBeNull();
+  });
+
+  it("clears the old numbers when the next read is REFUSED - a refusal never sits beside another workspace's data", async () => {
+    await inventoryFirstThenPickSecond({ status: 403, body: { error: { code: "AuthorizationFailed" } } });
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    await screen.findByText(/law-2: read Usage: HTTP 403/);
+    expect(screen.queryByText("Syslog")).toBeNull();
+    expect(screen.queryByText("tables with data")).toBeNull();
   });
 });

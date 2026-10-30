@@ -5,6 +5,7 @@ import {
   formatMB,
   inventoryCsv,
   sourceLabel,
+  staleInventoryNote,
 } from "./workspace-inventory-state";
 
 function source(partial: Partial<InventorySource>): InventorySource {
@@ -95,5 +96,21 @@ describe("inventoryCsv", () => {
       queries: { usage: "", sourcesExample: null },
     });
     expect(csv.split("\n")[1]).toBe('Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout"');
+  });
+});
+
+describe("staleInventoryNote (MIG-7)", () => {
+  const A = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-a";
+  const B = A.replace(/law-a$/, "law-b");
+
+  it("is silent when the shown inventory is the selected workspace", () => {
+    expect(staleInventoryNote(A, A)).toBeNull();
+  });
+
+  it("names both workspaces when they differ", () => {
+    expect(staleInventoryNote(A, B)).toBe(
+      "Showing the inventory of law-a, not the selected workspace. " +
+        "Press Inventory this workspace to read law-b.",
+    );
   });
 });

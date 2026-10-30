@@ -106,6 +106,24 @@ export function inventoryEmptyText(inventory: WorkspaceInventory): string | null
   return null;
 }
 
+/** A workspace's name from its ARM id (the last path segment). */
+export function workspaceNameOf(id: string): string {
+  return id.split("/").filter((s) => s !== "").pop() ?? id;
+}
+
+/**
+ * MIG-7: the shown inventory survives a selection change, so the page does not
+ * collapse under the pointer - which makes it ESSENTIAL to say when what is
+ * shown is not what is selected. Null when they agree.
+ */
+export function staleInventoryNote(inventoryId: string, selectedId: string): string | null {
+  if (inventoryId === selectedId) return null;
+  return (
+    `Showing the inventory of ${workspaceNameOf(inventoryId)}, not the selected ` +
+    `workspace. Press Inventory this workspace to read ${workspaceNameOf(selectedId)}.`
+  );
+}
+
 /** How many tables' source breakdowns did not come back whole. */
 export function sourceGaps(inventory: WorkspaceInventory): { failed: number; partial: number } {
   const rows = listingRows(inventory.tables);

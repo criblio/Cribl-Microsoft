@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**76 in the backlog, 53 in progress, 83 done.**
+**76 in the backlog, 54 in progress, 83 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| SIEM Migration | 1 | 5 | 1 |
+| SIEM Migration | 2 | 5 | 2 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 129.
+Open work totals 130.
 
 ## Epics and features
 
@@ -135,17 +135,17 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 83% (5/6)
+### `MIG` SIEM migration analysis - 71% (5/7)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 5/6 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6 |
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 5/7 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7 |
 
 ---
 
-## In progress (53)
+## In progress (54)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1270,6 +1270,20 @@ Started. Anything here with an unfinished dependency is called out on its card.
   routes, and never rewrites the QuickConnect flow. The operator connects the
   destination by hand in live testing: the app must not write the route or
   commit during verification without asking. Out of scope: DBT-37.
+
+- **MIG-7** The inventory panel jumps on workspace change, wraps its source lines, and says nothing after a download
+  `MIG-F1` `bug` `settled`
+  FOUND 2026-10-30 in the second MIG-4 UAT, in committed code (a230f02). (1)
+  Picking a different workspace cleared the shown inventory, so the page
+  shrank and scrolled under the pointer - two clicks in the UAT landed on the
+  wrong control because of it. (2) The Sources column is the narrowest in the
+  table, so each source line wraps its event count onto a line of its own. (3)
+  Download inventory CSV saved the file (verified: 618-byte Systest CSV
+  matching the screen) but the panel showed nothing, so an operator cannot
+  tell a save from a dead button. Fix: keep the shown inventory on a selection
+  change and say which workspace it belongs to and that it is not the selected
+  one; give the Sources column a minimum width; name the saved file (or the
+  save error) beside the button.
 
 ---
 

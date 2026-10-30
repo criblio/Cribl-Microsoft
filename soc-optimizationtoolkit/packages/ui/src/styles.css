@@ -3354,6 +3354,12 @@ button.readiness-pill:focus-visible {
   white-space: nowrap;
 }
 
+/* MIG-7: the widest content in the table; at the default share each source
+   line wrapped its event count onto a line of its own. */
+.siem-inventory-sources {
+  min-width: 380px;
+}
+
 .siem-inventory-query {
   font-size: 11px;
   white-space: pre-wrap;
