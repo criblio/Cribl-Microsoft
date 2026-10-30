@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 41 in progress, 93 done.**
+**87 in the backlog, 44 in progress, 93 done.**
 
 ## By menu item
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (41)
+## In progress (44)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1084,6 +1084,38 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **GEN-23** buildCoercionExpr corrupts boolean, int and dynamic conversions, and GEN-19 widened its reach
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
+  pipeline-conf.ts buildCoercionExpr emits Boolean(x) for a boolean column (so
+  '0', 'no', 'false' become true), Number(x) || 0 for int/long (a value that
+  does not convert arrives as 0, not empty), and JSON.parse(x) for dynamic
+  (throws on non-JSON text). Pre-existing on coerce rows; GEN-19 now also
+  routes matcher cross-type renames through it, so packs rebuilt from the
+  field-match rung can newly corrupt data. Fix: a value-aware boolean
+  expression, a NaN-to-empty numeric conversion, a guarded JSON.parse; pin
+  each through generatePipelineConfForPlan.
+
+- **GEN-24** A multi-type PAN-OS CEF pack gets placeholder route filters: the header TYPE cannot be routed on
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). DBT-196 splits
+  PAN-OS CEF captures into THREAT and TRAFFIC samples, but route-discriminator
+  excludes CEF header fields (isMintedHeaderField), so the pack built from
+  both gets a placeholder route filter instead of routing by type. The only
+  raw-text test available is a delimited token such as '|THREAT|'. Fix: a
+  route filter on the header TYPE token for PAN-OS CEF; pin the generated
+  route.yml. This is on the operator's PAN-OS path, so it blocks a working
+  two-type pack.
+
+- **DBT-208** Field Mappings: two rows pointed at one column silently overwrite each other
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). applyRemap
+  reports claimedBy and displaced, but the Dest-select path discards both and
+  the table shows nothing: point two rows at one column and the second Rename
+  overwrites the first; the value reaches neither the column nor overflow.
+  DBT-202's panel moves with a warning, the Dest select does not. Fix: show
+  the claim and offer 'Move from X' on the Dest path too.
+
 - **GEN-28** The existing-destination path has two deciders: the screen keys off the radio, the arc off a complete pick
   `GEN-F1` `bug` `settled`
   FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
@@ -1130,7 +1162,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (15)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1258,29 +1290,6 @@ Next to pick up. Nothing blocks these.
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
 
-- **GEN-23** buildCoercionExpr corrupts boolean, int and dynamic conversions, and GEN-19 widened its reach
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
-  pipeline-conf.ts buildCoercionExpr emits Boolean(x) for a boolean column (so
-  '0', 'no', 'false' become true), Number(x) || 0 for int/long (a value that
-  does not convert arrives as 0, not empty), and JSON.parse(x) for dynamic
-  (throws on non-JSON text). Pre-existing on coerce rows; GEN-19 now also
-  routes matcher cross-type renames through it, so packs rebuilt from the
-  field-match rung can newly corrupt data. Fix: a value-aware boolean
-  expression, a NaN-to-empty numeric conversion, a guarded JSON.parse; pin
-  each through generatePipelineConfForPlan.
-
-- **GEN-24** A multi-type PAN-OS CEF pack gets placeholder route filters: the header TYPE cannot be routed on
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). DBT-196 splits
-  PAN-OS CEF captures into THREAT and TRAFFIC samples, but route-discriminator
-  excludes CEF header fields (isMintedHeaderField), so the pack built from
-  both gets a placeholder route filter instead of routing by type. The only
-  raw-text test available is a delimited token such as '|THREAT|'. Fix: a
-  route filter on the header TYPE token for PAN-OS CEF; pin the generated
-  route.yml. This is on the operator's PAN-OS path, so it blocks a working
-  two-type pack.
-
 - **DBT-204** The Mapping Catalog claims deviceProcessName maps to ProcessName; the matcher sends it to ProcessID
   `DBT-F2` `bug` `settled`
   FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Same class as
@@ -1308,15 +1317,6 @@ Next to pick up. Nothing blocks these.
   count until a reload and then the store's byte-capped count with no
   explanation. Third intake path of DBT-197's trim; reuse
   storedEventShortfalls and the headline sentence.
-
-- **DBT-208** Field Mappings: two rows pointed at one column silently overwrite each other
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). applyRemap
-  reports claimedBy and displaced, but the Dest-select path discards both and
-  the table shows nothing: point two rows at one column and the second Rename
-  overwrites the first; the value reaches neither the column nor overflow.
-  DBT-202's panel moves with a warning, the Dest select does not. Fix: show
-  the claim and offer 'Move from X' on the Dest path too.
 
 - **DBT-209** Setting an overflow row's Action to rename or keep targets the catch-all column
   `DBT-F2` `bug` `settled`

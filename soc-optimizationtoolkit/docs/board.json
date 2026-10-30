@@ -2962,7 +2962,7 @@
       "detail": "FILED 2026-10-29 from the F2 plan. route-yml.ts records (measured 2026-09-04) only that output: default makes the pack selectable on the Routes page; that events then reach the calling group route's output is unmeasured. GEN-21's route-only wiring rests on it. The operator answers it by hand while connecting the destination in Cribl (2026-10-29: 'I will manually do that'); record the observed delivery here. Related: GEN-15."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -2974,7 +2974,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). pipeline-conf.ts buildCoercionExpr emits Boolean(x) for a boolean column (so '0', 'no', 'false' become true), Number(x) || 0 for int/long (a value that does not convert arrives as 0, not empty), and JSON.parse(x) for dynamic (throws on non-JSON text). Pre-existing on coerce rows; GEN-19 now also routes matcher cross-type renames through it, so packs rebuilt from the field-match rung can newly corrupt data. Fix: a value-aware boolean expression, a NaN-to-empty numeric conversion, a guarded JSON.parse; pin each through generatePipelineConfForPlan."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3034,7 +3034,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Tagged samples store every event three times (rawEvents, parsed.rawEvents, parsed.records), which is why verbose CEF keeps only about 9 to 14 of 100 events. Storing the raw text once (or rebuilding records on read) changes the stored format and needs a migration decision. Also: the adapter keeps the first n events, so a stratified trim that keeps every event shape would preserve sample diversity. Related: DBT-197."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
