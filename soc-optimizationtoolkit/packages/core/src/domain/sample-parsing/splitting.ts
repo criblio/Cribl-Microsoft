@@ -229,7 +229,8 @@ export interface SplitOutcome {
    * Input lines filed under NO group (DBT-205): a key=value line under the
    * three-pair gate, or a line that parses to nothing, when the other lines
    * did yield a discriminator. Group event counts plus this equal
-   * `rawEvents.length`. Always 0 on the fallback paths, which carry every line.
+   * `rawEvents.length`. Always 0 on the fallback paths and the PAN-OS
+   * headerless-CSV grouping, which carry every line.
    */
   leftOut: number;
 }

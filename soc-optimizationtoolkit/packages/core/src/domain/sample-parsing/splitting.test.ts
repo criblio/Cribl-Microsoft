@@ -578,6 +578,24 @@ describe("splitSamplesWithLeftOut (DBT-205)", () => {
     }
   });
 
+  it("leaves nothing out of the PAN-OS CSV grouping, which files every line", () => {
+    // The headerless-CSV path names real log types from position 3, so it is
+    // not the fallback group - but it groups EVERY input line, so its shortfall
+    // is 0 too. Pinned separately because no other case here reaches it.
+    const CSV_TRAFFIC = "1,2026/10/29 10:00:00,0123,TRAFFIC,end,2049,2026/10/29 10:00:00,10.0.0.1";
+    const CSV_THREAT = "1,2026/10/29 10:00:01,0123,THREAT,url,2049,2026/10/29 10:00:01,10.0.0.2";
+    const { splits, leftOut } = splitSamplesWithLeftOut(
+      [CSV_TRAFFIC, CSV_THREAT, CSV_TRAFFIC],
+      "fb",
+      "csv",
+    );
+    expect(splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["TRAFFIC", [CSV_TRAFFIC, CSV_TRAFFIC]],
+      ["THREAT", [CSV_THREAT]],
+    ]);
+    expect(leftOut).toBe(0);
+  });
+
   it("does not change the PAN-OS CEF split, and leaves none of it out", () => {
     const PAN_THREAT =
       "<14>Oct 29 10:00:00 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|rt=Oct 29 2026 10:00:00 GMT deviceExternalId=0123 src=10.0.0.1 dst=1.2.3.4 act=alert";
