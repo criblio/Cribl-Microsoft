@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**92 in the backlog, 37 in progress, 122 done.**
+**90 in the backlog, 38 in progress, 123 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 52 | 66 | 26 |
+| Sentinel Integration | 51 | 67 | 25 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 129.
+Open work totals 128.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 52% (74/143)
+### `DBT` Quality and technical debt _(enabler)_ - 52% (75/143)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 27/37 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 28/37 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1068,9 +1068,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **DBT-226** Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step
+  `DBT-F2` `story` `settled`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Enable
+  Sentinel Content shows a warning plus three Not loaded yet subsections; Rule
+  Coverage and Workbook Coverage are two steps of the same shape. Build: one
+  line plus Load until loaded; one Coverage step with a Rules / Workbooks
+  switch.
+
 ---
 
-## Backlog - now (13)
+## Backlog - now (11)
 
 Next to pick up. Nothing blocks these.
 
@@ -1278,33 +1291,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **DBT-225** Configure Cribl asks new or existing destination first; Azure Resources is one line when it does not apply
-  `DBT-F2` `story` `settled`
-  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
-  are too many words on the screen. I feel like we need more selections for
-  the user to choose before we reveal some information." Audit (2026-10-30,
-  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
-  content shown before the choice that makes it relevant. DECIDED: every
-  section stays open (no accordion); reveal inside sections only. Configure
-  Cribl shows the destination radio, its explanation, pack name, wiring,
-  multiple groups, pack check and rebuild together; Select Azure Resources
-  shows a paragraph for a step that does not apply with an existing
-  destination. Build: ask the destination question first and reveal that path;
-  collapse the non-applicable Azure step to one line.
-
-- **DBT-226** Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step
-  `DBT-F2` `story` `settled`
-  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
-  are too many words on the screen. I feel like we need more selections for
-  the user to choose before we reveal some information." Audit (2026-10-30,
-  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
-  content shown before the choice that makes it relevant. DECIDED: every
-  section stays open (no accordion); reveal inside sections only. Enable
-  Sentinel Content shows a warning plus three Not loaded yet subsections; Rule
-  Coverage and Workbook Coverage are two steps of the same shape. Build: one
-  line plus Load until loaded; one Coverage step with a Rules / Workbooks
-  switch.
 
 ---
 
@@ -2437,7 +2423,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (122)
+## Done (123)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6156,3 +6142,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   two screens to a third of one; Paste events showed only the textarea, name
   and Add Sample; Capture from a live source showed only the worker-group
   picker.
+
+- **DBT-225** Configure Cribl asks new or existing destination first; Azure Resources is one line when it does not apply
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Configure
+  Cribl shows the destination radio, its explanation, pack name, wiring,
+  multiple groups, pack check and rebuild together; Select Azure Resources
+  shows a paragraph for a step that does not apply with an existing
+  destination. Build: ask the destination question first and reveal that path;
+  collapse the non-applicable Azure step to one line. DONE 2026-10-30 (both).
+  Configure Cribl now opens with the Sentinel destination question (moved
+  above the worker group; the radios and their wording are unchanged, so the
+  GEN-21 pins hold), and the existing-destination listing renders only on that
+  path. On the existing path Pack wiring is one line (Pack wiring: Routable,
+  reason in an (i)) instead of a disabled select and its paragraph - the
+  GEN-21 pin that asserted the disabled select was changed deliberately to
+  assert no shape select and the fixed line, same intent. More worker groups,
+  the overwrite check and rebuild-only sit in a More pack options disclosure
+  that opens itself on a found conflict, a read error, a build in progress or
+  its log, so no warning is hidden. Select Azure Resources is one line on the
+  existing path, with the pinned sentence kept and the explanation in an (i).
+  New pin: question precedes the worker group, disclosure closed by default;
+  mutation-checked by forcing it open. LIVE on TMNA: section 7 reads Not
+  needed with an existing destination. (i); Configure Cribl starts with
+  Sentinel destination; Pack wiring: Routable (i); More pack options
+  collapsed.

@@ -2715,13 +2715,12 @@ export function IntegrateScreen({
   // all - an offline operator otherwise met a Reload button and "Always on"
   // facts about a deploy that will not run.
   const azureResourcesBody = existingMode ? (
+    // DBT-225: one line - the step does not apply, and why is in the tip.
     <p className="panel-desc">
       {existingDestination !== undefined
-        ? `Not needed - using ${existingDestination}. `
-        : "Not needed with an existing destination. "}
-      Nothing in Azure is read or written on this path: the pack hands its
-      events to the destination you pick in Configure Cribl. Choose
-      &quot;Create a new destination&quot; there to target Azure instead.
+        ? `Not needed - using ${existingDestination}.`
+        : "Not needed with an existing destination."}{" "}
+      <InfoTip text="Nothing in Azure is read or written on this path: the pack hands its events to the destination you pick in Configure Cribl. Choose Create a new destination there to target Azure instead." />
     </p>
   ) : (
     <>
@@ -2783,6 +2782,40 @@ export function IntegrateScreen({
 
   const criblConfigBody = (
     <div className="form-grid">
+      {/* DBT-225: where the events go is asked FIRST - it decides which of
+          the fields below apply (an existing destination needs no Azure, is
+          always routable, and is picked per table). Both are always offered;
+          an offline operator starts on the existing destination (GEN-21). */}
+      <div className="discovery-result">
+      <div role="radiogroup" aria-labelledby="integrate-destination-mode-label">
+        <span className="field-label" id="integrate-destination-mode-label">
+          Sentinel destination{" "}
+          <InfoTip text="Create: Deploy creates the Data Collection Rule in Azure and the matching Cribl Sentinel destination, which needs an Azure connection and an app registration. Existing: pick a Sentinel destination already configured in this worker group; the pack is built routable and nothing in Azure is read or written." />
+        </span>
+        <label className="integrate-check">
+          <input
+            type="radio"
+            name="integrate-destination-mode"
+            checked={!existingMode}
+            onChange={() => setDestinationMode("create")}
+          />
+          <span className="integrate-check-text">
+            Create a new destination with Deploy (needs an Azure connection)
+          </span>
+        </label>
+        <label className="integrate-check">
+          <input
+            type="radio"
+            name="integrate-destination-mode"
+            checked={existingMode}
+            onChange={() => setDestinationMode("existing")}
+          />
+          <span className="integrate-check-text">
+            Use an existing Cribl Sentinel destination (no Azure connection)
+          </span>
+        </label>
+      </div>
+      </div>
       <label className="field">
         <span className="field-label">
           Cribl worker group{" "}
@@ -2809,36 +2842,8 @@ export function IntegrateScreen({
       </label>
       {/* GEN-21. Where the pack's events go. Both are always offered; an
           offline operator starts on the existing destination. */}
+      {existingMode && (
       <div className="discovery-result">
-        <div role="radiogroup" aria-labelledby="integrate-destination-mode-label">
-          <span className="field-label" id="integrate-destination-mode-label">
-            Sentinel destination{" "}
-            <InfoTip text="Create: Deploy creates the Data Collection Rule in Azure and the matching Cribl Sentinel destination, which needs an Azure connection and an app registration. Existing: pick a Sentinel destination already configured in this worker group; the pack is built routable and nothing in Azure is read or written." />
-          </span>
-          <label className="integrate-check">
-            <input
-              type="radio"
-              name="integrate-destination-mode"
-              checked={!existingMode}
-              onChange={() => setDestinationMode("create")}
-            />
-            <span className="integrate-check-text">
-              Create a new destination with Deploy (needs an Azure connection)
-            </span>
-          </label>
-          <label className="integrate-check">
-            <input
-              type="radio"
-              name="integrate-destination-mode"
-              checked={existingMode}
-              onChange={() => setDestinationMode("existing")}
-            />
-            <span className="integrate-check-text">
-              Use an existing Cribl Sentinel destination (no Azure connection)
-            </span>
-          </label>
-        </div>
-        {existingMode && (
           <>
             <p className="panel-desc" data-testid="existing-destination-listing" data-status={existingView.kind}>
               {existingView.text}
@@ -2916,8 +2921,8 @@ export function IntegrateScreen({
                 );
               })}
           </>
-        )}
       </div>
+      )}
       <label className="field">
         <span className="field-label">
           Pack name{" "}
@@ -2940,44 +2945,48 @@ export function IntegrateScreen({
           as a route pipeline - and BOTH shapes are legitimate, so this is a
           choice rather than a fix. The wording names the consequence for each,
           because "all-inclusive" and "routable" mean nothing on their own. */}
-      <label className="field">
-        <span className="field-label">
-          Pack wiring{" "}
-          <InfoTip
-            text={
-              effectivePackShape === "all-inclusive"
-                ? "Self-contained: the pack ships the Sentinel destination and its secret, so it works on install with nothing set up first. Cribl does not offer a pack that holds a destination in the Routes page pipeline list. This is what Build and install pack wires for you."
-                : "Routable: no destination ships in the pack and every route hands events back, so it appears in the Routes page pipeline list and drops into a flow you already have. The Sentinel destination must already exist in the worker group - Deploy is what creates it there."
-            }
-          />
-        </span>
-        <select
-          value={effectivePackShape}
-          disabled={existingMode}
-          onChange={(e) => setPackShape(e.target.value as PackShape)}
-        >
-          <option value="all-inclusive">
-            Self-contained - the pack carries its own Sentinel destination
-          </option>
-          <option value="routable">
-            Routable - selectable from the Cribl Routes page
-          </option>
-        </select>
-        {/* Stays VISIBLE (GEN-16): it is the one instruction this choice
-            creates, and the only link between it and the action that
-            satisfies it. Everything else about the shapes is in the tip. */}
-        {existingMode ? (
-          <span className="field-hint">
-            Routable is required with an existing destination: a group route
-            sends the source through the pack to it.
+      {/* DBT-225: on the existing path the shape is not a choice, so it is one
+          line rather than a disabled select and its explanation. */}
+      {existingMode ? (
+        <p className="field-hint" data-testid="pack-wiring-fixed">
+          Pack wiring: Routable{" "}
+          <InfoTip text="Required with an existing destination: a group route sends the source through the pack to that destination, so no destination ships in the pack." />
+        </p>
+      ) : (
+        <label className="field">
+          <span className="field-label">
+            Pack wiring{" "}
+            <InfoTip
+              text={
+                effectivePackShape === "all-inclusive"
+                  ? "Self-contained: the pack ships the Sentinel destination and its secret, so it works on install with nothing set up first. Cribl does not offer a pack that holds a destination in the Routes page pipeline list. This is what Build and install pack wires for you."
+                  : "Routable: no destination ships in the pack and every route hands events back, so it appears in the Routes page pipeline list and drops into a flow you already have. The Sentinel destination must already exist in the worker group - Deploy is what creates it there."
+              }
+            />
           </span>
-        ) : packShape === "routable" && (
-          <span className="field-hint">
-            The Sentinel destination must already exist in the worker group -
-            Deploy is what puts it there.
-          </span>
-        )}
-      </label>
+          <select
+            value={effectivePackShape}
+            disabled={existingMode}
+            onChange={(e) => setPackShape(e.target.value as PackShape)}
+          >
+            <option value="all-inclusive">
+              Self-contained - the pack carries its own Sentinel destination
+            </option>
+            <option value="routable">
+              Routable - selectable from the Cribl Routes page
+            </option>
+          </select>
+          {/* Stays VISIBLE (GEN-16): it is the one instruction this choice
+              creates, and the only link between it and the action that
+              satisfies it. Everything else about the shapes is in the tip. */}
+          {packShape === "routable" && (
+            <span className="field-hint">
+              The Sentinel destination must already exist in the worker group -
+              Deploy is what puts it there.
+            </span>
+          )}
+        </label>
+      )}
       {/* GEN-16. The dependency a routable pack creates, checked rather than
           described. Never blocks the build - see the effect that fills this. */}
       {routableCheck !== null && (
@@ -3042,6 +3051,22 @@ export function IntegrateScreen({
             )}
         </div>
       )}
+      {/* DBT-225: the optional pack actions (more worker groups, the
+          overwrite check, rebuild only) wait behind a disclosure. It opens on
+          its own whenever something in it asks the operator to act - a found
+          conflict, a read error, a build in progress or its log - so a warning
+          is never hidden. */}
+      <details
+        className="gap-handles integrate-pack-options"
+        open={
+          (packConflicts !== null && packConflicts.length > 0) ||
+          conflictError !== "" ||
+          packBuilding ||
+          packBuildLines.length > 0 ||
+          undefined
+        }
+      >
+        <summary>More pack options: more worker groups, overwrite check, rebuild only</summary>
       <div className="discovery-result">
         <span className="field-label">
           Deploy targets and overwrite check{" "}
@@ -3172,6 +3197,7 @@ export function IntegrateScreen({
           <pre className="result">{packBuildLines.join("\n")}</pre>
         )}
       </div>
+      </details>
     </div>
   );
 

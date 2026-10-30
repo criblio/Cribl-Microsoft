@@ -3546,19 +3546,20 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "backlog",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-225",
       "type": "story",
       "priority": "now",
       "title": "Configure Cribl asks new or existing destination first; Azure Resources is one line when it does not apply",
-      "detail": "RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: \"There are too many words on the screen. I feel like we need more selections for the user to choose before we reveal some information.\" Audit (2026-10-30, TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural - content shown before the choice that makes it relevant. DECIDED: every section stays open (no accordion); reveal inside sections only. Configure Cribl shows the destination radio, its explanation, pack name, wiring, multiple groups, pack check and rebuild together; Select Azure Resources shows a paragraph for a step that does not apply with an existing destination. Build: ask the destination question first and reveal that path; collapse the non-applicable Azure step to one line."
+      "detail": "RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: \"There are too many words on the screen. I feel like we need more selections for the user to choose before we reveal some information.\" Audit (2026-10-30, TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural - content shown before the choice that makes it relevant. DECIDED: every section stays open (no accordion); reveal inside sections only. Configure Cribl shows the destination radio, its explanation, pack name, wiring, multiple groups, pack check and rebuild together; Select Azure Resources shows a paragraph for a step that does not apply with an existing destination. Build: ask the destination question first and reveal that path; collapse the non-applicable Azure step to one line. DONE 2026-10-30 (both). Configure Cribl now opens with the Sentinel destination question (moved above the worker group; the radios and their wording are unchanged, so the GEN-21 pins hold), and the existing-destination listing renders only on that path. On the existing path Pack wiring is one line (Pack wiring: Routable, reason in an (i)) instead of a disabled select and its paragraph - the GEN-21 pin that asserted the disabled select was changed deliberately to assert no shape select and the fixed line, same intent. More worker groups, the overwrite check and rebuild-only sit in a More pack options disclosure that opens itself on a found conflict, a read error, a build in progress or its log, so no warning is hidden. Select Azure Resources is one line on the existing path, with the pinned sentence kept and the explanation in an (i). New pin: question precedes the worker group, disclosure closed by default; mutation-checked by forcing it open. LIVE on TMNA: section 7 reads Not needed with an existing destination. (i); Configure Cribl starts with Sentinel destination; Pack wiring: Routable (i); More pack options collapsed.",
+      "verified": "both"
     },
     {
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "id": "DBT-226",
       "type": "story",

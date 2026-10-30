@@ -1582,12 +1582,16 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
       "Not needed with an existing destination.",
     );
     expect(view.container.textContent).not.toMatch(/Always on/);
-    // The shape is not a choice on this path.
+    // The shape is not a choice on this path. DBT-225: it used to be a
+    // disabled select plus its explanation; it is now one fixed line, and no
+    // shape select renders at all.
     const shape = [...view.container.querySelectorAll("select")].find((s) =>
       [...s.options].some((o) => o.value === "routable"),
-    ) as HTMLSelectElement;
-    expect(shape.value).toBe("routable");
-    expect(shape.disabled).toBe(true);
+    );
+    expect(shape).toBeUndefined();
+    expect(
+      view.container.querySelector('[data-testid="pack-wiring-fixed"]')?.textContent,
+    ).toMatch(/^Pack wiring: Routable/);
   });
 
   it("in the UAT's org - no identity, no scope - still asks only for the gap analysis", async () => {
@@ -1767,5 +1771,40 @@ describe("IntegrateScreen - one sample method at a time (DBT-224)", () => {
     expect(screen.queryByText("Query a Cribl Lake dataset")).toBeNull();
     fireEvent.click(screen.getByText("Paste events"));
     expect(view.paste()).not.toBeNull();
+  });
+});
+
+/**
+ * DBT-225: Configure Cribl asks where the events go before anything else, and
+ * keeps the optional pack actions behind a disclosure that opens itself when
+ * something in it needs the operator.
+ */
+describe("IntegrateScreen - Configure Cribl asks the destination first (DBT-225)", () => {
+  it("puts the destination question ahead of the worker group, and the pack actions behind a closed disclosure", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const radio = container.querySelector('input[name="integrate-destination-mode"]');
+    const groupLabel = [...container.querySelectorAll(".field-label")].find((l) =>
+      l.textContent?.startsWith("Cribl worker group"),
+    );
+    expect(radio).not.toBeNull();
+    expect(groupLabel).toBeDefined();
+    // DOCUMENT_POSITION_FOLLOWING: the worker group comes after the question.
+    expect(radio!.compareDocumentPosition(groupLabel!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const options = container.querySelector("details.integrate-pack-options") as HTMLDetailsElement;
+    expect(options).not.toBeNull();
+    expect(options.open).toBe(false);
+    expect(options.textContent).toContain("Rebuild pack only");
   });
 });

@@ -10,6 +10,8 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**Configure Cribl asks where events go first (DBT-225).** The Sentinel destination question (new or existing) now opens the section. With an existing destination, Pack wiring is a single line and Select Azure Resources says only that it is not needed, with the detail behind (i). Adding more worker groups, the overwrite check and Rebuild pack only are under More pack options, which opens by itself when one of them needs your attention.
+
 **Sample Data asks how you will supply samples (DBT-224).** Sentinel Integration no longer shows Lake, live capture, paste and upload at once: it asks How will you supply samples? and shows only the chosen method. Paste and Upload are offered even without a Cribl connection. Selecting a solution now shows how many log types it expects, with the full list behind Show the expected log types instead of printed in full.
 
 **Rule Coverage counts a column per log type (DBT-223).** With more than one
