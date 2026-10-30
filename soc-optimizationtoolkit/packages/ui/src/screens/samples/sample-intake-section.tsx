@@ -80,6 +80,17 @@
  * so a write that lands after a switch claims nothing for the next one - and
  * one note says when column orders are not being reused or remembered, and why.
  *
+ * WHAT THE STORE KEPT IS WHAT THE CHIP SHOWS (DBT-206). The cloud store
+ * byte-caps each sample and keeps only the first events that fit. Paste and
+ * upload put the sample they HANDED the store into the list, so the chip read
+ * the full count until a reload and then the smaller one with no reason given.
+ * Both now read the entry back after writing it, list THAT, and say what was
+ * trimmed in the same sentence the capture and Lake commits use
+ * (storedEventShortfalls / storedEventShortfallText, DBT-197). Applying CSV
+ * headers is a second write of the same sample and is read back the same way;
+ * an arrival from a sibling panel replaces the entry, so it drops that log
+ * type's note rather than leave it contradicting the new chip.
+ *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
  * decisions (chip derivation, dedupe, rename re-key, validation) live in
@@ -130,6 +141,11 @@ import {
   useVendorColumnOrder,
 } from "./use-vendor-column-order";
 import type { ColumnOrderRefusal } from "./use-vendor-column-order";
+import {
+  storedEventShortfallText,
+  storedEventShortfalls,
+} from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 
 /**
  * One batch of samples a SIBLING panel just wrote to the store, announced to
@@ -236,6 +252,11 @@ export function SampleIntakeSection({
 
   const [uploadError, setUploadError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Log types the LAST paste or upload handed the store more events of than it
+  // kept (DBT-206). Replaced by each paste or upload, so it describes that one;
+  // naming a CSV's columns re-measures its log type, and an arrival of the
+  // same log type drops its note.
+  const [trimmed, setTrimmed] = useState<StoredEventShortfall[]>([]);
 
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(
     null,
@@ -411,6 +432,11 @@ export function SampleIntakeSection({
     // rebuilds the reported list from this copy, so it would report the
     // arrivals away again while they sat in the store.
     void load();
+    // A trim note from this section's own last write describes an entry an
+    // arrival of the same log type just replaced; the sibling panel says what
+    // ITS write kept (DBT-206).
+    const arrived = new Set(arrivalEvent.samples.map((s) => s.logType));
+    setTrimmed((current) => current.filter((t) => !arrived.has(t.logType)));
     // Then offer resolution for the headerless arrivals, ONE TURN EACH, which
     // is the batch behaviour a multi-file upload has had since Unit 12. A batch
     // with nothing headerless in it builds a queue that is already done, and
@@ -421,13 +447,32 @@ export function SampleIntakeSection({
     }
   }, [arrivalEvent, load]);
 
-  // Persist an upserted sample and reflect it in the list.
-  const persistUpsert = useCallback(
-    async (sample: TaggedSample) => {
+  // Write a sample and return what the store KEPT of it (DBT-206): the store
+  // may byte-cap it, so the entry read back is what the chip must count. An
+  // entry the read does not return - or a read that fails after the write
+  // landed - falls back to the handed sample: a miss is not evidence of a
+  // trim, and the write itself succeeded, so it is not reported as a failure.
+  const writeAndReadBack = useCallback(
+    async (sample: TaggedSample): Promise<TaggedSample> => {
       await store.upsert(sample);
-      commit(upsertSample(samples ?? [], sample));
+      try {
+        return (await store.get(sample.logType)) ?? sample;
+      } catch {
+        return sample;
+      }
     },
-    [store, samples, commit],
+    [store],
+  );
+
+  // Persist an upserted sample, reflect what the store kept of it in the list,
+  // and return the trim (empty when it kept every event).
+  const persistUpsert = useCallback(
+    async (sample: TaggedSample): Promise<StoredEventShortfall[]> => {
+      const kept = await writeAndReadBack(sample);
+      commit(upsertSample(samples ?? [], kept));
+      return storedEventShortfalls([sample], [kept]);
+    },
+    [writeAndReadBack, samples, commit],
   );
 
   const addFromPaste = useCallback(async () => {
@@ -442,13 +487,14 @@ export function SampleIntakeSection({
     }
     setBusy(true);
     setPasteError("");
+    setTrimmed([]);
     try {
       const sample = tagSampleFromContent(
         normalizeLogType(pasteLogType),
         pasteText,
         "pasted",
       );
-      await persistUpsert(sample);
+      setTrimmed(await persistUpsert(sample));
       setPasteText("");
       setPasteLogType("");
       // Headerless positional CSV: offer header resolution for this sample.
@@ -466,7 +512,10 @@ export function SampleIntakeSection({
     async (files: FileList) => {
       setBusy(true);
       setUploadError("");
+      setTrimmed([]);
       const problems: string[] = [];
+      // What the store kept fewer events of, per file (DBT-206).
+      const shortfalls: StoredEventShortfall[] = [];
       // Fold upserts so multiple files auto-detecting the SAME log type replace
       // rather than duplicate (dedupe-by-logType).
       let next = samples ?? [];
@@ -477,14 +526,22 @@ export function SampleIntakeSection({
         try {
           const content = await file.text();
           const sample = tagFileContent(content, file.name);
-          await store.upsert(sample);
-          next = upsertSample(next, sample);
+          const kept = await writeAndReadBack(sample);
+          next = upsertSample(next, kept);
+          // Two files of the same log type replace each other in the store,
+          // so only the later file's trim still describes a chip.
+          const trim = storedEventShortfalls([sample], [kept]);
+          for (let i = shortfalls.length - 1; i >= 0; i -= 1) {
+            if (shortfalls[i].logType === sample.logType) shortfalls.splice(i, 1);
+          }
+          shortfalls.push(...trim);
           added.push(sample);
         } catch (err) {
           problems.push(`${file.name}: ${String(err)}`);
         }
       }
       commit(next);
+      setTrimmed(shortfalls);
       if (problems.length > 0) {
         setUploadError(problems.join("\n"));
       }
@@ -499,7 +556,7 @@ export function SampleIntakeSection({
         fileInputRef.current.value = "";
       }
     },
-    [samples, store, commit],
+    [samples, writeAndReadBack, commit],
   );
 
   const removeRef = useRef(onRemoveLogType);
@@ -601,8 +658,16 @@ export function SampleIntakeSection({
       setBusy(true);
       try {
         const resolved = resolveHeaders(item, headers);
-        await store.upsert(resolved);
-        commit(upsertSample(samples ?? [], resolved));
+        // The queue holds the sample as HANDED (every event, so the re-parse
+        // still reads them all), and this write is capped like the first one:
+        // list what the store kept, and re-measure this log type's note.
+        const kept = await writeAndReadBack(resolved);
+        commit(upsertSample(samples ?? [], kept));
+        const trim = storedEventShortfalls([resolved], [kept]);
+        setTrimmed((current) => [
+          ...current.filter((t) => t.logType !== resolved.logType),
+          ...trim,
+        ]);
         // REMEMBER the order for this vendor + log type, so the same feed
         // acquired next week is not asked again. A bundled order the operator
         // merely confirmed stores nothing - remember() refuses it, because the
@@ -616,7 +681,7 @@ export function SampleIntakeSection({
       }
       advanceCsvQueue();
     },
-    [csvQueue, store, samples, commit, advanceCsvQueue, rememberColumnOrder],
+    [csvQueue, writeAndReadBack, samples, commit, advanceCsvQueue, rememberColumnOrder],
   );
 
   return (
@@ -688,6 +753,20 @@ export function SampleIntakeSection({
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
         {uploadError !== "" && <pre className="result">{uploadError}</pre>}
+        {/* DBT-206: the store's trim, in the capture commit's own words, for
+            each log type still on the page (a removed one has nothing to
+            explain any more). */}
+        {trimmed
+          .filter((t) => samples?.some((s) => s.logType === t.logType) === true)
+          .map((t) => (
+            <p
+              key={t.logType}
+              className="field-hint sample-intake-trimmed"
+              role="status"
+            >
+              {storedEventShortfallText([t]).trim()}
+            </p>
+          ))}
       </div>
 
       {/* Tagged sample chips */}
