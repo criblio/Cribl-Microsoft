@@ -165,6 +165,7 @@ import { SampleSourcePicker } from "../samples/sample-source-picker";
 import { findEntry } from "../samples/sample-source-picker-state";
 import { CapturePanel } from "../samples/capture-panel";
 import { LakePanel } from "../samples/lake-panel";
+import { storedEventShortfalls } from "../samples/planned-samples";
 import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
@@ -713,15 +714,22 @@ export function IntegrateScreen({
    * intake section can offer to NAME the positional columns of a headerless
    * one, because the dialog and its queue live there. Both panels are wired to
    * this one callback so neither can drift away from that offer again.
+   *
+   * It resolves with what the store TRIMMED (DBT-197), read from the same
+   * listing the page is refreshed from: the cloud store byte-caps each sample
+   * and keeps only the first events that fit, and a 100-event capture reported
+   * as added in full while 9 were stored is the defect this answers.
    */
   const commitAcquiredSamples = useCallback(
     async (acquired: TaggedSample[]) => {
       for (const sample of acquired) {
         await ports.samples.upsert(sample);
       }
-      handleSamplesChange(await ports.samples.list());
+      const stored = await ports.samples.list();
+      handleSamplesChange(stored);
       arrivalNonce.current += 1;
       setSampleArrival({ nonce: arrivalNonce.current, samples: acquired });
+      return storedEventShortfalls(acquired, stored);
     },
     [ports.samples, handleSamplesChange],
   );

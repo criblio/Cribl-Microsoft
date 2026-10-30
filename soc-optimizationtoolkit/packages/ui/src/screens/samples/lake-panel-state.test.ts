@@ -1165,6 +1165,40 @@ describe("deriveLakeCommitView", () => {
     ]);
   });
 
+  it("names what the store KEPT when it trimmed a sample (DBT-197)", () => {
+    // The Lake panel shares the capture panel's commit callback, which reads
+    // the store back and returns its trims. Before this, the panel received
+    // them and said "Added 1 sample" over a chip holding 9 of 100 events.
+    const trimmed = [{ logType: "THREAT", handed: 100, kept: 9 }];
+    const done = deriveLakeCommitView(fetchResult(), false, 1, 1, 0, null, trimmed);
+    expect(done.status).toBe("done");
+    expect(done.headline).toBe(
+      'Added 1 sample from this dataset. "THREAT" kept 9 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+    );
+    // The shortfall branch carries it after its own sentence.
+    expect(
+      deriveLakeCommitView(fetchResult(), false, 1, 2, 0, null, trimmed).headline,
+    ).toBe(
+      'Added 1 of the 2 log types you picked; the rest returned nothing usable. "THREAT" kept 9 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+    );
+    // And so does a partial haul (ok: false), which is a separate branch.
+    const partial = deriveLakeCommitView(
+      fetchResult({ ok: false }),
+      false,
+      1,
+      2,
+      0,
+      null,
+      trimmed,
+    );
+    expect(partial.status).toBe("partial");
+    expect(partial.headline.endsWith(' "THREAT" kept 9 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.')).toBe(true);
+    // No trim found: the headline is exactly what it was.
+    expect(
+      deriveLakeCommitView(fetchResult(), false, 1, 1, 0, null, []).headline,
+    ).toBe("Added 1 sample from this dataset.");
+  });
+
   it("NAMES a partial haul rather than rounding it up to a success", () => {
     // fetchLakeLogTypeEvents keeps the good log types when one fails, so
     // "added 2" after ticking 3 is a success with a hole in it - invisible

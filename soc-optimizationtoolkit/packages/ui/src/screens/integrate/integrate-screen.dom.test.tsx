@@ -49,7 +49,13 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { DEFAULT_CRIBL_OPTIONS, emptyCapabilitySet, toListing } from "@soc/core";
+import {
+  DEFAULT_CRIBL_OPTIONS,
+  TAGGED_SAMPLE_MAX_BYTES,
+  capTaggedSampleBytes,
+  emptyCapabilitySet,
+  toListing,
+} from "@soc/core";
 import type {
   AzureConfig,
   CapabilityContext,
@@ -60,6 +66,7 @@ import type {
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
+import { panosCefCaptureBody } from "../samples/panos-cef-capture-test-fixture";
 import {
   IntegrateScreen,
   dcrInventoryReadNotice,
@@ -278,14 +285,20 @@ const PANOS_AUTH = [
  * Ports whose Cribl answers the two discovery stages, plus a capture that
  * returns real positional events, and nothing else.
  */
-function discoveryPorts() {
+function discoveryPorts(
+  overrides: { captureBody?: unknown; samples?: unknown } = {},
+) {
   const request = vi.fn(
     async (opts: { method: string; path: string; groupId?: string }) => {
       if (opts.path === "/system/inputs") {
         return { status: 200, body: { items: SOURCES[opts.groupId ?? ""] ?? [] } };
       }
       if (opts.path === "/system/capture") {
-        return { status: 200, body: PANOS_AUTH.map((raw) => ({ _raw: raw })) };
+        return {
+          status: 200,
+          body:
+            overrides.captureBody ?? PANOS_AUTH.map((raw) => ({ _raw: raw })),
+        };
       }
       if (opts.path.startsWith("/products/lake/")) {
         return { status: 200, body: { items: [{ id: "Corelight" }] } };
@@ -309,7 +322,7 @@ function discoveryPorts() {
     packs: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     packInstall: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     jobs: { list: vi.fn().mockResolvedValue([]) },
-    samples: memorySampleStore(),
+    samples: overrides.samples ?? memorySampleStore(),
   } as unknown as UiPorts;
 }
 
@@ -328,8 +341,7 @@ function memorySampleStore() {
   };
 }
 
-function renderWithDiscovery() {
-  const ports = discoveryPorts();
+function renderWithDiscovery(ports: UiPorts = discoveryPorts()) {
   const { container } = render(
     <PortsProvider ports={ports} config={CONFIG}>
       <IntegrateScreen
@@ -362,8 +374,8 @@ function pickOption(combo: HTMLElement, label: string): void {
 }
 
 /** Get as far as a mounted CapturePanel aimed at "in_syslog" in "default". */
-async function selectSourceInDefaultGroup() {
-  const view = renderWithDiscovery();
+async function selectSourceInDefaultGroup(ports?: UiPorts) {
+  const view = renderWithDiscovery(ports);
   await waitFor(() => {
     expect(screen.getByText("Capture from a live source")).toBeTruthy();
   });
@@ -553,6 +565,69 @@ describe("IntegrateScreen - an acquired sample reaches the column dialog", () =>
     expect(
       view.container.querySelector(".csv-dialog-title")?.textContent,
     ).toContain("Headerless CSV detected");
+  });
+});
+
+/**
+ * DBT-197, AT THE SCREEN, because the read-back that finds a trim lives in this
+ * component's commit callback and nowhere a pure module can see it.
+ *
+ * The UAT: "Captured 100 events", then a chip reading "captured 9 events" and a
+ * commit headline of "Added 1 sample from this capture." - 91 events gone with
+ * no reason given. The reason is the cloud store's byte cap, so the store here
+ * caps the way the adapter does (core capTaggedSampleBytes, at the budget the
+ * adapter tries after one 413). The count is pinned at all three places the
+ * operator reads it: the capture headline, the commit headline, the chip.
+ */
+describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
+  /** Keyed by log type like the real stores, and byte-capped like the KV one. */
+  function byteCappedSampleStore() {
+    const byType = new Map<string, TaggedSample>();
+    return {
+      upsert: async (sample: TaggedSample) => {
+        const capped = capTaggedSampleBytes(sample, TAGGED_SAMPLE_MAX_BYTES / 2);
+        byType.set(sample.logType, JSON.parse(JSON.stringify(capped.sample)));
+      },
+      get: async (logType: string) => byType.get(logType) ?? null,
+      list: async () => [...byType.values()],
+      remove: async (logType: string) => {
+        byType.delete(logType);
+      },
+    };
+  }
+
+  it("reports 14 of 100 kept in the commit headline and on the chip", async () => {
+    const view = await selectSourceInDefaultGroup(
+      discoveryPorts({
+        captureBody: panosCefCaptureBody(100),
+        samples: byteCappedSampleStore(),
+      }),
+    );
+    const panel = () => view.container.querySelector(".capture-panel") as HTMLElement;
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Run capture"));
+    });
+    expect(panel().querySelector(".panel-desc")?.textContent).toBe(
+      "Captured 100 events in 1 log type (cef).",
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Add these as samples"));
+    });
+
+    await waitFor(() => {
+      expect(
+        panel().querySelector('[data-testid="capture-outcome"] .panel-desc')
+          ?.textContent,
+      ).toBe(
+        'Added 1 sample from this capture. "captured" kept 14 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+      );
+    });
+    const chips = [...view.container.querySelectorAll(".sample-chip-counts")].map(
+      (c) => c.textContent,
+    );
+    expect(chips).toEqual(["14 events, 135 fields, time: PanTimeHighRes"]);
   });
 });
 

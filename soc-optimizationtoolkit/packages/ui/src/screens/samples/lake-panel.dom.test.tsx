@@ -733,6 +733,24 @@ describe("LakePanel - nothing enters the store without a click", () => {
     expect(outcomeStatus(container)).toBe("done");
   });
 
+  it("says what the store KEPT when the commit comes back trimmed (DBT-197)", async () => {
+    // The commit callback is the integrate screen's, shared with the capture
+    // panel, and resolves with what the store trimmed. The panel must carry
+    // that into its headline rather than drop it on the floor.
+    const onCommit = vi.fn(async (_samples: TaggedSample[]) => [
+      { logType: "GLOBALPROTECT", handed: 2, kept: 1 },
+    ]);
+    const { container } = renderPanel({ props: { onCommit } });
+    await runQuery(container);
+    await fetchAndAdd(container);
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(outcomeStatus(container)).toBe("done");
+    expect(outcomeHeadline(container)).toBe(
+      'Added 3 samples from this dataset. "GLOBALPROTECT" kept 1 of its 2 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 2.',
+    );
+  });
+
   it("previews the ACTUAL fetched lines, collapsed, before anything is stored", async () => {
     // The user-reported gap (2026-08-25): Lake samples carried a syslog
     // transport envelope around the vendor's own bytes and there was nowhere to

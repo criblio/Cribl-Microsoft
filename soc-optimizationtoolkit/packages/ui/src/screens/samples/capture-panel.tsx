@@ -57,6 +57,7 @@ import {
   toggleChoice,
 } from "./capture-panel-state";
 import { commitErrorText } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import { useNumericField } from "./use-numeric-field";
 import type {
   CaptureCommitOutcome,
@@ -72,8 +73,12 @@ export interface CapturePanelProps {
   existingLogTypes: readonly string[];
   /** Run the capture. Resolves with the result; never throws. */
   onCapture: (filter: string, maxEvents: number, durationSeconds: number) => Promise<CaptureSamplesResult>;
-  /** Commit the previewed samples to the store. */
-  onCommit: (samples: TaggedSample[]) => Promise<void>;
+  /**
+   * Commit the previewed samples to the store. Resolves with the log types the
+   * store kept fewer events of than it was handed (DBT-197), or void when the
+   * caller cannot read the store back - which reports no trim, not "none".
+   */
+  onCommit: (samples: TaggedSample[]) => Promise<readonly StoredEventShortfall[] | void>;
 }
 
 export function CapturePanel({
@@ -234,8 +239,12 @@ export function CapturePanel({
     setCommitting(true);
     setStoreError(null);
     try {
-      await onCommit(samples);
-      setOutcome({ stored: samples.length, returned: result.splits.length });
+      const trimmed = await onCommit(samples);
+      setOutcome({
+        stored: samples.length,
+        returned: result.splits.length,
+        trimmed: trimmed ?? [],
+      });
       // Cleared only once the store has it, AND only when it took something: a
       // commit that stored nothing leaves the preview up, because the only way
       // back to it is another capture.

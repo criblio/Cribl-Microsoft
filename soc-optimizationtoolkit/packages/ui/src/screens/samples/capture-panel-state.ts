@@ -31,7 +31,13 @@ import type {
   TaggedSample,
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
-import { plannedSamplesFrom, previewLines, sampleStoreKey } from "./planned-samples";
+import {
+  plannedSamplesFrom,
+  previewLines,
+  sampleStoreKey,
+  storedEventShortfallText,
+} from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 /** One log-type checkbox on the capture panel. */
@@ -262,6 +268,13 @@ export interface CaptureCommitOutcome {
    * shortfall in the commit.
    */
   returned: number;
+  /**
+   * Committed log types the store kept FEWER events of than it was handed
+   * (DBT-197), from storedEventShortfalls. Absent or empty when the store kept
+   * everything - or when the commit path could not read the store back, which
+   * is why this is a list of shortfalls FOUND rather than a claim of none.
+   */
+  trimmed?: readonly StoredEventShortfall[];
 }
 
 /** Project a finished (or refused) commit into what the panel reports. */
@@ -293,12 +306,17 @@ export function deriveCaptureCommitView(
   if (outcome.stored < outcome.returned) {
     return {
       status: "partial",
-      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.`,
+      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.${storedEventShortfallText(outcome.trimmed ?? [])}`,
     };
   }
+  // THE STORE'S TRIM IS SAID HERE (DBT-197). A 100-event capture read "Added 1
+  // sample from this capture." while the chip beside it read "captured 9
+  // events" - two true statements that together read as 91 events lost for no
+  // reason. The reason is the store's size limit per log type, so it is said
+  // where the operator is already reading.
   return {
     status: "done",
-    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.`,
+    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.${storedEventShortfallText(outcome.trimmed ?? [])}`,
   };
 }
 

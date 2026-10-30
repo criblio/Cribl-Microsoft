@@ -97,6 +97,7 @@ import {
 } from "./lake-panel-state";
 import type { LakeLogTypeChoice, LakeSamplePreview } from "./lake-panel-state";
 import { commitErrorText } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 // The picker's byte formatter, reused rather than reproduced - see the note at
 // its definition; it is the coarse hint register an estimate belongs in.
 import { formatBytes } from "./sample-source-picker-state";
@@ -136,6 +137,8 @@ interface CommitOutcome {
    * they should not.
    */
   merged: number;
+  /** Log types the store kept fewer events of than it was handed (DBT-197). */
+  trimmed: readonly StoredEventShortfall[];
 }
 
 export interface LakePanelProps {
@@ -164,8 +167,13 @@ export interface LakePanelProps {
     logTypes: readonly string[],
     eventsPerLogType: number,
   ) => Promise<FetchLakeEventsResult>;
-  /** Commit the fetched samples to the store. */
-  onCommit: (samples: TaggedSample[]) => Promise<void>;
+  /**
+   * Commit the fetched samples to the store. Shares the capture panel's commit
+   * callback, so it resolves with the log types the store kept fewer events of
+   * than it was handed (DBT-197), which the commit headline names; void when
+   * the caller cannot read the store back - which reports no trim, not "none".
+   */
+  onCommit: (samples: TaggedSample[]) => Promise<readonly StoredEventShortfall[] | void>;
 }
 
 export function LakePanel({
@@ -211,6 +219,7 @@ export function LakePanel({
     outcome?.requested ?? 0,
     outcome?.merged ?? 0,
     storeError,
+    outcome?.trimmed ?? [],
   );
   const selected = selectedLakeLogTypes(choices);
   const collisions = lakeCollisions(choices);
@@ -278,6 +287,7 @@ export function LakePanel({
           planned: 0,
           requested: selected.length,
           merged: 0,
+          trimmed: [],
         });
         return;
       }
@@ -319,12 +329,13 @@ export function LakePanel({
     setCommitting(true);
     setStoreError(null);
     try {
-      await onCommit(pending.samples);
+      const trimmed = await onCommit(pending.samples);
       setOutcome({
         result: pending.result,
         planned: pending.samples.length,
         requested: pending.requested,
         merged: pending.merged,
+        trimmed: trimmed ?? [],
       });
       // Cleared only once the store has it, as the capture panel clears its
       // preview: dropping the events first would leave a failed commit with
