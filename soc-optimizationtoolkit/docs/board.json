@@ -3329,6 +3329,30 @@
       "priorityWhy": "The tie only decides between two columns that both plausibly fit (Widget vs WidgetName for deviceWidgetName); the reviewer can re-point it, and the DBT-204 rung-5 guard already fixed the name/id cases that sent values to the wrong kind of column.",
       "title": "The matcher's rung-5 tie between a no-suffix and a same-suffix column is decided by schema order",
       "detail": "FOUND 2026-10-30 by the priority-now bug review (wf_f7edac02-12e). After DBT-204 a different-suffix column scores 68 and a same-suffix or no-suffix column scores 70, so deviceWidgetName against [Widget, WidgetName] ties and column order decides. Order same-suffix > no-suffix > different-suffix. Also re-check the side effects DBT-204 caused, which have no pins of their own: CrowdStrike_Additional_Events_CL severity_id now maps to Severity (was SeverityName); CommonSecurityLog user_name/src_user_name now map to *UserName (were *UserID); the ASim tables' username/app_name/processName now map to *Name columns."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "GEN-34",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "bug",
+      "title": "The CEF vendor/product override is written as bare text, not a JS string literal",
+      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). buildCefIdentityOverrideFn (pipeline-conf.ts) emits value: \"${JSON.stringify(v).slice(1,-1).replace(/\"/g, ...)}\": the slice strips the JS quotes, so DeviceVendor \"Palo Alto Networks\" becomes the Eval expression Palo Alto Networks, which does not parse; a value containing \" produces malformed YAML. Its own doc says values are quoted JS literals. The pins only check toContain, which the YAML quotes satisfy. Predates the F1/F2 work (47d088f). Fix: escapeYamlFilter(JSON.stringify(v)); pin with a YAML read-back that evaluates to the original value."
+    },
+    {
+      "status": "in-progress",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "GEN-35",
+      "epic": "GEN",
+      "feature": "GEN-F1",
+      "type": "enabler",
+      "title": "Architecture audit r8 maintenance: one remap-acceptance rule, a GEN-25 screen pin, stale comments, over-wide exports",
+      "detail": "FOUND 2026-10-30 by architecture audit r8 (wf_1c96d311-bc5). (1) reviewerRemap and the DBT-210 replayEdit write the remap-acceptance rule twice; share one predicate. (2) The GEN-25 integrate-screen wiring (routable flag, definitionDestinationFields) has no pin that can fail; move the option choice into a pure helper in build-destinations.ts and pin it. (3) extract-kql-fields WHERE_OPERATOR_WORDS doc says other patterns are unchanged, but the filter applies to every pattern; scope it to where operands. (4) rule-coverage-section header misdescribes a clear with no reports. (5) COLUMN_ACTIONS and rebaseEdits are exported with no outside consumer."
     }
   ],
   "features": [
