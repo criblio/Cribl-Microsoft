@@ -41,9 +41,10 @@
  * shouldRerunCoverage() is unconditionally true and analyzeContentCoverage is
  * well-defined on an empty availability set.
  *
- * QUEUED, NEVER DROPPED (DBT-212): a run that cannot start - an upload or clear
- * before any gap report exists, or one made mid-run - is queued and starts as
- * soon as it can, with a note while it waits. And a result resolved for other
+ * QUEUED, NEVER DROPPED (DBT-212): an upload that cannot start yet (no gap
+ * report exists, or a run is in flight), or a clear made mid-run while reports
+ * exist, is queued and starts as soon as it can, with a note while it waits. A
+ * clear with no reports drops the queue: there is nothing to re-run. And a result resolved for other
  * destination tables than the current reports carry is STALE: it is withheld
  * behind a "Re-analyze to refresh" note instead of rendering chips the new
  * analysis may already have answered.

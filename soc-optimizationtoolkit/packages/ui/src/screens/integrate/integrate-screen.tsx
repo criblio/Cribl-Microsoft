@@ -262,7 +262,11 @@ import type {
   SourceRouting,
 } from "./existing-destination-state";
 import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
-import { definitionDestinationFields, resolveBuildDestinations } from "./build-destinations";
+import {
+  buildDestinationPath,
+  definitionDestinationFields,
+  resolveBuildDestinations,
+} from "./build-destinations";
 import { WiringSection } from "./wiring-section";
 
 /**
@@ -1715,13 +1719,14 @@ export function IntegrateScreen({
       const planTables = plan.tables.map((t) => t.sentinelTable);
       // GEN-21: null on the existing-destination path, which reads no Azure
       // and bakes no destination values (resolveBuildDestinations says why).
+      // GEN-25: a native-path routable pack writes no outputs.yml either, so
+      // it reads no inventory and logs no placeholders it will not ship.
       const resolved = await resolveBuildDestinations({
-        existing: azureNeeds.dcrInventory
-          ? null
-          : { destination: existingDestination ?? "(not picked)" },
-        // GEN-25: a native-path routable pack writes no outputs.yml either, so
-        // it reads no inventory and logs no placeholders it will not ship.
-        routable: plan.packShape === "routable",
+        ...buildDestinationPath({
+          dcrInventory: azureNeeds.dcrInventory,
+          existingDestination,
+          packShape: plan.packShape,
+        }),
         planTables,
         sessionDestinations,
         // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds

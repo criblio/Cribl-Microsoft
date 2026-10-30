@@ -125,7 +125,7 @@ export function landsInColumn(row: GapFieldMapping): boolean {
 }
 
 /** The actions that write a row into its Dest Field column (DBT-209). */
-export const COLUMN_ACTIONS: readonly MatchAction[] = [
+const COLUMN_ACTIONS: readonly MatchAction[] = [
   "keep",
   "rename",
   "coerce",

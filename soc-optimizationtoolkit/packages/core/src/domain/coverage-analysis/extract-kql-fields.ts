@@ -29,8 +29,9 @@ import { KQL_BUILTINS } from "./kql-builtins";
  * Operator words a where predicate can hold that KQL_BUILTINS does not list
  * (it carries has/contains/startswith/endswith/in/between/matches but not
  * their case-sensitive, negated or any/all forms). Kept local rather than
- * added to KQL_BUILTINS so the other patterns, and the verbatim builtins port,
- * are unchanged. Lowercase; checked with `.toLowerCase()`.
+ * added to KQL_BUILTINS, and applied to the where operands only, so the other
+ * patterns and the verbatim builtins port are unchanged: a projected column
+ * named `Regex` is still a field. Lowercase; checked with `.toLowerCase()`.
  */
 const WHERE_OPERATOR_WORDS: ReadonlySet<string> = new Set([
   "has_cs", "has_any", "has_all", "hasprefix", "hasprefix_cs", "hassuffix",
@@ -153,7 +154,9 @@ export function extractKqlFields(kql: string): string[] {
 
   // Step 2: Extract field references. The where predicate is read by
   // wherePredicateOperands (DBT-215), not by a pattern here.
-  const candidates: string[] = wherePredicateOperands(cleaned);
+  const candidates: string[] = wherePredicateOperands(cleaned).filter(
+    (w) => !WHERE_OPERATOR_WORDS.has(w.toLowerCase()),
+  );
   const patterns = [
     /\bproject(?:-rename|-away)?\s+([\w,\s]+?)(?:\||$)/gim,
     /\bby\s+([\w,\s]+?)(?:\||$)/gim,
@@ -183,7 +186,6 @@ export function extractKqlFields(kql: string): string[] {
       fieldName.length > 1 &&
       /^[A-Za-z_]/.test(fieldName) &&
       !KQL_BUILTINS.has(fieldName.toLowerCase()) &&
-      !WHERE_OPERATOR_WORDS.has(fieldName.toLowerCase()) &&
       !computed.has(fieldName)
     ) {
       fields.add(fieldName);

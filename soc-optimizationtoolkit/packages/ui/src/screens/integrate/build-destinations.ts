@@ -9,7 +9,32 @@
  */
 
 import { resolveDestinations } from "@soc/core";
-import type { DcrInventoryEntry, PackScaffoldInput, SessionDestination } from "@soc/core";
+import type {
+  DcrInventoryEntry,
+  PackScaffoldInput,
+  PackShape,
+  SessionDestination,
+} from "@soc/core";
+
+/**
+ * Which path {@link resolveBuildDestinations} takes, chosen from the screen's
+ * state: the existing-destination path whenever the build does not need the
+ * DCR inventory (GEN-21; an unfinished pick still takes it, never the Azure
+ * read), and the routable flag from the plan's shape (GEN-25). Split out so
+ * the build callback's wiring is pinned without a mount (audit r8, GEN-35).
+ */
+export function buildDestinationPath(input: {
+  dcrInventory: boolean;
+  existingDestination: string | undefined;
+  packShape: PackShape | undefined;
+}): { existing: { destination: string } | null; routable: boolean } {
+  return {
+    existing: input.dcrInventory
+      ? null
+      : { destination: input.existingDestination ?? "(not picked)" },
+    routable: input.packShape === "routable",
+  };
+}
 
 /**
  * Resolve each plan table's destination values from this session's deploys

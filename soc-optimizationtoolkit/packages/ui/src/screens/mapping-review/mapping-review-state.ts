@@ -50,6 +50,7 @@ import type {
   GapReportStat,
   MatchAction,
   RemapRequest,
+  RemapResult,
   TaggedSample,
 } from "@soc/core";
 import {
@@ -260,6 +261,19 @@ export function withoutKey<T>(
  * nor overflow. The caller asks the reviewer first (destClaim) and sends
  * `moveClaimed`, which moves the other row to the catch-all.
  */
+/** The remap changed the rows (applied, or reverted to the analysis). */
+function remapChanged(remap: RemapResult): boolean {
+  return remap.outcome === "applied" || remap.outcome === "reverted";
+}
+
+/**
+ * The ONE acceptance rule for a reviewer re-point, shared by the live edit and
+ * the DBT-210 replay: it changed the rows and claimed no other row's column.
+ */
+function remapAccepted(remap: RemapResult): boolean {
+  return remapChanged(remap) && remap.claimedBy === null;
+}
+
 function reviewerRemap(
   state: MappingReviewState,
   logType: string,
@@ -270,10 +284,7 @@ function reviewerRemap(
     ...request,
     baseline,
   });
-  if (remap.outcome !== "applied" && remap.outcome !== "reverted") {
-    return state;
-  }
-  if (remap.claimedBy !== null) {
+  if (!remapAccepted(remap)) {
     return state;
   }
   return {
@@ -577,7 +588,7 @@ function isEditedRow(
  *
  * A table with no surviving edit loses its store entry, so it reads unmodified.
  */
-export function rebaseEdits(
+function rebaseEdits(
   mappingEdits: Readonly<Record<string, GapFieldMapping[]>>,
   previous: readonly GapReport[],
   reports: readonly GapReport[],
@@ -647,8 +658,7 @@ function replayEdit(
       catchAllColumn,
       baseline: report.fieldMappings,
     });
-    if (remap.outcome !== "applied" && remap.outcome !== "reverted") return null;
-    if (remap.claimedBy !== null) return null;
+    if (!remapAccepted(remap)) return null;
     next = remap.rows;
   }
   const row = next[at];
@@ -979,7 +989,7 @@ export function destClaim(
   ruleFields?: ReadonlySet<string>,
 ): DestClaim | null {
   const remap = applyRemap(rows, { ...request, moveClaimed: true });
-  if (remap.outcome !== "applied" && remap.outcome !== "reverted") return null;
+  if (!remapChanged(remap)) return null;
   const claimedBy = remap.moved ?? remap.claimedBy;
   if (claimedBy === null) return null;
   const row = remap.rows.find((m) => m.source === request.sourceField);

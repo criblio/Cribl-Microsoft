@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { definitionDestinationFields, resolveBuildDestinations } from "./build-destinations";
+import {
+  buildDestinationPath,
+  definitionDestinationFields,
+  resolveBuildDestinations,
+} from "./build-destinations";
 
 describe("resolveBuildDestinations", () => {
   it("never calls the Azure inventory read on the existing path", async () => {
@@ -120,5 +124,29 @@ describe("definitionDestinationFields (GEN-25)", () => {
     expect(
       definitionDestinationFields({ resolved: [], existingDestination: "PAN-CSL", ...identity }),
     ).toEqual({ outputsDefaults: { tenantId: "tenant-1", ingestionClientId: "client-1" } });
+  });
+});
+
+describe("buildDestinationPath (GEN-35: the build callback's wiring)", () => {
+  it("takes the native path when the build needs the inventory, routable from the plan", () => {
+    expect(
+      buildDestinationPath({ dcrInventory: true, existingDestination: undefined, packShape: "routable" }),
+    ).toEqual({ existing: null, routable: true });
+    expect(
+      buildDestinationPath({ dcrInventory: true, existingDestination: "sentinel-x", packShape: "all-inclusive" }),
+    ).toEqual({ existing: null, routable: false });
+    // A plan with no shape set is all-inclusive, never routable.
+    expect(
+      buildDestinationPath({ dcrInventory: true, existingDestination: undefined, packShape: undefined }),
+    ).toEqual({ existing: null, routable: false });
+  });
+
+  it("takes the existing path whenever the inventory is not needed, even with no pick", () => {
+    expect(
+      buildDestinationPath({ dcrInventory: false, existingDestination: "sentinel-x", packShape: "routable" }),
+    ).toEqual({ existing: { destination: "sentinel-x" }, routable: true });
+    expect(
+      buildDestinationPath({ dcrInventory: false, existingDestination: undefined, packShape: "routable" }),
+    ).toEqual({ existing: { destination: "(not picked)" }, routable: true });
   });
 });

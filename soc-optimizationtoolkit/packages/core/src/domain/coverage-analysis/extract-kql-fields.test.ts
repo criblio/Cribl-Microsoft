@@ -334,3 +334,16 @@ describe("full builtins set vs the legacy reduced inline copy", () => {
     expect(KQL_BUILTINS.size).toBeGreaterThanOrEqual(120);
   });
 });
+
+// GEN-35 (audit r8): the where-only operator words are dropped from WHERE
+// operands only. A column that happens to share one's name, read by another
+// pattern, is still a field.
+describe("where operator words stay scoped to the where predicate (GEN-35)", () => {
+  it("reports a projected column named like an operator word", () => {
+    expect(extractKqlFields("T | project Regex, Account")).toEqual(["Account", "Regex"]);
+  });
+
+  it("still drops the operator word itself from a where predicate", () => {
+    expect(extractKqlFields('T | where Account has_cs "x"')).toEqual(["Account"]);
+  });
+});

@@ -86,7 +86,6 @@ export { buildGapReport } from "./gap-report";
 // coercion and confidence follow from the destination in ONE place.
 export type { RemapRequest, RemapOutcome, RemapResult } from "./apply-remap";
 export {
-  COLUMN_ACTIONS,
   actionEditRefusal,
   applyRemap,
   columnActionsRefusal,
