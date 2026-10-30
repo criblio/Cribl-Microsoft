@@ -4,6 +4,9 @@ import {
   APP_THEME_KEY,
   AppFrame,
   ArchitectureScreen,
+  AzureOnboardingScreen,
+  AuditAgeChip,
+  AzureLoggingMapScreen,
   MappingCatalogScreen,
   AzureConnectSection,
   AzureResourcesSection,
@@ -28,10 +31,19 @@ import {
   capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
+  loadableSetupFromRead,
   mergeJourneyLinks,
+  OPTIONS_LOADING,
+  OPTIONS_UNREADABLE_NOTICE,
+  beginOptionsRetry,
+  optionsReadFailureLine,
+  optionsReadFromSettled,
+  planOptionsSave,
+  settleOptionsSave,
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
+  useMergedPolls,
 } from '@soc/ui';
 import type {
   AppFrameNav,
@@ -41,12 +53,12 @@ import type {
   JourneyLinks,
   LoadableAcceptance,
   LoadableSetup,
+  OptionsRead,
   ThemeControl,
 } from '@soc/ui';
 import {
   commitTargetScope,
   computeInvalidation,
-  DEFAULT_APP_OPTIONS,
   DEFAULT_THEME_CHOICE,
   mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
@@ -56,9 +68,6 @@ import {
   EMPTY_SETUP_RECORD,
   preflightPathForSetupPath,
   parseAcceptanceRecord,
-  parseSetupRecord,
-  parseAppOptions,
-  serializeAppOptions,
   parseAzureConfig,
   parseProfileStore,
   parseThemeChoice,
@@ -75,7 +84,6 @@ import {
 } from '@soc/core';
 import type {
   AcceptanceRecord,
-  AppOptions,
   OperationOptions,
   AzureConfig,
   BatchPacing,
@@ -97,6 +105,12 @@ import { makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
 // warn/error mirrored to one rolling plain KV entry. Module scope so the
 // ring survives connection switches and ports-bundle rebuilds.
 import { PlatformLogger } from './platform/logger';
+import {
+  PLATFORM_LINK_CHECKING,
+  criblReachability,
+  criblReachableUnlessFailed,
+  platformLinkState,
+} from './platform/platform-link';
 
 // The app's display name, shown in generated change-request tickets and the
 // architecture diagrams embedded in them. The change-request text and diagrams
@@ -128,8 +142,10 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const SETUP_KEY = 'setupComplete';
 // Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
-// persisted through the same SecretsStore adapter as appMode. Saves go
-// through @soc/core applyOptionsPatch so unmanaged keys in the blob survive.
+// persisted through the same SecretsStore adapter as appMode. An inline save
+// is planned by @soc/ui planOptionsSave, which applies the edit with @soc/core
+// applyOptionsPatch to the RAW record the read returned (the defaults when it
+// was never written), so unmanaged keys in the blob survive (DBT-172).
 const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
@@ -633,10 +649,18 @@ function App() {
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
   // from the plain appOptions KV entry alongside acceptance and mode;
-  // refreshed by saveAppOptions (the Integrate page's DCE toggle persists
-  // through it). The tolerant codec makes a failed read equal "defaults",
-  // never a crash.
-  const [appOptions, setAppOptions] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
+  // refreshed by persistOperation's save (the Integrate page's DCE toggle).
+  // The read is held WITH what it said - loaded, absent, unreadable or
+  // retrying - because the tolerant codec turns a failed read into the
+  // defaults, and saving over a failed read wrote those defaults over the
+  // operator's real options (DBT-158). appOptions is what screens render;
+  // whether it may be saved over is planOptionsSave's decision.
+  const [optionsRead, setOptionsRead] = useState<OptionsRead>(OPTIONS_LOADING);
+  const appOptions = optionsRead.options;
+  // Why the last inline options save did not land: refused because the read
+  // had not settled, or its PUT failed (DBT-173). The unreadable case renders
+  // from optionsRead itself.
+  const [optionsSaveNotice, setOptionsSaveNotice] = useState<string | null>(null);
 
   // Theme (porting-plan dark-mode note, lands with Unit 6.5). The CHOICE
   // (light | dark | system) persists as the plain appTheme KV entry (the
@@ -677,12 +701,15 @@ function App() {
 
   // Status of the consolidated connection poll (the one budgeted poller):
   // 'checking...' -> 'ok' | 'failed - <error>'.
-  const [platformLink, setPlatformLink] = useState('checking...');
+  const [platformLink, setPlatformLink] = useState(PLATFORM_LINK_CHECKING);
 
-  // Load acceptance + mode + options once on mount. Tolerant on purpose: a
-  // failed read parses to null, which re-prompts (acceptance) or re-asks
-  // (mode) rather than silently waving the user through; options fall back
-  // to their defaults.
+  // Load acceptance + setup + options once on mount. Tolerant on purpose: a
+  // failed acceptance read parses to null, which re-prompts rather than
+  // silently waving the user through. A failed SETUP read is the exception:
+  // it becomes 'unreadable', never "not set up", because folding it into null
+  // sent a finished install back into the setup flow on any 5xx, timeout or
+  // bridge error (DBT-145). A failed OPTIONS read is 'unreadable' too: the
+  // screens render the defaults, but no inline save may write them (DBT-158).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -698,10 +725,8 @@ function App() {
       setAcceptance(
         parseAcceptanceRecord(accRaw.status === 'fulfilled' ? accRaw.value : null)
       );
-      setSetupDone(parseSetupRecord(modeRaw.status === 'fulfilled' ? modeRaw.value : null) !== null);
-      setAppOptions(
-        parseAppOptions(optionsRaw.status === 'fulfilled' ? optionsRaw.value : null)
-      );
+      setSetupDone(loadableSetupFromRead(modeRaw));
+      setOptionsRead(optionsReadFromSettled(optionsRaw));
       // Theme: a failed read parses to 'system' - always renderable.
       setThemeChoice(
         parseThemeChoice(themeRaw.status === 'fulfilled' ? themeRaw.value : null)
@@ -712,23 +737,51 @@ function App() {
     };
   }, []);
 
-  // The options save callback (the small shared save this shell owns): one
-  // plain KV entry, with the shell's parsed copy refreshed on every save so
-  // onboarding defaults follow immediately. The dedicated Options screen was
-  // RETIRED (2026-07-14, never used); deployment/naming defaults apply from
-  // DEFAULT_APP_OPTIONS and the surviving inline edits persist through here.
-  const saveAppOptions = useCallback(async (serialized: string) => {
-    await appStateStore.set(APP_OPTIONS_KEY, serialized);
-    setAppOptions(parseAppOptions(serialized));
-  }, []);
   // Persist an inline OperationOptions edit (the Integrate page's DCE capability
-  // toggle) through the same appOptions entry.
+  // toggle) through the one appOptions KV entry - only over a read that
+  // answered. While the read is loading, unreadable or retrying planOptionsSave
+  // refuses and NOTHING is PUT: the stored options may exist, and the document
+  // this shell holds is the defaults (DBT-158). The PUT writes the stored
+  // record PATCHED, not a canonical rewrite (DBT-172). A failed PUT is caught:
+  // settleOptionsSave keeps the read as it was, so the controlled toggle shows
+  // the stored value again, and the notice says the change was not saved
+  // (DBT-173). The dedicated Options screen was RETIRED (2026-07-14); this is
+  // the only options write the shell owns.
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
-      void saveAppOptions(serializeAppOptions({ ...appOptions, operation }));
+      const plan = planOptionsSave(optionsRead, { operation });
+      if (plan.kind === 'refused') {
+        setOptionsSaveNotice(plan.reason);
+        return;
+      }
+      setOptionsSaveNotice(null);
+      void (async () => {
+        const [result] = await Promise.allSettled([
+          appStateStore.set(APP_OPTIONS_KEY, plan.serialized),
+        ]);
+        // The read settles against the CURRENT state (another save may have
+        // landed meanwhile); the notice depends only on the PUT's result.
+        setOptionsRead((current) => settleOptionsSave(current, plan.serialized, result).read);
+        setOptionsSaveNotice(settleOptionsSave(optionsRead, plan.serialized, result).notice);
+      })();
     },
-    [appOptions, saveAppOptions],
+    [optionsRead],
   );
+  // Retry an unreadable options read: re-read ONLY that key. beginOptionsRetry
+  // holds 'retrying' while the read is in flight (the retrySetupRead
+  // 'loading' pattern) and returns null for a second click, so two reads never
+  // race. A read that answers lifts the save block; another failure counts as
+  // a new one (optionsReadFailureLine says so).
+  const retryOptionsRead = useCallback(async () => {
+    const retrying = beginOptionsRetry(optionsRead);
+    if (retrying === null) {
+      return;
+    }
+    setOptionsSaveNotice(null);
+    setOptionsRead(retrying);
+    const [read] = await Promise.allSettled([appStateStore.get(APP_OPTIONS_KEY)]);
+    setOptionsRead(optionsReadFromSettled(read, retrying));
+  }, [optionsRead]);
 
   // Which profile's secret was last written to the single azureBasic slot THIS
   // session, plus the identity it was written under. Non-persisted: both reset to
@@ -883,11 +936,14 @@ function App() {
   const getRecentLogs = useCallback(async () => appLogger.getRecent(), []);
 
   // The ONE budgeted status poller (@soc/ui hook over the @soc/core
-  // poll-scheduler). For this unit only the connection-status poll registers:
-  // a KV key listing once a minute proves the platform bridge and the leader
-  // are reachable. Every future poll (health, data-flow, drift) registers
-  // HERE with a priority - never its own setInterval - so the shared
-  // ~100 req/min proxy budget has one enforcement point.
+  // poll-scheduler). The shell's own poll is connection-status: a KV key
+  // listing once a minute proves the platform bridge and the leader are
+  // reachable. SCREENS register their polls through the poll registry
+  // (useRegisterPoll; the Azure onboarding live flow is the first), and
+  // useMergedPolls folds those registrations into this one call - main.tsx
+  // wraps <App/> in PollRegistryProvider so this hook sees them. Nothing
+  // runs its own setInterval, so the shared ~100 req/min proxy budget keeps
+  // one enforcement point.
   const connectionPolls = useMemo(
     () => [
       {
@@ -913,7 +969,7 @@ function App() {
     []
   );
   useConsolidatedPolling({
-    polls: connectionPolls,
+    polls: useMergedPolls(connectionPolls),
     maxPerMinute: 30,
     enabled: phase.phase === 'ready',
   });
@@ -1073,7 +1129,7 @@ function App() {
     // reachability - the same mapping hasCribl and journeyFacts already use.
     // 'checking...' is not yet a failure, so it counts as reachable and the
     // Cribl verdicts stay 'unknown' rather than briefly claiming 'unreachable'.
-    criblReachable: platformLink !== 'failed',
+    criblReachable: criblReachableUnlessFailed(platformLink),
     now: nowIso,
   });
   const { audit: auditCapabilities } = capabilityAudit;
@@ -1305,6 +1361,14 @@ function App() {
     }
   };
 
+  // Retry of an unreadable setup record (DBT-145): re-read ONLY that key, so
+  // acceptance, options and theme keep what they already loaded.
+  const retrySetupRead = async () => {
+    setSetupDone('loading');
+    const [read] = await Promise.allSettled([appStateStore.get(SETUP_KEY)]);
+    setSetupDone(loadableSetupFromRead(read));
+  };
+
   // TBL-3: the table the Tables tab handed to Single, and which DCR tab is
   // showing. Held here because the hand-off crosses from one tab's panel to
   // another's. MUST live above the gate returns below - these are hooks, and
@@ -1322,6 +1386,28 @@ function App() {
         <header className="harness-header">
           <h1 className="harness-title">{APP_NAME}</h1>
           <p className="harness-subtitle">Loading...</p>
+        </header>
+      </div>
+    );
+  }
+  // The setup record could not be READ (DBT-145). Say so and offer a retry;
+  // never fall through to the wizard, which would walk a finished install
+  // through setup again and let Get Started overwrite the record.
+  if (phase.phase === 'setup-unreadable') {
+    return (
+      <div className="harness">
+        <header className="harness-header">
+          <h1 className="harness-title">{APP_NAME}</h1>
+          <p className="harness-subtitle">
+            Could not read whether setup is complete: the app key-value store did not answer.
+            Not showing the setup flow, because this install may already be set up. Retry when
+            the leader is reachable.
+          </p>
+          <div className="panel-controls">
+            <button className="run-button" onClick={() => void retrySetupRead()}>
+              Retry reading setup
+            </button>
+          </div>
         </header>
       </div>
     );
@@ -1433,7 +1519,7 @@ function App() {
             // workspace it would talk to. The consolidated platform-link poll is
             // the honest live signal, and 'checking...' must not read as a
             // failure, so an unresolved poll counts as connected.
-            hasCribl: platformLink !== 'failed',
+            hasCribl: criblReachableUnlessFailed(platformLink),
             hasAzure:
               activeConfig.tenantId.trim() !== '' &&
               activeConfig.clientId.trim() !== '',
@@ -1495,8 +1581,7 @@ function App() {
       activeConfig.subscriptionId.trim() !== '' &&
       activeConfig.resourceGroup.trim() !== '' &&
       activeConfig.workspaceName.trim() !== '',
-    criblReachable:
-      platformLink === 'ok' ? true : platformLink === 'checking...' ? undefined : false,
+    criblReachable: criblReachability(platformLink),
   };
 
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
@@ -1601,12 +1686,23 @@ function App() {
             })}
           </span>
           <span
-            className={`link-badge ${platformLink === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
+            className={`link-badge ${platformLinkState(platformLink) === 'ok' ? 'link-badge-ok' : 'link-badge-off'}`}
             title={platformLink}
           >
             platform link:{' '}
-            {platformLink === 'ok' ? 'ok' : platformLink === 'checking...' ? 'checking' : 'failed'}
+            {platformLinkState(platformLink)}
           </span>
+          {/* HON-6 / D-1: the audit's age sits with the other facts about the
+            * live connection. It gets the set, key and clock rather than the
+            * hook's `view`, because `view` is computed at THIS render and the
+            * shell does not re-render as time passes - the chip ticks itself. */}
+          <AuditAgeChip
+            capabilities={capabilityAudit.capabilities}
+            auditKey={capabilityAudit.key}
+            now={nowIso}
+            running={capabilityAudit.running}
+            onRecheck={capabilityAudit.refresh}
+          />
         </div>
         {switchNotice !== '' && <p className="connection-notice">{switchNotice}</p>}
         {identityDrifted && (
@@ -1723,6 +1819,32 @@ function App() {
     </>
   );
 
+  // The options-read notice (DBT-158), rendered on every route that shows the
+  // persisted options: while the appOptions read is unreadable the values on
+  // screen are the defaults, not the operator's, and inline saves are
+  // refused - say so, and offer the retry that lifts the block. While the
+  // retry is in flight the button is disabled; a retry that failed adds its
+  // own line, so it reads as a new failure (DBT-173).
+  const optionsUnreadable = optionsRead.state === 'unreadable' || optionsRead.state === 'retrying';
+  const optionsFailureLine = optionsReadFailureLine(optionsRead);
+  const optionsNotice = optionsUnreadable ? (
+    <div className="connection-notice" role="status">
+      <p>{OPTIONS_UNREADABLE_NOTICE}</p>
+      {optionsFailureLine !== null && <p>{optionsFailureLine}</p>}
+      <div className="panel-controls">
+        <button
+          className="run-button"
+          disabled={optionsRead.state === 'retrying'}
+          onClick={() => void retryOptionsRead()}
+        >
+          {optionsRead.state === 'retrying' ? 'Retrying...' : 'Retry reading options'}
+        </button>
+      </div>
+    </div>
+  ) : optionsSaveNotice !== null ? (
+    <p className="connection-notice" role="status">{optionsSaveNotice}</p>
+  ) : null;
+
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
   // screens (Azure Targeting cascade + the operable native-table deploy) as
@@ -1738,15 +1860,14 @@ function App() {
       <header className="harness-header">
         <h1 className="harness-title">Sentinel Integration</h1>
         <p className="harness-subtitle">
-          The single-page integration flow: solution browser, sample data,
-          Azure resources, Cribl configuration, gap analysis, rule and
-          workbook coverage, and the operable deploy on one page, with deploy
-          readiness always visible.
+          Take a Sentinel solution from sample data to a deployed Cribl pack
+          and Data Collection Rule.
         </p>
       </header>
       {secretNotice !== null && (
         <p className="connection-notice">{secretNotice}</p>
       )}
+      {optionsNotice}
       <PortsProvider {...portsProviderProps}>
         <IntegrateScreen
           key={`integrate-${store.activeProfileId ?? 'none'}`}
@@ -1760,7 +1881,9 @@ function App() {
           onCommitScope={handleCommitScope}
           criblDefaults={appOptions.cribl}
           operationDefaults={appOptions.operation}
-          onOperationChange={persistOperation}
+          // Unreadable options: the toggle is read-only (optionsNotice says
+          // why); persistOperation refuses regardless (DBT-158).
+          {...(optionsUnreadable ? {} : { onOperationChange: persistOperation })}
           roleGuidance={ROLE_GUIDANCE}
         />
       </PortsProvider>
@@ -1802,6 +1925,7 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
+          {optionsNotice}
           <PortsProvider {...portsProviderProps}>
             {/* The key carries prefillTable (TBL-3) so handing a table over
                 from the Tables tab REMOUNTS this screen and re-seeds its
@@ -1861,6 +1985,7 @@ function App() {
           {secretNotice !== null && (
             <p className="connection-notice">{secretNotice}</p>
           )}
+          {optionsNotice}
           <PortsProvider {...portsProviderProps}>
             <BatchDeployScreen
               key={`batch-${store.activeProfileId ?? 'none'}`}
@@ -1962,6 +2087,52 @@ function App() {
       </header>
       <PortsProvider {...portsProviderProps}>
         <EventHubDiscoveryScreen />
+      </PortsProvider>
+    </>
+  );
+
+  // Azure Native Source Onboarding (AZR-18): a checklist of Azure native
+  // sources to send through Cribl, persisted as the coverage document in KV.
+  // This slice makes two sections work - the Event Hub prerequisite (AZR-11,
+  // an EXISTING namespace, hub and Send-capable rule) and the Defender for
+  // Cloud continuous export of Alerts (AZR-3, configured subscription only);
+  // every other category renders visible and disabled. The only Azure
+  // resource it creates is the Defender automation, behind a two-step
+  // confirm. The KV document store arrives through makeCloudPorts, so no port
+  // is wired here. requires: [] until CAP-7 measures its actions - see
+  // route-capabilities.ts.
+  const azureOnboardingView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Azure Native Source Onboarding</h1>
+        <p className="harness-subtitle">
+          Choose which Azure native sources to send through Cribl, point them
+          at an existing Event Hub, and deploy the Defender for Cloud alert
+          export.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        <AzureOnboardingScreen pacing={BATCH_PACING} />
+      </PortsProvider>
+    </>
+  );
+
+  // Azure Logging Map (AZR-19, phase 1, READ-ONLY): the management-group tree
+  // with the policy assignments that deploy diagnostic settings - which are
+  // ours, which belong to someone else, and what each covers or cannot read.
+  // requires: [] - see the taxonomy-gap note in route-capabilities.ts.
+  const azureLoggingMapView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Azure Logging Map</h1>
+        <p className="harness-subtitle">
+          See which policy assignments deploy diagnostic settings across your
+          management groups and subscriptions, who owns them, and what each one
+          covers. Nothing here changes Azure.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        <AzureLoggingMapScreen />
       </PortsProvider>
     </>
   );
@@ -2195,7 +2366,7 @@ function App() {
   // journey/tools one item at a time as each passes live testing.
   // That migration has largely HAPPENED. It began as Setup and Sentinel
   // Integration alone; Dataflow, DCR Automation and Pack Maintenance have
-  // since graduated into journey, leaving four items parked below. Read the
+  // since graduated into journey, leaving the rest parked below. Read the
   // route table for the current split - this comment records the RULE, and
   // the table is the only place the answer lives.
   const routes: AppRoute[] = [
@@ -2214,7 +2385,9 @@ function App() {
     { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },
     { id: 'eventhub-discovery', label: 'Event Hub Discovery', requires: capabilitiesForRoute('eventhub-discovery'), section: 'development', render: () => eventHubDiscoveryView },
+    { id: 'azure-onboarding', label: 'Azure Native Source Onboarding', requires: capabilitiesForRoute('azure-onboarding'), section: 'development', render: () => azureOnboardingView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
+    { id: 'azure-logging-map', label: 'Azure Logging Map', requires: capabilitiesForRoute('azure-logging-map'), section: 'development', render: () => azureLoggingMapView },
     { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 

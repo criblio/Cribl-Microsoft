@@ -12,13 +12,13 @@ export type {
   LiveDiagramResult,
   LiveFlowSummary,
   LiveInput,
+  LiveConnection,
   LiveOutput,
   LiveRoute,
   LivePipeline,
   LivePipelineFunction,
   LiveBreaker,
   LivePack,
-  RouteFilterInputs,
 } from "./live-architecture";
 export {
   buildLiveDiagram,
@@ -26,6 +26,7 @@ export {
   installedPackIds,
   listLiveOutputs,
   parseRouteFilterInputs,
+  normalizeInput,
   isAzureCriblType,
   isAzureInput,
   outputCostTier,

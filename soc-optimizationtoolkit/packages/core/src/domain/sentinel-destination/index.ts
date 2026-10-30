@@ -1,7 +1,12 @@
 export {
   buildSentinelDestination,
+  criblSecretReference,
   defaultSentinelDestinationId,
+  destinationEmbedsSecret,
+  sentinelClientSecretId,
+  SENTINEL_SECRET_ID_MAX,
   rewriteIngestionEndpoint,
+  sanitizeDestinationTable,
   SentinelDestinationError,
   HANDLER_CONTROL_HOST_FRAGMENT,
   parseOutputListing,
@@ -10,6 +15,14 @@ export {
   SENTINEL_OAUTH_SCOPE,
   SENTINEL_SECRET_PLACEHOLDER,
 } from "./sentinel-destination";
+export { parseSentinelOutputs } from "./existing-outputs";
+export type {
+  SentinelBindableField,
+  SentinelEndpointMode,
+  SentinelOutputRow,
+  SentinelOutputsResult,
+  SentinelSecretKind,
+} from "./existing-outputs";
 export type {
   ExistingOutput,
   SentinelDestinationConfig,

@@ -15,18 +15,29 @@ explicitly:
   structural check on `soc-optimizationtoolkit/`: layering and coupling,
   duplicated decisions, test-pin integrity, dead code and stale docs. Diffs
   from the last audit marker rather than re-reading the whole repo. A
-  commit-count hook says when one is due.
+  commit-count hook says when one is due - on a machine where the hooks are
+  registered (see below).
 - **[backlog-grooming](./backlog-grooming/SKILL.md)** - groom `docs/board.json`:
   what to pick up next and in what order, priorities that no longer match the
   dependency graph, and the decisions and bottlenecks gating everything else.
 
+The three hook scripts in `.claude/hooks/` (architecture-audit-check,
+board-freshness-check, docs-drift-check) are tracked too, as is the audit
+marker `.claude/.last-architecture-audit`. **The hooks' registration is not.**
+They are wired up only in `.claude/settings.local.json` - the two Stop hooks
+and the PostToolUse docs-drift hook - and that file is gitignored, so a fresh
+clone has the scripts but never runs them until it adds those entries itself.
+CI's docs-drift and board-freshness steps are the checks that travel.
+
 ## What does not
 
-Everything else under this directory comes from
-[claude-kit](https://github.com/jamespederson1/claude-kit) and is re-pulled
-rather than maintained here, so it is gitignored and travels with nobody. A
-clone will see this file and the two skills above; the rest of what sits in
-this directory on any one machine is local to that machine and will differ.
+Everything else under this directory is machine-local - third-party or
+personal skills installed on that machine - and is gitignored, so it travels
+with nobody. Shared skills from
+[claude-kit](https://github.com/jamespederson1/claude-kit) do not live here at
+all: they load through the `~/.claude/skills` junction. A clone will see this
+file and the two skills above; the rest of what sits in this directory on any
+one machine is local to that machine and will differ.
 
 That is deliberate - see the comment above `.claude/skills/*` in `.gitignore`
 for why, including the `/*` detail that makes the negations reachable at all.

@@ -58,7 +58,7 @@ export function OverflowTriageBlock({
           vendor detail the table has no room for, or whether it does not
           belong to this table at all (user request 2026-08-18). */}
       {triage.noEquivalent.length > 0 && (
-        <details className="gap-overflow-triage">
+        <details>
           <summary className="field-hint">
             Fields with no {tableName} equivalent ({triage.noEquivalent.length})
           </summary>
@@ -73,7 +73,7 @@ export function OverflowTriageBlock({
       )}
 
       {triage.outranked.length > 0 && (
-        <details className="gap-overflow-triage">
+        <details>
           <summary className="field-hint">
             Overflow fields with a close-named column ({triage.outranked.length})
           </summary>

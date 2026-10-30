@@ -7,9 +7,11 @@ import {
   NAV_SECTION_ORDER,
   groupNavSections,
   isScrolledToBottom,
+  loadableSetupFromRead,
   resolveFramePhase,
 } from "./frame-state";
 import type { NavSection } from "./frame-state";
+import { ROUTE_CAPABILITIES, capabilitiesForRoute } from "./route-capabilities";
 
 const ACCEPTED: AcceptanceRecord = { acceptedAt: "2026-07-03T00:00:00.000Z" };
 
@@ -40,8 +42,32 @@ describe("resolveFramePhase", () => {
     expect(resolveFramePhase(ACCEPTED, false)).toEqual({ phase: "setup" });
   });
 
+  it("never routes an unreadable setup record into the wizard (DBT-145)", () => {
+    // A rejected read is not "not set up": the setup flow for a finished
+    // install is the defect this state exists to prevent.
+    expect(resolveFramePhase(ACCEPTED, "unreadable")).toEqual({ phase: "setup-unreadable" });
+    // The acceptance gate still comes first.
+    expect(resolveFramePhase(null, "unreadable")).toEqual({ phase: "aua" });
+  });
+
   it("is ready once accepted and set up, carrying nothing else", () => {
     expect(resolveFramePhase(ACCEPTED, true)).toEqual({ phase: "ready" });
+  });
+});
+
+describe("loadableSetupFromRead", () => {
+  it("reports a rejected read as unreadable, not as not-set-up (DBT-145)", () => {
+    expect(
+      loadableSetupFromRead({ status: "rejected", reason: new Error("KV get setupComplete failed: 502") }),
+    ).toBe("unreadable");
+  });
+
+  it("parses a fulfilled read: a record is set up, null or empty is not", () => {
+    expect(
+      loadableSetupFromRead({ status: "fulfilled", value: JSON.stringify({ completedAt: "2026-07-03T00:00:00.000Z" }) }),
+    ).toBe(true);
+    expect(loadableSetupFromRead({ status: "fulfilled", value: null })).toBe(false);
+    expect(loadableSetupFromRead({ status: "fulfilled", value: "" })).toBe(false);
   });
 });
 
@@ -135,5 +161,16 @@ describe("isScrolledToBottom", () => {
     // so the gate must count unscrollable content as already reviewed.
     expect(isScrolledToBottom(0, 400, 400)).toBe(true);
     expect(isScrolledToBottom(0, 400, 200)).toBe(true);
+  });
+});
+
+describe("azure-logging-map route capability", () => {
+  // capabilitiesForRoute falls back to [] for an UNKNOWN id, so asserting the
+  // [] alone would pass even if the entry were never added. hasOwn pins that
+  // the route's empty requirement is a recorded decision (the taxonomy gap),
+  // not the silent fallback.
+  it("is an explicit, empty entry rather than the unknown-id fallback", () => {
+    expect(Object.hasOwn(ROUTE_CAPABILITIES, "azure-logging-map")).toBe(true);
+    expect(capabilitiesForRoute("azure-logging-map")).toEqual([]);
   });
 });

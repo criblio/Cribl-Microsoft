@@ -16,6 +16,7 @@ import {
   guidColumnsLostByDeployedDcr,
   guidLossWarning,
 } from "./update-dcr";
+import { COLUMN_NAME_RULE } from "../../domain/custom-table/custom-table";
 
 const TABLE_SCHEMA = {
   status: 200,
@@ -590,6 +591,48 @@ describe("addDcrField (restricted tables - pure DCR change)", () => {
     expect(
       pickExtensionColumn("string", new Set(["flexstring1", "flexstring2"]), new Set(["flexstring1", "flexstring2"])),
     ).toBeNull();
+  });
+});
+
+describe("one column-name rule for both write paths (DBT-107)", () => {
+  // addTableColumn is driven with a _CL table: on a native table it appends
+  // _CF BEFORE validating, so '' would become '_CF' and pass - the typed name
+  // would not be the name tested.
+  const callBoth = (name: string) => {
+    const dcrAzure = new FakeAzureManagement();
+    const tableAzure = new FakeAzureManagement();
+    return {
+      dcrAzure,
+      tableAzure,
+      dcr: addDcrField(dcrAzure, { ...INPUT, column: { name, type: "string" } }),
+      table: addTableColumn(tableAzure, {
+        subscriptionId: "sub",
+        resourceGroup: "rg",
+        workspaceName: "ws",
+        table: "Acme_CL",
+        column: { name, type: "string" },
+      }),
+    };
+  };
+
+  it.each(["1abc", "a-b", "a b", ""])(
+    "both reject %j with the domain's rule, before any Azure call",
+    async (name) => {
+      const { dcrAzure, tableAzure, dcr, table } = callBoth(name);
+      await expect(dcr).rejects.toThrow(`is invalid - ${COLUMN_NAME_RULE}`);
+      await expect(table).rejects.toThrow(`is invalid - ${COLUMN_NAME_RULE}`);
+      expect(dcrAzure.calls.length).toBe(0);
+      expect(tableAzure.calls.length).toBe(0);
+    },
+  );
+
+  it.each(["_x", "Abc_1"])("both accept %j and go on to Azure", async (name) => {
+    const { dcrAzure, tableAzure, dcr, table } = callBoth(name);
+    // An empty script: passing validation is proven by reaching the fake.
+    await expect(dcr).rejects.toThrow("no scripted response");
+    await expect(table).rejects.toThrow("no scripted response");
+    expect(dcrAzure.calls.length).toBe(1);
+    expect(tableAzure.calls.length).toBe(1);
   });
 });
 

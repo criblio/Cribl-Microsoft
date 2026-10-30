@@ -17,6 +17,7 @@ export type {
 export {
   RAW_EVENTS_CAP,
   MAX_FIELD_EXAMPLES,
+  FIELD_EXAMPLE_MAX_CHARS,
   // THE ONE NAME FOR AN UNNAMED COLUMN. Exported because the UI's interactive
   // column mapper has to speak it too: a position the operator has not named
   // must round-trip as positional, and re-testing /^_\d+$/ in the renderer is
@@ -25,6 +26,11 @@ export {
   isPositionalFieldName,
   isOverflowFieldName,
   overflowFieldName,
+  // DBT-116: the narrowing guard and the never-typed default that makes a
+  // switch over the union exhaustive. SAMPLE_FORMATS and isSampleFormat stay
+  // module-internal (models.ts and its test) until something outside needs them.
+  toSampleFormat,
+  assertNeverFormat,
 } from "./models";
 
 export type { CappedTaggedSample } from "./cap-bytes";
@@ -53,7 +59,15 @@ export {
 // the reason the positional export below records: the screen and the installed
 // pipeline must reach the seven header fields the same way, and a second copy of
 // an escape rule drifts. The pack emits `.source` verbatim - see pipeline-conf.ts.
-export { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+export {
+  CEF_HEADER_PATTERN,
+  CEF_HEADER_ESCAPE,
+  CEF_HEADER_FIELD_BODY,
+} from "./parsers";
+// DBT-116: the two syslog line patterns, for the same reason - the generated
+// pipeline's syslog extraction emits their `.source`, so the names the parser
+// mints and the names the installed pack mints cannot drift apart.
+export { SYSLOG_RFC3164_PATTERN, SYSLOG_RFC5424_PATTERN } from "./parsers";
 
 export type { ParseSampleOptions } from "./parse-sample";
 export {
@@ -116,13 +130,16 @@ export {
 
 // Log-type SPLITTING of a mixed stream (rehomed 2026-08-18 from the deleted
 // sample-acquisition domain; load-bearing for capture and mixed uploads).
+export type { SplitOutcome } from "./splitting";
 export {
   parseKvLine,
   splitSamplesByLogType,
+  splitSamplesWithLeftOut,
   splitFoundNoDiscriminator,
   splitSampleId,
   hasNamedFields,
   convertPanosSplitAtLoad,
+  isPanosCefIdentity,
 } from "./splitting";
 
 // Remembered column orders per VENDOR + LOG TYPE (plan Gap 3 / step 4): the
@@ -157,9 +174,12 @@ export {
 // DBT-77/DBT-78: the positional field order, exported so pipeline-generation
 // can emit the SAME names the analyzer produced. One source of truth - a second
 // copy of the order would drift and silently name the wrong column.
+// DBT-106: vpcFlowV2AwsName is exported for the mapping review, which shows
+// AWS's hyphenated spelling beside the parsed name - for display only.
 export {
   VPC_FLOW_V2_AWS_NAMES,
   VPC_FLOW_V2_FIELDS,
+  vpcFlowV2AwsName,
   isVpcFlowV2,
   looksPositional,
   parsePositional,

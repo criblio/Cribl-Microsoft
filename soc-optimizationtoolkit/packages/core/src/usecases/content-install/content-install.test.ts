@@ -7,9 +7,15 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeAzureManagement } from "../../testing/index";
+import type {
+  AzureManagement,
+  AzureManagementRequest,
+} from "../../ports/azure-management";
+import type { PortHttpResponse } from "../../ports/http";
 import type { ParsedAnalyticRule } from "../../domain/coverage-analysis/index";
 import {
   absenceIsMeasured,
+  fetchWorkspaceLocation,
   installAnalyticRule,
   installParser,
   installWorkbook,
@@ -209,6 +215,41 @@ describe("installParser (duplicate-alias safety)", () => {
     expect(azure.calls[0].method).toBe("GET");
     expect(azure.calls[1].method).toBe("DELETE");
     expect(azure.calls[1].path).toContain("/savedSearches/parser-cloudflare");
+  });
+
+  // DBT-176: a failed savedSearches listing used to be swallowed - the PUT
+  // went ahead (right: it is idempotent) and the outcome read a plain
+  // "installed", hiding that the duplicate-alias check never ran.
+  it("still PUTs when the listing cannot be read, and SAYS the duplicate check did not run", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 403, body: "denied" }, // list savedSearches: refused
+      { status: 200, body: {} }, // PUT ours
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+    expect(outcome).toEqual({
+      name: "Cloudflare (parser)",
+      ok: true,
+      detail:
+        "installed, but the saved searches could not be read " +
+        '(list saved searches: HTTP 403 "denied"), so another function with ' +
+        "the alias Cloudflare was not checked for - if a query reports " +
+        "multiple functions with the same name, remove the duplicate",
+    });
+  });
+
+  it("carries the unread-listing note onto a failed PUT too", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 403, body: "denied" },
+      { status: 400, body: { error: { code: "BadRequest", message: "bad" } } },
+    );
+    const outcome = await installParser(azure, WS, parser);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toMatch(
+      /; the saved searches could not be read \(list saved searches: HTTP 403 "denied"\)$/,
+    );
   });
 });
 
@@ -570,5 +611,207 @@ describe("installSolution", () => {
     expect(outcome.detail).toContain("missing required install fields");
     // No install PUT is attempted when the package is unusable.
     expect(azure.calls).toHaveLength(1);
+  });
+});
+
+/**
+ * DBT-74: content-install's single ARM requests go through SafeAzureManagement.
+ * Two contracts are pinned here, and they are different words for `ok`:
+ *
+ *   - never rejects: an adapter that THROWS yields a resolved outcome carrying
+ *     the error text verbatim. No pin covered the throw path before this block.
+ *   - no ok-inversion: ArmAttempt.ok is true for a 403 (ARM answered), and the
+ *     step outcome must still be ok:false. Reading attempt.ok as the step
+ *     outcome would report a refused install as a success; the 403 pins are
+ *     the guard against exactly that.
+ */
+describe("content-install over SafeAzureManagement (DBT-74)", () => {
+  const TRANSPORT = "socket hang up";
+
+  /** An AzureManagement scripted per call: a response, or an Error to REJECT with. */
+  function scripted(...steps: Array<PortHttpResponse | Error>): AzureManagement & {
+    calls: AzureManagementRequest[];
+  } {
+    const calls: AzureManagementRequest[] = [];
+    return {
+      calls,
+      async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
+        calls.push(opts);
+        const step = steps.shift();
+        if (step === undefined) throw new Error(`unscripted ${opts.method} ${opts.path}`);
+        if (step instanceof Error) throw step;
+        return step;
+      },
+    };
+  }
+
+  const FORBIDDEN: PortHttpResponse = {
+    status: 403,
+    body: { error: { code: "AuthorizationFailed" } },
+  };
+  const FORBIDDEN_DETAIL = 'HTTP 403 {"error":{"code":"AuthorizationFailed"}}';
+  const PRODUCT_PACKAGE: PortHttpResponse = {
+    status: 200,
+    body: {
+      properties: {
+        contentId: "c",
+        contentProductId: "c-sl",
+        contentKind: "Solution",
+        version: "1.0.0",
+      },
+    },
+  };
+  const ORPHAN_CONFLICT: PortHttpResponse = {
+    status: 400,
+    body: { error: { message: "contentId c is already associated with another package" } },
+  };
+  const parser = {
+    alias: "Cloudflare",
+    displayName: "Cloudflare",
+    query: "T | take 1",
+    functionParameters: "",
+  };
+  const workbook = { displayName: "WB", serializedData: '{"a": 1}' };
+
+  describe("a transport rejection resolves an outcome with the error text", () => {
+    it("onboardSentinelWorkspace", async () => {
+      const outcome = await onboardSentinelWorkspace(scripted(new Error(TRANSPORT)), WS);
+      expect(outcome).toEqual({ ok: false, detail: TRANSPORT });
+    });
+
+    it("fetchWorkspaceLocation resolves null", async () => {
+      await expect(
+        fetchWorkspaceLocation(scripted(new Error(TRANSPORT)), "sub", "rg", "law"),
+      ).resolves.toBeNull();
+    });
+
+    it("installAnalyticRule", async () => {
+      const outcome = await installAnalyticRule(
+        scripted(new Error(TRANSPORT)),
+        WS,
+        rule({}),
+        mintId,
+      );
+      expect(outcome).toEqual({ name: "Rule", ok: false, detail: TRANSPORT });
+    });
+
+    it("installWorkbook", async () => {
+      const outcome = await installWorkbook(scripted(new Error(TRANSPORT)), WS, workbook, mintId);
+      expect(outcome).toEqual({ name: "WB", ok: false, detail: TRANSPORT });
+    });
+
+    it("installParser: the PUT rejecting", async () => {
+      const azure = scripted({ status: 200, body: { value: [] } }, new Error(TRANSPORT));
+      const outcome = await installParser(azure, WS, parser);
+      expect(outcome).toEqual({ name: "Cloudflare (parser)", ok: false, detail: TRANSPORT });
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+    });
+
+    it("installParser: the best-effort DELETE rejecting still defers", async () => {
+      const azure = scripted(
+        {
+          status: 200,
+          body: { value: [{ name: "sol.func", properties: { functionAlias: "Cloudflare" } }] },
+        },
+        new Error(TRANSPORT),
+      );
+      const outcome = await installParser(azure, WS, parser);
+      expect(outcome).toEqual({
+        name: "Cloudflare (parser)",
+        ok: true,
+        detail: "already provided by the solution",
+      });
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "DELETE"]);
+    });
+
+    it("installSolution: the product-package GET rejecting", async () => {
+      const azure = scripted(new Error(TRANSPORT));
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: false, detail: TRANSPORT });
+      expect(azure.calls).toHaveLength(1);
+    });
+
+    it("installSolution: the install PUT rejecting", async () => {
+      const azure = scripted(PRODUCT_PACKAGE, new Error(TRANSPORT));
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: false, detail: TRANSPORT });
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+    });
+
+    it("installSolution: rejecting orphan DELETEs are best-effort and the retry still runs", async () => {
+      const azure = scripted(
+        PRODUCT_PACKAGE,
+        ORPHAN_CONFLICT,
+        new Error(TRANSPORT),
+        new Error(TRANSPORT),
+        { status: 200, body: {} },
+      );
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: true, detail: "installed (version 1.0.0)" });
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT", "DELETE", "DELETE", "PUT"]);
+    });
+
+    it("installSolution: the retry PUT rejecting", async () => {
+      const azure = scripted(
+        PRODUCT_PACKAGE,
+        ORPHAN_CONFLICT,
+        { status: 200, body: {} },
+        { status: 204, body: {} },
+        new Error(TRANSPORT),
+      );
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: false, detail: TRANSPORT });
+    });
+  });
+
+  describe("a 403 is an answer, and the STEP is still ok:false (no ok-inversion)", () => {
+    it("onboardSentinelWorkspace", async () => {
+      const outcome = await onboardSentinelWorkspace(scripted(FORBIDDEN), WS);
+      expect(outcome).toEqual({ ok: false, detail: FORBIDDEN_DETAIL });
+    });
+
+    it("fetchWorkspaceLocation resolves null", async () => {
+      await expect(
+        fetchWorkspaceLocation(
+          scripted({ ...FORBIDDEN, body: { location: "eastus" } }),
+          "sub",
+          "rg",
+          "law",
+        ),
+      ).resolves.toBeNull();
+    });
+
+    it("installAnalyticRule", async () => {
+      const outcome = await installAnalyticRule(scripted(FORBIDDEN), WS, rule({}), mintId);
+      expect(outcome).toEqual({ name: "Rule", ok: false, detail: FORBIDDEN_DETAIL });
+    });
+
+    it("installWorkbook", async () => {
+      const outcome = await installWorkbook(scripted(FORBIDDEN), WS, workbook, mintId);
+      expect(outcome).toEqual({ name: "WB", ok: false, detail: FORBIDDEN_DETAIL });
+    });
+
+    it("installParser", async () => {
+      const outcome = await installParser(
+        scripted({ status: 200, body: { value: [] } }, FORBIDDEN),
+        WS,
+        parser,
+      );
+      expect(outcome).toEqual({
+        name: "Cloudflare (parser)",
+        ok: false,
+        detail: FORBIDDEN_DETAIL,
+      });
+    });
+
+    it("installSolution: the product-package GET", async () => {
+      const outcome = await installSolution(scripted(FORBIDDEN), WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: false, detail: FORBIDDEN_DETAIL });
+    });
+
+    it("installSolution: the install PUT", async () => {
+      const outcome = await installSolution(scripted(PRODUCT_PACKAGE, FORBIDDEN), WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: false, detail: FORBIDDEN_DETAIL });
+    });
   });
 });

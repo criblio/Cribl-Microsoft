@@ -569,37 +569,53 @@ describe('evaluateClassNames - UNDECIDED_BARE', () => {
     expect(result.errors[0]).toContain('Delete the entry');
   });
 
-  it('records a tag for every entry, because the tag is what makes most doubtful', () => {
-    // Four of the thirteen sit on an `a`, a `tr`, a `td` and a `details`, all of
-    // which carry user-agent styling or an ancestor rule this check cannot see.
-    // An entry with no tag would be a finding nobody can weigh.
+  it('records a tag, a path and a count on every entry it ever holds', () => {
+    // An entry with no tag would be a finding nobody can weigh - an `a`, a `tr`,
+    // a `td` and a `details` carry user-agent styling a `div` does not - and an
+    // entry with no count would default to nothing and suppress silently, which
+    // is the hole the count exists to close. Vacuous while the list is empty,
+    // and kept so the next entry is held to the shape the first fourteen were.
     for (const entry of UNDECIDED_BARE) {
       expect(entry.tag, `${entry.name} has no tag`).toMatch(/^[a-z]+$/);
       expect(entry.path).toMatch(/^packages\/ui\/src\/.+\.tsx$/);
-    }
-  });
-
-  it('records a count on every entry, and the list holds 14 elements in 13 entries', () => {
-    // BOTH NUMBERS, because they are not the same number and the CI comment and
-    // the file header both said only the smaller one. Thirteen entries, fourteen
-    // elements - `gap-overflow-triage` is bare at two lines of one file. An entry
-    // with no count would default to nothing and suppress silently, which is the
-    // hole this whole field exists to close.
-    for (const entry of UNDECIDED_BARE) {
       expect(entry.count, `${entry.name} has no count`).toBeTypeOf('number');
       expect(entry.count, `${entry.name} has a count below 1`).toBeGreaterThanOrEqual(1);
     }
+  });
 
-    expect(UNDECIDED_BARE).toHaveLength(13);
-    expect(UNDECIDED_BARE.reduce((n, e) => n + e.count, 0)).toBe(14);
-    expect(UNDECIDED_BARE.filter((e) => e.count > 1)).toEqual([
-      {
-        path: 'packages/ui/src/screens/mapping-review/overflow-triage-block.tsx',
-        name: 'gap-overflow-triage',
-        tag: 'details',
-        count: 2,
-      },
-    ]);
+  it('records NOTHING: DBT-114 decided all fourteen elements DBT-100 recorded', () => {
+    // Twelve were dead wrapper names and lost the attribute; two were test
+    // hooks and moved to data-testid. None was styled through its own name by
+    // an ancestor selector. An entry added back here is a NEW undecided element,
+    // and it should arrive with a card, not by editing this number.
+    expect(UNDECIDED_BARE).toEqual([]);
+  });
+
+  it('holds the real tree to ZERO bare elements with the shipped empty baseline', () => {
+    // The pin that makes the empty list mean something: the decided names must
+    // stay decided. Re-adding className="arch-card-head" (or any of the other
+    // thirteen) to its element fails here and in the CI step.
+    const result = evaluateClassNames({
+      stylesheets: [{ path: 'styles.css', text: read('styles.css') }],
+      sources: [
+        ['components', 'numbered-section.tsx'],
+        ['frame', 'app-frame.tsx'],
+        ['onboarding', 'manual-schema-editor.tsx'],
+        ['screens', 'architecture', 'architecture-screen.tsx'],
+        ['screens', 'content-install', 'content-install-section.tsx'],
+        ['screens', 'mapping-catalog', 'mapping-catalog-screen.tsx'],
+        ['screens', 'mapping-review', 'overflow-triage-block.tsx'],
+        ['screens', 'pipeline-preview', 'pipeline-preview-section.tsx'],
+        ['screens', 'samples', 'capture-panel.tsx'],
+        ['screens', 'samples', 'sample-intake-section.tsx'],
+      ].map((parts) => ({ path: parts.join('/'), text: read(...parts) })),
+      allowlist: [],
+      baseline: UNDECIDED_BARE,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.bareElements).toBe(0);
+    expect(result.baselined).toBe(0);
   });
 });
 

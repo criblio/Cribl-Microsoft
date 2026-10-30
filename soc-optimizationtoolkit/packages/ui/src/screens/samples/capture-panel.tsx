@@ -11,7 +11,9 @@
  * Cribl evaluates the expression and returns its own message, which beats a
  * guess from here. The one thing checked is the edit that fails silently -
  * deleting the __inputId clause, which widens the capture to every source in
- * the worker group.
+ * the worker group - and, since DBT-169, naming the source by its bare id,
+ * which matches nothing. The panel hands core the whole source so its type
+ * reaches that check; the typed `<type>:<id>` form is the one that is silent.
  *
  * TWO IN-FLIGHT STATES, not one (2026-08-20 audit). The capture is awaited and
  * so is the COMMIT, and until the store write resolves the panel is showing a
@@ -37,6 +39,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import type { CaptureSamplesResult, SampleSourceRef, TaggedSample } from "@soc/core";
 import {
   DEFAULT_DURATION_SECONDS,
@@ -52,9 +55,11 @@ import {
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
+  reseedKeepingPicks,
   toggleChoice,
 } from "./capture-panel-state";
 import { commitErrorText } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import { useNumericField } from "./use-numeric-field";
 import type {
   CaptureCommitOutcome,
@@ -70,8 +75,12 @@ export interface CapturePanelProps {
   existingLogTypes: readonly string[];
   /** Run the capture. Resolves with the result; never throws. */
   onCapture: (filter: string, maxEvents: number, durationSeconds: number) => Promise<CaptureSamplesResult>;
-  /** Commit the previewed samples to the store. */
-  onCommit: (samples: TaggedSample[]) => Promise<void>;
+  /**
+   * Commit the previewed samples to the store. Resolves with the log types the
+   * store kept fewer events of than it was handed (DBT-197), or void when the
+   * caller cannot read the store back - which reports no trim, not "none".
+   */
+  onCommit: (samples: TaggedSample[]) => Promise<readonly StoredEventShortfall[] | void>;
 }
 
 export function CapturePanel({
@@ -99,6 +108,15 @@ export function CapturePanel({
   // change from a RECOMMENDATION change - they want opposite things from the
   // latch. Same guard-ref shape as azure-resources-section.tsx:259-262.
   const seededForSourceRef = useRef(source.id);
+  // True once the operator has ticked or unticked a log type (DBT-198). Until
+  // then the picks are the app's suggestion and follow every re-seed - a type
+  // just committed comes back "already provided" and un-ticks itself. After it,
+  // the picks are the operator's, and a re-seed keeps them: committing used to
+  // re-tick everything they had unticked. Cleared on a source change, with the
+  // filter latch, for the same reason.
+  const picksEditedRef = useRef(false);
+  // The picks as last set, for the re-seed to read without depending on them.
+  const choicesRef = useRef<CaptureLogTypeChoice[]>(seeded);
   const maxEvents = useNumericField(DEFAULT_MAX_EVENTS);
   // The one that bites hardest cleared: 0 clamps to a ONE-SECOND capture, which
   // on a quiet source returns nothing and is then reported as an idle source.
@@ -147,15 +165,29 @@ export function CapturePanel({
    * with `key={captureTarget.id}` so a source change remounts and the refs reset
    * anyway - but a component that is only correct because of how its parent keys
    * it is one refactor away from being wrong, and the branch costs a ref.
+   *
+   * THE PICKS SURVIVE TOO, once the operator has made any (DBT-198). This
+   * effect replaced the list with the seed outright, so the commit that fixed
+   * the filter above still re-ticked every log type the operator had unticked:
+   * the UAT narrowed 13 to THREAT and TRAFFIC, pressed "Add these as samples",
+   * and got all 13 back. reseedKeepingPicks keeps their ticks and takes only the
+   * seed's evidence and notes, which are what the commit actually changed.
    */
   useEffect(() => {
-    setChoices(seeded);
     if (seededForSourceRef.current !== source.id) {
       seededForSourceRef.current = source.id;
       filterEditedRef.current = false;
+      picksEditedRef.current = false;
     }
+    // Read through the ref rather than the `choices` state, for the reason the
+    // filter latch is a ref: listing `choices` would re-run this on every tick.
+    const next = picksEditedRef.current
+      ? reseedKeepingPicks(seeded, choicesRef.current)
+      : seeded;
+    choicesRef.current = next;
+    setChoices(next);
     if (!filterEditedRef.current) {
-      setFilter(composeFilter(source.id, seeded));
+      setFilter(composeFilter(source.id, next));
     }
   }, [seeded, source.id]);
 
@@ -187,13 +219,15 @@ export function CapturePanel({
 
   const view = deriveCaptureView(result, running, existingLogTypes);
   const commitView = deriveCaptureCommitView(outcome, committing, storeError);
-  const warning = filterWarning(filter, source.id);
+  const warning = filterWarning(filter, source);
   // One lock for the whole panel, as the Lake panel does with querying/fetching:
   // every control here describes a request that is already in flight.
   const locked = running || committing;
 
   const toggle = (value: string) => {
     const next = toggleChoice(choices, value);
+    picksEditedRef.current = true;
+    choicesRef.current = next;
     setChoices(next);
     if (!filterEditedRef.current) {
       setFilter(composeFilter(source.id, next));
@@ -232,8 +266,12 @@ export function CapturePanel({
     setCommitting(true);
     setStoreError(null);
     try {
-      await onCommit(samples);
-      setOutcome({ stored: samples.length, returned: result.splits.length });
+      const trimmed = await onCommit(samples);
+      setOutcome({
+        stored: samples.length,
+        returned: result.splits.length,
+        trimmed: trimmed ?? [],
+      });
       // Cleared only once the store has it, AND only when it took something: a
       // commit that stored nothing leaves the preview up, because the only way
       // back to it is another capture.
@@ -253,6 +291,25 @@ export function CapturePanel({
     setStoreError(null);
   };
 
+  // One checkbox row. In the vendor group the per-row note is dropped: the
+  // group's summary already says it, once.
+  const renderChoice = (choice: CaptureLogTypeChoice, inVendorGroup = false) => (
+    <li key={choice.value}>
+      <label className="capture-log-type">
+        <input
+          type="checkbox"
+          checked={choice.selected}
+          onChange={() => toggle(choice.value)}
+          disabled={locked}
+        />
+        <span className="capture-log-type-name">{choice.value}</span>
+        {choice.note !== undefined && !(inVendorGroup && choice.evidence === "vendor") && (
+          <span className="field-hint">{choice.note}</span>
+        )}
+      </label>
+    </li>
+  );
+
   return (
     <div className="capture-panel" data-status={view.status}>
       <span className="field-label">Capture from {source.id}</span>
@@ -263,27 +320,43 @@ export function CapturePanel({
             Log types to capture. The ones this solution&apos;s own content needs
             are ticked; the rest are offered, not assumed.
           </span>
-          <ul className="capture-log-types">
-            {choices.map((choice) => (
-              <li key={choice.value}>
-                <label className="capture-log-type">
-                  <input
-                    type="checkbox"
-                    checked={choice.selected}
-                    onChange={() => toggle(choice.value)}
-                    disabled={locked}
-                  />
-                  <span className="capture-log-type-name">{choice.value}</span>
-                  {choice.note !== undefined && (
-                    <span className="field-hint">{choice.note}</span>
-                  )}
-                </label>
-              </li>
-            ))}
+          {/* DBT-228: the needed types as a compact grid; the vendor-documented
+              ones (offered, never required) in a group that stays closed unless
+              one of them is ticked, so the panel is not 19 stacked rows. */}
+          <ul className="capture-log-types capture-log-types-grid">
+            {choices
+              .filter((choice) => choice.evidence !== "vendor")
+              .map((choice) => renderChoice(choice))}
           </ul>
+          {choices.some((choice) => choice.evidence === "vendor") && (
+            <details
+              className="gap-handles capture-log-types-documented"
+              open={openWhen(choices.some((c) => c.evidence === "vendor" && c.selected))}
+            >
+              <summary>
+                Also documented by the vendor (
+                {choices.filter((choice) => choice.evidence === "vendor").length}) - not
+                required by this solution
+              </summary>
+              <ul className="capture-log-types capture-log-types-grid">
+                {choices
+                  .filter((choice) => choice.evidence === "vendor")
+                  .map((choice) => renderChoice(choice, true))}
+              </ul>
+            </details>
+          )}
         </>
       )}
 
+      {/* DBT-228: the generated expression is several lines of JavaScript the
+          ticks above already write - it waits behind Edit filter, and opens by
+          itself once the operator has edited it. Its warning stays outside,
+          always visible. */}
+      <details
+        className="gap-handles capture-filter-details"
+        open={openWhen(filterEditedRef.current)}
+      >
+        <summary>Edit filter</summary>
       <label className="field">
         <span className="field-label">Filter</span>
         <textarea
@@ -298,6 +371,7 @@ export function CapturePanel({
           disabled={locked}
         />
       </label>
+      </details>
       {warning !== null && (
         <p className="field-hint capture-filter-warning">{warning}</p>
       )}
@@ -420,7 +494,7 @@ export function CapturePanel({
           Lake panel's summary outlives its log-type list: clearing the panel on
           success rounds a partial haul up to a clean one. */}
       {commitView.status !== "idle" && (
-        <div className="capture-outcome" data-status={commitView.status}>
+        <div data-testid="capture-outcome" data-status={commitView.status}>
           <p className="panel-desc">{commitView.headline}</p>
         </div>
       )}

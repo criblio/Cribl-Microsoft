@@ -19,6 +19,8 @@ import {
   ARCHITECTURE_PRESETS,
   AZURE_RESOURCES,
   CRIBL_PRODUCTS,
+  LEGACY_INPUT_MATCH_SUFFIX,
+  LEGACY_INPUT_MATCH_TIP,
   LOG_SOURCES,
   PRODUCT_WHEN_TO_USE,
   SOLUTION_INGESTION_ENTRIES,
@@ -29,7 +31,6 @@ import {
   applySentinelOverlay,
   buildFleetInventory,
   fetchEdgeFleetData,
-  isStreamWorkerGroup,
   parseWorkerInventory,
   recommendWithSolutions,
   unifyPatternDiagrams,
@@ -39,7 +40,6 @@ import type {
   ArchitecturePreset,
   AzureResource,
   CriblClient,
-  CriblGroupSummary,
   CriblProduct,
   EdgeFleetData,
   LiveArchitectureSnapshot,
@@ -47,7 +47,13 @@ import type {
   PatternDiagram,
   PatternRecommendation,
 } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
 import { SearchableMultiSelect } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { ArchitectureFlow } from "./architecture-flow";
 import type { DiagramEditState } from "./arch-edits";
 import { PATTERN_DEPLOY_LINKS } from "./deploy-links";
@@ -67,7 +73,7 @@ function PatternCard({
   const deployLink = PATTERN_DEPLOY_LINKS[pattern.id];
   return (
     <div className="arch-card">
-      <div className="arch-card-head">
+      <div>
         <span className="arch-card-title">{pattern.title}</span>
       </div>
       <p className="panel-desc">{pattern.summary}</p>
@@ -260,8 +266,12 @@ function LiveArchitecturePanel({
   onExport: OnExport;
   criblUiBase?: string;
 }) {
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
+  // Listed only when asked (auto: false). Every listing state, including an
+  // empty one that used to leave this row silently without a select
+  // (DBT-134), is WorkerGroupField's to render. Stream worker groups only.
+  const workerGroups = useStreamWorkerGroups(cribl, { auto: false });
   const [groupId, setGroupId] = useState("");
+  useInitialWorkerGroup(workerGroups.state, "", setGroupId);
   const [liveError, setLiveError] = useState("");
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
@@ -280,23 +290,6 @@ function LiveArchitecturePanel({
     setExpandedPackRoutes([]);
     setRoutesExpanded(false);
   }, [snapshot]);
-
-  const loadGroups = async () => {
-    setLiveError("");
-    try {
-      const found = (await cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(found);
-      if (found.length > 0 && groupId === "") {
-        setGroupId(found[0].id);
-      }
-    } catch (err) {
-      setGroups(null);
-      setLiveError(
-        `Worker groups unavailable (is a Cribl connection active?): ` +
-          (err instanceof Error ? err.message : String(err)),
-      );
-    }
-  };
 
   const loadLive = async () => {
     if (loading || groupId === "") {
@@ -345,6 +338,13 @@ function LiveArchitecturePanel({
     () => (liveResult?.flows ?? []).filter((flow) => !azureOnly || flow.azure),
     [liveResult, azureOnly],
   );
+  // DBT-170: a route that reaches its input only by the bare id is drawn like
+  // any other, so the flows it carries are named here as unconfirmed - the
+  // same words the Azure onboarding screen uses for the same route.
+  const legacyFlows = useMemo(
+    () => visibleFlows.filter((flow) => flow.legacyInputMatch === true),
+    [visibleFlows],
+  );
   // Latest canvas edits, for titled exports that match the arrangement.
   const liveEditsRef = useRef<DiagramEditState | null>(null);
   const onLiveCanvasState = useCallback((state: DiagramEditState) => {
@@ -377,18 +377,22 @@ function LiveArchitecturePanel({
         connected Cribl environment. Nothing here changes any configuration.
       </p>
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void loadGroups()}>
-          {groups === null ? "Load worker groups" : "Reload worker groups"}
+        <button className="run-button" onClick={workerGroups.reload}>
+          {workerGroups.state.kind === "idle"
+            ? "Load worker groups"
+            : "Reload worker groups"}
         </button>
-        {groups !== null && groups.length > 0 && (
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.id}
-              </option>
-            ))}
-          </select>
-        )}
+        <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+          {(groups) => (
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </WorkerGroupField>
         <label className="integrate-check">
           <input
             type="checkbox"
@@ -422,7 +426,9 @@ function LiveArchitecturePanel({
             <SearchableMultiSelect
               options={visibleFlows.map((flow) => ({
                 value: flow.key,
-                label: flow.label,
+                label:
+                  flow.label +
+                  (flow.legacyInputMatch === true ? LEGACY_INPUT_MATCH_SUFFIX : ""),
               }))}
               values={selectedFlows}
               onChange={setSelectedFlows}
@@ -463,6 +469,22 @@ function LiveArchitecturePanel({
             onCanvasStateChange={onLiveCanvasState}
           />
           {liveResult.diagram.nodes.length > 0 && <CostLegend />}
+          {legacyFlows.length > 0 && (
+            <section className="arch-live-notes" aria-label="Unconfirmed routes">
+              <span className="field-label">Unconfirmed routes</span>
+              <ul>
+                {legacyFlows.map((flow) => (
+                  <li className="field-hint" key={flow.key}>
+                    <span>
+                      {flow.label}
+                      {LEGACY_INPUT_MATCH_SUFFIX}
+                    </span>{" "}
+                    <InfoTip text={LEGACY_INPUT_MATCH_TIP} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {liveResult.notes.length > 0 && (
             <div className="arch-live-notes">
               <span className="field-label">Notes</span>
@@ -599,10 +621,19 @@ function EdgeFleetsPanel({
       {fleetsError !== "" && (
         <span className="field-hint eh-warning">{fleetsError}</span>
       )}
-      {data !== null && fleetViews.length === 0 && (
+      {data !== null && fleetViews.length === 0 && data.groupsListed && (
         <p className="field-hint">
-          No Edge Fleets reported by this leader - the groups list contains
-          only Stream worker groups.
+          No Edge Fleets reported by this leader - none of the groups it
+          returned is an Edge Fleet.
+        </p>
+      )}
+      {/* DBT-134: an empty groups listing is also what a role that covers no
+          group receives, so it is not evidence that no fleet exists. */}
+      {data !== null && !data.groupsListed && (
+        <p className="field-hint">
+          Cribl returned no groups this account can see, so this cannot
+          confirm whether any Edge Fleets exist. Your Cribl role may not
+          grant access to them.
         </p>
       )}
       {data !== null && data.workers === undefined && fleetViews.length > 0 && (

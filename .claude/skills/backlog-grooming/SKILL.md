@@ -20,9 +20,13 @@ and still cannot say whether that matters this week.
 cd soc-optimizationtoolkit && npm run groom
 ```
 
-It reads `docs/board.json` and prints four finding sections followed by the
+It reads `docs/board.json` and prints five finding sections followed by the
 goals, priority band by band, each with the prerequisites it waits on listed in
 the order they have to happen.
+
+To groom one part of the product, narrow it to a menu item:
+`npm run groom -- integrate`. Cards outside that menu that block one inside it
+are pulled in and marked.
 
 Read the whole report before changing anything. Grooming that reacts to the
 first finding produces a board optimised for the first finding.
@@ -72,6 +76,18 @@ path regardless of its label.
 Judge: leverage is not value. A card can gate ten cards that nobody wants this
 quarter. Cross-check against what the epics are actually for before promoting on
 this number alone.
+
+### BUGS HELD BACK
+
+Every open `bug` card below `now`, printed with its `priorityWhy` and the
+question "still true?". CLAUDE.md rule 4 makes a bug `now` unless the card
+argues otherwise; this section is where that argument gets re-read, every run.
+
+Judge whether the written argument still holds. If it does not - the defect
+has bitten again, or the reason was about circumstances that have changed -
+promote the card to `now`. **Never delete or soften the `priorityWhy` just to
+quiet the section**: the listing is the point, and `check-board` fails on a
+deprioritised bug without one anyway.
 
 ### HYGIENE
 

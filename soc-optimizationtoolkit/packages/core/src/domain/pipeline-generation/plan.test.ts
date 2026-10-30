@@ -12,6 +12,10 @@ import type { DcrGapAnalysis } from "../gap-analysis";
 import { buildPipelinePlan } from "./plan";
 import { generatePipelineConfForPlan } from "./pipeline-conf";
 import { unreachableLogTypes } from "./route-yml";
+import { checkCriblYaml } from "./cribl-yaml-validator";
+import { checkPlanFieldAccessors } from "./plan-accessor-check";
+import { applyRemap } from "../gap-analysis/apply-remap";
+import type { GapFieldMapping } from "../gap-analysis/gap-report";
 import type {
   FieldMappingOverride,
   PipelineFieldMapping,
@@ -213,6 +217,43 @@ describe("per-logType overflow collision resolved (Cloudflare)", () => {
     // Both route to the same shared-table destination.
     expect(plan.tables[0].destinationId).toBe("MS-Sentinel-CloudflareV2-dest");
     expect(plan.tables[1].destinationId).toBe(plan.tables[0].destinationId);
+  });
+});
+
+describe("destination id follows the operator's naming (GEN-18 follow-through)", () => {
+  // Deploy creates the destination under the stored CriblOptions prefix/suffix.
+  // The plan's destinationId feeds outputs.yml, the routes and the README, so
+  // it must be that same id - not the fixed MS-Sentinel-...-dest default.
+  const keep = (name: string): PipelineFieldMapping => ({
+    source: name,
+    target: name,
+    type: "string",
+    action: "keep",
+  });
+  const tables: TablePlanInput[] = [
+    { sentinelTable: "SecurityEvent", logType: "SecurityEvent", presetFields: [keep("a")] },
+    { sentinelTable: "My-App_CL", logType: "App", presetFields: [keep("b")] },
+  ];
+
+  it("uses destinationNaming when supplied", () => {
+    const plan = buildPipelinePlan({
+      solutionName: "Example",
+      packName: "example",
+      tables,
+      destinationNaming: { destinationPrefix: "Sentinel-", destinationSuffix: "-out" },
+    });
+    expect(plan.tables.map((t) => t.destinationId)).toEqual([
+      "Sentinel-SecurityEvent-out",
+      "Sentinel-My_App-out",
+    ]);
+  });
+
+  it("keeps the default id when no naming is supplied", () => {
+    const plan = buildPipelinePlan({ solutionName: "Example", packName: "example", tables });
+    expect(plan.tables.map((t) => t.destinationId)).toEqual([
+      "MS-Sentinel-SecurityEvent-dest",
+      "MS-Sentinel-My_App-dest",
+    ]);
   });
 });
 
@@ -627,5 +668,221 @@ describe("planner invariant - no overlapping catch-alls survive", () => {
     });
     expect(plan.tables[0]?.routeCondition).toBe("true");
     expect(unreachableLogTypes(plan)).toEqual([]);
+  });
+});
+
+describe("an undetected sample format placeholders its route (GEN-11)", () => {
+  // Values that DO name their log type, so with formatDetected omitted the
+  // value path emits a filter - and the only thing that can turn it into a
+  // placeholder is the formatDetected:false guard this pins.
+  const planWith = (formatDetected: boolean | undefined) =>
+    buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: ["TRAFFIC", "THREAT"].map(
+        (logType) =>
+          ({
+            sentinelTable: "CommonSecurityLog",
+            logType,
+            sourceFormat: "json",
+            ...(formatDetected !== undefined ? { formatDetected } : {}),
+            presetFields: [
+              { source: "type", target: "Activity", type: "string", action: "rename" },
+            ],
+            sampleFieldValues: {
+              logType,
+              eventCount: 2,
+              values: { type: [logType, logType] },
+            },
+          }) as TablePlanInput,
+      ),
+    });
+
+  it("routes on the value when the format was detected (or not said)", () => {
+    expect(planWith(undefined).tables.map((t) => t.routeCondition)).toEqual([
+      "type === 'TRAFFIC'",
+      "type === 'THREAT'",
+    ]);
+  });
+
+  it("emits the placeholder instead when detection returned unknown", () => {
+    expect(planWith(false).tables.map((t) => t.routeCondition)).toEqual([
+      "__UNSET__ === 'TRAFFIC'",
+      "__UNSET__ === 'THREAT'",
+    ]);
+  });
+
+  it("still honours an explicit route condition for an undetected sample", () => {
+    // The guard decides only what the planner DERIVES. A filter the caller
+    // supplied - an accepted suggestion, a report's own condition - stands.
+    const plan = buildPipelinePlan({
+      solutionName: "Vendor",
+      packName: "vendor-sentinel",
+      tables: ["TRAFFIC", "THREAT"].map(
+        (logType) =>
+          ({
+            sentinelTable: "CommonSecurityLog",
+            logType,
+            sourceFormat: "json",
+            formatDetected: false,
+            routing: {
+              tableName: "CommonSecurityLog",
+              outputStream: "",
+              routeCondition: `_raw.includes('${logType}')`,
+            },
+          }) as TablePlanInput,
+      ),
+    });
+    expect(plan.tables.map((t) => t.routeCondition)).toEqual([
+      "_raw.includes('TRAFFIC')",
+      "_raw.includes('THREAT')",
+    ]);
+  });
+});
+
+describe("a reviewer's re-pointed row reaches the emitted pipeline (GEN-19, F1-e)", () => {
+  // The PAN-OS UAT (2026-10-29): PanSrcMac and `in` sat in AdditionalExtensions
+  // as overflow. The reviewer points PanSrcMac at SourceMACAddress and `in` at
+  // ReceivedBytes. Driven through applyRemap and the SAME entry points the
+  // pack build (fieldOverrides) and the preview (presetFields) use.
+  const SCHEMA = [
+    { name: "AdditionalExtensions", type: "string" },
+    { name: "ReceivedBytes", type: "long" },
+    { name: "SourceMACAddress", type: "string" },
+  ];
+  const overflowRow = (source: string, sourceType: string): GapFieldMapping => ({
+    source,
+    dest: "AdditionalExtensions",
+    sourceType,
+    destType: "string",
+    confidence: "unmatched",
+    action: "overflow",
+    needsCoercion: false,
+    description: "Collected into overflow field",
+  });
+  const baseline = [
+    overflowRow("PanSrcMac", "string"),
+    overflowRow("in", "int"),
+    overflowRow("PanOSRuleUUID", "string"),
+  ];
+  const edited = [
+    ["PanSrcMac", "SourceMACAddress"],
+    ["in", "ReceivedBytes"],
+  ].reduce(
+    (rows, [sourceField, destColumn]) =>
+      applyRemap(rows, {
+        sourceField,
+        destColumn,
+        destSchema: SCHEMA,
+        catchAllColumn: "AdditionalExtensions",
+        baseline,
+      }).rows,
+    baseline,
+  );
+
+  const planWith = (input: Partial<TablePlanInput>) =>
+    buildPipelinePlan({
+      solutionName: "Palo Alto Networks",
+      packName: "MS-Sentinel-PANOS",
+      version: "1.0.0",
+      tables: [
+        {
+          sentinelTable: "CommonSecurityLog",
+          logType: "PanOS",
+          sourceFormat: "json",
+          ...input,
+        } as TablePlanInput,
+      ],
+    }).tables[0]!;
+
+  /** The serialize function's own block, up to the next function. */
+  const serializeBlock = (conf: string): string => {
+    const at = conf.indexOf("- id: serialize");
+    expect(at).toBeGreaterThan(-1);
+    const end = conf.indexOf("  - id:", at + 1);
+    return conf.slice(at, end === -1 ? undefined : end);
+  };
+
+  const inputs: [string, Partial<TablePlanInput>][] = [
+    ["pack build (fieldOverrides)", { fieldOverrides: edited }],
+    [
+      "preview (presetFields)",
+      {
+        presetFields: edited.map((m) => ({
+          source: m.source,
+          target: m.dest,
+          type: m.destType,
+          action: m.action as PipelineFieldMapping["action"],
+          needsCoercion: m.needsCoercion,
+        })),
+      },
+    ],
+  ];
+  for (const [path, input] of inputs) {
+    it(`${path}: emits the Renames and takes the fields out of the catch-all`, () => {
+      const plan = planWith(input);
+      // Only the untouched field is still collected into the catch-all.
+      expect(plan.overflowConfig.sourceFields).toEqual(["PanOSRuleUUID"]);
+      const conf = generatePipelineConfForPlan(plan, "Palo Alto Networks");
+      expect(conf).toContain("currentName: PanSrcMac");
+      expect(conf).toContain("newName: SourceMACAddress");
+      expect(conf).toContain("currentName: in\n");
+      expect(conf).toContain("newName: ReceivedBytes");
+      // The serialize never names the old spellings, and excludes the columns
+      // they now land in, so neither is duplicated into AdditionalExtensions.
+      const serialize = serializeBlock(conf);
+      expect(serialize).not.toContain("PanSrcMac");
+      expect(serialize).not.toMatch(/"!?in"/);
+      expect(serialize).toContain('- "!SourceMACAddress"');
+      expect(serialize).toContain('- "!ReceivedBytes"');
+      // F1-e: the int -> long rename converts, on the TARGET name. The
+      // expression is GEN-23's (was `Number(x) || 0`, a deliberate change).
+      expect(conf).toContain(
+        `        - name: ReceivedBytes\n          value: "(ReceivedBytes != null && String(ReceivedBytes).trim() !== '' && isFinite(ReceivedBytes)) ? Number(ReceivedBytes) : undefined"`,
+      );
+      // A same-typed rename does not.
+      expect(conf).not.toContain("- name: SourceMACAddress\n");
+      expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+      expect(checkPlanFieldAccessors(plan)).toEqual([]);
+    });
+  }
+
+  it("field-match: the matcher's own cross-type rename converts too", () => {
+    // The same F1-e rule on the rung the matcher feeds: a vendor rename whose
+    // types differ reached the DCR unconverted while the gap report counted
+    // it as a coercion Cribl handles.
+    const plan = planWith({
+      matchResult: {
+        matched: [
+          {
+            sourceName: "in",
+            sourceType: "int",
+            destName: "ReceivedBytes",
+            destType: "long",
+            confidence: "exact",
+            action: "rename",
+            needsCoercion: true,
+            description: "Vendor mapping: in -> ReceivedBytes",
+          },
+        ],
+        overflow: [],
+        unmatchedSource: [],
+        unmatchedDest: [],
+        overflowConfig: {
+          enabled: false,
+          fieldName: "AdditionalExtensions",
+          fieldType: "string",
+          sourceFields: [],
+        },
+      } as unknown as TablePlanInput["matchResult"],
+    });
+    expect(plan.provenance).toBe("field-match");
+    expect(plan.fields).toEqual([
+      { source: "in", target: "ReceivedBytes", type: "long", action: "rename", needsCoercion: true },
+    ]);
+    const conf = generatePipelineConfForPlan(plan, "Palo Alto Networks");
+    expect(conf).toContain(
+      `        - name: ReceivedBytes\n          value: "(ReceivedBytes != null && String(ReceivedBytes).trim() !== '' && isFinite(ReceivedBytes)) ? Number(ReceivedBytes) : undefined"`,
+    );
   });
 });

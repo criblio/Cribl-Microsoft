@@ -20,8 +20,10 @@ export type { EntraCategory, EntraCategoryName, EntraProfile } from "./entra-cat
 export {
   AADIAM_API_VERSION,
   DEFAULT_SETTING_NAME,
+  ENTRA_DIAGNOSTIC_SETTINGS_PATH,
   ENTRA_DIRECTORY_PRECONDITION,
   buildEntraDiagnosticRequest,
+  listSettingsRequest,
   listSettingsUrl,
 } from "./entra-diagnostic-setting";
 export type {

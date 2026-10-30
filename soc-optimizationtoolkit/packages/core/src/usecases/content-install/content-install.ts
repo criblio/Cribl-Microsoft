@@ -20,6 +20,13 @@
  * rest, and each returns a success/failure outcome (user requirement). The
  * shell mints resource GUIDs (core is crypto-free) via mintId.
  *
+ * Never-rejects (DBT-74): single ARM requests go through SafeAzureManagement
+ * (usecases/arm-http), so a transport failure is an ArmAttempt to branch on,
+ * not a try block to remember. Its `ok` means "ARM answered"; an outcome's
+ * `ok` means "the step succeeded" (is2xx). They are different words - a 403
+ * is the first and not the second. Paginated listings (listAllPages) need
+ * the port's requestUrl, which the safe view omits, and keep their own guards.
+ *
  * Pure orchestration over the ports: no IO of its own.
  */
 
@@ -27,7 +34,8 @@ import type { AzureManagement } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
 import type { Logger } from "../../ports/logger";
 import { listAllPages } from "../azure-discovery/index";
-import { is2xx, prop } from "../arm-http";
+import { is2xx, prop, safeAzureManagement } from "../arm-http";
+import type { SafeAzureManagement } from "../arm-http";
 import {
   alertRuleResourceFromParsed,
   parserResourceBody,
@@ -95,20 +103,20 @@ export async function onboardSentinelWorkspace(
   ws: WorkspaceScope,
   logger?: Logger,
 ): Promise<OnboardOutcome> {
-  try {
-    const res = await azure.request({
-      method: "PUT",
-      path: `${workspaceInsightsScope(ws)}/onboardingStates/default`,
-      apiVersion: SENTINEL_ONBOARDING_API_VERSION,
-      body: { properties: {} },
-    });
-    logger?.info("content-install: sentinel onboarding PUT", { status: res.status });
-    return is2xx(res.status)
-      ? { ok: true, detail: "Microsoft Sentinel enabled on the workspace." }
-      : { ok: false, detail: failDetail(res) };
-  } catch (err) {
-    return { ok: false, detail: errText(err) };
-  }
+  const attempt = await safeAzureManagement(azure).request({
+    method: "PUT",
+    path: `${workspaceInsightsScope(ws)}/onboardingStates/default`,
+    apiVersion: SENTINEL_ONBOARDING_API_VERSION,
+    body: { properties: {} },
+  });
+  // TWO oks (DBT-74): attempt.ok only says ARM answered - a 403 is still
+  // attempt.ok. The STEP's ok is is2xx on that answer, and is the one returned.
+  if (!attempt.ok) return { ok: false, detail: attempt.error };
+  const res = attempt.response;
+  logger?.info("content-install: sentinel onboarding PUT", { status: res.status });
+  return is2xx(res.status)
+    ? { ok: true, detail: "Microsoft Sentinel enabled on the workspace." }
+    : { ok: false, detail: failDetail(res) };
 }
 
 /**
@@ -122,20 +130,16 @@ export async function fetchWorkspaceLocation(
   resourceGroup: string,
   workspaceName: string,
 ): Promise<string | null> {
-  try {
-    const res = await azure.request({
-      method: "GET",
-      path:
-        `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}` +
-        `/providers/Microsoft.OperationalInsights/workspaces/${workspaceName}`,
-      apiVersion: WORKSPACE_READ_API_VERSION,
-    });
-    if (!is2xx(res.status)) return null;
-    const loc = prop(res.body, "location");
-    return typeof loc === "string" && loc !== "" ? loc : null;
-  } catch {
-    return null;
-  }
+  const attempt = await safeAzureManagement(azure).request({
+    method: "GET",
+    path:
+      `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}` +
+      `/providers/Microsoft.OperationalInsights/workspaces/${workspaceName}`,
+    apiVersion: WORKSPACE_READ_API_VERSION,
+  });
+  if (!attempt.ok || !is2xx(attempt.response.status)) return null;
+  const loc = prop(attempt.response.body, "location");
+  return typeof loc === "string" && loc !== "" ? loc : null;
 }
 
 /** The full ARM resource id of the Log Analytics workspace (workbook sourceId). */
@@ -486,19 +490,17 @@ export async function installAnalyticRule(
     resource.kind === "NRT"
       ? SECURITY_INSIGHTS_PREVIEW_API_VERSION
       : SECURITY_INSIGHTS_API_VERSION;
-  try {
-    const res = await azure.request({
-      method: "PUT",
-      path: `${workspaceInsightsScope(ws)}/alertRules/${ruleId}`,
-      apiVersion,
-      body: resource.body,
-    });
-    return is2xx(res.status)
-      ? { name: rule.name, ok: true, detail: `installed (${resource.kind})` }
-      : { name: rule.name, ok: false, detail: ruleFailureDetail(res) };
-  } catch (err) {
-    return { name: rule.name, ok: false, detail: errText(err) };
-  }
+  const attempt = await safeAzureManagement(azure).request({
+    method: "PUT",
+    path: `${workspaceInsightsScope(ws)}/alertRules/${ruleId}`,
+    apiVersion,
+    body: resource.body,
+  });
+  if (!attempt.ok) return { name: rule.name, ok: false, detail: attempt.error };
+  const res = attempt.response;
+  return is2xx(res.status)
+    ? { name: rule.name, ok: true, detail: `installed (${resource.kind})` }
+    : { name: rule.name, ok: false, detail: ruleFailureDetail(res) };
 }
 
 // ---------------------------------------------------------------------------
@@ -548,28 +550,28 @@ export async function installWorkbook(
     workspaceResourceId: workspaceResourceId(ws),
     location: ws.location,
   });
-  try {
-    const res = await azure.request({
-      method: "PUT",
-      path:
-        `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
-        `/providers/Microsoft.Insights/workbooks/${mintId()}`,
-      apiVersion: WORKBOOKS_INSTALL_API_VERSION,
-      body,
-    });
-    if (is2xx(res.status)) {
-      return { name: spec.displayName, ok: true, detail: "installed" };
-    }
-    const failure = workbookFailureDetail(res, serializedData.length);
-    return {
-      name: spec.displayName,
-      ok: false,
-      detail: failure.detail,
-      ...(failure.code !== undefined ? { code: failure.code } : {}),
-    };
-  } catch (err) {
-    return { name: spec.displayName, ok: false, detail: errText(err) };
+  const attempt = await safeAzureManagement(azure).request({
+    method: "PUT",
+    path:
+      `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
+      `/providers/Microsoft.Insights/workbooks/${mintId()}`,
+    apiVersion: WORKBOOKS_INSTALL_API_VERSION,
+    body,
+  });
+  if (!attempt.ok) {
+    return { name: spec.displayName, ok: false, detail: attempt.error };
   }
+  const res = attempt.response;
+  if (is2xx(res.status)) {
+    return { name: spec.displayName, ok: true, detail: "installed" };
+  }
+  const failure = workbookFailureDetail(res, serializedData.length);
+  return {
+    name: spec.displayName,
+    ok: false,
+    detail: failure.detail,
+    ...(failure.code !== undefined ? { code: failure.code } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +592,11 @@ export async function installWorkbook(
  * creating ours, look for an EXISTING function with this alias from another
  * source; if one exists, delete our deterministic copy (if any) and defer to
  * it - leaving exactly one provider.
+ *
+ * When that listing cannot be read the PUT still goes ahead (it is idempotent
+ * and creates nothing that was not asked for), but the outcome SAYS the
+ * duplicate check did not run (DBT-176) - a plain "installed" over an unread
+ * listing hid the one failure this function exists to prevent.
  */
 export async function installParser(
   azure: AzureManagement,
@@ -599,55 +606,71 @@ export async function installParser(
   const searchId = `parser-${parser.alias}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
   const searchPath = `${workspaceResourceId(ws)}/savedSearches/${searchId}`;
   const label = `${parser.displayName} (parser)`;
+  const arm = safeAzureManagement(azure);
+  // Which resources already provide this alias? (If the listing fails, fall
+  // through to a plain idempotent PUT and report the unread listing.)
+  // listAllPages needs the port's requestUrl, which the safe view deliberately
+  // lacks, so this one keeps its own guard.
+  const aliasLc = parser.alias.toLowerCase();
+  let othersProvideAlias = false;
+  let listingUnread = "";
   try {
-    // Which resources already provide this alias? (Best-effort: if the listing
-    // fails, fall through to a plain idempotent PUT.)
-    const aliasLc = parser.alias.toLowerCase();
-    let othersProvideAlias = false;
-    try {
-      const all = await listAllPages(
-        azure,
-        {
-          method: "GET",
-          path: `${workspaceResourceId(ws)}/savedSearches`,
-          apiVersion: SAVED_SEARCHES_API_VERSION,
-        },
-        "list saved searches",
-      );
-      othersProvideAlias = all.some((s) => {
-        const name = str(prop(s, "name")).toLowerCase();
-        const alias = str(prop(prop(s, "properties"), "functionAlias")).toLowerCase();
-        return alias === aliasLc && name !== searchId;
-      });
-    } catch {
-      /* listing unavailable - fall through to the plain PUT below */
-    }
-    if (othersProvideAlias) {
-      // Another resource already provides this function. Remove OUR own copy
-      // (deterministic id) if it exists so exactly one remains, and defer.
-      try {
-        await azure.request({
-          method: "DELETE",
-          path: searchPath,
-          apiVersion: SAVED_SEARCHES_API_VERSION,
-        });
-      } catch {
-        /* best-effort cleanup */
-      }
-      return { name: label, ok: true, detail: "already provided by the solution" };
-    }
-    const res = await azure.request({
-      method: "PUT",
+    const all = await listAllPages(
+      azure,
+      {
+        method: "GET",
+        path: `${workspaceResourceId(ws)}/savedSearches`,
+        apiVersion: SAVED_SEARCHES_API_VERSION,
+      },
+      "list saved searches",
+    );
+    othersProvideAlias = all.some((s) => {
+      const name = str(prop(s, "name")).toLowerCase();
+      const alias = str(prop(prop(s, "properties"), "functionAlias")).toLowerCase();
+      return alias === aliasLc && name !== searchId;
+    });
+  } catch (err) {
+    listingUnread = err instanceof Error ? err.message : String(err);
+  }
+  if (othersProvideAlias) {
+    // Another resource already provides this function. Remove OUR own copy
+    // (deterministic id) if it exists so exactly one remains, and defer. The
+    // cleanup is best-effort: its attempt is deliberately not inspected.
+    await arm.request({
+      method: "DELETE",
       path: searchPath,
       apiVersion: SAVED_SEARCHES_API_VERSION,
-      body: parserResourceBody(parser),
     });
-    return is2xx(res.status)
-      ? { name: label, ok: true, detail: "installed" }
-      : { name: label, ok: false, detail: failDetail(res) };
-  } catch (err) {
-    return { name: label, ok: false, detail: errText(err) };
+    return { name: label, ok: true, detail: "already provided by the solution" };
   }
+  const attempt = await arm.request({
+    method: "PUT",
+    path: searchPath,
+    apiVersion: SAVED_SEARCHES_API_VERSION,
+    body: parserResourceBody(parser),
+  });
+  const unreadNote =
+    listingUnread === ""
+      ? ""
+      : `the saved searches could not be read (${listingUnread})`;
+  const failed = (detail: string): ContentInstallOutcome => ({
+    name: label,
+    ok: false,
+    detail: unreadNote === "" ? detail : `${detail}; ${unreadNote}`,
+  });
+  if (!attempt.ok) return failed(attempt.error);
+  const res = attempt.response;
+  if (!is2xx(res.status)) return failed(failDetail(res));
+  return {
+    name: label,
+    ok: true,
+    detail:
+      unreadNote === ""
+        ? "installed"
+        : `installed, but ${unreadNote}, so another function with the alias ` +
+          `${parser.alias} was not checked for - if a query reports multiple ` +
+          "functions with the same name, remove the duplicate",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -679,102 +702,109 @@ export async function installSolution(
   displayName: string,
   logger?: Logger,
 ): Promise<ContentInstallOutcome> {
-  try {
-    const pkg = await azure.request({
-      method: "GET",
-      path: `${workspaceInsightsScope(ws)}/contentProductPackages/${packageId}`,
-      apiVersion: SECURITY_INSIGHTS_API_VERSION,
-    });
-    if (!is2xx(pkg.status)) {
-      return { name: displayName, ok: false, detail: failDetail(pkg) };
-    }
-    const props = prop(pkg.body, "properties");
-    const contentId = str(prop(props, "contentId"));
-    const contentProductId = str(prop(props, "contentProductId"));
-    const contentKind = str(prop(props, "contentKind")) || "Solution";
-    const version = str(prop(props, "version"));
-    const name = str(prop(props, "displayName")) || displayName;
-    // Required by the live 2025-09-01 install API (the REST reference lists it
-    // as optional, but the RP rejects the PUT without it). Sourced from the
-    // product package; default to the current Content Hub schema version.
-    const contentSchemaVersion = str(prop(props, "contentSchemaVersion")) || "3.0.0";
-    if (contentId === "" || contentProductId === "" || version === "") {
-      return {
-        name: displayName,
-        ok: false,
-        detail:
-          "the product package is missing required install fields " +
-          "(contentId / contentProductId / version)",
-      };
-    }
-    // Short-circuit: the product package already reports an installed version.
-    const installedVersion = str(prop(props, "installedVersion"));
-    if (installedVersion !== "") {
-      return {
-        name: displayName,
-        ok: true,
-        detail: `already installed (version ${installedVersion})`,
-      };
-    }
-    // The install resource name is the short contentId (== the product
-    // package name); the RP enforces one contentPackages resource per
-    // contentId. Ref: learn.microsoft.com Content Package - Install.
-    const body = {
-      properties: {
-        contentId,
-        contentProductId,
-        contentKind,
-        contentSchemaVersion,
-        displayName: name,
-        version,
-      },
-    };
-    const put = () =>
-      azure.request({
-        method: "PUT",
-        path: `${workspaceInsightsScope(ws)}/contentPackages/${contentId}`,
-        apiVersion: SECURITY_INSIGHTS_API_VERSION,
-        body,
-      });
-    let res = await put();
-    // A prior partial/failed attempt can leave an ORPHAN contentPackages
-    // resource that already owns this contentId under a different name (the
-    // versioned contentProductId), so the RP refuses a second association with
-    // "contentId ... is already associated with another package". Delete the
-    // orphan(s) - two Solutions never share a contentId, so it can only be a
-    // stale copy of THIS solution - then retry the install once.
-    if (res.status === 400 && /already associated with another package/i.test(bodyText(res))) {
-      logger?.info("content-install: clearing orphaned package association", { contentId });
-      await deleteContentPackage(azure, ws, contentProductId);
-      await deleteContentPackage(azure, ws, contentId);
-      res = await put();
-    }
-    logger?.info("content-install: solution install PUT", {
-      packageId,
-      status: res.status,
-    });
-    return is2xx(res.status)
-      ? { name: displayName, ok: true, detail: `installed (version ${version})` }
-      : { name: displayName, ok: false, detail: failDetail(res) };
-  } catch (err) {
-    return { name: displayName, ok: false, detail: errText(err) };
+  const arm = safeAzureManagement(azure);
+  const pkgAttempt = await arm.request({
+    method: "GET",
+    path: `${workspaceInsightsScope(ws)}/contentProductPackages/${packageId}`,
+    apiVersion: SECURITY_INSIGHTS_API_VERSION,
+  });
+  if (!pkgAttempt.ok) {
+    return { name: displayName, ok: false, detail: pkgAttempt.error };
   }
+  const pkg = pkgAttempt.response;
+  if (!is2xx(pkg.status)) {
+    return { name: displayName, ok: false, detail: failDetail(pkg) };
+  }
+  const props = prop(pkg.body, "properties");
+  const contentId = str(prop(props, "contentId"));
+  const contentProductId = str(prop(props, "contentProductId"));
+  const contentKind = str(prop(props, "contentKind")) || "Solution";
+  const version = str(prop(props, "version"));
+  const name = str(prop(props, "displayName")) || displayName;
+  // Required by the live 2025-09-01 install API (the REST reference lists it
+  // as optional, but the RP rejects the PUT without it). Sourced from the
+  // product package; default to the current Content Hub schema version.
+  const contentSchemaVersion = str(prop(props, "contentSchemaVersion")) || "3.0.0";
+  if (contentId === "" || contentProductId === "" || version === "") {
+    return {
+      name: displayName,
+      ok: false,
+      detail:
+        "the product package is missing required install fields " +
+        "(contentId / contentProductId / version)",
+    };
+  }
+  // Short-circuit: the product package already reports an installed version.
+  const installedVersion = str(prop(props, "installedVersion"));
+  if (installedVersion !== "") {
+    return {
+      name: displayName,
+      ok: true,
+      detail: `already installed (version ${installedVersion})`,
+    };
+  }
+  // The install resource name is the short contentId (== the product
+  // package name); the RP enforces one contentPackages resource per
+  // contentId. Ref: learn.microsoft.com Content Package - Install.
+  const body = {
+    properties: {
+      contentId,
+      contentProductId,
+      contentKind,
+      contentSchemaVersion,
+      displayName: name,
+      version,
+    },
+  };
+  const put = () =>
+    arm.request({
+      method: "PUT",
+      path: `${workspaceInsightsScope(ws)}/contentPackages/${contentId}`,
+      apiVersion: SECURITY_INSIGHTS_API_VERSION,
+      body,
+    });
+  let attempt = await put();
+  if (!attempt.ok) return { name: displayName, ok: false, detail: attempt.error };
+  // A prior partial/failed attempt can leave an ORPHAN contentPackages
+  // resource that already owns this contentId under a different name (the
+  // versioned contentProductId), so the RP refuses a second association with
+  // "contentId ... is already associated with another package". Delete the
+  // orphan(s) - two Solutions never share a contentId, so it can only be a
+  // stale copy of THIS solution - then retry the install once.
+  if (
+    attempt.response.status === 400 &&
+    /already associated with another package/i.test(bodyText(attempt.response))
+  ) {
+    logger?.info("content-install: clearing orphaned package association", { contentId });
+    await deleteContentPackage(arm, ws, contentProductId);
+    await deleteContentPackage(arm, ws, contentId);
+    attempt = await put();
+    if (!attempt.ok) return { name: displayName, ok: false, detail: attempt.error };
+  }
+  const res = attempt.response;
+  logger?.info("content-install: solution install PUT", {
+    packageId,
+    status: res.status,
+  });
+  return is2xx(res.status)
+    ? { name: displayName, ok: true, detail: `installed (version ${version})` }
+    : { name: displayName, ok: false, detail: failDetail(res) };
 }
 
-/** Uninstall (DELETE) a contentPackages resource by name; best-effort, never throws. */
+/**
+ * Uninstall (DELETE) a contentPackages resource by name; best-effort, never
+ * rejects. Takes the SAFE view, so the attempt is deliberately not inspected -
+ * the retry PUT after it still surfaces any real failure.
+ */
 async function deleteContentPackage(
-  azure: AzureManagement,
+  arm: SafeAzureManagement,
   ws: WorkspaceScope,
   name: string,
 ): Promise<void> {
   if (name === "") return;
-  try {
-    await azure.request({
-      method: "DELETE",
-      path: `${workspaceInsightsScope(ws)}/contentPackages/${name}`,
-      apiVersion: SECURITY_INSIGHTS_API_VERSION,
-    });
-  } catch {
-    /* best-effort - a retry PUT still surfaces any real failure */
-  }
+  await arm.request({
+    method: "DELETE",
+    path: `${workspaceInsightsScope(ws)}/contentPackages/${name}`,
+    apiVersion: SECURITY_INSIGHTS_API_VERSION,
+  });
 }

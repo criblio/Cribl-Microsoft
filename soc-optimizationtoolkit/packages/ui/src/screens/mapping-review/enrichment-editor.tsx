@@ -8,7 +8,7 @@
  * global entries a table already receives, read-only.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isValidEnrichmentFieldName } from "../pipeline-preview/pipeline-preview-state";
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
 
@@ -17,15 +17,30 @@ export function EnrichmentEditor({
   inherited,
   onAdd,
   onRemove,
+  seed,
 }: {
   entries: readonly EnrichmentField[];
   inherited?: readonly EnrichmentField[];
   onAdd: (field: string, value: string) => boolean;
   onRemove: (field: string) => void;
+  /**
+   * Start a new entry for this field (DBT-202's "Add a constant" from an
+   * unmapped column): fills the field name and moves focus to the value. The
+   * nonce makes a second request for the same field act again.
+   */
+  seed?: { field: string; nonce: number };
 }) {
   const [field, setField] = useState("");
   const [value, setValue] = useState("");
   const [issue, setIssue] = useState("");
+  const valueRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (seed === undefined) return;
+    setField(seed.field);
+    setIssue("");
+    valueRef.current?.focus();
+  }, [seed]);
 
   const submit = () => {
     if (!isValidEnrichmentFieldName(field.trim())) {
@@ -89,6 +104,7 @@ export function EnrichmentEditor({
           spellCheck={false}
         />
         <input
+          ref={valueRef}
           type="text"
           value={value}
           onChange={(e) => {

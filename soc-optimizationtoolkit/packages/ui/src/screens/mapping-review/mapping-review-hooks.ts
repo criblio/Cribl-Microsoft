@@ -128,6 +128,8 @@ export function useEnrichmentFields(
   tableEnrichments: Record<string, EnrichmentField[]>;
   addEnrichment: (logType: string | null, field: string, value: string) => boolean;
   removeEnrichment: (logType: string | null, field: string) => void;
+  /** Forget every per-table enrichment of one log type (its sample was removed). */
+  forgetLogType: (logType: string) => void;
 } {
   const [globalEnrichments, setGlobalEnrichments] = useState<EnrichmentField[]>(
     [],
@@ -197,5 +199,22 @@ export function useEnrichmentFields(
     [],
   );
 
-  return { globalEnrichments, tableEnrichments, addEnrichment, removeEnrichment };
+  // Without this a removed log type's constants sat in state, invisible, and
+  // came back if a sample with the same name was added later.
+  const forgetLogType = useCallback((logType: string) => {
+    setTableEnrichments((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, logType)) return prev;
+      const next = { ...prev };
+      delete next[logType];
+      return next;
+    });
+  }, []);
+
+  return {
+    globalEnrichments,
+    tableEnrichments,
+    addEnrichment,
+    removeEnrichment,
+    forgetLogType,
+  };
 }

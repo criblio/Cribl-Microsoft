@@ -69,7 +69,10 @@ describe("NumberedSection collapse", () => {
 
     const collapse = getByRole("button", { name: "Collapse Run DCR Gap Analysis" });
     expect(collapse.closest(".numbered-section-head")).toBeNull();
-    expect(collapse.previousElementSibling?.className).toBe("numbered-section-body");
+    // DBT-127 put Collapse in a foot row beside Done - next; the row itself
+    // still comes straight after the body.
+    const foot = collapse.closest(".numbered-section-foot");
+    expect(foot?.previousElementSibling?.getAttribute("data-testid")).toBe("numbered-section-body");
     // No Expand affordance while expanded.
     expect(queryByRole("button", { name: "Expand Run DCR Gap Analysis" })).toBeNull();
 
@@ -80,5 +83,149 @@ describe("NumberedSection collapse", () => {
     expect(
       queryByRole("button", { name: "Collapse Run DCR Gap Analysis" }),
     ).toBeNull();
+  });
+});
+
+describe("NumberedSection driven by the page (DBT-127)", () => {
+  function Driven({ onDone }: { onDone: () => void }) {
+    const [collapsed, setCollapsed] = useState(false);
+    return (
+      <NumberedSection
+        number={1}
+        title="Select Sentinel Solution"
+        status="complete"
+        infoTip="tip"
+        anchorId="integrate-section-solution"
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+        summary="PaloAlto-PAN-OS"
+        onDone={() => {
+          setCollapsed(true);
+          onDone();
+        }}
+      >
+        <StatefulChild />
+      </NumberedSection>
+    );
+  }
+
+  it("Done collapses to a one-line summary and keeps the body mounted", () => {
+    let done = 0;
+    const { container, getByText, getByRole } = render(<Driven onDone={() => done++} />);
+    fireEvent.click(getByText("count:0"));
+    fireEvent.click(getByRole("button", { name: "Done - next" }));
+
+    expect(done).toBe(1);
+    const summary = container.querySelector(".numbered-section-summary");
+    expect(summary?.textContent).toBe("PaloAlto-PAN-OS");
+    // Hidden, not unmounted: the click count survives.
+    const body = getByText("count:1").closest("[hidden]");
+    expect(body).not.toBeNull();
+  });
+
+  it("Expand reports back to the page that owns the state", () => {
+    const { container, getByRole } = render(<Driven onDone={() => undefined} />);
+    fireEvent.click(getByRole("button", { name: "Done - next" }));
+    fireEvent.click(getByRole("button", { name: "Expand Select Sentinel Solution" }));
+    expect(container.querySelector(".numbered-section-summary")).toBeNull();
+    expect(container.querySelector("[hidden]")).toBeNull();
+  });
+
+  it("carries the anchor the footer pills scroll to", () => {
+    const { container } = render(<Driven onDone={() => undefined} />);
+    expect(container.querySelector("section")?.id).toBe("integrate-section-solution");
+  });
+
+  it("shows no summary and no Done button when the page does not drive it", () => {
+    const { container, queryByRole } = renderSection();
+    expect(queryByRole("button", { name: "Done - next" })).toBeNull();
+    expect(container.querySelector(".numbered-section-summary")).toBeNull();
+  });
+});
+
+describe("NumberedSection coming-soon and notBuiltBody (AZR-18)", () => {
+  it("without the prop, coming-soon is unchanged: the note, no body, no children, no collapse", () => {
+    const { container, getByText, queryByText, queryByRole } = render(
+      <NumberedSection
+        number={2}
+        title="Azure Policy"
+        status="coming-soon"
+        infoTip="tip"
+        reason="Not available yet."
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    expect(getByText("Not yet available")).toBeTruthy();
+    expect(getByText("Not available yet.")).toBeTruthy();
+    // The children are never rendered for a coming-soon section.
+    expect(queryByText("count:0")).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-body"]')).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-notbuilt"]')).toBeNull();
+    expect(queryByRole("button", { name: "Collapse Azure Policy" })).toBeNull();
+  });
+
+  it("with the prop, coming-soon shows the not-built rows under the note, and still not the children", () => {
+    const { container, getByLabelText, queryByText } = render(
+      <NumberedSection
+        number={2}
+        title="Azure Policy"
+        status="coming-soon"
+        infoTip="tip"
+        reason="Not available yet."
+        notBuiltBody={
+          <label>
+            <input type="checkbox" disabled aria-label="Built-in initiative" />
+          </label>
+        }
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    const box = getByLabelText("Built-in initiative") as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(box.closest(".numbered-section-comingsoon")).not.toBeNull();
+    expect(queryByText("count:0")).toBeNull();
+    expect(container.querySelector('[data-testid="numbered-section-body"]')).toBeNull();
+  });
+
+  it("ignores notBuiltBody on a built section", () => {
+    const { container, getByText } = render(
+      <NumberedSection
+        number={2}
+        title="Direct configuration"
+        status="available"
+        infoTip="tip"
+        notBuiltBody={<span>not built</span>}
+      >
+        <StatefulChild />
+      </NumberedSection>,
+    );
+    expect(getByText("count:0")).toBeTruthy();
+    expect(container.querySelector('[data-testid="numbered-section-notbuilt"]')).toBeNull();
+  });
+});
+
+describe("NumberedSection not-needed (GEN-21)", () => {
+  it("names what replaced the section in its header, with no completion check", () => {
+    const { container } = render(
+      <NumberedSection
+        number={7}
+        title="Select Azure Resources"
+        status="not-needed"
+        reason="Not needed - using PAN-CSL"
+        infoTip="tip"
+      >
+        <span>body</span>
+      </NumberedSection>,
+    );
+    const head = container.querySelector(".numbered-section-head");
+    expect(head?.querySelector(".numbered-section-info-tag")?.textContent).toBe(
+      "Not needed - using PAN-CSL",
+    );
+    expect(container.querySelector(".numbered-section-check")).toBeNull();
+    expect(
+      container.querySelector(".numbered-section-badge")?.getAttribute("aria-label"),
+    ).toBe("Section 7, not needed");
   });
 });

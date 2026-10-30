@@ -22,11 +22,10 @@
  * destination ships the "<replace me>" placeholder to fill in Cribl's UI.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   destinationIdFromOptions,
   isCustomTableName,
-  isStreamWorkerGroup,
   onboardTable,
   onboardTableStepsFor,
   DEFAULT_CUSTOM_TABLE_TOTAL_RETENTION_DAYS,
@@ -35,7 +34,6 @@ import {
   VENDOR_SCHEMAS,
 } from "@soc/core";
 import type {
-  CriblGroupSummary,
   CriblOptions,
   JobStep,
   OnboardTableOutcome,
@@ -43,6 +41,11 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../ports-context";
 import { SearchableSelect } from "../components/searchable-select";
+import { WorkerGroupField } from "../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../components/worker-group-listing";
 import { formatStepLine } from "./step-line";
 import { RecentRuns } from "./recent-runs";
 import { summaryText } from "./summary";
@@ -120,8 +123,6 @@ export function OnboardTableScreen({
       ? initialTable
       : "SecurityEvent",
   );
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
-  const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
   // Defaults to the ACTIVE connection's client id; the shell remounts this
   // screen when the active connection changes, re-reading the default.
@@ -183,30 +184,15 @@ export function OnboardTableScreen({
   );
 
   // Populate the worker-group dropdown from the CriblClient port. On failure
-  // the raw error is shown with a retry button - no silent empty dropdown.
-  // The persisted worker-group default (Unit 4 options) wins the initial
-  // selection when that group actually exists in the live list; otherwise
-  // the first discovered group is preselected as before.
+  // the raw error is shown with a retry button - no silent empty dropdown -
+  // and an EMPTY listing is hedged rather than shown as a select with nothing
+  // in it (DBT-134): WorkerGroupField owns every state. Edge fleets cannot run
+  // these pipelines: Stream worker groups only. The persisted worker-group
+  // default wins the initial selection when that group actually exists in the
+  // live list; otherwise the first discovered group is preselected as before.
   const preferredGroup = criblDefaults?.workerGroup ?? "";
-  const loadGroups = useCallback(async () => {
-    setGroups(null);
-    setGroupsError("");
-    try {
-      // Edge fleets cannot run these pipelines: Stream worker groups only.
-      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(list);
-      const preferred = list.some((g) => g.id === preferredGroup)
-        ? preferredGroup
-        : (list[0]?.id ?? "");
-      setGroupId((current) => (current !== "" ? current : preferred));
-    } catch (err) {
-      setGroupsError(String(err));
-    }
-  }, [ports.cribl, preferredGroup]);
-
-  useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+  const workerGroups = useStreamWorkerGroups(ports.cribl, { logger: ports.logger });
+  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   const run = async () => {
     setRunning(true);
@@ -326,30 +312,21 @@ export function OnboardTableScreen({
         </label>
         <label className="field">
           <span className="field-label">Cribl worker group</span>
-          {groups !== null ? (
-            <SearchableSelect
-              options={groups.map((g) => ({
-                value: g.id,
-                label: g.id,
-                hint: g.product,
-              }))}
-              value={groupId}
-              onChange={setGroupId}
-              placeholder="Select a worker group..."
-              ariaLabel="Filter worker groups"
-            />
-          ) : groupsError === "" ? (
-            <span className="field-hint">Loading worker groups...</span>
-          ) : (
-            <span className="field-hint">
-              Could not list worker groups: {groupsError}
-            </span>
-          )}
-          {groupsError !== "" && (
-            <button className="run-button" onClick={() => void loadGroups()}>
-              Retry loading groups
-            </button>
-          )}
+          <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+            {(groups) => (
+              <SearchableSelect
+                options={groups.map((g) => ({
+                  value: g.id,
+                  label: g.id,
+                  hint: g.product,
+                }))}
+                value={groupId}
+                onChange={setGroupId}
+                placeholder="Select a worker group..."
+                ariaLabel="Filter worker groups"
+              />
+            )}
+          </WorkerGroupField>
         </label>
         <label className="field">
           <span className="field-label">Ingestion client id</span>
@@ -375,10 +352,11 @@ export function OnboardTableScreen({
           />
           <span className="field-hint">
             Transient: this platform&apos;s encrypted storage is write-only, so
-            the app cannot reuse a stored secret here. Provide it to bake it
-            into the destination for this run only, or leave blank to create
-            the destination with the {SENTINEL_SECRET_PLACEHOLDER} placeholder
-            and paste the real secret in Cribl&apos;s UI.
+            the app cannot reuse a stored secret here. Provide it to store it
+            once as a Cribl secret the destination references (never in the
+            destination itself), or leave blank to create the destination with
+            the {SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real
+            secret in Cribl&apos;s UI.
           </span>
         </label>
       </div>

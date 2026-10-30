@@ -101,18 +101,79 @@ export function deriveInventoryRows(
 
 /** The rendered deployed-badge for one row. */
 export interface DeployedBadge {
-  /** True when the pack is installed on at least one worker group. */
+  /**
+   * True when the pack is installed on at least one worker group. False for
+   * both "read, and installed nowhere" and "not read" - the tone tells them
+   * apart.
+   */
   deployed: boolean;
   /** How many worker groups it is installed on. */
   count: number;
   /** The badge sentence (verbatim inventory vocabulary). */
   label: string;
   /** Tone hint for styling (never a color literal here). */
-  tone: "deployed" | "not-deployed";
+  tone: "deployed" | "not-deployed" | "unknown";
 }
 
-/** Derive the deployed-badge for a row from its (already-derived) group list. */
-export function deriveDeployedBadge(row: PackInventoryRow): DeployedBadge {
+/**
+ * Where the deployed-status read stands for the CURRENT worker-group listing.
+ * `pending` covers both "not started" and "in flight": neither has a snapshot
+ * a badge may cite.
+ */
+export type DeployedRead =
+  | { readonly kind: "pending" }
+  | { readonly kind: "read"; readonly snapshot: readonly DeployedGroupPacks[] }
+  | { readonly kind: "failed" };
+
+/**
+ * Why the badges may NOT claim a deployed status, or null when they may
+ * (DBT-134 review). "Not deployed" is a measured zero; it is only true of a
+ * listDeployed that succeeded for the groups listed NOW. A refused, empty or
+ * still-loading group listing never runs that read, and a Refresh whose
+ * re-list fails must not keep showing the previous success as current - so
+ * the group listing is checked FIRST, before any snapshot is trusted.
+ */
+export function deployedUnreadReason(
+  groups: "idle" | "loading" | "failed" | "loaded",
+  streamGroupCount: number,
+  read: DeployedRead,
+): string | null {
+  if (groups === "idle" || groups === "loading") {
+    return "worker groups still loading";
+  }
+  if (groups === "failed") {
+    return "worker groups unavailable";
+  }
+  if (streamGroupCount === 0) {
+    return "no Stream worker group listed";
+  }
+  if (read.kind === "failed") {
+    return "the packs read failed";
+  }
+  if (read.kind === "pending") {
+    return "reading the groups' packs";
+  }
+  return null;
+}
+
+/**
+ * Derive the deployed-badge for a row from its (already-derived) group list.
+ * With an `unreadReason` (from {@link deployedUnreadReason}) the row's group
+ * list is not evidence of anything, and the badge says so instead of
+ * "Not deployed".
+ */
+export function deriveDeployedBadge(
+  row: PackInventoryRow,
+  unreadReason: string | null = null,
+): DeployedBadge {
+  if (unreadReason !== null) {
+    return {
+      deployed: false,
+      count: 0,
+      label: `Deployed status not read - ${unreadReason}`,
+      tone: "unknown",
+    };
+  }
   const count = row.deployedGroups.length;
   if (count === 0) {
     return {

@@ -11,6 +11,8 @@
  * here is counted over the RENDERED rows: every row, one badge, non-empty text.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
@@ -66,12 +68,21 @@ const CONFIG = {
   workspaceName: "",
 } as unknown as AzureConfig;
 
+/**
+ * DBT-227: the list waits for the operator - it shows once they type a filter
+ * or press Browse all. Open it the way they would.
+ */
+async function openBrowseList(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
+}
+
 async function renderList(): Promise<HTMLElement[]> {
   render(
     <PortsProvider ports={{ content } as unknown as UiPorts} config={CONFIG}>
       <SolutionBrowser />
     </PortsProvider>,
   );
+  await openBrowseList();
   await waitFor(() => {
     expect(screen.getByText("Palo Alto Cortex XDR")).toBeTruthy();
   });
@@ -193,6 +204,7 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
         <SolutionBrowser />
       </PortsProvider>,
     );
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(name)).toBeTruthy();
     });
@@ -301,6 +313,7 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
         <SolutionBrowser />
       </PortsProvider>,
     );
+    await openBrowseList();
     await waitFor(() => {
       expect(screen.getByText(ABSENT)).toBeTruthy();
     });
@@ -469,7 +482,20 @@ describe("SolutionBrowser selected-solution card (DBT-15)", () => {
     const controls = [
       ...card.querySelectorAll("button, a, input, [role='button']"),
     ].map((el) => (el.textContent ?? "").trim());
-    expect(controls).toEqual(["Clear selection"]);
+    // DBT-125 added one control: the (i) beside the Clear warning. It opens
+    // a tip and does nothing with the address - its whole text is inside the
+    // card's textContent, which the scans above already hold to no "?solution="
+    // and no "deep link", and its only attributes are role/tabindex/aria.
+    expect(controls).toEqual(["Clear selection", "i"]);
+    const tipIcon = card.querySelector(".info-tip-icon");
+    expect(tipIcon?.getAttribute("role")).toBe("button");
+    expect(tipIcon?.getAttributeNames().sort()).toEqual([
+      "aria-expanded",
+      "aria-label",
+      "class",
+      "role",
+      "tabindex",
+    ]);
   });
 
   /**
@@ -622,7 +648,9 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     // switched away from and no samples were touched.
     expect(text.toLowerCase()).toMatch(/nothing was changed/);
     // The browser fell back to the browse list rather than to an empty pane.
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse STATE (search, Browse all) - not an empty pane, and
+    // the list itself waits for the operator to filter or browse.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(document.querySelector(".solution-browser-selected")).toBeNull();
   });
 
@@ -641,6 +669,7 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     cleanup();
 
     renderBrowser("#/");
+    await openBrowseList();
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-list")).toBeTruthy();
     });
@@ -653,6 +682,7 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     await waitFor(() => {
       expect(notice()).toBeTruthy();
     });
+    await openBrowseList();
     fireEvent.click(screen.getByText("Zscaler"));
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-selected")).toBeTruthy();
@@ -701,7 +731,9 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     });
     // The browse list is what the operator is left with - the notice sits above
     // it rather than replacing it.
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse STATE (search, Browse all) - not an empty pane, and
+    // the list itself waits for the operator to filter or browse.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(document.querySelector(".solution-browser-selected")).toBeNull();
   });
 
@@ -745,5 +777,420 @@ describe("SolutionBrowser solution handoff (DBT-28 defect 1)", () => {
     });
     expect(notice()).toBeNull();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * DBT-14: the list must only hold the wheel while it can actually scroll.
+ *
+ * `overscroll-behavior: contain` was added 2026-08-03 so that reaching the END
+ * of a long list does not hand the wheel to the page mid-search. But Chrome
+ * still makes an overflow:auto box with `contain` the wheel target when it has
+ * NOTHING to scroll, and contain then stops the scroll chaining to the page -
+ * measured 2026-10-02 with trusted CDP wheel input: 8 rows render at 279px,
+ * under the 420px cap, and three wheel events moved list 0 / page 0. Without
+ * contain the page moved 300px. So contain is applied by a measured class, not
+ * by the bare rule.
+ *
+ * happy-dom does no layout, so scrollHeight/clientHeight are stubbed from the
+ * rendered row count: 35px a row, clientHeight capped at 418 (420 less the
+ * border). That makes a FILTER change the measurement, which is what the
+ * shrink test needs.
+ */
+describe("SolutionBrowser list holds the wheel only while it overflows (DBT-14)", () => {
+  const ROW_PX = 35;
+  const CAP_PX = 418;
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+
+  function contentPx(el: HTMLElement): number {
+    return el.classList.contains("solution-browser-list")
+      ? el.children.length * ROW_PX
+      : 0;
+  }
+
+  beforeEach(() => {
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return contentPx(this);
+      },
+    });
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return Math.min(contentPx(this), CAP_PX);
+      },
+    });
+  });
+
+  afterEach(() => {
+    // The stubs are OWN properties of HTMLElement.prototype, shadowing
+    // whatever happy-dom defines further up the chain, so deleting them
+    // restores it for every other test in the file.
+    delete proto.scrollHeight;
+    delete proto.clientHeight;
+  });
+
+  function contentWith(solutions: SolutionRef[]): SentinelContent {
+    return {
+      async getCommitSha(): Promise<string | null> {
+        return "abcdef012345";
+      },
+      async listSolutions(): Promise<SolutionRef[]> {
+        return solutions;
+      },
+    } as unknown as SentinelContent;
+  }
+
+  async function renderWith(solutions: SolutionRef[]): Promise<HTMLElement> {
+    render(
+      <PortsProvider
+        ports={{ content: contentWith(solutions) } as unknown as UiPorts}
+        config={CONFIG}
+      >
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+    await openBrowseList();
+    await waitFor(() => {
+      expect(screen.getByText(solutions[solutions.length - 1].name)).toBeTruthy();
+    });
+    const list = document.querySelector<HTMLElement>(".solution-browser-list");
+    expect(list).toBeTruthy();
+    return list as HTMLElement;
+  }
+
+  // 8 rows = 280px, the live report's case: under the cap, nothing to scroll.
+  const EIGHT: SolutionRef[] = Array.from({ length: 8 }, (_, i) => ({
+    name: `Short Vendor ${i + 1}`,
+    path: `Solutions/Short Vendor ${i + 1}`,
+  }));
+  // 200 rows = 7000px, the 2026-08-03 case: the list really scrolls.
+  const LONG: SolutionRef[] = Array.from({ length: 200 }, (_, i) => ({
+    name: `Long Vendor ${String(i + 1).padStart(3, "0")}`,
+    path: `Solutions/Long Vendor ${i + 1}`,
+  }));
+
+  it("does NOT mark a list that fits under the cap as scrollable", async () => {
+    const list = await renderWith(EIGHT);
+    expect(list.querySelectorAll(".solution-browser-item").length).toBe(8);
+    expect(document.querySelectorAll(".solution-browser-list--scrollable").length).toBe(0);
+    expect([...list.classList]).toEqual(["solution-browser-list"]);
+  });
+
+  it("marks a list that overflows the cap as scrollable, exactly once", async () => {
+    const list = await renderWith(LONG);
+    expect(list.querySelectorAll(".solution-browser-item").length).toBe(200);
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list--scrollable").length,
+      ).toBe(1);
+    });
+    expect([...list.classList]).toEqual([
+      "solution-browser-list",
+      "solution-browser-list--scrollable",
+    ]);
+  });
+
+  it("drops the class when a filter shrinks a long list under the cap", async () => {
+    const list = await renderWith(LONG);
+    await waitFor(() => {
+      expect([...list.classList]).toEqual([
+        "solution-browser-list",
+        "solution-browser-list--scrollable",
+      ]);
+    });
+    // "Long Vendor 007" matches exactly one row: 35px, nothing to scroll. A
+    // stale class here is DBT-14 coming back after a search.
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), {
+      target: { value: "Long Vendor 007" },
+    });
+    await waitFor(() => {
+      expect(list.querySelectorAll(".solution-browser-item").length).toBe(1);
+    });
+    expect([...list.classList]).toEqual(["solution-browser-list"]);
+    // And back: clearing the search must restore the 2026-08-03 protection.
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), {
+      target: { value: "" },
+    });
+    await waitFor(() => {
+      expect(list.querySelectorAll(".solution-browser-item").length).toBe(200);
+    });
+    expect([...list.classList]).toEqual([
+      "solution-browser-list",
+      "solution-browser-list--scrollable",
+    ]);
+  });
+
+  it("keeps overscroll-behavior off the bare rule and on the scrollable one", () => {
+    // __dirname, not import.meta.url: under happy-dom import.meta.url is not a
+    // file: URL, so the URL form throws before reading anything.
+    const css = readFileSync(resolve(__dirname, "../../styles.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const ruleBodies = (selector: string): string[] => {
+      const bodies: string[] = [];
+      for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = m[1].split(",").map((s) => s.trim());
+        if (selectors.includes(selector)) {
+          bodies.push(m[2]);
+        }
+      }
+      return bodies;
+    };
+    const bare = ruleBodies(".solution-browser-list");
+    expect(bare.length).toBe(1);
+    expect(bare[0].match(/overscroll-behavior/g)).toBeNull();
+    const scrollable = ruleBodies(
+      ".solution-browser-list.solution-browser-list--scrollable",
+    );
+    expect(scrollable.length).toBe(1);
+    expect(scrollable[0].trim()).toBe("overscroll-behavior: contain;");
+  });
+});
+
+/**
+ * A REFUSED CACHE READ IS A MISS (DBT-159).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403 (a 5xx always did),
+ * and both cache reads here sat inside the same try as the GitHub fetch. One
+ * refused read therefore failed the whole index load - "Could not load the
+ * solution index" with a GitHub-token hint, about a store that is only an
+ * optimisation - or the whole connector fetch. The cache can make the page
+ * faster; it must never be what makes it fail. A failed read falls through to
+ * the content port, and is SAID (a warn log and an on-screen note), because a
+ * cache that silently stopped working is a slow page nobody can explain.
+ */
+describe("SolutionBrowser a refused cache read (DBT-159)", () => {
+  const NAME = "Palo Alto Cortex XDR";
+  const FILE: SolutionFileRef = {
+    name: "connector.json",
+    path: `Solutions/${NAME}/Data Connectors/connector.json`,
+    size: 10,
+  };
+  const PUSH_JSON = JSON.stringify({ kind: "Push", properties: { title: "x" } });
+
+  // `writesRefused`: a store that refuses a read for want of permission
+  // refuses the write after it too - the realistic case, and the one where a
+  // bare cache.set after the fall-through failed the load all over again.
+  function harness(writesRefused = false) {
+    const listSolutions = vi.fn(async () => SOLUTIONS);
+    const listConnectorFiles = vi.fn(async () => [FILE]);
+    const content = {
+      async getCommitSha(): Promise<string | null> {
+        return "abcdef012345";
+      },
+      listSolutions,
+      listConnectorFiles,
+      readFile: async () => PUSH_JSON,
+    } as unknown as SentinelContent;
+    const contentCache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => {
+        if (writesRefused) throw new Error("KV write refused (403)");
+      }),
+    };
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    render(
+      <PortsProvider
+        ports={{ content, contentCache, logger } as unknown as UiPorts}
+        config={CONFIG}
+      >
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+    return { listSolutions, listConnectorFiles, contentCache, logger };
+  }
+
+  const notes = () =>
+    [...document.querySelectorAll(".solution-browser-cache-note")].map(
+      (n) => n.textContent ?? "",
+    );
+
+  it("loads the index from GitHub instead of failing the load", async () => {
+    const h = harness();
+    await openBrowseList();
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list .solution-browser-item")
+          .length,
+      ).toBe(SOLUTIONS.length);
+    });
+    expect(h.contentCache.get).toHaveBeenCalledTimes(1);
+    expect(h.listSolutions).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Could not load the solution index/)).toBeNull();
+    // Said, not swallowed: once in the log, once on the page, with the reason.
+    expect(h.logger.warn).toHaveBeenCalledTimes(1);
+    expect(notes()).toHaveLength(1);
+    expect(notes()[0]).toContain("KV read refused (403)");
+  });
+
+  it("fetches a selected solution's connectors instead of failing the card", async () => {
+    const h = harness();
+    await openBrowseList();
+    await waitFor(() => {
+      expect(screen.getByText(NAME)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText(NAME));
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected .ingestion-badge")
+          ?.textContent,
+      ).toBe("Recommended");
+    });
+    expect(h.contentCache.get).toHaveBeenCalledTimes(2);
+    expect(h.listConnectorFiles).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Could not fetch this solution/)).toBeNull();
+    expect(h.logger.warn).toHaveBeenCalledTimes(2);
+    // ONE note however many reads were refused: it describes the cache, not
+    // each key, and two copies of one sentence read as two problems.
+    expect(notes()).toHaveLength(1);
+  });
+
+  it("still loads, and still fetches connectors, when the store refuses WRITES too", async () => {
+    const h = harness(true);
+    await openBrowseList();
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".solution-browser-list .solution-browser-item")
+          .length,
+      ).toBe(SOLUTIONS.length);
+    });
+    expect(screen.queryByText(/Could not load the solution index/)).toBeNull();
+    fireEvent.click(screen.getByText(NAME));
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected .ingestion-badge")
+          ?.textContent,
+      ).toBe("Recommended");
+    });
+    expect(screen.queryByText(/Could not fetch this solution/)).toBeNull();
+    expect(h.contentCache.set).toHaveBeenCalledTimes(2);
+    // Two refused reads and two refused writes: four warns, one note.
+    expect(h.logger.warn).toHaveBeenCalledTimes(4);
+    expect(notes()).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-176: an unreadable Content Hub catalog is not "none deprecated"
+// ---------------------------------------------------------------------------
+
+/**
+ * listDeprecatedContentHubSolutions used to answer an empty set for a failed
+ * read, so the browser rendered "the Hub deprecated nothing" and "the Hub could
+ * not be read" identically - the same counts and no tags. The unreadable case
+ * now carries a note with the reason; the read cases carry none.
+ */
+describe("SolutionBrowser Content Hub deprecation lookup (DBT-176)", () => {
+  const SCOPED = {
+    subscriptionId: "sub-1",
+    resourceGroup: "rg-1",
+    workspaceName: "law-1",
+  } as unknown as AzureConfig;
+
+  function harness(catalog: { status: number; body: unknown }) {
+    const request = vi.fn(async () => ({ ok: true, ...catalog }));
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    render(
+      <PortsProvider
+        ports={{ content, azure: { request }, logger } as unknown as UiPorts}
+        config={SCOPED}
+      >
+        <SolutionBrowser scopeCommitted={true} />
+      </PortsProvider>,
+    );
+    return { request };
+  }
+
+  const hubNotes = () =>
+    [...document.querySelectorAll(".solution-browser-hub-note")].map(
+      (n) => n.textContent ?? "",
+    );
+  const countsLine = () =>
+    document.querySelector(".solution-browser-counts")?.textContent ?? "";
+
+  it("says the catalog could not be read, with the reason, when the listing fails", async () => {
+    harness({ status: 403, body: "denied" });
+    await waitFor(() => {
+      expect(hubNotes()).toHaveLength(1);
+    });
+    expect(hubNotes()[0]).toContain('(list content product packages: HTTP 403 "denied")');
+    expect(hubNotes()[0]).toContain("deprecation here comes from the repository alone");
+    expect(countsLine()).toContain("0 deprecated");
+  });
+
+  it("carries no note, and tags the Hub-deprecated row, when the catalog was read", async () => {
+    harness({
+      status: 200,
+      body: {
+        value: [
+          { properties: { displayName: "1Password (Deprecated)" } },
+          { properties: { displayName: "AbnormalSecurity" } },
+        ],
+      },
+    });
+    await waitFor(() => {
+      expect(countsLine()).toContain("1 deprecated");
+    });
+    expect(hubNotes()).toHaveLength(0);
+  });
+
+  it("carries no note when the catalog was read and deprecates nothing", async () => {
+    const { request } = harness({
+      status: 200,
+      body: { value: [{ properties: { displayName: "AbnormalSecurity" } }] },
+    });
+    await waitFor(() => {
+      expect(countsLine()).toContain(`${SOLUTIONS.length} solutions`);
+    });
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    // Let the resolved lookup land before asserting the absence.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(hubNotes()).toHaveLength(0);
+    expect(countsLine()).toContain("0 deprecated");
+  });
+});
+
+describe("SolutionBrowser waits for a filter before listing (DBT-227)", () => {
+  function mount() {
+    render(
+      <PortsProvider ports={{ content } as unknown as UiPorts} config={CONFIG}>
+        <SolutionBrowser />
+      </PortsProvider>,
+    );
+  }
+  const rows = () =>
+    [...document.querySelectorAll(".solution-browser-list .solution-browser-item")].map(
+      (r) => r.querySelector(".solution-browser-item-name")?.textContent,
+    );
+
+  it("shows the counts and Browse all, but no list, until the operator acts", async () => {
+    mount();
+    await waitFor(() => {
+      expect(document.querySelector(".solution-browser-counts")?.textContent).toContain(
+        "Type to filter, or browse them all.",
+      );
+    });
+    expect(document.querySelector(".solution-browser-list")).toBeNull();
+    expect(document.querySelector(".solution-browser-legend")).toBeNull();
+    expect(screen.getByRole("button", { name: "Browse all" })).toBeTruthy();
+  });
+
+  it("lists only the matches once a filter is typed", async () => {
+    mount();
+    await screen.findByRole("button", { name: "Browse all" });
+    fireEvent.change(screen.getByPlaceholderText(/CrowdStrike/), { target: { value: "palo" } });
+    expect(rows()).toEqual(["Palo Alto Cortex XDR"]);
+    expect(document.querySelector(".solution-browser-counts")?.textContent).toContain("Showing 1.");
+    expect(screen.queryByRole("button", { name: "Browse all" })).toBeNull();
+  });
+
+  it("lists everything on Browse all", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
+    expect(rows()).toHaveLength(SOLUTIONS.length);
   });
 });

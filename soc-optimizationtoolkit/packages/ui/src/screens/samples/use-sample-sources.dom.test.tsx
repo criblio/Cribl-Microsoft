@@ -23,7 +23,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { EMPTY_AZURE_CONFIG, sectionFor } from "@soc/core";
+import { EMPTY_AZURE_CONFIG, sectionFor, toListing } from "@soc/core";
 import type { AzureConfig, CriblRequest, PortHttpResponse } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -46,11 +46,13 @@ const SOURCES: Record<string, unknown[]> = {
 /** A Cribl stub that answers both stages and records every call. */
 function okCribl() {
   return {
-    listGroups: vi.fn(async () => [
-      { id: "default", product: "stream" },
-      { id: "grp2", product: "stream" },
-      { id: "default_search", product: "search" },
-    ]),
+    listGroups: vi.fn(async () =>
+      toListing([
+        { id: "default", product: "stream" },
+        { id: "grp2", product: "stream" },
+        { id: "default_search", product: "search" },
+      ]),
+    ),
     // The body is `unknown` on purpose: individual tests swap in a 403 whose
     // body is a string, and a narrower inference would reject the very failure
     // shapes these pins exist for.

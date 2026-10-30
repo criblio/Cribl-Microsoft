@@ -33,6 +33,13 @@ import type {
   EdgeCostTier,
   PatternDiagram,
 } from "../architecture-patterns";
+import {
+  inputIdValue,
+  matchInputIdFilter,
+  parseInputIdClause,
+  type InputIdFilter,
+  type InputIdRef,
+} from "../capture-filter/input-id";
 
 const CRIBL = "https://docs.cribl.io";
 const PACKS = "https://packs.cribl.io";
@@ -206,6 +213,12 @@ export interface LiveFlowSummary {
   label: string;
   /** True when the flow touches an Azure-typed endpoint. */
   azure: boolean;
+  /**
+   * Set when the route reaches the input ONLY through a bare-id filter
+   * (`__inputId=='<id>'`): drawn because this app's own wiring writes that
+   * form, but unconfirmed - the events carry `<type>:<id>` (DBT-162).
+   */
+  legacyInputMatch?: true;
 }
 
 // ---------------------------------------------------------------------------
@@ -220,11 +233,12 @@ export interface LiveInput {
   pipeline?: string;
   breakerRulesets: readonly string[];
   /**
-   * The __inputId values this input's events carry - the id itself plus
-   * variants like "collection:{jobId}" for scheduled collector jobs (route
-   * filter attribution matches against these).
+   * How `__inputId` names this input: `{type, id}`, whose value the events
+   * carry is `<type>:<id>` (`collection:<jobId>` for a scheduled collector
+   * job). Route filter attribution matches through capture-filter/input-id.ts
+   * matchInputIdFilter, which reports a bare-id match as `legacy`.
    */
-  aliases: readonly string[];
+  inputIdRef: InputIdRef;
   /**
    * QuickConnect wiring: destinations this source feeds DIRECTLY, bypassing the
    * routing table (user report 2026-08-04 - these flows were invisible in the
@@ -356,41 +370,21 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-/** The route filter's consumed inputs, parsed from the cheap known forms. */
-export type RouteFilterInputs =
-  | { kind: "inputs"; ids: readonly string[] }
-  | { kind: "prefix"; value: string }
-  | { kind: "all" }
-  | { kind: "unparsed" };
-
 /**
  * Parse the filter forms this app (and common configs) write:
  * `__inputId=='x'` / `__inputId==="x"`, `['a','b'].includes(__inputId)`,
  * `__inputId.startsWith('collection:')`, missing or `true` = all inputs;
  * anything else = unparsed (treated as all, with a note - honest
- * over-approximation).
+ * over-approximation). The clause forms are input-id.ts parseInputIdClause,
+ * shared with the capture warning (DBT-169); the result shape (InputIdFilter)
+ * is owned there too, and matched against an input there (DBT-162).
  */
-export function parseRouteFilterInputs(filter: string | undefined): RouteFilterInputs {
+export function parseRouteFilterInputs(filter: string | undefined): InputIdFilter {
   const trimmed = (filter ?? "").trim();
   if (trimmed === "" || trimmed === "true") {
     return { kind: "all" };
   }
-  const single = /^__inputId\s*===?\s*['"]([^'"]+)['"]$/.exec(trimmed);
-  if (single !== null) {
-    return { kind: "inputs", ids: [single[1]] };
-  }
-  const list = /^\[([^\]]+)\]\.includes\(\s*__inputId\s*\)$/.exec(trimmed);
-  if (list !== null) {
-    const ids = [...list[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    if (ids.length > 0) {
-      return { kind: "inputs", ids };
-    }
-  }
-  const prefix = /^__inputId\.startsWith\(\s*['"]([^'"]+)['"]\s*\)$/.exec(trimmed);
-  if (prefix !== null) {
-    return { kind: "prefix", value: prefix[1] };
-  }
-  return { kind: "unparsed" };
+  return parseInputIdClause(trimmed) ?? { kind: "unparsed" };
 }
 
 /** Is a Cribl input/output TYPE Azure-related? (prefix rule + known names) */
@@ -516,10 +510,13 @@ function parseRoutesSection(
 /**
  * Normalize one input (or collection JOB). Collection jobs nest the event
  * breaker and pre-processing settings under an `input` sub-object, so both
- * levels are read; jobs additionally answer to the `collection:{id}`
- * __inputId alias route filters match on.
+ * levels are read; a job's `__inputId` type segment is `collection` whatever
+ * its own type field says.
+ *
+ * Exported for usecases/read-source-flow/read-onboarding-cribl-side.ts, which
+ * reads the same /system/inputs list and must not restate this (DBT-162).
  */
-function normalizeInput(item: unknown, isJob: boolean): LiveInput | null {
+export function normalizeInput(item: unknown, isJob: boolean): LiveInput | null {
   const id = asString(prop(item, "id"));
   if (id === "") {
     return null;
@@ -540,7 +537,7 @@ function normalizeInput(item: unknown, isJob: boolean): LiveInput | null {
     breakerRulesets: Array.isArray(rulesets)
       ? rulesets.filter((r): r is string => typeof r === "string" && r !== "")
       : [],
-    aliases: isJob || type === "collection" ? [id, `collection:${id}`] : [id],
+    inputIdRef: { type: isJob ? "collection" : type, id },
     connections: normalizeConnections(prop(item, "connections") ?? prop(nested, "connections")),
     // Cribl defaults sendToRoutes to true; only an explicit false (what
     // QuickConnect writes) takes the source out of the routing table.
@@ -898,6 +895,8 @@ interface FlowTriple {
   input: LiveInput | null;
   route: LiveRoute;
   output: LiveOutput | null;
+  /** The route names the input only by its bare id (DBT-162). */
+  legacyInputMatch?: true;
 }
 
 function truncateIds(ids: readonly string[]): string {
@@ -964,17 +963,17 @@ export function buildLiveDiagram(
   const breakerById = new Map(breakers.map((b) => [b.id, b]));
   const packById = new Map(packs.map((p) => [p.id, p]));
   const outputById = new Map(allOutputs.map((o) => [o.id, o]));
-  const inputById = new Map(allInputs.map((i) => [i.id, i]));
-  // Route filters match __inputId, which for collector jobs is the
-  // "collection:{id}" alias - resolve through every alias.
-  const inputByAlias = new Map<string, LiveInput>();
-  for (const input of allInputs) {
-    for (const alias of input.aliases) {
-      if (!inputByAlias.has(alias)) {
-        inputByAlias.set(alias, input);
-      }
+  // Route filters match __inputId (`<type>:<id>`); which input a filter
+  // literal names is capture-filter/input-id.ts's answer, typed before legacy.
+  const inputNamedBy = (literal: string): { input: LiveInput; legacy: boolean } | undefined => {
+    const filter = { kind: "inputs" as const, ids: [literal] };
+    const typed = allInputs.find((i) => matchInputIdFilter(filter, i.inputIdRef) === "match");
+    if (typed !== undefined) {
+      return { input: typed, legacy: false };
     }
-  }
+    const bare = allInputs.find((i) => matchInputIdFilter(filter, i.inputIdRef) === "legacy");
+    return bare !== undefined ? { input: bare, legacy: true } : undefined;
+  };
 
   // --- 2. Disabled skips ----------------------------------------------------
   const disabledInputs = allInputs.filter((i) => i.disabled);
@@ -1006,6 +1005,10 @@ export function buildLiveDiagram(
 
   // --- 4. Triples ------------------------------------------------------------
   const triples: FlowTriple[] = [];
+  // Bare-id attributions (DBT-162): drawn, so the routes this app's own wiring
+  // wrote stay visible, but each one is named in a note and flagged on its
+  // flow - the bare form matched nothing when captured (capture-filter.ts).
+  const legacyMatches: string[] = [];
   const unparsedFilterRoutes: string[] = [];
   const unknownInputRefs: string[] = [];
   const matchedInputIds = new Set<string>();
@@ -1013,27 +1016,45 @@ export function buildLiveDiagram(
   for (const route of routes) {
     const parsed = parseRouteFilterInputs(route.filter);
     let consumed: Array<LiveInput | null>;
+    // Inputs this route reaches ONLY by a bare id; a typed literal clears one.
+    const legacyInputs = new Set<LiveInput>();
     if (parsed.kind === "inputs") {
       consumed = [];
+      const typedInputs = new Set<LiveInput>();
       for (const id of parsed.ids) {
-        const input = inputByAlias.get(id) ?? inputById.get(id);
-        if (input === undefined) {
+        const named = inputNamedBy(id);
+        if (named === undefined) {
           if (inputsAvailable) {
             unknownInputRefs.push(`${route.name}: ${id}`);
           }
           continue;
         }
-        if (!input.disabled) {
-          consumed.push(input);
+        if (named.input.disabled) {
+          continue;
         }
+        (named.legacy ? legacyInputs : typedInputs).add(named.input);
+        if (!consumed.includes(named.input)) {
+          consumed.push(named.input);
+        }
+      }
+      for (const input of typedInputs) {
+        legacyInputs.delete(input);
       }
       if (consumed.length === 0) {
         consumed = [null];
       }
     } else if (parsed.kind === "prefix") {
-      consumed = inputs.filter((i) =>
-        i.aliases.some((alias) => alias.startsWith(parsed.value)),
-      );
+      consumed = [];
+      for (const input of inputs) {
+        const how = matchInputIdFilter(parsed, input.inputIdRef);
+        if (how === "none") {
+          continue;
+        }
+        consumed.push(input);
+        if (how === "legacy") {
+          legacyInputs.add(input);
+        }
+      }
       if (consumed.length === 0) {
         consumed = [null];
       }
@@ -1046,10 +1067,18 @@ export function buildLiveDiagram(
     }
     const output = resolveOutput(route.output);
     for (const input of consumed) {
+      const legacy = input !== null && legacyInputs.has(input);
       if (input !== null) {
         matchedInputIds.add(input.id);
+        if (legacy) {
+          legacyMatches.push(
+            `Route '${route.name}' names input '${input.id}' by its bare id; its events ` +
+              `carry __inputId '${inputIdValue(input.inputIdRef)}', so this legacy match ` +
+              `is drawn but may route nothing.`,
+          );
+        }
       }
-      triples.push({ input, route, output });
+      triples.push({ input, route, output, ...(legacy ? { legacyInputMatch: true as const } : {}) });
     }
   }
   for (const name of unparsedFilterRoutes.slice(0, 5)) {
@@ -1059,6 +1088,10 @@ export function buildLiveDiagram(
     notes.push(
       `Route filter(s) name unknown input id(s): ${truncateIds(unknownInputRefs)}.`,
     );
+  }
+  notes.push(...legacyMatches.slice(0, 5));
+  if (legacyMatches.length > 5) {
+    notes.push(`+${legacyMatches.length - 5} more legacy bare-id route match(es).`);
   }
   const danglingOutputs = routes.filter(
     (r) => r.output !== undefined && r.output !== "default" && !outputById.has(r.output),
@@ -1124,6 +1157,7 @@ export function buildLiveDiagram(
         `${triple.input?.id ?? "(any input)"} -> ${triple.route.name}` +
         `${routeVia(triple.route)} -> ${outputRef(triple)}`,
       azure: tripleAzure(triple),
+      ...(triple.legacyInputMatch === true ? { legacyInputMatch: true as const } : {}),
     });
   }
   // QuickConnect flows are first-class inventory entries (user request

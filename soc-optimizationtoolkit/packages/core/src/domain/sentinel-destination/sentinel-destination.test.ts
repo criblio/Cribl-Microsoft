@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildSentinelDestination,
   defaultSentinelDestinationId,
+  destinationEmbedsSecret,
   rewriteIngestionEndpoint,
+  sentinelClientSecretId,
   SentinelDestinationError,
+  SENTINEL_SECRET_ID_MAX,
   SENTINEL_SECRET_PLACEHOLDER,
 } from "./sentinel-destination";
 
@@ -57,23 +60,26 @@ describe("buildSentinelDestination", () => {
     });
   });
 
-  it("passes a provided secret through verbatim (TRANSIENT input, never read from KV)", () => {
+  // DBT-155: this pin used to be "passes a provided secret through verbatim",
+  // which is the defect - the value then lived in outputs.yml. The builder now
+  // takes a Cribl secret id and writes only its reference.
+  it("references a Cribl secret by id, never a value", () => {
     const config = buildSentinelDestination({
       ...INPUT,
-      ingestionClientSecret: "s3cr3t-value",
+      clientSecretId: "MS_Sentinel_SecurityEvent_dest_secret",
     });
-    expect(config.secret).toBe("s3cr3t-value");
+    expect(config.secret).toBe("!{MS_Sentinel_SecurityEvent_dest_secret}");
   });
 
-  it("ships the legacy placeholder when the secret is absent, null, or empty", () => {
+  it("ships the legacy placeholder when the secret id is absent, null, or empty", () => {
     expect(buildSentinelDestination(INPUT).secret).toBe(
       SENTINEL_SECRET_PLACEHOLDER,
     );
     expect(
-      buildSentinelDestination({ ...INPUT, ingestionClientSecret: null }).secret,
+      buildSentinelDestination({ ...INPUT, clientSecretId: null }).secret,
     ).toBe(SENTINEL_SECRET_PLACEHOLDER);
     expect(
-      buildSentinelDestination({ ...INPUT, ingestionClientSecret: "" }).secret,
+      buildSentinelDestination({ ...INPUT, clientSecretId: "" }).secret,
     ).toBe(SENTINEL_SECRET_PLACEHOLDER);
   });
 
@@ -163,5 +169,39 @@ describe("defaultSentinelDestinationId", () => {
     expect(defaultSentinelDestinationId("My-App.v2_cl")).toBe(
       "MS-Sentinel-My_App_v2-dest",
     );
+  });
+});
+
+describe("sentinelClientSecretId (DBT-155)", () => {
+  it("is the sanitized destination id plus _secret", () => {
+    expect(sentinelClientSecretId("MS-Sentinel-SecurityEvent-dest")).toBe(
+      "MS_Sentinel_SecurityEvent_dest_secret",
+    );
+  });
+
+  it("stays within the cap and keeps the suffix for a long destination id", () => {
+    const id = sentinelClientSecretId(`MS-Sentinel-${"A".repeat(80)}-dest`);
+    expect(id.length).toBe(SENTINEL_SECRET_ID_MAX);
+    expect(id.endsWith("_secret")).toBe(true);
+  });
+});
+
+describe("destinationEmbedsSecret (DBT-155)", () => {
+  it("flags a destination whose secret is a value, in an items envelope or bare", () => {
+    expect(destinationEmbedsSecret({ items: [{ id: "d", secret: "s3cr3t" }] })).toBe(true);
+    expect(destinationEmbedsSecret({ id: "d", secret: "#42:encrypted" })).toBe(true);
+  });
+
+  it("does not flag a reference, the placeholder, or an empty secret", () => {
+    expect(destinationEmbedsSecret({ items: [{ secret: "!{MS_x_secret}" }] })).toBe(false);
+    expect(destinationEmbedsSecret({ items: [{ secret: SENTINEL_SECRET_PLACEHOLDER }] })).toBe(false);
+    expect(destinationEmbedsSecret({ items: [{ secret: "" }] })).toBe(false);
+  });
+
+  it("answers false for a body it cannot read - no evidence either way", () => {
+    expect(destinationEmbedsSecret(null)).toBe(false);
+    expect(destinationEmbedsSecret({ items: [] })).toBe(false);
+    expect(destinationEmbedsSecret({ items: [{ id: "d" }] })).toBe(false);
+    expect(destinationEmbedsSecret("text")).toBe(false);
   });
 });

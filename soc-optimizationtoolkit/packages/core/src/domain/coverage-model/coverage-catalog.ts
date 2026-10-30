@@ -44,6 +44,30 @@
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto.
  */
 
+// The file, not the entra-diagnostics barrel: entra-categories.ts imports
+// nothing, so this edge cannot become a cycle.
+import {
+  ENTRA_PROFILES,
+  ENTRA_PROFILE_CATEGORIES,
+  type EntraProfile,
+} from "../entra-diagnostics/entra-categories";
+
+/**
+ * The Entra profile details the legacy `resource-coverage.json` carried, kept
+ * verbatim so a stored Standard or HighVolume still means what it meant.
+ *
+ * AZR-13 (backlog.md 18i, chosen: derive). The profile LIST used to be
+ * hand-kept here as Standard and HighVolume while entra-diagnostics knew three,
+ * so `decodeSelection` treated a stored SecurityOnly as stale and silently
+ * reverted it to Standard. The list now comes from {@link ENTRA_PROFILES}, the
+ * one authority; a profile with no legacy detail is described by its
+ * categories instead of by invented prose.
+ */
+const LEGACY_ENTRA_PROFILE_DETAIL: Partial<Record<EntraProfile, string>> = {
+  Standard: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers",
+  HighVolume: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
+};
+
 /**
  * How a source is turned on. Verbatim from `resource-coverage.json`'s `method`
  * values, and per backlog.md#6 these ARE the screen's section keys.
@@ -78,10 +102,15 @@ export const DEPLOYMENT_MODES: readonly DeploymentMode[] = ["Centralized", "Mult
  */
 export type SubSelectionKind = "tiers" | "profile" | "export-tiers";
 
-/** One option inside a sub-selection, with the legacy file's own description. */
+/** One option inside a sub-selection, with what choosing it means. */
 export interface SubSelectionOption {
   readonly key: string;
-  /** The legacy `tierDetails` / profile note, verbatim where one existed. */
+  /**
+   * The legacy `tierDetails` / profile note, verbatim where one existed -
+   * except the community policy tiers, whose detail is derived from
+   * {@link COMMUNITY_TIER_SERVICES} because the legacy text named services
+   * the tier never imports (AZR-51).
+   */
   readonly detail: string;
 }
 
@@ -123,31 +152,106 @@ export interface UnsupportedItem {
   readonly source: string;
   readonly title: string;
   readonly description: string;
-  /** What to do instead. The legacy `alternative`, verbatim. */
+  /** What to do instead. The legacy `alternative`, verbatim - provenance, not screen copy. */
   readonly alternative: string;
+  /**
+   * What the screen tells an operator to do instead (AZR-43). The legacy line
+   * pointed at paths in the old repository ("Azure/dev/vNetFlowLogDiscovery",
+   * "DCR-Automation solution in this repository"); an operator in Cribl has no
+   * repository, so the screen says what to use in Azure or in this app.
+   */
+  readonly instead: string;
 }
 
+/**
+ * The community services each tier imports, as the legacy script groups them
+ * (Deploy-CommunityPolicyInitiative.ps1:213-257, `$script:CommunityPolicyTiers`).
+ * `All` is every service (its line 364). Each service becomes one policy
+ * definition (onboarding-howto-steps' communityDefinitionNames), and Validate
+ * looks for exactly those. Pinned against the frozen script.
+ *
+ * The ONE declaration of what a tier holds (AZR-51): the tier details below
+ * are derived from it, so what an operator reads beside a tier is what ticking
+ * it imports and validates.
+ */
+export const COMMUNITY_TIER_SERVICES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  Storage: ["BlobServices", "FileServices", "QueueServices", "TableServices", "StorageAccounts"],
+  Security: ["Firewall", "NSG", "ApplicationGateway", "ExpressRoute", "VirtualNetwork"],
+  Data: [
+    "CosmosDB", "DataFactory", "MySQL", "PostgreSQL", "MariaDB",
+    "SynapseAnalytics", "SynapseSparkPool", "SynapseSQLPool", "DataExplorer", "Databricks",
+    "AnalysisServices", "TimeSeriesInsights",
+  ],
+  Compute: [
+    "AppService", "FunctionApp", "BatchAccount", "MachineLearning", "ApplicationInsights",
+    "AutoscaleSettings", "DevCenter",
+  ],
+  Integration: ["LogicApps", "LogicAppsISE", "EventGridTopic", "EventGridSystemTopic", "Relay"],
+  Networking: ["LoadBalancer", "TrafficManager", "CDNEndpoint"],
+  AVD: ["AVDHostPool", "AVDApplicationGroup", "AVDWorkspace", "AVDScalingPlan"],
+  Other: ["RecoveryServicesVault", "AzureAPIforFHIR", "PowerBIEmbedded"],
+});
+
+/** How each community service reads in its tier's detail. */
+export const COMMUNITY_SERVICE_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  BlobServices: "Blob",
+  FileServices: "File",
+  QueueServices: "Queue",
+  TableServices: "Table",
+  StorageAccounts: "Storage Accounts",
+  Firewall: "Firewall",
+  NSG: "NSG",
+  ApplicationGateway: "Application Gateway",
+  ExpressRoute: "ExpressRoute",
+  VirtualNetwork: "Virtual Network",
+  CosmosDB: "CosmosDB",
+  DataFactory: "Data Factory",
+  MySQL: "MySQL",
+  PostgreSQL: "PostgreSQL",
+  MariaDB: "MariaDB",
+  SynapseAnalytics: "Synapse Analytics",
+  SynapseSparkPool: "Synapse Spark Pool",
+  SynapseSQLPool: "Synapse SQL Pool",
+  DataExplorer: "Data Explorer",
+  Databricks: "Databricks",
+  AnalysisServices: "Analysis Services",
+  TimeSeriesInsights: "Time Series Insights",
+  AppService: "App Service",
+  FunctionApp: "Function App",
+  BatchAccount: "Batch",
+  MachineLearning: "Machine Learning",
+  ApplicationInsights: "Application Insights",
+  AutoscaleSettings: "Autoscale Settings",
+  DevCenter: "Dev Center",
+  LogicApps: "Logic Apps",
+  LogicAppsISE: "Logic Apps ISE",
+  EventGridTopic: "Event Grid Topic",
+  EventGridSystemTopic: "Event Grid System Topic",
+  Relay: "Relay",
+  LoadBalancer: "Load Balancer",
+  TrafficManager: "Traffic Manager",
+  CDNEndpoint: "CDN Endpoint",
+  AVDHostPool: "Host Pool",
+  AVDApplicationGroup: "Application Group",
+  AVDWorkspace: "Workspace",
+  AVDScalingPlan: "Scaling Plan",
+  RecoveryServicesVault: "Recovery Services Vault",
+  AzureAPIforFHIR: "Azure API for FHIR",
+  PowerBIEmbedded: "Power BI Embedded",
+});
+
+/**
+ * The tier options, in the legacy order. The legacy `tierDetails` text named
+ * services the script never imported (AKS under Security; IoT Hub and
+ * Cognitive Services under Other) and trailed off in "etc.", so a ticked tier
+ * read as covering what Validate never looks for. Each detail now lists its
+ * tier's services (AZR-51).
+ */
 const COMMUNITY_TIERS: readonly SubSelectionOption[] = [
-  { key: "Storage", detail: "Blob, File, Queue, Table, Storage Accounts" },
-  {
-    key: "Security",
-    detail: "AKS, Firewall, NSG, Application Gateway, ExpressRoute, VirtualNetwork",
-  },
-  {
-    key: "Data",
-    detail: "CosmosDB, Data Factory, MySQL, PostgreSQL, MariaDB, Synapse, Databricks, etc.",
-  },
-  {
-    key: "Compute",
-    detail: "App Service, Function App, Batch, Machine Learning, Application Insights, etc.",
-  },
-  { key: "Integration", detail: "Logic Apps, Event Grid, Relay" },
-  { key: "Networking", detail: "Load Balancer, Traffic Manager, CDN Endpoint" },
-  { key: "AVD", detail: "Host Pool, Application Group, Workspace, Scaling Plan" },
-  {
-    key: "Other",
-    detail: "Recovery Services, Healthcare APIs, IoT Hub, Cognitive Services, etc.",
-  },
+  ...Object.entries(COMMUNITY_TIER_SERVICES).map(([key, services]) => ({
+    key,
+    detail: services.map((s) => COMMUNITY_SERVICE_LABELS[s] ?? s).join(", "),
+  })),
   { key: "All", detail: "Every tier above" },
 ];
 
@@ -228,13 +332,11 @@ export const COVERAGE_CATALOG: readonly CoverageItem[] = [
     resourceCount: null,
     subSelection: {
       kind: "profile",
-      options: [
-        { key: "Standard", detail: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers" },
-        {
-          key: "HighVolume",
-          detail: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
-        },
-      ],
+      // Derived, not hand-listed (AZR-13): see LEGACY_ENTRA_PROFILE_DETAIL.
+      options: ENTRA_PROFILES.map((key) => ({
+        key,
+        detail: LEGACY_ENTRA_PROFILE_DETAIL[key] ?? ENTRA_PROFILE_CATEGORIES[key].join(", "),
+      })),
       defaultSelected: ["Standard"],
       multi: false,
     },
@@ -287,6 +389,8 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     description: "VNet Flow Logs - Storage Account only, use Cribl Azure Blob source",
     alternative:
       "Use Azure/dev/vNetFlowLogDiscovery for Cribl Blob source configuration",
+    instead:
+      "Read them with a Cribl Azure Blob source on the flow-log storage account - the VNet Flow Logs How-to below walks through it.",
   },
   {
     id: "nsgFlowLogs",
@@ -294,6 +398,7 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "NSG Flow Logs",
     description: "NSG Flow Logs - Storage Account only, use Cribl Azure Blob source",
     alternative: "Use Cribl Azure Blob source with NSG flow log storage account",
+    instead: "Use a Cribl Azure Blob source on the NSG flow log storage account.",
   },
   {
     id: "resourceChangeTracking",
@@ -301,6 +406,7 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "Resource change tracking",
     description: "Azure Resource Graph Change Analysis - Query-based only, no streaming",
     alternative: "Use scheduled Azure Resource Graph queries for change history",
+    instead: "Use scheduled Azure Resource Graph queries for change history.",
   },
   {
     id: "vmGuestLogs",
@@ -308,6 +414,8 @@ export const UNSUPPORTED_SOURCES: readonly UnsupportedItem[] = [
     title: "VM guest OS logs",
     description: "VM Guest OS Logs - Requires Azure Monitor Agent + DCR (not policy-based)",
     alternative: "Use DCR-Automation solution in this repository for AMA-based collection",
+    instead:
+      "Collect them with Azure Monitor Agent and a data collection rule, set up in Azure. This app does not set that up.",
   },
 ];
 

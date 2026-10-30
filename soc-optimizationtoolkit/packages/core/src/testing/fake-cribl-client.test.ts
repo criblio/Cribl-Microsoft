@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FakeCriblClient } from './fake-cribl-client';
+import { listingRows } from '../domain/inventory-listing';
 
 describe('FakeCriblClient', () => {
   it('serves scripted responses FIFO and records every call including groupId', async () => {
@@ -39,10 +40,20 @@ describe('FakeCriblClient', () => {
     const groups = await cribl.listGroups();
     await cribl.listGroups();
 
-    expect(groups).toEqual([{ id: 'default', product: 'stream' }, { id: 'edge-fleet' }]);
+    expect(groups).toEqual({
+      kind: 'rows',
+      rows: [{ id: 'default', product: 'stream' }, { id: 'edge-fleet' }],
+    });
     expect(cribl.listGroupsCalls).toBe(2);
 
-    groups[0]!.id = 'tampered';
-    expect((await cribl.listGroups())[0]!.id).toBe('default');
+    (listingRows(groups)[0] as { id: string }).id = 'tampered';
+    expect(listingRows(await cribl.listGroups())[0]!.id).toBe('default');
+  });
+
+  it('reports no configured groups as the unverified empty listing, never a zero', async () => {
+    // The adapter cannot tell "none exist" from "you may see none", so the fake
+    // must not either - a test written against it would otherwise pass on a
+    // shape the product never returns.
+    expect(await new FakeCriblClient().listGroups()).toEqual({ kind: 'empty' });
   });
 });

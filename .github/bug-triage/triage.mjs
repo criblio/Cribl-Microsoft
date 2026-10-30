@@ -14,6 +14,10 @@
  * therefore be "every open issue that is not a PR"; labels record DECISIONS,
  * never eligibility, or the sweep would silently see nothing forever.
  *
+ * KNOWN GAP: that includes the tracker issue this script creates. It carries
+ * neither decision label, so from the second run on it counts in Open, is
+ * listed as awaiting evaluation, and can be what "Last bug reported" names.
+ *
  * Decisions are read from labels so GitHub stays the source of truth:
  *   triage/approved - accepted for integration
  *   triage/rejected - considered and declined
@@ -96,7 +100,9 @@ function readState(body) {
     };
   } catch {
     // A hand-edited or truncated block must not wedge the sweep; start clean
-    // and say so in the rendered body rather than failing the run.
+    // rather than failing the run. The reset is SILENT: the rendered body does
+    // not mention it, and every open issue reappears under "New since last
+    // sweep".
     return { lastSweepAt: null, seen: {} };
   }
 }

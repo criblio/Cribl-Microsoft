@@ -1,5 +1,7 @@
 # SOC Optimization Toolkit - Cribl App
 
+Status: Living - the app workspace's entry page; corrected to match the code.
+
 The Cribl.Cloud app target of the SOC Optimization Toolkit: the shared
 @soc/ui screens over the Cribl Apps (Preview) platform bridge.
 
@@ -23,6 +25,8 @@ replaced on every release. Install it without building anything
 
 ## Build and package from source
 
+Requires Node 22 (the version CI uses).
+
 ```bash
 npm install          # from the soc-optimizationtoolkit/ workspace root
 npm run package      # from apps/cribl-app: builds, mints the next version,
@@ -35,7 +39,9 @@ npm run package      # from apps/cribl-app: builds, mints the next version,
 ## Development
 
 ```bash
-npm run dev          # Vite dev server with the local platform harness
+npm run dev          # Vite dev server for Cribl Live Preview: open it from the
+                     # leader at /apps/a/__local__ (standalone localhost has no
+                     # platform bridge or credentials)
 npm run typecheck && npm run test && npm run lint
 ```
 

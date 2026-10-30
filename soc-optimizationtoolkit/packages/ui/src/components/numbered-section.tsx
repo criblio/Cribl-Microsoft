@@ -19,6 +19,9 @@
  *     check: that made the page claim work the operator had not done (live
  *     review 2026-08-03). Muted, not dashed - the section IS available to
  *     use, unlike coming-soon;
+ *   - not-needed          -> the informational badge, with the reason (what
+ *     replaced the section, "Not needed - using <id>") as the header tag
+ *     (GEN-21). Not the check: nothing was finished there;
  *   - blocked             -> muted number plus an AMBER gating-reason line
  *     naming the single unlock condition (the commit inside the body is
  *     gated; the body still renders - read-ahead);
@@ -27,6 +30,11 @@
  *     section is never a working teaser). The note deliberately does NOT name
  *     a roadmap unit: "Arrives in Unit 16" is internal vocabulary that means
  *     nothing to the operator reading it (user report 2026-08-04).
+ *     The optional `notBuiltBody` (AZR-18) is the one exception, and it is
+ *     NOT the body: it shows what the section WILL hold - rows with their
+ *     controls disabled - so an operator can see every source the screen
+ *     knows about without any of it being actionable. Omitted, coming-soon
+ *     renders exactly as before.
  *
  * The InfoTip reuses the shared component, fed the section's point-of-
  * decision help text.
@@ -47,8 +55,10 @@ export interface NumberedSectionProps {
   /** Point-of-decision help fed to the InfoTip. */
   infoTip: string;
   /**
-   * The single unlock condition (status 'blocked') or the honest not-shipped
-   * note (status 'coming-soon'). Ignored for the other statuses.
+   * The single unlock condition (status 'blocked'), the honest not-shipped
+   * note (status 'coming-soon'), or what replaced the section (status
+   * 'not-needed', shown in its badge; "Not needed" when absent). Ignored for
+   * the other statuses.
    */
   reason?: string;
   /**
@@ -56,6 +66,38 @@ export interface NumberedSectionProps {
    * body regardless of what is passed here.
    */
   children?: ReactNode;
+  /**
+   * DBT-127: the page may own the collapsed state, so a "Done - next" button
+   * and the readiness-footer pills can fold and open sections. Omitted, the
+   * section keeps its own state exactly as before.
+   */
+  collapsed?: boolean;
+  /** Told whenever the header, Expand or Collapse changes the state. */
+  onCollapsedChange?: (collapsed: boolean) => void;
+  /** One line shown in the header while collapsed - what was chosen here. */
+  summary?: string;
+  /** Renders "Done - next" at the foot of the body; the page decides what it does. */
+  onDone?: () => void;
+  /** DOM id, so the page can scroll a section into view. */
+  anchorId?: string;
+  /**
+   * AZR-18: what a coming-soon section shows under its note - the rows it
+   * will hold, every control already disabled by the caller. Ignored for the
+   * other statuses (a built section passes `children`). It is not collapsible
+   * and is not the body: the caller owns keeping it inert.
+   */
+  notBuiltBody?: ReactNode;
+  /**
+   * DBT-232: pinned sections stay open when the operator moves to another
+   * section. Absent onPinnedChange = no Pin button.
+   */
+  pinned?: boolean;
+  onPinnedChange?: (pinned: boolean) => void;
+  /**
+   * DBT-232: called when the operator acts INSIDE the section (pointer down or
+   * keyboard focus) - the page's cue that this is the section being used.
+   */
+  onActivate?: () => void;
 }
 
 export function NumberedSection({
@@ -65,18 +107,41 @@ export function NumberedSection({
   infoTip,
   reason,
   children,
+  collapsed: collapsedProp,
+  onCollapsedChange,
+  summary,
+  onDone,
+  anchorId,
+  notBuiltBody,
+  pinned = false,
+  onPinnedChange,
+  onActivate,
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
   // COLLAPSIBLE (user request 2026-07-12: shorten the page as sections are
-  // completed). Manual toggle - never auto-collapses, so a section cannot
-  // vanish mid-edit when a gate flips. Header click or the chevron toggles;
-  // coming-soon sections have no body to collapse.
-  const [collapsed, setCollapsed] = useState(false);
+  // completed). This component never folds itself - a gate flipping cannot
+  // make a section vanish mid-edit. A page that owns `collapsed` may fold it
+  // when the operator explicitly moves to another section (Integrate does,
+  // DBT-232, unless the section is pinned). Header click or the chevron
+  // toggles; coming-soon sections have no body to collapse.
+  const [ownCollapsed, setOwnCollapsed] = useState(false);
+  const collapsed = collapsedProp ?? ownCollapsed;
+  const setCollapsed = (next: boolean | ((c: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(collapsed) : next;
+    if (collapsedProp === undefined) {
+      setOwnCollapsed(value);
+    }
+    onCollapsedChange?.(value);
+  };
   const collapsible = !comingSoon;
   const bodyHidden = collapsible && collapsed;
   return (
     <section
+      {...(anchorId !== undefined ? { id: anchorId } : {})}
+      {...(onActivate !== undefined
+        ? { onPointerDownCapture: onActivate, onFocusCapture: onActivate }
+        : {})}
       className={`numbered-section numbered-section-${status}${bodyHidden ? " numbered-section-collapsed" : ""}`}
     >
       <div
@@ -95,7 +160,9 @@ export function NumberedSection({
               ? ", complete"
               : status === "informational"
                 ? ", informational"
-                : ""
+                : status === "not-needed"
+                  ? ", not needed"
+                  : ""
           }`}
         >
           {status === "complete" ? (
@@ -108,9 +175,34 @@ export function NumberedSection({
         {status === "informational" && (
           <span className="numbered-section-info-tag">Informational</span>
         )}
+        {/* GEN-21: what replaced the section, in the header, so it reads
+            "Not needed - using <id>" whether or not the body is open. */}
+        {status === "not-needed" && (
+          <span className="numbered-section-info-tag">
+            {reason !== undefined && reason !== "" ? reason : "Not needed"}
+          </span>
+        )}
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
         </span>
+        {collapsible && onPinnedChange !== undefined && (
+          <button
+            type="button"
+            className={`numbered-section-pin${pinned ? " numbered-section-pin-on" : ""}`}
+            aria-pressed={pinned}
+            aria-label={pinned ? `Unpin ${title}` : `Pin ${title} open`}
+            title={pinned ? "Pinned open - click to let it fold" : "Keep this section open while you work elsewhere"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPinnedChange(!pinned);
+            }}
+          >
+            {pinned ? "Pinned" : "Pin"}
+          </button>
+        )}
+        {bodyHidden && summary !== undefined && summary !== "" && (
+          <span className="numbered-section-summary">{summary}</span>
+        )}
         {collapsible && collapsed && (
           <button
             className="numbered-section-collapse"
@@ -134,6 +226,11 @@ export function NumberedSection({
           {reason !== undefined && reason !== "" && (
             <p className="numbered-section-comingsoon-note">{reason}</p>
           )}
+          {notBuiltBody !== undefined && notBuiltBody !== null && (
+            <div className="numbered-section-notbuilt" data-testid="numbered-section-notbuilt">
+              {notBuiltBody}
+            </div>
+          )}
         </div>
       ) : (
         // A collapsed body stays MOUNTED and is hidden with CSS (live report
@@ -144,21 +241,31 @@ export function NumberedSection({
           {blocked && reason !== undefined && reason !== "" && (
             <p className="numbered-section-blocked-reason">{reason}</p>
           )}
-          <div className="numbered-section-body">{children}</div>
-          {collapsible && (
-            // Collapse lives at the BOTTOM of the expanded body (user
-            // direction 2026-07-13): a section is finished at its end, so
-            // that is where the put-it-away control belongs. Expand stays
-            // in the header - a collapsed section has no visible bottom.
-            <button
-              className="numbered-section-collapse numbered-section-collapse-bottom"
-              aria-expanded={true}
-              aria-label={`Collapse ${title}`}
-              onClick={() => setCollapsed(true)}
-            >
-              Collapse
-            </button>
-          )}
+          <div data-testid="numbered-section-body">{children}</div>
+          <div className="numbered-section-foot">
+            {onDone !== undefined && (
+              <button
+                className="next-action-button numbered-section-done"
+                onClick={onDone}
+              >
+                Done - next
+              </button>
+            )}
+            {collapsible && (
+              // Collapse lives at the BOTTOM of the expanded body (user
+              // direction 2026-07-13): a section is finished at its end, so
+              // that is where the put-it-away control belongs. Expand stays
+              // in the header - a collapsed section has no visible bottom.
+              <button
+                className="numbered-section-collapse numbered-section-collapse-bottom"
+                aria-expanded={true}
+                aria-label={`Collapse ${title}`}
+                onClick={() => setCollapsed(true)}
+              >
+                Collapse
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>

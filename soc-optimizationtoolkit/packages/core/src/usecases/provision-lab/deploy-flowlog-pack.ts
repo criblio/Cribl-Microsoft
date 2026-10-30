@@ -8,8 +8,10 @@
  *
  * 1. OPTIONAL secret provisioning: create the Azure_vNet_Flowlogs_Secret
  *    text secret in the worker group from a TRANSIENT client-secret input
- *    (create-or-update: POST, PATCH on conflict - the guided-deploy secret
- *    convention). Skipped when no secret value is supplied (the operator may
+ *    (create-or-update through ensureTextSecret: POST, and on a 409 PATCH
+ *    only a secret carrying this app's ownership stamp - DBT-152; a foreign
+ *    or unreadable one, or a 400, rejects with nothing written). Skipped
+ *    when no secret value is supplied (the operator may
  *    have created it already).
  * 2. Commit + deploy, mirroring onboard-table's REPORTED-BUT-NONFATAL
  *    semantics: single-instance leaders reject group commits, so an HTTP
@@ -20,7 +22,14 @@
 import type { CriblClient } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import { FLOWLOG_SECRET_NAME } from "../../domain/labs/lab-flowlog-pack";
+import { ensureTextSecret } from "../ensure-secret";
 import { is2xx, prop } from "../arm-http";
+
+/**
+ * The description the collector's text secret is written with; buildSecretBody
+ * (inside ensureTextSecret) appends the app's ownership stamp to it (DBT-163).
+ */
+export const FLOWLOG_SECRET_DESCRIPTION = "Client secret for the AzureFlowLogs pack collector";
 
 /** Input for {@link finalizeFlowLogPack}. */
 export interface FinalizeFlowLogPackInput {
@@ -61,38 +70,23 @@ export async function finalizeFlowLogPack(
     deployed: false,
   };
 
-  // --- 1. Secret (create-or-update; the guided-deploy convention) ---------
+  // --- 1. Secret (create-or-update, ours only; ensureTextSecret, DBT-152) --
+  // The body is the app-wide stamped one (DBT-163). A 409 updates only a
+  // secret this app provably owns; a foreign or unreadable one is refused and
+  // left unchanged, and a 400 is an error, never an overwrite. Either throws:
+  // a secret the collector cannot use is a hard failure, so nothing commits.
   const secretValue = input.clientSecret ?? "";
   if (secretValue !== "") {
-    const create = await cribl.request({
-      method: "POST",
-      path: "/system/secrets",
+    const ensured = await ensureTextSecret(cribl, {
       groupId: input.groupId,
-      body: { id: FLOWLOG_SECRET_NAME, type: "text", value: secretValue },
+      id: FLOWLOG_SECRET_NAME,
+      value: secretValue,
+      description: FLOWLOG_SECRET_DESCRIPTION,
     });
-    if (is2xx(create.status)) {
-      outcome.secret = "created";
-    } else if (create.status === 409 || create.status === 400) {
-      // Conflict shapes vary by version; PATCH is the documented fallback.
-      const update = await cribl.request({
-        method: "PATCH",
-        path: `/system/secrets/${FLOWLOG_SECRET_NAME}`,
-        groupId: input.groupId,
-        body: { id: FLOWLOG_SECRET_NAME, type: "text", value: secretValue },
-      });
-      if (!is2xx(update.status)) {
-        throw new Error(
-          `store Cribl secret '${FLOWLOG_SECRET_NAME}': HTTP ${update.status} ` +
-            JSON.stringify(update.body),
-        );
-      }
-      outcome.secret = "updated";
-    } else {
-      throw new Error(
-        `store Cribl secret '${FLOWLOG_SECRET_NAME}': HTTP ${create.status} ` +
-          JSON.stringify(create.body),
-      );
+    if (ensured.kind === "refused" || ensured.kind === "failed") {
+      throw new Error(ensured.message);
     }
+    outcome.secret = ensured.kind;
   }
 
   // --- 2. Commit + deploy (reported-but-nonfatal, onboard-table semantics) -

@@ -57,12 +57,6 @@ const PAT_WALKTHROUGH_STEPS: readonly string[] = [
   "Click Generate token, then copy the token (it starts with github_pat_...).",
 ];
 
-// A representative Elastic integrations package/stream used ONLY to verify the
-// elastic/integrations repo is reachable and the sample-fetch path works end to
-// end (nginx access logs are a stable, always-present pipeline test set).
-const ELASTIC_PROBE_PACKAGE = "nginx";
-const ELASTIC_PROBE_STREAM = "access";
-
 export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
@@ -76,11 +70,6 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const [solutionCount, setSolutionCount] = useState<number | null>(null);
   const [reachError, setReachError] = useState("");
   const [checking, setChecking] = useState(false);
-
-  const sampleSource = ports.sampleSource;
-  const [elasticFiles, setElasticFiles] = useState<number | null>(null);
-  const [elasticError, setElasticError] = useState("");
-  const [elasticChecking, setElasticChecking] = useState(false);
 
   // KQL-validation schema tables (the top schema-resolution tier): listing
   // count + one end-to-end definition read through the same content port.
@@ -101,9 +90,14 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         if (!cancelled) {
           dispatch({ type: "hydrate", status });
         }
-      } catch {
-        // A failed status read leaves the form in its no-PAT default; the
-        // reachability check surfaces any real connectivity problem.
+      } catch (err) {
+        // DBT-159: a failed status read is UNKNOWN, not "no PAT". It used to be
+        // swallowed here, leaving the no-PAT default to tell a hosted-app
+        // operator a token was required and nothing was connected - about a
+        // token that may well be saved - with the reason thrown away.
+        if (!cancelled) {
+          dispatch({ type: "hydrate-error", message: String(err) });
+        }
       }
     })();
     return () => {
@@ -194,29 +188,6 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     }
   }, [content]);
 
-  // Elastic reachability: probe a well-known package's test-pipeline files
-  // (nginx/access) - proves github.com/elastic/integrations is reachable AND the
-  // on-demand sample-fetch path works end to end (never a bulk mirror).
-  const checkElastic = useCallback(async () => {
-    if (sampleSource === undefined) {
-      return;
-    }
-    setElasticChecking(true);
-    setElasticError("");
-    try {
-      const files = await sampleSource.listElasticTestFiles(
-        ELASTIC_PROBE_PACKAGE,
-        ELASTIC_PROBE_STREAM,
-      );
-      setElasticFiles(files.length);
-    } catch (err) {
-      setElasticFiles(null);
-      setElasticError(String(err));
-    } finally {
-      setElasticChecking(false);
-    }
-  }, [sampleSource]);
-
   if (githubPat === undefined) {
     return (
       <div className="panel">
@@ -233,6 +204,7 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const reachability = deriveReachabilityStatus({
     platform,
     hasPat: view.hasPat,
+    patStatusError: view.statusUnknown,
     solutionCount,
     error: reachError,
   });
@@ -242,10 +214,6 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     : "numbered-section-badge-current";
   const connBadgeClass =
     solutionCount !== null
-      ? "numbered-section-badge-complete"
-      : "numbered-section-badge-current";
-  const elasticBadgeClass =
-    elasticFiles !== null
       ? "numbered-section-badge-complete"
       : "numbered-section-badge-current";
   const schemaBadgeClass =
@@ -274,25 +242,6 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
             detail:
               "Refresh to verify the Sentinel repo's KQL-validation table schemas are reachable with your token.",
           };
-  const elasticStatus =
-    elasticError !== ""
-      ? {
-          tone: "error",
-          label: "Could not reach Elastic sample data",
-          detail: elasticError,
-        }
-      : elasticFiles !== null
-        ? {
-            tone: "ok",
-            label: "Elastic integrations reachable",
-            detail: `${elasticFiles} sample file${elasticFiles === 1 ? "" : "s"} found for the ${ELASTIC_PROBE_PACKAGE}/${ELASTIC_PROBE_STREAM} probe. Vendor samples are fetched on demand when you browse a solution.`,
-          }
-        : {
-            tone: "warn",
-            label: "Not checked yet",
-            detail:
-              "Refresh to verify github.com/elastic/integrations is reachable with your token.",
-          };
 
   return (
     <div className="repositories-screen">
@@ -305,7 +254,17 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         </div>
         <p className="panel-desc">{policy.rationale}</p>
         <p className="panel-desc">{policy.scopeGuidance}</p>
-        {policy.required && !view.hasPat && (
+        {view.statusUnknown !== "" && (
+          <div className="status-bar status-bar-error repositories-pat-unknown">
+            <span className="status-bar-dot" aria-hidden="true" />
+            <span className="status-bar-text">
+              Could not read whether a GitHub token is saved (
+              {view.statusUnknown}). One may be stored; saving a token below
+              replaces it either way, and Clear token removes it.
+            </span>
+          </div>
+        )}
+        {policy.required && !view.hasPat && view.statusUnknown === "" && (
           <p className="connection-notice">
             A token is required on this hosted app before you can browse
             solutions or fetch content.
@@ -424,47 +383,11 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
         </div>
       </section>
 
-      {sampleSource !== undefined && (
-        <section className="numbered-section">
-          <div className="numbered-section-head">
-            <span className={`numbered-section-badge ${elasticBadgeClass}`}>
-              3
-            </span>
-            <h2 className="numbered-section-title">
-              Elastic integrations sample data
-            </h2>
-          </div>
-          <p className="panel-desc">
-            Raw vendor log samples from github.com/elastic/integrations, fetched
-            ON DEMAND per selected solution to drive field mapping and reduction
-            rules - never a bulk mirror. The check below probes a known package (
-            {ELASTIC_PROBE_PACKAGE}/{ELASTIC_PROBE_STREAM}) to confirm the repo is
-            reachable with your token.
-          </p>
-          <div className={`reachability reachability-${elasticStatus.tone}`}>
-            <span className="reachability-dot" aria-hidden="true" />
-            <div>
-              <span className="reachability-label">{elasticStatus.label}</span>
-              <p className="panel-desc">{elasticStatus.detail}</p>
-            </div>
-          </div>
-          <div className="panel-controls">
-            <button
-              className="next-action-button"
-              onClick={() => void checkElastic()}
-              disabled={elasticChecking}
-            >
-              {elasticChecking ? "Checking..." : "Refresh"}
-            </button>
-          </div>
-        </section>
-      )}
-
       {content !== undefined && (
         <section className="numbered-section">
           <div className="numbered-section-head">
             <span className={`numbered-section-badge ${schemaBadgeClass}`}>
-              {sampleSource !== undefined ? 4 : 3}
+              3
             </span>
             <h2 className="numbered-section-title">
               Schema tables (KQL validation)

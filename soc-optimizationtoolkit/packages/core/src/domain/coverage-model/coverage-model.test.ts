@@ -10,12 +10,14 @@
 // the shipped module, and the architecture audit exempts *.test.ts explicitly.
 // The shipped catalog is a TS constant with no IO in it.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  COMMUNITY_SERVICE_LABELS,
+  COMMUNITY_TIER_SERVICES,
   COVERAGE_CATALOG,
   DEFAULT_ENABLED,
   UNSUPPORTED_SOURCES,
@@ -25,6 +27,8 @@ import {
 } from "./coverage-catalog";
 import {
   COVERAGE_SELECTION_KEY,
+  COVERAGE_SELECTION_KIND,
+  COVERAGE_SELECTION_VERSION,
   decodeSelection,
   defaultSelection,
   encodeSelection,
@@ -32,21 +36,18 @@ import {
   selectedItemIds,
 } from "./coverage-selection";
 import { deployPlan } from "../onboarding-selection";
+import { ENTRA_PROFILES, ENTRA_PROFILE_CATEGORIES } from "../entra-diagnostics/entra-categories";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LEGACY_PATH = join(
+// A FROZEN COPY inside the app (DBT-132): the app is moving to its own
+// repository, which will not carry deprecated/. The copy is byte-for-byte the
+// file this catalog was ported from; the pin below holds the two equal for as
+// long as the original exists beside it.
+const LEGACY_PATH = join(HERE, "legacy", "resource-coverage.json");
+const ORIGINAL_PATH = join(
   HERE,
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "deprecated",
-  "Azure",
-  "Azure-LogCollection",
-  "core",
-  "resource-coverage.json",
+  "..", "..", "..", "..", "..", "..",
+  "deprecated", "Azure", "Azure-LogCollection", "core", "resource-coverage.json",
 );
 
 /**
@@ -70,6 +71,14 @@ function legacy(): Record<string, unknown> {
   }
   return JSON.parse(text) as Record<string, unknown>;
 }
+
+describe("the frozen legacy copy (DBT-132)", () => {
+  // Runs only where the original still exists (this repository); skipped, and
+  // shown as skipped, once the app lives without deprecated/.
+  it.runIf(existsSync(ORIGINAL_PATH))("is byte-for-byte the ported-from file", () => {
+    expect(readFileSync(LEGACY_PATH, "utf8")).toBe(readFileSync(ORIGINAL_PATH, "utf8"));
+  });
+});
 
 /** Walk a dotted path like `scriptBasedDeployment.entraId`. */
 function at(root: unknown, path: string): Record<string, unknown> | undefined {
@@ -131,27 +140,85 @@ describe("COVERAGE_CATALOG - ported, not invented", () => {
     expect(ported).toEqual(legacyTiers);
   });
 
-  it("keeps every community tier's detail text verbatim", () => {
+  it("keeps a community tier's detail verbatim only where the legacy text named what it imports", () => {
+    // AZR-51: this pin used to hold EVERY tier detail verbatim to the legacy
+    // tierDetails. It is changed on purpose: what an operator reads beside a
+    // tier must match what ticking it imports and Validate checks, and the
+    // legacy text named services the script never imported (AKS, IoT Hub,
+    // Cognitive Services) or trailed off in "etc.". The tiers whose legacy
+    // text was already exact stay verbatim; the rest are derived from
+    // COMMUNITY_TIER_SERVICES (pinned below).
     const src = legacy();
     const details = at(src, "communityPolicyInitiative.tiers.tierDetails") ?? {};
     const ported = coverageItem("communityPolicyInitiative")?.subSelection?.options ?? [];
+    const verbatim = ported.filter((o) => o.detail === details[o.key]).map((o) => o.key);
 
-    for (const option of ported) {
-      if (option.key === "All") continue; // no legacy tierDetails entry; ours is a gloss
-      expect(option.detail, `tier ${option.key}`).toBe(details[option.key]);
-    }
-    // And the gloss is the only thing we added.
+    expect(verbatim).toEqual(["Storage", "Networking", "AVD"]);
+    // And the All gloss is the only option with no legacy entry.
     expect(ported.filter((o) => details[o.key] === undefined).map((o) => o.key)).toEqual([
       "All",
     ]);
   });
 
-  it("keeps the Entra profile options verbatim", () => {
+  it("describes each community tier by exactly the services it imports (AZR-51)", () => {
+    const options = coverageItem("communityPolicyInitiative")?.subSelection?.options ?? [];
+    const tiers = options.filter((o) => o.key !== "All");
+
+    // One declaration: every non-All tier has a non-empty service list, and
+    // no service list belongs to a tier the catalog does not offer.
+    expect(tiers.map((o) => o.key)).toEqual(Object.keys(COMMUNITY_TIER_SERVICES));
+    for (const o of tiers) {
+      const services = COMMUNITY_TIER_SERVICES[o.key] ?? [];
+      expect(services.length, `tier ${o.key}`).toBeGreaterThan(0);
+      // Each named item is the label of a service in THIS tier, once each.
+      expect(o.detail.split(", "), `tier ${o.key}`).toEqual(
+        services.map((s) => COMMUNITY_SERVICE_LABELS[s]),
+      );
+    }
+    expect(Object.keys(COMMUNITY_SERVICE_LABELS).sort()).toEqual(
+      Object.values(COMMUNITY_TIER_SERVICES).flat().sort(),
+    );
+    const detail = (key: string): string | undefined => options.find((o) => o.key === key)?.detail;
+    expect(detail("Security")).toBe("Firewall, NSG, Application Gateway, ExpressRoute, Virtual Network");
+    expect(detail("Other")).toBe("Recovery Services Vault, Azure API for FHIR, Power BI Embedded");
+    expect(options.map((o) => o.detail).join(" | ")).not.toMatch(/AKS|IoT Hub|Cognitive|etc\./);
+  });
+
+  it("keeps the legacy two Entra profiles, plus SecurityOnly from AZR-2", () => {
+    // AZR-13 / backlog.md 18i (chosen: derive). This pin used to say the ported
+    // keys EQUAL the legacy `_profileOptions`; it is weakened on purpose. The
+    // legacy two still have to survive, and the only addition allowed is the
+    // third preset AZR-2 took from the script. Anything else is invention.
     const src = legacy();
     const legacyProfiles = at(src, "scriptBasedDeployment.entraId")?.["_profileOptions"];
-    const ported = coverageItem("entraId")?.subSelection?.options.map((o) => o.key);
+    const ported = coverageItem("entraId")?.subSelection?.options.map((o) => o.key) ?? [];
 
-    expect(ported).toEqual(legacyProfiles);
+    expect(ported.filter((k) => k !== "SecurityOnly")).toEqual(legacyProfiles);
+    expect(ported).toEqual([...ENTRA_PROFILES]);
+  });
+
+  it("takes the Entra profile list from ENTRA_PROFILES - one authority, not two (AZR-13)", () => {
+    // Two hand-kept lists drifted: entra-diagnostics knew three profiles, the
+    // catalog two, so a stored SecurityOnly was silently reverted to Standard.
+    const options = coverageItem("entraId")?.subSelection?.options ?? [];
+
+    expect(options.map((o) => o.key)).toEqual(["SecurityOnly", "Standard", "HighVolume"]);
+    expect(options.map((o) => o.key)).toEqual([...ENTRA_PROFILES]);
+  });
+
+  it("describes SecurityOnly by its categories and leaves the legacy details untouched", () => {
+    const detail = Object.fromEntries(
+      (coverageItem("entraId")?.subSelection?.options ?? []).map((o) => [o.key, o.detail]),
+    );
+
+    expect(detail).toEqual({
+      SecurityOnly: ENTRA_PROFILE_CATEGORIES.SecurityOnly.join(", "),
+      Standard: "AuditLogs, SignInLogs, ServicePrincipal, ManagedIdentity, RiskyUsers",
+      HighVolume: "Standard plus NonInteractiveUserSignInLogs (5-10x more volume)",
+    });
+    expect(detail["SecurityOnly"]).toBe(
+      "AuditLogs, SignInLogs, RiskyUsers, UserRiskEvents, RiskyServicePrincipals, ServicePrincipalRiskEvents",
+    );
   });
 
   it("ports the notSupported block entry for entry - none missing, none invented", () => {
@@ -169,6 +236,17 @@ describe("COVERAGE_CATALOG - ported, not invented", () => {
       const node = at(src, u.source);
       expect(node?.["description"], `${u.id} description`).toBe(u.description);
       expect(node?.["alternative"], `${u.id} alternative`).toBe(u.alternative);
+    }
+  });
+
+  // AZR-43 (found live 2026-10-28): the screen told operators to use
+  // "Azure/dev/vNetFlowLogDiscovery" and "DCR-Automation solution in this
+  // repository". The legacy line stays as provenance; the screen line may not
+  // name a repository or a path in one.
+  it("tells an operator what to use instead without naming a repository", () => {
+    for (const u of UNSUPPORTED_SOURCES) {
+      expect(u.instead.trim(), `${u.id} instead`).not.toBe("");
+      expect(u.instead, `${u.id} instead`).not.toMatch(/repositor|Azure\/dev|deprecated\/|\w\/\w+\//i);
     }
   });
 
@@ -298,6 +376,28 @@ describe("decodeSelection - a KV value outlives the code that wrote it", () => {
     expect(dropped).toContain("communityPolicyInitiative.Atlantis");
   });
 
+  it("keeps a stored SecurityOnly Entra profile instead of reverting it to Standard (AZR-13)", () => {
+    const original = {
+      ...defaultSelection(),
+      enabled: ["entraId"],
+      subSelections: { ...defaultSelection().subSelections, entraId: ["SecurityOnly"] },
+    };
+    const { selection, dropped, usedDefaults } = decodeSelection(encodeSelection(original));
+
+    expect(selection.subSelections["entraId"]).toEqual(["SecurityOnly"]);
+    expect(dropped).toEqual([]);
+    expect(usedDefaults).toBe(false);
+  });
+
+  it("still falls back to Standard for an Entra profile no list knows", () => {
+    const { selection, dropped } = decodeSelection(
+      JSON.stringify({ enabled: ["entraId"], subSelections: { entraId: ["Bogus"] } }),
+    );
+
+    expect(selection.subSelections["entraId"]).toEqual(["Standard"]);
+    expect(dropped).toEqual(["entraId.Bogus"]);
+  });
+
   it("keeps the valid half of a partly-stale sub-selection", () => {
     const { selection, dropped } = decodeSelection(
       JSON.stringify({
@@ -397,6 +497,19 @@ describe("the KV contract", () => {
     // Changing this orphans every saved selection in the field, so it is worth
     // a pin rather than a comment.
     expect(COVERAGE_SELECTION_KEY).toBe("azure-coverage-selection");
+  });
+
+  it("writes its identity and version into every document", () => {
+    // AZR-18 added `kind`: the shared KV standard keeps "is this ours?" apart
+    // from "can this release read it?", and the Save gate in
+    // readCoverageDocument (coverage-document.test.ts) needs the first answer
+    // to be a field, not a guess. The decodeSelection pins above deliberately
+    // store documents WITHOUT kind: that is what a pre-AZR-18 save looks like,
+    // and decodeSelection is unchanged and still ignores kind.
+    const doc = JSON.parse(encodeSelection(defaultSelection())) as Record<string, unknown>;
+    expect(doc["kind"]).toBe(COVERAGE_SELECTION_KIND);
+    expect(COVERAGE_SELECTION_KIND).toBe("azure-coverage-selection");
+    expect(doc["version"]).toBe(COVERAGE_SELECTION_VERSION);
   });
 
   it("encodes deterministically, so an unchanged selection is not a rewrite", () => {

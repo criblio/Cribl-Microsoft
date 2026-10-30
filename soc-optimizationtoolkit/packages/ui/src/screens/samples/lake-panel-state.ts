@@ -83,7 +83,9 @@ import {
   previewLines,
   sampleStoreKey,
   storeLabelFor,
+  storedEventShortfallText,
 } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 
 /**
  * How many log types start ticked.
@@ -798,6 +800,12 @@ export interface LakeCommitView {
  * in the sample they just added, and sends them off to widen a window that was
  * never the problem. `mergedCount` is what lets the two be told apart; it
  * defaults to 0 so a caller with nothing to fold reads exactly as before.
+ *
+ * A STORE TRIM IS NAMED TOO (DBT-197). `trimmed` is what the shared commit
+ * callback read back from the store: log types it kept fewer events of than it
+ * was handed, because the cloud store byte-caps one sample. Without it a Lake
+ * fetch of 100 verbose events said "Added 1 sample" over a 9-event chip, the
+ * capture panel's defect on its sibling. Empty means no trim was FOUND.
  */
 export function deriveLakeCommitView(
   result: FetchLakeEventsResult | null,
@@ -806,6 +814,7 @@ export function deriveLakeCommitView(
   requestedCount: number,
   mergedCount = 0,
   storeError: string | null = null,
+  trimmed: readonly StoredEventShortfall[] = [],
 ): LakeCommitView {
   if (fetching) {
     return { status: "fetching", headline: "Fetching events...", notes: [] };
@@ -836,16 +845,18 @@ export function deriveLakeCommitView(
         headline:
           `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from the` +
           ` ${requestedCount} log type${requestedCount === 1 ? "" : "s"} you picked. ` +
-          partialFetchShortfall(plannedCount, requestedCount, mergedCount),
+          partialFetchShortfall(plannedCount, requestedCount, mergedCount) +
+          storedEventShortfallText(trimmed),
         notes: result.notes,
       };
     }
     return {
       status: "done",
       headline:
-        plannedCount < requestedCount
+        (plannedCount < requestedCount
           ? `Added ${plannedCount} of the ${requestedCount} log types you picked; ${shortfallReason(plannedCount, requestedCount, mergedCount)}.`
-          : `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from this dataset.`,
+          : `Added ${plannedCount} sample${plannedCount === 1 ? "" : "s"} from this dataset.`) +
+        storedEventShortfallText(trimmed),
       notes: result.notes,
     };
   }

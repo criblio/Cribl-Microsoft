@@ -18,6 +18,7 @@ import {
   AZURE_ACTION_CAPABILITIES,
   AZURE_PROBE_CAPABILITIES,
   CRIBL_PROBE_CAPABILITIES,
+  GRANT_ONLY_AZURE_ACTIONS,
   capabilitiesCheckedForSetupPath,
   capabilitiesFromReport,
   capabilitiesFromSides,
@@ -40,6 +41,10 @@ import {
   type CapabilityContext,
 } from "../../domain/capabilities";
 import { checkResult, REQUIRED_ACTIONS } from "../../domain/azure-permissions";
+import {
+  DEFENDER_NAMESPACE_ACTIONS,
+  DEFENDER_SUBSCRIPTION_ACTIONS,
+} from "../../domain/defender-export/defender-permissions";
 import type { PermissionSet, SetupPath } from "../../domain/azure-permissions";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
@@ -73,6 +78,11 @@ function permsResponse(...sets: PermissionSet[]): PortHttpResponse {
 }
 const OK: PortHttpResponse = { status: 200, body: {} };
 const FORBIDDEN: PortHttpResponse = { status: 403, body: {} };
+/** A Resource Graph answer with a row in it - the only 2xx that counts. */
+const GRAPH_ROW: PortHttpResponse = {
+  status: 200,
+  body: { totalRecords: 1, count: 1, data: [{ id: "/subscriptions/x/resourceGroups/rg" }] },
+};
 
 /** A minimal Azure half, overridable per test. */
 function azurePreflight(partial: Partial<AzurePreflight> = {}): AzurePreflight {
@@ -149,6 +159,15 @@ describe("mapping tables", () => {
     }
   });
 
+  it("measures the Defender capabilities from no probe at all", () => {
+    // CAP-7a is RBAC-only. Even the two reads have no probe, so nothing here
+    // can ever be the source of a Defender verdict - and above all not of the
+    // automations write.
+    for (const capability of Object.values(AZURE_PROBE_CAPABILITIES)) {
+      expect(capability.startsWith("defender-"), capability).toBe(false);
+    }
+  });
+
   it("leaves lab-provisioning actions unmapped rather than widening the taxonomy", () => {
     expect(
       AZURE_ACTION_CAPABILITIES["Microsoft.Resources/subscriptions/resourceGroups/write"],
@@ -173,8 +192,17 @@ describe("mapping tables", () => {
     expect(capabilitiesCheckedForSetupPath("existing-rg").sort()).toEqual(
       ["arm.deploy", "dcr.write", "role.assign", "table.write"].sort(),
     );
+    // RE-PINNED 2026-10-27 (CAP-7a): the three Defender capabilities joined
+    // existing-subscription, the one path evaluated at the subscription their
+    // resources live under. No other path gains them - pinned below.
     expect(capabilitiesCheckedForSetupPath("existing-subscription").sort()).toEqual(
-      ["dcr.read", "workspace.read"].sort(),
+      [
+        "dcr.read",
+        "workspace.read",
+        "defender-plans.read",
+        "defender-automation.read",
+        "defender-automation.write",
+      ].sort(),
     );
     // lab-byo-rg checks workspaces/write, which has no capability - the list is
     // the mapped subset, never padded to match the action count. The Sentinel
@@ -187,6 +215,40 @@ describe("mapping tables", () => {
     expect(capabilitiesCheckedForSetupPath("existing-rg")).not.toContain(
       "content.install",
     );
+  });
+
+  it("checks the Defender capabilities on the subscription-scope discovery path only", () => {
+    // CAP-7a. Pricings and automations are subscription resources; a
+    // resource-group evaluation could read a grant at the group as covering
+    // them. lab-new-rg-subscription is subscription-scoped too but has no
+    // Defender step, and an action nothing on that path calls does not belong.
+    const defender = [
+      "defender-plans.read",
+      "defender-automation.read",
+      "defender-automation.write",
+    ];
+    const paths: SetupPath[] = ["existing-rg", "lab-new-rg-subscription", "lab-byo-rg"];
+    for (const path of paths) {
+      expect(
+        capabilitiesCheckedForSetupPath(path).filter((c) => defender.includes(c)),
+        path,
+      ).toEqual([]);
+    }
+  });
+
+  it("keys the Defender capabilities on the Defender domain's own action strings", () => {
+    // The mapping is keyed by import, not restatement, so the action checked and
+    // the action mapped cannot drift apart. Pin the exact pairing.
+    const byCapability = Object.fromEntries(
+      Object.entries(AZURE_ACTION_CAPABILITIES).map(([action, c]) => [c, action]),
+    );
+    expect(byCapability["defender-plans.read"]).toBe(DEFENDER_SUBSCRIPTION_ACTIONS[0].action);
+    expect(byCapability["defender-automation.read"]).toBe(DEFENDER_SUBSCRIPTION_ACTIONS[1].action);
+    expect(byCapability["defender-automation.write"]).toBe(DEFENDER_SUBSCRIPTION_ACTIONS[2].action);
+    // The namespace's listKeys is CAP-7b and maps to nothing yet.
+    for (const a of DEFENDER_NAMESPACE_ACTIONS) {
+      expect(AZURE_ACTION_CAPABILITIES[a.action], a.action).toBeUndefined();
+    }
   });
 
   it("never claims a capability the setup path does not check", () => {
@@ -500,6 +562,126 @@ describe("over a real preflight report", () => {
     expect(capabilitiesFromSides(full.azure, full.cribl, META)).toEqual(
       capabilitiesFromReport(full, META),
     );
+  });
+
+  it("Reader on existing-subscription reads the Defender export; the write stays unmeasured", async () => {
+    // CAP-7a, measured by the subscription-scope RBAC evaluation. '*/read'
+    // covers pricings/read and automations/read and not automations/write.
+    //
+    // RE-PINNED 2026-10-27 (review): this asserted the write `denied`. The
+    // automation is written into a resource group the operator picks at deploy
+    // time, and a role on that group is invisible at the subscription, so "not
+    // granted here" is not a measured denial. The check row still reports it;
+    // the capability records nothing and resolves `unknown`.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, OK);
+    const preflight = await runAzurePreflight(azure, "existing-subscription", FULL_TARGET);
+    expect(azure.calls[0].path).toBe(
+      `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`,
+    );
+
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["defender-plans.read"]).toBe("granted");
+    expect(set.verdicts["defender-automation.read"]).toBe("granted");
+    expect(
+      preflight.checks.find((c) => c.action === DEFENDER_SUBSCRIPTION_ACTIONS[2].action)?.granted,
+    ).toBe(false);
+    expect(set.verdicts["defender-automation.write"]).toBeUndefined();
+    expect(verdictFor("defender-automation.write", set, connected)).toBe("unknown");
+    // Feature checks: the gap is reported, the path is still ready.
+    expect(preflight.hasRequiredAccess).toBe(true);
+  });
+
+  it("a subscription-scope denial of the Defender READS is still recorded", async () => {
+    // The grant-only rule is the write's alone: pricings and the automations
+    // list are read at the subscription itself, so there "not granted" IS the
+    // measurement.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      permsResponse(
+        permSet({
+          actions: [
+            "Microsoft.Insights/dataCollectionRules/read",
+            "Microsoft.OperationalInsights/workspaces/read",
+          ],
+        }),
+      ),
+      OK,
+      OK,
+    );
+    const preflight = await runAzurePreflight(azure, "existing-subscription", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["defender-plans.read"]).toBe("denied");
+    expect(set.verdicts["defender-automation.read"]).toBe("denied");
+    expect(set.verdicts["defender-automation.write"]).toBeUndefined();
+    expect([...GRANT_ONLY_AZURE_ACTIONS]).toEqual([DEFENDER_SUBSCRIPTION_ACTIONS[2].action]);
+  });
+
+  it("Owner on existing-subscription is granted all three Defender capabilities", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK);
+    const preflight = await runAzurePreflight(azure, "existing-subscription", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["defender-plans.read"]).toBe("granted");
+    expect(set.verdicts["defender-automation.read"]).toBe("granted");
+    expect(set.verdicts["defender-automation.write"]).toBe("granted");
+  });
+
+  it("an existing-rg audit leaves the Defender capabilities unmeasured, not denied", async () => {
+    // The resource-group path does not evaluate the subscription, so it has
+    // said nothing about Defender. Absent - the domain resolves `unknown`.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, OK);
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["defender-plans.read"]).toBeUndefined();
+    expect(set.verdicts["defender-automation.read"]).toBeUndefined();
+    expect(set.verdicts["defender-automation.write"]).toBeUndefined();
+    expect(verdictFor("defender-automation.write", set, connected)).toBe("unknown");
+  });
+
+  it("measures resourcegraph.read from the query probe on the default path", async () => {
+    // CAP-1. existing-rg is what the audit runs by default, and its RBAC checks
+    // say nothing about Resource Graph, so the probe is the whole measurement.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBe("granted");
+  });
+
+  it("an answered query with no rows leaves resourcegraph.read unmeasured", async () => {
+    // What a no-access identity can be answered: Resource Graph filters rather
+    // than refusing. Granted would be a claim the probe never established.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, {
+      status: 200,
+      body: { totalRecords: 0, count: 0, data: [] },
+    });
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBeUndefined();
+    expect(verdictFor("resourcegraph.read", set, connected)).toBe("unknown");
+  });
+
+  it("a 403 on the Resource Graph query denies only resourcegraph.read", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, FORBIDDEN);
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBe("denied");
+    expect(set.verdicts["dcr.read"]).toBe("granted");
+    expect(set.verdicts["dcr.write"]).toBe("granted");
+  });
+
+  it("a query that fails for another reason leaves resourcegraph.read unmeasured", async () => {
+    // A 400 (bad query, unregistered provider) is not a permission answer.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, { status: 400, body: {} });
+    const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const set = capabilitiesFromReport(report(preflight), META);
+    expect(set.verdicts["resourcegraph.read"]).toBeUndefined();
+    expect(verdictFor("resourcegraph.read", set, connected)).toBe("unknown");
   });
 
   it("a 403 on the DCR list denies only the read it probed", async () => {

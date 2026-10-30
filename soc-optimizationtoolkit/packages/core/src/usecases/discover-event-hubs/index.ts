@@ -1,5 +1,6 @@
 export {
   discoverEventHubs,
+  discoverEventHubNamespaces,
   discoverEventHubSenders,
   checkEventHubActivity,
   enumerateEventHubDetails,

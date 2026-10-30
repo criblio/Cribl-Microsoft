@@ -19,7 +19,7 @@
  * secret is TRANSIENT input for this one run and cleared afterward.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   ONBOARD_BATCH_JOB_KIND,
@@ -28,7 +28,6 @@ import {
   artifactsToOffer,
   emptyCapabilitySet,
   findVendorSchema,
-  isStreamWorkerGroup,
   onboardBatch,
   onboardBatchStepsFor,
 } from "@soc/core";
@@ -36,7 +35,6 @@ import type {
   BatchPacing,
   Capability,
   CapabilityFallback,
-  CriblGroupSummary,
   CriblOptions,
   JobStep,
   OnboardBatchOutcome,
@@ -51,6 +49,11 @@ import {
   isInlineArtifact,
 } from "../../capabilities/fallback-notice-state";
 import { SearchableSelect } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { formatStepLine } from "../step-line";
 import { RecentRuns } from "../recent-runs";
 import {
@@ -211,39 +214,23 @@ export function BatchDeployScreen({
     setOverrides((prev) => ({ ...prev, [key]: value }));
 
   // ---- Cribl target and ingestion identity (OnboardTableScreen pattern) ---
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
-  const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
   const [ingestionClientId, setIngestionClientId] = useState(
     () => config.clientId,
   );
   const [ingestionClientSecret, setIngestionClientSecret] = useState("");
 
+  // Every listing state is WorkerGroupField's to render (DBT-134). Edge
+  // fleets cannot run these pipelines: Stream worker groups only.
+  // Forced templateOnly = no live Cribl connection in this mode: there is
+  // no leader to list worker groups from, and the run makes no Cribl
+  // calls, so discovery is skipped instead of failing noisily.
   const preferredGroup = criblDefaults?.workerGroup ?? "";
-  const loadGroups = useCallback(async () => {
-    setGroups(null);
-    setGroupsError("");
-    try {
-      // Edge fleets cannot run these pipelines: Stream worker groups only.
-      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(list);
-      const preferred = list.some((g) => g.id === preferredGroup)
-        ? preferredGroup
-        : (list[0]?.id ?? "");
-      setGroupId((current) => (current !== "" ? current : preferred));
-    } catch (err) {
-      setGroupsError(String(err));
-    }
-  }, [ports.cribl, preferredGroup]);
-
-  useEffect(() => {
-    // Forced templateOnly = no live Cribl connection in this mode: there is
-    // no leader to list worker groups from, and the run makes no Cribl
-    // calls, so discovery is skipped instead of failing noisily.
-    if (!forcedTemplateOnly) {
-      void loadGroups();
-    }
-  }, [loadGroups, forcedTemplateOnly]);
+  const workerGroups = useStreamWorkerGroups(ports.cribl, {
+    auto: !forcedTemplateOnly,
+    logger: ports.logger,
+  });
+  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   // ---- Run state -----------------------------------------------------------
   const [running, setRunning] = useState(false);
@@ -634,29 +621,22 @@ export function BatchDeployScreen({
                 destinations.
               </span>
             </>
-          ) : groups !== null ? (
-            <SearchableSelect
-              options={groups.map((g) => ({
-                value: g.id,
-                label: g.id,
-                hint: g.product,
-              }))}
-              value={groupId}
-              onChange={setGroupId}
-              placeholder="Select a worker group..."
-              ariaLabel="Filter worker groups"
-            />
-          ) : groupsError === "" ? (
-            <span className="field-hint">Loading worker groups...</span>
           ) : (
-            <span className="field-hint">
-              Could not list worker groups: {groupsError}
-            </span>
-          )}
-          {groupsError !== "" && (
-            <button className="run-button" onClick={() => void loadGroups()}>
-              Retry loading groups
-            </button>
+            <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+              {(groups) => (
+                <SearchableSelect
+                  options={groups.map((g) => ({
+                    value: g.id,
+                    label: g.id,
+                    hint: g.product,
+                  }))}
+                  value={groupId}
+                  onChange={setGroupId}
+                  placeholder="Select a worker group..."
+                  ariaLabel="Filter worker groups"
+                />
+              )}
+            </WorkerGroupField>
           )}
         </label>
         <label className="field">

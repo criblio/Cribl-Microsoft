@@ -21,12 +21,25 @@ const EXISTS = new Set([
   'deprecated/Cribl-Microsoft_IntegrationSolution',
 ]);
 
+// The shape the real manifests have: the root FORWARDS check-release to the
+// app workspace, which also defines it - the overlap that makes a union of
+// manifests the wrong resolver.
+const MANIFESTS = {
+  '.': {
+    'check-release': 'npm run check-release --workspace apps/cribl-app',
+    test: 'npm run test --workspaces --if-present',
+  },
+  'apps/cribl-app': { 'check-release': 'node scripts/check-release-drift.mjs', preview: 'vite preview', test: 'vitest run' },
+  'packages/core': { test: 'vitest run' },
+};
+
 const doc = (path, text) => ({ path, text });
 
 const facts = (overrides) => ({
   docs: [],
   adrs: [],
   existingPaths: EXISTS,
+  manifests: MANIFESTS,
   today: TODAY,
   ...overrides,
 });
@@ -287,6 +300,133 @@ describe('evaluateDocsDrift - broken path references', () => {
     );
 
     expect(result.errors).toEqual([]);
+  });
+
+  it('path-checks a citation carrying a :N-M line suffix (DBT-95)', () => {
+    // The repo's most common citation form, and before the suffix was allowed
+    // the regex never matched it, so a dead `file.ts:43-54` passed silently.
+    const result = evaluateDocsDrift(
+      facts({ docs: [doc('docs/x.md', 'Status: Living\n\nSee `packages/x/missing.ts:43-54`.\n')] }),
+    );
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('`packages/x/missing.ts`');
+    expect(result.errors[0]).not.toContain(':43');
+  });
+
+  it('path-checks a citation carrying a single :N suffix', () => {
+    const result = evaluateDocsDrift(
+      facts({ docs: [doc('docs/x.md', 'Status: Living\n\nSee `scripts/package.mjs:73`.\n')] }),
+    );
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('`scripts/package.mjs`');
+  });
+
+  it('accepts an existing path with a line suffix, and does not judge the line number', () => {
+    const result = evaluateDocsDrift(
+      facts({
+        docs: [doc('docs/x.md', 'Status: Living\n\n`packages/core/src/index.ts:12` and `apps/cribl-app/src/App.tsx:99999`.\n')],
+      }),
+    );
+
+    expect(result.errors).toEqual([]);
+  });
+});
+
+describe('evaluateDocsDrift - npm scripts named in documents (DBT-101)', () => {
+  const living = (body, overrides = {}) =>
+    evaluateDocsDrift(facts({ docs: [doc('docs/x.md', `Status: Living\n\n${body}\n`)], ...overrides }));
+
+  it('passes a script the root manifest defines', () => {
+    expect(living('Run `npm run check-release`.').errors).toEqual([]);
+  });
+
+  it('catches a script no manifest defines', () => {
+    const result = living('Run `npm run check-everything`.');
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('docs/x.md:3');
+    expect(result.errors[0]).toContain('`npm run check-everything`');
+  });
+
+  it('catches the DBT-90 regression: the root forward deleted, the workspace script still there', () => {
+    // The pin the card exists for. check-release is still in apps/cribl-app, so
+    // a resolver over the UNION of manifests stays green here - and the
+    // documented command exits 1 from the toolkit root.
+    const { 'check-release': _gone, ...rootWithoutForward } = MANIFESTS['.'];
+    const result = living('Run `npm run check-release`.', {
+      manifests: { ...MANIFESTS, '.': rootWithoutForward },
+    });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('`npm run check-release`');
+    expect(result.errors[0]).toContain('It exists in apps/cribl-app');
+  });
+
+  it('resolves a command carrying --workspace against that workspace', () => {
+    expect(living('Run `npm run preview --workspace apps/cribl-app`.').errors).toEqual([]);
+    expect(living('Run `npm run preview --workspace=apps/cribl-app`.').errors).toEqual([]);
+  });
+
+  it('does NOT resolve a workspace-only script against the root', () => {
+    const result = living('Run `npm run preview`.');
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('the toolkit root package.json does not define');
+  });
+
+  it('applies a --workspace flag only to its own command, not every command on the line', () => {
+    // backlog.md writes exactly this: "`npm run a` works, as does the longer
+    // `npm run a --workspace w`". The bare one must still resolve at the root.
+    const result = living('`npm run preview` works, as does `npm run preview --workspace apps/cribl-app`.');
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('the toolkit root package.json');
+  });
+
+  it('reports a --workspace naming no known workspace', () => {
+    const result = living('Run `npm run test --workspace packages/gone`.');
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('packages/gone');
+  });
+
+  it('ignores the placeholder `npm run X`, which generated board text cannot suppress', () => {
+    expect(living('`npm run X` is the shape.').errors).toEqual([]);
+  });
+
+  it('leaves `npm run local` to the retired-token rule', () => {
+    const result = living('Use `npm run local`.');
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('retired by ADR 0002');
+  });
+
+  it('honours the suppress marker', () => {
+    expect(living('Once ran `npm run check-everything`. <!--drift-ok-->').errors).toEqual([]);
+  });
+
+  it('exempts Record and Proposed documents', () => {
+    const result = evaluateDocsDrift(
+      facts({
+        docs: [
+          doc('docs/r.md', 'Status: Record\n\nRan `npm run check-everything`.\n'),
+          doc('docs/p.md', 'Status: Proposed\nLast-confirmed: 2026-08-20\n\nAdd `npm run check-everything`.\n'),
+        ],
+      }),
+    );
+
+    expect(result.errors).toEqual([]);
+  });
+
+  it('catches a root forward pointing at a script its workspace no longer defines', () => {
+    const result = evaluateDocsDrift(
+      facts({ manifests: { ...MANIFESTS, 'apps/cribl-app': { preview: 'vite preview' } } }),
+    );
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('package.json script "check-release"');
   });
 });
 

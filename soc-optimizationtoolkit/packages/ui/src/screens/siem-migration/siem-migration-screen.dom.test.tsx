@@ -217,3 +217,55 @@ describe("SiemMigrationScreen pivot warning (DBT-102)", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * A REFUSED PLAN-CACHE READ (DBT-175).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403. The restore effect
+ * caught the throw and said nothing, so a saved analysis the store would not
+ * hand back looked exactly like there being none - an operator who bounced to
+ * Sentinel Integration and back saw an empty page with no reason, and
+ * re-uploading was the only move offered. Not knowing is its own state, and it
+ * carries the reason.
+ */
+describe("SiemMigrationScreen - a refused plan-cache read (DBT-175)", () => {
+  const unread = () => document.querySelectorAll(".siem-plan-unread");
+
+  it("says a saved analysis could not be read, with the reason", async () => {
+    const ports = {
+      contentCache: {
+        get: vi.fn(async () => {
+          throw new Error("KV read refused (403)");
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      },
+      artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(unread()).toHaveLength(1);
+    });
+    expect(unread()[0].textContent).toContain("KV read refused (403)");
+    expect(unread()[0].textContent).toMatch(/could not be read/);
+    // It is not a restore, and upload still works as the way forward.
+    expect(screen.queryByText(/Restored the saved analysis/)).toBeNull();
+    expect(screen.getByText(/Upload detection rules/i)).toBeTruthy();
+  });
+
+  it("says nothing when there is simply no saved plan", async () => {
+    render(
+      <PortsProvider ports={portsWith(null)} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/Upload detection rules/i)).toBeTruthy();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(unread()).toHaveLength(0);
+  });
+});

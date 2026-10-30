@@ -32,20 +32,23 @@
 // so nothing breaks. What is wrong is a tracked file stating a version that is
 // not the version, which is the definition of the thing above.
 //
-// The honest cost, stated rather than buried: this makes THREE of the five
-// claims manual, where two were before. The difference is that the other two
-// manual ones need prose written and this one needs one deterministic command,
-// and the right end state is package.mjs regenerating the lock as it already
-// writes package.json and release/ - at which point this claim guards an
-// automated fact instead of a chore.
+// The cost it carried at first, stated rather than buried: it made THREE of the
+// five claims manual, where two were before, because a release then needed
+// "npm install --package-lock-only" run by hand. DBT-82 retired that step:
+// package.mjs now writes the lock's version field (lock-version.mjs) as it
+// already writes package.json and release/, so TWO of the five claims are manual
+// again - the release-notes section and the backlog "IS CURRENT" line, both
+// prose - and this one guards an automated fact instead of a chore. It still
+// fires on a hand-bump, which is the case its npm remediation text is for.
 //
 // The pure half takes facts and returns findings; main() gathers the facts. That
 // split is what lets the rules be pinned without a repo, a git history or a tgz.
 
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lockWorkspaceKey } from './lock-version.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, '..');
@@ -62,7 +65,12 @@ const TGZ_VERSION = /^soc-optimizationtoolkit-(\d+\.\d+\.\d+)\.tgz$/;
 // Prose rather than a machine field on purpose - it is read by people far more
 // often than by this script - so the script reads the prose. Keep the shape if
 // you reword around it.
-const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
+//
+// Exported for DBT-92: the pins read THIS file's own source with this regex, so
+// a concrete version written back into the comment above fails a test instead of
+// waiting to be noticed. Exporting it, rather than copying the pattern into the
+// test, keeps the guard and the check on one definition.
+export const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
 
 // Source that changes what the packaged app DOES. Docs are excluded: a doc-only
 // commit landing after a release is not a stale release, and warning about it
@@ -234,20 +242,21 @@ async function gatherFacts() {
 }
 
 /**
- * The lock keys its workspace entries by PATH relative to the lock, in posix
- * form, so the key is derived from appDir rather than written out - a workspace
- * move then keeps working instead of reporting the lock as versionless. The
- * separator swap is not cosmetic: node's relative() yields "apps\\cribl-app" on
- * Windows, which matches no key in any lock file, and the check would fail on
- * every Windows run with a message pointing at npm.
+ * The workspace key comes from lock-version.mjs, the same definition package.mjs
+ * writes the field through, so the writer and this reader cannot disagree about
+ * which entry is the app's. It is derived from appDir rather than written out,
+ * and posix even on Windows - see lockWorkspaceKey.
  *
  * A parse failure returns null rather than throwing. This lock lives in a repo
  * where several agents share one tree, so a half-written or conflict-marked
  * lock is a state that happens; "the lock states no version, regenerate it" is
  * a better report of that than a stack trace out of the version checker.
+ *
+ * Exported so the pins can hold package.mjs's write and this read to one round
+ * trip.
  */
-function readLockVersion(lockJson) {
-  const workspaceKey = relative(toolkitDir, appDir).split(sep).join('/');
+export function readLockVersion(lockJson) {
+  const workspaceKey = lockWorkspaceKey(toolkitDir, appDir);
   try {
     return JSON.parse(lockJson).packages?.[workspaceKey]?.version ?? null;
   } catch {

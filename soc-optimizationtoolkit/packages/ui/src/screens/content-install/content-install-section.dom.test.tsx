@@ -158,6 +158,50 @@ describe("ContentInstallSection install gate (DBT-47)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DBT-199: before a load nothing is "none found", and Setup is where Azure is
+// connected
+// ---------------------------------------------------------------------------
+
+describe("ContentInstallSection before and after a load (DBT-199)", () => {
+  function renderUnloaded(config: AzureConfig) {
+    return render(
+      <PortsProvider ports={makePorts()} config={config}>
+        <ContentInstallSection solutionName={SOLUTION} scopeCommitted={true} />
+      </PortsProvider>,
+    );
+  }
+
+  it("shows only the Load button until the content is read - never 'None found' before a load", () => {
+    // DBT-226: the groups used to render here each saying "Not loaded yet";
+    // now nothing but Load shows until a load. The DBT-199 guarantee is the
+    // same and stronger: no group can claim "None found" before a load.
+    const { container } = renderUnloaded(CONNECTED);
+    expect(screen.getByRole("button", { name: "Load solution content" })).toBeTruthy();
+    expect(container.querySelectorAll(".content-install-group")).toHaveLength(0);
+    expect(screen.queryByText("None found for this solution.")).toBeNull();
+  });
+
+  it("says 'None found' only for the group the load found empty", async () => {
+    renderUnloaded(CONNECTED);
+    fireEvent.click(screen.getByRole("button", { name: "Load solution content" }));
+    await waitFor(() => {
+      expect(screen.getByText(WORKBOOK)).toBeTruthy();
+    });
+    // The fixture ships one workbook and no rules.
+    expect(screen.getAllByText("None found for this solution.")).toHaveLength(1);
+    expect(
+      screen.queryByText("Not loaded yet - use Load solution content above."),
+    ).toBeNull();
+  });
+
+  it("points an operator with no identity at Setup, not a missing Options page", () => {
+    renderUnloaded(NO_IDENTITY);
+    expect(screen.getByText(/connect Azure on the Setup page\./)).toBeTruthy();
+    expect(screen.queryByText(/in Options/)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DBT-44: an empty installed-content listing is an unknown, not a zero
 // ---------------------------------------------------------------------------
 
@@ -198,6 +242,8 @@ function makeListingPorts(opts: {
   alertRules?: unknown[];
   /** Content port override, for the fixture that ships a rule. */
   content?: SentinelContent;
+  /** The contentProductPackages answer; defaults to a page holding CATALOG_ENTRY. */
+  catalog?: PortHttpResponse;
 }): UiPorts {
   const page = (value: unknown[]): PortHttpResponse =>
     ({ ok: true, status: 200, body: { value } }) as unknown as PortHttpResponse;
@@ -206,7 +252,7 @@ function makeListingPorts(opts: {
       async request(req: { path: string }): Promise<PortHttpResponse> {
         // contentProductPackages FIRST - "/contentPackages" is not a substring
         // of it, but the reverse order would still be a trap worth avoiding.
-        if (req.path.includes("/contentProductPackages")) return page([CATALOG_ENTRY]);
+        if (req.path.includes("/contentProductPackages")) return opts.catalog ?? page([CATALOG_ENTRY]);
         if (req.path.includes("/contentPackages")) return page(opts.contentPackages);
         if (req.path.includes("/alertRules")) return page(opts.alertRules ?? []);
         if (req.path.includes("/Microsoft.Insights/workbooks")) return page(opts.workbooks);
@@ -409,5 +455,83 @@ describe("ContentInstallSection: the RULES hedge is defended too (DBT-44)", () =
       }),
     );
     expect(screen.getByText(/Suspicious sign-in from new location/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-176: a catalog that could not be read is not "not in the catalog"
+// ---------------------------------------------------------------------------
+
+/**
+ * The defect: findSolutionCatalogEntry answered null for a failed read AND for
+ * a genuine miss, and the section rendered null as "Load to look up this
+ * solution in Content Hub." - so after a load the operator was told to do the
+ * thing they had just done, with the failure nowhere on the page. Each answer
+ * now has its own sentence; these pin that the three never share one.
+ */
+async function renderAndLoadUntil(ports: UiPorts, text: RegExp) {
+  render(
+    <PortsProvider ports={ports} config={CONNECTED}>
+      <ContentInstallSection solutionName={SOLUTION} scopeCommitted={true} />
+    </PortsProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Load solution content" }));
+  await waitFor(() => {
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+}
+
+describe("ContentInstallSection: the catalog lookup's three answers (DBT-176)", () => {
+  it("says the catalog could not be read, with the reason, when the listing fails", async () => {
+    await renderAndLoadUntil(
+      makeListingPorts({
+        contentPackages: [],
+        workbooks: [],
+        catalog: { ok: true, status: 403, body: "denied" } as unknown as PortHttpResponse,
+      }),
+      /Could not read the Content Hub catalog/,
+    );
+    const notes = document.querySelectorAll(".content-install-catalog-unreadable");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain('(list content product packages: HTTP 403 "denied")');
+    // The old sentence, which told the operator to redo what they just did.
+    expect(screen.queryByText("Load to look up this solution in Content Hub.")).toBeNull();
+    expect(document.querySelectorAll(".content-install-catalog-missing")).toHaveLength(0);
+    // No entry to install - and the repo content is still offered.
+    expect(screen.queryByRole("button", { name: "Install solution" })).toBeNull();
+    expect(screen.getByText(WORKBOOK)).toBeTruthy();
+  });
+
+  it("says no package matches, with the count it read, when the catalog has none for it", async () => {
+    const page = (value: unknown[]): PortHttpResponse =>
+      ({ ok: true, status: 200, body: { value } }) as unknown as PortHttpResponse;
+    await renderAndLoadUntil(
+      makeListingPorts({
+        contentPackages: [],
+        workbooks: [],
+        catalog: page([
+          { name: "a", properties: { displayName: "Zscaler Internet Access" } },
+          { name: "b", properties: { displayName: "Cloudflare" } },
+        ]),
+      }),
+      /No Content Hub package matches this solution/,
+    );
+    const notes = document.querySelectorAll(".content-install-catalog-missing");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toMatch(/among the 2 packages in this workspace's\s+catalog/);
+    expect(screen.queryByText("Load to look up this solution in Content Hub.")).toBeNull();
+    expect(document.querySelectorAll(".content-install-catalog-unreadable")).toHaveLength(0);
+  });
+
+  it("still renders the package and its Install button when the entry is found", async () => {
+    await renderAndLoad(
+      makeListingPorts({
+        contentPackages: [{ properties: { contentId: "some-other-solution" } }],
+        workbooks: [],
+      }),
+    );
+    expect(screen.getByText(new RegExp(`${SOLUTION} 3\\.0\\.0 -`))).toBeTruthy();
+    expect(document.querySelectorAll(".content-install-catalog-unreadable")).toHaveLength(0);
+    expect(document.querySelectorAll(".content-install-catalog-missing")).toHaveLength(0);
   });
 });

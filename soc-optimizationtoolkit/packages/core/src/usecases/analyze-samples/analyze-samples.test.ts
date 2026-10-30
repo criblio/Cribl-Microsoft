@@ -91,6 +91,32 @@ describe("analyzeSamples (chunked DCR gap analysis)", () => {
     expect(report.routeCondition).toBe("true");
   });
 
+  it("carries the sample's first value on EVERY mapping row, matched and overflow (DBT-122)", async () => {
+    // The Field Mappings table's Example Value column reads `sampleValue` off
+    // these rows. Confirmed on this path before the column was added: every
+    // row kind keeps it. A row that lost it would render a "no value" dash
+    // for a field the sample plainly carries.
+    const [report] = await collectGapReports(makePorts(), {
+      solutionName: SOLUTION,
+      samples: [
+        { logType: "process", tableName: PROCESS_TABLE, content: readCorpus(PROCESS_TABLE) },
+      ],
+    });
+    const matched = report.fieldMappings.filter((m) => m.action !== "overflow");
+    const overflow = report.fieldMappings.filter((m) => m.action === "overflow");
+    expect(matched.length).toBe(109);
+    expect(overflow.length).toBe(34);
+    expect(
+      report.fieldMappings.filter((m) => m.sampleValue === undefined).map((m) => m.source),
+    ).toEqual([]);
+    const value = (source: string) =>
+      report.fieldMappings.find((m) => m.source === source)?.sampleValue;
+    expect(value("aip")).toBe("81.2.69.192");
+    expect(value("CapPrm")).toBe("3800192030037");
+    // An empty string is a value, not an absence.
+    expect(value("ContextData")).toBe("");
+  });
+
   it("surfaces the AdditionalData_d-missing warning through the usecase", async () => {
     const [report] = await collectGapReports(makePorts(), {
       solutionName: SOLUTION,

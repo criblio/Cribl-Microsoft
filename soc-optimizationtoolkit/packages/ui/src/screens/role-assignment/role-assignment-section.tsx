@@ -22,6 +22,7 @@
  */
 
 import { InfoTip } from "../../components/info-tip";
+import { openWhen } from "../../components/open-when";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireServicePrincipals,
@@ -226,7 +227,21 @@ export function RoleAssignmentSection({
     }
   }, [ports, running, targets, objectId, clientId, sleep]);
 
+  // DBT-230: nothing here can act until a DCR is deployed, so until then the
+  // section waits behind a one-line disclosure. It opens by itself once there
+  // is a DCR to grant on, a principal is chosen, or a run happened or failed -
+  // and the operator can open it early to pick the principal.
+  const needsAttention =
+    targets.length > 0 || objectId !== "" || steps.length > 0 || runError !== "" || running;
   return (
+    <details
+      className="gap-handles role-assignment-details"
+      open={openWhen(needsAttention)}
+    >
+      <summary>
+        Ingestion role (Monitoring Metrics Publisher)
+        {targets.length === 0 ? " - granted per DCR after Deploy" : ` - ${targets.length} DCR(s) to grant on`}
+      </summary>
     <div className="discovery-result">
       <span className="field-label">
         Ingestion role (Monitoring Metrics Publisher)
@@ -390,5 +405,6 @@ export function RoleAssignmentSection({
         />
       </p>
     </div>
+    </details>
   );
 }

@@ -311,4 +311,109 @@ describe("PipelinePreviewSection - CSV cannot be filtered on parsed fields", () 
     expect(input.getAttribute("placeholder")).toContain("event_type ===");
     expect(screen.queryByText(/reach the route unparsed/)).toBeNull();
   });
+
+  // DBT-116. CSV was only one of the formats core's formatCanDiscriminate says
+  // cannot route on a parsed field: positional names its columns from a
+  // POSITION and syslog from a REGEX CAPTURE, both after the route has run. The
+  // screen gated on `f === "csv"` alone, so those operators were handed the
+  // very field-test example the CSV note exists to warn against, and no note.
+  for (const format of ["positional", "syslog"]) {
+    it(`offers a _raw example and the unparsed note for ${format}`, () => {
+      renderCsv(format);
+      const input = screen.getByLabelText("Route filter for Allowed");
+      expect(input.getAttribute("placeholder")).toBe(
+        "_raw.indexOf('login') !== -1",
+      );
+      const note = screen.getByText(/reach the route unparsed/).textContent;
+      // Audit follow-up (DBT-116): the sentence names the formats ON SCREEN,
+      // not a hard-coded three, so a fourth such format cannot be misnamed.
+      const label = format.charAt(0).toUpperCase() + format.slice(1);
+      expect(note).toContain(`${label} events reach the route unparsed`);
+      expect(note).not.toContain("CSV");
+    });
+  }
+
+  it("names every unparsed format present, in order, and no others", () => {
+    render(
+      <PipelinePreviewSection
+        inputs={{
+          solutionName: "Vendor",
+          reports: [report("Allowed"), report("Blocked"), report("Other")],
+          sampleFormats: { Allowed: "csv", Blocked: "syslog", Other: "csv" },
+          approved: true,
+        }}
+        packName="vendor-sentinel"
+        onAcceptRouteFilter={vi.fn()}
+      />,
+    );
+    const note = screen.getByText(/reach the route unparsed/).textContent;
+    expect(note).toContain(
+      "CSV and syslog events reach the route unparsed, so a field test like",
+    );
+    expect(note).not.toContain("positional");
+  });
+
+  // GEN-11 audit follow-up. normalizeSourceFormat turns an undetected sample
+  // into "json", and formatCanDiscriminate("json") is true, so the screen used
+  // to offer `event_type === 'dns'` for exactly the log types the planner
+  // placeholders BECAUSE a parsed-field filter cannot be trusted for them.
+  for (const format of ["unknown", ""]) {
+    it(`treats an undetected sample (${JSON.stringify(format)}) as unparsed`, () => {
+      renderCsv(format);
+      const input = screen.getByLabelText("Route filter for Allowed");
+      expect(input.getAttribute("placeholder")).toBe(
+        "_raw.indexOf('login') !== -1",
+      );
+      const note = screen.getByText(/reach the route unparsed/).textContent;
+      expect(note).toContain(
+        "Undetected-format events reach the route unparsed",
+      );
+    });
+  }
+});
+
+/**
+ * Audit follow-up (GEN-5): the validity banner's count now includes the plan-
+ * level accessor issues (checkPlanFieldAccessors), so it must not claim every
+ * issue is a YAML-loader finding, nor that one "should not happen" - a field
+ * name the operator's sample carries is an ordinary way to reach it.
+ */
+describe("PipelinePreviewSection - the invalid banner (GEN-5)", () => {
+  it("calls a kept unaddressable name a pipeline validation issue", () => {
+    const kept = report("Kept");
+    const fieldMappings = [
+      {
+        source: "Source IP",
+        dest: "Source IP",
+        sourceType: "string",
+        destType: "string",
+        confidence: "exact" as const,
+        action: "keep" as const,
+        needsCoercion: false,
+        description: "",
+      },
+    ];
+    render(
+      <PipelinePreviewSection
+        inputs={{
+          solutionName: "Vendor",
+          reports: [
+            {
+              ...kept,
+              fieldMappings,
+              destSchema: [{ name: "Source IP", type: "string" }],
+            },
+          ],
+          approved: true,
+        }}
+        packName="vendor-sentinel"
+      />,
+    );
+    const banner = screen.getByText(/validation found/).parentElement;
+    expect(banner?.textContent).toBe(
+      "Pipeline validation found 1 issue(s). They include the Cribl YAML " +
+        "loader checks and the plan's field-name checks; the exact messages " +
+        "are shown with each file below.",
+    );
+  });
 });

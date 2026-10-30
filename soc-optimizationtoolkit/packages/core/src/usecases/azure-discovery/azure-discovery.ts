@@ -22,8 +22,9 @@
  *
  * PAGINATION: ARM list responses carry `nextLink`, a FULL URL.
  * {@link listAllPages} follows it through the OPTIONAL
- * `AzureManagement.requestUrl` method when the adapter provides one, and
- * returns the single first page when it does not.
+ * `AzureManagement.requestUrl` method, and THROWS when a page has a nextLink
+ * and the adapter provides no requestUrl (DBT-160) - page one of a longer list
+ * is not the list.
  *
  * Zero IO of its own, no wall-clock reads, no timers: the create-workspace
  * provisioning poll is bounded by ATTEMPT COUNT only (adapters own
@@ -132,14 +133,20 @@ async function logged<T>(
  * every page.
  *
  * ARM list responses carry `nextLink` - a FULL https://management.azure.com
- * URL with an opaque continuation token. When the adapter implements the
- * OPTIONAL `requestUrl` port method, each nextLink is followed via GET until
- * a page has none; when it does not, the FIRST PAGE ALONE is returned (the
- * documented single-page fallback). Follows at most {@link MAX_LIST_PAGES}
+ * URL with an opaque continuation token. Each nextLink is followed via GET
+ * through the OPTIONAL `requestUrl` port method until a page has none. When
+ * the first page carries a nextLink and the adapter has no `requestUrl`, this
+ * THROWS (DBT-160): it used to return the first page alone, and every caller
+ * then presented an undercount as a whole inventory. A last page with no
+ * nextLink needs no `requestUrl`. Follows at most {@link MAX_LIST_PAGES}
  * nextLinks, then throws - a cyclic or absurd nextLink chain fails loudly
  * instead of looping.
  *
- * Throws on any non-2xx page response with raw greppable error text.
+ * Throws on any non-2xx page response with raw greppable error text, and on
+ * a 2xx page whose body has no array `value` (DBT-148): such a page is a body
+ * we did not understand, not zero items, and reading it as zero would let
+ * every caller state an unverified "none". The message names the page's URL
+ * (the request path for the first page, the nextLink after it).
  */
 export async function listAllPages(
   azure: AzureManagement,
@@ -152,17 +159,24 @@ export async function listAllPages(
   }
 
   const items: unknown[] = [];
-  const collect = (body: unknown): string => {
+  const collect = (pageContext: string, url: string, status: number, body: unknown): string => {
     const value = prop(body, "value");
-    if (Array.isArray(value)) {
-      items.push(...value);
+    if (!Array.isArray(value)) {
+      throw new Error(`${pageContext}: HTTP ${status} body from ${url} has no array 'value'`);
     }
+    items.push(...(value as unknown[]));
     return asString(prop(body, "nextLink"));
   };
 
-  let nextLink = collect(first.body);
-  if (nextLink === "" || typeof azure.requestUrl !== "function") {
+  let nextLink = collect(context, request.path, first.status, first.body);
+  if (nextLink === "") {
     return items;
+  }
+  if (typeof azure.requestUrl !== "function") {
+    throw new Error(
+      `${context}: list incomplete - HTTP ${first.status} body from ${request.path} ` +
+        "has a nextLink, but this adapter has no requestUrl to follow it",
+    );
   }
 
   let pagesFollowed = 0;
@@ -173,13 +187,13 @@ export async function listAllPages(
       );
     }
     pagesFollowed++;
-    const page = await azure.requestUrl({ method: "GET", url: nextLink });
+    const pageUrl = nextLink;
+    const pageContext = `${context} (page ${pagesFollowed + 1})`;
+    const page = await azure.requestUrl({ method: "GET", url: pageUrl });
     if (!is2xx(page.status)) {
-      throw new Error(
-        httpErrorText(`${context} (page ${pagesFollowed + 1})`, page.status, page.body),
-      );
+      throw new Error(httpErrorText(pageContext, page.status, page.body));
     }
-    nextLink = collect(page.body);
+    nextLink = collect(pageContext, pageUrl, page.status, page.body);
   }
   return items;
 }

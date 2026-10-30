@@ -1,6 +1,8 @@
 # Contributing to Cribl-Microsoft
 
-Thank you for your interest in contributing to the Cribl-Microsoft integration repository! This guide will help you contribute effectively to our Azure Data Collection Rules automation and templates.
+Status: Living - the contributor guide; corrected to match the repository.
+
+Thank you for your interest in contributing to the Cribl-Microsoft integration repository! This guide will help you contribute effectively to the SOC Optimization Toolkit and the DCR templates.
 
 ## Table of Contents
 
@@ -16,10 +18,16 @@ Thank you for your interest in contributing to the Cribl-Microsoft integration r
 
 This repository provides tools for integrating Cribl Stream with Azure Log Analytics/Sentinel:
 
-- **DCR-Automation**: PowerShell scripts that automate DCR creation
-- **DCR-Templates**: Pre-built ARM templates for Sentinel native tables
-- **Cribl Configurations**: Auto-generated destination configs for Cribl Stream
-- **Future Content**: TBD
+- **SOC Optimization Toolkit** (`soc-optimizationtoolkit/`) - the active
+  deliverable: a Cribl.Cloud app built as npm workspaces - `packages/core`
+  (pure domain logic), `packages/ui` (React screens) and `apps/cribl-app` (the
+  Cribl.Cloud shell and its adapters). Work is tracked on
+  `soc-optimizationtoolkit/docs/board.md`.
+- **DCR-Templates** (`Azure/CustomDeploymentTemplates/DCR-Templates/`) -
+  pre-built ARM templates for Sentinel native tables; the manual path.
+- **`deprecated/`** - the PowerShell DCR-Automation, the Electron GUI and the v1
+  toolkit. Frozen since 2026-07-13: it receives no further development and is
+  closed to contributions (see `deprecated/README.md`).
 
 ## Branching Policy
 
@@ -109,11 +117,14 @@ git commit -m "WIP"
 
 ### Types of Contributions Welcome
 
-#### 1. DCR Automation Enhancements
-- New features for the PowerShell automation
-- Support for additional table types
-- Performance improvements
-- Bug fixes in schema retrieval or deployment
+#### 1. SOC Optimization Toolkit
+- Core domain logic (`packages/core`) - pure, with no IO or React
+- UI screens (`packages/ui`)
+- Cribl app adapters and shipped config (`apps/cribl-app`)
+- Bug fixes - file a card on the board first (see `soc-optimizationtoolkit/docs/documenting-work.md`)
+
+The PowerShell DCR-Automation is deprecated; enhancements to it are no longer
+accepted.
 
 #### 2. Template Contributions
 - ARM templates for new Azure tables
@@ -144,7 +155,7 @@ git commit -m "WIP"
 
 2. **Add upstream remote**
  ```bash
- git remote add upstream https://github.com/original-org/Cribl-Microsoft.git
+ git remote add upstream https://github.com/criblio/Cribl-Microsoft.git  # update after the repository move
  git fetch upstream
  ```
 
@@ -168,11 +179,11 @@ git commit -m "WIP"
  git push origin feature/your-feature-name
  ```
 
-6. **Test thoroughly in Azure**
+6. **Run the checks** in [Testing Requirements](#testing-requirements)
 
 7. **Submit a pull request**
  - Go to GitHub and create a PR from your branch to `main`
- - Fill out the PR template completely
+ - Use the [PR template](#pr-template) below
  - Wait for review and address feedback
 
 ## Contribution Guidelines
@@ -180,36 +191,29 @@ git commit -m "WIP"
 ### Repository Structure
 
 ```
+soc-optimizationtoolkit/ # The active toolkit (npm workspaces)
+ packages/core/ # Pure domain logic and port interfaces
+ packages/ui/ # React screens
+ apps/cribl-app/ # Cribl.Cloud shell, adapters, release/
+ docs/ # board.json, backlog.md, adr/
 Azure/CustomDeploymentTemplates/
- DCR-Automation/ # PowerShell automation scripts
- *.ps1 # Core scripts
- *.json # Configuration files
- custom-table-schemas/ # Custom table definitions
- generated-templates/ # Auto-generated (don't commit)
  DCR-Templates/ # Static ARM templates
  SentinelNativeTables/
  DataCollectionRules(DCE)/ # DCE-based templates
  DataCollectionRules(NoDCE)/ # Direct DCR templates
+KnowledgeArticles/ # Integration knowledge base articles
+deprecated/ # Frozen: PowerShell automation, Electron GUI, v1 toolkit
 ```
 
 ### Code Standards
 
-#### PowerShell Scripts
-```powershell
-# Use clear function names
-function New-LogAnalyticsCustomTable {
- param(
- [Parameter(Mandatory=$true)]
- [string]$TableName
- )
- # Include proper error handling
- try {
- # Implementation
- } catch {
- Write-Error "Failed to create table: $_"
- }
-}
-```
+#### TypeScript (toolkit)
+- Keep `packages/core` pure: no IO, no React; reach Azure, Cribl and GitHub
+  through a port the shell implements
+- Read the workspace's `CONTEXT.md` before changing it, and
+  `soc-optimizationtoolkit/docs/adr/` for decisions already made
+- `npm run lint` (oxlint) and `npm run typecheck` must pass
+- No emojis in code, comments, output or docs
 
 #### JSON Templates
 ```json
@@ -245,25 +249,34 @@ Every contribution must include:
 
 ### Before Submitting
 
-1. **Script Testing**
- - Test with both Direct and DCE-based DCRs
- - Verify custom table creation works
- - Ensure Cribl config export is accurate
+1. **Toolkit changes** - from `soc-optimizationtoolkit/` (Node 22, the version CI uses):
+ ```bash
+ npm install
+ npm run lint
+ npm run typecheck
+ npm test
+ npm run build
+ npm run check-docs
+ npm run check-board
+ ```
+ CI (`.github/workflows/soc-toolkit-ci.yml`) also runs `check-release`,
+ `check-listings`, `check-classnames`, `check-schema-asset` and
+ `check-board-freshness` on every PR that touches `soc-optimizationtoolkit/`.
 
-2. **Template Validation**
+2. **Template Validation** (DCR-Templates changes only)
  - Deploy templates in test environment
  - Verify schema completeness
  - Check parameter validation
 
-3. **Integration Testing**
+3. **Integration Testing** (DCR-Templates changes only)
  - Confirm data flows to Log Analytics
  - Validate Cribl destination configs work
  - Test with different Azure regions
 
 ### Test Checklist
 ```markdown
-- [ ] Scripts run without errors
-- [ ] Templates deploy successfully
+- [ ] Toolkit checks pass (lint, typecheck, test, build, check-docs, check-board)
+- [ ] Templates deploy successfully (template changes)
 - [ ] Documentation is updated
 - [ ] No sensitive data in commits
 - [ ] Backward compatibility maintained
@@ -301,7 +314,7 @@ Brief description of changes
 
 ## Checklist
 - [ ] No real credentials in code
-- [ ] Scripts follow style guidelines
+- [ ] Code follows style guidelines
 - [ ] README updated if needed
 - [ ] Tests pass successfully
 ```
@@ -340,7 +353,7 @@ Brief description of changes
 - Script/template that failed
 - Error messages
 - Azure region and subscription type
-- PowerShell version
+- App version (toolkit) or template name (DCR-Templates)
 - Steps to reproduce
 
 ### Feature Requests Should Include
@@ -378,13 +391,10 @@ Looking for ways to contribute? Consider:
  - Azure Monitor metrics tables
  - Third-party security solutions
 
-2. **Enhance automation features**
- - Batch processing improvements
- - Parallel deployment support
- - Rollback capabilities
+2. **Pick up open toolkit work**
+ - See `soc-optimizationtoolkit/docs/board.md` and `docs/backlog.md`
 
 3. **Improve Cribl integration**
- - Support for Cribl Cloud
  - Advanced routing rules
  - Performance tuning guides
 
@@ -402,8 +412,8 @@ Contributors are recognized through:
 
 ## Questions?
 
-- Check existing [issues](https://github.com/your-org/Cribl-Microsoft/issues)
-- Review the [documentation](./Azure/CustomDeploymentTemplates/DCR-Automation/README.md)
+- Check existing [issues](https://github.com/criblio/Cribl-Microsoft/issues) (update after the repository move)
+- Review the documentation: [README](./README.md), [QUICK_START](./QUICK_START.md) and the [toolkit README](./soc-optimizationtoolkit/README.md)
 - Create a new issue with the "question" label
 
 ---

@@ -2,9 +2,11 @@
 
 Date: 2026-07-01
 Status: Accepted; SUPERSEDED IN PART by ADR 0002 (2026-08-17), which drops the
-local target and ships apps/cribl-app only. The workspace layout, the port
-seam, and the lint-enforced boundaries below all still hold - they are what
-made removing the second target a 31-file deletion rather than a refactor.
+local target and ships apps/cribl-app only. The workspace layout and the port
+seam still hold - they are what made removing the second target a 31-file
+deletion rather than a refactor. The package boundaries are NOT lint-enforced
+(`.oxlintrc.json` carries only react rules); they hold only by the
+package.json dependency declarations (core depends on nothing, ui on core).
 Invalidates: none
 Everything below is the reasoning as it stood on 2026-07-01; read ADR 0002 for
 what changed and what it cost.

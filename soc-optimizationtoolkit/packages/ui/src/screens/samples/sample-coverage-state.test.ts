@@ -21,7 +21,7 @@ import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
   joinNames,
-  packShapeSummary,
+  packCountsSummary,
   sampleCoverageGateReason,
 } from "./sample-coverage-state";
 
@@ -38,20 +38,20 @@ const coverageFor = (queries: string[], provided: string[]) =>
     provided,
   );
 
-describe("packShapeSummary", () => {
+describe("packCountsSummary", () => {
   it("states the concrete route and pipeline counts", () => {
-    const out = packShapeSummary(3);
+    const out = packCountsSummary(3);
     expect(out).toContain("3 log types");
     expect(out).toContain("6 routes");
     expect(out).toContain("6 pipelines");
   });
 
   it("says the pack has nothing to route with no samples", () => {
-    expect(packShapeSummary(0)).toContain("nothing to route");
+    expect(packCountsSummary(0)).toContain("nothing to route");
   });
 
   it("uses the singular for one log type", () => {
-    expect(packShapeSummary(1)).toContain("1 log type tagged");
+    expect(packCountsSummary(1)).toContain("1 log type tagged");
   });
 });
 
@@ -168,10 +168,10 @@ describe("deriveLogTypeRecommendation", () => {
     const rec = recFor([threeTypes], ["TRAFFIC", "THREAT"], { contentLoaded: true });
 
     expect(rec.status).toBe("partial");
-    expect(rec.headline).toContain(
-      "This solution's content needs CONFIG, THREAT and TRAFFIC.",
+    // Counts, not names: the entry list names each one (DBT-125).
+    expect(rec.headline).toBe(
+      "3 log types referenced by this solution's content. 2 provided.",
     );
-    expect(rec.headline).toContain("You have provided THREAT and TRAFFIC.");
   });
 
   it("marks each expected type provided or not, keeping the core's ranking", () => {
@@ -195,7 +195,9 @@ describe("deriveLogTypeRecommendation", () => {
     const rec = recFor([threeTypes], [], { contentLoaded: true });
 
     expect(rec.status).toBe("none-provided");
-    expect(rec.headline).toContain("You have provided none of them yet.");
+    expect(rec.headline).toBe(
+      "3 log types referenced by this solution's content. None provided yet.",
+    );
     // The list is the recommendation - it must be present precisely when
     // nothing has been provided, which is when the operator needs it most.
     expect(rec.entries).toHaveLength(3);
@@ -206,7 +208,9 @@ describe("deriveLogTypeRecommendation", () => {
     const rec = recFor([threeTypes], ["TRAFFIC", "THREAT", "CONFIG"], { contentLoaded: true });
 
     expect(rec.status).toBe("covered");
-    expect(rec.headline).toContain("You have provided all of them.");
+    expect(rec.headline).toBe(
+      "3 log types referenced by this solution's content. All provided.",
+    );
   });
 
   it("distinguishes NOT-READ from READ-AND-DISCRIMINATES-ON-NOTHING", () => {

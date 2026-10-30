@@ -468,7 +468,6 @@ describe("destinationIdFromOptions", () => {
       destinationIdFromOptions("CloudFlare_CL", {
         destinationPrefix: "Sec-",
         destinationSuffix: "-out",
-        workerGroup: "",
       }),
     ).toBe("Sec-CloudFlare-out");
   });

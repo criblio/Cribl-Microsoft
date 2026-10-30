@@ -279,20 +279,63 @@ describe("listAllPages", () => {
     expect(azure.urlCalls).toEqual([{ method: "GET", url: NEXT }]); // second page via the FULL nextLink URL
   });
 
-  it("returns the single first page when the adapter does not implement requestUrl", async () => {
+  // DBT-160: page one of a list that says it has a page two is not the list.
+  // It used to come back as if complete, so every caller stated an undercount
+  // as a measured inventory; it now throws, saying why the list is incomplete.
+  it("throws when page 1 has a nextLink the adapter cannot follow (no requestUrl)", async () => {
     const fake = new FakeAzureManagement();
     fake.respondWith({
       status: 200,
       body: { value: [{ name: "rg-1", location: "eastus" }], nextLink: NEXT },
     });
 
+    await expect(
+      listAllPages(
+        withoutRequestUrl(fake),
+        { method: "GET", path: `/subscriptions/${SUB}/resourcegroups`, apiVersion: RESOURCE_GROUP_API_VERSION },
+        "list resource groups",
+      ),
+    ).rejects.toThrow(
+      `list resource groups: list incomplete - HTTP 200 body from /subscriptions/${SUB}/resourcegroups ` +
+        "has a nextLink, but this adapter has no requestUrl to follow it",
+    );
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.urlCalls).toHaveLength(0);
+  });
+
+  it("listResourceGroups rejects rather than returning page 1 as the whole listing", async () => {
+    const fake = new FakeAzureManagement();
+    fake.respondWith({
+      status: 200,
+      body: { value: [{ name: "rg-1", location: "eastus" }], nextLink: NEXT },
+    });
+
+    await expect(listResourceGroups(withoutRequestUrl(fake), SUB)).rejects.toThrow(
+      /^list resource groups in subscription '[^']+': list incomplete - .* no requestUrl to follow it$/,
+    );
+  });
+
+  it("listResourceGroupChoices surfaces the incomplete list on listError, not as the groups", async () => {
+    const fake = new FakeAzureManagement();
+    fake.respondWith({
+      status: 200,
+      body: { value: [{ name: "rg-1", location: "eastus" }], nextLink: NEXT },
+    });
+
+    const choices = await listResourceGroupChoices(withoutRequestUrl(fake), SUB, []);
+
+    expect(choices.groups).toEqual([]);
+    expect(choices.source).toBe("list");
+    expect(choices.listError).toMatch(/: list incomplete - .* no requestUrl to follow it$/);
+  });
+
+  it("a last page without a nextLink still needs no requestUrl", async () => {
+    const fake = new FakeAzureManagement();
+    fake.respondWith({ status: 200, body: { value: [{ name: "rg-1", location: "eastus" }] } });
+
     const groups = await listResourceGroups(withoutRequestUrl(fake), SUB);
 
-    expect(groups).toEqual({
-      kind: "rows",
-      rows: [{ name: "rg-1", location: "eastus" }],
-    });
-    expect(fake.urlCalls).toHaveLength(0);
+    expect(groups).toEqual({ kind: "rows", rows: [{ name: "rg-1", location: "eastus" }] });
   });
 
   it("throws with page context when a follow-up page fails", async () => {
@@ -311,9 +354,51 @@ describe("listAllPages", () => {
     ).rejects.toThrow(/list resource groups \(page 2\): HTTP 500/);
   });
 
-  it("tolerates a body with no value array", async () => {
+  // DBT-148: a 2xx page without an array `value` is a body we did not
+  // understand, not zero items. It used to be read as [] and every caller
+  // then stated an unverified "none"; it now throws, naming the URL.
+  it("throws on a 2xx first page with no value array, naming the request path", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith({ status: 200, body: {} });
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },
+        "list subscriptions",
+      ),
+    ).rejects.toThrow("list subscriptions: HTTP 200 body from /subscriptions has no array 'value'");
+  });
+
+  it("throws on a 2xx first page whose value is not an array", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: { name: "rg-1" } } });
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: `/subscriptions/${SUB}/resourcegroups`, apiVersion: RESOURCE_GROUP_API_VERSION },
+        "list resource groups",
+      ),
+    ).rejects.toThrow(/has no array 'value'/);
+  });
+
+  it("throws on a 2xx follow-up page with no value array, naming the nextLink and dropping page 1", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: { value: [{ name: "rg-1" }], nextLink: NEXT } },
+      { status: 200, body: { nextLink: "" } },
+    );
+    await expect(
+      listAllPages(
+        azure,
+        { method: "GET", path: `/subscriptions/${SUB}/resourcegroups`, apiVersion: RESOURCE_GROUP_API_VERSION },
+        "list resource groups",
+      ),
+    ).rejects.toThrow(`list resource groups (page 2): HTTP 200 body from ${NEXT} has no array 'value'`);
+  });
+
+  it("a 2xx page with value [] is still a completed read of zero items", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: [] } });
     const items = await listAllPages(
       azure,
       { method: "GET", path: "/subscriptions", apiVersion: SUBSCRIPTIONS_API_VERSION },

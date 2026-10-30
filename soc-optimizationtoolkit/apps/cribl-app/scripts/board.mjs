@@ -58,12 +58,14 @@ const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
  * in `apps/cribl-app/src/App.tsx`, so the vocabulary cannot describe a menu the
  * app does not have. Their order here is the nav's order, by section.
  *
- * Two ids are NOT routes and are marked so below, because conflating them with
+ * One id is NOT a route and is marked so below, because conflating it with
  * shipped menus is how a rollup starts overstating what exists:
  *
- *   azure-onboarding  PLANNED. backlog.md#6 calls it a menu item; there is no
- *                     route, no screen, and AZR is the epic that builds it
  *   windows-events    PLANNED. backlog.md#5's Windows Event analysis screen
+ *
+ * (azure-onboarding was PLANNED until AZR-18 shipped its route; it now sits in
+ * the development section after eventhub-discovery, its prerequisite screen.
+ * scripts/board-menus-routes.test.mjs holds this list to App.tsx.)
  *
  * And one is the honest escape hatch:
  *
@@ -88,11 +90,12 @@ export const MENUS = [
   'siem-migration',
   'preflight',
   'eventhub-discovery',
+  'azure-onboarding',
   'mapping-catalog',
+  'azure-logging-map',
   // diagnostics
   'harness',
   // planned - no route exists yet
-  'azure-onboarding',
   'windows-events',
   // cross-cutting
   'none',
@@ -113,14 +116,29 @@ export const MENU_LABELS = {
   preflight: 'Permission Verification',
   'eventhub-discovery': 'Event Hub Discovery',
   'mapping-catalog': 'Mapping Catalog',
+  'azure-logging-map': 'Azure Logging Map',
   harness: 'Diagnostics',
-  'azure-onboarding': 'Azure Native Source Onboarding (planned)',
+  'azure-onboarding': 'Azure Native Source Onboarding',
   'windows-events': 'Windows Event analysis (planned)',
   none: 'Cross-cutting',
 };
 
-/** The two that name a screen nobody can open yet. */
-export const PLANNED_MENUS = ['azure-onboarding', 'windows-events'];
+/** The one that names a screen nobody can open yet. */
+export const PLANNED_MENUS = ['windows-events'];
+
+/**
+ * The rollup's sentence about PLANNED menus, derived from PLANNED_MENUS so it
+ * cannot drift. It was a hard-coded "Two menus are PLANNED" and kept saying
+ * so after AZR-18 routed azure-onboarding and only one remained.
+ */
+export function plannedMenusSentence(planned = PLANNED_MENUS) {
+  const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five'];
+  const n = planned.length;
+  const count = NUMBER_WORDS[n] ?? String(n);
+  return n === 1
+    ? `${count} menu is PLANNED and has no route yet.`
+    : `${count} menus are PLANNED and have no route yet.`;
+}
 
 /**
  * A story's menu: its own if it overrides, otherwise its feature's.
@@ -487,6 +505,104 @@ function hierarchyFindings(data, sections) {
   return out;
 }
 
+/**
+ * A `[[CARD-ID]]` link in card prose, matched by ID SHAPE only (DBT-120).
+ *
+ * Shape-only so prose that talks ABOUT links - the literal `[[CARD-ID]]`,
+ * `[[link]]` - is not mistaken for one. The optional letter before the number
+ * covers feature ids (DBT-F4) and spikes (AZR-S1); a pattern written for
+ * `X-F?N` alone would have reported every link to a spike as dangling.
+ *
+ * Exported so board-html's richText uses THIS pattern (DBT-120 follow-up,
+ * architecture audit 2026-10-02): it used to match any `[[...]]`, so the two
+ * tools disagreed about what a link is. Global, so use it only with matchAll
+ * or replace - both reset lastIndex; test/exec would carry state between calls.
+ */
+export const LINK = /\[\[([A-Z]+-[A-Z]?\d+)\]\]/g;
+const LINKED_FIELDS = ['title', 'detail', 'priorityWhy'];
+
+/**
+ * Every id a `[[link]]` may resolve to: stories AND features (DBT-120). One
+ * definition shared by danglingLinks and the HTML board, which used to resolve
+ * against stories only and so marked every feature link as gone.
+ *
+ * @returns {Set<string>}
+ */
+export function knownIds(data) {
+  return new Set([
+    ...(data.stories ?? []).map((s) => s.id),
+    ...(data.features ?? []).map((f) => f.id),
+  ]);
+}
+
+/**
+ * Every text field of a card that board-html renders through richText, as
+ * {field, text}: the top-level LINKED_FIELDS plus the decision's question and
+ * each option's detail (DBT-124 - those render links on the kanban too). The
+ * decision is an object, so its fields cannot sit in LINKED_FIELDS. Guarded
+ * with ?. because a malformed decision is validateBoard's to report, not ours
+ * to throw on.
+ *
+ * @returns {{field: string, text: string}[]}
+ */
+function linkedTexts(s) {
+  const out = LINKED_FIELDS.map((field) => ({ field, text: String(s[field] ?? '') }));
+  const d = s.decision;
+  if (d && typeof d === 'object') {
+    out.push({ field: 'decision.question', text: String(d.question ?? '') });
+    (Array.isArray(d.options) ? d.options : []).forEach((o, i) => {
+      out.push({ field: `decision.options.${o?.key ?? i}.detail`, text: String(o?.detail ?? '') });
+    });
+  }
+  return out;
+}
+
+/**
+ * Every `[[link]]` in a card's title, detail, priorityWhy, decision question
+ * or decision option details that names nothing on this board - neither a
+ * story nor a feature. DBT-120, DBT-124.
+ *
+ * Repeats are kept: the count is the size of the decay a reader will trip
+ * over, and two dead links in one paragraph are two trips. This is NOT part of
+ * validateBoard - pruning done cards is deliberate and the target survives in
+ * backlog.md and the git history of board.json, so a dangling link is a
+ * warning. Failing on it would only make check-board something people disable.
+ *
+ * @returns {{from: string, field: string, target: string}[]}
+ */
+export function danglingLinks(data) {
+  const known = knownIds(data);
+  const out = [];
+  for (const s of data.stories ?? []) {
+    for (const { field, text } of linkedTexts(s)) {
+      for (const m of text.matchAll(LINK)) {
+        if (!known.has(m[1])) out.push({ from: s.id, field, target: m[1] });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Non-fatal findings, printed by main() without touching the exit code - the
+ * tier check-release-drift has for its commit-count warning and check-board
+ * lacked (DBT-120). At most one line per concern, so the size of a problem is
+ * stated rather than scrolled past.
+ */
+export function boardWarnings(data) {
+  const dangling = danglingLinks(data);
+  if (dangling.length === 0) return [];
+  const cards = new Set(dangling.map((d) => d.from));
+  const targets = [...new Set(dangling.map((d) => d.target))].sort();
+  const shown = targets.slice(0, 10).join(', ') + (targets.length > 10 ? ', ...' : '');
+  // "Not on this board", not "pruned": some targets (D-2) may never have been
+  // cards at all, and the warning should not claim a history it cannot see.
+  return [
+    `${dangling.length} [[link]](s) in ${cards.size} card(s) name ${targets.length} id(s) not on this board ` +
+      `(${shown}). Pruned cards live in backlog.md and the git history of board.json.`,
+  ];
+}
+
 export function validateBoard(data, options = {}) {
   const out = [];
   const epicKeys = new Set((data.epics ?? []).map((e) => e.key));
@@ -659,16 +775,25 @@ export function renderBoard(data, today) {
   L.push('alternatives. This board holds only what is a unit of work, what state it is');
   L.push('in, and what it waits on.');
   L.push('');
-  // Added 2026-09-04 with the prune of every card done through 1.12.7. A
-  // `[[link]]` in a surviving card may now name a card this board no longer
-  // shows - 60 such links pointed at 29 pruned cards the day this was written.
-  // Saying so here is cheaper than rewriting the prose, and honest: the target
-  // is not lost, it is just not on this page any more.
-  L.push('A `[[CARD-ID]]` link may name a card that has been PRUNED from this board.');
-  L.push('Cards done through 1.12.7 were removed on 2026-09-04; their reasoning is in');
-  L.push('`backlog.md` and their full text in the git history of `board.json`. A link');
-  L.push('that resolves to nothing here is a pruned card, not a typo.');
-  L.push('');
+  // A `[[link]]` in a surviving card may name a card this board no longer
+  // shows. Added 2026-09-04 as a hardcoded sentence naming that day's prune;
+  // DBT-120 replaced it with a MEASUREMENT, because the sentence was itself a
+  // hand-maintained claim that would age into describing one particular prune.
+  // A count and no date cannot go stale, and it disappears when it is zero.
+  const dangling = danglingLinks(data);
+  if (dangling.length > 0) {
+    const gone = new Set(dangling.map((d) => d.target)).size;
+    L.push(
+      wrap(
+        `${dangling.length} \`[[links]]\` on this board name ${gone} card(s) it no longer shows. ` +
+          'Their reasoning is in `backlog.md` and their full text in the git history of ' +
+          '`board.json`; a link that resolves to nothing here is not a typo.',
+        76,
+        '',
+      ),
+    );
+    L.push('');
+  }
   L.push(`**${count((s) => s.status === 'backlog')} in the backlog, ${count((s) => s.status === 'in-progress')} in progress, ${count((s) => s.status === 'done')} done.**`);
   L.push('');
 
@@ -682,7 +807,7 @@ export function renderBoard(data, today) {
   L.push('');
   L.push('Which part of the product each card is about, using the app\'s own route');
   L.push('ids. `Cross-cutting` is release mechanics, docs and board tooling - work no');
-  L.push('operator sees on any screen. Two menus are PLANNED and have no route yet.');
+  L.push(`operator sees on any screen. ${plannedMenusSentence()}`);
   L.push('');
   L.push('| Menu | Open | Done | Now |');
   L.push('|---|---|---|---|');
@@ -812,6 +937,12 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+
+  // DBT-120: the warning tier. Printed on both --check and render, and never
+  // sets the exit code - see danglingLinks for why a dangling link is not an
+  // error.
+  const warnPrefix = process.env.GITHUB_ACTIONS === 'true' ? '::warning::' : 'warning: ';
+  for (const w of boardWarnings(data)) console.log(`${warnPrefix}${w}`);
 
   const today = new Date().toISOString().slice(0, 10);
   const rendered = renderBoard(data, today);

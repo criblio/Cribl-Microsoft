@@ -23,7 +23,15 @@
  * it renders an always-visible unavailable state.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { InfoTip } from "../../components/info-tip";
 import {
   DELIVERY_FIT_NOT_FETCHED,
   DELIVERY_FIT_UNMEASURED_LABEL,
@@ -40,6 +48,7 @@ import {
 } from "@soc/core";
 import type {
   DeliveryFitEvidence,
+  DeprecatedSolutionsLookup,
   IngestionClass,
   SolutionRef,
   WorkspaceScope,
@@ -86,6 +95,49 @@ export interface SolutionBrowserProps {
   restoreName?: string | null;
 }
 
+/**
+ * Whether an element currently overflows vertically, i.e. has something of its
+ * own to scroll (DBT-14). Returns a callback ref and the flag.
+ *
+ * It exists for ONE css decision: the browse list carries
+ * `overscroll-behavior: contain` only while it overflows, because on a list
+ * that fits under its 420px cap Chrome still makes it the wheel target and
+ * contain then stops the wheel reaching the page, so nothing scrolls at all.
+ *
+ * A callback ref rather than useRef because the list mounts conditionally
+ * (it is replaced by the selected-solution card), and the effect has to re-run
+ * on the element it is given. `contentKey` re-measures when the CONTENT changes
+ * - a filter changes the row count, and a list already pinned at its cap does
+ * not change size when its rows do, so the ResizeObserver alone would miss a
+ * long list shrinking to a still-long one, or growing past the cap from a box
+ * that never resized. The ResizeObserver covers the rest: the list itself
+ * shrinking under the cap, a window resize, late-loading fonts changing row
+ * heights. No wheel handling anywhere - this only chooses a class.
+ */
+function useOverflowsY<T extends HTMLElement>(
+  contentKey: unknown,
+): [(el: T | null) => void, boolean] {
+  const [el, setEl] = useState<T | null>(null);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    if (el === null) {
+      setOverflows(false);
+      return;
+    }
+    // The +1 absorbs sub-pixel rounding: a box whose content is fractionally
+    // taller than itself has nothing an operator could scroll to.
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, contentKey]);
+  return [setEl, overflows];
+}
+
 // The cap on how many connector files a selected solution decodes for the
 // log-type preview - keeps a solution with many connectors well under the
 // 100 req/min budget (each connector is one raw fetch).
@@ -118,6 +170,51 @@ type DetailState =
 interface UnresolvedHandoff {
   name: string;
   source: "deep-link" | "restore";
+}
+
+/**
+ * Read one content-cache entry, answering a REFUSED read as a miss (DBT-159).
+ *
+ * The cache is an optimisation over the content port, so a failed read must
+ * cost speed and nothing else. Since DBT-145 the KV store throws on a
+ * non-encrypted 403 (a 5xx always did), and both reads below used to sit inside
+ * the same try as the GitHub fetch - one refused read failed the whole index
+ * load, under a message blaming the GitHub token. `onRefused` receives the
+ * reason so the caller can SAY the cache is not working rather than becoming a
+ * slow page nobody can explain.
+ */
+async function readCacheOrMiss(
+  cache: { get(key: string): Promise<unknown> },
+  key: string,
+  onRefused: (reason: string) => void,
+): Promise<unknown> {
+  try {
+    return await cache.get(key);
+  } catch (err) {
+    onRefused(String(err));
+    return null;
+  }
+}
+
+/**
+ * Write one content-cache entry, answering a REFUSED write as a skipped store
+ * (DBT-159). A store that refuses a read for want of permission refuses the
+ * write that follows the fall-through too, and a bare `cache.set` there threw
+ * after the content had already been fetched - failing the load the read had
+ * just been taught to survive. The fetched value is still used; only the
+ * saving of it is lost.
+ */
+async function writeCacheOrSkip(
+  cache: { set(key: string, value: unknown): Promise<void> },
+  key: string,
+  value: unknown,
+  onRefused: (reason: string) => void,
+): Promise<void> {
+  try {
+    await cache.set(key, value);
+  } catch (err) {
+    onRefused(String(err));
+  }
 }
 
 /**
@@ -171,12 +268,21 @@ export function SolutionBrowser({
   const cache = ports.contentCache;
 
   const [solutions, setSolutions] = useState<SolutionRef[] | null>(null);
-  // Authoritative Content Hub deprecation keys (populated when a scope is
-  // committed); merged into the repo deprecation signal below.
-  const [hubDeprecated, setHubDeprecated] = useState<Set<string>>(new Set());
+  // The authoritative Content Hub deprecation lookup, merged into the repo
+  // deprecation signal below; null while no scope is committed (or the read is
+  // in flight). Three answers (DBT-176): an unreadable catalog must not read as
+  // "none deprecated".
+  const [hubLookup, setHubLookup] = useState<DeprecatedSolutionsLookup | null>(null);
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
+  // The reason the content cache last refused a read or write, "" while it has
+  // not (DBT-159). One string for every refusal: the note describes the cache,
+  // not a key, so a second refusal replaces the first rather than adding a line.
+  const [cacheRefused, setCacheRefused] = useState("");
   const [query, setQuery] = useState("");
+  // DBT-227: the list waits for the operator - it shows once they type a
+  // filter or ask to browse everything, not on arrival (436 rows did).
+  const [browseAll, setBrowseAll] = useState(false);
   const [hideDeprecated, setHideDeprecated] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState>({ phase: "idle" });
@@ -206,6 +312,22 @@ export function SolutionBrowser({
   const [unresolvedHandoff, setUnresolvedHandoff] =
     useState<UnresolvedHandoff | null>(null);
 
+  // A refused cache read or write, logged AND kept for the on-screen note
+  // (DBT-159).
+  const logger = ports.logger;
+  const noteCacheRefused = useCallback(
+    (op: "read" | "write", key: string, reason: string) => {
+      logger?.warn(
+        op === "read"
+          ? "content cache read refused; fetching instead"
+          : "content cache write refused; the fetched value is not saved",
+        { key, reason },
+      );
+      setCacheRefused(reason);
+    },
+    [logger],
+  );
+
   // Load the solution index lazily: resolve the HEAD commit (the cache stamp),
   // then read the cached index for that commit or fetch it once and cache it.
   const loadIndex = useCallback(async () => {
@@ -220,7 +342,9 @@ export function SolutionBrowser({
       const indexKey = solutionIndexCacheKey(sha);
       let list: SolutionRef[] | null = null;
       if (cache !== undefined) {
-        const cached = await cache.get(indexKey);
+        const cached = await readCacheOrMiss(cache, indexKey, (reason) =>
+          noteCacheRefused("read", indexKey, reason),
+        );
         if (Array.isArray(cached)) {
           list = cached as SolutionRef[];
         }
@@ -228,14 +352,16 @@ export function SolutionBrowser({
       if (list === null) {
         list = await content.listSolutions();
         if (cache !== undefined) {
-          await cache.set(indexKey, list);
+          await writeCacheOrSkip(cache, indexKey, list, (reason) =>
+            noteCacheRefused("write", indexKey, reason),
+          );
         }
       }
       setSolutions(list);
     } catch (err) {
       setLoadError(String(err));
     }
-  }, [content, cache]);
+  }, [content, cache, noteCacheRefused]);
 
   useEffect(() => {
     void loadIndex();
@@ -243,7 +369,8 @@ export function SolutionBrowser({
 
   // Cross-reference the Content Hub catalog for authoritative deprecation once
   // a scope is committed (the repo folder heuristics miss Hub-deprecated
-  // solutions like Cloudflare). Best-effort: a failure leaves the set empty.
+  // solutions like Cloudflare). Never fails the browser: an unreadable catalog
+  // tags nothing and SAYS so beside the counts (DBT-176).
   useEffect(() => {
     if (
       scopeCommitted !== true ||
@@ -251,7 +378,7 @@ export function SolutionBrowser({
       config.resourceGroup === "" ||
       config.workspaceName === ""
     ) {
-      setHubDeprecated(new Set());
+      setHubLookup(null);
       return;
     }
     let cancelled = false;
@@ -262,8 +389,8 @@ export function SolutionBrowser({
       location: "",
     };
     void listDeprecatedContentHubSolutions(ports.azure, scope, ports.logger).then(
-      (set) => {
-        if (!cancelled) setHubDeprecated(set);
+      (lookup) => {
+        if (!cancelled) setHubLookup(lookup);
       },
     );
     return () => {
@@ -282,13 +409,14 @@ export function SolutionBrowser({
   // the Hub flags is marked deprecated even when the repo folder is not.
   const mergedSolutions = useMemo<SolutionRef[] | null>(() => {
     if (solutions === null) return null;
-    if (hubDeprecated.size === 0) return solutions;
+    if (hubLookup?.kind !== "found") return solutions;
+    const hubKeys = hubLookup.keys;
     return solutions.map((s) =>
-      s.deprecated !== true && hubDeprecated.has(deprecatedSolutionKey(s.name))
+      s.deprecated !== true && hubKeys.has(deprecatedSolutionKey(s.name))
         ? { ...s, deprecated: true, deprecationReason: "Deprecated in the Microsoft Content Hub" }
         : s,
     );
-  }, [solutions, hubDeprecated]);
+  }, [solutions, hubLookup]);
 
   // Fetch (and cache) one solution's connector detail on demand.
   const loadDetail = useCallback(
@@ -300,7 +428,9 @@ export function SolutionBrowser({
       try {
         const cacheKey = connectorsCacheKey(name, commitSha ?? "");
         if (cache !== undefined) {
-          const cached = await cache.get(cacheKey);
+          const cached = await readCacheOrMiss(cache, cacheKey, (reason) =>
+            noteCacheRefused("read", cacheKey, reason),
+          );
           if (
             cached !== null &&
             typeof cached === "object" &&
@@ -336,14 +466,16 @@ export function SolutionBrowser({
           ingestion: classes.length > 0 ? classifySolutionIngestion(classes) : null,
         };
         if (cache !== undefined) {
-          await cache.set(cacheKey, built);
+          await writeCacheOrSkip(cache, cacheKey, built, (reason) =>
+            noteCacheRefused("write", cacheKey, reason),
+          );
         }
         setDetail({ phase: "loaded", detail: built });
       } catch (err) {
         setDetail({ phase: "error", message: String(err) });
       }
     },
-    [content, cache, commitSha],
+    [content, cache, commitSha, noteCacheRefused],
   );
 
   // Select a solution: record the name and report up. The detail fetch is
@@ -481,6 +613,10 @@ export function SolutionBrowser({
         : filterSolutions(mergedSolutions, { query, hideDeprecated }),
     [mergedSolutions, query, hideDeprecated],
   );
+  // `visible` is the content key: every filter or index change re-measures
+  // (DBT-14). Declared before the early returns below - it is a hook.
+  const [listRef, listScrollable] = useOverflowsY<HTMLUListElement>(visible);
+  const listShown = browseAll || query.trim() !== "";
   const selected = useMemo(
     () => resolveSelectedSolution(mergedSolutions ?? [], selectedName),
     [mergedSolutions, selectedName],
@@ -543,6 +679,17 @@ export function SolutionBrowser({
               for it, the same deletion the Clear selection button warns about.
             </>
           )}
+        </p>
+      )}
+      {/* DBT-159. The page still works with the cache refusing reads or writes - every
+          read fell through to GitHub - so this is a note, not an error: it
+          explains a slower page that spends the request budget the cache was
+          there to save. */}
+      {cacheRefused !== "" && (
+        <p className="field-hint solution-browser-cache-note" role="status">
+          The content cache could not be used ({cacheRefused}), so this was
+          fetched from GitHub instead. Everything still works; it is slower and
+          uses more of the request budget until the cache can be used again.
         </p>
       )}
       {loadError !== "" ? (
@@ -687,32 +834,39 @@ export function SolutionBrowser({
               about the chip is entirely the paragraph above - there is no
               pasteable ADDRESS to put the fragment on, not an inability to
               consume one it is handed.
-              WHETHER THE FRAGMENT SURVIVES THE IFRAME IS UNSETTLED, and the
-              record points both ways. Do NOT cite the 2026-08-28 live attempt
-              for non-arrival, which an earlier draft here did: DBT-28
-              investigated non-arrival as its candidate (1) and records that it
-              "found BOTH recorded candidates wrong", attributing the unchanged
-              selection to a measured RESOLVER defect instead. THAT DEFECT IS
-              HISTORY, NOT A DESCRIPTION OF THE CODE BESIDE THIS NOTE, and it is
-              cited here only for what it displaced: AS OF 2026-08-28
-              resolveSelectedSolution matched exact and case-insensitive-exact
-              only, so a punctuation variant resolved to nothing and was consumed
-              in silence. Both halves are closed as of 2026-09-04 - the
-              separator-insensitive third pass is in browser-state.ts (with its
-              own note on why equality and not substring), and both callers here
-              now raise the unresolved-handoff notice above instead of
-              swallowing the miss. What that leaves standing is only the
-              displacement itself: an unchanged selection in 2026-08-28's live
-              attempt has a measured cause that is NOT non-arrival, so it is not
-              evidence that the fragment failed to reach this document.
-              Pointing the other way, the restoreName note
-              at the top of this file records live review 2026-08-03 finding
-              that "the Cribl app iframe does not preserve" the hash - which is
-              why the HOST restores the selection from the content cache at
-              all. The two have not been reconciled and neither is settled.
-              Removing the chip needs neither answer: with no address to paste,
-              advertising one is a FALSE CLAIM rather than an unfinished
-              feature.
+              A FRAGMENT FROM OUTSIDE THE SHELL DOES NOT REACH THIS DOCUMENT -
+              settled by live measurement on 2026-09-04 (backlog.md section 20,
+              DBT-119), after this note had said for a while that the record
+              pointed both ways. Navigating to `#/?solution=` and reading the
+              mounted iframe's src, on Live Preview and on installed 1.11.3:
+              the outer frame carried the hash, and the iframe src carried no
+              fragment and no query. The Cribl shell builds that src, so an
+              externally supplied fragment never arrives. That agrees with the
+              restoreName note at the top of this file (live review 2026-08-03:
+              "the Cribl app iframe does not preserve" the hash), which is why
+              the HOST restores the selection from the content cache. It is a
+              claim about the shell AS MEASURED on that date, not a law - a
+              later shell that forwards the fragment would change it, and
+              DBT-119 carries that trigger.
+              The 2026-08-28 live attempt is reconciled by the same measurement,
+              not contradicted by it. DBT-28 attributed its unchanged selection
+              to a RESOLVER defect: AS OF 2026-08-28 resolveSelectedSolution
+              matched exact and case-insensitive-exact only, so a punctuation
+              variant resolved to nothing and was consumed in silence. That
+              defect was real and is closed - the separator-insensitive third
+              pass is in browser-state.ts (with its own note on why equality and
+              not substring), and both callers here raise the unresolved-handoff
+              notice above instead of swallowing the miss - but it was not what
+              that attempt saw. The fragment never arrived, so the resolver was
+              never reached (backlog.md section 20: "cause (1), the fragment
+              never arriving, is correct").
+              NONE OF THIS IS ABOUT THE HASH INSIDE THE IFRAME, which works and
+              stays: select() writes it, and the SIEM-migration pivot hands off
+              by writing it (backlog.md section 20; the mechanism paragraph
+              below). Only the link arriving from OUTSIDE the shell is
+              undeliverable. Removing the chip never depended on this answer:
+              with no address to paste, advertising one is a FALSE CLAIM rather
+              than an unfinished feature.
               THE MECHANISM IS UNTOUCHED - AND WAS ALREADY HALF BROKEN.
               buildSolutionDeepLink still writes the hash in select() above,
               the mount read still preselects on the FIRST mount of this route,
@@ -729,11 +883,13 @@ export function SolutionBrowser({
               packages/ui suite green (80 files / 1343 tests). Re-measured
               2026-09-03: with the read pin present the same inversion fails
               exactly one test of 1344, and it is that pin.
-              WHETHER A SHAREABLE DEEP LINK IS WANTED IS STILL OPEN. Answering
-              it needs a base URL this app does not own, so it is a Cribl
-              platform question and not a routing one. Do not re-add a chip to
-              answer it - the pin in solution-browser.dom.test.tsx fails if
-              this card starts printing an address again. */}
+              A SHAREABLE DEEP LINK IS WANTED (answered 2026-09-04, backlog.md
+              section 20) AND IS PARKED AS DBT-119. Delivering it needs the
+              Cribl shell to forward a query onto the app-ui URL or post the
+              entry route on mount, so it is a Cribl platform request and not a
+              routing one. Do not re-add a chip to answer it - the pin in
+              solution-browser.dom.test.tsx fails if this card starts printing
+              an address again. */}
           {detail.phase === "loaded" && (
             <span className="field-hint">
               {detail.detail.connectorCount} connector file
@@ -779,10 +935,9 @@ export function SolutionBrowser({
               The three sections still do not share a verb: samples are
               DELETED and unrecoverable, mapping and coverage only empty. */}
           <span className="field-hint">
-            Every section below is scoped to this solution. Clearing it deletes
-            the samples you acquired for it and empties the mapping and coverage
-            sections - it is how you pick another solution, so do that only when
-            you are done with this one.
+            Clearing deletes this solution's samples and empties its mapping
+            and coverage.{" "}
+            <InfoTip text="Every section below is scoped to the selected solution. Clearing is how you pick another one, so do it only when you are done with this one." />
           </span>
         </div>
       ) : (
@@ -811,9 +966,28 @@ export function SolutionBrowser({
           {counts !== null && (
             <p className="solution-browser-counts">
               {counts.total} solutions - {counts.active} active,{" "}
-              {counts.deprecated} deprecated. Showing {visible.length}.
+              {counts.deprecated} deprecated.{" "}
+              {listShown ? `Showing ${visible.length}.` : "Type to filter, or browse them all."}
             </p>
           )}
+          {!listShown && counts !== null && (
+            <div className="panel-controls">
+              <button type="button" className="run-button" onClick={() => setBrowseAll(true)}>
+                Browse all
+              </button>
+            </div>
+          )}
+          {/* DBT-176: without this an unreadable catalog and "the Hub deprecated
+              nothing extra" render identically - the same counts, no tags. */}
+          {hubLookup?.kind === "unreadable" && (
+            <p className="field-hint solution-browser-hub-note" role="status">
+              Could not read the Content Hub catalog ({hubLookup.reason}), so
+              deprecation here comes from the repository alone - a solution the
+              Content Hub deprecated may not be flagged.
+            </p>
+          )}
+          {listShown && (
+          <>
           <p className="solution-browser-legend">
             Cribl delivery fit (Azure Logs Ingestion API):{" "}
             <span className="ingestion-badge ingestion-badge-recommended">
@@ -837,7 +1011,13 @@ export function SolutionBrowser({
             </span>{" "}
             no connector JSON was read for it
           </p>
-          <ul className="solution-browser-list">
+          <ul
+            ref={listRef}
+            className={
+              "solution-browser-list" +
+              (listScrollable ? " solution-browser-list--scrollable" : "")
+            }
+          >
             {visible.map((solution) => {
               // The list only renders while NOTHING is selected (selecting
               // switches to the selected-solution card), so rows carry no
@@ -894,6 +1074,8 @@ export function SolutionBrowser({
               </li>
             )}
           </ul>
+          </>
+          )}
         </>
       )}
     </div>

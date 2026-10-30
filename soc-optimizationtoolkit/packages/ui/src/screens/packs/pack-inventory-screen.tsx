@@ -14,28 +14,33 @@
  * the ports.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyMaintenanceEdits,
   assemblePack,
   installedPackVersions,
-  isStreamWorkerGroup,
   maintenanceRows,
   makeBuildRecord,
   nextPackVersion,
 } from "@soc/core";
 import type {
-  CriblGroupSummary,
   MaintenanceEdit,
   PipelineFieldMapping,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
-import type { DeployedGroupPacks, StoredPack } from "../../ports-context";
+import type { DeployedGroupPacks,
+  StoredPack } from "../../ports-context";
 import { SearchableMultiSelect } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  streamGroupRows,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import {
   inventoryPlaceholder,
   PACK_INVENTORY_UNAVAILABLE_REASON,
   PACK_RETENTION_NOTE,
+  deployedUnreadReason,
   deriveDeployedBadge,
   deriveInventoryRows,
   deriveStorageSummary,
@@ -44,9 +49,18 @@ import {
   tablesSummary,
   validateDeleteId,
 } from "./pack-inventory-state";
+import type { DeployedRead } from "./pack-inventory-state";
 
 /** Keep the newest builds per pack name in the retention preview. */
 const KEEP_PER_PACK = 5;
+
+/** One identity for "no groups to read", so it never re-triggers a load. */
+const NO_GROUP_IDS: readonly string[] = [];
+
+/** Stable identities for the deployed read, so resets never re-render twice. */
+const DEPLOYED_PENDING: DeployedRead = { kind: "pending" };
+const DEPLOYED_FAILED: DeployedRead = { kind: "failed" };
+const NO_SNAPSHOT: readonly DeployedGroupPacks[] = [];
 
 /** Decode base64 cached bytes to a fresh Uint8Array (browser atob). */
 function decodeBase64(base64: string): Uint8Array {
@@ -90,8 +104,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   const packInstall = ports.packInstall;
 
   const [packs, setPacks] = useState<StoredPack[] | null>(null);
-  const [snapshot, setSnapshot] = useState<DeployedGroupPacks[]>([]);
-  const [groups, setGroups] = useState<CriblGroupSummary[]>([]);
+  const [deployedRead, setDeployedRead] = useState<DeployedRead>(DEPLOYED_PENDING);
   // MULTI-destination install (user request 2026-07-13).
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -101,39 +114,89 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   // progress) - rendered ON the card being acted on.
   const [action, setAction] = useState<{ id: string; line: string } | null>(null);
 
-  const load = useCallback(async () => {
+  // DBT-134. The worker groups are their OWN listing, rendered through
+  // WorkerGroupField, rather than a step inside the pack load. Three defects
+  // came from folding them in: the picker was simply ABSENT whenever the list
+  // was empty or had failed (groups started as `[]`, so not-loaded, failed
+  // and empty were one state); a refused listing was reported as "Deployed
+  // status unavailable", blaming the wrong call; and `selectedGroups` sat in
+  // the load's deps, so every pick re-listed the groups and every group's
+  // packs against the shared request budget. Edge fleets cannot host
+  // installed packs: Stream worker groups only.
+  const workerGroups = useStreamWorkerGroups(ports.cribl, {
+    auto: packStore !== undefined && packInstall !== undefined,
+    logger,
+  });
+  const groupIds = useMemo(() => {
+    const ids = streamGroupRows(workerGroups.state).map((g) => g.id);
+    return ids.length === 0 ? NO_GROUP_IDS : ids;
+  }, [workerGroups.state]);
+
+  // Preselect the first group once, never over the operator's own picks.
+  useEffect(() => {
+    const first = groupIds[0];
+    if (first === undefined) return;
+    setSelectedGroups((current) => (current.length > 0 ? current : [first]));
+  }, [groupIds]);
+
+  const loadPacks = useCallback(async () => {
     if (packStore === undefined) {
       return;
     }
     setError("");
     try {
-      const stored = await packStore.list();
-      setPacks(stored);
-      // Deployed-status truth: list each worker group's live packs. Group
-      // discovery and the per-group list are best-effort - a Cribl-side error
-      // must not blank the build records the operator can still download.
-      if (packInstall !== undefined) {
-        try {
-          // Edge fleets cannot host installed packs: Stream worker groups only.
-          const gs = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
-          setGroups(gs);
-          if (selectedGroups.length === 0 && gs.length > 0) {
-            setSelectedGroups([gs[0].id]);
-          }
-          setSnapshot(await packInstall.listDeployed(gs.map((g) => g.id)));
-        } catch (err) {
-          setSnapshot([]);
-          setNotice(`Deployed status unavailable: ${String(err)}`);
-        }
-      }
+      setPacks(await packStore.list());
     } catch (err) {
       setError(String(err));
     }
-  }, [packStore, packInstall, ports.cribl, selectedGroups]);
+  }, [packStore]);
+
+  // Deployed-status truth: list each worker group's live packs. Best-effort -
+  // a Cribl-side error must not blank the build records the operator can
+  // still download - and only once there are groups to ask about.
+  //
+  // DBT-134 review: every call starts by forgetting the previous snapshot,
+  // and only the latest call may write one. A snapshot belongs to ONE group
+  // listing; carried across a re-list (or a re-list that failed) it would
+  // show the old deployed groups as current.
+  const deployedSequence = useRef(0);
+  const loadDeployed = useCallback(async () => {
+    deployedSequence.current += 1;
+    const mine = deployedSequence.current;
+    setDeployedRead(DEPLOYED_PENDING);
+    if (packInstall === undefined || groupIds.length === 0) {
+      return;
+    }
+    try {
+      const snapshot = await packInstall.listDeployed([...groupIds]);
+      if (mine !== deployedSequence.current) return;
+      setDeployedRead({ kind: "read", snapshot });
+    } catch (err) {
+      if (mine !== deployedSequence.current) return;
+      setDeployedRead(DEPLOYED_FAILED);
+      setNotice(`Deployed status unavailable: ${String(err)}`);
+    }
+  }, [packInstall, groupIds]);
+  const snapshot = deployedRead.kind === "read" ? deployedRead.snapshot : NO_SNAPSHOT;
+  // Checked against the listing as it stands NOW, so a Refresh that sets the
+  // groups back to loading hides the old snapshot on that very render.
+  const unreadReason =
+    packInstall === undefined
+      ? "this shell does not read installed packs"
+      : deployedUnreadReason(workerGroups.state.kind, groupIds.length, deployedRead);
+
+  const load = useCallback(async () => {
+    await loadPacks();
+    await loadDeployed();
+  }, [loadPacks, loadDeployed]);
 
   useEffect(() => {
-    void load();
-  }, [load, refreshToken]);
+    void loadPacks();
+  }, [loadPacks, refreshToken]);
+
+  useEffect(() => {
+    void loadDeployed();
+  }, [loadDeployed, refreshToken]);
 
   const rows = useMemo(
     () => (packs === null ? [] : deriveInventoryRows(packs, snapshot)),
@@ -257,7 +320,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       try {
         // Next version: above the highest INSTALLED copy and this record.
         const version = nextPackVersion([
-          ...installedPackVersions(snapshot, pack.record.packName),
+          ...installedPackVersions([...snapshot], pack.record.packName),
           pack.record.version,
         ]);
         const nextDef = applyMaintenanceEdits(
@@ -379,19 +442,33 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
   return (
     <div className="discovery-result">
       <div className="panel-controls">
-        <button className="run-button" onClick={() => void load()} disabled={busy}>
+        <button
+          className="run-button"
+          onClick={() => {
+            void loadPacks();
+            // Re-listing the groups re-reads the deployed status too, once the
+            // new listing lands; without it a failed listing could never be
+            // retried from here.
+            workerGroups.reload();
+          }}
+          disabled={busy}
+        >
           Refresh
         </button>
-        {groups.length > 0 && packInstall !== undefined && (
+        {packInstall !== undefined && (
           <label className="field">
             <span className="field-label">Deploy target</span>
-            <SearchableMultiSelect
-              options={groups.map((g) => ({ value: g.id, label: g.id }))}
-              values={selectedGroups}
-              onChange={setSelectedGroups}
-              placeholder="Select worker groups..."
-              ariaLabel="Filter worker groups"
-            />
+            <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+              {(groups) => (
+                <SearchableMultiSelect
+                  options={groups.map((g) => ({ value: g.id, label: g.id }))}
+                  values={selectedGroups}
+                  onChange={setSelectedGroups}
+                  placeholder="Select worker groups..."
+                  ariaLabel="Filter worker groups"
+                />
+              )}
+            </WorkerGroupField>
           </label>
         )}
       </div>
@@ -424,7 +501,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
       {placeholder !== null && <p className="panel-desc">{placeholder}</p>}
 
       {rows.map((row) => {
-        const badge = deriveDeployedBadge(row);
+        const badge = deriveDeployedBadge(row, unreadReason);
         return (
           <div className="mapping-review-card" key={row.id}>
             <div className="mapping-review-card-head">

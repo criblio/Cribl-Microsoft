@@ -1,0 +1,150 @@
+{
+  "kit": "github.com/jamespederson1/claude-kit",
+  "adoptions": [
+    {
+      "skill": "cribl-app-kit",
+      "from": "skills/cribl-app-kit/reference/policies",
+      "to": "apps/cribl-app/src/platform/policies",
+      "skipped": [
+        "skills/cribl-app-kit/reference/policies/paths.ts",
+        "skills/cribl-app-kit/reference/policies/policyCoverage.test.template.ts"
+      ],
+      "notCopiedWhy": {
+        "skills/cribl-app-kit/reference/policies/paths.ts": "a TEMPLATE: the app writes its own registry of real calls at the same project path (apps/cribl-app/src/platform/policies/paths.ts); it is not a copy and must not be synced. Re-running adopt for this folder would record it as unknown-base - remove that record by hand.",
+        "skills/cribl-app-kit/reference/policies/policyCoverage.test.template.ts": "its app form is apps/cribl-app/src/platform/policies/policies-coverage.test.ts, which adds KNOWN_EXCEPTIONS (DBT-153) and the request-scan check"
+      }
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference",
+      "to": "packages/core/src/kit/config-writes",
+      "skipped": [
+        "skills/cribl-config-writes/reference/transport.ts"
+      ],
+      "notCopiedWhy": {
+        "skills/cribl-config-writes/reference/transport.ts": "systemClock (Date.now/setTimeout) breaks core purity; replaced by a core-local type-only module at packages/core/src/kit/config-writes/transport.ts (not a copy; do not sync it)"
+      }
+    },
+    {
+      "skill": "cribl-dataflow-diagram",
+      "from": "skills/cribl-dataflow-diagram/reference",
+      "to": "packages/ui/src/components/diagram",
+      "kitCommit": "0b276a88cc1c8ecddd593f59f27e4f64a204b111",
+      "skipped": [
+        "skills/cribl-dataflow-diagram/reference/FlowDiagram.test.tsx",
+        "skills/cribl-dataflow-diagram/reference/FlowDiagram.tsx",
+        "skills/cribl-dataflow-diagram/reference/dataflow.css",
+        "skills/cribl-dataflow-diagram/reference/exportSvg.ts",
+        "skills/cribl-dataflow-diagram/reference/fixtures.ts",
+        "skills/cribl-dataflow-diagram/reference/flow.test.ts",
+        "skills/cribl-dataflow-diagram/reference/flow.ts",
+        "skills/cribl-dataflow-diagram/reference/layout.test.ts",
+        "skills/cribl-dataflow-diagram/reference/layout.ts",
+        "skills/cribl-dataflow-diagram/reference/model.test.ts",
+        "skills/cribl-dataflow-diagram/reference/model.ts",
+        "skills/cribl-dataflow-diagram/reference/policies.snippet.yml",
+        "skills/cribl-dataflow-diagram/reference/snapshot.test.ts",
+        "skills/cribl-dataflow-diagram/reference/snapshot.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowMetrics.test.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowMetrics.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowSnapshot.test.ts",
+        "skills/cribl-dataflow-diagram/reference/useFlowSnapshot.ts"
+      ],
+      "notCopiedWhy": {
+        "skills/cribl-dataflow-diagram/reference": "ported into hooks, not copied: FlowDiagram.tsx became use-diagram-viewport.ts, use-card-drag.ts, diagram-info.tsx and animated-edge.tsx, and layout.ts's pure geometry became geometry.ts (by way of screens/azure-logging-map/logging-map-layout.ts). No file is a copy, so none has a `files` record and kitDrift cannot compare them: after a kit change to FlowDiagram.tsx or layout.ts, diff them by hand against the ported files, from this kitCommit (the reference's head when the shell was ported). The other reference files (model, flow, snapshot, metrics hooks, export, css, fixtures, policies snippet, tests) were not ported."
+      }
+    },
+    {
+      "skill": "cribl-metrics",
+      "from": "skills/cribl-metrics/reference",
+      "to": "packages/core/src/kit/metrics",
+      "skipped": [
+        "skills/cribl-metrics/reference/fakes.test-util.ts",
+        "skills/cribl-metrics/reference/metricName.ts",
+        "skills/cribl-metrics/reference/metrics.test.ts",
+        "skills/cribl-metrics/reference/promStore.test.ts",
+        "skills/cribl-metrics/reference/promStore.ts",
+        "skills/cribl-metrics/reference/promql.ts",
+        "skills/cribl-metrics/reference/seriesCount.ts",
+        "skills/cribl-metrics/reference/seriesEstimate.ts",
+        "skills/cribl-metrics/reference/transport.ts"
+      ],
+      "notCopiedWhy": {
+        "skills/cribl-metrics/reference/transport.ts": "one transport for the kit in core: packages/core/src/kit/metrics/transport.ts is a local re-export of ../config-writes/transport (no systemClock)",
+        "skills/cribl-metrics/reference/metrics.test.ts": "imports the uncopied seriesEstimate, metricName and fakes; its metricsQuery and counting cases are ported to the local metrics-subset.test.ts",
+        "skills/cribl-metrics/reference/fakes.test-util.ts": "identical to config-writes/fakes.test-util.ts, which the local subset test uses",
+        "skills/cribl-metrics/reference/promql.ts": "not used by this app",
+        "skills/cribl-metrics/reference/promStore.ts": "not used by this app",
+        "skills/cribl-metrics/reference/promStore.test.ts": "tests the uncopied promStore",
+        "skills/cribl-metrics/reference/seriesCount.ts": "not used by this app",
+        "skills/cribl-metrics/reference/seriesEstimate.ts": "not used by this app",
+        "skills/cribl-metrics/reference/metricName.ts": "not used by this app"
+      }
+    }
+  ],
+  "files": [
+    {
+      "skill": "cribl-app-kit",
+      "from": "skills/cribl-app-kit/reference/policies/policyCoverage.test.ts",
+      "to": "apps/cribl-app/src/platform/policies/policyCoverage.test.ts",
+      "base": "8be00b2103665253c86566b74ddf55f7f8ce2631b188ead68501c0e2721fcecb",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-app-kit",
+      "from": "skills/cribl-app-kit/reference/policies/policyCoverage.ts",
+      "to": "apps/cribl-app/src/platform/policies/policyCoverage.ts",
+      "base": "e399e95d6d898501f9dc688d8cc61a5dab62b6a00721040acea3dc2726058ee9",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference/commitDeploy.ts",
+      "to": "packages/core/src/kit/config-writes/commitDeploy.ts",
+      "base": "2ce32d4941f27a65437af6e5029cb0a0a7447009f0f1731b954b4d4e7f936e1d",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference/configWrites.test.ts",
+      "to": "packages/core/src/kit/config-writes/configWrites.test.ts",
+      "base": "ece4f0e61da48a898999a4e8297f0fa257e031e2f04dcf3ddeacaeecaf901d69",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference/fakes.test-util.ts",
+      "to": "packages/core/src/kit/config-writes/fakes.test-util.ts",
+      "base": "87835a80e1b5de6963094b5802d7f124a9613eb2e1922a18e8e3e25cb2212303",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference/ownership.ts",
+      "to": "packages/core/src/kit/config-writes/ownership.ts",
+      "base": "4bbcccd3cc2476938f254c68bc2244ee9159ce803591a9db29eb3e16317b24f7",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-config-writes",
+      "from": "skills/cribl-config-writes/reference/readModifyWrite.ts",
+      "to": "packages/core/src/kit/config-writes/readModifyWrite.ts",
+      "base": "761aa2359a6209834007bd06c63b5736cc9c5325b695f1345171836f205370dc",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-metrics",
+      "from": "skills/cribl-metrics/reference/counting.ts",
+      "to": "packages/core/src/kit/metrics/counting.ts",
+      "base": "af917ad78c45dc9e29d65c56541b6c7ef3f876262b572ab4faec81be6c4fc173",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "cribl-metrics",
+      "from": "skills/cribl-metrics/reference/metricsQuery.ts",
+      "to": "packages/core/src/kit/metrics/metricsQuery.ts",
+      "base": "e24b13b0410ccd06782f1d5c6424c8bd9ac1c14ba79075ae0ba2393caa3a5f36",
+      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    }
+  ]
+}

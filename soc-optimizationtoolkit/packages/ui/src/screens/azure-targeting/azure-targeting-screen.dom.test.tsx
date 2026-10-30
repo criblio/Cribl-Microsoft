@@ -158,7 +158,6 @@ describe("AzureTargetingScreen - a run torn down mid-fetch does not strand the p
           screen.getByText(/Connected - 1 subscription\(s\) visible\./),
         ).toBeTruthy();
       },
-      { timeout: 3000 },
     );
   });
 
@@ -195,7 +194,6 @@ describe("AzureTargetingScreen - a run torn down mid-fetch does not strand the p
         azure.releaseAll();
         expect(screen.queryByText("Loading workspaces...")).toBeNull();
       },
-      { timeout: 3000 },
     );
     expect(countOf(azure.calls, WORKSPACES)).toBeGreaterThanOrEqual(1);
   });
@@ -394,5 +392,25 @@ describe("AzureTargetingScreen - a DENIED Sentinel check never reads as 'not ena
     });
     // The operator gets the real status back, not a sanitised one.
     expect(screen.getByText(/403|denied by RBAC/)).toBeTruthy();
+  });
+});
+
+describe("AzureTargetingScreen - creating waits behind a disclosure (DBT-230)", () => {
+  it("keeps Create a new resource group or workspace closed once the scope is complete, Sentinel outside it", async () => {
+    const azure = makeRecordingAzure();
+    const { container } = render(
+      <PortsProvider ports={({ azure: { request: azure.port.request } }) as unknown as UiPorts} config={CONFIG}>
+        <AzureTargetingScreen offline={false} onCommitScope={async () => ({ committed: true, notice: "" })} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(countOf(azure.calls, SENTINEL_SOLUTION)).toBe(1);
+    });
+    const details = container.querySelector("details.azure-create-missing") as HTMLDetailsElement;
+    expect(details).not.toBeNull();
+    expect(details.open).toBe(false);
+    // The create buttons are inside; nothing about Sentinel is.
+    expect(details.textContent).toContain("Create workspace");
+    expect(details.textContent).not.toMatch(/Sentinel/);
   });
 });

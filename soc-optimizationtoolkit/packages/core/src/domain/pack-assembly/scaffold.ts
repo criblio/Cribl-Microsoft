@@ -19,7 +19,8 @@
  * LAYOUT (section 3 item 5): `default/` holds pack.yml, breakers.yml,
  * outputs.yml, samples.yml, lookups.yml, pipelines/route.yml, and
  * pipelines/{Name}/conf.yml; `data/` holds sample JSON and lookup CSVs;
- * lookups.yml is at `default/`, NEVER `data/lookups/`. No report/side files are
+ * lookups.yml is at `default/`, NEVER `data/lookups/`; README.md (GEN-14) and
+ * package.json sit at the pack root. No report/side files are
  * written into the tree (the legacy gap-analysis .txt leak is designed out; the
  * tar builder also guards it).
  *
@@ -57,6 +58,7 @@ import {
 import { serializeSentinelOutputsYml } from "./outputs-yml";
 import { buildPackageJson, renderPackageJson } from "./package-json";
 import { PackTree } from "./pack-tree";
+import { generatePackReadme } from "./readme";
 import {
   generateSampleFile,
   generateSamplesYml,
@@ -99,6 +101,14 @@ export interface PackScaffoldInput {
   builtAtMs: number;
   /** Fallback identity for the outputs.yml skeleton. */
   outputsDefaults?: { tenantId?: string; ingestionClientId?: string };
+  /**
+   * GEN-21/GEN-25: the existing Cribl Sentinel destination the operator picked
+   * instead of connecting Azure. Read only for a ROUTABLE pack - the one shape a
+   * group route can reach a destination through - where the README names it in
+   * place of the convention ids the pack would otherwise say must exist. Blank
+   * is no pick. Part of the stored definition, so a rebuild names it too.
+   */
+  existingDestinationId?: string;
 }
 
 const B62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -176,16 +186,26 @@ function lookupRowsFor(input: TableAssemblyInput | undefined): string[][] {
 }
 
 /**
- * Whether a table's destination will ship placeholders - i.e. no caller
- * supplied real DCR values for it.
+ * Whether the pack writes outputs.yml at all - the routable shape does not
+ * (GEN-13, see scaffoldPack). One predicate for the emitter and the report.
+ */
+function writesOutputs(plan: PipelinePlan): boolean {
+  return plan.packShape !== "routable";
+}
+
+/**
+ * Whether a table's destination will ship placeholders - i.e. the pack writes
+ * a destination for it and no caller supplied real DCR values.
  *
  * Separate from {@link destinationConfigFor} so the same condition decides both
  * what is emitted and what is REPORTED. Deriving the report from a second
  * expression is how the two would eventually disagree, and the failure mode of
- * that disagreement is a pack that claims to be complete and is not.
+ * that disagreement is a pack that claims to be complete and is not. GEN-25 was
+ * that disagreement the other way: a routable pack writes no destination, yet
+ * every table was reported as a placeholder.
  */
-function shipsPlaceholders(input: TableAssemblyInput | undefined): boolean {
-  return input?.destination === undefined;
+function shipsPlaceholders(plan: PipelinePlan, input: TableAssemblyInput | undefined): boolean {
+  return writesOutputs(plan) && input?.destination === undefined;
 }
 
 /** Build the Sentinel destination config for a table (real or placeholder). */
@@ -217,6 +237,17 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
 
   // Manifest + static pack files.
   tree.set("package.json", renderPackageJson(buildPackageJson(plan)));
+  // GEN-14: at the pack ROOT, not default/. Without it Cribl shows its own
+  // placeholder template in Pack Settings -> README.
+  tree.set(
+    "README.md",
+    generatePackReadme(
+      plan,
+      input.existingDestinationId !== undefined
+        ? { existingDestinationId: input.existingDestinationId }
+        : {},
+    ),
+  );
   tree.set("default/pack.yml", "allowGlobalAccess: true\n");
   tree.set("default/breakers.yml", generateBreakersYml(plan.solutionName));
 
@@ -288,7 +319,7 @@ export function scaffoldPack(input: PackScaffoldInput): PackTree {
   // route to Cribl's "Send to Worker Group Routes" and the pack stayed hidden;
   // they deleted the destination and it appeared. HelloPacks, which is
   // selectable, ships no outputs.yml at all.
-  if (plan.packShape !== "routable") {
+  if (writesOutputs(plan)) {
     const configById = new Map<string, SentinelDestinationConfig>();
     plan.tables.forEach((table, i) => {
       const config = destinationConfigFor(table, tableInputs[i], input.outputsDefaults);
@@ -313,7 +344,8 @@ export interface AssembledPack {
    * time nobody derived it: the fallback was silent, and an operator could
    * install a pack whose destination pointed at
    * `dcr-00000000000000000000000000000000` with nothing anywhere saying so.
-   * Empty means every table carries real values.
+   * Empty means every table carries real values - or, for a routable pack,
+   * that the pack ships no destination values at all (GEN-25).
    */
   placeholderTables: string[];
 }
@@ -338,7 +370,7 @@ export function assemblePack(input: PackScaffoldInput): AssembledPack {
     crblFileName: crblFileName(input.plan.packName, input.plan.version),
     record,
     placeholderTables: input.plan.tables
-      .filter((_, index) => shipsPlaceholders(input.tableInputs?.[index]))
+      .filter((_, index) => shipsPlaceholders(input.plan, input.tableInputs?.[index]))
       .map((table) => table.sentinelTable),
   };
 }

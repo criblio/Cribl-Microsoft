@@ -12,6 +12,7 @@
 import type { CriblClient } from "../../ports/cribl-client";
 import { isEdgeFleet } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
+import { listingRows, listingWasRead } from "../../domain/inventory-listing";
 import type {
   LiveArchitectureSnapshot,
   LiveSnapshotSection,
@@ -28,14 +29,21 @@ export interface EdgeFleetData {
   workers?: LiveSnapshotSection;
   /** Fleet ids beyond the fetch cap, surfaced instead of silently dropped. */
   skippedFleets: string[];
+  /**
+   * False when the groups listing itself came back EMPTY (DBT-134): then "no
+   * fleets" is unverified - the leader sends the same empty answer to a
+   * caller whose role covers no group - and the screen must not state it.
+   */
+  groupsListed: boolean;
 }
 
 export async function fetchEdgeFleetData(
   cribl: CriblClient,
   logger?: Logger,
 ): Promise<EdgeFleetData> {
-  const groups = await cribl.listGroups();
-  const fleetIds = groups.filter(isEdgeFleet).map((g) => g.id);
+  const listing = await cribl.listGroups();
+  // Rows to filter; emptiness is reported through `groupsListed`, not a count.
+  const fleetIds = listingRows(listing).filter(isEdgeFleet).map((g) => g.id);
   const fetched = fleetIds.slice(0, MAX_FLEET_FETCHES);
   const fleets = await Promise.all(
     fetched.map(async (id) => ({
@@ -59,6 +67,12 @@ export async function fetchEdgeFleetData(
     fleets: fleets.length,
     skipped: fleetIds.length - fetched.length,
     workersAvailable: workers !== undefined,
+    groupsListing: listing.kind,
   });
-  return { fleets, workers, skippedFleets: fleetIds.slice(MAX_FLEET_FETCHES) };
+  return {
+    fleets,
+    workers,
+    skippedFleets: fleetIds.slice(MAX_FLEET_FETCHES),
+    groupsListed: listingWasRead(listing),
+  };
 }

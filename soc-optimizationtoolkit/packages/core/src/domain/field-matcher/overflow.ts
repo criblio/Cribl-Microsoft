@@ -40,10 +40,12 @@ export const TABLE_OVERFLOW_FIELDS: Record<
  * Fields to skip from overflow (Cribl internals, transport metadata - cleaned
  * up separately by the pipeline). Verbatim from legacy `skipOverflow`.
  *
- * DESIGN NOTE preserved: "in" is a JS reserved word, so the CEF inbound-bytes
- * field cannot be an ALIAS_TABLE key (its counterpart "out" is). It therefore
- * never gets a dedicated match and flows to overflow by design - not dropped.
- * Preserving this list (and NOT adding "in") preserves that behavior.
+ * The CEF inbound-bytes field "in" is NOT special here. A legacy note claimed
+ * that, being a JS reserved word, it could not be an ALIAS_TABLE key and so
+ * flowed to overflow by design. That was wrong - a quoted object key may be a
+ * reserved word - and since GEN-20 "in" aliases to ReceivedBytes like its
+ * counterpart "out" aliases to SentBytes. A field this list skips is cleaned
+ * up, not overflowed, so "in" must never be added to it.
  */
 export const SKIP_OVERFLOW_FIELDS = new Set([
   "_raw",

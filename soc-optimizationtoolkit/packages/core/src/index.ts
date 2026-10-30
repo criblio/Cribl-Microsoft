@@ -55,8 +55,34 @@ export * from "./domain/sample-sources";
 export * from "./domain/log-type-catalog";
 export * from "./domain/capture-filter";
 export * from "./domain/eventhub-discovery";
+// AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
+// Azure onboarding screen all use.
+export * from "./domain/eventhub-arm";
+// AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
+export * from "./domain/defender-export";
+// AZR-18: the Azure onboarding screen's section layout and item availability.
+export * from "./domain/onboarding-sections";
 export * from "./domain/siem-migration";
 export * from "./domain/content-install";
 export * from "./domain/labs";
+export * from "./domain/logging-map";
+// AZR-30..34 (ADR 0007): the Azure onboarding How-to, Validate, dataflow and
+// Cribl source domains. The eventhub-arm, defender-export and entra-diagnostics
+// additions (ruleCanListen, classifyExportForPlan, listSettingsRequest, ...)
+// reach the root through those barrels above.
+export * from "./domain/onboarding-howto";
+export * from "./domain/onboarding-howto-steps";
+export * from "./domain/onboarding-validation";
+export * from "./domain/cribl-onboarding-source";
+// The one Cribl text-secret body builder (DBT-163); cribl-onboarding-source
+// re-exports the same APP_ID and buildSecretBody bindings.
+export * from "./domain/cribl-secrets";
+export * from "./domain/onboarding-flow";
+export * from "./domain/onboarding-dataflow";
+// The adopted claude-kit code stays internal: only the request description a
+// screen shows in its (i) and the two transport types cross the package edge.
+// Never the kit wholesale - in particular never a clock (core stays pure).
+export { describeMetricsRequest } from "./kit/metrics/metricsQuery";
+export type { ApiResponse, Clock } from "./kit/config-writes/transport";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";

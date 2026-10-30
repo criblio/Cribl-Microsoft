@@ -30,6 +30,7 @@ const ALL_KINDS: CapabilityFallbackKind[] = [
   "role-assignment-request",
   "app-registration-request",
   "cribl-pack",
+  "defender-howto-steps",
 ];
 
 describe("copy decisions", () => {
@@ -66,9 +67,24 @@ describe("copy decisions", () => {
         continue;
       }
       // A named surface is the whole content: "produced by a run somewhere" is
-      // what the hint already said and is not actionable.
-      expect(pointer, kind).toMatch(/Batch tab|Deploy section/);
+      // what the hint already said and is not actionable. The How-to section
+      // joined the alternation with CAP-7a's Defender kind: a third surface,
+      // still named, so the pin's demand is unchanged.
+      expect(pointer, kind).toMatch(/Batch tab|Deploy section|How to set it up yourself section/);
     }
+  });
+
+  it("sends the Defender export to the How-to steps, not to an ARM run", () => {
+    // CAP-7a. The arm-template run is the Sentinel Integration export, which
+    // builds no continuous export; pointing there would send someone to a
+    // screen that cannot produce what they need.
+    expect(isInlineArtifact("defender-howto-steps")).toBe(false);
+    expect(fallbackRunPointer("defender-howto-steps")).toContain(
+      "How to set it up yourself",
+    );
+    expect(fallbackRunPointer("defender-howto-steps")).not.toMatch(/Deploy section|Batch tab/);
+    expect(fallbackHint("defender-howto-steps")).toContain("no live changes");
+    expect(fallbackHint("defender-howto-steps")).not.toMatch(/run/);
   });
 });
 

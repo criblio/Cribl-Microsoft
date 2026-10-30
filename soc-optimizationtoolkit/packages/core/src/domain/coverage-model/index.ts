@@ -29,11 +29,17 @@ export type {
 
 export {
   COVERAGE_SELECTION_KEY,
+  COVERAGE_SELECTION_KIND,
   COVERAGE_SELECTION_VERSION,
   decodeSelection,
   defaultSelection,
   encodeSelection,
+  readCoverageDocument,
   resolvedSubSelection,
   selectedItemIds,
 } from "./coverage-selection";
-export type { CoverageSelection, DecodedSelection } from "./coverage-selection";
+export type {
+  CoverageDocument,
+  CoverageSelection,
+  DecodedSelection,
+} from "./coverage-selection";

@@ -17,6 +17,8 @@
  * up", which routes the next load into the wizard - the same legacy behaviour,
  * now keyed on setup rather than mode.
  *
+ *   - {@link loadableSetupFromRead}: the boot read of the setup record as a
+ *     LoadableSetup, keeping a FAILED read apart from "not set up" (DBT-145).
  *   - {@link isScrolledToBottom}: the acceptance gate's scroll threshold.
  *   - {@link groupNavSections}: the sidebar's section grouping (ux-flow-plan
  *     4.4, Unit 6.5) - journey steps first, then tools, then diagnostics.
@@ -27,6 +29,7 @@
  * Pure: no IO, no fetch, no React.
  */
 
+import { parseSetupRecord } from "@soc/core";
 import type { AcceptanceRecord } from "@soc/core";
 
 /**
@@ -39,14 +42,37 @@ export type LoadableAcceptance = AcceptanceRecord | null | "loading";
  * Whether setup is complete, as the shell holds it. null means "not yet set
  * up". This replaced the persisted AppMode, which carried that meaning only
  * incidentally (capability-model-plan step 5).
+ *
+ * "unreadable" means the read of the setup record FAILED (rejected: a 5xx, a
+ * timeout, a bridge error) - which is not the same fact as "not set up".
+ * Folding it into null sent an install that had finished setup back into the
+ * setup flow on any failed read (DBT-145).
  */
-export type LoadableSetup = boolean | null | "loading";
+export type LoadableSetup = boolean | null | "loading" | "unreadable";
+
+/**
+ * Turn the settled boot read of the setup record into a {@link LoadableSetup}.
+ * A fulfilled read parses (a missing or empty record is null, "not set up");
+ * a REJECTED read is "unreadable", never null (DBT-145). Which answers reject
+ * is the adapter's half of DBT-145, not decided here: PlatformSecretsStore
+ * rejects every 403 except the encrypted-value one, which resolves null and
+ * so arrives here as fulfilled.
+ */
+export function loadableSetupFromRead(
+  read: PromiseSettledResult<string | null>,
+): LoadableSetup {
+  if (read.status === "rejected") {
+    return "unreadable";
+  }
+  return parseSetupRecord(read.value) !== null;
+}
 
 /** The top-level surface the shell should render. */
 export type FramePhase =
   | { phase: "loading" }
   | { phase: "aua" }
   | { phase: "setup" }
+  | { phase: "setup-unreadable" }
   | { phase: "ready" };
 
 /**
@@ -58,8 +84,10 @@ export type FramePhase =
  *   2. not accepted -> "aua" (the gate comes before everything else,
  *      including setup - even if setup state is still loading)
  *   3. setup still loading -> "loading"
- *   4. setup not complete -> "setup" (the first-run wizard)
- *   5. otherwise -> "ready"
+ *   4. setup record unreadable -> "setup-unreadable" (say so and offer a
+ *      retry; NEVER the wizard, because a failed read is not "not set up")
+ *   5. setup not complete -> "setup" (the first-run wizard)
+ *   6. otherwise -> "ready"
  *
  * Step 4 used to be "mode-select", and "ready" used to carry the chosen mode.
  * The wizard replaced the chooser and the frame no longer has a mode to carry
@@ -77,6 +105,9 @@ export function resolveFramePhase(
   }
   if (setup === "loading") {
     return { phase: "loading" };
+  }
+  if (setup === "unreadable") {
+    return { phase: "setup-unreadable" };
   }
   if (setup === null || setup === false) {
     return { phase: "setup" };

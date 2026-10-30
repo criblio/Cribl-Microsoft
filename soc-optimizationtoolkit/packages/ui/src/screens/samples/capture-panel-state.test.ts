@@ -12,7 +12,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { CaptureSamplesResult } from "@soc/core";
+import type { CaptureSamplesResult, CriblClient } from "@soc/core";
+import {
+  TAGGED_SAMPLE_MAX_BYTES,
+  capTaggedSampleBytes,
+  captureSamples,
+} from "@soc/core";
+import { panosCefCaptureBody } from "./panos-cef-capture-test-fixture";
+import { storedEventShortfalls } from "./planned-samples";
 import {
   captureLogTypeChoices,
   composeFilter,
@@ -20,6 +27,7 @@ import {
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
+  reseedKeepingPicks,
   selectedValues,
   toggleChoice,
 } from "./capture-panel-state";
@@ -36,6 +44,7 @@ const result = (over: Partial<CaptureSamplesResult> = {}): CaptureSamplesResult 
   rawEvents: [],
   format: "csv",
   noDiscriminator: false,
+  leftOutEvents: 0,
   notes: [],
   ok: true,
   ...over,
@@ -86,6 +95,56 @@ function select(filter: string, inputId: string, raw: string): boolean {
   ) as boolean;
 }
 
+describe("reseedKeepingPicks (DBT-198)", () => {
+  it("keeps the operator's ticks and takes the seed's notes and order", () => {
+    // What the panel had after the operator narrowed it to two.
+    const previous = captureLogTypeChoices([
+      rec("TRAFFIC", "detection"),
+      rec("THREAT", "detection"),
+      rec("CONFIG", "workbook"),
+      rec("SYSTEM", "detection"),
+    ]).map((c) => ({ ...c, selected: c.value === "TRAFFIC" || c.value === "THREAT" }));
+    // The seed the commit provokes: TRAFFIC and THREAT now provided (so the seed
+    // alone would UN-tick them), the others still needed (so it would tick
+    // them), and a type nobody has been offered yet.
+    const seeded = captureLogTypeChoices([
+      rec("THREAT", "detection", true),
+      rec("TRAFFIC", "detection", true),
+      rec("CONFIG", "workbook"),
+      rec("SYSTEM", "detection"),
+      rec("URL", "detection"),
+    ]);
+
+    const next = reseedKeepingPicks(seeded, previous);
+
+    expect(next.map((c) => [c.value, c.selected])).toEqual([
+      ["THREAT", true],
+      ["TRAFFIC", true],
+      ["CONFIG", false],
+      ["SYSTEM", false],
+      // Never offered before, so nobody chose against it: the seed's default.
+      ["URL", true],
+    ]);
+    // The facts the commit changed still arrive.
+    expect(next[0].note).toBe("already provided - capturing again replaces that sample");
+    expect(next[1].note).toBe("already provided - capturing again replaces that sample");
+    expect(next[2].note).toBeUndefined();
+  });
+
+  it("drops a value the new seed no longer offers", () => {
+    const previous = captureLogTypeChoices([rec("A", "detection"), rec("B", "detection")]);
+    const next = reseedKeepingPicks(captureLogTypeChoices([rec("B", "vendor")]), previous);
+    expect(next).toEqual([
+      {
+        value: "B",
+        evidence: "vendor",
+        selected: true,
+        note: "documented by the vendor, not required by this solution",
+      },
+    ]);
+  });
+});
+
 describe("toggle + compose", () => {
   const choices = captureLogTypeChoices([
     rec("TRAFFIC", "detection"),
@@ -125,10 +184,13 @@ describe("toggle + compose", () => {
   });
 
   it("surfaces the __inputId warning for an edited filter", () => {
-    expect(filterWarning("/,TRAFFIC,/i.test(_raw)", "in_syslog")).toContain(
+    const source = { id: "in_syslog", detail: "syslog" };
+    expect(filterWarning("/,TRAFFIC,/i.test(_raw)", source)).toContain(
       "EVERY source",
     );
-    expect(filterWarning(composeFilter("in_syslog", choices), "in_syslog")).toBeNull();
+    expect(filterWarning(composeFilter("in_syslog", choices), source)).toBeNull();
+    // DBT-169: the source's type reaches core, so the typed form is silent.
+    expect(filterWarning("__inputId=='syslog:in_syslog'", source)).toBeNull();
   });
 });
 
@@ -175,6 +237,31 @@ describe("deriveCaptureView", () => {
     expect(view.headline).toBe("Captured 3 events in 2 log types (csv).");
     expect(view.logTypes.map((l) => l.eventCount)).toEqual([2, 1]);
     expect(view.logTypes[0].preview).toEqual(["a", "b"]);
+  });
+
+  it("SAYS how many captured events are in no log type (DBT-205)", () => {
+    // Five captured, three grouped: without the second sentence the headline
+    // promises five events and the groups below hold three.
+    const splits = [
+      { logType: "TRAFFIC", rawEvents: ["a", "b"], format: "kv" as const, eventCount: 2 },
+      { logType: "THREAT", rawEvents: ["c"], format: "kv" as const, eventCount: 1 },
+    ];
+    const view = deriveCaptureView(
+      result({ rawEvents: ["a", "x", "b", "y", "c"], format: "kv", splits, leftOutEvents: 2 }),
+      false,
+      [],
+    );
+    expect(view.headline).toBe(
+      "Captured 5 events in 2 log types (kv). 2 of them parsed into no log type and are in none of the samples below.",
+    );
+    const one = deriveCaptureView(
+      result({ rawEvents: ["a", "x", "b", "c"], format: "kv", splits, leftOutEvents: 1 }),
+      false,
+      [],
+    );
+    expect(one.headline).toBe(
+      "Captured 4 events in 2 log types (kv). 1 of them parsed into no log type and is in none of the samples below.",
+    );
   });
 
   it("WARNS which log types a commit would replace", () => {
@@ -399,5 +486,115 @@ describe("deriveCaptureCommitView", () => {
       deriveCaptureCommitView(null, false, "disk full").headline,
     ];
     expect(new Set(headlines).size).toBe(4);
+  });
+
+  it("says what the store kept and why when it trimmed a sample (DBT-197)", () => {
+    const view = deriveCaptureCommitView(
+      {
+        stored: 1,
+        returned: 1,
+        trimmed: [{ logType: "captured", handed: 100, kept: 9 }],
+      },
+      false,
+    );
+    expect(view).toEqual({
+      status: "done",
+      headline:
+        'Added 1 sample from this capture. "captured" kept 9 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+    });
+    // A partial commit carries the same sentence, after its own.
+    expect(
+      deriveCaptureCommitView(
+        {
+          stored: 1,
+          returned: 2,
+          trimmed: [{ logType: "THREAT", handed: 50, kept: 14 }],
+        },
+        false,
+      ).headline,
+    ).toBe(
+      'Added 1 of the 2 log types this capture returned; the rest held nothing this app could parse into a record. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
+    );
+  });
+});
+
+/**
+ * DBT-197, END TO END through every pure step "Add these as samples" takes.
+ *
+ * The UAT: a 100-event PAN-OS CEF capture over syslog read "Captured 100
+ * events", then the chip read "captured 9 events" and nothing said why. Pushed
+ * through the real path - captureSamples on a live-shaped NDJSON body,
+ * plannedCaptureSamples, a store that byte-caps exactly as the cloud adapter
+ * does, the read-back, the commit view - NOTHING before the store loses an
+ * event: all 100 are captured, split, parsed and handed over. The store's byte
+ * cap is where they go, and it is deliberate (the leader 413s a large KV body).
+ * So the count is pinned at every hop, and the headline must name the trim.
+ */
+describe("a verbose PAN-OS CEF capture, captured to committed", () => {
+  it("hands all 100 events to the store and names what the store kept", async () => {
+    const cribl = {
+      request: async () => ({ status: 200, body: panosCefCaptureBody(100) }),
+    } as unknown as CriblClient;
+    const result = await captureSamples(cribl, {
+      groupId: "default",
+      filter: "__inputId=='syslog:in_syslog'",
+      maxEvents: 100,
+    });
+
+    expect(result.rawEvents).toHaveLength(100);
+    // DBT-196 splits PAN-OS CEF by its header TYPE: the fixture alternates the
+    // THREAT and TRAFFIC shapes, so it captures as two log types of 50.
+    expect(result.splits.map((s) => [s.logType, s.eventCount])).toEqual([
+      ["THREAT", 50],
+      ["TRAFFIC", 50],
+    ]);
+    // DBT-205: every PAN-OS CEF line parses, so the headline gains no sentence.
+    expect(result.leftOutEvents).toBe(0);
+    expect(deriveCaptureView(result, false, []).headline).toBe(
+      "Captured 100 events in 2 log types (cef).",
+    );
+
+    const handed = plannedCaptureSamples(result.splits, "capture:in_syslog");
+    expect(handed.map((s) => [s.logType, s.format])).toEqual([
+      ["THREAT", "cef"],
+      ["TRAFFIC", "cef"],
+    ]);
+    for (const s of handed) {
+      expect(s.parsed.records).toHaveLength(50);
+      expect(s.parsed.eventCount).toBe(50);
+      expect(s.parsed.fields).toHaveLength(115);
+    }
+    // Each shape carries 20 keys the other lacks; together, the 135 the
+    // unsplit capture used to read.
+    const union = new Set(handed.flatMap((s) => s.parsed.fields.map((f) => f.name)));
+    expect(union.size).toBe(135);
+
+    // The cloud adapter's first write: the 256 KiB budget. A 413 halves it; one
+    // halving is pinned here, which is the size the UAT's 9 sits beside. The
+    // cap is PER LOG TYPE, so each 50-event type keeps what one 128 KiB sample
+    // holds (~8.5 KB an event): 14 apiece, 28 of 100 overall.
+    const stored = handed.map(
+      (s) => capTaggedSampleBytes(s, TAGGED_SAMPLE_MAX_BYTES / 2).sample,
+    );
+    expect(stored.map((s) => [s.logType, s.parsed.records.length])).toEqual([
+      ["THREAT", 14],
+      ["TRAFFIC", 14],
+    ]);
+    // The field list is untouched by the cap - each type's 115 came from all 50.
+    for (const s of stored) expect(s.parsed.fields).toHaveLength(115);
+
+    const trimmed = storedEventShortfalls(handed, stored);
+    expect(trimmed).toEqual([
+      { logType: "THREAT", handed: 50, kept: 14 },
+      { logType: "TRAFFIC", handed: 50, kept: 14 },
+    ]);
+    expect(
+      deriveCaptureCommitView(
+        { stored: handed.length, returned: result.splits.length, trimmed },
+        false,
+      ).headline,
+    ).toBe(
+      'Added 2 samples from this capture. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50. "TRAFFIC" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
+    );
   });
 });

@@ -61,14 +61,13 @@ jobs:
       # name at a time reported 36 findings of which 21 named elements a sibling
       # class already styled, and this gate would have failed on its first run.
       #
-      # FOURTEEN elements survive that narrowing, recorded in UNDECIDED_BARE as
-      # THIRTEEN path-plus-name entries - `gap-overflow-triage` is bare at two
-      # lines of one file. Both numbers, because they are not the same number:
-      # an earlier draft of this comment said only "13" and claimed the gate
-      # fails on the fourteenth, and the fourteenth already existed and passed.
-      # Entries carry no line - a line moves on any edit above it - so each one
-      # carries an EXACT COUNT instead, and a further bare element under a
-      # recorded name fails the step rather than joining the record.
+      # FOURTEEN elements survived that narrowing when it was wired, recorded in
+      # UNDECIDED_BARE as THIRTEEN path-plus-name entries. DBT-114 decided all
+      # of them - twelve dead names deleted, two test hooks moved to
+      # data-testid - so the list is EMPTY and any bare element fails the step.
+      # If a residue is ever recorded again, each entry carries an EXACT COUNT
+      # rather than a line (a line moves on any edit above it), so a further
+      # bare element under a recorded name fails rather than joining the record.
       - name: Check class names
         run: npm run check-classnames --workspace apps/cribl-app
 

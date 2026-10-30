@@ -31,7 +31,9 @@ export {
 } from "./ensure-tables";
 export type {
   AvailableWorkbook,
+  DeprecatedSolutionsLookup,
   SolutionCatalogEntry,
+  SolutionCatalogLookup,
 } from "./available-content";
 export {
   availableAnalyticRules,

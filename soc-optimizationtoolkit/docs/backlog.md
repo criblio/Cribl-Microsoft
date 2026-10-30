@@ -1,10 +1,9 @@
 # Backlog
 
-Status: Living - the open work, newest decisions first. The most honest document in the repo.
+Status: Living - the reasoning behind open work and decisions; sections are numbered in the order they were filed, newest last. The most honest document in the repo.
 
-Updated 2026-08-12 (branch `feature/capability-preflight-mapping`). Each item
-states enough context to be picked up cold. Ordered by priority within each
-group.
+Each item states enough context to be picked up cold. Priority and ordering live
+in `board.json` (rendered as `board.md`), not here.
 
 ## 1. Capability model - COMPLETE, with two follow-ons
 
@@ -12,8 +11,9 @@ All five plan steps have shipped. See
 [capability-model-plan.md](capability-model-plan.md). App modes are gone; what an
 operator can do is measured by a permission audit and annotated, never hidden.
 
-Two things remain, both carried below: step 4 has no UI, and the audit's age has
-no home. Neither blocks anything.
+Two things remained, both carried below. Step 4's offer now sits beside the
+actions (Integrate, Batch Deploy, DCR Automation - see section 16, D-2); the
+audit's age still has no home. Neither blocks anything.
 
 **Step 2 - audit lifecycle. DONE (2026-08-06).** The pure policy
 (`domain/capabilities/audit-lifecycle` - the audit key, the trigger rules, age
@@ -63,9 +63,9 @@ a denied route stays clickable, pinned by DOM tests over the frame (which had no
 direct coverage before this).
 
 Per-route capabilities live in ONE shared `ROUTE_CAPABILITIES` map rather than in
-each shell's route table, so the two shells cannot disagree about what an
-operator can do. Two routes deliberately depart from their old coarse value, and
-both are worth remembering:
+a shell's route table (written when there were two shells, so they could not
+disagree about what an operator can do; ADR-0002 left one). Two routes
+deliberately depart from their old coarse value, and both are worth remembering:
 
 - **`preflight` was `azure`, now `[]`.** It is the screen that RUNS the audit, so
   gating it on permissions is circular - an operator whose audit says "no access"
@@ -82,6 +82,11 @@ plus a preflight probe for it.** The same question came up three times - here,
 in item 4's unmeasured listers, and across item 6 - and it is answered once:
 extend the taxonomy rather than reusing a neighbouring capability or leaving
 surfaces unmeasured. Do the extension as ONE piece of work serving all three.
+
+> ANSWERED 2026-08-31: the connection bar (section 18a, D-1). The paragraph
+> below is kept as history.
+
+> LANDED 2026-10-27 (CAP-1, merged af9bfad; awaits a live preflight): `resourcegraph.read` exists, `eventhub-discovery` now requires it, and the probe counts a 2xx as granted only when rows come back, because Resource Graph filters rather than refuses.
 
 **Not yet done in step 3:** the audit's AGE and a manual re-check still have no
 home. The nav was the intended surface for it, and annotating individual items
@@ -111,6 +116,10 @@ out of work that might succeed.
 Three cases correctly produce nothing: an unresolved check, an UNKNOWN verdict
 (not a denial - verified live, where broken Cribl auth produced unknowns and no
 offers), and a denied READ (no artifact exists by design).
+
+**Follow-on - DONE 2026-08-31 (section 16).** The offer now also sits beside
+Integrate's deploy, Batch Deploy and DCR Automation, each with its own
+`onProduce`. The original note, kept as history:
 
 **Follow-on:** the offer is only on the permission panel. Placing it beside the
 ACTIONS themselves - Integrate's deploy, Batch Deploy, DCR Automation - is a
@@ -408,6 +417,9 @@ leaving them unmeasured or reusing a neighbouring capability. Note this is the
 same extension item 1 needs and item 6 needs: ONE piece of work, not three, and
 each new capability needs a real probe or it contributes nothing.
 
+> ANSWERED 2026-08-31 (18b, D-3) and BUILT: capabilities travel in PortsContext
+> (`packages/ui/src/ports-context.ts`). The question below is kept as history.
+
 **Open question 2: prop-drilling.** `capabilities`/`capabilityContext` are
 threaded from the shell into each screen that lists (Integrate ->
 AzureTargeting, DcrInventoryPanel so far). At ~8 listers that is the duplication
@@ -474,7 +486,8 @@ turns a measured zero into an unmeasured absence, which is item 4 in a new place
 
 **Worth settling when picking it up:**
 
-- **Does the screen only report, or does it produce?** The end state matching
+- **Does the screen only report, or does it produce?** ANSWERED 2026-08-31:
+  produce, in scope (section 18c, D-4). The end state matching
   item 3's "still owed" note is an enrichment that reaches the GENERATED
   PIPELINE - a function that reconstructs `Account` from the raw fields, say.
   Reporting first is a legitimate slice; just do not let it become the finished
@@ -631,7 +644,9 @@ group, resources emit to Event Hub, Cribl reads the hub.
   which the bundled initiative deliberately EXCLUDES (incompatible
   `resourceLocation` Array type). Those two exclusions are the classic silent
   gap - an operator ticking "Security" reasonably assumes AKS came with it - so
-  they need to be visible checkboxes, not a footnote.
+  they need to be visible checkboxes, not a footnote. (The legacy tier text made
+  it worse by listing AKS under Security; since AZR-51 each tier's detail is
+  derived from the services it imports, so AKS is no longer named there.)
 
 Mechanics shared by all three, all already recorded in the census: every
 assignment needs a user-assigned managed identity plus Monitoring Contributor at
@@ -654,6 +669,121 @@ Note this makes the preview a genuinely useful standalone tool: policy
 assignments recreate settings after removal, so knowing what exists and what
 would be affected is most of the value an operator needs before dropping to the
 legacy script to act.
+
+#### 6a-i. The Azure Logging Map (AZR-19) - phase 1, read-only - 2026-10-26
+
+**Asked and answered first: no earlier version of the app had this.** No
+version of the toolkit ever read the management-group tree, policy assignments
+or exemptions, or drew where logging policy applies. The legacy PowerShell in
+`deprecated/Azure/Azure-LogCollection/core/` only DEPLOYED assignments and
+printed a gap analysis. It never drew a tree and never classified assignments
+written by anyone else. So nothing was restored. What phase 1 ports from the
+legacy is DATA only: the names, definition ids, identity name and scopes it
+wrote, the diagnostic-settings parameter names, the roles it granted its
+identity, and the gap-category order. Each piece is pinned against a frozen
+byte-for-byte copy in `packages/core/src/domain/logging-map/legacy/`.
+
+**Ownership: `createdBy` is not usable.** Azure stamps `metadata.createdBy` on
+every assignment. The card's default ("ours = createdBy set by the toolkit") is
+replaced by a reserved key plus ranked legacy evidence; see
+`docs/adr/0006-policy-assignment-ownership-marker.md` (Accepted 2026-10-27).
+The owner chose the key `criblSocToolkit` (`metadata.criblSocToolkit =
+{ version }`) on AZR-19, and the How-to assignment steps tell an operator who
+creates an assignment by hand to set it, with `version: "manual"`.
+
+**Legacy defects deliberately NOT ported.** Each one turns a failed or
+truncated read into an answer that looks real:
+
+- `deprecated/Azure/Azure-LogCollection/core/Analyze-ComplianceGaps.ps1:232-244`
+  reads Resource Graph with `-First 1000` and no paging, and both the empty
+  branch and the `catch` return `@()`. A refused read and a management group
+  with no resources print the same thing.
+- `Analyze-ComplianceGaps.ps1:256` reads compliance with `-Top 5000` and no
+  paging, so a large estate's summary is silently a sample.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-BuiltInPolicyInitiatives.ps1:893-906`
+  looks assignments up with `-ErrorAction SilentlyContinue`, and both the miss
+  and the `catch` print "NOT ASSIGNED". A 403 reads as not deployed.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-SupplementalPolicies.ps1:2343-2347`
+  does the same for the Activity Log. Its `catch` would say UNKNOWN, but
+  `SilentlyContinue` means it never fires.
+- `deprecated/Azure/Azure-LogCollection/core/Deploy-CommunityPolicyInitiative.ps1:1162-1188`
+  builds MultiRegion `resourceSelectors` and never adds them to the splat, so a
+  "per-region" community assignment covers every region. The map therefore
+  reads regions from an assignment's actual selectors and never from its name.
+
+The port instead treats every per-scope list read as a verdict: read rows, a
+verified zero, or refused (http, transport, unexpected shape, too many pages).
+A refusal is UNKNOWN and counted, never "none".
+
+**Why the usecase has its own pager.** When this was written, `listAllPages`
+(`packages/core/src/usecases/azure-discovery/azure-discovery.ts`) quietly
+skipped a 2xx page whose `value` is missing or not an array, and returned only
+the concatenated items. Its caller could not tell "zero rows" from "a body it
+did not understand". The map needs that distinction to mint a verified zero, so
+`packages/core/src/usecases/read-logging-map/arm-pager.ts` checks every page
+and refuses the whole list on a bad one. DBT-148 later made `listAllPages`
+throw on such a page, naming its URL, so its other callers no longer read it
+as zero. The pagers stay separate: the map needs a classified verdict rather
+than a throw, and `arm-pager` refuses a nextLink it cannot follow where
+`listAllPages` returns the first page alone.
+
+**What a verified zero rests on.** A per-scope ARM read (policyAssignments with
+`atScope()`, policyExemptions, roleAssignments) answers 403 when the caller
+cannot read that scope; it does not filter to an empty list. So a 2xx with an
+array `value` on every page is a capability verdict for that scope, and
+`toListingFromRead` in `packages/core/src/domain/logging-map/list-read.ts` may
+mint `none` from it. The permission-FILTERED `GET /subscriptions` read is
+wrapped with `toListing` and never mints `none`
+(`packages/core/src/domain/inventory-listing/inventory-listing.ts:56-66`). The
+visible management-group list is used only to build the tree: it is never
+wrapped in a Listing and never shown as a count. Anything that later shows its
+count must wrap it with `toListing`, not `toListingFromRead`.
+The 403-not-empty claim is platform knowledge and is live-verification item 3f
+on AZR-19. If it turns out wrong for either request kind, `toListingFromRead`
+must stop minting `none` for that kind.
+
+**The read cost, and why not Resource Graph yet.** Phase 1 reads direct ARM per
+scope: one assignments read and one exemptions read per management group and
+subscription, then the distinct non-built-in definitions (capped at 60), then
+roles for the shown assignments (capped at 40, shared between role-assignment
+and role-definition reads). Reads are sequential and paced at 60 a minute,
+which leaves headroom in the 100-a-minute app proxy budget. On a tenant with
+200 subscriptions that is more than 400 requests before definitions, so the
+first open takes several minutes. Resource Graph `policyresources` would
+answer the same in a few calls, but no code here has used Resource Graph with
+a management-group scope (Event Hub discovery uses subscriptions only), and
+the capability work (CAP-1) is not done. That is its own follow-up card.
+(2026-10-27: CAP-1 has landed, pending its live preflight; the management-group
+scope is still unmeasured, so AZR-21 still waits on that.)
+
+**Roles via `assignedTo()`, with one open question.** For each shown
+assignment with a principal id, roles are read once per principal and scope
+with `roleAssignments?$filter=assignedTo('<pid>')` at the assignment's scope,
+then each distinct role definition once for its name. Unknown: whether that
+read at a management group returns grants made BELOW it, such as the legacy's
+Azure Event Hubs Data Owner grant on the namespace. If it does not, the panel
+has to say "roles at scopes below this were not read" rather than imply the
+list is complete. Live-verification item 3g.
+
+**Deferred to phase 2: the DeployIfNotExists compliance lag.** Phase 1 shows
+where an assignment APPLIES, not whether resources comply. Compliance lags
+15-30 minutes after an assignment and DINE fires only for new resources (see
+6a above), so a compliance overlay has to explain a fresh "non-compliant"
+instead of reporting it. The legacy's own gap categories
+(`Analyze-ComplianceGaps.ps1:314-373`) are kept as reference data and not used.
+
+**Drag follows the standard (AZR-20, decided 2026-10-27).** The approved mockup
+had no drag; the house diagram standard requires movable cards and Reset
+layout, and the owner chose the standard. Every card drags on the shared
+`components/diagram` drag hook, its edges follow it through `applyPositions`,
+and Reset layout restores the computed tree. Positions are session-only, as
+the standard asks, and a collapse, fold or filter drops them. Background pan
+(dragging on the empty canvas) is unchanged.
+
+**Portal link for a management group is unverified.** The panel links every
+scope as `#resource<scopeId>/overview`. That is known for subscriptions; the
+portal normally opens management groups through the ManagementGroups
+drilldown blade. The AZR-19 live checklist opens both before the card closes.
 
 ### 6b. Direct ARM configuration - script, no policy
 
@@ -688,6 +818,8 @@ actually ran: all three profiles ship, with members taken verbatim from
 compare, the same provenance approach AZR-0 used. The coverage catalog keeps
 offering the two profiles it always did, because changing what an existing
 stored selection MEANS is a separate act from making a third preset available.
+(Superseded 2026-10-02 by AZR-13, section 18i: the catalog now derives all
+three from `ENTRA_PROFILES`.)
 
 **The two consequences ride their categories.** The 5-10x warning sits on
 `NonInteractiveUserSignInLogs` itself, and only two of fifteen categories carry
@@ -930,7 +1062,10 @@ Partial coverage already exists and should be extended rather than duplicated:
 `event-hub-fanin`, `entra-reroute` (Entra, content-preserving), the
 `azure-platform-fanin` preset ("platform diagnostics and Entra ID exports stream
 into Event Hubs"), `vnet-flow-collection`, `blob-collector`, `windows-ama-direct`
-and `direct-dcr`. What has no diagram today: the POLICY mechanism itself (6a -
+and `direct-dcr`. (2026-10-26: the Azure Logging Map, 6a-i, now draws WHERE
+policy assignments apply in the management-group tree. That is a scope map, not
+a dataflow pattern, so the gap below still stands.) What has no diagram today:
+the POLICY mechanism itself (6a -
 assignment at MG scope, DeployIfNotExists, the managed identity, remediation for
 pre-existing resources), Defender for Cloud continuous export (6b), Defender XDR
 streaming with its manual portal step (6c), and the pull collectors (6d).
@@ -943,6 +1078,14 @@ Two things worth drawing honestly, because they are where a generic
 - **6d flows the other way.** Every other category is Azure pushing to a hub;
   the pull collectors are Cribl reaching into Azure on a schedule. A diagram set
   that draws them all left-to-right identically teaches the wrong model.
+
+> AMENDED 2026-10-26 (ADR 0007, `docs/adr/0007-onboarding-cribl-source-and-howto-progress.md`):
+> the onboarding screen now has its OWN per-source dataflow diagram (AZR-30), so
+> "do not build a new diagram implementation" was answered by lifting the Logging
+> Map's hand-SVG canvas into one shared shell,
+> `packages/ui/src/components/diagram/`, which both screens use. No third engine
+> was written. This section's ask - reference patterns on the Dataflow page - is
+> still open and still belongs in `domain/architecture-patterns`. See section 24.
 
 ### 6h. Shared concerns
 
@@ -1004,6 +1147,29 @@ discovery and the unmeasured listers. Already measured and reusable: Event Hub
 namespace creation is `arm.deploy`; every Cribl-side write here, Event Hub source
 or REST collector, is `source.manage`.
 
+> CORRECTED 2026-10-21 (ADR 0005, `docs/adr/0005-azure-onboarding-sections-and-kv-documents.md`):
+> Event Hub namespace creation is NOT measured by `arm.deploy`. That capability is
+> measured from `deployments/write` only (`capability-mapping.ts`), while the labs
+> preflight checks `namespaces/write` directly (`lab-permissions.ts`). Treat
+> namespace creation as unmeasured until a capability probes it. Filed as CAP-7,
+> with the Defender `pricings`/`automations` actions and the namespace rule
+> `listKeys/action`.
+
+> AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
+> workflow, so verified none): EXTEND the existing Event Hub surface; do not build
+> a second one. Event Hub Discovery is single-subscription and read-only -
+> namespaces via Resource Graph, hubs by one GET per namespace, authorization
+> rules at HUB scope only, no listKeys, ending at a JSON download - and its
+> namespace GET/PUT builders were duplicated in labs (same api-version, same
+> path). So AZR-11 lifts those builders into one `domain/eventhub-arm` module,
+> re-bases `listEventHubsRequest` on a minimal `NamespaceRef` (which the existing
+> callers satisfy structurally), splits a Resource-Graph-only
+> `discoverEventHubNamespaces` out of `discoverEventHubs` so the picker does not
+> spend one ARM GET per namespace, and adds hub and namespace-level rule listing
+> for one namespace, a Send-rights check and listKeys (`eventhub-target`). The
+> Event Hub Discovery screen itself stays as it is. ADR 0005 section 6 records the
+> same decision.
+
 Each new capability needs a preflight PROBE, not just a name - an unprobed
 capability contributes nothing per the step-2 mapping rule (only measurements are
 recorded). The existing rules carry over unchanged: writes come only from
@@ -1039,6 +1205,15 @@ already exists in `usecases/guided-deploy/wire-source.ts` and
 The connectedness test must be the SAME one the rest of the app uses, not a new
 probe: two answers to "is there a Cribl here" is the duplicated-decision shape
 the capability model was built to end.
+
+> AS BUILT 2026-10-26 (ADR 0007, `docs/adr/0007-onboarding-cribl-source-and-howto-progress.md`):
+> the WRITE half shipped for the onboarding screen (AZR-34) as a new create-only
+> usecase, `packages/core/src/usecases/create-cribl-source/`, and NOT on
+> `wire-source.ts` or `secret-provisioning.ts`, whose commit, deploy and
+> secret handling are bug cards (DBT-149, DBT-151, DBT-152). Two parts of this
+> decision were not built: the EXPORT fallback when no Cribl is connected, and
+> the `source.manage` gate - a role without the grant learns it from Cribl's own
+> refusal. Both stay open. See section 24.
 
 **Prerequisite ordering is real and mostly implicit.** Nearly every section needs
 an Event Hub namespace (LOG-03) to exist first, and the policy sections need
@@ -1217,6 +1392,35 @@ and a `details`, all of which pick up user-agent styling or an ancestor selector
 this check cannot model. Deciding them needs the design intent of each screen's
 owner, and NO CARD OWNS THAT YET.
 
+**DECIDED by [[DBT-114]] (2026-10-20); `UNDECIDED_BARE` is now empty.** The
+fourteen came apart into two kinds and neither of them was a defect. TWELVE were
+dead wrapper names - `app-frame-route`, `arch-card-head`, `manual-schema-editor`,
+`content-install`, `mapping-catalog-doclink`, the catalog's `mapping-row`,
+`mapping-catalog-doc`, both `gap-overflow-triage`, `pipeline-preview-funcs`,
+`pipeline-preview-rules` and `vendor-name-seam` - so the attribute was deleted and
+the element kept, which changes nothing rendered because none of them had a rule
+to lose. TWO were test hooks - `numbered-section-body` (asserted by string
+equality in `numbered-section.dom.test.tsx`) and `capture-outcome` (queried in
+`capture-panel.dom.test.tsx`) - and moved to `data-testid`, which is what the
+2026-08-17 sweep below meant by "structural hooks rather than dead names". The
+`mapping-row` on `mapping-review-section.tsx` is a different element and a live
+selector; it was left alone. `content-install` turned out NOT to be a test
+selector any more, although that sweep said it was - no test reads it.
+
+FOR [[DBT-115]]: 0 OF 14 WERE ANCESTOR-STYLED through their own name. None of
+the thirteen names appears in any selector in `styles.css`, descendant or
+otherwise. The catalog's `td` and `tr` are styled - `.match-field-table td` - but
+by element type, which never reads the class and so survives the deletion. That
+is the measurement DBT-115 asked this card for, and on this set it says teaching
+the check about descendant selectors would have changed nothing.
+
+What was deliberately NOT done: adding a CSS rule to any of them. A wrapper that
+wants a layout rule is a design change to its screen and needs a Live Preview
+look; nothing about these read as broken, so that would have been churn. Closed
+on pins: a test holds the ten real files to zero bare elements with the empty
+baseline, mutation-checked by restoring `className="arch-card-head"`, which
+fails both that test and the CI step.
+
 So DBT-39's own four names - `pack-card`, `pack-card-head`, `dcr-progress-line`,
 `identity-row-editable` - were deleted in the SAME commit that added the script,
 and the rest were LEFT STANDING rather than accrued afterwards. What went unfixed
@@ -1244,25 +1448,47 @@ card now has a second unpinned command to cover: this section documents
 `npm run check-classnames` as well, and deleting either forward would leave every
 gate green while both documented commands exit 1.
 
-**The lock claim was added 2026-09-02, and it costs a manual step.** The lock was
+**Guarded since 2026-10-20 ([[DBT-101]]).** The paragraph above described the
+state before the card; check-docs now resolves every `npm run <name>` in a
+Living document. The directory question was settled by convention rather than
+by reading prose: a mention resolves against the toolkit ROOT manifest unless
+the command carries its own `--workspace <dir>`. The obvious alternative - a
+name resolves if ANY manifest defines it - was rejected because it cannot catch
+the bug the card exists for: `check-release` is defined in `apps/cribl-app` too,
+so with the root forward deleted a union stays green. The pin deletes exactly
+that forward and expects the error; switching the resolver to the union turns it
+green, which is how it was mutation-checked. Root scripts of the form
+`npm run Y --workspace W` are also checked to find `Y` in `W`. Two limits stay
+open on purpose: only `docs/**/*.md` and `CONTEXT.md` are scanned, so
+`README.md` and the repo `CLAUDE.md` - where most operator-facing commands live -
+are NOT covered (widening that would expose them to every other check-docs rule
+too, a separate decision); and a Living doc that names a workspace-only script
+such as `preview` without `--workspace` will fail even if the prose says which
+directory to run it from.
+
+**The lock claim was added 2026-09-02, and it cost a manual step until DBT-82.** The lock was
 found recording 1.11.5 while `package.json` said 1.12.3. The argument against
 checking a GENERATED file was taken seriously first - a claim on one fails
 whenever somebody forgets to regenerate it, which is how a check gets bypassed
 rather than obeyed - and it lost on THREE measurements, the same three the
-script's header numbers, in the same order. (1) The drift window is one moment,
-the release commit, because `package.mjs` writes the version and never invokes
-npm, while ordinary dependency work already forces an `npm install`. (2) It does
+script's header numbers, in the same order. (1) The drift window was one moment,
+the release commit, because `package.mjs` wrote the version and never invoked
+npm, while ordinary dependency work already forces an `npm install`. Since
+DBT-82 `package.mjs` writes the lock as well, so the window that remains is a
+version hand-edited outside `package.mjs`. (2) It does
 not self-correct: the lock sat at 1.11.5 across FOURTEEN subsequent releases,
 1.11.6 through 1.12.3, before an agent noticed it by accident. (3) The damage is
 exactly the damage this check exists for and no more - `npm ci` accepts the
 mismatch (measured on npm 11.4.2 - exit 0, lock untouched) and the lock never
 ships inside the tgz, so nothing breaks except that a tracked file states a
 version that is not the version. The full argument is in the script's header.
-The cost, stated rather than buried: THREE of the five claims are now kept true
-by hand where two were. The root fix is `package.mjs` regenerating the lock as it
-already writes `package.json` and `release/`, at which point this claim guards an
-automated fact instead of a chore; until that lands, the packaging procedure
-below carries the step.
+The cost, stated rather than buried: it made THREE of the five claims kept true
+by hand where two had been. That cost is RETIRED (DBT-82): `package.mjs` now
+writes the lock's version field through
+`apps/cribl-app/scripts/lock-version.mjs`, as it already writes
+`package.json` and `release/`, so two of the five are manual again - the
+release-notes section and this file's "IS CURRENT" line - and this claim guards
+an automated fact instead of a chore.
 
 **Unreleased source WARNS and never fails**, which is the one rule to keep if
 this is ever rewritten: a feature branch normally carries source the last package
@@ -1274,14 +1500,17 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.12.7 IS CURRENT (2026-09-04).**
-`release/soc-optimizationtoolkit-1.12.7.tgz` - the operator chooses how a pack is
-wired, and the routable choice reports what the worker group must already have;
-a capture window may now run to its full 600 seconds. On top of 1.12.6's wizard
+**1.13.0 IS CURRENT (2026-10-30).**
+`release/soc-optimizationtoolkit-1.12.9.tgz` - worker-group pickers that say why
+they are empty (DBT-134), the permission audit's age in the connection bar
+(HON-6), and Sentinel Integration in one line per section (DBT-125). On top of
+1.12.8's bug sweep - the Field Mappings example values (DBT-122) and RULE badges
+on every DCR gap analysis (DBT-121) - 1.12.7's operator-chosen pack wiring and
+600-second capture window, 1.12.6's wizard
 workspace picker, 1.12.5's ungated deployment target, 1.12.3's replacing pack
 rebuild, 1.12.1's guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.7.
+file at 1.4.0 and now current through 1.12.9.
 
 The two sub-claims above were rewritten on 2026-09-04 having decayed AGAIN - they
 named the 1.12.3 tarball and 1.12.3 notes while `release/` held 1.12.6. That is
@@ -1316,34 +1545,31 @@ a third correction as proof the check should have been built instead - so the
 third correction built it.
 
 **DO NOT HAND-BUMP THE VERSION BEFORE PACKAGING.** `npm run package` IS the
-bump: `scripts/package.mjs:73` increments the patch itself (`--minor`, `--major`
+bump: `apps/cribl-app/scripts/package.mjs:77` increments the patch itself (`--minor`, `--major`
 and `--version X.Y.Z` override it). Editing `package.json` first and then
 running package double-bumps - done 2026-08-18 while shipping 1.11.15, which
 landed on 1.11.16 and had to be rolled back. Nothing warns; the tgz name is the
 only place the doubled number shows up, and `release/` gets pruned to it, so the
 wrong version becomes the shipped one quietly. Bump by running the script.
 
-**AFTER `npm run package`, RUN `npm install --package-lock-only` AND COMMIT THE
-ONE-LINE LOCK CHANGE.** `package.mjs` bumps `apps/cribl-app/package.json` and
-writes the tgz but never invokes npm, so without this step every release commit
-leaves `package-lock.json` naming the PREVIOUS version and `check-release` red.
-That check runs in CI on every PR touching `soc-optimizationtoolkit/**`, so the
-consequence is a blocked PR, not a local nuisance. Measured 2026-09-02 in an
-isolated sandbox mirroring the layout: a faithful 1.12.3 -> 1.12.4 release with
-the lock left as npm left it exits 1 with "package-lock.json records the app at
-1.12.3 but package.json says 1.12.4"; running the command turns the same tree
-green. Run it from `soc-optimizationtoolkit` or from `apps/cribl-app` - npm walks
-up to the workspace root either way, also measured - and prefer
-`--package-lock-only` over a bare `npm install` because it is the minimal command
-that fixes this and only this. NOT because the bare form rewrites the lock: in
-the same sandbox, seeded at manifest 1.12.4 / lock 1.12.3, the two commands wrote
-a BYTE-IDENTICAL lock - same sha256, and the same SINGLE changed line, the
-`apps/cribl-app` version field: one deletion and one insertion, which is the
-one-line change the heading above asks you to commit. Re-measured 2026-09-03 on
-npm 11.4.2 / node 24.4.1, from both directories. The difference is
-`node_modules`, which the bare form resolves and installs and
-`--package-lock-only` never creates. This step disappears when `package.mjs`
-regenerates the lock itself.
+**`npm run package` UPDATES `package-lock.json` TOO - COMMIT THE ONE-LINE LOCK
+CHANGE WITH THE RELEASE.** Until DBT-82 this was a manual step: `package.mjs`
+bumped `apps/cribl-app/package.json` and wrote the tgz but never touched the
+lock, so every release commit left `package-lock.json` naming the PREVIOUS
+version and `check-release` red - PR-blocking, since that check runs in CI on
+every PR touching `soc-optimizationtoolkit/**` (measured 2026-09-02 in a sandbox:
+a faithful 1.12.3 -> 1.12.4 release exited 1 with "package-lock.json records the
+app at 1.12.3 but package.json says 1.12.4"). The fix had always been one line:
+in the same sandbox, `npm install --package-lock-only` and a bare `npm install`
+wrote a BYTE-IDENTICAL lock whose only change was the `apps/cribl-app` version
+field (re-measured 2026-09-03 on npm 11.4.2 / node 24.4.1). So `package.mjs` now
+writes that field itself (`apps/cribl-app/scripts/lock-version.mjs`) rather
+than shelling out to npm, and `lock-version.test.mjs` holds the write to that same single line against
+the real lock. It computes the new lock BEFORE writing `package.json` and refuses
+a conflict-marked or entry-less lock, so a failure leaves the tree un-bumped
+rather than half-bumped. `npm install --package-lock-only` stays the remedy
+`check-release` names, for the case it still catches: a version hand-edited
+outside `package.mjs`.
 
 **`release/` HOLDS EXACTLY THE LATEST TGZ** - a user directive from 2026-07-30,
 enforced by `package.mjs`, which prunes older tarballs on every run. Publishing
@@ -1365,9 +1591,10 @@ Two things learned while packaging, worth knowing next time:
   artifact is ~500 KB and that `static/assets` holds the real JS/CSS before
   trusting a package.
 
-**Still installed: 1.2.212.** Packaging does not deploy. The lab workspace runs
-the installed app, not `release/`, so this work stays invisible there until
-someone uploads the new tgz through the Apps page.
+**Installed build: last observed 1.11.3 (2026-09-04, section 20); packaging
+does not deploy.** Re-read the Apps page before relying on this. The lab
+workspace runs the installed app, not `release/`, so this work stays invisible
+there until someone uploads the new tgz through the Apps page.
 
 ## 9. Copy and UX
 
@@ -1378,9 +1605,14 @@ sample from the store. The deletion is correct and intended (samples are
 solution-scoped); the wording is what misleads. Saying "are deleted" would match
 the behavior.
 
+DONE - DBT-9: the copy now says Clearing deletes the samples
+(`solution-browser.tsx`); see section 11.
+
 **Nested scrolling on tall pages.** The 558-row solution list scrolls inside a
 scrolling page inside the app iframe. `overscroll-behavior: contain` stops the
-wheel chaining at the list's end, but the three-level nesting remains.
+wheel chaining at the list's end, but the three-level nesting remains. Since
+1.12.8 (DBT-14, section 21) contain applies only while the list overflows
+(`.solution-browser-list--scrollable`); the nesting itself remains by decision.
 
 ## 10. Diagram fidelity
 
@@ -1392,8 +1624,19 @@ today, so an inline reference shows as "Default selection" rather than naming
 the rule. Worth surfacing.
 
 **`InputRest` has no schema** under that name in the vendored OpenAPI spec, so
-the REST collector is modelled elsewhere - likely `InputCollection` with a
-collector conf. Pin this down before relying on collector breaker classification.
+the REST collector is modelled elsewhere. PINNED 2026-10-20 (DBT-1,
+`packages/core/src/testing/vendored-spec-provenance.test.ts`): it is a collection
+JOB, not an input. `RestCollectorConf` is referenced only by `CollectorRest`
+(`type: "rest"`, `conf: RestCollectorConf`), which is one arm of the `Collector`
+oneOf; `Collector` is the `collector` of `RunnableJobCollection` and
+`SavedJobCollection`, whose `input` is
+`RunnableJobCollectionTypeCollectionWithBreakerRulesetsConstraint`
+(`type: "collection"`, `breakerRulesets: string[]`). The earlier guess, "an
+`InputCollection` with a collector conf", was wrong: `InputCollection` carries no
+collector and no conf. So a REST collector's breaker rulesets are declared on
+the job's `input`; collector breaker classification (`DBT-4`) has to read them
+from the saved job, and nothing in the spec says they also surface through
+`/system/inputs`.
 
 **Re-derive `BREAKER_CONFIGURABLE_INPUT_TYPES` when the spec is re-vendored.**
 It is the 19 `Input*` schemas carrying a breaker property, out of 68, extracted
@@ -1539,7 +1782,9 @@ Of the rest: five were SCANNER ARTIFACTS (`ok`, `failed`, `running`, `idle`,
 all render correctly - they are grouping wrappers whose children carry the
 styling, or semantic elements (`<a>`, table rows) the browser styles anyway.
 Two of them, `content-install` and `numbered-section-body`, are used as TEST
-SELECTORS, so they are structural hooks rather than dead names.
+SELECTORS, so they are structural hooks rather than dead names. (Superseded
+2026-10-20 by [[DBT-114]]: the hooks are `numbered-section-body` and
+`capture-outcome`, both now `data-testid`, and the dead names were deleted.)
 
 Deliberately NOT "fixed": adding rules to wrappers that never needed them is
 churn that looks like progress, and deleting the names would break two test
@@ -1655,7 +1900,9 @@ runs in the gap-analysis path.
 
 What this needs deciding before it is built:
 
-- **Does maintenance re-analyse, or read a stored analysis?** Re-analysing needs
+- **Does maintenance re-analyse, or read a stored analysis?** ANSWERED
+  2026-08-31: re-analyse against the live table schema (section 18d, D-6).
+  Re-analysing needs
   the original samples, which the pack carries (`PackVendorSample`) but which may
   no longer represent live traffic. Reading a stored verdict is cheap and goes
   stale silently. A third option - re-analyse against the LIVE table schema and
@@ -1747,9 +1994,9 @@ The guards stay; what was wrong was the module's stated model, not the code. The
 full verdict table, and what each row actually observed, is in the plan's
 "Needs live verification" section.
 
-**And it is packaged.** ADR-0003 shipped in full in 1.12.0; **1.12.1 is current**
-(see the release entry above). The "still 1.11.15, everything unreleased" claim
-was true when written on 2026-08-23 and stopped being true the next day.
+**And it is packaged.** ADR-0003 shipped in full in 1.12.0 (1.12.1 was current
+when this was written, 2026-08-25; section 8's IS CURRENT line is the live
+claim). The "still 1.11.15, everything unreleased" claim was true when written on 2026-08-23 and stopped being true the next day.
 
 **The run's real yield was defects, not confirmations.** Four PRODUCT defects,
 all silent, the first three each enough on their own to stop the Lake path: the
@@ -2463,7 +2710,10 @@ having remembered a call site.
 **What is NOT converted, by the same rule read the other way.**
 `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out of the
 repo; `listDeprecatedContentHubSolutions` returns a `Set` used as a lookup.
-None has an ambiguous empty. Wrapping them would teach the codebase that
+None has an ambiguous empty. (Wrong for the last one: a failed catalog read
+returned the same empty set as "nothing deprecated". DBT-176 gave it, and
+`findSolutionCatalogEntry`, a found / not-found / unreadable answer - still not
+a `Listing`, because the answer is a lookup, not rows to count.) Wrapping them would teach the codebase that
 `Listing` means "any list", and a type that marks everything marks nothing.
 
 ## 18. Nine decisions settled - the answers were recorded, the reasoning was not
@@ -2553,6 +2803,7 @@ it.
 This is the most work of the three and it lands on the unmeasured Resource Graph
 capability that CAP-1 closes, which is the real sequencing constraint: CAP-1
 first, or this ships against a permission nothing has measured.
+(2026-10-27: CAP-1 has landed in code; it is measured once its live preflight passes.)
 
 ### 18f. D-10 - the setup wizard stepper grows to match its header
 
@@ -2725,3 +2976,207 @@ There is one non-platform path that would also unblock it, worth recording
 because it existed once: an ADR 0001 style shell whose own document is the
 address bar. The chip worked there, which is why it was true when it shipped and
 false after ADR 0002.
+
+## 21. Bug sweep: eight decisions answered - 2026-10-02
+
+Every open bug card was re-verified on 2026-10-02 by an independent reproducer
+and an adversarial skeptic, then judged. None was refuted (17 real, 3 partially
+real). Eight fixes needed a policy choice first; the operator answered all eight
+in one sitting. The reasoning that decided each, and what it rules out:
+
+- **DBT-14 - contain overscroll only while the list overflows.** Rejected:
+  dropping the 420px cap. That removes the nested scroll region but a long
+  unfiltered solution list then pushes every later section far down the page.
+  Measuring overflow in JS keeps the 2026-08-03 end-of-list protection where it
+  is needed and returns the wheel to the page where it is not.
+- **DBT-58 - name the excluded subscription workbooks on both surfaces.** The
+  info tip and the empty-workbook summary now say the same thing. Rejected:
+  summary only. "Why isn't my deployed workbook here?" is asked from either
+  place, and two surfaces with two policies is what the card was about.
+- **DBT-106 - wire the AWS spellings in, do not delete them.** The mapping table
+  shows `account-id` beside the parsed `account_id` for VPC Flow v2 samples, as
+  DBT-77 intended. Rejected: deleting the unused table. The operator reads AWS's
+  documentation by AWS's names; the hyphen-trap reasoning still survives on the
+  constant.
+- **GEN-7 - TimeGenerated is the flow START, converted in a pack Eval.** Start
+  is how a hunt frames a flow. A pack Eval keeps the DCR transform `source`.
+  Rejected: `end` (closer to emission, further from the event), and converting
+  in the DCR transformKql (ADR 0004 precedent, but needs parser and type
+  changes for no operator-visible gain).
+- **DBT-84 - accept the re-key, and the exact `type` key wins.** Some stored
+  samples regroup; a release-notes line tells the operator to re-capture.
+  Rejected: an on-load migration (only possible where old ids can be recomputed
+  from raw events) and grandfathering old captures (two behaviours forever).
+- **DBT-89, DBT-99, and GEN-5's drop leg - measure Cribl first.** Each makes the
+  app's preview agree with what Cribl does at runtime, and the app should copy
+  Cribl rather than guess at it. Each needs one unsaved pipeline preview on a
+  live worker (kvp on a welded prefix; kvp on `\=` `\` `\|` `\n`; an Eval
+  removing `aws.account`, `Source IP`, `src-ip`). DBT-99 is also bounded:
+  expand only the ArcSight-spec escapes, with `\n`/`\r` becoming real control
+  characters. GEN-5's leg 1 (kept and coerced fields) did not wait on this.
+
+## 22. Repository move: four decisions answered - 2026-10-05
+
+The pre-migration docs review (DBT-129) produced an inventory of everything
+tying the app to this repository (docs/repo-migration-plan.md). The operator
+answered the four decisions that shape the rest of the move (DBT-130):
+
+- **Keep the soc-optimizationtoolkit/ subdirectory.** Rejected: flattening to
+  the repository root - cleaner, but every path the CI filters, the hooks,
+  board-freshness and the release-drift check hard-code would change in the
+  same commit, for a cosmetic gain.
+- **The criblio organization owns it.** Rejected: a personal account.
+- **Only the app and what it strictly needs.** The point of the new repository
+  is the smallest content from which the app is published to the Cribl
+  Marketplace. Rejected: vendoring the DCR ARM templates (two copies to keep in
+  step, for an extractor the shipped app never runs) and fetching them at a
+  pinned SHA (builds depend on the old repository). Consequence, pending the
+  operator's confirmation: the schema asset ships frozen, and the provenance
+  pins that read deprecated/ legacy files are retired.
+- **A version change triggers the release.** A CI pipeline with an approval
+  gate builds the tarball and publishes the new version to the Cribl
+  Marketplace. Rejected: GitHub Releases and the committed-tarball model as
+  the distribution channel. Unknown and blocking the pipeline: how the
+  Marketplace accepts a new version.
+
+## 23. DBT-134: an empty worker-group picker, and the doc that said it could not happen - 2026-10-20
+
+**The report.** A tester saw the worker-group picker with nothing in it. The
+developer, an Org admin, saw the full list on the same build.
+
+**What it was, as far as code can say.** Four states rendered as one: the
+leader returned no groups, the caller's role (or the app grant) covered none,
+every group was an Edge fleet / Outpost / Search group, and a typo in the
+filter. All four became an enabled select whose only row read "No matches".
+`CriblClient.listGroups` returned a bare array and five pickers filtered it
+inline, so the information that told them apart was thrown away at the call
+site. `docs/inventory-standard.md` claimed DBT-62 had converted this read to
+`Listing<T>`; it had wrapped it inside one usecase only (DBT-135). The false
+claim is why nobody looked - a BINDING document is evidence people stop
+checking behind.
+
+**The likeliest root cause is a missing grant, and it is not proven.**
+`policies.yml` declared the groups COLLECTION and no per-group read, while the
+platform's own authoring doc (apps/cribl-app/AGENTS.md:230) says a collection
+declaration covers that exact path and "group results can be empty" without
+the per-item one. An admin's own role covers every group, which fits the
+admin-sees, tester-does-not split exactly. `GET /master/groups/:id` is now
+declared. It cannot be confirmed by an admin on themselves: it needs a
+non-admin user shared the app, in Live Preview, capturing the `/master/groups`
+body before and after - and possibly `/products/stream/groups[/:id]`, the
+non-deprecated route the doc actually names, which was deliberately NOT added
+blind.
+
+**Why the honesty fix ships regardless of the grant.** Whatever the live check
+finds, an empty listing is what a role that covers no group receives, so
+rendering it as a zero is wrong on its own. One component
+(`components/worker-group-field.tsx`) now owns every state for every picker,
+and the port returns a `Listing`, so the next picker cannot reintroduce the
+bare-array filter without the compiler noticing.
+
+**Rejected:** a capability (`cribl.groups.read`) and a probe for it. The
+taxonomy is closed deliberately (see the inventory standard's "When NO
+capability covers the list"), and the hedge plus Retry already gives the
+operator the truthful next step. **Rejected as causes:** the mapper's
+product-over-type precedence (real, but identity-independent - kept as
+hardening: either signal saying "stream" now wins), a grant missing from an
+older release (present since the walking skeleton), and a StrictMode race (now
+guarded anyway: only the latest call writes).
+
+**Review round: the badges inherited the same lie.** Splitting the groups out
+of the pack load removed the "Deployed status unavailable" notice from the
+refused-listing path, and left every stored pack badged "Not deployed" - a
+measured zero from a packs read that never ran. The same badge showed while
+the groups were loading or empty, and a Refresh whose re-list failed kept the
+previous snapshot, so stale deployed groups read as current. The badge now
+cites a snapshot only when `listDeployed` succeeded for the listing as it
+stands NOW (`deployedUnreadReason`, which checks the group listing before any
+snapshot); otherwise it says "Deployed status not read - <why>". Each read
+also clears the last snapshot first, so either guard alone closes the
+Refresh case.
+
+## 24. Azure onboarding: How-to, Validate, live dataflow and the Cribl source (AZR-30 to AZR-34) - 2026-10-26
+
+**The ask (operator, 2026-10-26).** On the Azure Native Source Onboarding
+screen: a dataflow diagram per source, readable from each side; a How-to path
+for customers who will not let the app configure Azure (choose what to onboard,
+instructions in a dialog, a done box per step); a read-only check of the Azure
+side; a new live flow once data reaches Cribl; and the Cribl source always
+created by the app. Decisions are in ADR 0007,
+`docs/adr/0007-onboarding-cribl-source-and-howto-progress.md` (Accepted - not
+verified live). ADR 0005 carries an addendum.
+
+**What it chose, in one line each.**
+
+- How-to progress is a SECOND KV document, `azure-onboarding-progress`, because
+  the AZR-18 selection codec strips unknown keys and would erase it. The mount
+  pin moved from one load to two, deliberately.
+- Automated is only offered where `isAutomatable(id)` - a function over ADR
+  0005's item availability - says so. Today that is the Defender export.
+- Validate is GET-only and reuses the Logging Map's `readAllPages`; `unknown` is
+  never `absent`, and a measured zero arrival is never `unknown`.
+- The Cribl Event Hub INPUT type is `eventhub`. `azure_eventhub` is the
+  destination; reading the two as one would have failed at the API.
+- The source needs a LISTEN rule. The AZR-18 picker chooses a Send rule for the
+  Defender export, so the source has its own picker, or a pasted connection
+  string reduced to a non-secret descriptor and checked before any write.
+- The write is create-only through the claude-kit config-writes code, adopted
+  verbatim into `packages/core/src/kit/` except its clocked transport.
+- The live flow is opt-in, one metrics query a minute through the shared
+  poller, and animates only a measured, non-zero intake.
+- One hand-SVG canvas shell, `packages/ui/src/components/diagram/`, now serves
+  both the Logging Map and this diagram.
+
+**Cards filed before the code (CLAUDE.md rule 2).** Defects found in committed
+code while planning, none fixed by this work:
+
+- DBT-149 - three Cribl writers treat commit and deploy failure as a warning and
+  commit the whole group unchecked.
+- DBT-150 - the Dataflow screen animates every edge from configuration, with no
+  metrics read.
+- DBT-151 - the secret writers send `type` where the schema names `secretType`.
+- DBT-152 - ensure-secret overwrites an existing secret on a 409.
+- DBT-153 - policies.yml wildcards and pre-existing coverage gaps. The new
+  coverage test's `KNOWN_EXCEPTIONS` cites it.
+- DBT-154 - the lab blob source passes `queueName` unquoted.
+- DBT-155 - the Sentinel destination carries the client secret in clear.
+
+Follow-up stories: AZR-35 (route the source to the Sentinel destination, with
+records unrolled - the route is only read today), AZR-36 (create a Listen rule
+and a dedicated consumer group), AZR-37 (a persisted last-seen beyond the
+24-hour lookback) and AZR-38 (one definition of the Defender item id).
+
+**What is still open from earlier decisions.** AZR-S2 (section 6h) asked for an
+export fallback when no Cribl is connected and a `source.manage` gate; neither
+was built. AZR-24, persisting the Event Hub picker's choice, stays open: the
+How-to plan values persist but do not seed the picker. Section 6g's reference
+patterns on the Dataflow page are untouched.
+
+**Not verified live.** Nothing here has met a real tenant or worker group. The
+riskiest unknowns are which files a secret and an input create dirty (the
+commit markers are a guess, and a wrong guess refuses rather than commits),
+whether the `/products/stream/groups` routes answer through the app proxy, the
+metrics label form for the new input, and whether Cribl accepts the
+`queueName` expression. ADR 0007's live-verification list is the full set;
+AZR-30 to AZR-34 close only after it.
+
+## 25. DBT-223: Rule Coverage scopes a column to log types, not to the whole solution - 2026-10-30
+
+Raised by the operator during the TMNA PaloAlto-PAN-OS test with TRAFFIC and
+THREAT samples: choosing one close match in the analytics-rule analysis looked
+as if it applied to every log type. It did not - the apply writes to one log
+type's mappings - but Rule Coverage pooled every log type's columns into one
+availability set, so the chip cleared everywhere and a THREAT detection reading
+that column was counted covered while THREAT events never carry it.
+
+**Chosen: per log type.** A field is available only when every log type whose
+destination schema has that column fills it; a log type whose table lacks the
+column does not count against it, and a field that is no column anywhere must
+be carried (in overflow, say) by every log type. Chips name the log types still
+missing a field, and close-match candidates are offered per log type.
+
+**Rejected: per rule** - require the column only from the log types each
+rule's detections target. It would give the most accurate coverage figure, but
+it rests on attributing every detection to log types, which is its own
+accuracy question; rules that do not filter by log type would need all of them
+anyway. It stays available as a refinement once that attribution is trusted.

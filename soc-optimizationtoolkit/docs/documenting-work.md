@@ -20,7 +20,7 @@ document's instructions bind:
 
 | Status | Means | Checked for |
 |---|---|---|
-| `Living` | Describes how things are now, and is kept true | retired paths, broken path references |
+| `Living` | Describes how things are now, and is kept true | retired paths, broken path references, unresolvable npm scripts |
 | `Proposed` | A plan not yet built | retired paths, and it EXPIRES |
 | `Record` | A dated account of what happened | nothing |
 | `Superseded` | Replaced, and says by what | that it names a successor |
@@ -37,7 +37,7 @@ document is an account rather than an instruction - which is most of them.
 ## Proposed plans expire
 
 A `Proposed` document carries `Last-confirmed: YYYY-MM-DD` and must be re-read
-within 60 days. A warning arrives at day 46; the build fails at day 61.
+within 60 days. A warning arrives at day 47 (two weeks out); the build fails at day 61.
 
 Clearing it is a real re-read, not a date bump. Two honest outcomes:
 
@@ -75,6 +75,32 @@ Every marker is counted and the total is printed on every run, clean or not. A
 suppression nobody can see is how this check would quietly stop meaning
 anything. If that number climbs, the question is whether the document should
 have been split, not whether the check is too strict.
+
+## Paths and commands a live document names
+
+**A backticked path must exist**, written from the repo root or from inside
+`soc-optimizationtoolkit/`. A trailing line suffix - `file.ts:43` or
+`file.ts:43-54` - is allowed and stripped before the check. The line numbers
+are NOT checked: they drift on every edit above them, and a gate that failed on
+that would be bypassed within a week. `file.ts#L43` and `file.ts:43:5` are not
+recognised as paths at all.
+
+**`npm run <name>` must resolve**, and the rule is where:
+
+- By default it resolves against the toolkit ROOT `package.json`, because that
+  is the directory these documents tell a reader to work from.
+- If the command itself carries `--workspace <dir>`, it resolves against that
+  workspace's `package.json` instead. The flag binds to its own command only,
+  not to every `npm run` on the line.
+- It never resolves against the union of all manifests. `check-release` exists
+  in `apps/cribl-app` as well as at the root, so a union would stay green with
+  the root forward deleted - the DBT-90 regression, where the documented
+  command exited 1 for everyone who followed it.
+
+Only lowercase names are checked, so `npm run X` stays usable as a placeholder.
+The check asserts the script EXISTS, not that it passes. Separately, every root
+script written `npm run Y --workspace W` must find `Y` in `W`, because a forward
+pointing at nothing fails exactly like a missing one.
 
 ## Retiring something
 
@@ -170,16 +196,18 @@ board is "what is left before Sentinel Integration works end to end", and
 before this the only way to ask it was to read every card.
 
 It lives on the FEATURE and stories inherit, for the same reason `epic` does:
-26 features are maintainable by hand and 81 stories are not, and a feature
+a couple of dozen features are maintainable by hand and ~90 stories are not, and a feature
 spanning two menus usually wants splitting. A story may override when it
 genuinely differs - a fallback offer landing on the Integrate deploy while its
 feature is about the capability audit - and `check-board` rejects an override
 that merely restates its feature's menu, because a second copy of a fact is a
 second thing to keep in step.
 
-Two values name screens nobody can open yet, `azure-onboarding` and
-`windows-events`, and they render as PLANNED so a rollup cannot imply a route
-exists. `none` is for work no operator sees on any screen - release mechanics,
+One value names a screen nobody can open yet, `windows-events`, and it
+renders as PLANNED so a rollup cannot imply a route exists. (`azure-onboarding`
+was the other until AZR-18 shipped its route;
+`apps/cribl-app/scripts/board-menus-routes.test.mjs` now holds the menu list to
+the App.tsx route table, so a shipped screen cannot stay PLANNED.) `none` is for work no operator sees on any screen - release mechanics,
 docs, the board's own tooling - and it is not a synonym for "unsure": if a card
 changes what an operator sees anywhere, it has a menu.
 
@@ -191,12 +219,28 @@ report a goal as ready when it is not.
 Each story carries an `id`, `epic`, `feature`, `title`, `type`, `status`
 (backlog / in-progress / done), a `priority` while it is in the backlog
 (now / next / later), `settled` (settled / undecided / unconfirmed),
-`verified` (pins / live / both / none), a `dependsOn` list, `detail`, and -
-on a deprioritised `bug` only - a `priorityWhy` (see below).
+`verified` (pins / live / both / none), a `dependsOn` list, `detail`, an
+optional `decision` block (`question`, two or more `options` with unique
+`key`s, and `chosen` once answered), and - on a deprioritised `bug` only - a
+`priorityWhy` (see below).
 `npm run check-board` validates all of it, and the dependency rules are the
 ones prose could not enforce: no cycles, no dependency on a story that does not
 exist, nothing in progress whose blocker is still in the backlog, and nothing
 done that depends on something open.
+
+**Answering a decision is not settling it.** Picking an option in the live
+kanban records `chosen` and touches nothing else, because the reasoning - the
+rejected alternatives included - still has to reach `backlog.md`.
+`check-board` holds both ends of that: a card that is `settled` with a
+`chosen` answer must cite its reasoning in `detail` ("backlog.md#6h" or
+"backlog.md section 18a"), a card that cites one must be settled, and a
+settled card may not carry a decision that is still unanswered. A `chosen`
+that is not one of the options fails too.
+
+A `[[CARD-ID]]` link in card prose that names no card on the board is a
+WARNING, not a failure: pruned cards live on in `backlog.md` and the git
+history of `board.json`, so a dangling link is a pointer to read, not a
+broken build.
 
 **A defect found in COMMITTED code becomes a card before it is fixed** - even
 when the fix takes five minutes, and even when you are going to do it right now.
@@ -333,8 +377,11 @@ npm run check-docs          # from soc-optimizationtoolkit/
 ```
 
 It runs in CI on every pull request that touches the toolkit, and locally on
-every documentation edit through `.claude/hooks/docs-drift-check.sh`. The hook
-is convenience - `.claude/` is gitignored and travels with nobody. CI is the
+every documentation edit through `.claude/hooks/docs-drift-check.sh`. The
+script itself is tracked (`.gitignore` re-includes `.claude/`), but it is
+registered only in `.claude/settings.local.json`, which is gitignored. A clone -
+and the repository move - carries the script but not its wiring, so it fires
+for nobody else until a tracked `.claude/settings.json` registers it. CI is the
 gate.
 
 The rules are pinned in `apps/cribl-app/scripts/check-docs-drift.test.mjs`, and

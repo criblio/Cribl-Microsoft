@@ -43,7 +43,7 @@ import type {
   InstalledContentState,
   ParsedAnalyticRule,
   ParserResource,
-  SolutionCatalogEntry,
+  SolutionCatalogLookup,
   WorkspaceScope,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -112,8 +112,13 @@ export function ContentInstallSection({
 
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [catalog, setCatalog] = useState<SolutionCatalogEntry | null>(null);
+  // The Content Hub lookup, null until a load with a committed scope ran it.
+  // Three answers (DBT-176): a failed read is NOT "not in the catalog".
+  const [catalogLookup, setCatalogLookup] = useState<SolutionCatalogLookup | null>(null);
+  const catalog = catalogLookup?.kind === "found" ? catalogLookup.entry : null;
   const [installed, setInstalled] = useState<InstalledContentState | null>(null);
+  // DBT-199: whether the repo content below has been read at all.
+  const [contentLoaded, setContentLoaded] = useState(false);
   const [rules, setRules] = useState<ParsedAnalyticRule[]>([]);
   const [workbooks, setWorkbooks] = useState<AvailableWorkbook[]>([]);
   const [parsers, setParsers] = useState<ParserResource[]>([]);
@@ -166,7 +171,7 @@ export function ContentInstallSection({
       ? "Installs are unavailable: the hosting shell did not provide an id minter."
       : !hasAzureIdentity(config)
         ? "No Azure identity is connected (tenant and client id), so nothing " +
-          "can be installed into this workspace yet - connect Azure in Options."
+          "can be installed into this workspace yet - connect Azure on the Setup page."
         : !scopeCommitted ||
             config.subscriptionId === "" ||
             config.resourceGroup === "" ||
@@ -186,12 +191,13 @@ export function ContentInstallSection({
     setLoadError("");
     if (!keepOutcomes) setOutcomes([]);
     try {
-      const entry = scopeCommitted
+      const lookup = scopeCommitted
         ? await findSolutionCatalogEntry(ports.azure, scope, solutionName, ports.logger)
         : null;
-      setCatalog(entry);
+      setCatalogLookup(lookup);
+      const contentId = lookup?.kind === "found" ? lookup.entry.contentId : undefined;
       const state = scopeCommitted
-        ? await installedContentState(ports.azure, scope, entry?.contentId, ports.logger)
+        ? await installedContentState(ports.azure, scope, contentId, ports.logger)
         : null;
       setInstalled(state);
       const [repoRules, repoWorkbooks, repoParsers] = await Promise.all([
@@ -202,6 +208,7 @@ export function ContentInstallSection({
       setRules(repoRules);
       setWorkbooks(repoWorkbooks);
       setParsers(repoParsers);
+      setContentLoaded(true);
       if (scopeCommitted) {
         setLocation(
           await fetchWorkspaceLocation(
@@ -221,8 +228,9 @@ export function ContentInstallSection({
 
   // Reset when the solution changes (the section is keyed by solution too).
   useEffect(() => {
-    setCatalog(null);
+    setCatalogLookup(null);
     setInstalled(null);
+    setContentLoaded(false);
     setRules([]);
     setWorkbooks([]);
     setParsers([]);
@@ -537,7 +545,7 @@ export function ContentInstallSection({
   );
 
   return (
-    <div className="content-install">
+    <div>
       {/* DBT-47: one notice for whatever blocks an install - a missing minter,
           a missing Azure identity, or an uncommitted scope. Loading and
           previewing the solution's content never needed any of them, which is
@@ -591,19 +599,41 @@ export function ContentInstallSection({
           <p key={i} className="field-hint">{note}</p>
         ))}
 
+      {/* DBT-226: until something has been read there is nothing to show but
+          the Load button - the three subsections used to sit here each saying
+          "Not loaded yet". They appear once content, a catalog answer (even an
+          unreadable one), a load in progress or an install outcome exists. */}
+      {(contentLoaded || catalogLookup !== null || loading || outcomes.length > 0) && (
+      <>
       {/* SOLUTION */}
       <section className="content-install-group">
         <h3 className="content-install-title">
           Solution{" "}
           <InfoTip text="Install the Content Hub solution package itself (its ARM template, deployed to your workspace). This brings in the solution's own rule/workbook/parser definitions the same way the portal Content Hub does." />
         </h3>
-        {catalog === null ? (
+        {/* DBT-176: three different answers, three different sentences. Before,
+            a failed catalog read and a genuine miss both left `catalog` null,
+            and the section kept saying "Load to look up..." after a load. */}
+        {catalogLookup === null ? (
           <p className="panel-desc">
             {scopeCommitted
               ? "Load to look up this solution in Content Hub."
               : "Commit a target scope, then load to look up the Content Hub package."}
           </p>
-        ) : solutionIsInstalled ? (
+        ) : catalogLookup.kind === "unreadable" ? (
+          <p className="field-hint content-install-catalog-unreadable">
+            Could not read the Content Hub catalog ({catalogLookup.reason}), so
+            whether this solution has a Content Hub package is unknown. Load
+            again to retry; its rules and workbooks below can still be installed.
+          </p>
+        ) : catalogLookup.kind === "not-found" ? (
+          <p className="panel-desc content-install-catalog-missing">
+            No Content Hub package matches this solution among the{" "}
+            {catalogLookup.packagesSeen} packages in this workspace&apos;s
+            catalog, so the solution package itself cannot be installed from
+            here. Its rules and workbooks below can still be installed.
+          </p>
+        ) : catalog === null ? null : solutionIsInstalled ? (
           <p className="content-install-installed">
             Installed
             {solutionInstalledVersion !== null
@@ -687,6 +717,7 @@ export function ContentInstallSection({
         onClear={() => setRuleSel(new Set())}
         onInstall={() => void doInstallRules()}
         installing={busy === "rules"}
+        loaded={contentLoaded}
         canInstall={canInstall}
         blockedReason={installBlockedReason}
         uploadRef={ruleFileRef}
@@ -718,6 +749,7 @@ export function ContentInstallSection({
         onClear={() => setWbSel(new Set())}
         onInstall={() => void doInstallWorkbooks()}
         installing={busy === "workbooks"}
+        loaded={contentLoaded}
         canInstall={canInstall}
         blockedReason={installBlockedReason}
         uploadRef={wbFileRef}
@@ -732,6 +764,8 @@ export function ContentInstallSection({
           {parsers.length} solution parser(s) will be installed automatically
           with any rules or workbooks that depend on them.
         </p>
+      )}
+      </>
       )}
     </div>
   );
@@ -750,6 +784,7 @@ function ContentGroup({
   onClear,
   onInstall,
   installing,
+  loaded,
   canInstall,
   blockedReason,
   uploadRef,
@@ -774,6 +809,12 @@ function ContentGroup({
   onClear: () => void;
   onInstall: () => void;
   installing: boolean;
+  /**
+   * DBT-199: the solution's content has been read. Before that an empty group
+   * is "not loaded yet", never "none found" - the UAT read "None found" beside
+   * a Rule Coverage section that had found five rules.
+   */
+  loaded: boolean;
   canInstall: boolean;
   /**
    * DBT-47: why this group's install cannot succeed, or null. The button is
@@ -798,7 +839,11 @@ function ContentGroup({
       </h3>
       {caveat !== undefined && <p className="field-hint">{caveat}</p>}
       {installable.length === 0 && installedNames.length === 0 ? (
-        <p className="panel-desc">None found for this solution.</p>
+        <p className="panel-desc">
+          {loaded
+            ? "None found for this solution."
+            : "Not loaded yet - use Load solution content above."}
+        </p>
       ) : (
         <>
           {installable.length > 0 && (

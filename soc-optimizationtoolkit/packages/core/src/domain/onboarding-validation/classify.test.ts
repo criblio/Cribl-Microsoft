@@ -1,0 +1,992 @@
+// Pins for the Validate classifiers (AZR-32). The defects these guard against
+// are silent: a denied read rendered as "not found", a truncated listing
+// rendered as a verified absence, a Basic namespace (no Kafka) rendered as fine,
+// and a measured zero arrival rendered the same as "could not measure".
+
+import { describe, expect, it } from "vitest";
+
+import { readRefused, readRows, type ListRead, type Refusal } from "../logging-map/list-read";
+import { CHECK_KINDS, type CheckKind } from "../onboarding-howto/check-kinds";
+import { defaultPlanValues, type PlanValues } from "../onboarding-howto/plan-values";
+// The barrels, not the modules: Validate and the core root reach them there.
+import { namespaceSupportsKafka, ruleCanListen } from "../eventhub-arm";
+import { classifyExportForPlan, DEFENDER_EXPORT_NAME } from "../defender-export";
+import { listSettingsRequest } from "../entra-diagnostics";
+import {
+  checkExpectationsFor,
+  classifyArrival,
+  classifyCheck,
+  classifyHubArrival,
+  measuredHubNames,
+  requestsFor,
+  type CheckExpectations,
+} from "./index";
+// Module-internal (not in the barrel): pinned directly for its own guard.
+import { classifyEventSubscription, classifyTopic } from "./classify";
+
+const BLOB = "Microsoft.Storage.BlobCreated";
+
+const FULL: PlanValues = {
+  ...defaultPlanValues({ subscriptionId: "sub-1", resourceGroup: "rg-1" }),
+  managementGroupId: "mg-1",
+  region: "eastus",
+  namespace: "ns1",
+  hubName: "defender-alerts",
+  sendRule: "sender",
+  listenRule: "reader",
+  storageAccount: "flowlogsa",
+  queueName: "flowlog-queue",
+  systemTopic: "flowlogsa-events",
+  networkWatcher: "NetworkWatcher_eastus",
+  flowLogName: "vnet-flowlog",
+  criblPrincipalObjectId: "00000000-0000-0000-0000-0000000000aa",
+};
+const NS_PATH = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.EventHub/namespaces/ns1";
+const AUDIT = checkExpectationsFor("diagnosticSettingsInitiative", FULL);
+
+function refusal(over: Partial<Refusal> = {}): Refusal {
+  return { request: "/x", status: 403, code: "AuthorizationFailed", text: "denied at /x", reason: "http", ...over };
+}
+
+const denied = readRefused<unknown>(refusal());
+const one = (row: unknown): ListRead<unknown> => readRows([row]);
+
+/**
+ * The community initiative's expectations: an initiative AND the definitions
+ * it imports, so every policy kind reads (the built-in Audit imports none).
+ */
+const COMMUNITY = checkExpectationsFor("communityPolicyInitiative", FULL);
+
+/** The kinds that make at least one request. */
+const READING_KINDS = CHECK_KINDS.filter((k) => {
+  const r = requestsFor(k, FULL, COMMUNITY);
+  return r.kind === "requests" && r.requests.length > 0;
+});
+
+describe("refusals are unknown with their reason, never absent", () => {
+  it("a 403 is unknown 'denied' for EVERY check kind that reads", () => {
+    expect(READING_KINDS.length).toBe(CHECK_KINDS.length - 2);
+    expect(READING_KINDS).toEqual(expect.arrayContaining(["eh-rule-manage", "policy-definition"]));
+    for (const kind of READING_KINDS) {
+      expect(classifyCheck(kind, FULL, [denied], COMMUNITY), kind).toEqual({
+        kind: "unknown",
+        reason: "denied",
+        detail: "denied at /x",
+      });
+    }
+  });
+
+  it("a 401 is denied too", () => {
+    const v = classifyCheck("eh-hub", FULL, [readRefused(refusal({ status: 401 }))], AUDIT);
+    expect(v.kind === "unknown" && v.reason).toBe("denied");
+  });
+
+  it("a too-many-pages refusal is truncated, for every list kind", () => {
+    const truncated = readRefused<unknown>(refusal({ reason: "too-many-pages", status: null, code: "" }));
+    for (const kind of READING_KINDS) {
+      const v = classifyCheck(kind, FULL, [truncated], COMMUNITY);
+      expect(v.kind === "unknown" && v.reason, kind).toBe("truncated");
+    }
+  });
+
+  it("MissingSubscriptionRegistration is unregistered, even on a 404", () => {
+    for (const status of [409, 404, 400]) {
+      const v = classifyCheck(
+        "defender-plans",
+        FULL,
+        [readRefused(refusal({ status, code: "MissingSubscriptionRegistration" }))],
+        AUDIT,
+      );
+      expect(v.kind === "unknown" && v.reason).toBe("unregistered");
+    }
+  });
+
+  it("a transport failure, a 5xx and an odd body are failed", () => {
+    for (const r of [
+      refusal({ reason: "transport", status: null, code: "" }),
+      refusal({ status: 503, code: "" }),
+      refusal({ reason: "unexpected-shape", status: 200, code: "" }),
+    ]) {
+      const v = classifyCheck("storage-account", FULL, [readRefused(r)], AUDIT);
+      expect(v.kind === "unknown" && v.reason).toBe("failed");
+    }
+  });
+
+  it("a 404 is absent ONLY for a GET by name; on a list it is unknown", () => {
+    const notFound = readRefused<unknown>(refusal({ status: 404, code: "ResourceNotFound" }));
+    expect(classifyCheck("eh-namespace", FULL, [notFound])).toEqual({ kind: "absent" });
+    expect(classifyCheck("storage-queue", FULL, [notFound])).toEqual({ kind: "absent" });
+    expect(classifyCheck("eh-hub", FULL, [notFound]).kind).toBe("unknown");
+    expect(classifyCheck("defender-export", FULL, [notFound]).kind).toBe("unknown");
+  });
+
+  it("a missing NetworkWatcherRG is unknown, not an absent watcher", () => {
+    const v = classifyCheck("network-watcher", FULL, [
+      readRefused(refusal({ status: 404, code: "ResourceGroupNotFound" })),
+    ]);
+    expect(v.kind).toBe("unknown");
+    expect(
+      classifyCheck("network-watcher", FULL, [readRefused(refusal({ status: 404, code: "NotFound" }))]),
+    ).toEqual({ kind: "absent" });
+  });
+
+  it("a refused SECOND read still decides the verdict", () => {
+    const v = classifyCheck("eh-hub", FULL, [readRows([]), denied], AUDIT);
+    expect(v.kind === "unknown" && v.reason).toBe("denied");
+  });
+});
+
+describe("missing values", () => {
+  it("a blank needed value is unknown 'missing-value' and names the field", () => {
+    const v = classifyCheck("eh-namespace", { ...FULL, namespace: "" }, [one({})]);
+    expect(v).toEqual({ kind: "unknown", reason: "missing-value", detail: "Set Event Hub namespace first." });
+  });
+
+  it("matches requestsFor: missing there is missing-value here, for every kind", () => {
+    const blank = defaultPlanValues(null);
+    for (const kind of CHECK_KINDS) {
+      if (requestsFor(kind, blank, AUDIT).kind !== "missing") continue;
+      const v = classifyCheck(kind, blank, [one({})], AUDIT);
+      expect(v.kind === "unknown" && v.reason, kind).toBe("missing-value");
+    }
+  });
+
+  it("a policy check with no expected initiative is missing-value", () => {
+    const v = classifyCheck("policy-assignment", FULL, [readRows([])], {});
+    expect(v.kind === "unknown" && v.reason).toBe("missing-value");
+  });
+});
+
+describe("Event Hub checks", () => {
+  it("a Basic namespace is present-differs on sku", () => {
+    const v = classifyCheck("eh-namespace", FULL, [one({ sku: { name: "Basic" }, location: "eastus" })]);
+    expect(v).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "sku", expected: "Standard or Premium (Kafka)", actual: "Basic" }],
+    });
+  });
+
+  it("a Standard namespace in the planned region is as-expected; another region differs", () => {
+    expect(classifyCheck("eh-namespace", FULL, [one({ sku: { name: "Standard" }, location: "East US" })])).toEqual({
+      kind: "as-expected",
+    });
+    const v = classifyCheck("eh-namespace", FULL, [one({ sku: { name: "Standard" }, location: "westus" })]);
+    expect(v.kind === "present-differs" && v.diffs.map((d) => d.field)).toEqual(["region"]);
+  });
+
+  it("an unreported sku is unknown, never fine", () => {
+    expect(classifyCheck("eh-namespace", FULL, [one({ location: "eastus" })]).kind).toBe("unknown");
+  });
+
+  it("a named hub: present is as-expected, a complete listing without it is absent", () => {
+    const hubs = (...names: string[]) => readRows(names.map((name) => ({ name })));
+    const ex = checkExpectationsFor("defenderExport", FULL);
+    expect(classifyCheck("eh-hub", FULL, [hubs("defender-alerts")], ex)).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-hub", FULL, [hubs("other")], ex)).toEqual({ kind: "absent" });
+    expect(classifyCheck("eh-hub", FULL, [hubs()], ex)).toEqual({ kind: "absent" });
+  });
+
+  it("auto-created hubs: some missing differs, a prefix match satisfies the initiative", () => {
+    const entra: CheckExpectations = { expectedHubs: ["insights-logs-auditlogs", "insights-logs-signinlogs"] };
+    const v = classifyCheck("eh-hub", FULL, [readRows([{ name: "insights-logs-auditlogs" }])], entra);
+    expect(v.kind).toBe("present-differs");
+    expect(classifyCheck("eh-hub", FULL, [readRows([{ name: "insights-logs-kube-audit" }])], AUDIT)).toEqual({
+      kind: "as-expected",
+    });
+  });
+
+  it("measuredHubNames is filled only from a complete read", () => {
+    expect(measuredHubNames(readRows([{ name: "a" }, { name: "b" }]))).toEqual(["a", "b"]);
+    expect(measuredHubNames(readRows([]))).toEqual([]);
+    expect(measuredHubNames(denied)).toBeNull();
+    expect(measuredHubNames(readRows([{ name: "a" }, { id: "x" }]))).toBeNull();
+  });
+
+  // AZR-50: a nameless row may be the hub, so a listing with one never shows
+  // a hub missing - but a readable match is still a match.
+  it("eh-hub over a listing with a nameless row: unknown where absent would be a guess", () => {
+    const partial = readRows([{ name: "t1" }, { id: "x" }, { name: "" }]);
+    const ex: CheckExpectations = { expectedHubs: ["defender-alerts"] };
+    expect(classifyCheck("eh-hub", FULL, [partial], ex)).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "2 hub rows could not be read, so the listing does not show it is missing.",
+    });
+    expect(classifyCheck("eh-hub", FULL, [partial], AUDIT)).toMatchObject({ kind: "unknown", reason: "failed" });
+    const entra: CheckExpectations = { expectedHubs: ["insights-logs-auditlogs", "insights-logs-signinlogs"] };
+    expect(
+      classifyCheck("eh-hub", FULL, [readRows([{ name: "insights-logs-auditlogs" }, { id: "x" }])], entra),
+    ).toMatchObject({ kind: "unknown", reason: "failed" });
+    expect(classifyCheck("eh-hub", FULL, [readRows([{ name: "defender-alerts" }, { id: "x" }])], ex)).toEqual({
+      kind: "as-expected",
+    });
+  });
+
+  it("a Send-only listen rule differs on rights; Manage is fine; a missing rule is absent", () => {
+    const rules = readRows([
+      { name: "reader", properties: { rights: ["Send"] } },
+      { name: "sender", properties: { rights: ["Manage", "Send", "Listen"] } },
+    ]);
+    expect(classifyCheck("eh-rule-listen", FULL, [rules])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Listen or Manage", actual: "Send" }],
+    });
+    expect(classifyCheck("eh-rule-send", FULL, [rules])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-rule-listen", { ...FULL, listenRule: "nope" }, [rules])).toEqual({ kind: "absent" });
+  });
+
+  it("rule rows that cannot be parsed are unknown, never absent", () => {
+    const unparsed = readRows([{ properties: { rights: ["Listen"] } }, 42]);
+    for (const kind of ["eh-rule-listen", "eh-rule-send"] as const) {
+      const v = classifyCheck(kind, FULL, [unparsed]);
+      expect(v.kind === "unknown" && v.reason, kind).toBe("failed");
+      expect(v.kind === "unknown" && v.detail).toContain("2 authorization rule rows");
+    }
+    // A parsed match still decides even when another row was dropped.
+    const mixed = readRows([{ name: "reader", properties: { rights: ["Listen"] } }, 42]);
+    expect(classifyCheck("eh-rule-listen", FULL, [mixed])).toEqual({ kind: "as-expected" });
+  });
+
+  it("the $Default consumer group differs", () => {
+    expect(classifyCheck("eh-consumer-group", { ...FULL, consumerGroup: "$Default" }, [one({})]).kind).toBe(
+      "present-differs",
+    );
+    expect(classifyCheck("eh-consumer-group", FULL, [one({})])).toEqual({ kind: "as-expected" });
+  });
+});
+
+describe("Defender, Entra, Activity Log, policy, XDR", () => {
+  const exportItem = (name: string, hub = "defender-alerts") => ({
+    id: `/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Security/automations/${name}`,
+    name,
+    properties: {
+      isEnabled: true,
+      scopes: [{ scopePath: "/subscriptions/sub-1" }],
+      sources: [{ eventSource: "Alerts" }],
+      actions: [{ actionType: "EventHub", eventHubResourceId: `${NS_PATH}/eventhubs/${hub}` }],
+    },
+  });
+
+  it("defender-export: ours as-expected, another name on the plan hub present-other-name, none absent", () => {
+    expect(classifyCheck("defender-export", FULL, [readRows([exportItem(DEFENDER_EXPORT_NAME)])])).toEqual({
+      kind: "as-expected",
+    });
+    const v = classifyCheck("defender-export", FULL, [readRows([exportItem("PortalExport")])]);
+    expect(v.kind === "present-other-name" && v.name).toBe("PortalExport");
+    expect(classifyCheck("defender-export", FULL, [readRows([])])).toEqual({ kind: "absent" });
+  });
+
+  it("defender-export rows that cannot be parsed are unknown, never absent", () => {
+    const v = classifyCheck("defender-export", FULL, [readRows([42, "x"])]);
+    expect(v.kind === "unknown" && v.reason).toBe("failed");
+    expect(v.kind === "unknown" && v.detail).toContain("2 automation rows");
+    // A match among the parsed rows still decides.
+    expect(classifyCheck("defender-export", FULL, [readRows([exportItem(DEFENDER_EXPORT_NAME), 42])])).toEqual({
+      kind: "as-expected",
+    });
+  });
+
+  it("defender-plans: any Standard is as-expected, all Free differs, none returned unknown", () => {
+    const plan = (tier: string) => ({ name: "VirtualMachines", properties: { pricingTier: tier } });
+    expect(classifyCheck("defender-plans", FULL, [readRows([plan("Free"), plan("Standard")])])).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("defender-plans", FULL, [readRows([plan("Free")])]).kind).toBe("present-differs");
+    expect(classifyCheck("defender-plans", FULL, [readRows([])]).kind).toBe("unknown");
+  });
+
+  it("defender-provider: NotRegistered differs on registrationState", () => {
+    expect(classifyCheck("defender-provider", FULL, [one({ registrationState: "NotRegistered" })])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "registrationState", expected: "Registered", actual: "NotRegistered" }],
+    });
+  });
+
+  it("entra-setting: ours missing a category differs; another name to the namespace is present-other-name", () => {
+    const ex = checkExpectationsFor("entraId", FULL, ["Standard"]);
+    const setting = (name: string, categories: readonly string[]) => ({
+      name,
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_PATH}/authorizationRules/sender`,
+        eventHubName: "",
+        logs: categories.map((category) => ({ category, enabled: true })),
+      },
+    });
+    const all = ex.entraCategories ?? [];
+    expect(all.length).toBeGreaterThan(1);
+    expect(classifyCheck("entra-setting", FULL, [readRows([setting("CriblEntraIDLogs", all)])], ex)).toEqual({
+      kind: "as-expected",
+    });
+    const partial = classifyCheck("entra-setting", FULL, [readRows([setting("CriblEntraIDLogs", all.slice(1))])], ex);
+    expect(partial.kind === "present-differs" && partial.diffs.map((d) => d.field)).toEqual(["logs"]);
+    const other = classifyCheck("entra-setting", FULL, [readRows([setting("Portal", all)])], ex);
+    expect(other).toEqual({ kind: "present-other-name", name: "Portal", diffs: [] });
+    expect(classifyCheck("entra-setting", FULL, [readRows([])], ex)).toEqual({ kind: "absent" });
+  });
+
+  it("activity-log-setting: a setting to another namespace is absent for the plan", () => {
+    const s = {
+      name: "x",
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_PATH}2/authorizationRules/sender`,
+        logs: [{ category: "Administrative", enabled: true }],
+      },
+    };
+    expect(classifyCheck("activity-log-setting", FULL, [readRows([s])])).toEqual({ kind: "absent" });
+    const ours = { ...s, properties: { ...s.properties, eventHubAuthorizationRuleId: `${NS_PATH}/authorizationRules/sender` } };
+    expect(classifyCheck("activity-log-setting", FULL, [readRows([ours])])).toEqual({ kind: "as-expected" });
+  });
+
+  it("policy-assignment: Cribl-AU-Central is as-expected; a family name is present-other-name", () => {
+    const assignment = (name: string) => ({
+      name,
+      identity: { type: "UserAssigned" },
+      properties: { policyDefinitionId: AUDIT.policy?.definitionId, enforcementMode: "Default" },
+    });
+    expect(classifyCheck("policy-assignment", FULL, [readRows([assignment("Cribl-AU-Central")])], AUDIT)).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("policy-assignment", FULL, [readRows([assignment("Cribl-AU-Old")])], AUDIT)).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [],
+    });
+    expect(classifyCheck("policy-assignment", FULL, [readRows([])], AUDIT)).toEqual({ kind: "absent" });
+  });
+
+  it("xdr-streaming is never as-expected, whatever is read", () => {
+    for (const reads of [[], [one({})], [readRows([])], [denied]]) {
+      const v = classifyCheck("xdr-streaming", FULL, reads, AUDIT);
+      expect(v.kind).toBe("unknown");
+      expect(v.kind === "unknown" && v.reason).toBe("unmeasurable");
+    }
+  });
+
+  it("policy-identity-roles is truncated, with the caveat", () => {
+    const v = classifyCheck("policy-identity-roles", FULL, [], AUDIT);
+    expect(v.kind === "unknown" && v.reason).toBe("truncated");
+    expect(v.kind === "unknown" && v.detail).toContain("Monitoring Contributor");
+  });
+});
+
+describe("blob checks", () => {
+  it("storage-rbac: both roles as-expected, one differs, none absent", () => {
+    const ra = (guid: string) => ({
+      properties: { roleDefinitionId: `/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/${guid}` },
+    });
+    const blob = "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1";
+    const queue = "8a0f0c08-91a1-4084-bc3d-661d67233fed";
+    expect(classifyCheck("storage-rbac", FULL, [readRows([ra(blob), ra(queue)])])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("storage-rbac", FULL, [readRows([ra(blob)])]).kind).toBe("present-differs");
+    expect(classifyCheck("storage-rbac", FULL, [readRows([])])).toEqual({ kind: "absent" });
+  });
+
+  it("eventgrid-subscription: a queue destination with BlobCreated is as-expected", () => {
+    const account = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
+    const sub = (types: string[]) => ({
+      properties: {
+        topic: account,
+        destination: { endpointType: "StorageQueue", properties: { resourceId: account, queueName: "flowlog-queue" } },
+        filter: { includedEventTypes: types },
+      },
+    });
+    expect(classifyCheck("eventgrid-subscription", FULL, [readRows([sub(["Microsoft.Storage.BlobCreated"])])])).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("eventgrid-subscription", FULL, [readRows([sub(["Microsoft.Storage.BlobDeleted"])])]).kind).toBe(
+      "present-differs",
+    );
+    expect(classifyCheck("eventgrid-subscription", FULL, [readRows([])])).toEqual({ kind: "absent" });
+  });
+
+  it("flow-log: disabled or version 1 differs", () => {
+    const fl = (enabled: boolean, version: number) => ({
+      location: "eastus",
+      properties: {
+        enabled,
+        storageId: "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa",
+        format: { type: "JSON", version },
+      },
+    });
+    expect(classifyCheck("flow-log", FULL, [one(fl(true, 2))])).toEqual({ kind: "as-expected" });
+    const v = classifyCheck("flow-log", FULL, [one(fl(false, 1))]);
+    expect(v.kind === "present-differs" && v.diffs.map((d) => d.field)).toEqual(["enabled", "format.version"]);
+  });
+});
+
+describe("classifyHubArrival: a hub a complete listing lacks is not quiet (AZR-47)", () => {
+  const zero = readRows([{ value: [{ timeseries: [{ data: [{ total: 0 }] }] }] }]);
+
+  it("complete listing without the hub -> no-hub, whatever the metric said", () => {
+    expect(classifyHubArrival("insights-logs-auditlogs", zero, ["t1", "t2", "t3"])).toEqual({ kind: "no-hub" });
+    expect(classifyHubArrival("h", denied, [])).toEqual({ kind: "no-hub" });
+  });
+
+  it("incomplete listing (null) -> the measured zero stands", () => {
+    expect(classifyHubArrival("insights-logs-auditlogs", zero, null, "PT1H")).toEqual({
+      kind: "measured",
+      messages: 0,
+      window: "PT1H",
+    });
+  });
+
+  it("hub present (case-insensitive) and zero -> the quiet measured zero", () => {
+    expect(classifyHubArrival("T2", zero, ["t1", "t2", "t3"], "PT1H")).toEqual({
+      kind: "measured",
+      messages: 0,
+      window: "PT1H",
+    });
+  });
+});
+
+describe("classifyArrival: a measured zero is not unknown", () => {
+  const metrics = (totals: number[]) =>
+    readRows([{ value: [{ timeseries: [{ data: totals.map((total) => ({ total })) }] }] }]);
+
+  it("sums the totals", () => {
+    expect(classifyArrival(metrics([2, 3]), "PT1H")).toEqual({ kind: "measured", messages: 5, window: "PT1H" });
+  });
+
+  it("a total of 0 is {measured, 0}; a 403 is unknown; the two are unequal", () => {
+    const zero = classifyArrival(metrics([0, 0]));
+    const forbidden = classifyArrival(denied);
+    expect(zero).toEqual({ kind: "measured", messages: 0, window: "PT1H" });
+    expect(forbidden.kind).toBe("unknown");
+    expect(forbidden.kind === "unknown" && forbidden.reason).toBe("denied");
+    expect(zero).not.toEqual(forbidden);
+  });
+
+  it("a body that carries no number is unknown, never a measured zero", () => {
+    const shapes: unknown[] = [
+      {},
+      { value: [] },
+      { value: [{ timeseries: [] }] },
+      { value: [{ timeseries: [{}] }] },
+      { value: [{ timeseries: [{ data: [] }] }] },
+      { value: [{ timeseries: [{ data: [{ timeStamp: "t" }, { total: "3" }] }] }] },
+      { value: [{ timeseries: [{ data: [{ total: 2 }] }, {}] }] },
+    ];
+    for (const body of shapes) {
+      const v = classifyArrival(readRows([body]));
+      expect(v.kind === "unknown" && v.reason, JSON.stringify(body)).toBe("failed");
+    }
+    // Each malformed shape names what was wrong with it.
+    const detail = (body: unknown) => {
+      const v = classifyArrival(readRows([body]));
+      return v.kind === "unknown" ? v.detail : "";
+    };
+    expect(detail({ value: [{ timeseries: [] }] })).toContain("timeseries list is empty");
+    expect(detail({ value: [{ timeseries: [{}] }] })).toContain("no data array");
+    expect(detail({ value: [{ timeseries: [{ data: [] }] }] })).toContain("numeric total");
+  });
+
+  it("one point reporting 0 among points without a total is a measured zero", () => {
+    const body = { value: [{ timeseries: [{ data: [{ timeStamp: "t" }, { total: 0 }] }] }] };
+    expect(classifyArrival(readRows([body]))).toEqual({ kind: "measured", messages: 0, window: "PT1H" });
+  });
+
+  it("a 404 is unknown, never absent", () => {
+    const v = classifyArrival(readRefused(refusal({ status: 404, code: "ResourceNotFound" })));
+    expect(v.kind).toBe("unknown");
+  });
+});
+
+describe("policy-remediation: outcomes", () => {
+  const COMMUNITY = checkExpectationsFor("communityPolicyInitiative", FULL);
+  const remediation = (assignment: string, provisioningState: string) => ({
+    properties: {
+      policyAssignmentId: `/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyAssignments/${assignment}`,
+      provisioningState,
+    },
+  });
+  const check = (ex: CheckExpectations, rows: unknown[]) =>
+    classifyCheck("policy-remediation", FULL, [readRows(rows)], ex);
+
+  it("a Succeeded remediation of the exact assignment name is as-expected", () => {
+    expect(AUDIT.policy?.assignmentName).toBe("Cribl-AU-Central");
+    expect(check(AUDIT, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({ kind: "as-expected" });
+    // Matched case-insensitively, on the id's last segment.
+    expect(check(AUDIT, [remediation("cribl-au-central", "succeeded")])).toEqual({ kind: "as-expected" });
+    // Today's instructed name is also a family member, so the case above
+    // cannot tell the exact-name match from the family match. An instructed
+    // name outside the family can: only the exact-name match accepts it.
+    const outside: CheckExpectations = {
+      ...AUDIT,
+      policy: { ...AUDIT.policy!, assignmentName: "Contoso-Diag-Policy" },
+    };
+    expect(check(outside, [remediation("contoso-diag-policy", "Succeeded")])).toEqual({ kind: "as-expected" });
+  });
+
+  // DBT-166: with a name instructed, a remediation of a family member is the
+  // same "another assignment" policy-assignment reports, not the plan's own.
+  it("with a name instructed, a remediation of a family member is present-other-name", () => {
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [],
+    });
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Old", "Running")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed, Running" }],
+    });
+    // The diffs are the named assignment's own: another family member's
+    // Succeeded does not clear them.
+    expect(check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Older", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+      alsoFound: 1,
+    });
+    // The same assignment, read by policy-assignment, is called the same thing.
+    const assignment = {
+      name: "Cribl-AU-Old",
+      identity: { type: "UserAssigned" },
+      properties: { policyDefinitionId: AUDIT.policy?.definitionId, enforcementMode: "Default" },
+    };
+    expect(classifyCheck("policy-assignment", FULL, [readRows([assignment])], AUDIT)).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Old",
+      diffs: [],
+    });
+    // An instructed name outside the family: a family remediation is still another assignment's.
+    const outside: CheckExpectations = {
+      ...AUDIT,
+      policy: { ...AUDIT.policy!, assignmentName: "Contoso-Diag-Policy" },
+    };
+    expect(check(outside, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({
+      kind: "present-other-name",
+      name: "Cribl-AU-Central",
+      diffs: [],
+    });
+  });
+
+  it("with a name instructed, the exact name's remediations decide, whatever the family's say", () => {
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Old", "Succeeded"), remediation("Cribl-AU-Central", "Failed")]),
+    ).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed" }],
+    });
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Old", "Failed"), remediation("Cribl-AU-Central", "Succeeded")]),
+    ).toEqual({ kind: "as-expected" });
+  });
+
+  it("with no instructed name, a Succeeded remediation in the legacy family is as-expected", () => {
+    expect(COMMUNITY.policy?.assignmentName).toBeNull();
+    expect(check(COMMUNITY, [remediation("Cribl-Diag-EH-mg-1", "Succeeded")])).toEqual({ kind: "as-expected" });
+  });
+
+  it("no remediation of a matching assignment is absent", () => {
+    expect(check(AUDIT, [])).toEqual({ kind: "absent" });
+    expect(check(AUDIT, [remediation("SomeoneElse", "Succeeded")])).toEqual({ kind: "absent" });
+    // The other initiative's name does not match the community family.
+    expect(check(COMMUNITY, [remediation("Cribl-AU-Central", "Succeeded")])).toEqual({ kind: "absent" });
+    // The bare family prefix is not a member: the family needs a suffix.
+    expect(check(COMMUNITY, [remediation("Cribl-Diag-EH-", "Succeeded")])).toEqual({ kind: "absent" });
+  });
+
+  it("matching remediations none of which Succeeded differ on every provisioningState, joined", () => {
+    expect(
+      check(AUDIT, [
+        remediation("Cribl-AU-Central", "Failed"),
+        remediation("SomeoneElse", "Succeeded"),
+        remediation("Cribl-AU-Central", "Running"),
+      ]),
+    ).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "Failed, Running" }],
+    });
+    // One Succeeded among them is enough.
+    expect(
+      check(AUDIT, [remediation("Cribl-AU-Central", "Failed"), remediation("Cribl-AU-Central", "Succeeded")]),
+    ).toEqual({ kind: "as-expected" });
+    // A missing state reads as "(none)", never as Succeeded.
+    expect(check(AUDIT, [{ properties: { policyAssignmentId: "/x/policyAssignments/Cribl-AU-Central" } }])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "provisioningState", expected: "Succeeded", actual: "(none)" }],
+    });
+  });
+});
+
+describe("eventgrid-topic: outcomes", () => {
+  const ACCOUNT_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
+  const topic = (source: string, topicType = "Microsoft.Storage.StorageAccounts") => ({
+    name: "flowlogsa-events",
+    properties: { source, topicType },
+  });
+
+  it("a system topic on the plan's storage account is as-expected", () => {
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(ACCOUNT_ID))])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(ACCOUNT_ID.toUpperCase()))])).toEqual({
+      kind: "as-expected",
+    });
+  });
+
+  it("a topic on another source differs on source; a non-storage topicType differs too", () => {
+    const other = ACCOUNT_ID.replace("flowlogsa", "othersa");
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic(other))])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "source", expected: ACCOUNT_ID, actual: other }],
+    });
+    expect(classifyCheck("eventgrid-topic", FULL, [one(topic("", "Microsoft.Resources.Subscriptions"))])).toEqual({
+      kind: "present-differs",
+      diffs: [
+        { field: "source", expected: ACCOUNT_ID, actual: "(none)" },
+        {
+          field: "topicType",
+          expected: "Microsoft.Storage.StorageAccounts",
+          actual: "Microsoft.Resources.Subscriptions",
+        },
+      ],
+    });
+  });
+
+  // DBT-167: the topic is only the plan's if it sits on the plan's account.
+  it("with no storage account in the plan, the topic is unknown missing-value, never as-expected", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "" };
+    expect(requestsFor("eventgrid-topic", noAccount)).toEqual({ kind: "missing", missing: ["storageAccount"] });
+    for (const source of [ACCOUNT_ID, ACCOUNT_ID.replace("flowlogsa", "othersa")]) {
+      expect(classifyCheck("eventgrid-topic", noAccount, [one(topic(source))])).toEqual({
+        kind: "unknown",
+        reason: "missing-value",
+        detail: "Set Storage account first.",
+      });
+    }
+  });
+
+  it("classifyTopic itself refuses to call a topic as-expected without a storage account", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "  " };
+    expect(classifyTopic(noAccount, topic(ACCOUNT_ID))).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
+    expect(classifyTopic(FULL, topic(ACCOUNT_ID))).toEqual({ kind: "as-expected" });
+  });
+
+  it("a 404 for the topic is absent", () => {
+    const notFound = readRefused<unknown>(refusal({ status: 404, code: "ResourceNotFound" }));
+    expect(classifyCheck("eventgrid-topic", FULL, [notFound])).toEqual({ kind: "absent" });
+  });
+
+  it("a denied or failed read is unknown, never absent", () => {
+    const v = classifyCheck("eventgrid-topic", FULL, [denied]);
+    expect(v.kind === "unknown" && v.reason).toBe("denied");
+    const serverError = readRefused<unknown>(refusal({ status: 500, code: "InternalServerError" }));
+    const failed = classifyCheck("eventgrid-topic", FULL, [serverError]);
+    expect(failed.kind === "unknown" && failed.reason).toBe("failed");
+  });
+});
+
+// DBT-178: present-other-name named one object and said nothing of the rest,
+// so the screen read as if the named one were the only one.
+describe("present-other-name counts the others that matched the same way", () => {
+  const exportItem = (name: string, hub = "defender-alerts") => ({
+    id: `/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Security/automations/${name}`,
+    name,
+    properties: {
+      isEnabled: true,
+      scopes: [{ scopePath: "/subscriptions/sub-1" }],
+      sources: [{ eventSource: "Alerts" }],
+      actions: [{ actionType: "EventHub", eventHubResourceId: `${NS_PATH}/eventhubs/${hub}` }],
+    },
+  });
+  const setting = (name: string, ns = NS_PATH) => ({
+    name,
+    properties: {
+      eventHubAuthorizationRuleId: `${ns}/authorizationRules/sender`,
+      eventHubName: "",
+      logs: [{ category: "AuditLogs", enabled: true }],
+    },
+  });
+  const assignment = (name: string) => ({
+    name,
+    identity: { type: "UserAssigned" },
+    properties: { policyDefinitionId: AUDIT.policy?.definitionId, enforcementMode: "Default" },
+  });
+  const remediation = (name: string, provisioningState = "Succeeded") => ({
+    properties: {
+      policyAssignmentId: `/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyAssignments/${name}`,
+      provisioningState,
+    },
+  });
+  const ENTRA: CheckExpectations = {};
+
+  it("defender-export: two others on the namespace name the exact-hub one and count one more", () => {
+    const v = classifyCheck("defender-export", FULL, [
+      readRows([exportItem("NsOnly", "other-hub"), exportItem("PortalExport")]),
+    ]);
+    expect(v.kind === "present-other-name" && [v.name, v.alsoFound]).toEqual(["PortalExport", 1]);
+    const alone = classifyCheck("defender-export", FULL, [readRows([exportItem("PortalExport")])]);
+    expect(alone.kind === "present-other-name" && "alsoFound" in alone).toBe(false);
+  });
+
+  it("entra-setting: counts only the settings that send to the plan's namespace", () => {
+    const v = classifyCheck(
+      "entra-setting",
+      FULL,
+      [readRows([setting("A"), setting("Elsewhere", `${NS_PATH}2`), setting("B"), setting("C")])],
+      ENTRA,
+    );
+    expect(v).toEqual({ kind: "present-other-name", name: "A", diffs: [], alsoFound: 2 });
+  });
+
+  it("policy-assignment: counts the other family members and initiative users", () => {
+    const v = classifyCheck(
+      "policy-assignment",
+      FULL,
+      [readRows([assignment("Cribl-AU-Old"), assignment("Unrelated-Name"), { name: "SomeoneElse", properties: {} }])],
+      AUDIT,
+    );
+    // Unrelated-Name uses the plan's initiative; SomeoneElse matches neither.
+    expect(v).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [], alsoFound: 1 });
+  });
+
+  it("policy-remediation: counts other assignments, not remediations", () => {
+    const v = classifyCheck(
+      "policy-remediation",
+      FULL,
+      [
+        readRows([
+          remediation("Cribl-AU-Old"),
+          remediation("Cribl-AU-Old", "Failed"),
+          remediation("cribl-au-old", "Failed"),
+          remediation("Cribl-AU-Older"),
+          remediation("Cribl-AU-Oldest"),
+        ]),
+      ],
+      AUDIT,
+    );
+    expect(v).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [], alsoFound: 2 });
+    expect(
+      classifyCheck("policy-remediation", FULL, [readRows([remediation("Cribl-AU-Old"), remediation("cribl-au-old")])], AUDIT),
+    ).toEqual({ kind: "present-other-name", name: "Cribl-AU-Old", diffs: [] });
+  });
+});
+
+// DBT-179: the subscription matched on queueName alone, so one delivering to a
+// same-named queue on another account, on another account's topic, read as
+// the plan's - the shape DBT-167 fixed for the topic.
+describe("eventgrid-subscription: the plan's storage account", () => {
+  const ACCOUNT_ID = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.Storage/storageAccounts/flowlogsa";
+  const OTHER_ID = ACCOUNT_ID.replace("flowlogsa", "othersa");
+  const sub = (resourceId: string | undefined, topic: string | undefined, types = [BLOB]) => ({
+    properties: {
+      ...(topic !== undefined ? { topic } : {}),
+      destination: {
+        endpointType: "StorageQueue",
+        properties: { ...(resourceId !== undefined ? { resourceId } : {}), queueName: "flowlog-queue" },
+      },
+      filter: { includedEventTypes: types },
+    },
+  });
+  const check = (values: PlanValues, rows: unknown[]) =>
+    classifyCheck("eventgrid-subscription", values, [readRows(rows)]);
+
+  it("a subscription on another account's topic, to another account's queue, differs on both", () => {
+    expect(check(FULL, [sub(OTHER_ID, OTHER_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [
+        { field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID },
+        { field: "topic", expected: ACCOUNT_ID, actual: OTHER_ID },
+      ],
+    });
+    // Either one alone is enough.
+    expect(check(FULL, [sub(ACCOUNT_ID, OTHER_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "topic", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+    expect(check(FULL, [sub(OTHER_ID, ACCOUNT_ID)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+  });
+
+  it("the plan's account on both is as-expected, compared case-insensitively", () => {
+    expect(check(FULL, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({ kind: "as-expected" });
+    expect(check(FULL, [sub(ACCOUNT_ID.toUpperCase(), ACCOUNT_ID.toLowerCase())])).toEqual({ kind: "as-expected" });
+  });
+
+  it("prefers the subscription on the plan's account among same-queue ones", () => {
+    expect(check(FULL, [sub(OTHER_ID, OTHER_ID), sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({ kind: "as-expected" });
+  });
+
+  it("a read that does not say the account is unknown, never as-expected", () => {
+    expect(check(FULL, [sub(undefined, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "The event subscription was read, but Azure did not report which storage account its queue is on.",
+    });
+    const topicUnsaid = {
+      kind: "unknown",
+      reason: "failed",
+      detail: "The event subscription was read, but its topic does not say which storage account it belongs to.",
+    };
+    expect(check(FULL, [sub(ACCOUNT_ID, undefined)])).toEqual(topicUnsaid);
+    // A topic id that is not a storage account's (the system topic's own id) cannot say either.
+    const systemTopicId =
+      "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.EventGrid/systemTopics/flowlogsa-events";
+    expect(check(FULL, [sub(ACCOUNT_ID, systemTopicId)])).toEqual(topicUnsaid);
+    // A definite difference is still reported: it is true whatever the topic is.
+    expect(check(FULL, [sub(OTHER_ID, undefined)])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "destination.resourceId", expected: ACCOUNT_ID, actual: OTHER_ID }],
+    });
+  });
+
+  it("with no storage account in the plan, it is unknown missing-value and sends nothing", () => {
+    const noAccount: PlanValues = { ...FULL, storageAccount: "" };
+    expect(requestsFor("eventgrid-subscription", noAccount)).toEqual({ kind: "missing", missing: ["storageAccount"] });
+    expect(check(noAccount, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
+  });
+
+  it("classifyEventSubscription itself refuses as-expected without a storage account", () => {
+    expect(classifyEventSubscription({ ...FULL, storageAccount: " " }, [sub(ACCOUNT_ID, ACCOUNT_ID)])).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "Set Storage account first.",
+    });
+  });
+});
+
+describe("eh-rule-manage: the rule Azure creates hubs with (AZR-39)", () => {
+  const rules = (rights: string[]) => readRows([{ name: "sender", properties: { rights } }]);
+
+  it("a Send-only rule is present-differs on rights, where eh-rule-send calls the same rule fine", () => {
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Send"])])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Manage", actual: "Send" }],
+    });
+    expect(classifyCheck("eh-rule-send", FULL, [rules(["Send"])])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Listen", "Send"])])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Manage", actual: "Listen, Send" }],
+    });
+  });
+
+  it("a Manage rule is as-expected; a missing one is absent; unparsed rows are unknown", () => {
+    expect(classifyCheck("eh-rule-manage", FULL, [rules(["Manage", "Send", "Listen"])])).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("eh-rule-manage", { ...FULL, sendRule: "nope" }, [rules(["Manage"])])).toEqual({
+      kind: "absent",
+    });
+    const v = classifyCheck("eh-rule-manage", FULL, [readRows([42])]);
+    expect(v).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "1 authorization rule row could not be read, so the listing does not show it is missing.",
+    });
+  });
+
+  it("checks the plan's sendRule, and needs it", () => {
+    const v = classifyCheck("eh-rule-manage", { ...FULL, sendRule: "" }, [rules(["Manage"])]);
+    expect(v).toEqual({ kind: "unknown", reason: "missing-value", detail: "Set Send rule first." });
+  });
+});
+
+describe("policy-definition: absent only from a complete listing (AZR-39)", () => {
+  const MG_DEFS = "/providers/Microsoft.Management/managementGroups/mg-1/providers/Microsoft.Authorization/policyDefinitions";
+  const ACTIVITY = checkExpectationsFor("activityLog", FULL);
+  const STORAGE = checkExpectationsFor("communityPolicyInitiative", FULL, ["Storage"]);
+  const def = (id: string) => ({ id, name: id.split("/").pop() });
+
+  it("the Activity Log definition: listed is as-expected; a complete listing without it is absent", () => {
+    const id = `${MG_DEFS}/Cribl-Community-ActivityLog-DiagSettings-EventHub`;
+    expect(classifyCheck("policy-definition", FULL, [readRows([def(id)])], ACTIVITY)).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("policy-definition", FULL, [readRows([id.toLowerCase()].map(def))], ACTIVITY)).toEqual({
+      kind: "as-expected",
+    });
+    expect(classifyCheck("policy-definition", FULL, [readRows([])], ACTIVITY)).toEqual({ kind: "absent" });
+    expect(classifyCheck("policy-definition", FULL, [readRows([def(`${MG_DEFS}/Other`)])], ACTIVITY)).toEqual({
+      kind: "absent",
+    });
+  });
+
+  it("the same name saved at ANOTHER management group is not the plan's", () => {
+    const parent = "/providers/Microsoft.Management/managementGroups/root/providers/Microsoft.Authorization/policyDefinitions";
+    const rows = readRows([def(`${parent}/Cribl-Community-ActivityLog-DiagSettings-EventHub`)]);
+    expect(classifyCheck("policy-definition", FULL, [rows], ACTIVITY)).toEqual({ kind: "absent" });
+  });
+
+  it("community: some of the chosen tier's definitions is present-differs naming exactly the missing", () => {
+    const rows = readRows([def(`${MG_DEFS}/Cribl-BlobServices-DiagSettings-EH`), def(`${MG_DEFS}/Cribl-FileServices-DiagSettings-EH`)]);
+    expect(classifyCheck("policy-definition", FULL, [rows], STORAGE)).toEqual({
+      kind: "present-differs",
+      diffs: [
+        {
+          field: "definitions",
+          expected: "5 definitions",
+          actual:
+            "missing Cribl-QueueServices-DiagSettings-EH, Cribl-TableServices-DiagSettings-EH, " +
+            "Cribl-StorageAccounts-DiagSettings-EH",
+        },
+      ],
+    });
+    const all = readRows((STORAGE.policyDefinitions ?? []).map(def));
+    expect(classifyCheck("policy-definition", FULL, [all], STORAGE)).toEqual({ kind: "as-expected" });
+  });
+
+  it("a refused listing is unknown: 403 denied, 404 failed (never absent), too many pages truncated", () => {
+    expect(classifyCheck("policy-definition", FULL, [denied], ACTIVITY)).toEqual({
+      kind: "unknown",
+      reason: "denied",
+      detail: "denied at /x",
+    });
+    const notFound = classifyCheck(
+      "policy-definition",
+      FULL,
+      [readRefused(refusal({ status: 404, code: "ManagementGroupNotFound" }))],
+      ACTIVITY,
+    );
+    expect(notFound.kind === "unknown" && notFound.reason).toBe("failed");
+    const truncated = classifyCheck(
+      "policy-definition",
+      FULL,
+      [readRefused(refusal({ reason: "too-many-pages", status: null, code: "" }))],
+      ACTIVITY,
+    );
+    expect(truncated.kind === "unknown" && truncated.reason).toBe("truncated");
+  });
+
+  it("a row without an id may be the missing one: unknown, never absent", () => {
+    const v = classifyCheck("policy-definition", FULL, [readRows([{ name: "x" }, 7])], ACTIVITY);
+    expect(v).toEqual({
+      kind: "unknown",
+      reason: "failed",
+      detail: "2 policy definition rows could not be read, so the listing does not show it is missing.",
+    });
+  });
+
+  it("with no definitions expected (the built-in Audit) it is missing-value, whatever is read", () => {
+    expect(classifyCheck("policy-definition", FULL, [readRows([])], AUDIT)).toEqual({
+      kind: "unknown",
+      reason: "missing-value",
+      detail: "No policy definition is imported for this source.",
+    });
+  });
+});
+
+describe("barrels reach the C3 additions", () => {
+  it("resolves the new names through each domain index", () => {
+    expect(ruleCanListen(["Listen"])).toBe(true);
+    expect(namespaceSupportsKafka("Basic")).toBe(false);
+    expect(typeof classifyExportForPlan).toBe("function");
+    expect(listSettingsRequest().method).toBe("GET");
+  });
+
+  it("covers every check kind in the classifier", () => {
+    const kinds: readonly CheckKind[] = CHECK_KINDS;
+    for (const kind of kinds) {
+      expect(() => classifyCheck(kind, FULL, [readRows([{}])], AUDIT), kind).not.toThrow();
+    }
+  });
+});

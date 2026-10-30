@@ -186,6 +186,27 @@ describe("persistence", () => {
     expect(stored.connectionId).toBe(KEY);
   });
 
+  it("stores and restores the Defender verdicts an existing-subscription audit measured", async () => {
+    // CAP-7a. The cached set is decoded against the capability taxonomy, which
+    // DROPS names it does not know - so a capability missing from the taxonomy
+    // would be measured, saved, and silently lost on the next launch.
+    const cache = new FakeContentCache();
+    const azure = new FakeAzureManagement();
+    // RE-PINNED 2026-10-27 (review): Reader-like '*/read' became Security
+    // Admin's Microsoft.Security/*, because a subscription-scope miss on the
+    // automations write is no longer recorded (it may be granted on the group
+    // the export is written to), so only a grant can round-trip for it.
+    azure.respondWith(permsResponse(permSet({ actions: ["Microsoft.Security/*"] })), OK, OK);
+    const subInput: CapabilityAuditInput = { ...INPUT, setupPath: "existing-subscription" };
+    const first = await runCapabilityAudit({ azure, cribl: new FakeCriblClient(), cache }, subInput);
+    expect(first.set.verdicts["defender-automation.write"]).toBe("granted");
+
+    const stored = await loadCachedCapabilities(cache);
+    expect(stored.verdicts["defender-plans.read"]).toBe("granted");
+    expect(stored.verdicts["defender-automation.read"]).toBe("granted");
+    expect(stored.verdicts["defender-automation.write"]).toBe("granted");
+  });
+
   it("re-audits after a scope change, because the key changed", async () => {
     const cache = new FakeContentCache();
     await runCapabilityAudit(ownerPorts(cache), INPUT);

@@ -18,6 +18,7 @@ import {
   reKeyByLogType,
   removeByLogType,
   renameInList,
+  splitNoteLead,
   suggestLogType,
   tagFileContent,
   tagSampleFromContent,
@@ -300,5 +301,38 @@ describe("validateRename", () => {
     });
     expect(validateRename(list, "A", "C")).toEqual({ ok: true, collision: false });
     expect(validateRename(list, "A", "B")).toEqual({ ok: true, collision: true });
+  });
+});
+
+describe("splitNoteLead (DBT-125)", () => {
+  it("leads with the first sentence and flags that more follows", () => {
+    expect(
+      splitNoteLead(
+        "Column-order log types (CSV rows, whitespace-positional lines) cannot be routed automatically. Routes are evaluated before the pipeline extracts.",
+      ),
+    ).toEqual({
+      lead: "Column-order log types (CSV rows, whitespace-positional lines) cannot be routed automatically.",
+      more: true,
+    });
+  });
+
+  it("does not end a sentence inside a number or an abbreviation", () => {
+    expect(splitNoteLead("Bundled order (1.5 columns), e.g. src. Check it.")).toEqual({
+      lead: "Bundled order (1.5 columns), e.g. src.",
+      more: true,
+    });
+  });
+
+  it("keeps a single sentence whole and offers no (i)", () => {
+    expect(splitNoteLead("Your saved Palo Alto TRAFFIC column order (115 columns).")).toEqual({
+      lead: "Your saved Palo Alto TRAFFIC column order (115 columns).",
+      more: false,
+    });
+  });
+
+  it("ends the lead before a sentence that starts with a digit", () => {
+    expect(
+      splitNoteLead("Bundled order (115 columns), naming 73 fields. 42 of the 115 names have no field."),
+    ).toEqual({ lead: "Bundled order (115 columns), naming 73 fields.", more: true });
   });
 });

@@ -35,6 +35,7 @@ import {
   plannedSamplesFrom,
   previewLines,
   sampleStoreKey,
+  storedEventShortfalls,
 } from "./planned-samples";
 
 /** A CEF line, so the re-tag has a format to detect that no caller declared. */
@@ -124,6 +125,7 @@ describe("the capture and Lake paths share ONE conversion", () => {
         rawEvents,
         format: "cef",
         noDiscriminator: false,
+        leftOutEvents: 0,
         notes: [],
         ok: true,
       },
@@ -198,5 +200,45 @@ describe("commitErrorText", () => {
     for (const thrown of [new Error(""), null, 0, false]) {
       expect(commitErrorText(thrown).trim()).not.toBe("");
     }
+  });
+});
+
+/**
+ * DBT-197: what the store kept, read back from the store. The cloud adapter
+ * byte-caps each sample and keeps its first events; the commit headline can only
+ * say so if this finds the shortfall - and must not invent one for a sample the
+ * listing simply did not return.
+ */
+describe("storedEventShortfalls", () => {
+  const lines = (n: number) =>
+    Array.from({ length: n }, (_, i) => `${CEF} spt=${i}`);
+  const [traffic] = plannedSamplesFrom(
+    [{ logType: "TRAFFIC", rawEvents: lines(5) }],
+    "capture:in_syslog",
+  );
+  const [threat] = plannedSamplesFrom(
+    [{ logType: "THREAT", rawEvents: lines(3) }],
+    "capture:in_syslog",
+  );
+  /** The store's copy of `sample` holding only its first `n` records. */
+  const keptFirst = (sample: typeof traffic, n: number) => ({
+    ...sample,
+    parsed: { ...sample.parsed, records: sample.parsed.records.slice(0, n) },
+  });
+
+  it("reports a trimmed sample with the counts handed and kept", () => {
+    expect(traffic.parsed.records).toHaveLength(5);
+    expect(
+      storedEventShortfalls([traffic, threat], [keptFirst(traffic, 2), threat]),
+    ).toEqual([{ logType: "TRAFFIC", handed: 5, kept: 2 }]);
+  });
+
+  it("reports nothing when every sample landed whole", () => {
+    expect(storedEventShortfalls([traffic, threat], [traffic, threat])).toEqual([]);
+  });
+
+  it("does not read a sample MISSING from the listing as kept-zero", () => {
+    // A listing that skipped an entry says nothing about the entry's size.
+    expect(storedEventShortfalls([traffic, threat], [threat])).toEqual([]);
   });
 });

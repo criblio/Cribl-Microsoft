@@ -67,9 +67,10 @@ export function isPlaceholderFilter(routeCondition: string): boolean {
   return routeCondition.includes(UNSET_FIELD);
 }
 
-/**
+/*
  * WHY a log type will need a hand-written route filter - and the reason some
- * formats get their own answer (HON-5, GEN-8).
+ * formats get their own answer (HON-5, GEN-8). There are two causes, and the
+ * operator has to be told which one applies:
  *
  *   evidence  the samples did not separate it from a sibling THIS TIME. More
  *             or better samples can fix it, and often do.
@@ -80,23 +81,25 @@ export function isPlaceholderFilter(routeCondition: string): boolean {
  *             route-discriminator and route-value-discriminator, which each ask
  *             {@link formatCanDiscriminate} rather than restating the rule.
  *
- * Collapsing these into one warning is the failure this exists to avoid. Told
- * "no discriminator found", such an operator will go and collect more samples,
+ * Collapsing these into one warning is the failure to avoid. Told "no
+ * discriminator found", such an operator will go and collect more samples,
  * which cannot possibly help; told the truth, they write one filter and move
  * on. The generic placeholder message is right for every other format and
- * wrong for these.
+ * wrong for these, which is why {@link formatRoutingWarning} exists alongside
+ * it. The distinction lives in that function and in formatCanDiscriminate, not
+ * in a type: no value names the cause (GEN-12 deleted a `PlaceholderCause` type
+ * that was declared for it and never emitted).
  *
  * TWO MECHANISMS SHARE THE `format` CAUSE and they do NOT share wording, which
- * is why {@link csvRoutingWarning} returns two texts:
+ * is why {@link formatRoutingWarning} returns two texts:
  *
  *   column order (csv, positional)  the names come from a column POSITION.
  *   regex capture (syslog)          the names come from a regex over the line.
  *
  * Same verdict, different sentence: a syslog operator handed the column-order
  * text would go looking for columns their events do not have, which is the same
- * wrong-cause failure this type exists to prevent, one step further down.
+ * wrong-cause failure, one step further down.
  */
-export type PlaceholderCause = "evidence" | "format";
 
 /**
  * The formats whose events carry values in COLUMN ORDER and no field names.
@@ -118,7 +121,7 @@ const COLUMN_ORDER_FORMATS: ReadonlySet<string> = new Set(["csv", "positional"])
  * pack carries `_raw`, so the presence path can never find it unique.
  *
  * Same verdict as column order, different mechanism, so it is a second set
- * rather than a widening of the first - {@link csvRoutingWarning} has to tell
+ * rather than a widening of the first - {@link formatRoutingWarning} has to tell
  * these two operators different things.
  */
 const REGEX_CAPTURE_FORMATS: ReadonlySet<string> = new Set(["syslog"]);
@@ -213,16 +216,15 @@ const MINTED_HEADER_FIELDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
  *   cef      the HEADER names are minted and the EXTENSION pairs are genuinely
  *   leef     in the text, so these formats stay routable and lose only the
  *            headers - a per-FIELD answer, {@link isMintedHeaderField}.
- *   json     the string an UNDETECTED sample arrives as, and so the real
- *            carrier of the remaining gap. `normalizeSourceFormat`
+ *   json     the string an UNDETECTED sample arrives as. `normalizeSourceFormat`
  *            (pipeline-preview-state.ts) erases "unknown" to "json" before the
  *            plan input is built, so neither this predicate nor either
- *            discriminator is ever handed "unknown" - only csvRoutingWarning
+ *            discriminator is ever handed "unknown" - only formatRoutingWarning
  *            is, from the samples screen, which passes the DETECTED format.
  *            Whether such a sample's names are minted depends on the CONTENT,
  *            and "json" cannot say, because a real JSON document's names ARE in
- *            its text. See {@link isMintedHeaderField} for the measurements and
- *            for what stays open.
+ *            its text. GEN-11 answers it OUTSIDE this predicate, at plan level:
+ *            see {@link isMintedHeaderField}.
  */
 export function formatCanDiscriminate(format: string): boolean {
   const f = format.toLowerCase();
@@ -270,30 +272,39 @@ export function formatCanDiscriminate(format: string): boolean {
  * (pipeline-preview-state.ts) turns "unknown", "" and undefined into "json"
  * before `reportToPlanInput` builds the plan, so the planner and both
  * discriminators only ever see "json". "unknown" reaches exactly one caller on
- * this surface - csvRoutingWarning, from the samples screen, which is handed the
+ * this surface - formatRoutingWarning, from the samples screen, which is handed the
  * DETECTED format.
  *
- * MEASURED THROUGH THE REAL CHAIN with planFormat = "json" (2026-09-04):
- * parseByFormat's try-each fallback over the content, fieldValuesFromRecords,
- * the value path, then the emitted filter evaluated against an unparsed
- * route-time event carrying only `_raw`. Two log types, two events each, all
- * four parsed in every case:
+ * MEASURED THROUGH THE REAL CHAIN with planFormat = "json" (re-measured for
+ * GEN-11 through parseSampleContent's REAL detection, which answers "unknown"
+ * for each of these while the try-each fallback still parses them), then
+ * fieldValuesFromRecords, the value path, and the derived filter evaluated
+ * against an unparsed route-time event carrying only `_raw`. Two log types,
+ * two events each:
  *
- *   CEF content, AUTH vs TRAFFIC      `DeviceEventClassID === 'AUTH'`   0 of 2
- *   RFC 3164 syslog, sshd vs CRON     `Program === 'sshd'`              0 of 2
- *   headerless PAN-OS CSV             `_2 === 'TRAFFIC'`                0 of 2
+ *   headerless delimited rows          `_2 === 'TRAFFIC'`     0 of 2
+ *   3-column header CSV                `type === 'TRAFFIC'`   0 of 2
+ *   key=value, two pairs per line      `type === 'TRAFFIC'`   0 of 2
+ *
+ * The last is in the raw text (`type=TRAFFIC`), so it is dead only because for
+ * json and ndjson deriveValueDiscriminator suppresses the `_raw` fallback
+ * outright (a bare value token would match anywhere in a JSON document): the
+ * derived filter is a BARE field test with no second disjunct at all. The CEF
+ * and RFC 3164 syslog figures this comment used to quote came from a harness
+ * that FORCED "unknown"; real detection classifies that content as cef and
+ * syslog, and both already placeholder correctly.
  *
  * CALIBRATION, and the reason those zeros mean anything: the same harness on
  * JSON content whose names really ARE in the text emitted `authField !==
  * undefined || (typeof _raw === 'string' && _raw.indexOf('"authField"') !== -1)`
  * and matched 2 of 2. It can return true.
  *
- * All three produced a FILTER, so each log type counted as neither a placeholder
- * nor unreachable and the pack previewed clean - GEN-8's exact failure, and this
- * fix does not touch it. Worse than a dead disjunct, in fact: for json and
- * ndjson deriveValueDiscriminator suppresses the `_raw` fallback outright (a
- * bare value token would match anywhere in a JSON document), so what ships is a
- * BARE field test with no second disjunct at all.
+ * CLOSED AT PLAN LEVEL BY GEN-11. Each of those used to ship as a FILTER, so the
+ * log type counted as neither a placeholder nor unreachable and the pack
+ * previewed clean. reportToPlanInput now sets `formatDetected: false` for a
+ * sample whose detection returned "unknown", and buildPipelinePlan then derives
+ * nothing for it and emits the placeholder, which the preview reports. Detected
+ * json keeps its value and presence filters untouched.
  *
  * WHY THIS PREDICATE STILL CANNOT ANSWER IT, re-argued on the corrected premise.
  * The signature DOES receive the string that carries the gap, so "the format
@@ -301,11 +312,11 @@ export function formatCanDiscriminate(format: string): boolean {
  * receives is "json", and json is a format whose names genuinely are in the
  * text: a JSON document carrying `Name`, `Severity` or `Timestamp` is ordinary,
  * and applying the CEF or LEEF sets to "json" would delete real routing from
- * every genuine JSON pack in order to rescue the undetected ones. The fix is
- * unchanged - key the exclusion on the parser that actually RAN rather than on
- * the declared format - and it still needs the effective format carried out of
- * sample-parsing and through plan.ts, which is a change to neither of the two
- * functions this predicate serves.
+ * every genuine JSON pack in order to rescue the undetected ones. That is why
+ * GEN-11 carries the "not detected" signal through plan.ts instead of teaching
+ * it to this predicate. Rescuing a filter that WOULD work (the two-pair kv case,
+ * by verifying it against the sample's own raw lines) is a possible refinement;
+ * until then those log types placeholder, which is honest rather than silent.
  */
 export function isMintedHeaderField(field: string, format: string): boolean {
   const minted = MINTED_HEADER_FIELDS.get(format.toLowerCase());
@@ -316,11 +327,10 @@ export function isMintedHeaderField(field: string, format: string): boolean {
  * The warning for a log type that WILL placeholder because of its FORMAT, or
  * null when there is nothing to say.
  *
- * THE NAME IS NARROWER THAN THE FUNCTION as of 2026-09-03, and narrower again
- * since GEN-8: it answers for "positional" and "syslog" too. Renaming it would
- * edit the pipeline-generation barrel and the samples screen, which are outside
- * this change's scope, so the name is left and the rename is GEN-9. The
- * behaviour is defined by {@link formatCanDiscriminate}, not by this identifier.
+ * NAMED FOR THE PROPERTY, NOT A FORMAT. It was `csvRoutingWarning` until GEN-9,
+ * by which time it already answered for "positional" and "syslog" too; a name
+ * that lists formats drifts every time the set grows. The behaviour is defined
+ * by {@link formatCanDiscriminate}, not by this identifier.
  *
  * NOTHING IS SAID HERE FOR cef OR leef, on purpose. Those formats route fine on
  * extension fields, so a format-level warning would fire on every CEF pack in
@@ -330,19 +340,21 @@ export function isMintedHeaderField(field: string, format: string): boolean {
  * WHAT A CEF HEADER-ONLY LOG TYPE ACTUALLY GETS, since the reason for a silence
  * has to be true or the silence is unargued: this function returns null, and the
  * log type lands in `placeholderLogTypes` (route-yml) like every other
- * placeholder. The pipeline preview renders ONE hardcoded banner for that whole
+ * placeholder. (One exception since GEN-24: a PAN-OS CEF log type DBT-196 split
+ * by header TYPE routes on that TYPE in `_raw` instead, whenever the guards in
+ * route-panos-cef hold.) The pipeline preview renders ONE hardcoded banner for that whole
  * list - "Nothing in these samples separates X from the others, so the pack
  * ships them with a placeholder filter that matches nothing" - so the operator
  * is told something, and what they are told is evidence-flavoured.
  *
- * THAT BANNER IS NOT DERIVED FROM {@link PlaceholderCause}, and this comment
- * claimed it was until 2026-09-04 ("reports the generic `evidence` cause
- * instead"). Nothing in this repo ever reports a PlaceholderCause: the type has
- * exactly two references, this declaration and its type-only re-export from the
- * pipeline-generation barrel. No function returns one, no state stores one, no
- * screen renders one. The banner is a literal string in
- * pipeline-preview-section.tsx that happens to say what the `evidence` cause
- * would have meant, and it says it for every placeholder regardless of format.
+ * THAT BANNER IS NOT DERIVED FROM ANY CAUSE VALUE, and this comment claimed it
+ * was until 2026-09-04 ("reports the generic `evidence` cause instead"). No
+ * function returns a cause, no state stores one, no screen renders one - the
+ * type that named the two causes was never emitted, and GEN-12 deleted it so
+ * the next reader cannot argue from it as this comment once did. The banner is
+ * a literal string in pipeline-preview-section.tsx that happens to say what the
+ * `evidence` cause means, and it says it for every placeholder regardless of
+ * format.
  *
  * THE SILENCE STILL STANDS on the corrected premise, which is worth arguing
  * separately from the mechanism. "Nothing in these samples" is the right thing
@@ -363,7 +375,7 @@ export function isMintedHeaderField(field: string, format: string): boolean {
  * @param format       the log type's source format
  * @param siblingCount how many OTHER log types share the pack
  */
-export function csvRoutingWarning(
+export function formatRoutingWarning(
   format: string,
   siblingCount: number,
 ): string | null {

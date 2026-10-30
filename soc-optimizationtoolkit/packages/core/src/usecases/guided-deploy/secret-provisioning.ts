@@ -9,9 +9,11 @@
  *     secret object, `!{sentinel_client_secret}` (this is
  *     {@link SENTINEL_CLIENT_SECRET_REFERENCE}, the exact string the legacy pack
  *     outputs.yml embedded - pack-builder.ts 2573). The app ENSURES that secret
- *     exists via the Cribl secrets API (POST/PATCH /system/secrets) before the
- *     destination goes live. The real secret is TRANSIENT input, written once to
- *     Cribl, never persisted in job records/artifacts/logs.
+ *     exists via the Cribl secrets API before the destination goes live, through
+ *     ensureTextSecret (usecases/ensure-secret, DBT-152): POST, and on a 409
+ *     PATCH only a secret carrying this app's ownership stamp. The real secret
+ *     is TRANSIENT input, written once to Cribl, never persisted in job
+ *     records/artifacts/logs.
  *
  *   - AIR-GAP path: no Cribl to write a secret into, so the exported destination
  *     JSON keeps the literal `<replace me>` placeholder
@@ -19,15 +21,15 @@
  *     operator to fill in by hand. That placeholder survives ONLY in air-gap
  *     artifacts (see air-gap-export.ts).
  *
- * This module owns the CONNECTED path's request shaping; the air-gap path is
- * just the destination builder's default (omit the secret -> placeholder). Both
- * are tested.
+ * This module owns the CONNECTED path's NAMES (secret id, reference,
+ * description); ensureTextSecret owns the requests and the body. It used to
+ * shape the POST and the PATCH here too, and the PATCH went out on any 409
+ * with no ownership check (DBT-152). The air-gap path is just the destination
+ * builder's default (omit the secret -> placeholder). Both are tested.
  *
- * Pure: no IO, no fetch, no React, no Date/crypto/Math.random. The usecase
- * performs the request through the CriblClient port.
+ * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import type { CriblRequest } from "../../ports/cribl-client";
 import { CRIBL_SECRET_REFERENCE } from "../../domain/pack-assembly";
 
 /** The Cribl secret object name the Sentinel destinations reference. */
@@ -45,52 +47,8 @@ export const SENTINEL_CLIENT_SECRET_REFERENCE = CRIBL_SECRET_REFERENCE;
 export const SECRETS_API_PATH = "/system/secrets";
 
 /**
- * Shape the create request for the named Sentinel client secret. Cribl text
- * secrets are created with POST /system/secrets carrying `{ id, type: 'text',
- * value }`; a 409/conflict means the secret already exists and the shell should
- * fall back to {@link buildUpdateSecretRequest} (create-or-update).
- *
- * @param secretValue TRANSIENT client secret - never logged or persisted.
- * @param groupId Optional worker group scope for the secret.
+ * The description the named secret is written with; buildSecretBody (inside
+ * ensureTextSecret) appends the app's ownership stamp to it (DBT-163), and a
+ * later 409 updates the secret only when that stamp is there (DBT-152).
  */
-export function buildEnsureSecretRequest(
-  secretValue: string,
-  groupId?: string,
-): CriblRequest {
-  const request: CriblRequest = {
-    method: "POST",
-    path: SECRETS_API_PATH,
-    body: {
-      id: SENTINEL_CLIENT_SECRET_NAME,
-      type: "text",
-      value: secretValue,
-    },
-  };
-  if (groupId !== undefined) {
-    request.groupId = groupId;
-  }
-  return request;
-}
-
-/**
- * Shape the update request for the named secret (PATCH /system/secrets/{id}),
- * used when {@link buildEnsureSecretRequest} conflicts with an existing secret.
- */
-export function buildUpdateSecretRequest(
-  secretValue: string,
-  groupId?: string,
-): CriblRequest {
-  const request: CriblRequest = {
-    method: "PATCH",
-    path: `${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`,
-    body: {
-      id: SENTINEL_CLIENT_SECRET_NAME,
-      type: "text",
-      value: secretValue,
-    },
-  };
-  if (groupId !== undefined) {
-    request.groupId = groupId;
-  }
-  return request;
-}
+export const SENTINEL_CLIENT_SECRET_DESCRIPTION = "Client secret for the Sentinel destinations";

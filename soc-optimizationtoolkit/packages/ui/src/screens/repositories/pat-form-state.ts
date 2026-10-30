@@ -11,7 +11,8 @@
  *   2. The REACHABILITY STATUS derivation - "Repositories ready" means REACHABLE
  *      + PAT-VALID + INDEXED, NOT "downloaded N files" (legacy-flow-analysis.md
  *      LAZY-FETCH NEW WORKFLOW). It reports connected / reachable-no-PAT /
- *      not-connected / error from the hasPat flag, the platform policy, and the
+ *      not-connected / token-status-unknown / error from the hasPat flag (and
+ *      whether reading it failed - DBT-159), the platform policy, and the
  *      lazily-loaded solution index count.
  *
  * The domain PAT policy (patPolicyFor, evaluatePatGate, patFormatIssue) is the
@@ -40,12 +41,21 @@ export interface PatFormState {
    * STICKS until the next edit (the legacy unstick sequence) or a new attempt.
    */
   error: string;
+  /**
+   * Why the stored status could not be READ, or "" when it was (or has not been
+   * tried yet) - DBT-159. With `status` still null this is the UNKNOWN state:
+   * the token may or may not be saved, and the screen must say so rather than
+   * fall through to the no-PAT default. Cleared by any action that learns the
+   * stored status; an edit learns nothing about it, so it survives one.
+   */
+  statusError: string;
 }
 
 /** The reducer actions. */
 export type PatFormAction =
   | { type: "edit"; value: string }
   | { type: "hydrate"; status: PatManagerStatus }
+  | { type: "hydrate-error"; message: string }
   | { type: "submit-start" }
   | { type: "submit-result"; status: PatManagerStatus }
   | { type: "submit-error"; message: string }
@@ -55,7 +65,7 @@ export type PatFormAction =
 
 /** The initial form state (before the stored status is hydrated). */
 export function initialPatFormState(): PatFormState {
-  return { value: "", phase: "idle", status: null, error: "" };
+  return { value: "", phase: "idle", status: null, error: "", statusError: "" };
 }
 
 /**
@@ -77,7 +87,11 @@ export function patFormReducer(
       // Unstick: editing the token clears the stale error from the last attempt.
       return { ...state, value: action.value, error: "" };
     case "hydrate":
-      return { ...state, status: action.status };
+      return { ...state, status: action.status, statusError: "" };
+    case "hydrate-error":
+      // The status stays null - nothing was learned about the token - and the
+      // reason is kept to be shown, never swallowed into "no token" (DBT-159).
+      return { ...state, statusError: action.message };
     case "submit-start":
       return { ...state, phase: "validating", error: "" };
     case "submit-result": {
@@ -86,6 +100,7 @@ export function patFormReducer(
         ...state,
         phase: "idle",
         status: action.status,
+        statusError: "",
         // On success, clear the input (the token is stored write-only, never
         // read back); on failure keep the value so the user can correct it.
         value: action.status.hasPat ? "" : state.value,
@@ -102,6 +117,7 @@ export function patFormReducer(
         phase: "idle",
         value: "",
         status: { hasPat: false },
+        statusError: "",
         error: "",
       };
     case "clear-error":
@@ -117,7 +133,11 @@ export interface PatFormView {
   busy: boolean;
   /** Whether the Save/Validate action is enabled. */
   canSubmit: boolean;
-  /** Whether the Clear action is enabled (only when a PAT is stored). */
+  /**
+   * Whether the Clear action is enabled: when a PAT is stored, AND when the
+   * stored status is unknown (DBT-175) - a token this screen could not see may
+   * still be there, and clearing an absent one is harmless.
+   */
   canClear: boolean;
   /** The label for the primary action (Save vs Replace, per stored state). */
   submitLabel: string;
@@ -129,6 +149,11 @@ export interface PatFormView {
   hasPat: boolean;
   /** The resolved GitHub login, or "" when unknown / no PAT. */
   login: string;
+  /**
+   * Why the stored status is UNKNOWN, or "" when it is known (DBT-159). When
+   * non-empty, `hasPat` false means "not known to be saved", not "none".
+   */
+  statusUnknown: string;
 }
 
 /**
@@ -142,16 +167,20 @@ export function derivePatFormView(state: PatFormState): PatFormView {
   const trimmed = state.value.trim();
   const formatIssue = patFormatIssue(state.value);
   const hasPat = state.status?.hasPat === true;
+  const statusUnknown = state.status === null ? state.statusError : "";
   return {
     busy,
     canSubmit: !busy && formatIssue === null,
-    canClear: !busy && hasPat,
+    // DBT-175: hasPat-only left a possibly stored token unclearable while the
+    // status read was refused. Unknown is not none, so Clear stays offered.
+    canClear: !busy && (hasPat || statusUnknown !== ""),
     submitLabel: hasPat ? "Replace token" : "Validate and save token",
     // Only nag once the user has typed something.
     formatHint: trimmed === "" ? "" : (formatIssue ?? ""),
     error: state.error,
     hasPat,
     login: state.status?.login ?? "",
+    statusUnknown,
   };
 }
 
@@ -164,6 +193,11 @@ export interface ReachabilityInput {
   platform: ContentPlatform;
   /** Whether a validated PAT is stored. */
   hasPat: boolean;
+  /**
+   * Why the stored PAT status could not be read (DBT-159); omitted or "" when
+   * it was. With hasPat false it turns "no token" into "unknown".
+   */
+  patStatusError?: string;
   /**
    * The lazily-loaded solution index count, or null when it has not been loaded
    * yet (the wizard verifies REACHABILITY + PAT validity, not "downloaded").
@@ -198,7 +232,20 @@ export function deriveReachabilityStatus(
       detail: `Could not reach GitHub: ${input.error}`,
     };
   }
-  if (!input.hasPat) {
+  const patStatusError = input.patStatusError ?? "";
+  // DBT-159: a status read that FAILED is not a status of "none". Until the
+  // index probe proves the connection, say what is not known and why; once it
+  // has (solutionCount set), the connected line below is the truth either way.
+  if (!input.hasPat && patStatusError !== "" && input.solutionCount === null) {
+    return {
+      tone: "warn",
+      label: "Token status unknown",
+      detail:
+        `Could not read whether a GitHub token is saved: ${patStatusError}. ` +
+        "Refresh to check GitHub directly.",
+    };
+  }
+  if (!input.hasPat && patStatusError === "") {
     if (input.platform === "cloud") {
       return {
         tone: "error",

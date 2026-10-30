@@ -49,7 +49,13 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { DEFAULT_CRIBL_OPTIONS, emptyCapabilitySet } from "@soc/core";
+import {
+  DEFAULT_CRIBL_OPTIONS,
+  TAGGED_SAMPLE_MAX_BYTES,
+  capTaggedSampleBytes,
+  emptyCapabilitySet,
+  toListing,
+} from "@soc/core";
 import type {
   AzureConfig,
   CapabilityContext,
@@ -60,6 +66,7 @@ import type {
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
+import { panosCefCaptureBody } from "../samples/panos-cef-capture-test-fixture";
 import {
   IntegrateScreen,
   dcrInventoryReadNotice,
@@ -278,14 +285,20 @@ const PANOS_AUTH = [
  * Ports whose Cribl answers the two discovery stages, plus a capture that
  * returns real positional events, and nothing else.
  */
-function discoveryPorts() {
+function discoveryPorts(
+  overrides: { captureBody?: unknown; samples?: unknown } = {},
+) {
   const request = vi.fn(
     async (opts: { method: string; path: string; groupId?: string }) => {
       if (opts.path === "/system/inputs") {
         return { status: 200, body: { items: SOURCES[opts.groupId ?? ""] ?? [] } };
       }
       if (opts.path === "/system/capture") {
-        return { status: 200, body: PANOS_AUTH.map((raw) => ({ _raw: raw })) };
+        return {
+          status: 200,
+          body:
+            overrides.captureBody ?? PANOS_AUTH.map((raw) => ({ _raw: raw })),
+        };
       }
       if (opts.path.startsWith("/products/lake/")) {
         return { status: 200, body: { items: [{ id: "Corelight" }] } };
@@ -299,15 +312,17 @@ function discoveryPorts() {
     azure: { request: vi.fn().mockRejectedValue(new Error("offline")) },
     cribl: {
       request,
-      listGroups: vi.fn().mockResolvedValue([
-        { id: "default", product: "stream" },
-        { id: "grp2", product: "stream" },
-      ]),
+      listGroups: vi.fn().mockResolvedValue(
+        toListing([
+          { id: "default", product: "stream" },
+          { id: "grp2", product: "stream" },
+        ]),
+      ),
     },
     packs: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     packInstall: { list: vi.fn().mockRejectedValue(new Error("offline")) },
     jobs: { list: vi.fn().mockResolvedValue([]) },
-    samples: memorySampleStore(),
+    samples: overrides.samples ?? memorySampleStore(),
   } as unknown as UiPorts;
 }
 
@@ -326,8 +341,7 @@ function memorySampleStore() {
   };
 }
 
-function renderWithDiscovery() {
-  const ports = discoveryPorts();
+function renderWithDiscovery(ports: UiPorts = discoveryPorts()) {
   const { container } = render(
     <PortsProvider ports={ports} config={CONFIG}>
       <IntegrateScreen
@@ -360,8 +374,8 @@ function pickOption(combo: HTMLElement, label: string): void {
 }
 
 /** Get as far as a mounted CapturePanel aimed at "in_syslog" in "default". */
-async function selectSourceInDefaultGroup() {
-  const view = renderWithDiscovery();
+async function selectSourceInDefaultGroup(ports?: UiPorts) {
+  const view = renderWithDiscovery(ports);
   await waitFor(() => {
     expect(screen.getByText("Capture from a live source")).toBeTruthy();
   });
@@ -551,6 +565,74 @@ describe("IntegrateScreen - an acquired sample reaches the column dialog", () =>
     expect(
       view.container.querySelector(".csv-dialog-title")?.textContent,
     ).toContain("Headerless CSV detected");
+  });
+});
+
+/**
+ * DBT-197, AT THE SCREEN, because the read-back that finds a trim lives in this
+ * component's commit callback and nowhere a pure module can see it.
+ *
+ * The UAT: "Captured 100 events", then a chip reading "captured 9 events" and a
+ * commit headline of "Added 1 sample from this capture." - 91 events gone with
+ * no reason given. The reason is the cloud store's byte cap, so the store here
+ * caps the way the adapter does (core capTaggedSampleBytes, at the budget the
+ * adapter tries after one 413). The count is pinned at all three places the
+ * operator reads it: the capture headline, the commit headline, the chip.
+ */
+describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
+  /** Keyed by log type like the real stores, and byte-capped like the KV one. */
+  function byteCappedSampleStore() {
+    const byType = new Map<string, TaggedSample>();
+    return {
+      upsert: async (sample: TaggedSample) => {
+        const capped = capTaggedSampleBytes(sample, TAGGED_SAMPLE_MAX_BYTES / 2);
+        byType.set(sample.logType, JSON.parse(JSON.stringify(capped.sample)));
+      },
+      get: async (logType: string) => byType.get(logType) ?? null,
+      list: async () => [...byType.values()],
+      remove: async (logType: string) => {
+        byType.delete(logType);
+      },
+    };
+  }
+
+  it("reports 14 of 50 kept per log type in the commit headline and on the chips", async () => {
+    const view = await selectSourceInDefaultGroup(
+      discoveryPorts({
+        captureBody: panosCefCaptureBody(100),
+        samples: byteCappedSampleStore(),
+      }),
+    );
+    const panel = () => view.container.querySelector(".capture-panel") as HTMLElement;
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Run capture"));
+    });
+    expect(panel().querySelector(".panel-desc")?.textContent).toBe(
+      "Captured 100 events in 2 log types (cef).",
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Add these as samples"));
+    });
+
+    await waitFor(() => {
+      expect(
+        panel().querySelector('[data-testid="capture-outcome"] .panel-desc')
+          ?.textContent,
+      ).toBe(
+        'Added 2 samples from this capture. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50. "TRAFFIC" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
+      );
+    });
+    // DBT-196 split the capture by PAN-OS header TYPE: one chip per type,
+    // each byte-capped on its own.
+    const chips = [...view.container.querySelectorAll(".sample-chip-counts")].map(
+      (c) => c.textContent,
+    );
+    expect(chips).toEqual([
+      "14 events, 115 fields, time: PanTimeHighRes",
+      "14 events, 115 fields, time: PanTimeHighRes",
+    ]);
   });
 });
 
@@ -875,7 +957,6 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
       () => {
         expect(remove).toHaveBeenCalledWith("CISCO_ASA");
       },
-      { timeout: 3000 },
     );
     expect(remove).toHaveBeenCalledTimes(1);
     // ONE SOLUTION ON THE PAGE. The pack name is derived from the HOST's
@@ -897,12 +978,15 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
     await waitFor(() => {
       expect(document.querySelector(".solution-browser-unresolved")).toBeTruthy();
     });
-    // The split the notice describes: the browse list is up here while the
+    // The split the notice describes: the browse state is up here while the
     // host is still scoped to the restored name (the pack name proves it).
-    expect(document.querySelector(".solution-browser-list")).toBeTruthy();
+    // DBT-227: the browse state is the search box; the list waits for a
+    // filter or Browse all.
+    expect(document.querySelector(".solution-browser-search")).toBeTruthy();
     expect(
       (screen.getByDisplayValue(/^MS-Sentinel/) as HTMLInputElement).value,
     ).toBe("MS-Sentinel-Cisco-ASA");
+    fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
     fireEvent.click(screen.getByText("Zscaler"));
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith("CISCO_ASA");
@@ -1007,7 +1091,9 @@ function renderWithGroup(request = vi.fn().mockResolvedValue(ROUTABLE_OUTPUTS)) 
     cribl: {
       request,
       // The screen filters to Stream groups; an undefined product qualifies.
-      listGroups: vi.fn().mockResolvedValue([{ id: "AzureManaged", name: "AzureManaged" }]),
+      listGroups: vi
+        .fn()
+        .mockResolvedValue(toListing([{ id: "AzureManaged", name: "AzureManaged" }])),
     },
   } as unknown as UiPorts;
   const utils = render(
@@ -1086,10 +1172,103 @@ describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
     const { container } = renderWithGroup();
     await chooseRoutable(container);
     const hint = [...container.querySelectorAll(".field-hint")].find((el) =>
-      /must ALREADY EXIST in the worker group/i.test(el.textContent ?? ""),
+      /must already exist in the worker group/i.test(el.textContent ?? ""),
     );
     expect(hint).toBeTruthy();
-    expect(hint?.textContent).toMatch(/Deploy is what puts them there/i);
+    expect(hint?.textContent).toMatch(/Deploy is what puts it there/i);
+  });
+});
+
+/**
+ * DBT-134 WIRING: the Cribl config section's worker-group field and the
+ * fan-out under it render through the shared WorkerGroupField. What the field
+ * says per state is pinned in worker-group-field.dom.test.tsx; these prove the
+ * screen hands it the listing rather than a filtered array again.
+ */
+describe("IntegrateScreen - worker-group listing states (DBT-134)", () => {
+  function renderListing(listGroups: ReturnType<typeof vi.fn>) {
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      cribl: { request: vi.fn().mockRejectedValue(new Error("offline")), listGroups },
+    } as unknown as UiPorts;
+    const utils = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const section = utils.container.querySelector<HTMLElement>(
+      "#integrate-section-cribl-config",
+    );
+    expect(section).not.toBeNull();
+    return section!;
+  }
+
+  function fanOut() {
+    fireEvent.click(screen.getByLabelText(/Deploy the pack to multiple worker groups/));
+  }
+
+  it("hedges an EMPTY listing - no empty select, no 'No matches'", async () => {
+    const section = renderListing(vi.fn().mockResolvedValue(toListing([])));
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/Cribl returned no worker groups this account can see/),
+    );
+    expect(section.textContent).not.toMatch(/No matches/);
+    expect(section.querySelector(".searchable-select")).toBeNull();
+    expect(
+      section.querySelector('button[aria-label="Retry loading groups"]'),
+    ).not.toBeNull();
+  });
+
+  it("names the groups when the listing holds only Edge / Search groups", async () => {
+    const section = renderListing(
+      vi.fn().mockResolvedValue(
+        toListing([
+          { id: "default_fleet", product: "edge" },
+          { id: "default_search", product: "search" },
+        ]),
+      ),
+    );
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/none is a Stream worker group/),
+    );
+    expect(section.textContent).toMatch(/default_fleet \(edge\), default_search \(search\)/);
+  });
+
+  it("shows a refused listing as an error in the fan-out too, never an endless Loading", async () => {
+    const section = renderListing(
+      vi.fn().mockRejectedValue(new Error("GET /master/groups: HTTP 403")),
+    );
+    await waitFor(() =>
+      expect(section.textContent).toMatch(/Could not list worker groups/),
+    );
+    fanOut();
+    expect(section.textContent).not.toMatch(/Loading worker groups/);
+    // Once for the primary picker, once for the fan-out under it.
+    expect(
+      section.querySelectorAll('button[aria-label="Retry loading groups"]'),
+    ).toHaveLength(2);
+    expect(section.textContent?.match(/Could not list worker groups/g)).toHaveLength(2);
+  });
+
+  it("says which group is the only one, rather than that none are available", async () => {
+    const section = renderListing(
+      vi.fn().mockResolvedValue(toListing([{ id: "default", product: "stream" }])),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/worker group: default/i)).toBeTruthy(),
+    );
+    fanOut();
+    expect(section.textContent).toMatch(
+      /default is the only Stream worker group Cribl returned/,
+    );
+    expect(section.textContent).toMatch(/Groups your Cribl role cannot see are not listed/);
+    expect(section.textContent).not.toMatch(/No other worker groups are available/);
   });
 });
 
@@ -1116,5 +1295,644 @@ describe("shouldCheckRoutablePrerequisites (GEN-16)", () => {
     // The vacuous reassurance: "all destinations present" is true only because
     // none is needed, and an operator reads it as the group being ready.
     expect(shouldCheckRoutablePrerequisites("routable", "AzureManaged", 0)).toBe(false);
+  });
+});
+
+describe("IntegrateScreen - fold as you go (DBT-127)", () => {
+  // The pieces are pinned where they live (sectionForPill in core, the
+  // summary in integrate-screen-state, the frame in numbered-section). This
+  // pins the WIRING the screen owns - the part that, deleted, would leave every
+  // piece green and the page inert.
+  function scrolledTo(): string[] {
+    return (Element.prototype.scrollIntoView as unknown as ReturnType<typeof vi.fn>).mock.contexts.map(
+      (el) => (el as Element).id,
+    );
+  }
+
+  it("Done folds the section to its summary and scrolls to the next one", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = renderScreen();
+    const sections = [...container.querySelectorAll<HTMLElement>("section[id^='integrate-section-']")];
+    expect(sections[0]?.id).toBe("integrate-section-solution");
+    const nextId = sections[1]?.id;
+    expect(nextId).toBe("integrate-section-sample-data");
+
+    const done = sections[0]!.querySelector<HTMLButtonElement>(".numbered-section-done")!;
+    fireEvent.click(done);
+
+    expect(sections[0]!.querySelector(".numbered-section-summary")?.textContent).toBe(
+      "no solution selected",
+    );
+    await waitFor(() => expect(scrolledTo()).toEqual([nextId]));
+  });
+
+  it("a footer pill opens its section and scrolls to it", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = renderScreen();
+    const solution = container.querySelector<HTMLElement>("#integrate-section-solution")!;
+    fireEvent.click(solution.querySelector<HTMLButtonElement>(".numbered-section-done")!);
+    expect(solution.querySelector(".numbered-section-summary")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to Solution" }));
+    expect(solution.querySelector(".numbered-section-summary")).toBeNull();
+    await waitFor(() =>
+      expect(scrolledTo().at(-1)).toBe("integrate-section-solution"),
+    );
+  });
+});
+
+describe("IntegrateScreen - removing one log type reaches both sections (DBT-143)", () => {
+  // The two sections are siblings: a removal from either has to cross this
+  // component, and that crossing is the part no section-level test can see.
+  function jsonSample(logType: string, record: Record<string, string>): TaggedSample {
+    const raw = JSON.stringify(record);
+    return {
+      logType,
+      format: "json",
+      rawEvents: [raw],
+      parsed: {
+        format: "json",
+        records: [record],
+        eventCount: 1,
+        fields: Object.keys(record).map((name) => ({
+          name,
+          type: "string",
+          examples: [record[name]],
+        })),
+        rawEvents: [raw],
+        sourceName: `${logType}.json`,
+        errors: [],
+      },
+    } as unknown as TaggedSample;
+  }
+
+  it("the gap card's Remove deletes the sample, its chip and its card", async () => {
+    const byType = new Map(
+      [
+        jsonSample("Traffic", { src: "10.0.0.1", action: "allow" }),
+        jsonSample("Decryption", { src: "10.0.0.2", tls: "1.3" }),
+      ].map((s) => [s.logType, s]),
+    );
+    const remove = vi.fn(async (logType: string) => {
+      byType.delete(logType);
+    });
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      samples: {
+        list: vi.fn(async () => [...byType.values()]),
+        get: vi.fn(async (t: string) => byType.get(t) ?? null),
+        upsert: vi.fn(async (s: TaggedSample) => {
+          byType.set(s.logType, s);
+        }),
+        remove,
+      },
+    } as unknown as UiPorts;
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const chips = () =>
+      [...container.querySelectorAll(".sample-chip-name")].map((n) => n.textContent);
+    const cards = () =>
+      [...container.querySelectorAll(".mapping-review-logtype")].map(
+        (n) => n.textContent,
+      );
+
+    await waitFor(() => expect(chips()).toEqual(["Traffic", "Decryption"]));
+    const analyze = [...container.querySelectorAll(".mapping-review-analyze button")][0];
+    await act(async () => {
+      fireEvent.click(analyze);
+    });
+    await waitFor(() => expect(cards()).toEqual(["Traffic", "Decryption"]));
+
+    await act(async () => {
+      fireEvent.click(
+        container.querySelector('button[aria-label="Remove Decryption sample"]')!,
+      );
+    });
+
+    await waitFor(() => expect(cards()).toEqual(["Traffic"]));
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledWith("Decryption");
+    expect(chips()).toEqual(["Traffic"]);
+    expect(container.textContent).not.toMatch(/re-analyze to refresh/i);
+  });
+});
+
+/**
+ * GEN-21: AN EXISTING CRIBL SENTINEL DESTINATION INSTEAD OF AZURE.
+ *
+ * The picker, its listing states and the gate live in this component; what
+ * each state SAYS is pinned in existing-destination-state.test.ts. These pin
+ * the wiring: the offline preselect, that the listing reaches the screen in
+ * every state, that no Azure call is made on the path - with an Azure port
+ * that throws if it is ever touched - and that the gate the operator reads
+ * never asks for a client id.
+ */
+describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
+  const PAN_CSL = {
+    id: "PAN-CSL",
+    type: "sentinel",
+    endpointURLConfiguration: "ID",
+    dcrID: "dcr-0123456789abcdef0123456789abcdef",
+    streamName: "Custom-dev-TMNA-PaloAltoNetworks-Firewall-stream",
+    client_id: "'11111111-2222-3333-4444-555555555555'",
+    secret: "!{pan_csl_secret}",
+  };
+
+  function renderExisting(opts: {
+    outputs: () => Promise<{ status: number; body: unknown }>;
+    offline?: boolean;
+    /** Defaults to a scope AND an identity; the UAT's org had neither. */
+    config?: AzureConfig;
+    scopeCommitted?: boolean;
+  }) {
+    const azure = vi.fn(async () => {
+      throw new Error("Azure must not be called on the existing-destination path");
+    });
+    const request = vi.fn(async (req: { path: string }) => {
+      if (req.path === "/system/outputs") return opts.outputs();
+      throw new Error("offline");
+    });
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      azure: { request: azure },
+      cribl: {
+        request,
+        listGroups: vi
+          .fn()
+          .mockResolvedValue(toListing([{ id: "TMNA_POV", product: "stream" }])),
+      },
+    } as unknown as UiPorts;
+    const view = render(
+      // A scope AND an identity are configured, so every Azure read on the
+      // page has what it needs to fire - only the path may stop it.
+      <PortsProvider ports={ports} config={opts.config ?? SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={opts.scopeCommitted ?? true}
+          offline={opts.offline ?? true}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const listing = () =>
+      view.container.querySelector(
+        '[data-testid="existing-destination-listing"]',
+      ) as HTMLElement | null;
+    const radios = () =>
+      [
+        ...view.container.querySelectorAll(
+          'input[name="integrate-destination-mode"]',
+        ),
+      ] as HTMLInputElement[];
+    return { ...view, azure, request, listing, radios };
+  }
+
+  const read = (items: unknown[], status = 200) => async () => ({
+    status,
+    body: { items },
+  });
+
+  it("opens on the existing destination when offline", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    expect(view.radios().map((r) => r.checked)).toEqual([false, true]);
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+  });
+
+  it("opens on create when connected, and reads nothing for the picker", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]), offline: false });
+    expect(view.radios().map((r) => r.checked)).toEqual([true, false]);
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: TMNA_POV/i)).toBeTruthy();
+    });
+    expect(view.listing()).toBeNull();
+    expect(
+      view.request.mock.calls.filter((c) => c[0].path === "/system/outputs"),
+    ).toHaveLength(0);
+  });
+
+  it("lists the group's Sentinel destinations with stream and DCR, never the secret", async () => {
+    const view = renderExisting({
+      outputs: read([{ id: "S3", type: "s3" }, PAN_CSL]),
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    expect(view.listing()?.textContent).toBe(
+      "1 Microsoft Sentinel destination in TMNA_POV.",
+    );
+    expect(view.container.textContent).toContain(
+      "PAN-CSL - stream Custom-dev-TMNA-PaloAltoNetworks-Firewall-stream, DCR dcr-0123456789abcdef0123456789abcdef",
+    );
+    expect(view.container.textContent).not.toContain("pan_csl_secret");
+    expect(view.container.textContent).not.toContain("11111111-2222");
+  });
+
+  it("states a FAILED read as failed", async () => {
+    const view = renderExisting({ outputs: read([], 403) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("failed"));
+    expect(view.listing()?.textContent).toMatch(
+      /^Could not read TMNA_POV's destinations: The outputs listing returned HTTP 403\./,
+    );
+  });
+
+  it("states an EMPTY read as unverified", async () => {
+    const view = renderExisting({ outputs: read([]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("empty"));
+    expect(view.listing()?.textContent).toMatch(
+      /is not confirmation that TMNA_POV has none\.$/,
+    );
+  });
+
+  it("states outputs with no Sentinel one as a measured none", async () => {
+    const view = renderExisting({ outputs: read([{ id: "S3", type: "s3" }]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("none"));
+    expect(view.listing()?.textContent).toMatch(
+      /^TMNA_POV has 1 destination, and none is a Microsoft Sentinel destination\./,
+    );
+  });
+
+  it("never calls Azure, and reads the outputs once per group", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    // Let any effect that would read Azure after the listing settle first.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(view.azure).not.toHaveBeenCalled();
+    expect(
+      view.request.mock.calls.filter((c) => c[0].path === "/system/outputs"),
+    ).toHaveLength(1);
+  });
+
+  it("asks for the gap analysis, never a client id; Azure Resources is not needed", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const hint = view.container.querySelector(".readiness-footer-hint");
+    expect(hint?.textContent).toBe(
+      "Run the DCR Gap Analysis (section 3) - its tables decide what the existing destination must feed.",
+    );
+    expect(view.container.textContent).not.toMatch(/ingestion client id/i);
+    // Select Azure Resources holds no cascade, no capability rows, no Reload.
+    expect(view.container.textContent).toContain(
+      "Not needed with an existing destination.",
+    );
+    expect(view.container.textContent).not.toMatch(/Always on/);
+    // The shape is not a choice on this path. DBT-225: it used to be a
+    // disabled select plus its explanation; it is now one fixed line, and no
+    // shape select renders at all.
+    const shape = [...view.container.querySelectorAll("select")].find((s) =>
+      [...s.options].some((o) => o.value === "routable"),
+    );
+    expect(shape).toBeUndefined();
+    expect(
+      view.container.querySelector('[data-testid="pack-wiring-fixed"]')?.textContent,
+    ).toMatch(/^Pack wiring: Routable/);
+  });
+
+  it("in the UAT's org - no identity, no scope - still asks only for the gap analysis", async () => {
+    // With no identity the native run's own gate reads "Enter an ingestion
+    // client id"; the scoped config above hides that, because its client id
+    // prefills the field. This is the shape the operator actually had.
+    const view = renderExisting({
+      outputs: read([PAN_CSL]),
+      config: CONFIG,
+      scopeCommitted: false,
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const hint = view.container.querySelector(".readiness-footer-hint");
+    expect(hint?.textContent).toBe(
+      "Run the DCR Gap Analysis (section 3) - its tables decide what the existing destination must feed.",
+    );
+    expect(view.container.textContent).not.toMatch(/client id/i);
+    expect(view.azure).not.toHaveBeenCalled();
+  });
+
+  it("points nothing at an Azure scope before the pick is complete (GEN-28)", async () => {
+    // The radio puts the page on the path; the pick waits for a gap analysis.
+    // For that whole stretch the section status, the footer pill and the
+    // Deploy header used to ask for the scope the body said was not needed.
+    const view = renderExisting({
+      outputs: read([PAN_CSL]),
+      config: CONFIG,
+      scopeCommitted: false,
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const pills = [...view.container.querySelectorAll(".readiness-pill")].map(
+      (p) => p.textContent,
+    );
+    expect(pills).toEqual(["Solution", "Samples", "Mappings", "Worker Groups", "Pack Name"]);
+    const azureSection = view.container.querySelector("#integrate-section-azure-resources");
+    expect(azureSection?.className).toContain("numbered-section-not-needed");
+    expect(
+      azureSection?.querySelector(".numbered-section-info-tag")?.textContent,
+    ).toBe("Not needed with an existing destination");
+    expect(view.container.textContent).not.toContain(
+      "Commit an Azure target (subscription, resource group, and workspace)",
+    );
+  });
+});
+
+/**
+ * DBT-200: the client-id hint promised "Defaults to the active connection"
+ * with no identity connected.
+ */
+describe("IntegrateScreen - the client-id hint (DBT-200)", () => {
+  function renderWith(config: AzureConfig) {
+    return render(
+      <PortsProvider ports={PORTS} config={config}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={false}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+  }
+
+  it("promises no default when no identity is connected", () => {
+    const { container } = renderWith(CONFIG);
+    expect(container.textContent).not.toContain("Defaults to the active connection.");
+    expect(container.textContent).toContain(
+      "No Azure identity is connected, so there is no default - enter the app registration's client id.",
+    );
+  });
+
+  it("names the default when one exists", () => {
+    const { container } = renderWith(SCOPED_CONFIG);
+    expect(container.textContent).toContain("Defaults to the active connection.");
+  });
+});
+
+/**
+ * DBT-201: the pack's worker group follows the group the samples were
+ * captured on, not the saved Options default.
+ */
+describe("IntegrateScreen - the pack group follows the capture (DBT-201)", () => {
+  it("moves Configure Cribl to the capture group", async () => {
+    const ports = discoveryPorts();
+    const view = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={{ ...DEFAULT_CRIBL_OPTIONS, workerGroup: "grp2" }}
+        />
+      </PortsProvider>,
+    );
+    // The saved default preselects first...
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: grp2/i)).toBeTruthy();
+    });
+    // ...then a capture source in "default" moves the pack there.
+    fireEvent.click(screen.getByText("Capture from a live source"));
+    const picker = view.container.querySelector(".sample-source-picker") as HTMLElement;
+    const combos = () =>
+      [...picker.querySelectorAll(".searchable-select-control")] as HTMLElement[];
+    pickOption(combos()[0], "default");
+    await waitFor(() => expect(combos()).toHaveLength(2));
+    pickOption(combos()[1], "in_syslog");
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: default/i)).toBeTruthy();
+    });
+  });
+});
+
+/**
+ * DBT-224: Sample Data asks HOW samples are supplied before showing any
+ * method's controls. Lake, live capture, paste and upload used to be on screen
+ * together; now only the chosen one is.
+ */
+describe("IntegrateScreen - one sample method at a time (DBT-224)", () => {
+  function renderScreen(criblReachable: boolean) {
+    const ports = discoveryPorts();
+    const view = render(
+      <PortsProvider
+        ports={ports}
+        config={CONFIG}
+        capabilityContext={{ azureIdentityPresent: true, criblReachable }}
+      >
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const paste = () => view.container.querySelector("textarea.sample-paste");
+    const upload = () => screen.queryByRole("button", { name: "Upload Files" });
+    return { ...view, paste, upload };
+  }
+
+  it("asks the question and shows no method's controls until one is chosen", async () => {
+    const view = renderScreen(true);
+    await waitFor(() => {
+      expect(screen.getByText("Capture from a live source")).toBeTruthy();
+    });
+    expect(screen.getByText("How will you supply samples?")).toBeTruthy();
+    expect(screen.getByText("Paste events")).toBeTruthy();
+    expect(screen.getByText("Upload files")).toBeTruthy();
+    expect(view.paste()).toBeNull();
+    expect(view.upload()).toBeNull();
+  });
+
+  it("reveals only the chosen method, and switching replaces it", async () => {
+    const view = renderScreen(true);
+    await waitFor(() => {
+      expect(screen.getByText("Paste events")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Paste events"));
+    expect(view.paste()).not.toBeNull();
+    expect(view.upload()).toBeNull();
+    // The Cribl controls stay away while a manual method is chosen.
+    expect(view.container.querySelector(".sample-source-picker .field")).toBeNull();
+
+    fireEvent.click(screen.getByText("Upload files"));
+    expect(view.paste()).toBeNull();
+    expect(view.upload()).not.toBeNull();
+  });
+
+  it("still offers Paste and Upload when Cribl is unreachable, and not the Cribl methods", async () => {
+    const view = renderScreen(false);
+    await waitFor(() => {
+      expect(screen.getByText("Paste events")).toBeTruthy();
+    });
+    expect(screen.queryByText("Capture from a live source")).toBeNull();
+    expect(screen.queryByText("Query a Cribl Lake dataset")).toBeNull();
+    fireEvent.click(screen.getByText("Paste events"));
+    expect(view.paste()).not.toBeNull();
+  });
+});
+
+/**
+ * DBT-225: Configure Cribl asks where the events go before anything else, and
+ * keeps the optional pack actions behind a disclosure that opens itself when
+ * something in it needs the operator.
+ */
+describe("IntegrateScreen - Configure Cribl asks the destination first (DBT-225)", () => {
+  it("puts the destination question ahead of the worker group, and the pack actions behind a closed disclosure", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const radio = container.querySelector('input[name="integrate-destination-mode"]');
+    const groupLabel = [...container.querySelectorAll(".field-label")].find((l) =>
+      l.textContent?.startsWith("Cribl worker group"),
+    );
+    expect(radio).not.toBeNull();
+    expect(groupLabel).toBeDefined();
+    // DOCUMENT_POSITION_FOLLOWING: the worker group comes after the question.
+    expect(radio!.compareDocumentPosition(groupLabel!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const options = container.querySelector("details.integrate-pack-options") as HTMLDetailsElement;
+    expect(options).not.toBeNull();
+    expect(options.open).toBe(false);
+    expect(options.textContent).toContain("Rebuild pack only");
+  });
+});
+
+/**
+ * DBT-226: rule and workbook coverage are ONE step with a Rules / Workbooks
+ * switch. Both panels stay mounted - the rules panel feeds the RULE badges
+ * whichever view shows - and the switch only hides one.
+ */
+describe("IntegrateScreen - one coverage step with a switch (DBT-226)", () => {
+  it("renders one Review Coverage step, both panels mounted, rules shown first", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    expect(screen.getByText("Review Coverage")).toBeTruthy();
+    expect(screen.queryByText("Review Workbook Coverage")).toBeNull();
+    const panels = [...container.querySelectorAll(".rule-coverage")];
+    expect(panels).toHaveLength(2);
+    const visible = () => panels.map((p) => !p.parentElement!.hidden);
+    expect(visible()).toEqual([true, false]);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Workbooks" }));
+    expect(visible()).toEqual([false, true]);
+    // Still both mounted - hidden, not unmounted.
+    expect(container.querySelectorAll(".rule-coverage")).toHaveLength(2);
+  });
+});
+
+describe("IntegrateScreen - Deploy settings fold into one line (DBT-231)", () => {
+  it("summarises the settings, and opens them while a value that blocks the run is missing", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    fireEvent.click(screen.getByLabelText(/Create a new destination with Deploy/));
+    const details = await waitFor(() => {
+      const d = container.querySelector("details.deploy-settings-details") as HTMLDetailsElement | null;
+      expect(d).not.toBeNull();
+      return d!;
+    });
+    // The fixture prefills the table but carries no client id - which blocks
+    // the run - so the summary names it and the fields open by themselves.
+    expect(details.querySelector("summary")!.textContent).toBe(
+      "Deploy settings: table SecurityEvent - no client id - secret: placeholder (change)",
+    );
+    expect(details.open).toBe(true);
+  });
+});
+
+/**
+ * DBT-232: acting inside a section folds the others - except pinned ones and
+ * the arc's current section - and a pin is saved under the user's own key.
+ * pointerDown, not click: the trigger is acting inside a section, and a bare
+ * fireEvent.click never fires it (which is why the older pins here are blind
+ * to this behaviour).
+ */
+describe("IntegrateScreen - folds the sections you are not using (DBT-232)", () => {
+  function mount(stored: string | null = null) {
+    const base = discoveryPorts();
+    const cache = { get: vi.fn(async () => stored), set: vi.fn(async () => {}) };
+    const ports = {
+      ...base,
+      contentCache: cache,
+      user: { current: vi.fn(async () => ({ id: "u-7", username: "op" })) },
+    } as unknown as UiPorts;
+    const view = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const section = (id: string) => view.container.querySelector(`#integrate-section-${id}`)!;
+    const folded = (id: string) => section(id).classList.contains("numbered-section-collapsed");
+    return { ...view, cache, section, folded };
+  }
+
+  it("folds the other sections when you act inside one, leaving pinned and current ones open", async () => {
+    const view = mount('["deploy"]');
+    await waitFor(() => {
+      expect(view.section("deploy").querySelector(".numbered-section-pin-on")).not.toBeNull();
+    });
+    fireEvent.pointerDown(view.section("cribl-config"));
+    await waitFor(() => expect(view.folded("gap-analysis")).toBe(true));
+    expect(view.folded("cribl-config")).toBe(false);
+    // Pinned stays open.
+    expect(view.folded("deploy")).toBe(false);
+    // The arc's current section stays open (it is asking for action).
+    const current = view.container.querySelector(".numbered-section-current");
+    if (current !== null) {
+      expect(current.classList.contains("numbered-section-collapsed")).toBe(false);
+    }
+  });
+
+  it("saves a pin under the user's own key", async () => {
+    const view = mount();
+    await waitFor(() => expect(view.cache.get).toHaveBeenCalledWith("integrate-pinned-sections:u-7"));
+    fireEvent.click(screen.getByRole("button", { name: "Pin Configure Cribl open" }));
+    await waitFor(() =>
+      expect(view.cache.set).toHaveBeenCalledWith(
+        "integrate-pinned-sections:u-7",
+        JSON.stringify(["cribl-config"]),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Unpin Configure Cribl" }).getAttribute("aria-pressed")).toBe("true");
   });
 });

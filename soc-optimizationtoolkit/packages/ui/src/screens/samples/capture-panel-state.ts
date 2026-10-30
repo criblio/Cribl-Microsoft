@@ -26,11 +26,18 @@
 import type {
   CaptureSamplesResult,
   LogTypeEvidence,
+  SampleSourceRef,
   SplitSample,
   TaggedSample,
 } from "@soc/core";
 import { buildCaptureFilter, captureFilterWarning } from "@soc/core";
-import { plannedSamplesFrom, previewLines, sampleStoreKey } from "./planned-samples";
+import {
+  plannedSamplesFrom,
+  previewLines,
+  sampleStoreKey,
+  storedEventShortfallText,
+} from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import type { RecommendedLogType } from "./sample-coverage-state";
 
 /** One log-type checkbox on the capture panel. */
@@ -71,6 +78,33 @@ export function captureLogTypeChoices(
   });
 }
 
+/**
+ * Re-seed the checkboxes from a NEW recommendation while keeping the
+ * operator's picks (DBT-198).
+ *
+ * The recommendation is rebuilt from coverage, and committing samples always
+ * changes coverage, so "Add these as samples" hands the panel a fresh seed on
+ * the very next render. Replacing the list with it threw away every tick the
+ * operator had changed: in the UAT they unticked all but THREAT and TRAFFIC,
+ * added the capture, and all 13 solution log types came back ticked.
+ *
+ * So for a value already on screen the operator's `selected` wins, and only the
+ * seed's evidence and note are taken - those are facts that DID change (a type
+ * just committed is now "already provided", and should say so). A value the
+ * old list did not have takes the seed's default, since nobody has chosen
+ * anything about it yet. Order and membership follow the seed.
+ */
+export function reseedKeepingPicks(
+  seeded: readonly CaptureLogTypeChoice[],
+  previous: readonly CaptureLogTypeChoice[],
+): CaptureLogTypeChoice[] {
+  const picked = new Map(previous.map((c) => [c.value, c.selected]));
+  return seeded.map((c) => {
+    const selected = picked.get(c.value);
+    return selected === undefined ? c : { ...c, selected };
+  });
+}
+
 /** The values currently ticked, in the order they are offered. */
 export function selectedValues(
   choices: readonly CaptureLogTypeChoice[],
@@ -96,9 +130,18 @@ export function composeFilter(
   return buildCaptureFilter({ inputId, logTypes: selectedValues(choices) });
 }
 
-/** A warning about an operator-edited filter, or null. Re-exported for the UI. */
-export function filterWarning(filter: string, inputId: string): string | null {
-  return captureFilterWarning(filter, inputId);
+/**
+ * A warning about an operator-edited filter, or null. Re-exported for the UI.
+ *
+ * Takes the SOURCE, not just its id (DBT-169): recognising the typed
+ * `__inputId` form needs the input's type, which a Cribl source carries as
+ * `detail` (core sample-sources/inventory.ts parseCriblSources).
+ */
+export function filterWarning(
+  filter: string,
+  source: Pick<SampleSourceRef, "id" | "detail">,
+): string | null {
+  return captureFilterWarning(filter, source.id, source.detail);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,9 +234,17 @@ export function deriveCaptureView(
 
   const total = result.rawEvents.length;
   const kinds = logTypes.length;
+  // THE SPLIT'S SHORTFALL IS SAID HERE (DBT-205). A line that parses to no
+  // record is in no group, so "Captured 5 events in 2 log types" sat above
+  // groups holding 3 with nothing to say where the other 2 went.
+  const leftOut = result.leftOutEvents;
+  const leftOutText =
+    leftOut > 0
+      ? ` ${leftOut} of them parsed into no log type and ${leftOut === 1 ? "is" : "are"} in none of the samples below.`
+      : "";
   return {
     status: "ready",
-    headline: `Captured ${total} event${total === 1 ? "" : "s"} in ${kinds} log type${kinds === 1 ? "" : "s"} (${result.format}).`,
+    headline: `Captured ${total} event${total === 1 ? "" : "s"} in ${kinds} log type${kinds === 1 ? "" : "s"} (${result.format}).${leftOutText}`,
     logTypes,
     notes: result.notes,
     noDiscriminator: result.noDiscriminator,
@@ -252,6 +303,13 @@ export interface CaptureCommitOutcome {
    * shortfall in the commit.
    */
   returned: number;
+  /**
+   * Committed log types the store kept FEWER events of than it was handed
+   * (DBT-197), from storedEventShortfalls. Absent or empty when the store kept
+   * everything - or when the commit path could not read the store back, which
+   * is why this is a list of shortfalls FOUND rather than a claim of none.
+   */
+  trimmed?: readonly StoredEventShortfall[];
 }
 
 /** Project a finished (or refused) commit into what the panel reports. */
@@ -283,12 +341,17 @@ export function deriveCaptureCommitView(
   if (outcome.stored < outcome.returned) {
     return {
       status: "partial",
-      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.`,
+      headline: `Added ${outcome.stored} of the ${outcome.returned} log types this capture returned; the rest held nothing this app could parse into a record.${storedEventShortfallText(outcome.trimmed ?? [])}`,
     };
   }
+  // THE STORE'S TRIM IS SAID HERE (DBT-197). A 100-event capture read "Added 1
+  // sample from this capture." while the chip beside it read "captured 9
+  // events" - two true statements that together read as 91 events lost for no
+  // reason. The reason is the store's size limit per log type, so it is said
+  // where the operator is already reading.
   return {
     status: "done",
-    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.`,
+    headline: `Added ${outcome.stored} sample${outcome.stored === 1 ? "" : "s"} from this capture.${storedEventShortfallText(outcome.trimmed ?? [])}`,
   };
 }
 

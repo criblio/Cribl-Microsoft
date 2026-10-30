@@ -9,6 +9,11 @@ Invalidates: sample-acquisition-plan.md, legacy-flow-analysis.md, feature-catalo
         Verdicts and the defects the run exposed are in the plan; what the
         verification changed HERE is in "Verified live" at the end.
 
+> **2026-08-23: this work is DONE (see Status).** <!--drift-ok-->
+> sample-acquisition-plan.md is now a Record; its file:line citations describe
+> pre-deletion code (`domain/sample-acquisition/` no longer exists). Read it as
+> the execution history, not as instructions. The banner below is kept as written.
+
 > **To DO this work, read [sample-acquisition-plan.md](../sample-acquisition-plan.md)
 > instead.** That document is self-contained: verified file:line facts, the
 > phases, the deletion list, and the traps. This ADR is the decision record -

@@ -24,6 +24,7 @@ export type {
   AppOptionsPatch,
   CriblOptions,
   CustomTableRetentionDays,
+  DestinationNaming,
   OperationOptions,
   OptionFieldChoice,
   OptionFieldError,

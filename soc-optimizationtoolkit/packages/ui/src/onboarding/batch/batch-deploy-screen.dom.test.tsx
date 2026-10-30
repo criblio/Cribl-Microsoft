@@ -24,7 +24,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { emptyCapabilitySet } from "@soc/core";
+import { emptyCapabilitySet, toListing } from "@soc/core";
 import type {
   AzureConfig,
   BatchPacing,
@@ -78,7 +78,7 @@ function batchPorts() {
       request: vi.fn().mockRejectedValue(new Error("offline")),
       listGroups: vi
         .fn()
-        .mockResolvedValue([{ id: "default", product: "stream" }]),
+        .mockResolvedValue(toListing([{ id: "default", product: "stream" }])),
     },
     artifacts: { save: vi.fn().mockResolvedValue(undefined) },
     jobs: {
@@ -201,5 +201,64 @@ describe("BatchDeployScreen - the blocked write offers an artifact", () => {
     listOneTable();
     expect(buttonMatching(/download the arm request bodies/i)).toBeUndefined();
     expect(buttonMatching(new RegExp(FALLBACK_POINTER_LABEL, "i"))).toBeUndefined();
+  });
+});
+
+/**
+ * DBT-134 WIRING: the batch screen's worker-group field renders through the
+ * shared WorkerGroupField, so an empty or refused listing is said, not shown
+ * as a select reading "No matches". The wording per state is pinned in
+ * worker-group-field.dom.test.tsx.
+ */
+describe("BatchDeployScreen - worker-group listing states (DBT-134)", () => {
+  function renderListing(listGroups: ReturnType<typeof vi.fn>): HTMLElement {
+    const ports = batchPorts();
+    (ports.cribl as unknown as { listGroups: unknown }).listGroups = listGroups;
+    const { container } = render(
+      <PortsProvider
+        ports={ports}
+        config={CONFIG}
+        capabilities={emptyCapabilitySet()}
+        capabilityContext={CONNECTED}
+      >
+        <BatchDeployScreen pacing={PACING} />
+      </PortsProvider>,
+    );
+    const field = [...container.querySelectorAll<HTMLElement>("label.field")].find(
+      (el) => el.querySelector(".field-label")?.textContent === "Cribl worker group",
+    );
+    expect(field).toBeTruthy();
+    return field!;
+  }
+
+  it("hedges an EMPTY listing - no empty select, no 'No matches'", async () => {
+    const field = renderListing(vi.fn().mockResolvedValue(toListing([])));
+    await waitFor(() =>
+      expect(field.textContent).toMatch(/Cribl returned no worker groups this account can see/),
+    );
+    expect(field.querySelector(".searchable-select")).toBeNull();
+    expect(field.textContent).not.toMatch(/No matches/);
+    expect(field.querySelector('button[aria-label="Retry loading groups"]')).not.toBeNull();
+  });
+
+  it("names the non-Stream groups when none of the listed groups is Stream", async () => {
+    const field = renderListing(
+      vi.fn().mockResolvedValue(toListing([{ id: "default_search", product: "search" }])),
+    );
+    await waitFor(() =>
+      expect(field.textContent).toMatch(
+        /none is a Stream worker group: default_search \(search\)/,
+      ),
+    );
+  });
+
+  it("shows a refused listing as the error with Retry", async () => {
+    const field = renderListing(
+      vi.fn().mockRejectedValue(new Error("GET /master/groups: HTTP 403")),
+    );
+    await waitFor(() =>
+      expect(field.textContent).toMatch(/Could not list worker groups/),
+    );
+    expect(field.querySelector('button[aria-label="Retry loading groups"]')).not.toBeNull();
   });
 });

@@ -7,6 +7,13 @@
  * are the serializedData verbatim.
  *
  * Pure orchestration over the ports.
+ *
+ * DBT-176: both Content Hub catalog reads answer in three states - found,
+ * not-found, unreadable (with the reason) - because "the catalog could not be
+ * read" and "the catalog has no such entry" call for different operator moves
+ * and used to collapse into the same null / empty set. An EMPTY catalog is
+ * unreadable rather than not-found: a readable Content Hub always lists its
+ * packages, so an empty page measures nothing (docs/inventory-standard.md).
  */
 
 import type { AzureManagement } from "../../ports/azure-management";
@@ -38,6 +45,27 @@ export interface SolutionCatalogEntry {
   installedVersion: string | null;
 }
 
+/**
+ * The answer to "which catalog entry is this solution?" (DBT-176). not-found
+ * is MEASURED - the catalog was read and held `packagesSeen` packages, none of
+ * them this solution - so it may be stated as a fact; unreadable may not.
+ */
+export type SolutionCatalogLookup =
+  | { kind: "found"; entry: SolutionCatalogEntry }
+  | { kind: "not-found"; packagesSeen: number }
+  | { kind: "unreadable"; reason: string };
+
+/**
+ * The answer to "which solutions has the Content Hub deprecated?" (DBT-176).
+ * `keys` are {@link deprecatedSolutionKey} keys and never empty on found;
+ * not-found means the catalog was read and none of its `packagesSeen`
+ * packages is deprecated - distinct from unreadable, which says nothing.
+ */
+export type DeprecatedSolutionsLookup =
+  | { kind: "found"; keys: ReadonlySet<string>; packagesSeen: number }
+  | { kind: "not-found"; packagesSeen: number }
+  | { kind: "unreadable"; reason: string };
+
 /** A solution workbook available to install (its document body). */
 export interface AvailableWorkbook {
   displayName: string;
@@ -53,16 +81,17 @@ function normName(s: string): string {
 }
 
 /**
- * Find the Content Hub catalog entry for `solutionName` (fuzzy display-name
- * match, the same normalized-containment rule the rest of the app uses).
- * Returns null when the catalog cannot be read or no entry matches.
+ * Read the workspace's whole Content Hub catalog (contentProductPackages), or
+ * say why it could not be read. An empty listing is reported unreadable: the
+ * catalog is never empty for an identity that can see it, so `200 []` is the
+ * permission-filtered shape, not a measured absence.
  */
-export async function findSolutionCatalogEntry(
+async function readContentHubCatalog(
   azure: AzureManagement,
   ws: WorkspaceScope,
-  solutionName: string,
-  logger?: Logger,
-): Promise<SolutionCatalogEntry | null> {
+  logger: Logger | undefined,
+  purpose: string,
+): Promise<{ kind: "read"; packages: unknown[] } | { kind: "unreadable"; reason: string }> {
   const scope =
     `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
     `/providers/Microsoft.OperationalInsights/workspaces/${ws.workspaceName}` +
@@ -75,26 +104,53 @@ export async function findSolutionCatalogEntry(
       "list content product packages",
     );
   } catch (err) {
-    logger?.warn("content-install: catalog listing failed", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return null;
+    const reason = err instanceof Error ? err.message : String(err);
+    logger?.warn(`content-install: ${purpose} listing failed`, { error: reason });
+    return { kind: "unreadable", reason };
   }
+  if (packages.length === 0) {
+    const reason =
+      "the Content Hub catalog listed no packages, which a readable catalog " +
+      "never does - this identity may not be able to see it";
+    logger?.warn(`content-install: ${purpose} listing was empty`, { error: reason });
+    return { kind: "unreadable", reason };
+  }
+  return { kind: "read", packages };
+}
+
+/**
+ * Find the Content Hub catalog entry for `solutionName` (fuzzy display-name
+ * match, the same normalized-containment rule the rest of the app uses).
+ * Never throws: a failed or empty catalog read is `unreadable` with the
+ * reason, and only a read catalog with no match is `not-found` (DBT-176).
+ */
+export async function findSolutionCatalogEntry(
+  azure: AzureManagement,
+  ws: WorkspaceScope,
+  solutionName: string,
+  logger?: Logger,
+): Promise<SolutionCatalogLookup> {
+  const catalog = await readContentHubCatalog(azure, ws, logger, "catalog");
+  if (catalog.kind === "unreadable") return catalog;
+  const packages = catalog.packages;
   const target = normName(solutionName);
   const match = packages.find((p) => {
     const dn = normName(str(prop(prop(p, "properties"), "displayName")));
     return dn === target || dn.includes(target) || target.includes(dn);
   });
-  if (match === undefined) return null;
+  if (match === undefined) return { kind: "not-found", packagesSeen: packages.length };
   const props = prop(match, "properties");
   const installed = prop(props, "installedVersion");
   return {
-    packageId: str(prop(match, "name")),
-    contentId: str(prop(props, "contentId")),
-    displayName: str(prop(props, "displayName")),
-    version: str(prop(props, "version")),
-    installedVersion:
-      typeof installed === "string" && installed !== "" ? installed : null,
+    kind: "found",
+    entry: {
+      packageId: str(prop(match, "name")),
+      contentId: str(prop(props, "contentId")),
+      displayName: str(prop(props, "displayName")),
+      version: str(prop(props, "version")),
+      installedVersion:
+        typeof installed === "string" && installed !== "" ? installed : null,
+    },
   };
 }
 
@@ -116,31 +172,18 @@ export function deprecatedSolutionKey(name: string): string {
  * Legacy marker. Returned as {@link deprecatedSolutionKey} keys so the solution
  * browser (which lists REPO folder names) can tag rows the repo heuristics
  * miss - e.g. Cloudflare, deprecated in the Hub but current in the repo.
- * Best-effort: a failed listing yields an empty set (no tags), never throws.
+ * Never throws: a failed or empty listing is `unreadable` with the reason,
+ * never an empty set that reads as "none deprecated" (DBT-176).
  */
 export async function listDeprecatedContentHubSolutions(
   azure: AzureManagement,
   ws: WorkspaceScope,
   logger?: Logger,
-): Promise<Set<string>> {
-  const scope =
-    `/subscriptions/${ws.subscriptionId}/resourceGroups/${ws.resourceGroup}` +
-    `/providers/Microsoft.OperationalInsights/workspaces/${ws.workspaceName}` +
-    "/providers/Microsoft.SecurityInsights/contentProductPackages";
+): Promise<DeprecatedSolutionsLookup> {
+  const catalog = await readContentHubCatalog(azure, ws, logger, "deprecated-solutions");
+  if (catalog.kind === "unreadable") return catalog;
+  const packages = catalog.packages;
   const keys = new Set<string>();
-  let packages: unknown[];
-  try {
-    packages = await listAllPages(
-      azure,
-      { method: "GET", path: scope, apiVersion: SECURITY_INSIGHTS_API_VERSION },
-      "list content product packages",
-    );
-  } catch (err) {
-    logger?.warn("content-install: deprecated-solutions listing failed", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return keys;
-  }
   for (const p of packages) {
     const props = prop(p, "properties");
     const displayName = str(prop(props, "displayName"));
@@ -153,8 +196,11 @@ export async function listDeprecatedContentHubSolutions(
   }
   logger?.info("content-install: content hub deprecated solutions", {
     count: keys.size,
+    packagesSeen: packages.length,
   });
-  return keys;
+  return keys.size > 0
+    ? { kind: "found", keys, packagesSeen: packages.length }
+    : { kind: "not-found", packagesSeen: packages.length };
 }
 
 /**

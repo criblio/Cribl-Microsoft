@@ -8,8 +8,8 @@
 > at the Event Hub, and ticking the Entra ID box in backlog item 6b is what
 > triggers the problem this plan solves.
 
-Status: Proposed (plan only, no code)
-Last-confirmed: 2026-08-26
+Status: Proposed (plan; the content-analyzer first slice is built as `@soc/core` `coverage-analysis`, the rest is unbuilt)
+Last-confirmed: 2026-10-05
 Author-context: derived from a verified research digest, 2026-07-02
 Related: [feature-catalog.md](../feature-catalog.md), [roadmap.md](../roadmap.md), [ADR-0001 dual-target architecture](../adr/0001-dual-target-architecture.md) (superseded in part by [ADR-0002](../adr/0002-drop-local-target.md))
 
@@ -17,7 +17,7 @@ Related: [feature-catalog.md](../feature-catalog.md), [roadmap.md](../roadmap.md
 > instructions are read as instructions - and the ones that say to build for two
 > targets are corrected below, not preserved. `apps/cribl-app` on Cribl.Cloud is
 > the only shell; `apps/local-app` is deleted. <!--drift-ok--> The port seam this plan writes
-> against (`AzureManagement`, `GraphClient`, `CriblClient`) is unchanged, so
+> against (`AzureManagement`, `GraphDirectory`, `CriblClient`) is unchanged, so
 > nothing else in the design moves.
 
 ## Summary
@@ -65,7 +65,7 @@ The app selects the ingestion mode per target table by consulting a native-table
 
 ### Mode A - DCR into the native table (the clean path)
 
-When the target table is supported by the Logs Ingestion API, the app builds a Direct DCR whose `outputStream` is `Microsoft-<TableName>` and whose `transformKql` reshapes the incoming stream to the fixed native schema. Data lands in the real table with its real name and schema; **no downstream content refactor is needed** because nothing about the table changed from the content's point of view. This is exactly the stream declaration that the existing `schema-mapping` core module already emits for native tables (`buildStreamDeclaration` -> `outputStream: "Microsoft-{table}"`, `transformKql: "source"`).
+When the target table is supported by the Logs Ingestion API, the app builds a Direct DCR whose `outputStream` is `Microsoft-<TableName>` and whose `transformKql` reshapes the incoming stream to the fixed native schema. Data lands in the real table with its real name and schema; **no downstream content refactor is needed** because nothing about the table changed from the content's point of view. This is exactly the stream declaration that the existing `schema-mapping` core module already emits for native tables (`buildStreamDeclaration` -> `outputStream: "Microsoft-{table}"`). `transformKql` is `source`, plus a `toguid()` extend for each guid column (ADR 0004); pass the `casts` from `buildDcrColumnSet` together with the columns.
 
 Constraints Mode A must respect:
 - Native/built-in tables have **fixed schemas**. The transform output schema must match the destination exactly: omitted columns are stored empty, extra columns must be excluded, you may only add custom columns carrying a `_CF` suffix, and the names `_ResourceId`, `id`, `_SubscriptionId`, `TenantId`, `Type`, `UniqueId`, `Title` are reserved.
@@ -129,7 +129,7 @@ The engine:
 4. Builds a reconciliation worklist, classifying each hit as: **covered by function-alias/ASIM** (no rewrite needed), **needs guided rewrite** (point at the `_CL` table and reconcile column/type differences), or **UEBA-bound** (cannot be redirected - flag and warn).
 5. **Previews the impact** to the operator before any change, and supports **rollback** (the alias/parser is a discrete `savedSearch` resource that can be deleted; rewrites are staged and reversible).
 
-The app reuses the existing analytics-rule coverage analyzer (ENG-11: loads a solution's analytics rules, extracts KQL fields, computes per-rule covered/missing field coverage against a destination schema) as the proof that analytics rules survive onboarding. The other content types (hunting queries, workbooks, parsers, playbooks) have **no** existing analyzer and are net-new (see sections 5 and 6).
+The app reuses the existing analytics-rule coverage analyzer (ENG-11: loads a solution's analytics rules, extracts KQL fields, computes per-rule covered/missing field coverage against a destination schema) as the proof that analytics rules survive onboarding. That analyzer is now `@soc/core` `coverage-analysis` (`packages/core/src/domain/coverage-analysis/`), built as the FIRST SLICE of this plan's content-reference analyzer: it runs over one generic `ContentItem {type, id, queries[]}` shape (`models.ts`) and already has two sources, alert rules and workbooks (`parse-workbook.ts` parses `serializedData`), plus parser-function resolution (`parse-parser-function.ts`). It computes FIELD coverage per item. Still net-new: hunting-query and playbook sources (`ContentItemType` is `"alert-rule" | "workbook"` today), the table-reference scan, and the covered-by-alias / needs-rewrite / UEBA-bound classification (see sections 5 and 6).
 
 ---
 
@@ -149,28 +149,28 @@ The chain is: **diagnostic setting -> Event Hub -> Cribl source -> pipeline -> S
 
 ## 5. Composition with existing capabilities
 
-The end-to-end chain assembles almost entirely from building blocks that already exist in the repo (as PowerShell/TS references) and the `@soc/core` domain modules already ported. Per the redesign-first principle (ADR-0001), legacy code is a capability reference and edge-case archive, not an implementation to transplant.
+The end-to-end chain assembles almost entirely from building blocks that are now ported into `@soc/core` (re-read 2026-10-05). Legacy IDs (LOG-07, ENG-13, ...) are kept as provenance only; the legacy PowerShell/Electron sources stay behind in the old repository's `deprecated/` and do not resolve from the toolkit's own repository. Per the redesign-first principle (ADR-0001), legacy code is a capability reference and edge-case archive, not an implementation to transplant.
 
 **Source / diagnostic-settings half (reuse):**
-- LOG-07 `Deploy-EntraIDDiagnostics.ps1` - deploys the tenant Entra diagnostic setting; its HighVolume profile already includes `NonInteractiveUserSignInLogs`, the flagship example.
-- LOG-03 `Deploy-EventHubNamespaces.ps1` - Event Hub namespace so Azure auto-creates the per-category hubs.
-- LOG-16 `Generate-CriblEventHubSources.ps1` - emits the Cribl Event Hub source config with SASL/secret references.
-- EVH-03/EVH-04/EVH-06 - Resource Graph inventory of namespaces/hubs, discovery of which hub a diagnostic setting targets, consumer-group/auth-rule enumeration to seed the source.
-- ENG-13 `source-types.ts` - the `azure_event_hub` source definition with `azure_ad`/`azure_diagnostics` presets and `generateInputsYml`.
+- `@soc/core` `entra-diagnostics` (LOG-07) - `entra-categories.ts` (category -> table, with a `uebaBoundTable` per category) and `entra-diagnostic-setting.ts` `buildEntraDiagnosticRequest`, the tenant Entra diagnostic setting.
+- LOG-03 (legacy `Deploy-EventHubNamespaces.ps1`, provenance) - Event Hub namespace so Azure auto-creates the per-category hubs.
+- `@soc/core` `eventhub-discovery` (EVH-03/EVH-04/EVH-06, LOG-16) - Resource Graph inventory of namespaces/hubs, discovery of which hub a diagnostic setting targets, consumer-group/auth-rule enumeration, and the Cribl Event Hub source config with secret references.
+- `@soc/core` `pipeline-generation/source-types.ts` (ENG-13) - the `azure_event_hub` source definition with `azure_ad`/`azure_diagnostics` presets.
 
 **DCR / native-table half (reuse):**
-- DCR-06..DCR-16 `Create-TableDCRs.ps1` - the native-table DCR engine: schema retrieval that refuses `_CL` matches in native mode, column filtering, ARM template gen with the `Custom-`/`Microsoft-` stream rule, DCE, deploy.
-- `@soc/core` `schema-mapping` (`packages/core/src/domain/schema-mapping/schema-mapping.ts`) - `mapColumnType` (DCR-08), `selectSchemaColumns`, `buildDcrColumnSet` (DCR-09), and `buildStreamDeclaration` which emits `outputStream: Microsoft-{table}` + `transformKql: "source"` for native tables. This directly produces the schema-preserving native DCR (Mode A). Plus `normalizeCustomSchemaColumns`/`stripReservedTableCreationColumns` for the `_CL` variant (Mode B). This is a compatibility contract pinned by characterization tests.
+- DCR-06..DCR-16 (legacy `Create-TableDCRs.ps1`, provenance; ported as `schema-mapping`, `dcr-request`, `dce-request`, `arm-template`) - the native-table DCR engine: schema retrieval that refuses `_CL` matches in native mode, column filtering, ARM template gen with the `Custom-`/`Microsoft-` stream rule, DCE, deploy.
+- `@soc/core` `schema-mapping` (`packages/core/src/domain/schema-mapping/schema-mapping.ts`) - `mapColumnType` (DCR-08), `selectSchemaColumns`, `buildDcrColumnSet` (DCR-09), and `buildStreamDeclaration` which emits `outputStream: Microsoft-{table}` for native tables, with `transformKql` = `source` plus a `toguid()` extend per guid column (ADR 0004; pass the `casts` from `buildDcrColumnSet` with the columns). This directly produces the schema-preserving native DCR (Mode A). Plus `normalizeCustomSchemaColumns`/`stripReservedTableCreationColumns` for the `_CL` variant (Mode B). This is a compatibility contract pinned by characterization tests.
 - `@soc/core` `dcr-naming` (`dcr-naming.ts`) - `generateDcrName`, the byte-faithful 30/64-char DCR/DCE naming port (DCR-10), works for native and custom.
 - AST-01/AST-02 - 100 prebuilt native-table DCR ARM templates (incl. 10 ASim tables) whose embedded `streamDeclarations` double as an offline native-schema catalog. **Gap:** the Entra sign-in native tables (`SigninLogs`, `AADNonInteractiveUserSignInLogs`, `AADServicePrincipalSignInLogs`, `ADFSSignInLogs`) are **not** in that census, so the flagship DCR must be generated dynamically from a live Log Analytics schema query (DCR-07), not pulled from a template.
 
 **Cribl destination half (reuse):**
-- DCR-27 `Generate-CriblDestinations.ps1` (+ DCR-25/26/28/29) - Cribl `sentinel` destination generator from a deployed DCR.
-- ENG-28 `auth.ts` Cribl config API client - create sources/outputs/secrets/routes via the Cribl REST API.
+- `@soc/core` `sentinel-destination` (DCR-27, + DCR-25/26/28/29) - Cribl `sentinel` destination generator from a deployed DCR.
+- ENG-28 Cribl config API client - now the `CriblClient` port (`packages/core/src/ports/cribl-client.ts`), bound by `apps/cribl-app`: create sources/outputs/secrets/routes via the Cribl REST API.
 
 **Content-preservation half (partial reuse):**
-- ENG-11 `pack-builder.ts` rule-coverage (backed by `sentinel-repo.ts` `listAnalyticRules` + `extractKqlFields`) - analytics-rule field-coverage analysis; the mechanism to prove analytics rules survive.
-- ENG-12 `kql-parser.ts` - `parseDcrJson`/`parseTransformKql` + `analyzeDcrGap` (passthrough / DCR-handled / Cribl-must-handle) + route-condition generation; reusable to reshape the diagnostic payload and derive the Cribl transform/route.
+- `@soc/core` `coverage-analysis` (ENG-11) - the first slice of the content-reference analyzer: field coverage per content item over `{type, id, queries[]}`, with alert-rule and workbook sources and parser-function resolution; the mechanism to prove analytics rules (and workbooks) survive.
+- `@soc/core` `content-install` - already PUTs `savedSearches` with `functionAlias` (`domain/content-install/content-install.ts`), and the usecase (`usecases/content-install/content-install.ts`) carries the duplicate-alias safety handling that bears directly on the collision risk in section 8. This is the deploy path for the alias shim.
+- `@soc/core` `gap-analysis/kql-parser.ts` (ENG-12) - `parseDcrJson`/`parseTransformKql` + `analyzeDcrGap` (passthrough / DCR-handled / Cribl-must-handle) + route-condition generation; reusable to reshape the diagnostic payload and derive the Cribl transform/route.
 - ENG-42 `preIngested` flag - detects already-Sentinel-schema data (Entra diagnostic logs are close to, but not identical to, native schema).
 
 **Cross-cutting core modules (reuse as-is):** `azure-permissions` (`hasEffectiveAction` + `REQUIRED_ACTIONS['existing-rg']` already lists `dataCollectionRules/write`, `workspaces/tables/write`, `deployments/write` - the deploy preflight for this feature); `azure-config`, `azure-profiles`, `connection-invalidation`, `azure-resource-id`.
@@ -178,9 +178,9 @@ The end-to-end chain assembles almost entirely from building blocks that already
 **What is genuinely net-new:**
 1. **Native-table catalog with an ingestion-support flag** - the category->table->schema map plus the version-sensitive Logs Ingestion API supported-tables membership. No such catalog exists (AST covers 50 tables and none of the Entra sign-in tables).
 2. **Diagnostic-envelope-to-native-schema reshape** - a Cribl pipeline/transform that unrolls the `records[]` camelCase envelope into the `Microsoft-<Table>`/`_CL` schema. Existing pipeline generation (ENG-01) is CEF/CSV/vendor-oriented; ENG-12/ENG-42 only detect/flag pre-ingested data, they do not map the Azure diagnostic envelope.
-3. **Function-alias / ASIM-parser generator** - no existing module emits a `savedSearch` `functionAlias` shim or a `vimAuthentication` parser.
-4. **Content-reference analyzer beyond analytics rules** - ENG-11 covers analytics rules only; workbooks, hunting queries, parsers, and playbooks have no analyzer.
-5. **The composed orchestration** - no single "diagnostic-settings source -> Cribl Event Hub source -> native-table DCR destination -> Sentinel" orchestrator exists. The halves are all present but unwired; ENG-39 `e2e-orchestrator.ts` is built for the vendor/custom-table/field-matcher pack path and needs a new native-preservation branch. LOG-16 emits an Event Hub source but does not wire its routing to a Sentinel native-table DCR destination - that routing glue is net-new.
+3. **Function-alias / ASIM-parser generator** - the deploy path for a `functionAlias` `savedSearch` exists (`content-install`); what is new is the shim BODY generator (the `_CL` -> native projection, union-vs-replace) and the `vimAuthentication` parser.
+4. **Content-reference analyzer beyond field coverage** - `coverage-analysis` covers alert rules and workbooks (and resolves parser functions) for field coverage; hunting-query and playbook sources, the table-reference scan, and the alias/rewrite/UEBA-bound classification are new.
+5. **The composed orchestration** - no single "diagnostic-settings source -> Cribl Event Hub source -> native-table DCR destination -> Sentinel" orchestrator exists. The halves are all present but unwired; ENG-39 (now `usecases/guided-deploy`) is built for the vendor/custom-table/field-matcher pack path and needs a new native-preservation branch. LOG-16 emits an Event Hub source but does not wire its routing to a Sentinel native-table DCR destination - that routing glue is net-new.
 
 ---
 
@@ -192,14 +192,14 @@ Follows the workspace discipline in CONTEXT.md and ADR-0001 as amended by ADR-00
 
 - **`native-table-catalog`** - maps diagnostic-setting category -> Sentinel table (encoding the AAD-prefix rules and the `SignInLogs` -> `Signin` and `AuditLogs` no-prefix exceptions), holds the native column schema per table, and carries an `ingestionSupported` flag derived from a version-pinned snapshot of the Logs Ingestion API supported-tables list. Refreshable; the flag is explicitly time-sensitive and the module must make the snapshot date first-class so callers can warn on staleness.
 - **`table-alias-kql`** - generates the function-alias shim: the `savedSearch` body that projects `_CL` type-suffixed columns (`_s`/`_d`/`_g`/`_b`/`_t`) back to native column names and types, preserving `TimeGenerated`, and decides union-vs-replace from whether the native table retains data. Emits the deployable `savedSearches` resource shape (`functionAlias`, `query`, `category`, `version`). A sibling generator emits the ASIM `vimAuthentication<Vendor><Product>` variant for the Authentication schema.
-- **`content-reference-analyzer`** - given a set of extracted content items (each a `{type, id, queries[]}` record produced by the api layer) and a target table name, scans the KQL for references and classifies each as covered-by-alias / needs-rewrite / UEBA-bound; produces the reconciliation worklist and the preview/rollback plan. Pure text/AST scanning; no IO.
+- **`content-reference-analyzer`** - EXTEND `coverage-analysis` rather than building a second module beside it: it already defines the `ContentItem {type, id, queries[]}` shape and the alert-rule/workbook sources. What to add: given a set of extracted content items (produced by the api layer) and a target table name, scans the KQL for references and classifies each as covered-by-alias / needs-rewrite / UEBA-bound; produces the reconciliation worklist and the preview/rollback plan. Pure text/AST scanning; no IO.
 - **`native-onboarding-planner`** - the composition brain. Takes a selected diagnostic category + target workspace/schema and produces an ordered plan: diagnostic-setting spec, Event Hub/source spec, DCR + (native or `_CL`) table spec, Cribl pipeline+destination spec, and the content-reconciliation actions. Runs the Mode A/B auto-selection using `native-table-catalog`. Reuses `schema-mapping`, `dcr-naming`, and `azure-permissions` rather than duplicating them.
 - **`diagnostic-envelope-mapping`** (may fold into the pipeline-generation domain) - the pure spec of how the Azure `records[]` camelCase envelope maps to the destination schema, driving the generated Cribl pipeline functions and the optional reduction rules for noisy non-interactive sign-ins.
 
 ### API clients (adapter layer, behind ports)
 
-Written against the existing `AzureManagement`, `GraphClient`, and `CriblClient` ports; `apps/cribl-app` binds its own transport (the cloud proxy). The port seam is kept even with one shell (ADR-0002) - it is what would make a second target cheap again:
-- Sentinel/ARM content clients: `alertRules` (SecurityInsights), `savedSearches` (Log Analytics - hunting queries + parsers + the alias shim deploy), `workbooks` (Insights, parse `serializedData`), `workflows` (Logic, parse query actions), `watchlists`. Pin/confirm api-versions per type.
+Written against the existing `AzureManagement`, `GraphDirectory`, and `CriblClient` ports; `apps/cribl-app` binds its own transport (the cloud proxy). The port seam is kept even with one shell (ADR-0002) - it is what would make a second target cheap again:
+- Sentinel/ARM content clients: `alertRules` (SecurityInsights), `savedSearches` (Log Analytics - hunting queries + parsers + the alias shim deploy), `workbooks` (Insights, parse `serializedData`), `workflows` (Logic, parse query actions), `watchlists`. Pin/confirm api-versions per type. These read DEPLOYED workspace content, so they sit behind `AzureManagement` (ARM REST). The `SentinelContent` port is not this seam: it reads the Sentinel solutions REPO, so it is only the source for SHIPPED solution content (for example the expected parser/alias definitions a solution carries).
 - Cribl product API: source (`POST /system/inputs`), pipeline (`POST /pipelines`), destination (`POST /system/outputs`), plus commit/push/deploy in distributed mode - reusing the ENG-28 client pattern.
 
 ### UI feature folder (`packages/ui`)
@@ -254,4 +254,4 @@ It sits at the seam of two existing tiers in `feature-catalog.md`:
 
 **Per-rule rewrite effort is variable.** The exact column-by-column schema each OOTB analytics rule requires of a `_CL` replacement was not exhaustively verified; the effort to make cloned/rewritten detections actually work will vary per rule, and entity-mapping behavior against a schema-matched `_CL` table (vs UEBA, which definitely does not follow) was not directly confirmed.
 
-**Cribl deployment addressing.** The Cribl product API base URL and worker-group/commit-push-deploy semantics are deployment-specific (on-prem leader vs Cloud workspace, single-instance vs distributed); the api layer must confirm per environment. The eventhub-vs-eventhub_amqp source choice is also version/namespace-dependent. The legacy HTTP Data Collector API retires 2026-09-14 in favor of the Logs Ingestion API, and Cribl's older Azure Monitor Logs destination is deprecated in favor of the Sentinel destination - the plan targets the current APIs only.
+**Cribl deployment addressing.** The Cribl product API base URL and worker-group/commit-push-deploy semantics are deployment-specific (on-prem leader vs Cloud workspace, single-instance vs distributed); the api layer must confirm per environment. The eventhub-vs-eventhub_amqp source choice is also version/namespace-dependent. The legacy HTTP Data Collector API retired 2026-09-14 (as announced) in favor of the Logs Ingestion API, and Cribl's older Azure Monitor Logs destination is deprecated in favor of the Sentinel destination - the plan targets the current APIs only.

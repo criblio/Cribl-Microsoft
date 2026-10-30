@@ -16,8 +16,8 @@ import type { PortHttpResponse } from '../ports/http';
  * throws, so tests fail loudly on unexpected extra calls.
  *
  * The fake implements the OPTIONAL `requestUrl` port method (nextLink
- * pagination). To exercise a caller's single-page fallback against an adapter
- * WITHOUT `requestUrl`, wrap the fake:
+ * pagination). To exercise a caller against an adapter that cannot paginate
+ * (no `requestUrl`), wrap the fake:
  * `const azure: AzureManagement = { request: (o) => fake.request(o) };`
  */
 export class FakeAzureManagement implements AzureManagement {

@@ -13,7 +13,11 @@
  *     summaries;
  *   - an EDITABLE field-mapping table (with a per-card FIELD SEARCH): a
  *     dest-column dropdown and an action dropdown (incl. base64 decode) per
- *     source field, plus the unmapped destination columns;
+ *     source field, plus the unmapped destination columns. A dest choice onto
+ *     a column another row fills opens the claim panel (DBT-208) instead of
+ *     applying. On a row in the catch-all the actions that need a column
+ *     (keep, rename, coerce, decode) are disabled with the reason: Dest Field
+ *     is the one way such a row comes to land in a column (DBT-209);
  *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
  *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
  *     enrichment / forced-input resolution with curated auto-seeding;
@@ -39,9 +43,14 @@
  * The APPROVAL STATE MACHINE lives in the pure mapping-review-state module; this
  * component only drives it: Auto-Approve All / Reset All / per-table Approve,
  * the "Approval Required" / "Approved" badges, the staleness prompt, and the
- * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis; edits
- * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
- * optional renameEvent prop).
+ * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis, and
+ * a table's on any re-point of its rows (Dest Field or suggestion, DBT-213); edits
+ * survive a re-analysis re-applied to the new rows - one whose field is gone is
+ * dropped, and a notice says how many (DBT-210) - and re-key on a log-type
+ * rename (the Unit 11 seam, threaded via the optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
+ * only its own card and review; the other tables keep their approvals. A
+ * close match chosen in a coverage section (remapEvent, DBT-203) applies
+ * through the same path as this section's own unmapped-column suggestions.
  *
  * All analysis IO flows through @soc/core: resolveSampleRouting then the
  * analyzeSamples usecase (fed the pre-resolved DCR flows - one fetch pass)
@@ -56,14 +65,20 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import {
   DEFAULT_GAP_PROFILE,
+  FIELD_EXAMPLE_MAX_CHARS,
+  actionEditRefusal,
   collectGapReports,
+  columnActionsRefusal,
   createBundledSchemaCatalog,
   createSchemaLadder,
   detectVendorIdentity,
   dropSavingsLine,
   estimateDropSavings,
+  getOverflowConfig,
+  landsInColumn,
   learnedToVendorMappings,
   mergeDropSavings,
   resolveSampleRouting,
@@ -72,6 +87,7 @@ import {
   vendorLabelEnrichments,
   vendorMappingsForSolution,
   vendorPacksForSolution,
+  vpcFlowV2AwsName,
 } from "@soc/core";
 import type {
   CefIdentityFinding,
@@ -84,6 +100,7 @@ import type {
   IdentityFieldStatus,
   MatchAction,
   Logger,
+  RemapRequest,
   SchemaCatalog,
   SentinelContent,
   TaggedSample,
@@ -95,6 +112,8 @@ import { EnrichmentEditor } from "./enrichment-editor";
 import { IdentityBlock } from "./identity-block";
 import { IdentityMismatchBlock } from "./identity-mismatch-block";
 import { OverflowTriageBlock } from "./overflow-triage-block";
+import { UnmappedColumnPanel } from "./unmapped-column-panel";
+import { DestClaimPanel } from "./dest-claim-panel";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -102,9 +121,18 @@ import {
   mergeEnrichments,
 } from "../pipeline-preview/pipeline-preview-state";
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
-import type { RequirementsForAssessment } from "./mapping-review-state";
+import type {
+  AnalysisSignature,
+  RequirementsForAssessment,
+} from "./mapping-review-state";
 import {
+  EMPTY_ANALYSIS_SIGNATURE,
   INITIAL_MAPPING_REVIEW_STATE,
+  analysisSignature,
+  forgetLogTypeKeys,
+  isSignatureStale,
+  signatureWithout,
+  withoutKey,
   assessUnusedOverflow,
   autoDropPlan,
   MAPPING_REVIEW_NO_SAMPLES_REASON,
@@ -112,10 +140,14 @@ import {
   OVERFLOW_COVERAGE_NOTE,
   analyzeButtonLabel,
   approvalBarText,
+  columnSuggestions,
   deriveLiveStats,
   deriveMappingReviewGate,
+  destClaim,
+  droppedEditsNotice,
   effectiveMappings,
   fieldMappingsLabel,
+  formatExampleValue,
   isApproved,
   isModified,
   isRuleField,
@@ -152,11 +184,51 @@ const ACTION_OPTIONS: readonly MatchAction[] = [
   "drop",
 ];
 
+/**
+ * DBT-208: a Dest Field choice as destClaim takes it. The catch-all is the
+ * matcher's own overflow column for the table, as the reducer's re-point uses.
+ */
+function claimRequest(
+  report: GapReport,
+  sourceField: string,
+  column: string,
+): Omit<RemapRequest, "moveClaimed"> {
+  return {
+    sourceField,
+    destColumn: column,
+    destSchema: report.destSchema,
+    catchAllColumn: getOverflowConfig(report.tableName).fieldName,
+    baseline: report.fieldMappings,
+  };
+}
+
 /** A rename signal from the Sample Data section (the Unit 11 seam). */
 export interface MappingReviewRenameEvent {
   from: string;
   to: string;
   /** Bumped on every rename so a repeated from/to still fires the effect. */
+  nonce: number;
+}
+
+/** A log type whose sample was removed (DBT-143), to prune from the review. */
+export interface MappingReviewRemoveEvent {
+  logType: string;
+  /** Bumped on every removal so removing, re-adding and removing again fires. */
+  nonce: number;
+}
+
+/**
+ * A close match chosen OUTSIDE this section (DBT-203: the Rule and Workbook
+ * Coverage missing-field chips), applied exactly as this section's own
+ * unmapped-column suggestion is.
+ */
+export interface MappingReviewRemapEvent {
+  logType: string;
+  /** The sample field to re-point (exact spelling). */
+  sourceField: string;
+  /** The destination column it should fill. */
+  dest: string;
+  /** Bumped on every apply so choosing the same field twice still fires. */
   nonce: number;
 }
 
@@ -230,6 +302,19 @@ export interface MappingReviewSectionProps {
   /** A log-type rename to re-key approvals + edits by (the Unit 11 seam). */
   renameEvent?: MappingReviewRenameEvent;
   /**
+   * A log type whose sample is gone (DBT-143). Its card, approval, edits, table
+   * override, enrichments and seed guards are pruned; every other table keeps
+   * its review. The ONE prune path - a card's own Remove does not prune
+   * locally, it asks through onRemoveLogType and arrives back here, so the
+   * store, the Sample Data chips and this section cannot disagree.
+   */
+  removeEvent?: MappingReviewRemoveEvent;
+  /**
+   * The card's Remove button: asks the page to delete this log type's sample.
+   * Absent = no button (a host that cannot delete samples offers none).
+   */
+  onRemoveLogType?: (logType: string) => void;
+  /**
    * Surfaces the user-added ENRICHMENT constants (merged global + per-table)
    * keyed by logType - fields the source does not carry that the pipeline
    * adds (e.g. DeviceVendor for PAN-OS). Feeds the pipeline preview, the pack
@@ -260,6 +345,13 @@ export interface MappingReviewSectionProps {
    * from the rules section still protects workbook-consumed fields.
    */
   dropUnneededEvent?: { nonce: number };
+  /**
+   * A close match chosen in a coverage section (DBT-203; nonce bumps per
+   * click). Applied through the SAME apply-suggestion path as the Unmapped
+   * Destination Fields panel, so it withdraws the table's approval and forgets
+   * the auto-drop key just as a click here does.
+   */
+  remapEvent?: MappingReviewRemapEvent;
   /**
    * Per-logType findings comparing the sample's DeviceVendor/DeviceProduct
    * against what the selected solution's rules filter on. Empty when no rules
@@ -302,14 +394,6 @@ const COMMON_NATIVE_TABLES: readonly string[] = [
   "WindowsEvent",
 ];
 
-/** A stable signature of the analysis inputs (drives staleness detection). */
-function inputSignature(solutionName: string, samples: TaggedSample[]): string {
-  const parts = samples.map(
-    (s) => `${s.logType}#${s.parsed.fields.length}#${s.format}`,
-  );
-  return `${solutionName}||${parts.join("|")}`;
-}
-
 export function MappingReviewSection({
   solutionName,
   samples,
@@ -324,10 +408,13 @@ export function MappingReviewSection({
   onReportsChange,
   onEffectiveMappingsChange,
   renameEvent,
+  removeEvent,
+  onRemoveLogType,
   onEnrichmentsChange,
   learnedCache,
   contentRequirements,
   dropUnneededEvent,
+  remapEvent,
   identityFindings,
   identityOverrides,
   onIdentityOverridesChange,
@@ -389,6 +476,34 @@ export function MappingReviewSection({
   const [mappingSearch, setMappingSearch] = useState<Record<string, string>>(
     {},
   );
+  // DBT-202: the unmapped column whose suggestion panel is open (one at a
+  // time), the "Add a constant" hand-off to a table's enrichment editor, and
+  // the last re-point applied per table, by suggestion or Dest Field
+  // (announced, since applying withdraws the table's approval - DBT-213). The
+  // note is rendered only while its claim holds - the table unapproved AND
+  // the field still filling the column - so Approve All, a later edit or
+  // another suggestion cannot leave it saying something the table no longer
+  // shows.
+  const [suggestFor, setSuggestFor] = useState<{
+    logType: string;
+    column: string;
+  } | null>(null);
+  const [enrichSeeds, setEnrichSeeds] = useState<
+    Record<string, { field: string; nonce: number }>
+  >({});
+  const [appliedNotes, setAppliedNotes] = useState<
+    Record<string, { source: string; column: string; withdrew: boolean }>
+  >({});
+  // DBT-208: a Dest Field choice onto a column another row fills, waiting on
+  // the reviewer's answer (one at a time). Only the QUESTION is held: the
+  // claim itself is re-derived from the current rows on every render, so the
+  // panel closes once it no longer holds (the other row left the column, or a
+  // re-analysis changed the rows) instead of naming a row Move would not move.
+  const [pendingClaim, setPendingClaim] = useState<{
+    logType: string;
+    source: string;
+    column: string;
+  } | null>(null);
 
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
@@ -406,6 +521,7 @@ export function MappingReviewSection({
     tableEnrichments,
     addEnrichment,
     removeEnrichment,
+    forgetLogType: forgetLogTypeEnrichments,
   } = useEnrichmentFields(reports, isValidEnrichmentFieldName, onEnrichmentsChange);
 
   const [review, dispatch] = useReducer(
@@ -548,6 +664,20 @@ export function MappingReviewSection({
   // `mappingEdits` untouched (mapping-review-state.ts:187-191), so it never
   // reverted these. Corrected 2026-08-26.
   const autoDroppedRef = useRef(new Set<string>());
+  // DBT-208: fields the reviewer moved OUT of a column into the catch-all
+  // (Move). The claim panel promises their value is kept, so the policy's
+  // drop must not take them (autoDropPlan's `reviewerKept`).
+  const reviewerKeptRef = useRef(new Set<string>());
+  // DBT-210: an edit a re-analysis dropped is no longer the policy's drop or
+  // the reviewer's move, so forget its keys - declared BEFORE the auto-drop
+  // effect, which must not see them on the same commit (a table change would
+  // otherwise never re-drop a field the old table's policy had dropped).
+  useEffect(() => {
+    for (const { logType, source } of review.droppedEdits) {
+      autoDroppedRef.current.delete(`${logType}|${source}`);
+      reviewerKeptRef.current.delete(`${logType}|${source}`);
+    }
+  }, [review.droppedEdits]);
   useEffect(() => {
     for (const report of reports) {
       const assessment = assessments.get(report.logType);
@@ -558,6 +688,7 @@ export function MappingReviewSection({
         assessment,
         effectiveMappings(review, report),
         autoDroppedRef.current,
+        reviewerKeptRef.current,
       );
       for (const source of drop) {
         autoDroppedRef.current.add(`${report.logType}|${source}`);
@@ -584,8 +715,24 @@ export function MappingReviewSection({
     }
   }, [reports, assessments, unusedPolicy, review]);
 
-  const analyzedSigRef = useRef<string>("");
-  const currentSig = inputSignature(solutionName, samples);
+  const analyzedSigRef = useRef<AnalysisSignature>(EMPTY_ANALYSIS_SIGNATURE);
+  const currentSig = useMemo(
+    () => analysisSignature(solutionName, samples),
+    [solutionName, samples],
+  );
+  // The samples as of the LATEST render, for a run that started before a
+  // removal landed: its results must not resurrect the removed log type.
+  const samplesRef = useRef(samples);
+  samplesRef.current = samples;
+  // The reports the edit store was made against, for the re-base a completed
+  // run dispatches (DBT-210). Latest render's, not the run's closure.
+  const reportsRef = useRef(reports);
+  reportsRef.current = reports;
+  // A rename re-keys the edit store but not `reports`, so the re-base must find
+  // a renamed table's old rows under the name it had: new name -> report name,
+  // for every rename since the last analysis. Without it the new analysis's
+  // own rows stand in, and every row it decides differently reads as an edit.
+  const renamedSinceAnalysisRef = useRef(new Map<string, string>());
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
   const runAnalysis = useCallback(async (
@@ -666,13 +813,34 @@ export function MappingReviewSection({
           ],
         },
       );
-      setReports(produced);
-      logger?.info("gap-analysis: finished", {
-        tables: produced.map((r) => r.tableName).join(","),
-        reports: produced.length,
+      // A sample removed WHILE this run was in flight has already been pruned
+      // everywhere else; keep its report out too. Filtered against the live
+      // list, not this closure's, which still holds it.
+      const live = new Set(samplesRef.current.map((s) => s.logType));
+      const kept = produced.filter((r) => live.has(r.logType));
+      const renamed = renamedSinceAnalysisRef.current;
+      const previous = reportsRef.current.map((r) => {
+        const to = [...renamed].find(([, from]) => from === r.logType)?.[0];
+        return to === undefined ? r : { ...r, logType: to };
       });
-      analyzedSigRef.current = inputSignature(solutionName, samples);
-      dispatch({ type: "analyzed" });
+      renamed.clear();
+      setReports(kept);
+      logger?.info("gap-analysis: finished", {
+        tables: kept.map((r) => r.tableName).join(","),
+        reports: kept.length,
+      });
+      analyzedSigRef.current = analysisSignature(
+        solutionName,
+        samples.filter((s) => live.has(s.logType)),
+      );
+      // DBT-210: the edits are re-based onto `kept`; the ones that no longer
+      // fit are dropped and counted (the notice under the approval bar).
+      dispatch({ type: "analyzed", previous, reports: kept });
+      // A fresh analysis resets every approval, so a note asking to approve
+      // again after a suggestion is no longer about anything.
+      setAppliedNotes({});
+      setSuggestFor(null);
+      setPendingClaim(null);
     } catch (err) {
       logger?.error(`gap-analysis: failed: ${String(err)}`);
       setAnalyzeError(String(err));
@@ -744,7 +912,7 @@ export function MappingReviewSection({
     if (reports.length === 0) {
       return;
     }
-    if (currentSig !== analyzedSigRef.current) {
+    if (isSignatureStale(analyzedSigRef.current, currentSig)) {
       dispatch({ type: "inputs-changed" });
     }
   }, [currentSig, reports.length]);
@@ -759,12 +927,51 @@ export function MappingReviewSection({
       return;
     }
     lastRenameNonce.current = renameEvent.nonce;
+    // A chain (A -> B -> C) still points at the report name, A.
+    const renamed = renamedSinceAnalysisRef.current;
+    const reportName = renamed.get(renameEvent.from) ?? renameEvent.from;
+    renamed.delete(renameEvent.from);
+    renamed.set(renameEvent.to, reportName);
     dispatch({
       type: "rename-log-type",
       from: renameEvent.from,
       to: renameEvent.to,
     });
   }, [renameEvent]);
+
+  // ---- Remove prune (DBT-143) ---------------------------------------------
+  // Everything this section keys by log type goes, and nothing else does. The
+  // seed guards are cleared too: they exist so a DELETED seed stays deleted,
+  // and a sample re-added under the same name is a new sample, not that one.
+  const lastRemoveNonce = useRef<number>(removeEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (removeEvent === undefined) {
+      return;
+    }
+    if (removeEvent.nonce === lastRemoveNonce.current) {
+      return;
+    }
+    lastRemoveNonce.current = removeEvent.nonce;
+    const { logType } = removeEvent;
+    setReports((prev) => {
+      const next = prev.filter((r) => r.logType !== logType);
+      return next.length === prev.length ? prev : next;
+    });
+    dispatch({ type: "remove-log-type", logType });
+    setTableOverrides((prev) => withoutKey(prev, logType));
+    setMappingSearch((prev) => withoutKey(prev, logType));
+    setAppliedNotes((prev) => withoutKey(prev, logType));
+    setEnrichSeeds((prev) => withoutKey(prev, logType));
+    setSuggestFor((prev) => (prev?.logType === logType ? null : prev));
+    setPendingClaim((prev) => (prev?.logType === logType ? null : prev));
+    forgetLogTypeEnrichments(logType);
+    forgetLogTypeKeys(seededIdentityRef.current, logType);
+    forgetLogTypeKeys(seededLabelRef.current, logType);
+    forgetLogTypeKeys(autoDroppedRef.current, logType);
+    renamedSinceAnalysisRef.current.delete(logType);
+    analyzedSigRef.current = signatureWithout(analyzedSigRef.current, logType);
+    logger?.info("gap-analysis: log type removed", { logType });
+  }, [removeEvent, forgetLogTypeEnrichments, logger]);
 
   // ---- Content-path gate + reports surfacing ----------------------------
   const gate = deriveMappingReviewGate(review, reports);
@@ -793,24 +1000,126 @@ export function MappingReviewSection({
     onEffectiveMappingsChange(byLogType);
   }, [reports, review, onEffectiveMappingsChange]);
 
-  const updateMapping = useCallback(
-    (
-      report: GapReport,
-      sourceField: string,
-      field: "dest" | "action",
-      value: string,
-    ) => {
+  // DBT-209: the table's catch-all rides along, so the reducer refuses an
+  // action that needs a column on a row that has none (the select also
+  // disables those options and says why).
+  const updateAction = useCallback(
+    (report: GapReport, sourceField: string, value: string) => {
       dispatch({
         type: "edit-mapping",
         logType: report.logType,
         sourceField,
-        field,
+        field: "action",
         value,
         baseline: report.fieldMappings,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
     },
     [],
   );
+
+  // DBT-213: the ONE reviewer re-point, behind the Dest Field select and
+  // "Use this field" alike. GEN-19: the reducer re-derives the whole row
+  // (action, type, coercion) through core applyRemap; the catch-all is the
+  // matcher's own overflow column for this table, so choosing it means
+  // overflow. The reducer withdraws the table's approval (F1-c), and the
+  // note says so. The auto-drop key is forgotten FIRST: a field the
+  // drop-unneeded policy dropped is otherwise still "its" drop, and
+  // switching the policy back to preserve would restore it to overflow on
+  // top of the reviewer's choice.
+  const repoint = useCallback(
+    (
+      report: GapReport,
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+      via: "dest" | "suggestion",
+      moveClaimed = false,
+    ) => {
+      autoDroppedRef.current.delete(`${report.logType}|${sourceField}`);
+      const target = {
+        logType: report.logType,
+        sourceField,
+        baseline: report.fieldMappings,
+        destSchema: report.destSchema,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
+      };
+      dispatch(
+        via === "dest"
+          ? { type: "edit-mapping", field: "dest", value: column, moveClaimed, ...target }
+          : { type: "apply-suggestion", destColumn: column, ...target },
+      );
+      setAppliedNotes((prev) => ({
+        ...prev,
+        [report.logType]: {
+          source: sourceField,
+          column,
+          withdrew: wasApproved,
+        },
+      }));
+    },
+    [],
+  );
+
+  // DBT-208: a Dest Field choice onto a column another row fills is ASKED,
+  // not applied - the reducer refuses it without `moveClaimed`, because two
+  // Renames onto one name lose the first value.
+  const chooseDest = useCallback(
+    (
+      report: GapReport,
+      rows: readonly GapFieldMapping[],
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+    ) => {
+      if (destClaim(rows, claimRequest(report, sourceField, column)) !== null) {
+        setPendingClaim({ logType: report.logType, source: sourceField, column });
+        return;
+      }
+      setPendingClaim(null);
+      repoint(report, sourceField, column, wasApproved, "dest");
+    },
+    [repoint],
+  );
+
+  // DBT-202: apply a suggested sample field to an unmapped column.
+  const applySuggestion = useCallback(
+    (
+      report: GapReport,
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+    ) => {
+      repoint(report, sourceField, column, wasApproved, "suggestion");
+      setSuggestFor(null);
+    },
+    [repoint],
+  );
+
+  // DBT-203: a coverage section's "Use this field" arrives here and goes
+  // through applySuggestion, the one apply path. The nonce guard starts at the
+  // event already in hand, so a remount (the content reset key) never replays
+  // an apply the reviewer made before it.
+  const lastRemapNonce = useRef<number>(remapEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (remapEvent === undefined || remapEvent.nonce === lastRemapNonce.current) {
+      return;
+    }
+    lastRemapNonce.current = remapEvent.nonce;
+    const report = reports.find((r) => r.logType === remapEvent.logType);
+    if (report === undefined) {
+      logger?.warn("gap-analysis: close match for a log type with no report", {
+        logType: remapEvent.logType,
+      });
+      return;
+    }
+    applySuggestion(
+      report,
+      remapEvent.sourceField,
+      remapEvent.dest,
+      isApproved(review, report.logType),
+    );
+  }, [remapEvent, reports, review, applySuggestion, logger]);
 
   const provenanceDefault = resolution !== null && resolution.tier === "default";
 
@@ -840,17 +1149,6 @@ export function MappingReviewSection({
 
       {analyzeError !== "" && <pre className="result">{analyzeError}</pre>}
 
-      {resolution !== null && (
-        <div
-          className={`gap-provenance${provenanceDefault ? " gap-provenance-default" : ""}`}
-        >
-          <span className="gap-provenance-label">Destination: </span>
-          <span className="gap-provenance-tables">
-            {resolution.tables.join(", ")}
-          </span>
-          <span className="gap-provenance-source"> - {resolution.source}</span>
-        </div>
-      )}
 
       {solutionName.trim() === "" && (
         <div className="status-bar status-bar-warn">
@@ -887,6 +1185,21 @@ export function MappingReviewSection({
         </p>
       )}
 
+      {/* DBT-229: destination, learned decisions and unused fields are one
+          status line - each keeps its tip and its action - rather than three
+          stacked banners above the approval bar. */}
+      <div className="gap-status-line">
+      {resolution !== null && (
+        <div
+          className={`gap-provenance${provenanceDefault ? " gap-provenance-default" : ""}`}
+        >
+          <span className="gap-provenance-label">Destination: </span>
+          <span className="gap-provenance-tables">
+            {resolution.tables.join(", ")}
+          </span>
+          <InfoTip text={`How the destination was chosen: ${resolution.source}`} />
+        </div>
+      )}
       {learned.length > 0 && (
         <div className="status-bar learned-mappings-bar">
           <span className="status-bar-dot" />
@@ -948,9 +1261,22 @@ export function MappingReviewSection({
             </div>
           );
         })()}
+      </div>
 
       {gate.stale && reports.length > 0 && (
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>
+      )}
+
+      {review.droppedEdits.length > 0 && (
+        <p
+          className="field-hint mapping-review-dropped-edits"
+          role="status"
+          title={review.droppedEdits
+            .map((d) => `${d.logType}: ${d.source}`)
+            .join("\n")}
+        >
+          {droppedEditsNotice(review.droppedEdits)}
+        </p>
       )}
 
       {hasMappings && (
@@ -1005,6 +1331,11 @@ export function MappingReviewSection({
       )}
 
       {reports.length > 0 && (
+        <details
+          className="gap-handles gap-enrichment-details"
+          open={openWhen(globalEnrichments.length > 0)}
+        >
+          <summary>Add enrichment fields (constants added to every table)</summary>
         <div className="discovery-result">
           <span className="field-label">
             Enrichment fields (added to every table)
@@ -1016,12 +1347,18 @@ export function MappingReviewSection({
             onRemove={(field) => removeEnrichment(null, field)}
           />
         </div>
+        </details>
       )}
 
       {reports.map((report) => {
         const effective = effectiveMappings(review, report);
         const mappings = sortedMappings(effective);
         const unmapped = unmappedDestColumns(report, effective);
+        // DBT-106: the format the sample behind this table was parsed as, so a
+        // VPC Flow v2 row can show AWS's spelling (account-id) beside ours.
+        const sampleFormat = samples.find(
+          (s) => s.logType === report.logType,
+        )?.format;
         const query = (mappingSearch[report.logType] ?? "")
           .trim()
           .toLowerCase();
@@ -1038,7 +1375,8 @@ export function MappingReviewSection({
             ? unmapped
             : unmapped.filter((d) => d.name.toLowerCase().includes(query));
         const approved = isApproved(review, report.logType);
-        const modified = isModified(review, report.logType);
+        const modified = isModified(review, report);
+        const catchAllColumn = getOverflowConfig(report.tableName).fieldName;
         return (
           <div key={report.logType} className="mapping-review-card">
             <div className="mapping-review-card-head">
@@ -1056,6 +1394,17 @@ export function MappingReviewSection({
                   ariaLabel="Filter destination tables"
                 />
               </div>
+              {onRemoveLogType !== undefined && (
+                <button
+                  className="run-button mapping-review-remove"
+                  onClick={() => onRemoveLogType(report.logType)}
+                  disabled={analyzing}
+                  aria-label={`Remove ${report.logType} sample`}
+                  title="Delete this log type's sample and drop it from every section below. The other tables keep their review and approvals."
+                >
+                  Remove
+                </button>
+              )}
             </div>
 
             <div className="match-stat-grid">
@@ -1211,7 +1560,7 @@ export function MappingReviewSection({
               <details className="mapping-review-fields">
                 <summary className="mapping-review-fields-summary">
                   <span>
-                    {fieldMappingsLabel(mappings.length, unmapped.length)}
+                    {fieldMappingsLabel(mappings, unmapped.length)}
                   </span>
                   {approved ? (
                     <span className="gap-badge gap-badge-approved">
@@ -1266,8 +1615,12 @@ export function MappingReviewSection({
                           <InfoTip text="The data type detected from the sample values (string, int, real, boolean, dynamic)." />
                         </th>
                         <th>
+                          Example Value
+                          <InfoTip text={`The first value seen for this field in your sample, so you can check the mapping by eye - an IP landing in a user-name column is wrong at a glance. Long values are shortened; hover the cell for the full value. -- means no example was captured: the sample had no value for the field, or every value was ${FIELD_EXAMPLE_MAX_CHARS} characters or longer.`} />
+                        </th>
+                        <th>
                           Dest Field
-                          <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to." />
+                          <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to. Choosing a column another field already fills asks first: moving it sends that field to the catch-all as overflow. A change withdraws this table's approval; approve again to save it as a learned mapping." />
                         </th>
                         <th>
                           Type
@@ -1275,24 +1628,57 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Confidence
-                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), or unmatched (collected into overflow)." />
+                          <InfoTip text="How the match was determined: exact (identical names), alias (known alias, e.g. src to SourceIP), fuzzy (similar names), reviewer (a column you chose), or unmatched (collected into overflow)." />
                         </th>
                         <th>
                           Action
-                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop." />
+                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop. A field in the catch-all has no column of its own, so keep, rename, coerce and decode wait until you choose one in Dest Field, which sets the action for you." />
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       {shownMappings.map((m) => {
                         const ruleField = isRuleField(m.dest, ruleFields);
-                        return (
+                        // Display only - the parsed name stays the pipeline's
+                        // accessor; a hyphenated one breaks it at runtime.
+                        const awsName =
+                          sampleFormat === undefined
+                            ? null
+                            : vpcFlowV2AwsName(sampleFormat, m.source);
+                        // DBT-122: the row's own sample value, formatted in
+                        // the pure state module (truncation, escaping, and
+                        // the empty-vs-missing distinction live there).
+                        const example = formatExampleValue(m.sampleValue);
+                        const columnlessReason = columnActionsRefusal(
+                          m,
+                          catchAllColumn,
+                        );
+                        const claim =
+                          pendingClaim !== null &&
+                          pendingClaim.logType === report.logType &&
+                          pendingClaim.source === m.source
+                            ? destClaim(
+                                effective,
+                                claimRequest(report, m.source, pendingClaim.column),
+                                ruleFields,
+                              )
+                            : null;
+                        return [
                           <tr
                             key={m.source}
+                            data-source={m.source}
                             className={`mapping-row mapping-row-${m.action}`}
                           >
                             <td title={m.description}>
                               {m.source}
+                              {awsName !== null && (
+                                <span
+                                  className="mapping-aws-name"
+                                  title={`AWS documents this field as ${awsName}. It is parsed as ${m.source} because Cribl reads a hyphen in a field name as subtraction.`}
+                                >
+                                  {awsName}
+                                </span>
+                              )}
                               {ruleField && (
                                 <span
                                   className="rule-badge"
@@ -1303,16 +1689,23 @@ export function MappingReviewSection({
                               )}
                             </td>
                             <td className="match-field-type">{m.sourceType}</td>
+                            <td
+                              className={`mapping-example-value mapping-example-value-${example.kind}`}
+                              title={example.title}
+                            >
+                              {example.text}
+                            </td>
                             <td>
                               <select
                                 className="mapping-select"
                                 value={m.dest}
                                 onChange={(e) =>
-                                  updateMapping(
+                                  chooseDest(
                                     report,
+                                    effective,
                                     m.source,
-                                    "dest",
                                     e.target.value,
+                                    approved,
                                   )
                                 }
                               >
@@ -1338,44 +1731,98 @@ export function MappingReviewSection({
                               <select
                                 className="mapping-select"
                                 value={m.action}
+                                title={columnlessReason ?? undefined}
                                 onChange={(e) =>
-                                  updateMapping(
-                                    report,
-                                    m.source,
-                                    "action",
-                                    e.target.value,
-                                  )
+                                  updateAction(report, m.source, e.target.value)
                                 }
                               >
-                                {ACTION_OPTIONS.map((act) => (
-                                  <option key={act} value={act}>
-                                    {act}
-                                  </option>
-                                ))}
+                                {ACTION_OPTIONS.map((act) => {
+                                  // DBT-209: the reducer refuses these here.
+                                  const refused =
+                                    act !== m.action &&
+                                    actionEditRefusal(m, act, catchAllColumn) !== null;
+                                  return (
+                                    <option key={act} value={act} disabled={refused}>
+                                      {refused ? `${act} (choose a Dest Field first)` : act}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </td>
-                          </tr>
-                        );
+                          </tr>,
+                          claim !== null && (
+                            <DestClaimPanel
+                              key={`claim-${m.source}`}
+                              id={`mapping-claim-${report.logType}-${m.source}`.replace(
+                                /[^A-Za-z0-9_-]/g,
+                                "_",
+                              )}
+                              source={m.source}
+                              claim={claim}
+                              onMove={() => {
+                                setPendingClaim(null);
+                                for (const moved of claim.moves) {
+                                  reviewerKeptRef.current.add(
+                                    `${report.logType}|${moved}`,
+                                  );
+                                }
+                                repoint(
+                                  report,
+                                  m.source,
+                                  claim.column,
+                                  approved,
+                                  "dest",
+                                  true,
+                                );
+                              }}
+                              onKeep={() => setPendingClaim(null)}
+                            />
+                          ),
+                        ];
                       })}
                       {shownUnmapped.length > 0 && (
                         <tr className="mapping-unmapped-head">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             Unmapped Destination Fields ({shownUnmapped.length})
-                            <InfoTip text="These destination schema columns have no corresponding field in your sample data. They will be empty in Sentinel unless populated by a DCR transformation or added to your source data." />
+                            <InfoTip text="These destination schema columns have no corresponding field in your sample data, so they will be empty in Sentinel unless a DCR transformation fills them. Click a column name to see the sample fields that could fill it, with an example value and why each was suggested, and use one in a click - a field that already fills another column moves from it. Applying a suggestion withdraws this table's approval; approve again to save it as a learned mapping. When nothing in the sample fits, add the value as a constant instead." />
                           </td>
                         </tr>
                       )}
                       {shownUnmapped.map((d) => {
                         const ruleField = isRuleField(d.name, ruleFields);
-                        return (
+                        const open =
+                          suggestFor !== null &&
+                          suggestFor.logType === report.logType &&
+                          suggestFor.column === d.name;
+                        const panelId = `mapping-suggest-${report.logType}-${d.name}`.replace(
+                          /[^A-Za-z0-9_-]/g,
+                          "_",
+                        );
+                        return [
                           <tr
                             key={`unmapped-${d.name}`}
                             className="mapping-row mapping-row-unmapped"
                           >
                             <td className="match-field-type">--</td>
                             <td className="match-field-type">--</td>
+                            <td className="match-field-type">--</td>
                             <td>
-                              {d.name}
+                              <button
+                                type="button"
+                                className="missing-field-button"
+                                title={`Show sample fields that could fill ${d.name}`}
+                                aria-expanded={open}
+                                aria-controls={open ? panelId : undefined}
+                                onClick={() =>
+                                  setSuggestFor(
+                                    open
+                                      ? null
+                                      : { logType: report.logType, column: d.name },
+                                  )
+                                }
+                              >
+                                {d.name}
+                              </button>
                               {ruleField && (
                                 <span
                                   className="rule-badge rule-badge-missing"
@@ -1390,12 +1837,65 @@ export function MappingReviewSection({
                               <span className="match-conf">none</span>
                             </td>
                             <td className="match-field-type">no source</td>
-                          </tr>
-                        );
+                          </tr>,
+                          open && (
+                            <UnmappedColumnPanel
+                              key={`suggest-${d.name}`}
+                              id={panelId}
+                              column={d.name}
+                              suggestions={columnSuggestions(
+                                d,
+                                report.logType,
+                                effective,
+                                ruleFields,
+                                solutionName,
+                              )}
+                              onApply={(source) =>
+                                applySuggestion(report, source, d.name, approved)
+                              }
+                              onAddConstant={() => {
+                                setSuggestFor(null);
+                                setEnrichSeeds((prev) => ({
+                                  ...prev,
+                                  [report.logType]: {
+                                    field: d.name,
+                                    nonce:
+                                      (prev[report.logType]?.nonce ?? 0) + 1,
+                                  },
+                                }));
+                              }}
+                              onDismiss={() => setSuggestFor(null)}
+                            />
+                          ),
+                        ];
                       })}
                     </tbody>
                   </table>
                 </div>
+
+                {(() => {
+                  const note = appliedNotes[report.logType];
+                  if (
+                    note === undefined ||
+                    approved ||
+                    !effective.some(
+                      (m) =>
+                        m.source === note.source &&
+                        landsInColumn(m) &&
+                        m.dest === note.column,
+                    )
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <p className="field-hint mapping-suggest-applied" role="status">
+                      {note.source} now fills {note.column}. Approve{" "}
+                      {report.logType}
+                      {note.withdrew ? " again" : ""} to save it as a learned
+                      mapping.
+                    </p>
+                  );
+                })()}
 
                 <div className="enrich-table-block">
                   <span className="field-label">
@@ -1410,6 +1910,7 @@ export function MappingReviewSection({
                     onRemove={(field) =>
                       removeEnrichment(report.logType, field)
                     }
+                    seed={enrichSeeds[report.logType]}
                   />
                 </div>
 
@@ -1440,6 +1941,9 @@ export function MappingReviewSection({
                             })),
                         );
                         dispatch({ type: "approve", logType: report.logType });
+                        setAppliedNotes((prev) =>
+                          withoutKey(prev, report.logType),
+                        );
                       }}
                     >
                       Approve {report.logType}

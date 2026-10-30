@@ -15,6 +15,7 @@ import {
   parsePositional,
   positionalNote,
   splitPositional,
+  vpcFlowV2AwsName,
 } from "./positional";
 
 /** A real v2 line, in AWS's default field order. */
@@ -149,5 +150,47 @@ describe("positionalNote", () => {
     expect(note).toContain("Read as a positional log");
     expect(note).toContain("4");
     expect(note).not.toMatch(/could not|error|invalid|fail/i);
+  });
+});
+
+describe("vpcFlowV2AwsName - the AWS spelling the mapping table shows (DBT-106)", () => {
+  it("answers AWS's hyphenated spelling for exactly the three fields that differ", () => {
+    // The operator compares the mapping table against AWS's docs, which write
+    // account-id; the parsed name is account_id because a hyphen is not a valid
+    // Cribl accessor path. Every other v2 field is spelled the same both ways,
+    // so an alias on it would be noise - hence exactly 3, not 14.
+    const aliased = VPC_FLOW_V2_FIELDS.filter(
+      (f) => vpcFlowV2AwsName("positional", f) !== null,
+    );
+    expect(aliased).toEqual(["account_id", "interface_id", "log_status"]);
+    expect(vpcFlowV2AwsName("positional", "account_id")).toBe("account-id");
+    expect(vpcFlowV2AwsName("positional", "interface_id")).toBe("interface-id");
+    expect(vpcFlowV2AwsName("positional", "log_status")).toBe("log-status");
+  });
+
+  it("answers NOTHING outside a positional parse - a JSON account_id is not AWS's", () => {
+    // The names only mean VPC Flow when the positional parser minted them. A
+    // JSON or CSV sample that happens to carry account_id is somebody else's
+    // field, and labelling it with an AWS spelling would be a confident lie.
+    expect(vpcFlowV2AwsName("json", "account_id")).toBeNull();
+    expect(vpcFlowV2AwsName("csv", "log_status")).toBeNull();
+    expect(vpcFlowV2AwsName("kv", "interface_id")).toBeNull();
+  });
+
+  it("answers NOTHING for an unrecognised positional column", () => {
+    expect(vpcFlowV2AwsName("positional", "field2")).toBeNull();
+    expect(vpcFlowV2AwsName("positional", "srcaddr")).toBeNull();
+  });
+
+  it("keeps every PARSED name a valid accessor, so the alias never becomes the name", () => {
+    // The hyphen trap the alias exists to explain: if a hyphenated spelling
+    // ever leaks into VPC_FLOW_V2_FIELDS, Cribl reads account-id as account
+    // minus id and the pipeline fails at runtime.
+    expect(VPC_FLOW_V2_FIELDS).toHaveLength(14);
+    for (const field of VPC_FLOW_V2_FIELDS) {
+      expect(field, `${field} is not a valid accessor`).toMatch(
+        /^[A-Za-z_][A-Za-z0-9_]*$/,
+      );
+    }
   });
 });

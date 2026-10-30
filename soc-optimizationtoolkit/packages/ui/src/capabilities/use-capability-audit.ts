@@ -4,17 +4,21 @@
  *
  * Owns the AUDIT LIFECYCLE for the running app: it loads the cached result,
  * decides whether to re-measure, and hands back the capabilities plus the
- * connection facts the domain needs to resolve anything unmeasured. Step 3's nav
- * annotation is the intended consumer; the preflight panel already uses it to
- * show the audit's age and offer a manual re-check.
+ * connection facts the domain needs to resolve anything unmeasured. In the cloud
+ * shell (App.tsx) `capabilities` and `context` feed the nav annotation and the
+ * PortsProvider; the connection bar's AuditAgeChip is the only consumer of the
+ * age and the manual re-check, and it takes `capabilities`, `key`, `running` and
+ * `refresh` - not `view`, which no shell renders today.
  *
  * WHY THE EFFECT USES THE `launch` TRIGGER FOR MORE THAN LAUNCH. Two of the
  * plan's three re-audit events - connection switch and scope commit - already
  * change the audit key, so the effect re-fires and `launch` correctly declines
- * only when a cached set matches. That also means switching BACK to a connection
- * audited earlier reuses its result instead of paying for it again. The third
- * event, secret re-entry, leaves the key untouched and must be reported by the
- * shell through {@link CapabilityAuditState.audit}.
+ * only when a cached set matches. The cache is ONE slot
+ * (CAPABILITY_AUDIT_CACHE_KEY), so a match means a reload of the connection
+ * audited last; switching BACK to a connection audited earlier re-measures,
+ * because switching away overwrote its result. The third event, secret
+ * re-entry, leaves the key untouched and must be reported by the shell through
+ * {@link CapabilityAuditState.audit}.
  *
  * The shell owns the clock: `now` is injected, never read here, matching the
  * CapabilitySet contract that the audit timestamp comes from outside core.

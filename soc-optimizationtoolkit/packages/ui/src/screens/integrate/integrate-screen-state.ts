@@ -34,7 +34,7 @@ import {
   integrateSection,
   packNameForSolution,
 } from "@soc/core";
-import type { CriblOptions, SectionInputs } from "@soc/core";
+import type { CriblOptions, IntegrateSectionId, SectionInputs } from "@soc/core";
 
 /**
  * The native table the deploy section seeds - the one the user validated
@@ -75,6 +75,20 @@ export interface IntegrateRawInputs {
    * pill, but never participates in canDeploy. Defaults false.
    */
   mappingsApproved: boolean;
+  /**
+   * The Sentinel destination radio is on "existing" ([[GEN-21]]). Passed
+   * straight through: it is the ONE signal for "on the existing-destination
+   * path" that the screen and the core arc both read ([[GEN-28]]), and the
+   * core decides what that path drops.
+   */
+  existingMode?: boolean;
+  /**
+   * The existing Cribl Sentinel destination every table was pointed at
+   * ([[GEN-21]], existing-destination-state existingDestinationForArc), or
+   * undefined. Passed straight through; it only names the destination in the
+   * arc's text.
+   */
+  existingDestination?: string;
 }
 
 /**
@@ -92,6 +106,10 @@ export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
     deployCompleted: raw.deployCompleted,
     samplesProvided: raw.sampleCount > 0,
     mappingsApproved: raw.mappingsApproved,
+    ...(raw.existingMode !== undefined ? { existingMode: raw.existingMode } : {}),
+    ...(raw.existingDestination !== undefined
+      ? { existingDestination: raw.existingDestination }
+      : {}),
   };
 }
 
@@ -137,4 +155,156 @@ export function deployDisabledReason(inputs: SectionInputs): string | null {
     return null;
   }
   return deriveSectionStatus(integrateSection("deploy"), inputs).reason ?? null;
+}
+
+/** What the page knows, for the one-line summary of a collapsed section. */
+export interface SectionSummaryFacts {
+  solutionName: string;
+  sampleLogTypes: readonly string[];
+  analyzedLogTypes: number;
+  mappingsApproved: boolean;
+  scopeCommitted: boolean;
+  workspaceName: string;
+  workerGroup: string;
+  packName: string;
+  deployCompleted: boolean;
+}
+
+const SUMMARY_NAMES_SHOWN = 3;
+
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * The line a collapsed section shows beside its title (DBT-127): what was
+ * chosen there, so the operator can find an earlier section without opening
+ * it. An unfinished section says so rather than going blank - a blank reads as
+ * "nothing to see" when it means "nothing done". The read-only coverage and
+ * content sections have no choice to summarize and return "".
+ */
+export function sectionSummary(
+  id: IntegrateSectionId,
+  facts: SectionSummaryFacts,
+): string {
+  switch (id) {
+    case "solution":
+      return facts.solutionName !== "" ? facts.solutionName : "no solution selected";
+    case "sample-data": {
+      const types = facts.sampleLogTypes;
+      if (types.length === 0) return "no samples";
+      const shown = types.slice(0, SUMMARY_NAMES_SHOWN).join(", ");
+      const rest = types.length - SUMMARY_NAMES_SHOWN;
+      return `${plural(types.length, "sample")}: ${shown}${rest > 0 ? ` and ${rest} more` : ""}`;
+    }
+    case "gap-analysis":
+      return facts.analyzedLogTypes === 0
+        ? "not analyzed"
+        : `${plural(facts.analyzedLogTypes, "log type")} analyzed - ${
+            facts.mappingsApproved ? "approved" : "not yet approved"
+          }`;
+    case "azure-resources":
+      return facts.scopeCommitted && facts.workspaceName !== ""
+        ? facts.workspaceName
+        : "no target committed";
+    case "cribl-config":
+      return facts.packName !== "" && facts.workerGroup !== ""
+        ? `${facts.packName} in ${facts.workerGroup}`
+        : "not configured";
+    case "deploy":
+      return facts.deployCompleted ? "deployed" : "not deployed yet";
+    default:
+      return "";
+  }
+}
+
+/**
+ * DBT-231: the one-line summary of the native deploy's prefilled settings -
+ * what Deploy will use, without the three fields open. The client id is
+ * shortened (first and last four) because the line is for recognition, not
+ * for copying; an empty value is named as missing rather than hidden.
+ */
+export function deploySettingsSummary(
+  table: string,
+  clientId: string,
+  secretGiven: boolean,
+): string {
+  const t = table.trim() === "" ? "no table yet" : `table ${table.trim()}`;
+  const id = clientId.trim();
+  const c =
+    id === ""
+      ? "no client id"
+      : id.length > 12
+        ? `client ${id.slice(0, 4)}...${id.slice(-4)}`
+        : `client ${id}`;
+  const secret = secretGiven ? "secret given" : "secret: placeholder";
+  return `Deploy settings: ${t} - ${c} - ${secret} (change)`;
+}
+
+// ---------------------------------------------------------------------------
+// DBT-232: collapse the sections the operator is not using, unless pinned
+// ---------------------------------------------------------------------------
+
+/** The per-user KV key the pinned sections are stored under. */
+export function pinnedSectionsKey(userId: string): string {
+  return `integrate-pinned-sections:${userId}`;
+}
+
+/** Parse a stored pin list, keeping only ids the page still has. */
+export function parsePinnedSections(
+  raw: unknown,
+  validIds: readonly IntegrateSectionId[],
+): IntegrateSectionId[] {
+  if (typeof raw !== "string" || raw === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return validIds.filter((id) => parsed.includes(id));
+}
+
+/**
+ * The sections to fold when the operator moves to `active` (DBT-232): every
+ * other OPEN section, except the pinned ones and those that must stay in view
+ * (`keepOpen`: the arc's current section, a running deploy). Only explicit
+ * moves call this - opening a section, clicking or focusing inside it, Done -
+ * next - never scrolling, so nothing shrinks under the pointer mid-read.
+ */
+export function sectionsToCollapseOnMove(
+  active: IntegrateSectionId,
+  allIds: readonly IntegrateSectionId[],
+  alreadyCollapsed: ReadonlySet<IntegrateSectionId>,
+  pinned: ReadonlySet<IntegrateSectionId>,
+  keepOpen: ReadonlySet<IntegrateSectionId>,
+): IntegrateSectionId[] {
+  return allIds.filter(
+    (id) => id !== active && !alreadyCollapsed.has(id) && !pinned.has(id) && !keepOpen.has(id),
+  );
+}
+
+/**
+ * DBT-234: drop the sections ABOVE the active one from a fold when the page
+ * cannot absorb their shift. Folding a section above moves the active one up
+ * by at most that section's height, and moveToSection compensates by
+ * scrolling - which is impossible when the page is scrolled less than that
+ * (at the top, there is no room). Sections below never move the active one,
+ * so they always fold. `heights` are the CURRENT heights of the sections to
+ * fold, in px; the sum is an upper bound on the shift (a folded section keeps
+ * its header).
+ */
+export function foldableWithoutShift(
+  toFold: readonly IntegrateSectionId[],
+  order: readonly IntegrateSectionId[],
+  active: IntegrateSectionId,
+  heights: Readonly<Partial<Record<IntegrateSectionId, number>>>,
+  scrollTop: number,
+): IntegrateSectionId[] {
+  const activeIndex = order.indexOf(active);
+  const above = toFold.filter((id) => order.indexOf(id) < activeIndex);
+  const shift = above.reduce((sum, id) => sum + (heights[id] ?? 0), 0);
+  if (shift <= scrollTop) return [...toFold];
+  return toFold.filter((id) => order.indexOf(id) > activeIndex);
 }

@@ -59,14 +59,24 @@ DBT-43, DBT-44 and HON-2 were written - three violations of a rule that was
 sitting right here in writing. The conclusion was not that people needed
 reminding. It was that a document cannot fail a build.
 
-So the ARM listers no longer return arrays. They return `Listing<T>` from
+So the ARM listers no longer return arrays; since DBT-62 (2026-08-31)
+neither do the Graph service-principal read or `listLabs`; and since DBT-134
+(2026-10-20) neither does the Cribl worker-group read itself -
+`CriblClient.listGroups` is `Promise<Listing<CriblGroupSummary>>`, minted by
+`toListing` in the cloud adapter. They return `Listing<T>` from
 `packages/core/src/domain/inventory-listing/`:
 
 ```ts
 type Listing<T> =
   | { kind: "rows"; rows: readonly [T, ...T[]] }   // non-empty BY TYPE
+  | { kind: "none" }    // a VERIFIED zero: rows were read and none qualified
   | { kind: "empty" }                              // carries no count at all
 ```
+
+`empty` stays unverified. Only a caller holding a capability verdict, or a
+filtering usecase that actually read rows (`listLabs` reads the resource groups
+and keeps the lab-tagged ones), may produce `none`. The third variant was forced by
+`listLabs` (DBT-62/DBT-64).
 
 Three consequences, all of them mechanical:
 
@@ -200,16 +210,43 @@ for Resource Graph.
   2026-08-31.** Same defect, somewhere nobody reviews: `total: 0` in a log is
   the same confident wrong answer as on a screen. They now carry
   `listing: rows|empty` beside the number.
-- Audit the remaining listers against this rule when touching them: Event Hub
-  discovery (the Resource Graph taxonomy gap), worker groups, pack inventory.
-  The `unreachable` wording already names the right connection for a Cribl
-  capability, so the Cribl-side listers can adopt the helper as they are
-  touched. Whether to convert them to `Listing<T>` up front is DBT-62, left
-  open on purpose - no Cribl listing has actually misread yet.
+- **The remaining listings were converted to `Listing<T>`. DONE 2026-08-31 as
+  DBT-62** (reasoning in backlog.md section 17): the Graph service-principal
+  read and `listLabs` - where the conversion found DBT-64, "No running labs
+  found" rendered off an RBAC-filtered empty, and forced the `none` variant
+  above. Deliberately NOT converted, because none of them has an ambiguous
+  empty: `acquireAnalyticRules` and `acquireSolutionWorkbooks` read files out
+  of the repo. `listDeprecatedContentHubSolutions` was on this list as "a `Set`
+  used as a lookup", and that was wrong: a failed catalog read returned the
+  same empty set as "nothing deprecated". FIXED 2026-10-27 as DBT-176 - it and
+  `findSolutionCatalogEntry` now answer found / not-found / unreadable (with
+  the reason), an EMPTY catalog counts as unreadable, and both screens say
+  which. Not a `Listing<T>`: the answer is a lookup, not rows to count.
+- **The Cribl worker-group read was NOT converted by DBT-62, although this
+  file said it was. FIXED 2026-10-20 as DBT-134 / DBT-135.** DBT-62 wrapped the
+  result inside `discover-sample-sources` only; the port kept returning a bare
+  `CriblGroupSummary[]`, so the compile-time guard above never reached the
+  five pickers that called it. They filtered with `.filter(isStreamWorkerGroup)`
+  and rendered `[]` as an enabled select whose only row was "No matches" - and
+  a tester, whose access came from the app share rather than an admin role,
+  saw exactly that. Now `listGroups` returns a `Listing`, `streamWorkerGroups`
+  (`packages/core/src/ports/cribl-client.ts`) narrows it while keeping what the
+  filter removed, and every picker renders through ONE component,
+  `packages/ui/src/components/worker-group-field.tsx`: `empty` hedges ("Cribl
+  returned no worker groups this account can see", naming the Cribl role and
+  the app's policies as likely causes, with Retry), `none` names the Edge /
+  Outpost / Search groups that were found, and a refused call shows its error
+  with Retry. Its wording lives in `noStreamGroupsText` rather than
+  `unmeasuredInventoryMessage` because the likely causes are Cribl-specific
+  (an app grant that covers the collection but not the groups) and worth
+  naming; it is still one helper for every screen. The false sentence in this
+  file was itself why nobody looked - the same failure as the
+  Workspace-tables bullet above, one level up.
 
-## Promote this
+## Promoted
 
 This is a general engineering rule, not a Cribl or Azure one - any paginated,
 permission-filtered API has the same shape (Google Cloud, AWS, GitHub org
-listings). It belongs in `claude-kit/standards/` once it has been applied here
-at least twice.
+listings). It has been promoted to claude-kit as `standards/inventory-honesty.md`
+(and the `inventory-honesty` skill). This file keeps the repo-specific instances
+and helpers; the general rule lives there.

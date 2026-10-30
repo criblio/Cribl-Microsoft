@@ -21,9 +21,21 @@
  */
 
 import type { AzureManagementRequest } from "../../ports/azure-management";
+import {
+  EVENTHUB_ARM_API_VERSION,
+  buildHubConsumerGroupGetRequest,
+  buildHubConsumerGroupPutRequest,
+  buildHubGetRequest,
+  buildHubPutRequest,
+  buildNamespaceGetRequest,
+  buildNamespacePutRequest,
+} from "../eventhub-arm/eventhub-arm";
 
-/** ARM api-version for Microsoft.EventHub (namespaces, hubs, consumer groups). */
-export const LAB_EVENTHUB_ARM_API_VERSION = "2021-11-01";
+/**
+ * ARM api-version for Microsoft.EventHub (namespaces, hubs, consumer groups).
+ * An alias of the shared EVENTHUB_ARM_API_VERSION (domain/eventhub-arm).
+ */
+export const LAB_EVENTHUB_ARM_API_VERSION = EVENTHUB_ARM_API_VERSION;
 
 /** ARM api-version for Microsoft.Kusto (clusters, databases, scripts). */
 export const LAB_KUSTO_API_VERSION = "2023-08-15";
@@ -43,16 +55,9 @@ export const DEFAULT_LAB_EVENTHUB_NAMESPACE: LabEventHubNamespaceSettings = {
 /** The legacy per-hub consumer group (every shipped hub declared ["cribl"]). */
 export const DEFAULT_LAB_CONSUMER_GROUPS: readonly string[] = ["cribl"] as const;
 
-function namespacePath(
-  subscriptionId: string,
-  resourceGroup: string,
-  namespaceName: string,
-): string {
-  return (
-    `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}` +
-    `/providers/Microsoft.EventHub/namespaces/${namespaceName}`
-  );
-}
+// The namespace, hub and consumer-group builders below are thin wrappers over
+// domain/eventhub-arm (AZR-12): the path and api-version live there once. The
+// positional signatures and exported names are kept so no lab caller changes.
 
 /** GET the Event Hub namespace (existence + provisioningState). */
 export function buildEventHubNamespaceGetRequest(
@@ -60,11 +65,7 @@ export function buildEventHubNamespaceGetRequest(
   resourceGroup: string,
   namespaceName: string,
 ): AzureManagementRequest {
-  return {
-    method: "GET",
-    path: namespacePath(subscriptionId, resourceGroup, namespaceName),
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-  };
+  return buildNamespaceGetRequest({ subscriptionId, resourceGroup, name: namespaceName });
 }
 
 /** PUT the Event Hub namespace with the legacy Standard/1 settings. */
@@ -75,16 +76,11 @@ export function buildEventHubNamespacePutRequest(
   location: string,
   settings: LabEventHubNamespaceSettings,
 ): AzureManagementRequest {
-  return {
-    method: "PUT",
-    path: namespacePath(subscriptionId, resourceGroup, namespaceName),
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-    body: {
-      location,
-      sku: { name: settings.sku, tier: settings.sku, capacity: settings.capacity },
-      properties: {},
-    },
-  };
+  return buildNamespacePutRequest(
+    { subscriptionId, resourceGroup, name: namespaceName },
+    location,
+    settings,
+  );
 }
 
 /** GET one Event Hub inside the namespace. */
@@ -94,13 +90,7 @@ export function buildEventHubGetRequest(
   namespaceName: string,
   hubName: string,
 ): AzureManagementRequest {
-  return {
-    method: "GET",
-    path:
-      namespacePath(subscriptionId, resourceGroup, namespaceName) +
-      `/eventhubs/${hubName}`,
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-  };
+  return buildHubGetRequest({ subscriptionId, resourceGroup, name: namespaceName }, hubName);
 }
 
 /** PUT one Event Hub with the legacy partition/retention settings. */
@@ -112,16 +102,12 @@ export function buildEventHubPutRequest(
   partitionCount: number,
   messageRetentionInDays: number,
 ): AzureManagementRequest {
-  return {
-    method: "PUT",
-    path:
-      namespacePath(subscriptionId, resourceGroup, namespaceName) +
-      `/eventhubs/${hubName}`,
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-    body: {
-      properties: { partitionCount, messageRetentionInDays },
-    },
-  };
+  return buildHubPutRequest(
+    { subscriptionId, resourceGroup, name: namespaceName },
+    hubName,
+    partitionCount,
+    messageRetentionInDays,
+  );
 }
 
 /** GET one consumer group on a hub. */
@@ -132,13 +118,11 @@ export function buildConsumerGroupGetRequest(
   hubName: string,
   groupName: string,
 ): AzureManagementRequest {
-  return {
-    method: "GET",
-    path:
-      namespacePath(subscriptionId, resourceGroup, namespaceName) +
-      `/eventhubs/${hubName}/consumergroups/${groupName}`,
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-  };
+  return buildHubConsumerGroupGetRequest(
+    { subscriptionId, resourceGroup, name: namespaceName },
+    hubName,
+    groupName,
+  );
 }
 
 /** PUT one consumer group on a hub. */
@@ -149,14 +133,11 @@ export function buildConsumerGroupPutRequest(
   hubName: string,
   groupName: string,
 ): AzureManagementRequest {
-  return {
-    method: "PUT",
-    path:
-      namespacePath(subscriptionId, resourceGroup, namespaceName) +
-      `/eventhubs/${hubName}/consumergroups/${groupName}`,
-    apiVersion: LAB_EVENTHUB_ARM_API_VERSION,
-    body: { properties: {} },
-  };
+  return buildHubConsumerGroupPutRequest(
+    { subscriptionId, resourceGroup, name: namespaceName },
+    hubName,
+    groupName,
+  );
 }
 
 // ---------------------------------------------------------------------------

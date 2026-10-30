@@ -154,3 +154,24 @@ describe("RoleAssignmentSection directory read (DBT-46)", () => {
     ).toMatch(/not read yet/i);
   });
 });
+
+describe("RoleAssignmentSection waits for something to grant on (DBT-230)", () => {
+  it("is a closed one-line disclosure with no deployed DCR", async () => {
+    const { ports } = makePorts();
+    const { container } = renderSection(ports, []);
+    await settle();
+    const details = container.querySelector("details.role-assignment-details") as HTMLDetailsElement;
+    expect(details).not.toBeNull();
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")!.textContent).toContain("granted per DCR after Deploy");
+  });
+
+  it("opens by itself once there is a DCR to grant on", async () => {
+    const { ports } = makePorts();
+    const { container } = renderSection(ports, [TARGET]);
+    await settle();
+    const details = container.querySelector("details.role-assignment-details") as HTMLDetailsElement;
+    expect(details.open).toBe(true);
+    expect(details.querySelector("summary")!.textContent).toContain("1 DCR(s) to grant on");
+  });
+});

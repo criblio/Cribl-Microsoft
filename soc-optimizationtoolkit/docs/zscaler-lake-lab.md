@@ -15,8 +15,10 @@ that is the variation customers actually have.
 | `zscaler_cef` | CEF over syslog | `dg_zscaler_cef` | `b9ZtKx` (`zscaler_cef.log`) | `zscaler_cef_to_lake` |
 | `zscaler_leef` | LEEF 1.0 over syslog | `dg_zscaler_leef` | `7wXSIo` (`zscaler_leef.log`) | `zscaler_leef_to_lake` |
 
-Each sample file holds 68 events; each datagen replays at 4 events/sec into
-`out_zscaler_<fmt>` (a `cribl_lake` Destination, `destPath` = the dataset).
+Each sample file holds 68 events; each datagen replays at 1 event/sec per Worker
+Node (`eventsPerSec: 1` since 2026-08-26; was 4) into `out_zscaler_<fmt>` (a
+`cribl_lake` Destination, `destPath` = the dataset; Lake retention 7 days since
+the same date, was 30).
 Routes filter on `__inputId=='datagen:dg_zscaler_<fmt>'`, are `final: true`, and
 sit immediately before `garbagecollection` so the catch-all cannot swallow them.
 
@@ -208,7 +210,8 @@ Zscaler Internet Access.
 - **Naming the columns is what makes the feed recognisable.** After resolving
   DNS and Tunnel, the solution's feed list flipped those two from `not provided`
   to **`provided`**, while Firewall and Web - deliberately skipped - stayed
-  unmatched and kept their **Resolve headers** button. That is the reopen path
+  unmatched and kept their **Resolve headers** button (now labelled **Name columns**,
+  `sample-intake-section.tsx`). That is the reopen path
   and the value of the feature in one screen.
 - **`broken_feed` answered honestly**: *"Nothing on these events tells one log
   type from another, so 'broken_feed' is offered as a single log type."*
@@ -258,9 +261,10 @@ and the spec's wording is what makes it plausible - but it is a candidate, not a
 finding. The node count was never read off the worker config, and the rate was
 measured at the END of the path (off the Lake dataset, downstream of the route
 and the `cribl_lake` Destination), so a constant factor introduced anywhere
-along that path would look identical from where we were standing. Settling the
-cause needs a live worker and no credential here reaches one, so DBT-7 stays
-open for that half.
+along that path would look identical from where we were standing. DBT-7 was
+closed after the unit was corrected; the cause of the factor of 2 is unconfirmed
+and no card tracks it - settling it needs a live worker, and no credential here
+reaches one.
 
 The operational lesson survives the correction intact, which is why the section
 is still here: the number to trust is the one you measure off the dataset, not

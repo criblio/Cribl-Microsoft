@@ -12,6 +12,7 @@ import {
   emptyInventoryMessage,
   unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
+  verifiedNoneInventoryMessage,
 } from "./empty-inventory";
 import { emptyCapabilitySet } from "@soc/core";
 import type { CapabilityContext, CapabilitySet } from "@soc/core";
@@ -34,6 +35,14 @@ describe("only a MEASURED grant may claim a zero", () => {
     const m = msg(audited({ "workspace.read": "granted" }));
     expect(m.text).toBe("No workspaces found");
     expect(m.verified).toBe(true);
+  });
+
+  it("a measured grant and a structurally verified none share ONE zero wording", () => {
+    // Listers holding a Listing of kind 'none' use verifiedNoneInventoryMessage;
+    // this pin keeps the two routes to "there are none" from drifting apart.
+    expect(msg(audited({ "workspace.read": "granted" }))).toEqual(
+      verifiedNoneInventoryMessage("workspaces"),
+    );
   });
 
   it("never claims a zero on a denial", () => {

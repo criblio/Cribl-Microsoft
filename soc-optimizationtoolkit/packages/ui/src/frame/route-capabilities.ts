@@ -8,8 +8,8 @@
  *
  * This is a faithful TRANSLATION of the old coarse requirements, not a redesign:
  * `none` becomes `[]`, and `azure`/`cribl`/`both` become the specific capability
- * that route's primary purpose actually exercises. Two entries deliberately
- * depart from the old value, and both are noted below.
+ * that route's primary purpose actually exercises. `preflight` and (since
+ * GEN-21) `integrate` deliberately depart from the old value, as noted below.
  *
  * Pure data: no IO, no React.
  */
@@ -33,10 +33,19 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // The setup page itself must always be reachable - it is where connections
     // are made in the first place.
     home: [],
-    // The flagship deploy page: writes DCRs and creates the Sentinel destination.
+    // The flagship deploy page. Its one requirement on EVERY path is the Cribl
+    // side: a pack is installed and a destination is created or used. dcr.write
+    // was listed too until GEN-21 (decision F2-e): the page now has an offline
+    // path - pick an existing Cribl Sentinel destination, build a routable pack,
+    // never touch Azure - and with dcr.write here an operator with no Azure
+    // identity saw the whole page as `unreachable` (not attemptable) and was
+    // told to connect Azure to do something that needs no Azure. The DCR write
+    // is still gated where it happens: the page's own Deploy and its dcr.write
+    // FallbackNotice. What the nav loses is the dcr.write denial chip and its
+    // ARM-export offer on this item; the page keeps that offer in place.
     // table.write is NOT listed - custom _CL tables are a subset of the flow, and
     // requiring it would flag the whole page for operators doing native tables.
-    integrate: ["dcr.write", "destination.manage"],
+    integrate: ["destination.manage"],
     "dcr-automation": ["dcr.write"],
     packs: ["pack.manage"],
     repositories: [],
@@ -51,14 +60,33 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // says "no access" would find the one screen that could correct that finding
     // flagged as unavailable. It must always read as available.
     preflight: [],
-    // DEPARTS FROM THE OLD 'azure', for a different and less satisfying reason:
-    // Event Hub discovery reads through Resource Graph, and the settled
-    // 11-capability taxonomy has nothing covering that. Mapping it onto a
-    // workspace or DCR read would MISREPORT what is being checked, so it is left
-    // unconstrained and the screen keeps reporting its own errors. Recorded in
-    // the backlog as a taxonomy gap rather than papered over here.
-    "eventhub-discovery": [],
+    // Event Hub discovery's primary read is the Resource Graph query. This was
+    // `[]` while the taxonomy had nothing covering Resource Graph (mapping it
+    // onto a workspace or DCR read would have MISREPORTED what was checked);
+    // CAP-1 added resourcegraph.read, measured by a one-row query probe on every
+    // audited path. The per-namespace hub GETs that follow are still not a
+    // capability, so the screen keeps reporting its own errors for those.
+    "eventhub-discovery": ["resourcegraph.read"],
+    // EXPLICITLY EMPTY, not forgotten. Azure Native Source Onboarding needs
+    // Defender pricings read, the security automation read and write, and the
+    // Event Hub rule's listKeys. CAP-7a added the three Defender capabilities
+    // (defender-plans.read, defender-automation.read/.write), measured only by
+    // an existing-subscription audit; listKeys is still unmeasured (CAP-7b).
+    // The entry stays [] because the screen still renders both lists itself as
+    // "needed, not yet measured" and reads no verdict, and because the route
+    // is several sources: gating all of it on the Defender export would flag
+    // the Event Hub and Entra paths for an operator who never touches Defender.
+    // It changes together with that screen copy, under CAP-7.
+    "azure-onboarding": [],
     "mapping-catalog": [],
+    // Same kind of gap eventhub-discovery had before CAP-1. The logging map
+    // reads management groups, policy assignments, exemptions, definitions and
+    // role assignments; Management Group Reader and policy / role read are not
+    // in the capability taxonomy (core capabilities.ts), and borrowing a
+    // workspace or DCR capability would misreport what is checked. So the
+    // route is unconstrained and the screen reports every refused read itself
+    // as UNKNOWN, counted. A dedicated capability is filed as its own card.
+    "azure-logging-map": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.
     harness: [],

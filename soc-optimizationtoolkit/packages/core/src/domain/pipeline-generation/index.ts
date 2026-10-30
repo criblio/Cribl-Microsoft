@@ -91,9 +91,11 @@ export type { LogTypeFieldValues } from "./route-value-discriminator";
 
 // Core Cribl-YAML acceptance validator
 export { checkCriblYaml } from "./cribl-yaml-validator";
+// GEN-5 kept leg: the names a kept field carries but no conf line presents.
+export { checkPlanFieldAccessors } from "./plan-accessor-check";
 
-// HON-5: WHY a log type will need a hand-written filter. CSV is structural -
-// no amount of extra sampling can separate positional rows - so it gets its
-// own message rather than the generic "no discriminator found".
-export { csvRoutingWarning, formatCanDiscriminate } from "./route-placeholder";
-export type { PlaceholderCause } from "./route-placeholder";
+// HON-5: WHY a log type will need a hand-written filter. Some formats are
+// structural - column-order rows (csv, positional) and regex-captured syslog
+// carry no field names a route can test, so no amount of extra sampling helps -
+// and they get their own message rather than the generic "no discriminator found".
+export { formatRoutingWarning, formatCanDiscriminate } from "./route-placeholder";

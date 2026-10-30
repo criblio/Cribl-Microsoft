@@ -106,6 +106,9 @@
   /* The Cribl Search send-path line: teal, a hue no node category or cost
    * badge uses (2026-07-31 - violet now belongs to route nodes). */
   --tone-search: #08979c;
+  /* Azure Logging Map: the soft fill behind "ours" chips and covered scopes
+   * (the stroke reuses --tone-search, the teal no other diagram state uses). */
+  --lm-ours-bg: #e6fffb;
   /* Load-bearing monospace stack (technical values, counts, summaries,
    * placeholders, the REPOS status line, code chips). Previously several rules
    * referenced var(--font-mono) with no fallback and silently rendered as
@@ -171,6 +174,7 @@
   --tier-pipeline: #e0669f;
   --tier-pipeline-bg: #2a1220;
   --tone-search: #33bcb7;
+  --lm-ours-bg: #0f2a2a;
 }
 
 * {
@@ -688,6 +692,61 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* The capability audit's age and its manual re-check, in the connection bar
+ * beside the secret / target / platform-link chips. Lives here rather than in
+ * the cloud shell's App.css because AuditAgeChip ships from this package. The
+ * group wraps, so at a narrow width the button drops below the chip instead of
+ * pushing the row sideways. */
+.audit-chip-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.audit-chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.audit-chip-ok {
+  color: var(--ok);
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.audit-chip-muted {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.audit-chip-attention {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.audit-chip-recheck {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.audit-chip-recheck:disabled {
+  color: var(--text-faint);
+  cursor: default;
 }
 
 /* Minimal topBar container for shells without a full connection bar (the
@@ -1242,6 +1301,15 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--on-ok);
 }
 
+/* Gated variant (DBT-200): a primary action that cannot run yet. Neutral
+ * surface and muted text, so it does not read as the page's call to action
+ * while its prerequisites are missing; the disabled opacity still applies. */
+.next-action-button-gated {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
 /* Readiness chips (identity / secret / scope): the legacy point-of-commit
  * chip checklist promoted to the overview. 'unknown' is the honest hedge -
  * warning tint, never ok. */
@@ -1465,7 +1533,8 @@ button.journey-step-main:hover .journey-step-label {
  * deliberately not the green complete badge (a read-only diagnostic has
  * nothing to finish, so claiming completion was dishonest) and not the dashed
  * coming-soon badge (the section is built and usable right now). */
-.numbered-section-badge-informational {
+.numbered-section-badge-informational,
+.numbered-section-badge-not-needed {
   border-color: var(--border);
   background: var(--surface-raised);
   color: var(--text-muted);
@@ -1776,6 +1845,19 @@ button.journey-step-main:hover .journey-step-label {
   list-style: none;
 }
 
+/* DBT-228: the chip's column-order provenance, inline on the count line -
+   kept on one line with its (i). */
+.sample-chip-provenance {
+  white-space: nowrap;
+}
+
+/* DBT-228: the capture checklist as a compact grid rather than one long column. */
+.capture-log-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 16px;
+}
+
 .capture-log-type {
   display: flex;
   align-items: baseline;
@@ -1900,6 +1982,14 @@ button.journey-step-main:hover .journey-step-label {
   margin: 0;
 }
 
+/* AZR-18: the rows a coming-soon section WILL hold, shown under its note with
+ * every control disabled by the caller. Muted, so it reads as a preview and
+ * not as a working form. */
+.numbered-section-notbuilt {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
 /* Azure Resources capability checkboxes (DCE / metrics / role) - read-only
  * honest reflections of what the deploy does, not editable controls. */
 .integrate-check {
@@ -1916,30 +2006,6 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-muted);
 }
 
-/* An always-included capability: a fact, NOT a control. Rendered with a badge
- * (never a disabled checkbox, which reads as a broken toggle the user tries to
- * uncheck). */
-.integrate-fact {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 6px 0;
-  font-size: 13px;
-  color: var(--text);
-}
-.integrate-fact-badge {
-  flex: none;
-  margin-top: 1px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--accent-bg);
-  color: var(--accent-strong);
-  border: 1px solid var(--accent-border);
-  white-space: nowrap;
-}
 
 /* The persistent deploy-readiness footer: pills + the single Deploy action,
  * sticky at the page bottom so readiness is auditable without scrolling. */
@@ -1988,6 +2054,16 @@ button.journey-step-main:hover .journey-step-label {
   background: transparent;
   color: var(--text-faint);
   white-space: nowrap;
+}
+/* DBT-127: footer pills are links back to their section. */
+button.readiness-pill {
+  font-family: inherit;
+  cursor: pointer;
+}
+button.readiness-pill:hover,
+button.readiness-pill:focus-visible {
+  border-color: var(--text-dim, #8b9cb8);
+  color: var(--text, #dbe4f0);
 }
 
 .readiness-pill-ok {
@@ -2857,8 +2933,12 @@ button.journey-step-main:hover .journey-step-label {
   word-break: break-all;
 }
 
+/* Sits on <td> cells (Field Mappings, Mapping Catalog), so it must not set
+   display (nor float, nor position absolute/fixed, which blockify a cell the
+   same way): a block <td> leaves the table, and consecutive block cells merge
+   into one anonymous cell that shifts the rest of the row left (DBT-192).
+   Pinned in mapping-review/mapping-table-cells.dom.test.tsx. */
 .match-field-type {
-  display: block;
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -2951,14 +3031,21 @@ button.journey-step-main:hover .journey-step-label {
   padding: 0;
   max-height: 420px;
   overflow-y: auto;
-  /* This list sits inside a scrolling page which itself sits inside the Cribl
-   * app iframe - three nested scroll regions, so reaching the end of the list
-   * used to hand the wheel to the page and jump the operator somewhere else
-   * mid-search (live review 2026-08-03). `contain` keeps the wheel in the list
-   * until they deliberately move out of it. */
-  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+/* This list sits inside a scrolling page which itself sits inside the Cribl
+ * app iframe - three nested scroll regions, so reaching the end of the list
+ * used to hand the wheel to the page and jump the operator somewhere else
+ * mid-search (live review 2026-08-03). `contain` keeps the wheel in the list
+ * until they deliberately move out of it.
+ * ONLY WHILE IT OVERFLOWS (DBT-14). On a list that fits under the cap, Chrome
+ * still makes the overflow:auto box the wheel target, and contain then stops
+ * the scroll chaining to the page - so neither moves (measured 2026-10-02:
+ * 8 rows at 279px, list 0 / page 0; without contain the page moved 300px).
+ * The --scrollable class is set by a measurement in solution-browser.tsx. */
+.solution-browser-list.solution-browser-list--scrollable {
+  overscroll-behavior: contain;
 }
 .solution-browser-item {
   border-bottom: 1px solid var(--border-subtle);
@@ -3175,9 +3262,6 @@ button.journey-step-main:hover .journey-step-label {
 .gap-provenance-tables {
   font-family: 'Courier New', monospace;
 }
-.gap-provenance-source {
-  color: var(--text-faint);
-}
 
 /* Derived-schema status: informational (the deploy CREATES the table), not
    a warning - ok tones, warning-bar sizing. */
@@ -3231,6 +3315,53 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--warn);
   border-color: var(--warn-border);
   background: var(--warn-bg);
+}
+
+/* SIEM Migration: existing workspace inventory (MIG-3). */
+/* MIG-8: holds the SearchableSelect, which fills its container. */
+.siem-inventory-picker {
+  flex: 1 1 420px;
+  min-width: 280px;
+  max-width: 720px;
+}
+
+.siem-inventory-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.siem-inventory-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.siem-inventory-table th,
+.siem-inventory-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.siem-inventory-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* MIG-7: the widest content in the table; at the default share each source
+   line wrapped its event count onto a line of its own. */
+.siem-inventory-sources {
+  min-width: 380px;
+}
+
+.siem-inventory-query {
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 4px 0;
+  color: var(--text);
 }
 
 /* Enable Sentinel Content (content-install section). */
@@ -3481,6 +3612,23 @@ button.journey-step-main:hover .journey-step-label {
 .mapping-row-unmapped {
   opacity: 0.7;
 }
+/* DBT-122: the Example Value column. `pre` keeps leading/trailing spaces
+   visible (the formatter never trims) without wrapping; the max width plus
+   ellipsis keeps a long value from widening the table - the full value is in
+   the cell title. */
+.mapping-example-value {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mapping-example-value-none,
+.mapping-example-value-empty {
+  color: var(--text-faint);
+}
 .mapping-unmapped-head td {
   font-weight: 700;
   font-size: 11px;
@@ -3509,6 +3657,9 @@ button.journey-step-main:hover .journey-step-label {
 .match-conf-unmatched {
   color: var(--error-strong);
 }
+.match-conf-reviewer {
+  color: var(--accent-strong);
+}
 
 .rule-badge {
   margin-left: 4px;
@@ -3520,6 +3671,13 @@ button.journey-step-main:hover .journey-step-label {
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
   vertical-align: middle;
+}
+/* DBT-106: AWS's own spelling of a VPC Flow v2 field, beside the parsed name. */
+.mapping-aws-name {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 .rule-badge-missing {
   color: var(--error-strong);
@@ -5294,6 +5452,28 @@ details[open] > summary::before {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* DBT-202: the same panel, opened from an unmapped column of the Field
+   Mappings table. The row spans the grid; the panel inside it is the flex box
+   (a flex <tr> would leave the table). */
+.mapping-suggest-row > td {
+  padding: 4px 0 8px;
+}
+.mapping-suggest-type {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.mapping-suggest-warn {
+  font-size: 11px;
+  color: var(--warn);
+}
+.mapping-suggest-apply {
+  margin-left: auto;
+}
+.mapping-suggest-empty,
+.mapping-suggest-applied,
+.mapping-suggest-candidate {
+  margin: 0;
+}
 /* The two states of ONE identity row (identity-block.tsx). Both stack a row,
    a hint and the candidate chips in a column; only the framing differs, which
    is why they share a rule rather than one of them being deleted - a satisfied
@@ -5418,6 +5598,27 @@ details[open] > summary::before {
 }
 .numbered-section-collapsed .numbered-section-head {
   margin-bottom: 0;
+}
+
+/* DBT-127: a section the operator marked Done shows what was chosen in one
+   line beside its title, and Done - next sits with Collapse at the foot. */
+.numbered-section-summary {
+  color: var(--text-dim, #8b9cb8);
+  font-size: 0.85rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.numbered-section-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.numbered-section-foot .numbered-section-collapse-bottom {
+  margin: 0;
 }
 
 /* DCR update preview chips (2026-07-13, user color semantics): GREEN =
@@ -6282,4 +6483,1662 @@ details[open] > summary::before {
   color: var(--text-dim);
   border-left: 2px solid var(--warn);
   padding: 4px 10px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Azure Native Source Onboarding (AZR-18, screens/azure-onboarding/). Tokens
+ * only, so the dark theme follows. The catalog rows, the Event Hub target and
+ * Defender export blocks, the toned state lines, the plans and exports tables
+ * and the two-step deploy confirm.
+ * ------------------------------------------------------------------------ */
+
+.azure-onboarding {
+  display: flex;
+  flex-direction: column;
+}
+
+.azure-onboarding-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.azure-onboarding-defender {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  /* Deploy's "The Defender state could not be read - ..." reason quotes
+   * Azure's message, scope id and all, inside a no-wrap controls row; the
+   * section wraps it rather than widen the page (AZR-44). */
+  overflow-wrap: anywhere;
+}
+
+.azure-onboarding-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.azure-onboarding-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.azure-onboarding-rows {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.azure-onboarding-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.azure-onboarding-state {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-muted);
+  /* "Deployment state could not be read - ..." quotes Azure's message, scope
+   * id and all (AZR-44). */
+  overflow-wrap: anywhere;
+}
+
+.azure-onboarding-state-deployed {
+  color: var(--ok-strong);
+}
+
+.azure-onboarding-state-pending {
+  color: var(--accent-strong);
+}
+
+.azure-onboarding-state-unknown,
+.azure-onboarding-state-deployed-unselected {
+  color: var(--warn);
+}
+
+.azure-onboarding-banner {
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  max-width: 96ch;
+  /* An error banner can quote a raw Azure or Cribl response body (a JSON
+   * error with an unbroken resource id); it wraps instead of widening the
+   * page inside the Cribl frame (AZR-44). */
+  overflow-wrap: anywhere;
+}
+
+.azure-onboarding-banner-info {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.azure-onboarding-banner-warning {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.azure-onboarding-banner-error {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+  color: var(--error-strong);
+}
+
+.azure-onboarding-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azure-onboarding-table th,
+.azure-onboarding-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azure-onboarding-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.azure-onboarding-confirm {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  margin: 4px 0 8px;
+}
+
+/* ------------------------------------------------------------------------
+ * Azure Native Source Onboarding, How-to / Validate / Cribl source / Dataflow
+ * (AZR-30..34, screens/azure-onboarding/{howto,validate,cribl-source,dataflow}).
+ * Tokens only, so the dark theme follows; no hex here. Every state is shown
+ * as a WORD as well as a colour or a border style, so nothing here is the only
+ * carrier of meaning. The pipe animation is the one moving thing and it is
+ * drawn only on a measured flowing edge (the component renders .azo-flow-pipe
+ * only then); reduced motion stops the dash here and drops the packets in JS
+ * (components/diagram/animated-edge.tsx).
+ * ------------------------------------------------------------------------ */
+
+/* How-to: chooser, mode toggle, plan values, steps. */
+.azo-howto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.azo-howto-chooser {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.azo-howto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The selection document could not be read: the row says so in words; the
+ * dashed edge only reinforces it. */
+.azo-howto-row[data-chosen='unknown'] {
+  border-left: 3px dashed var(--text-faint);
+  padding-left: 8px;
+}
+
+.azo-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.azo-mode-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.azo-mode-toggle label + label {
+  border-left: 1px solid var(--border);
+}
+
+.azo-mode-toggle label:has(input:checked) {
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.azo-mode-toggle label:has(input:disabled) {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.azo-mode-toggle input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.azo-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.azo-step-list {
+  margin: 0;
+  padding: 0 0 0 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.azo-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.azo-step-row[data-tick='done'] {
+  border-left: 3px solid var(--ok);
+  padding-left: 8px;
+}
+
+.azo-step-row[data-tick='stale'] {
+  border-left: 3px dashed var(--warn);
+  padding-left: 8px;
+}
+
+/* "not yet confirmed against live Azure": a dashed pill, the words inside. */
+.azo-step-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 8px;
+  border: 1px dashed var(--warn-border);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.azo-step-stale {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.azo-step-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px var(--shadow);
+}
+
+.azo-step-dialog::backdrop {
+  background: var(--shadow);
+}
+
+.azo-step-dialog h3,
+.azo-step-dialog h4 {
+  margin: 10px 0 4px;
+  color: var(--text-strong);
+}
+
+.azo-step-cli {
+  margin: 4px 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.azo-step-values {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azo-step-values th,
+.azo-step-values td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azo-step-values th {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.azo-step-values td {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* Validate: verdict rows carry data-tone; the verdict word is always in the
+ * row text. A verdict, an arrival line or the "Validate stopped" line can
+ * quote a raw Azure response body, so the whole panel wraps anywhere rather
+ * than let one unbroken resource id push the page sideways (AZR-44). */
+.azo-validate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.azo-validate ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.azo-verdict {
+  padding: 6px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  border-left: 3px solid var(--border);
+  color: var(--text);
+}
+
+.azo-verdict[data-tone='ok'] {
+  border-left-color: var(--ok);
+}
+
+.azo-verdict[data-tone='warning'] {
+  border-left-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.azo-verdict[data-tone='error'] {
+  border-left-color: var(--error);
+  background: var(--error-bg);
+}
+
+/* Unknown is never drawn as absent: dashed and muted, never the error red
+ * (inventory-honesty). */
+.azo-verdict[data-tone='unknown'] {
+  border-left-style: dashed;
+  border-left-color: var(--text-faint);
+  color: var(--text-muted);
+}
+
+.azo-verdict-diffs {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.azo-verdict-diffs th,
+.azo-verdict-diffs td {
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.azo-verdict-diffs th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.azo-verdict-diffs td {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* Cribl source: one row per lane, then the two-step confirm. The whole panel
+ * wraps anywhere: the worker-group failure ("Could not list worker groups:
+ * ...") in the controls row and every lane row's status, Cribl-side, outcome
+ * and create-error lines quote what Cribl or Azure answered, raw bodies
+ * included (AZR-44). */
+.azo-cribl-source {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.azo-cribl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.azo-cribl-row [data-tone='ok'] {
+  color: var(--ok-strong);
+}
+
+.azo-cribl-row [data-tone='warning'] {
+  color: var(--warn);
+}
+
+.azo-cribl-row [data-tone='error'] {
+  color: var(--error-strong);
+}
+
+.azo-confirm {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--text);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+/* Dataflow diagram (hand SVG on the components/diagram shell). */
+.azo-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.azo-flow-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.azo-flow-perspective {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.azo-flow-perspective-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.azo-flow-perspective-option label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.azo-flow-btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+.azo-flow-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.azo-flow-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.azo-flow-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.azo-flow-watch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.azo-flow-watch-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-asof {
+  margin: 0;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-empty {
+  padding: 24px 14px;
+  color: var(--text-muted);
+}
+
+.azo-flow-canvas {
+  position: relative;
+  height: 560px;
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.azo-flow-section {
+  fill: var(--surface-raised);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.azo-flow-section-caption {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.azo-flow-card {
+  cursor: grab;
+}
+
+.azo-flow-card:focus {
+  outline: none;
+}
+
+.azo-flow-card-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+
+.azo-flow-card:focus-visible .azo-flow-card-box,
+.azo-flow-card[aria-expanded='true'] .azo-flow-card-box {
+  stroke: var(--border-focus);
+  stroke-width: 2.4;
+}
+
+.azo-flow-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.azo-flow-card-status {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text-muted);
+}
+
+.azo-flow-card-fact {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+/* Card states (CardStatusKind, core onboarding-dataflow/lanes.ts). Colour plus
+ * a border style; the status word is always drawn on the card. */
+.azo-flow-card.is-as-expected .azo-flow-card-box,
+.azo-flow-card.is-created .azo-flow-card-box,
+.azo-flow-card.is-present .azo-flow-card-box,
+.azo-flow-card.is-consumes .azo-flow-card-box {
+  stroke: var(--ok);
+  stroke-width: 1.8;
+}
+
+.azo-flow-card.is-as-expected .azo-flow-card-status,
+.azo-flow-card.is-created .azo-flow-card-status,
+.azo-flow-card.is-present .azo-flow-card-status,
+.azo-flow-card.is-consumes .azo-flow-card-status {
+  fill: var(--ok-strong);
+}
+
+.azo-flow-card.is-partly-checked .azo-flow-card-box,
+.azo-flow-card.is-differs .azo-flow-card-box,
+.azo-flow-card.is-other-name .azo-flow-card-box,
+.azo-flow-card.is-missing .azo-flow-card-box,
+.azo-flow-card.is-not-routed .azo-flow-card-box,
+.azo-flow-card.is-named-by-route .azo-flow-card-box {
+  stroke: var(--warn);
+  stroke-width: 1.8;
+  stroke-dasharray: 8 3;
+}
+
+.azo-flow-card.is-partly-checked .azo-flow-card-status,
+.azo-flow-card.is-differs .azo-flow-card-status,
+.azo-flow-card.is-other-name .azo-flow-card-status,
+.azo-flow-card.is-missing .azo-flow-card-status,
+.azo-flow-card.is-not-routed .azo-flow-card-status,
+.azo-flow-card.is-named-by-route .azo-flow-card-status {
+  fill: var(--warn);
+}
+
+.azo-flow-card.is-absent .azo-flow-card-box {
+  stroke: var(--error);
+  stroke-width: 1.8;
+}
+
+.azo-flow-card.is-absent .azo-flow-card-status {
+  fill: var(--error-strong);
+}
+
+/* Unknown, unread and not-yet-checked are dotted and faint: never drawn as
+ * absent (inventory-honesty). */
+.azo-flow-card.is-unknown .azo-flow-card-box,
+.azo-flow-card.is-cannot-evaluate .azo-flow-card-box,
+.azo-flow-card.is-not-read .azo-flow-card-box,
+.azo-flow-card.is-not-checked .azo-flow-card-box,
+.azo-flow-card.is-no-check .azo-flow-card-box,
+.azo-flow-card.is-not-created .azo-flow-card-box {
+  stroke: var(--text-faint);
+  stroke-dasharray: 3 3;
+}
+
+/* Edges. The base path never moves; .azo-flow-pipe is an overlay the
+ * component draws only on a measured flowing edge. */
+.azo-flow-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.6;
+}
+
+.azo-flow-edge.is-flowing {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.azo-flow-edge.is-idle {
+  stroke: var(--text-muted);
+}
+
+.azo-flow-edge.is-never-seen,
+.azo-flow-edge.is-not-measured,
+.azo-flow-edge.is-no-counter {
+  stroke: var(--text-faint);
+  stroke-dasharray: 4 4;
+}
+
+/* A step-to-target edge configures something; it never carries logs. Every
+ * configures edge also carries .is-no-counter, so this rule must come AFTER
+ * that group and out-specify it, or the faint 4 4 dash wins and a configures
+ * edge reads exactly like an unmeasured data edge. Dotted, round caps, muted. */
+.azo-flow-edge.is-configures,
+.azo-flow-edge.is-configures.is-no-counter {
+  stroke: var(--text-muted);
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+}
+
+.azo-flow-edge.is-blocked {
+  stroke: var(--error);
+}
+
+.azo-flow-edge-label {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+}
+
+.azo-flow-pipe {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.6;
+  stroke-dasharray: 7 9;
+  animation: azo-flow-dash 1s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes azo-flow-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .azo-flow-pipe {
+    animation: none;
+  }
+}
+
+.azo-flow-packet {
+  fill: var(--accent-strong);
+  pointer-events: none;
+}
+
+/* The in-SVG (i), drawn as a sibling of its card or section caption. */
+.azo-flow-info {
+  cursor: pointer;
+}
+
+.azo-flow-info:focus {
+  outline: none;
+}
+
+.azo-flow-info-hit {
+  fill: transparent;
+}
+
+.azo-flow-info-glyph {
+  fill: var(--surface);
+  stroke: var(--text-muted);
+}
+
+.azo-flow-info:focus-visible .azo-flow-info-glyph,
+.azo-flow-info[aria-expanded='true'] .azo-flow-info-glyph {
+  stroke: var(--border-focus);
+  stroke-width: 2;
+}
+
+.azo-flow-info-i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+.azo-flow-popover {
+  position: absolute;
+  z-index: 3;
+  width: 280px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.azo-flow-popover-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.azo-flow-popover-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.azo-flow-popover-status {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.azo-flow-popover-facts {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.azo-flow-popover-close {
+  justify-self: end;
+}
+
+.azo-flow-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 8px 14px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.azo-flow-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===================================================================
+ * Azure Logging Map (screens/azure-logging-map). Hand SVG, no animation:
+ * policy coverage is configuration, not measured flow. Every state carries
+ * more than colour - a pill, a border style or a hatch - so it survives
+ * greyscale and both themes. Tokens only; no hex here.
+ * =================================================================== */
+.lm-screen {
+  display: grid;
+  gap: 12px;
+}
+
+.lm-lead {
+  color: var(--text-muted);
+  max-width: 80ch;
+}
+
+.lm-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.lm-btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.lm-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.lm-btn:focus-visible,
+.lm-seg button:focus-visible,
+.lm-crumb:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.lm-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.lm-progress {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-mock {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.lm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lm-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.lm-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.lm-seg button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.lm-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.lm-ctl-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-ctl select,
+.lm-search {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  max-width: 260px;
+}
+
+.lm-counts {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lm-count-label {
+  color: var(--text-muted);
+}
+
+.lm-count-value {
+  color: var(--text);
+}
+
+.lm-banner {
+  display: grid;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-border);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.lm-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-height: 560px;
+}
+
+@media (max-width: 860px) {
+  .lm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lm-panel {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    max-height: none;
+  }
+
+  .lm-counts {
+    margin-left: 0;
+  }
+}
+
+.lm-stage {
+  position: relative;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.lm-canvas-root {
+  position: relative;
+  height: 100%;
+}
+
+.lm-zoom {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lm-canvas {
+  position: relative;
+  height: 600px;
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.lm-canvas-empty {
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.lm-edge {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1.4;
+}
+
+.lm-card {
+  cursor: grab;
+}
+
+.lm-card:focus {
+  outline: none;
+}
+
+.lm-card-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+}
+
+.lm-card-management-group .lm-card-box,
+.lm-card-tenant-root .lm-card-box {
+  stroke-width: 1.6;
+}
+
+.lm-card-subscription .lm-card-box {
+  stroke-width: 1.2;
+}
+
+.lm-card-placeholder .lm-card-box,
+.lm-card-count .lm-card-box {
+  stroke-dasharray: 6 4;
+}
+
+.lm-card:focus-visible .lm-card-box,
+.lm-card.is-selected .lm-card-box {
+  stroke: var(--border-focus);
+  stroke-width: 2.4;
+}
+
+/* Unreadable: a dashed card plus the lock note - never drawn as empty. */
+.lm-card.is-unread .lm-card-box {
+  stroke-dasharray: 3 3;
+  stroke: var(--text-faint);
+}
+
+.lm-card-header {
+  fill: var(--surface-raised);
+}
+
+.lm-card-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  fill: var(--text-muted);
+}
+
+.lm-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.lm-card-status,
+.lm-card-more {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+.lm-card-lock {
+  font-style: italic;
+}
+
+/* Trace marks: origin is ringed, covered is filled, gaps are hatched,
+ * unknown stays dashed, and what the assignment does not reach is dimmed. */
+.lm-mark-origin .lm-card-box {
+  fill: var(--lm-ours-bg);
+  stroke: var(--tone-search);
+  stroke-width: 3;
+}
+
+.lm-mark-covered .lm-card-box,
+.lm-mark-conditional .lm-card-box,
+.lm-mark-partial .lm-card-box,
+.lm-mark-covered-exemptions-unknown .lm-card-box {
+  fill: var(--lm-ours-bg);
+}
+
+.lm-mark-conditional .lm-card-box,
+.lm-mark-partial .lm-card-box,
+.lm-mark-covered-exemptions-unknown .lm-card-box {
+  stroke-dasharray: 8 3;
+}
+
+.lm-mark-unknown .lm-card-box {
+  stroke-dasharray: 3 3;
+  stroke: var(--text-faint);
+}
+
+.lm-mark-dimmed {
+  opacity: 0.32;
+}
+
+.lm-card-hatch {
+  pointer-events: none;
+}
+
+.lm-hatch-bg {
+  fill: var(--error-bg);
+}
+
+.lm-hatch-line {
+  stroke: var(--error);
+  stroke-width: 1.4;
+  opacity: 0.45;
+}
+
+.lm-mark-gap-excluded .lm-card-box,
+.lm-mark-gap-exempt .lm-card-box {
+  stroke: var(--error);
+}
+
+.lm-chip rect {
+  stroke-width: 1;
+}
+
+.lm-chip-ours rect {
+  fill: var(--lm-ours-bg);
+  stroke: var(--tone-search);
+}
+
+.lm-chip-other rect {
+  fill: var(--surface-raised);
+  stroke: var(--text-faint);
+}
+
+.lm-chip-inherited rect {
+  fill: transparent;
+  stroke: var(--text-faint);
+  stroke-dasharray: 2 2;
+}
+
+.lm-chip-text {
+  font-size: 10.5px;
+  font-weight: 500;
+  fill: var(--text);
+}
+
+.lm-chip-inherited .lm-chip-text {
+  font-style: italic;
+  fill: var(--text-muted);
+}
+
+.lm-chip-pill {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  fill: var(--text-muted);
+}
+
+.lm-chip-ours .lm-chip-pill {
+  fill: var(--tone-search);
+}
+
+.lm-info,
+.lm-caret {
+  cursor: pointer;
+}
+
+.lm-info:focus,
+.lm-caret:focus {
+  outline: none;
+}
+
+.lm-info-hit,
+.lm-caret-hit {
+  fill: transparent;
+}
+
+.lm-info-glyph {
+  fill: var(--surface);
+  stroke: var(--text-muted);
+}
+
+.lm-info:focus-visible .lm-info-glyph,
+.lm-info[aria-expanded='true'] .lm-info-glyph,
+.lm-caret:focus-visible .lm-caret-hit {
+  stroke: var(--border-focus);
+  stroke-width: 2;
+}
+
+.lm-info-i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.lm-caret-glyph {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.lm-popover {
+  position: absolute;
+  z-index: 3;
+  width: 280px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.lm-popover-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.lm-popover-title {
+  font-weight: 600;
+}
+
+.lm-popover-id,
+.lm-mono,
+.lm-scope-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-popover-facts {
+  margin-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.lm-popover-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 0 6px;
+}
+
+.lm-outline {
+  padding: 14px 18px;
+  min-height: 560px;
+}
+
+.lm-outline-tree,
+.lm-outline-group {
+  list-style: none;
+}
+
+.lm-outline-group {
+  padding-left: 18px;
+  border-left: 1px dashed var(--border);
+}
+
+.lm-outline-item {
+  margin: 4px 0;
+}
+
+.lm-outline-item:focus {
+  outline: none;
+}
+
+.lm-outline-item:focus-visible > .lm-outline-row {
+  outline: 2px solid var(--border-focus);
+}
+
+.lm-outline-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lm-outline-item.is-selected > .lm-outline-row {
+  background: var(--surface-raised);
+  box-shadow: inset 2px 0 0 var(--border-focus);
+}
+
+.lm-outline-name {
+  color: var(--text);
+}
+
+.lm-outline-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.lm-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.lm-pill-kind,
+.lm-pill-other {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.lm-pill-ours {
+  background: var(--lm-ours-bg);
+  color: var(--tone-search);
+  border-color: var(--tone-search);
+}
+
+.lm-pill-name {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn-border);
+}
+
+.lm-pill-unread {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--text-faint);
+}
+
+.lm-pill-gap {
+  background: var(--error-bg);
+  color: var(--error-strong);
+  border-color: var(--error-border);
+}
+
+.lm-panel {
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+  max-height: 760px;
+  font-size: 13px;
+}
+
+.lm-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.lm-panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.lm-panel-trace {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 2px solid var(--tone-search);
+  border-radius: var(--radius-control);
+}
+
+.lm-panel-section {
+  display: grid;
+  gap: 8px;
+}
+
+.lm-crumbs {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-crumb {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.lm-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-note-unknown {
+  font-style: italic;
+  border-left: 2px dashed var(--text-faint);
+  padding-left: 8px;
+  /* "The map could not be read: ..." quotes the error, raw body and all
+   * (AZR-44). */
+  overflow-wrap: anywhere;
+}
+
+.lm-unread-block {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px dashed var(--text-faint);
+  border-radius: var(--radius-control);
+}
+
+.lm-alist {
+  display: grid;
+  gap: 10px;
+}
+
+.lm-acard {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.lm-acard-ours {
+  border-left: 4px solid var(--tone-search);
+}
+
+.lm-acard-other {
+  border-left: 4px solid var(--text-faint);
+}
+
+.lm-acard-inherited {
+  border-left: 4px dotted var(--text-faint);
+}
+
+.lm-acard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-acard-name {
+  overflow-wrap: anywhere;
+}
+
+.lm-dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+}
+
+.lm-dl dt {
+  color: var(--text-muted);
+}
+
+.lm-dl dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lm-evidence,
+.lm-roles,
+.lm-exemptions {
+  margin-left: 16px;
+  display: grid;
+  gap: 3px;
+}
+
+.lm-evidence-kind,
+.lm-role-name {
+  font-weight: 600;
+}
+
+.lm-evidence-detail {
+  color: var(--text-muted);
+}
+
+.lm-role-row,
+.lm-exemption-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.lm-role-scope {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.lm-identity-ua {
+  display: block;
+}
+
+.lm-portal-link {
+  color: var(--accent);
+}
+
+.lm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lm-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 11px;
+  border-radius: 3px;
+  border: 2px solid var(--border);
+}
+
+.lm-swatch-ours {
+  border-color: var(--tone-search);
+  background: var(--lm-ours-bg);
+}
+
+.lm-swatch-other {
+  border-color: var(--text-faint);
+  background: var(--surface-raised);
+}
+
+.lm-swatch-inherited {
+  border-style: dotted;
+  border-color: var(--text-faint);
+}
+
+.lm-swatch-gap {
+  border-color: var(--error);
+  background: repeating-linear-gradient(45deg, var(--error-bg) 0 3px, var(--error-border) 3px 5px);
+}
+
+.lm-swatch-unread {
+  border-style: dashed;
+  border-color: var(--text-faint);
+}
+
+/* DBT-229: the Gap Analysis status line - destination, learned decisions and
+   unused fields side by side, each without its own banner chrome. */
+.gap-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  margin: 4px 0 8px;
+}
+.gap-status-line > .status-bar,
+.gap-status-line > .gap-provenance {
+  margin: 0;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+}
+
+/* DBT-229: a satisfied vendor identity as ONE inline line with its Edit - not
+   the bordered editor box the full block uses. */
+.identity-block-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 4px 0;
+}
+
+/* DBT-232: the Pin toggle on a section header. */
+.numbered-section-pin {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.numbered-section-pin-on {
+  border-color: var(--accent, #4aa3df);
+  color: var(--accent, #4aa3df);
 }

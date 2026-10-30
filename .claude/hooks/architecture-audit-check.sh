@@ -12,8 +12,12 @@ set -uo pipefail
 THRESHOLD=5
 MARKER_REL=".claude/.last-architecture-audit"
 
-# Only commits that touch code an audit could have a finding about. Mirrors
-# check-release-drift.mjs's SOURCE_PATHS and the board-freshness hook's WATCHED.
+# Only commits that touch code an audit could have a finding about. Overlaps,
+# but deliberately does not equal, check-release-drift.mjs's SOURCE_PATHS (which
+# adds apps/cribl-app/default and index.html - shipped config an audit has no
+# structural finding about - and drops apps/cribl-app/scripts, which never ships
+# but is code an audit reads) and the board-freshness hook's WATCHED (which adds
+# docs/backlog.md and docs/adr, since those change what the board should say).
 #
 # WHY (2026-08-27): this counted EVERY commit, so a batch of feature-branch
 # merges tripped the threshold immediately and a release commit - a version

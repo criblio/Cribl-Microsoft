@@ -96,6 +96,7 @@ export {
   NAV_SECTION_ORDER,
   groupNavSections,
   isScrolledToBottom,
+  loadableSetupFromRead,
   resolveFramePhase,
 } from "./frame/frame-state";
 export type {
@@ -105,6 +106,21 @@ export type {
   NavSection,
   NavSectionGroup,
 } from "./frame/frame-state";
+// The appOptions read as loaded / absent / unreadable, and the inline-save
+// decision over it: an unreadable read refuses the save (DBT-158), a save
+// patches the stored record (DBT-172), and a failed save or retry is said
+// out loud (DBT-173).
+export {
+  OPTIONS_LOADING,
+  OPTIONS_UNREADABLE_NOTICE,
+  beginOptionsRetry,
+  optionsReadFailureLine,
+  optionsReadFromSave,
+  optionsReadFromSettled,
+  planOptionsSave,
+  settleOptionsSave,
+} from "./frame/options-read";
+export type { OptionsRead, OptionsSaveOutcome, OptionsSavePlan } from "./frame/options-read";
 
 // Theme (porting-plan dark-mode note, lands with Unit 6.5): the UI layer
 // over @soc/core's app-theme model (codec + resolveTheme live in core) -
@@ -256,7 +272,8 @@ export type {
 // stat tiles, the DCR/Cribl handles split, an editable dest/action mapping
 // table, and the data-loss warnings. The pure approval STATE MACHINE
 // (mapping-review-state) owns the consent semantics: approvals reset on
-// re-analysis, edits survive and re-key on rename (the Unit 11 seam), the
+// re-analysis, edits are re-applied to the new rows (dropped and counted when
+// their field is gone, DBT-210) and re-key on rename (the Unit 11 seam), the
 // staleness flag, and the CONTENT-path deploy gate that is strictly partitioned
 // from the native quick-onboard gate.
 export { MappingReviewSection } from "./screens/mapping-review/mapping-review-section";
@@ -510,6 +527,14 @@ export type { RepositoriesScreenProps } from "./screens/repositories/repositorie
 export { ArchitectureScreen } from "./screens/architecture/architecture-screen";
 export { MappingCatalogScreen } from "./screens/mapping-catalog/mapping-catalog-screen";
 export { EventHubDiscoveryScreen } from "./screens/eventhub-discovery/eventhub-discovery-screen";
+// Azure Logging Map (AZR-19, phase 1, read-only): management-group tree with
+// the policy assignments that deploy diagnostic settings, who owns them, and
+// what each one covers, excludes or cannot be read.
+export { AzureLoggingMapScreen } from "./screens/azure-logging-map/azure-logging-map-screen";
+
+// Azure Native Source Onboarding (AZR-18): the coverage catalog by collection
+// method, the Event Hub target, and the Defender for Cloud alert export.
+export { AzureOnboardingScreen } from "./screens/azure-onboarding/azure-onboarding-screen";
 
 // Labs (roadmap Phase 5, LAB-01/02/13/14): app-provisioned disposable Azure
 // lab environments - the 8 UnifiedLab profiles as a planning surface plus the
@@ -676,12 +701,14 @@ export type {
 // it is safe because the audit informs rather than forbids. Step 3's nav
 // annotation is the intended consumer.
 export {
+  AuditAgeChip,
   auditStatusTone,
   deriveCapabilityContext,
   hasAzureIdentity,
   refreshLabel,
   useCapabilityAudit,
 } from "./capabilities";
+export type { AuditAgeChipProps } from "./capabilities";
 // Route id -> required capabilities, SHARED by both shells (the render
 // functions are per-shell; what a route needs is one product decision).
 export {
@@ -812,6 +839,18 @@ export type {
   ConsolidatedPoll,
   ConsolidatedPollingOptions,
 } from "./polling/use-consolidated-polling";
+// The poll registry (AZR-33): a screen registers its poll here and the shell's
+// ONE useConsolidatedPolling runs it, so the proxy budget keeps one
+// enforcement point. main.tsx wraps <App/> in the provider.
+export {
+  PollRegistryProvider,
+  useMergedPolls,
+  useRegisterPoll,
+} from "./polling/poll-registry";
+export type {
+  DuplicatePollPolicy,
+  PollRegistryProviderProps,
+} from "./polling/poll-registry";
 
 // Workspace table picker (backlog item 2): choosing an existing Log Analytics
 // table to run DCR gap analysis against. First feature to exercise the
@@ -839,6 +878,7 @@ export {
   emptyInventoryMessage,
   unauditedScopeInventoryMessage,
   unmeasuredInventoryMessage,
+  verifiedNoneInventoryMessage,
 } from "./capabilities";
 export type {
   AuditedScope,

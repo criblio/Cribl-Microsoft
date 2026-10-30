@@ -72,6 +72,25 @@
  * also gained the control the notice implied: `forget`, documented as the way
  * back from a mistaken paste, had been written and wired to nothing.
  *
+ * A REFUSED STORE IS SAID (DBT-175). Since DBT-145 the KV store throws on a
+ * non-encrypted 403. Naming the vendor wrote fire-and-forget and showed "Saved"
+ * before the write landed - an unhandled rejection under a false "Saved" - and
+ * a refused column-order read or write left reuse silently off. "Saved" now
+ * waits for the store's answer - and only for the solution it was asked under,
+ * so a write that lands after a switch claims nothing for the next one - and
+ * one note says when column orders are not being reused or remembered, and why.
+ *
+ * WHAT THE STORE KEPT IS WHAT THE CHIP SHOWS (DBT-206). The cloud store
+ * byte-caps each sample and keeps only the first events that fit. Paste and
+ * upload put the sample they HANDED the store into the list, so the chip read
+ * the full count until a reload and then the smaller one with no reason given.
+ * Both now read the entry back after writing it, list THAT, and say what was
+ * trimmed in the same sentence the capture and Lake commits use
+ * (storedEventShortfalls / storedEventShortfallText, DBT-197). Applying CSV
+ * headers is a second write of the same sample and is read back the same way;
+ * an arrival from a sibling panel replaces the entry, so it drops that log
+ * type's note rather than leave it contradicting the new chip.
+ *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
  * decisions (chip derivation, dedupe, rename re-key, validation) live in
@@ -79,8 +98,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InfoTip } from "../../components/info-tip";
 import {
-  csvRoutingWarning,
+  formatRoutingWarning,
   detectVendorIdentity,
   isUsableVendorName,
   operatorVendorKey,
@@ -100,6 +120,7 @@ import {
   upsertSample,
   validateLogType,
   validateRename,
+  splitNoteLead,
 } from "./sample-intake-state";
 import { CsvHeaderDialog } from "./csv-header-dialog";
 import {
@@ -115,7 +136,16 @@ import {
   singleItemQueue,
 } from "./csv-resolution-state";
 import type { CsvResolutionQueue } from "./csv-resolution-state";
-import { useVendorColumnOrder } from "./use-vendor-column-order";
+import {
+  describeColumnOrderRefusal,
+  useVendorColumnOrder,
+} from "./use-vendor-column-order";
+import type { ColumnOrderRefusal } from "./use-vendor-column-order";
+import {
+  storedEventShortfallText,
+  storedEventShortfalls,
+} from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 
 /**
  * One batch of samples a SIBLING panel just wrote to the store, announced to
@@ -165,6 +195,20 @@ export interface SampleIntakeSectionProps {
    */
   onRenameLogType?: (from: string, to: string) => void;
   /**
+   * Remove contract (DBT-143), invoked AFTER the store entry is deleted, so the
+   * page can prune everything downstream keyed by that log type. Without it a
+   * removed sample left its gap-analysis card behind and made the remaining
+   * analysis stale.
+   */
+  onRemoveLogType?: (logType: string) => void;
+  /**
+   * A removal asked for from ELSEWHERE - the DCR Gap Analysis card's Remove.
+   * Routed through this section's own remove so there is one delete path: the
+   * store, these chips and onRemoveLogType all follow from it. Nonce'd and
+   * consumed once, like arrivalEvent.
+   */
+  removeRequest?: { logType: string; nonce: number };
+  /**
    * Samples that landed in the store through a SIBLING acquisition panel - the
    * capture panel or the Lake panel - rather than through the paste/upload
    * controls in here.
@@ -187,6 +231,14 @@ export interface SampleIntakeSectionProps {
    * dropUnneededEvent), so it is reused rather than reinvented.
    */
   arrivalEvent?: SampleArrivalEvent;
+  /**
+   * DBT-224: which manual input to show. The screen asks how samples are
+   * supplied first, so only the chosen input appears: 'paste' (text, name,
+   * Add Sample), 'upload' (Upload Files), 'none' (neither - a Cribl method or
+   * no choice yet). The sample list always renders. Default 'all' keeps the
+   * original combined block.
+   */
+  entry?: "all" | "paste" | "upload" | "none";
 }
 
 export function SampleIntakeSection({
@@ -195,8 +247,13 @@ export function SampleIntakeSection({
   definitionCache,
   onSamplesChange,
   onRenameLogType,
+  onRemoveLogType,
+  removeRequest,
   arrivalEvent,
+  entry = "all",
 }: SampleIntakeSectionProps) {
+  const showPaste = entry === "all" || entry === "paste";
+  const showUpload = entry === "all" || entry === "upload";
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
   const [loadError, setLoadError] = useState("");
 
@@ -206,6 +263,11 @@ export function SampleIntakeSection({
 
   const [uploadError, setUploadError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Log types the LAST paste or upload handed the store more events of than it
+  // kept (DBT-206). Replaced by each paste or upload, so it describes that one;
+  // naming a CSV's columns re-measures its log type, and an arrival of the
+  // same log type drops its note.
+  const [trimmed, setTrimmed] = useState<StoredEventShortfall[]>([]);
 
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(
     null,
@@ -241,17 +303,41 @@ export function SampleIntakeSection({
   // carries the canonical spelling every existing definition is filed under.
   const [operatorVendor, setOperatorVendor] = useState("");
   const [vendorSaved, setVendorSaved] = useState(false);
+  // Why the saved name could not be READ, "" when it could (DBT-159). Shown
+  // under the box: "never named" and "could not read the name" look the same
+  // in an empty input and ask different things of the operator.
+  const [vendorReadError, setVendorReadError] = useState("");
+  // The name WRITE (DBT-175): in flight, and why the store refused it ("" when
+  // it did not). "Saved" is shown only once the store has said yes.
+  const [vendorSaving, setVendorSaving] = useState(false);
+  const [vendorSaveError, setVendorSaveError] = useState("");
   const vendorKey = useMemo(() => operatorVendorKey(solutionName), [solutionName]);
+  // The scope a name write's answer must still belong to when it lands: the
+  // write is awaited, and a solution switch while it is in flight must not
+  // let its late "Saved" (or refusal) land on the next solution's box.
+  const vendorScopeRef = useRef<object>({});
 
   useEffect(() => {
     let cancelled = false;
+    vendorScopeRef.current = {};
     setOperatorVendor("");
     setVendorSaved(false);
+    setVendorSaving(false);
+    setVendorReadError("");
+    setVendorSaveError("");
     if (definitionCache === undefined || vendorKey === null || detectedVendor !== "") {
       return;
     }
     void (async () => {
-      const stored = await definitionCache.get(vendorKey);
+      // DBT-159: since DBT-145 a refused KV read THROWS, and with no catch here
+      // it was an unhandled rejection. A refused read is a miss for the box.
+      let stored: unknown;
+      try {
+        stored = await definitionCache.get(vendorKey);
+      } catch (err) {
+        if (!cancelled) setVendorReadError(String(err));
+        return;
+      }
       if (cancelled || typeof stored !== "string") return;
       setOperatorVendor(stored);
       setVendorSaved(stored !== "");
@@ -271,6 +357,38 @@ export function SampleIntakeSection({
   // than on the state object, which is rebuilt every render.
   const { remember: rememberColumnOrder, forget: forgetColumnOrder } =
     columnOrder;
+  // A refusal reported by a chip's own column-order read (DBT-175). Kept
+  // beside the queued item's so ONE note describes the store however many
+  // chips asked it; reset when the scope they read under changes.
+  const [chipOrderRefusal, setChipOrderRefusal] =
+    useState<ColumnOrderRefusal | null>(null);
+  useEffect(() => {
+    setChipOrderRefusal(null);
+  }, [definitionCache, vendor]);
+  const columnOrderRefusal = columnOrder.storeRefused ?? chipOrderRefusal;
+
+  // Persist the operator's vendor name, and claim "Saved" only once the store
+  // has answered (DBT-175). A refusal is a skip: the name stays in the box,
+  // nothing is filed under it, and the reason is shown.
+  const saveVendorName = useCallback(async () => {
+    if (definitionCache === undefined || vendorKey === null) return;
+    const name = operatorVendor.trim();
+    const scope = vendorScopeRef.current;
+    setOperatorVendor(name);
+    setVendorSaveError("");
+    setVendorSaving(true);
+    try {
+      await definitionCache.set(vendorKey, name);
+      if (vendorScopeRef.current === scope) setVendorSaved(true);
+    } catch (err) {
+      if (vendorScopeRef.current === scope) {
+        setVendorSaved(false);
+        setVendorSaveError(String(err));
+      }
+    } finally {
+      if (vendorScopeRef.current === scope) setVendorSaving(false);
+    }
+  }, [definitionCache, vendorKey, operatorVendor]);
 
   const forgetSavedOrder = useCallback(() => {
     forgetColumnOrder();
@@ -325,6 +443,11 @@ export function SampleIntakeSection({
     // rebuilds the reported list from this copy, so it would report the
     // arrivals away again while they sat in the store.
     void load();
+    // A trim note from this section's own last write describes an entry an
+    // arrival of the same log type just replaced; the sibling panel says what
+    // ITS write kept (DBT-206).
+    const arrived = new Set(arrivalEvent.samples.map((s) => s.logType));
+    setTrimmed((current) => current.filter((t) => !arrived.has(t.logType)));
     // Then offer resolution for the headerless arrivals, ONE TURN EACH, which
     // is the batch behaviour a multi-file upload has had since Unit 12. A batch
     // with nothing headerless in it builds a queue that is already done, and
@@ -335,13 +458,32 @@ export function SampleIntakeSection({
     }
   }, [arrivalEvent, load]);
 
-  // Persist an upserted sample and reflect it in the list.
-  const persistUpsert = useCallback(
-    async (sample: TaggedSample) => {
+  // Write a sample and return what the store KEPT of it (DBT-206): the store
+  // may byte-cap it, so the entry read back is what the chip must count. An
+  // entry the read does not return - or a read that fails after the write
+  // landed - falls back to the handed sample: a miss is not evidence of a
+  // trim, and the write itself succeeded, so it is not reported as a failure.
+  const writeAndReadBack = useCallback(
+    async (sample: TaggedSample): Promise<TaggedSample> => {
       await store.upsert(sample);
-      commit(upsertSample(samples ?? [], sample));
+      try {
+        return (await store.get(sample.logType)) ?? sample;
+      } catch {
+        return sample;
+      }
     },
-    [store, samples, commit],
+    [store],
+  );
+
+  // Persist an upserted sample, reflect what the store kept of it in the list,
+  // and return the trim (empty when it kept every event).
+  const persistUpsert = useCallback(
+    async (sample: TaggedSample): Promise<StoredEventShortfall[]> => {
+      const kept = await writeAndReadBack(sample);
+      commit(upsertSample(samples ?? [], kept));
+      return storedEventShortfalls([sample], [kept]);
+    },
+    [writeAndReadBack, samples, commit],
   );
 
   const addFromPaste = useCallback(async () => {
@@ -356,13 +498,14 @@ export function SampleIntakeSection({
     }
     setBusy(true);
     setPasteError("");
+    setTrimmed([]);
     try {
       const sample = tagSampleFromContent(
         normalizeLogType(pasteLogType),
         pasteText,
         "pasted",
       );
-      await persistUpsert(sample);
+      setTrimmed(await persistUpsert(sample));
       setPasteText("");
       setPasteLogType("");
       // Headerless positional CSV: offer header resolution for this sample.
@@ -380,7 +523,10 @@ export function SampleIntakeSection({
     async (files: FileList) => {
       setBusy(true);
       setUploadError("");
+      setTrimmed([]);
       const problems: string[] = [];
+      // What the store kept fewer events of, per file (DBT-206).
+      const shortfalls: StoredEventShortfall[] = [];
       // Fold upserts so multiple files auto-detecting the SAME log type replace
       // rather than duplicate (dedupe-by-logType).
       let next = samples ?? [];
@@ -391,14 +537,22 @@ export function SampleIntakeSection({
         try {
           const content = await file.text();
           const sample = tagFileContent(content, file.name);
-          await store.upsert(sample);
-          next = upsertSample(next, sample);
+          const kept = await writeAndReadBack(sample);
+          next = upsertSample(next, kept);
+          // Two files of the same log type replace each other in the store,
+          // so only the later file's trim still describes a chip.
+          const trim = storedEventShortfalls([sample], [kept]);
+          for (let i = shortfalls.length - 1; i >= 0; i -= 1) {
+            if (shortfalls[i].logType === sample.logType) shortfalls.splice(i, 1);
+          }
+          shortfalls.push(...trim);
           added.push(sample);
         } catch (err) {
           problems.push(`${file.name}: ${String(err)}`);
         }
       }
       commit(next);
+      setTrimmed(shortfalls);
       if (problems.length > 0) {
         setUploadError(problems.join("\n"));
       }
@@ -413,8 +567,11 @@ export function SampleIntakeSection({
         fileInputRef.current.value = "";
       }
     },
-    [samples, store, commit],
+    [samples, writeAndReadBack, commit],
   );
+
+  const removeRef = useRef(onRemoveLogType);
+  removeRef.current = onRemoveLogType;
 
   const removeSample = useCallback(
     async (logType: string) => {
@@ -422,6 +579,7 @@ export function SampleIntakeSection({
       try {
         await store.remove(logType);
         commit(removeByLogType(samples ?? [], logType));
+        removeRef.current?.(logType);
       } catch (err) {
         setLoadError(String(err));
       } finally {
@@ -430,6 +588,22 @@ export function SampleIntakeSection({
     },
     [store, samples, commit],
   );
+
+  // Seeded with the current nonce for the same reason as arrivalEvent: a
+  // remount by key must not replay a removal it already performed.
+  const lastRemoveNonce = useRef<number>(removeRequest?.nonce ?? -1);
+  useEffect(() => {
+    if (removeRequest === undefined || samples === null) {
+      // Wait for the list: removing against a null list would commit [] and
+      // report every other sample away.
+      return;
+    }
+    if (removeRequest.nonce === lastRemoveNonce.current) {
+      return;
+    }
+    lastRemoveNonce.current = removeRequest.nonce;
+    void removeSample(removeRequest.logType);
+  }, [removeRequest, samples, removeSample]);
 
   const commitRename = useCallback(async () => {
     if (renaming === null) {
@@ -495,8 +669,16 @@ export function SampleIntakeSection({
       setBusy(true);
       try {
         const resolved = resolveHeaders(item, headers);
-        await store.upsert(resolved);
-        commit(upsertSample(samples ?? [], resolved));
+        // The queue holds the sample as HANDED (every event, so the re-parse
+        // still reads them all), and this write is capped like the first one:
+        // list what the store kept, and re-measure this log type's note.
+        const kept = await writeAndReadBack(resolved);
+        commit(upsertSample(samples ?? [], kept));
+        const trim = storedEventShortfalls([resolved], [kept]);
+        setTrimmed((current) => [
+          ...current.filter((t) => t.logType !== resolved.logType),
+          ...trim,
+        ]);
         // REMEMBER the order for this vendor + log type, so the same feed
         // acquired next week is not asked again. A bundled order the operator
         // merely confirmed stores nothing - remember() refuses it, because the
@@ -510,27 +692,25 @@ export function SampleIntakeSection({
       }
       advanceCsvQueue();
     },
-    [csvQueue, store, samples, commit, advanceCsvQueue, rememberColumnOrder],
+    [csvQueue, writeAndReadBack, samples, commit, advanceCsvQueue, rememberColumnOrder],
   );
 
   return (
     <div className="sample-intake">
-      <p className="panel-desc">
-        Provide representative events per log type. Paste a sample and name its
-        log type, or upload one or more files. The format is detected from the
-        content - Cribl capture events are unwrapped to their inner _raw - and
-        the discovered fields drive the gap analysis and pipeline generation.
-        Samples are optional for the native-table deploy below; they enrich the
-        content-driven flow.
-      </p>
 
       {/* Paste + name + upload: one intake block (paste on the left, the log-type
           name and the Add Sample / Upload Files actions grouped), matching the
           reference's Sample Data layout. The native file input stays in the DOM
           (works in both shells) but is visually hidden and driven by the ghost
           Upload Files button, so both actions read as buttons. */}
+      {(showPaste || showUpload) && (
       <div className="sample-intake-input">
-        <span className="field-label">Paste a sample</span>
+        {showPaste && (
+        <>
+        <span className="field-label">
+          Paste a sample{" "}
+          <InfoTip text="Representative events for one log type. The format is detected from the content (a Cribl capture is unwrapped to its inner _raw), and the fields found drive the gap analysis and the generated pipelines. Samples are optional for a native-table deploy." />
+        </span>
         <textarea
           className="sample-paste"
           value={pasteText}
@@ -552,6 +732,8 @@ export function SampleIntakeSection({
             disabled={busy}
           />
         </label>
+        </>
+        )}
         {/* The native file input is driven by the visible Browse button; the
             .sample-file-input class owns its display:none (no inline styles). */}
         <input
@@ -569,6 +751,7 @@ export function SampleIntakeSection({
           aria-hidden="true"
         />
         <div className="panel-controls">
+          {showPaste && (
           <button
             className="next-action-button"
             onClick={() => void addFromPaste()}
@@ -576,6 +759,9 @@ export function SampleIntakeSection({
           >
             Add Sample
           </button>
+          )}
+          {showUpload && (
+          <>
           <button
             className="run-button"
             onClick={() => fileInputRef.current?.click()}
@@ -583,15 +769,31 @@ export function SampleIntakeSection({
           >
             Upload Files
           </button>
+          <InfoTip text="Upload one or more files instead of pasting. Each file's log type is detected from its name and content; rename it on the sample afterwards." />
+          </>
+          )}
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
-        <span className="field-hint">
-          Upload one or more files instead of pasting: the log type is
-          auto-detected from each filename and content; rename it on the chip
-          afterwards.
-        </span>
-        {uploadError !== "" && <pre className="result">{uploadError}</pre>}
       </div>
+      )}
+      {/* Outside the input block: an upload's error and the store's trim notes
+          (which also explain capture and Lake commits) show whatever method
+          is chosen. */}
+        {uploadError !== "" && <pre className="result">{uploadError}</pre>}
+        {/* DBT-206: the store's trim, in the capture commit's own words, for
+            each log type still on the page (a removed one has nothing to
+            explain any more). */}
+        {trimmed
+          .filter((t) => samples?.some((s) => s.logType === t.logType) === true)
+          .map((t) => (
+            <p
+              key={t.logType}
+              className="field-hint sample-intake-trimmed"
+              role="status"
+            >
+              {storedEventShortfallText([t]).trim()}
+            </p>
+          ))}
 
       {/* Tagged sample chips */}
       {loadError !== "" && (
@@ -607,7 +809,7 @@ export function SampleIntakeSection({
       )}
       {samples !== null && samples.length === 0 && (
         <p className="field-hint">
-          No samples tagged yet. Upload or paste one above.
+          {entry === "all" ? "No samples tagged yet. Upload or paste one above." : "No samples yet."}
         </p>
       )}
       {/*
@@ -618,7 +820,7 @@ export function SampleIntakeSection({
         existing for a solution and not existing.
       */}
       {detectedVendor === "" && vendorKey !== null && samples !== null && samples.length > 0 && (
-        <div className="vendor-name-seam">
+        <div>
           <label className="field-label" htmlFor="operator-vendor">
             Vendor name
           </label>
@@ -630,21 +832,35 @@ export function SampleIntakeSection({
             onChange={(e) => {
               setOperatorVendor(e.target.value);
               setVendorSaved(false);
+              setVendorSaveError("");
             }}
           />
           <button
             className="run-button"
-            disabled={!isUsableVendorName(operatorVendor) || definitionCache === undefined}
-            onClick={() => {
-              if (definitionCache === undefined || vendorKey === null) return;
-              const name = operatorVendor.trim();
-              void definitionCache.set(vendorKey, name);
-              setOperatorVendor(name);
-              setVendorSaved(true);
-            }}
+            disabled={
+              !isUsableVendorName(operatorVendor) ||
+              definitionCache === undefined ||
+              vendorSaving
+            }
+            onClick={() => void saveVendorName()}
           >
-            {vendorSaved ? "Saved" : "Use this vendor"}
+            {vendorSaving ? "Saving..." : vendorSaved ? "Saved" : "Use this vendor"}
           </button>
+          {vendorSaveError !== "" && (
+            <p className="field-hint sample-intake-vendor-unsaved" role="status">
+              The vendor name could not be saved ({vendorSaveError}), so column
+              orders still cannot be remembered for this solution. Try again
+              once the store accepts writes.
+            </p>
+          )}
+          {vendorReadError !== "" && (
+            <p className="field-hint sample-intake-vendor-unread" role="status">
+              A vendor name saved for this solution could not be read (
+              {vendorReadError}), so the box starts empty. Naming it again
+              saves over whatever is stored, if the store accepts the write -
+              the button says whether it did.
+            </p>
+          )}
           <p className="field-hint">
             This solution is not in the curated vendor list, so column orders
             cannot be remembered for it until you name the vendor. Naming it
@@ -718,6 +934,18 @@ export function SampleIntakeSection({
                     {chip.timestampField !== undefined
                       ? `, time: ${chip.timestampField}`
                       : ""}
+                    {/* WHERE THESE COLUMN NAMES CAME FROM (VND-3): a sample named
+                        from a bundled or remembered order is otherwise
+                        indistinguishable from one typed by hand. DBT-228: on the
+                        count line, with the full note in its tip. */}
+                    {!isRenaming && (
+                      <SampleChipColumnOrder
+                        cache={definitionCache}
+                        vendor={vendor}
+                        sample={sample}
+                        onStoreRefused={setChipOrderRefusal}
+                      />
+                    )}
                   </span>
                   {!isRenaming && (
                     <span className="sample-chip-actions">
@@ -763,41 +991,6 @@ export function SampleIntakeSection({
                     destination schema.
                   </p>
                 )}
-                {/* WHERE THESE COLUMN NAMES CAME FROM. Without it, a sample
-                    named from a bundled vendor dictionary, one named from the
-                    operator's own remembered order, and one typed by hand from
-                    real values are indistinguishable afterwards - so a later
-                    reader seeing `receive_time / src / dst` cannot tell whether
-                    anyone ever confirmed those names against values, which is
-                    exactly the off-by-one the preview surface exists to expose.
-                    core describeColumnOrder returns plain text for precisely
-                    this second caller. */}
-                {!isRenaming && (
-                  <SampleChipColumnOrder
-                    cache={definitionCache}
-                    vendor={vendor}
-                    sample={sample}
-                  />
-                )}
-                {/*
-                  HON-5: say it HERE, when the CSV sample is tagged, not at the
-                  preview. Both route discriminators early-return on "csv" by
-                  construction, so this pack can never route automatically - and
-                  an operator told only "no discriminator found" would go and
-                  collect more samples, which cannot possibly help. The
-                  sibling count is why this is not a bare format check: a
-                  single-log-type pack keeps a working match-all.
-                */}
-                {!isRenaming &&
-                  (() => {
-                    const warning = csvRoutingWarning(
-                      sample.format,
-                      samples.length - 1,
-                    );
-                    return warning === null ? null : (
-                      <p className="field-hint sample-chip-routing">{warning}</p>
-                    );
-                  })()}
                 {isRenaming && renameError !== "" && (
                   <p className="field-hint">{renameError}</p>
                 )}
@@ -843,6 +1036,17 @@ export function SampleIntakeSection({
           })}
         </div>
       )}
+      {/* HON-5, said ONCE (DBT-228): the routing caveat used to repeat on every
+          chip of the same format. It is a warning - a pack that cannot route
+          automatically - so it stays visible, grouped by message and naming
+          the log types it applies to; the full text is in the tip. */}
+      {samples !== null &&
+        routingWarningGroups(samples).map(({ warning, logTypes }) => (
+          <p key={warning} className="field-hint sample-chip-routing">
+            {logTypes.join(", ")}: {splitNoteLead(warning).lead}{" "}
+            <InfoTip text={warning} />
+          </p>
+        ))}
 
       {/* CSV header-resolution dialog (Unit 12). Keyed by queue index so each
           queued file gets a fresh dialog (transient tab/paste state resets).
@@ -852,6 +1056,13 @@ export function SampleIntakeSection({
           unable to fill it without overwriting whatever the operator had
           started typing. The wait is one KV read, and only when a cache is
           bound and the scope can be named. */}
+      {/* DBT-175. One note for the store, not one per key: the queued item
+          and every chip read it, and a refusal is about all of them. */}
+      {columnOrderRefusal !== null && (
+        <p className="field-hint sample-intake-column-order-refused" role="status">
+          {describeColumnOrderRefusal(columnOrderRefusal)}
+        </p>
+      )}
       {csvQueue !== null &&
         !columnOrder.loading &&
         csvItem !== null && (
@@ -897,25 +1108,49 @@ export function SampleIntakeSection({
  * provenance would be the same failure as inventing a column name - a confident
  * wrong answer where an honest silence was available.
  */
+/**
+ * DBT-228: the per-format routing warnings, one entry per distinct message with
+ * the log types it applies to, in sample order. A single-log-type pack keeps a
+ * working match-all, which formatRoutingWarning already encodes via the
+ * sibling count.
+ */
+export function routingWarningGroups(
+  samples: readonly TaggedSample[],
+): Array<{ warning: string; logTypes: string[] }> {
+  const groups = new Map<string, string[]>();
+  for (const sample of samples) {
+    const warning = formatRoutingWarning(sample.format, samples.length - 1);
+    if (warning === null) continue;
+    groups.set(warning, [...(groups.get(warning) ?? []), sample.logType]);
+  }
+  return [...groups].map(([warning, logTypes]) => ({ warning, logTypes }));
+}
+
 function SampleChipColumnOrder({
   cache,
   vendor,
   sample,
+  onStoreRefused,
 }: {
   cache: ContentCache | undefined;
   vendor: string;
   sample: TaggedSample;
+  /** Hands a refused store call up to the section's single note (DBT-175). */
+  onStoreRefused: (refusal: ColumnOrderRefusal) => void;
 }) {
   // VND-3: the field count comes from the sample this chip is already about, so
   // the sentence can MEASURE the shortfall instead of asking the operator to
   // eyeball it. The chip prints "35 fields" two lines up; the order prints "120
   // columns". Both numbers were already on screen and neither was compared.
-  const { resolved, notice, loading } = useVendorColumnOrder(
+  const { resolved, notice, loading, storeRefused } = useVendorColumnOrder(
     cache,
     vendor,
     sample.logType,
     sample.parsed.fields.length,
   );
+  useEffect(() => {
+    if (storeRefused !== null) onStoreRefused(storeRefused);
+  }, [storeRefused, onStoreRefused]);
   if (
     loading ||
     resolved === null ||
@@ -924,7 +1159,12 @@ function SampleChipColumnOrder({
   ) {
     return null;
   }
+  // The first sentence on the card, the whole note behind the (i) (DBT-125).
+  // DBT-228: a short phrase on the chip's own count line, the note in its tip.
   return (
-    <p className="field-hint sample-chip-provenance">Column names: {notice}</p>
+    <span className="sample-chip-provenance">
+      {", column names from a known order "}
+      <InfoTip text={notice} />
+    </span>
   );
 }

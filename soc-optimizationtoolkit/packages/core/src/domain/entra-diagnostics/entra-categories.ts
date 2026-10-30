@@ -36,9 +36,11 @@
  * HighVolume. AZR-2 called for resolving that while porting. Resolved in favour
  * of the SCRIPT, which is the thing that actually ran: all three are here,
  * their members taken from `$SecurityLogCategories`, `$StandardLogCategories`
- * and `$HighVolumeLogCategories` verbatim. The coverage catalog keeps offering
- * the two it always did, because changing what a stored selection means is a
- * separate act from making a third preset available.
+ * and `$HighVolumeLogCategories` verbatim. The coverage catalog DERIVES its
+ * Entra profile options from {@link ENTRA_PROFILES} (AZR-13, backlog.md 18i):
+ * Standard and HighVolume keep their legacy keys and meaning, and SecurityOnly
+ * becomes storable instead of being reverted to Standard on decode. Add a
+ * profile here and the catalog offers it; there is no second list to update.
  *
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto.
  */

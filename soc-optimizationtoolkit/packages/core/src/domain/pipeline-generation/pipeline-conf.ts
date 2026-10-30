@@ -13,16 +13,27 @@
  *     positional map (now sourced from Unit 12's canonical PANOS_CSV_HEADERS
  *     dictionary instead of the legacy hard-coded subset) or a generic serde;
  *   - JSON/KV: serde json/kvp.
- * ONE format is NOT legacy knowledge and was added 2026-09-03 (GEN-6):
+ * TWO formats are NOT legacy knowledge. SYSLOG was added 2026-10-02 (DBT-116):
+ * an eval that matches sample-parsing's own RFC 3164 / RFC 5424 patterns and
+ * names the groups as parseSyslog does - see syslogExtractFunction. Before it,
+ * syslog fell to the same trailing JSON serde positional once did. The other,
+ * added 2026-09-03 (GEN-6):
  *   - POSITIONAL: an eval that splits _raw on runs of whitespace and assigns
  *     the SAME column names sample-parsing/positional.ts produced. Before it,
  *     a positional sample fell to the trailing else and got a JSON serde over
  *     a whitespace line, which extracted nothing while every screen reported
  *     success. See positionalColumns / positionalExtractFunctions.
  * Timestamp logic (candidate list, CrowdStrike eval-first + backup
- * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map, the
+ * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map (but NOT its
+ * boolean, numeric, dynamic and string expressions, nor its quote escape -
+ * GEN-23 and GEN-29, see buildCoercionExpr), the
  * `Type=<table>` enrichment, the fixed cleanup field list, and escapeYamlFilter
- * ordering are all verbatim.
+ * ordering are all verbatim - with ONE timestamp exception, added 2026-10-02
+ * (GEN-7, operator decision): a RECOGNISED VPC Flow v2 positional source gets
+ * its timestamp field overridden to `start` beside the CEF `rt` override, and a
+ * Step 3a1 enrich eval that stamps TimeGenerated from `start` and converts the
+ * Start/End epoch seconds to ISO. Legacy stamped nothing there, so every flow
+ * took ingestion time. See vpcFlowStamp.
  *
  * PINNED STEP ORDER (contract, section 3 item 12): REDUCTION runs BEFORE RENAME
  * so its filters see RAW vendor field names. Reordering silently breaks every KB
@@ -54,8 +65,13 @@ import {
   CEF_HEADER_ESCAPE,
   CEF_HEADER_PATTERN,
   PANOS_CSV_HEADERS,
+  SYSLOG_RFC3164_PATTERN,
+  SYSLOG_RFC5424_PATTERN,
   VPC_FLOW_V2_FIELDS,
+  assertNeverFormat,
+  toSampleFormat,
 } from "../sample-parsing";
+import type { SampleFormat } from "../sample-parsing";
 import type { OverflowConfig } from "../field-matcher";
 import { CEF_IDENTITY_FIELDS, overrideValueFor } from "../cef-identity";
 import type { CefIdentityOverride } from "../cef-identity";
@@ -75,7 +91,40 @@ export interface PipelineVendorMapping {
   description?: string;
 }
 
-/** Build a type coercion expression for the Cribl Eval function (verbatim). */
+/**
+ * Build a type coercion expression for the Cribl Eval function.
+ *
+ * The type map is legacy; FOUR of its expressions are not (GEN-23 and
+ * GEN-29, 2026-10-29), because legacy's corrupted data silently:
+ *   - boolean: legacy `Boolean(x)` made '0', 'no' and 'false' true (every
+ *     non-empty string is truthy). Now value-aware: true/1/yes -> true,
+ *     false/0/no -> false, case-insensitive and trimmed; a real boolean passes
+ *     through; anything else yields undefined.
+ *   - int/long/real: legacy `Number(x) || 0` / `parseFloat(x) || 0.0` turned a
+ *     value that does not convert into a real 0, indistinguishable from a
+ *     measured zero. Now the epochToIso guard (non-null, non-blank, isFinite)
+ *     decides, then Number(); otherwise undefined. real also loses parseFloat's
+ *     partial parse ('12.5ms' -> 12.5).
+ *   - dynamic: legacy `JSON.parse(x)` threw on any non-JSON string. Now the
+ *     parse sits in a try/catch and a string that does not parse is KEPT AS IT
+ *     ARRIVED - not nulled - because a dynamic column holds a string, and the
+ *     text is the only copy of the vendor's value.
+ *   - string (GEN-29): legacy `String(x || '')` turned an int 0 or a boolean
+ *     false into ''. Now null/undefined pass through and every other value is
+ *     String(value).
+ * "Empty" is undefined, the same convention as the VPC Flow stamp: Cribl's Eval
+ * leaves the field unset. The emitter writes these inside a YAML double-quoted
+ * `value:` through escapeYamlFilter, so a field name holding `"` or `\` still
+ * yields a scalar that reads back verbatim. Legacy escaped `'` in the name as
+ * `\'`, which is not a YAML double-quoted escape and did not make the name a
+ * JS identifier either (it is never inside a string literal); that escape is
+ * gone (GEN-29). The expressions themselves use single quotes and no
+ * backslashes, so escaping changes nothing for an addressable name. The dynamic one is
+ * the first emitted expression with a statement body (an arrow IIFE); it is
+ * valid JavaScript and evaluated in the pins, NOT VERIFIED AGAINST A LIVE CRIBL
+ * INSTANCE in this change. Pinned by coercion-expr.test.ts through
+ * generatePipelineConfForPlan, evaluating each expression on sample values.
+ */
 export function buildCoercionExpr(
   fieldName: string,
   sourceType: string,
@@ -83,14 +132,23 @@ export function buildCoercionExpr(
 ): string | null {
   if (sourceType === targetType) return null;
   const t = targetType.toLowerCase();
-  const escaped = fieldName.replace(/'/g, "\\'");
-  if (t === "int" || t === "long") return `Number(${escaped}) || 0`;
-  if (t === "real") return `parseFloat(${escaped}) || 0.0`;
-  if (t === "boolean") return `Boolean(${escaped})`;
-  if (t === "datetime") return `${escaped}`;
-  if (t === "string") return `String(${escaped} || '')`;
+  // The name is read as a bare identifier, never inside a string literal, so
+  // there is nothing to escape for JavaScript; YAML escaping is the emitter's
+  // job (GEN-29). A name that is not a valid accessor is refused by
+  // checkCriblYaml's accessor rule, not repaired here.
+  const ref = fieldName;
+  const toNumber = `(${ref} != null && String(${ref}).trim() !== '' && isFinite(${ref})) ? Number(${ref}) : undefined`;
+  if (t === "int" || t === "long" || t === "real") return toNumber;
+  if (t === "boolean")
+    return (
+      `typeof ${ref} === 'boolean' ? ${ref} : ` +
+      `/^(true|1|yes)$/i.test(String(${ref}).trim()) ? true : ` +
+      `/^(false|0|no)$/i.test(String(${ref}).trim()) ? false : undefined`
+    );
+  if (t === "datetime") return `${ref}`;
+  if (t === "string") return `${ref} == null ? ${ref} : String(${ref})`;
   if (t === "dynamic")
-    return `typeof ${escaped} === 'string' ? JSON.parse(${escaped}) : ${escaped}`;
+    return `typeof ${ref} === 'string' ? (() => { try { return JSON.parse(${ref}); } catch (err) { return ${ref}; } })() : ${ref}`;
   return null;
 }
 
@@ -162,7 +220,9 @@ export function buildCefIdentityOverrideFn(
       continue;
     }
     adds.push(`        - name: ${field}`);
-    adds.push(`          value: "${JSON.stringify(value).slice(1, -1).replace(/"/g, '\\"')}"`);
+    // JSON.stringify makes the JS literal (quotes included); escapeYamlFilter
+    // then makes it a valid YAML double-quoted scalar (GEN-34).
+    adds.push(`          value: "${escapeYamlFilter(JSON.stringify(value))}"`);
   }
   if (adds.length === 0) {
     return null;
@@ -423,6 +483,152 @@ function positionalExtractFunctions(
   ];
 }
 
+/** The extraction kinds that are a plain serde over `_raw` (the trailing else). */
+type SerdeExtraction = "json" | "kvp";
+
+/**
+ * How a pipeline pulls fields out of `_raw`, by sample format.
+ */
+type Extraction =
+  | "cef"
+  | "leef"
+  | "csv"
+  | "positional"
+  | "syslog"
+  | SerdeExtraction;
+
+/**
+ * THE one decision about how a format is extracted (DBT-116), asked by both the
+ * transformation conf and the fallback reduction conf.
+ *
+ * A SWITCH WITH A NEVER-TYPED DEFAULT, deliberately, and that is the structural
+ * half of the fix. Both confs used to decide this in if/ternary ladders over a
+ * plain string, and a ladder compiles happily when the union grows: positional
+ * (DBT-77) reached the trailing JSON serde that way until GEN-6, and syslog was
+ * still reaching it when DBT-116 counted. Adding a SampleFormat member now fails
+ * typecheck HERE until someone decides how it is extracted.
+ *
+ * `unknown` maps to json explicitly - the behaviour it always had, now stated.
+ * ndjson is one JSON object per line, so the json serde reads it as it is.
+ */
+function extractionFor(format: SampleFormat): Extraction {
+  switch (format) {
+    case "cef":
+      return "cef";
+    case "leef":
+      return "leef";
+    case "csv":
+      return "csv";
+    case "positional":
+      return "positional";
+    case "syslog":
+      return "syslog";
+    case "kv":
+      return "kvp";
+    case "json":
+    case "ndjson":
+    case "unknown":
+      return "json";
+    default:
+      return assertNeverFormat(format);
+  }
+}
+
+/** The never-typed default for a switch over {@link Extraction}. */
+function assertNeverExtraction(extraction: never): never {
+  throw new Error(`Unhandled extraction: ${String(extraction)}`);
+}
+
+/**
+ * The extraction eval for a syslog source (DBT-116).
+ *
+ * WHY THIS BRANCH EXISTS. Without it a syslog sample fell to the trailing else
+ * and got `serde type: json` - "Parse JSON from _raw" - over a syslog line. A
+ * syslog line is not JSON, so the step extracted NOTHING, and every name the
+ * analyzer had shown (Hostname, Program, Message ...) and the mappings were
+ * built on was undefined in the installed pipeline. GEN-6's failure, one format
+ * over, and the reason the extraction has to REPRODUCE the parse.
+ *
+ * AN EVAL, NOT regex_extract, although the remediation plan proposed the
+ * latter. This emitter already avoids regex_extract for CEF ("conf differences
+ * across Cribl versions", see the file header), and an eval lets the emitted
+ * expressions mirror parseSyslog line for line: the parser tries RFC 3164
+ * first and RFC 5424 only when that failed, parses Priority/PID/Version as
+ * integers, and derives Facility and Severity from a 3164 PRI. A capture-group
+ * extraction would leave the numbers as strings and could not derive the two.
+ *
+ * THE PATTERNS ARE IMPORTED, on the cefHeaderAdds precedent: sample-parsing's
+ * own SYSLOG_RFC3164_PATTERN / SYSLOG_RFC5424_PATTERN are emitted by `.source`,
+ * so the parse and the pipeline reach each field through the same characters.
+ * The pin is an equality with the constants and a parity run against
+ * parseSyslog (pipeline-conf.test.ts), NOT a live Cribl run.
+ *
+ * `.slice(0)` turns a match into a PLAIN array and a miss into `[]` - the
+ * `__cefParts` precedent - so nothing downstream depends on Cribl preserving a
+ * match array's `index`/`input`/`groups`. A field whose value is undefined is
+ * not set, so a line neither pattern matches carries only `_raw`, exactly as
+ * parseSyslog leaves it.
+ */
+function syslogExtractFunction(groupId: string): string {
+  const raw = "(_raw || '')";
+  const is3164 = "__sys3164.length > 0";
+  const is5424 = "__sys5424.length > 0";
+  const int = (expr: string) => `parseInt(${expr}, 10)`;
+  /** One field, read from whichever pattern matched, else undefined. */
+  const pick = (from3164: string | null, from5424: string | null): string => {
+    const tail =
+      from5424 === null ? "undefined" : `(${is5424} ? ${from5424} : undefined)`;
+    return from3164 === null ? tail : `${is3164} ? ${from3164} : ${tail}`;
+  };
+  const pri3164 = "__sys3164[1]";
+  const entries: Array<[string, string]> = [
+    [
+      "__sys3164",
+      `(${raw}.match(/${SYSLOG_RFC3164_PATTERN.source}/) || []).slice(0)`,
+    ],
+    [
+      "__sys5424",
+      `${is3164} ? [] : (${raw}.match(/${SYSLOG_RFC5424_PATTERN.source}/) || []).slice(0)`,
+    ],
+    // The 3164 PRI is optional; parseSyslog sets Priority only when present.
+    [
+      "Priority",
+      pick(`(${pri3164} ? ${int(pri3164)} : undefined)`, int("__sys5424[1]")),
+    ],
+    ["Version", pick(null, int("__sys5424[2]"))],
+    ["Timestamp", pick("__sys3164[2]", "__sys5424[3]")],
+    ["Hostname", pick("__sys3164[3]", "__sys5424[4]")],
+    ["Program", pick("__sys3164[4]", null)],
+    ["PID", pick(`(__sys3164[5] ? ${int("__sys3164[5]")} : undefined)`, null)],
+    ["AppName", pick(null, "__sys5424[5]")],
+    ["ProcID", pick(null, "__sys5424[6]")],
+    ["MsgID", pick(null, "__sys5424[7]")],
+    ["Message", pick("__sys3164[6]", "__sys5424[8]")],
+    // parseSyslog derives these from a 3164 PRI only, never from a 5424 one.
+    [
+      "Facility",
+      pick(`(${pri3164} ? Math.floor(${int(pri3164)} / 8) : undefined)`, null),
+    ],
+    ["Severity", pick(`(${pri3164} ? ${int(pri3164)} % 8 : undefined)`, null)],
+  ];
+  return [
+    "  - id: eval",
+    '    filter: "true"',
+    "    disabled: false",
+    "    conf:",
+    "      add:",
+    ...entries.map(
+      ([name, expr]) =>
+        `        - name: ${name}\n          value: "${escapeYamlFilter(expr)}"`,
+    ),
+    "      remove:",
+    "        - __sys3164",
+    "        - __sys5424",
+    "    description: Parse syslog from _raw",
+    `    groupId: ${groupId}`,
+  ].join("\n");
+}
+
 /**
  * Generate the transformation pipeline conf.yml. Groups: Field Extraction,
  * (Volume Reduction), Enrich & Classify, (Overflow Collection), Sentinel
@@ -475,9 +681,15 @@ export function generatePipelineConf(
   const vendorCoercionDests = new Set(
     vendorCoercions.map((m) => m.destName.toLowerCase()),
   );
+  // A RENAME whose types differ converts too (F1-e), on the TARGET name: the
+  // coercion eval runs in the enrich group after the rename, so by then the
+  // value lives under the column's name. It used to be dropped here - the gap
+  // report counted it under "Cribl handles: N coercion(s)" and the pipeline
+  // never wrote it.
   const presetCoercions = activeFields.filter(
     (f) =>
-      f.action === "coerce" &&
+      (f.action === "coerce" ||
+        (f.action === "rename" && f.needsCoercion === true)) &&
       !vendorCoercionDests.has((f.target || f.source).toLowerCase()),
   );
   // Base64-decode fields (2026-09 decode action): emitted as an Eval below.
@@ -500,9 +712,29 @@ export function generatePipelineConf(
   if (sourceFormat === "cef" && timestampField === "TimeGenerated") {
     timestampField = "rt";
   }
+  // GEN-7. A RECOGNISED VPC Flow v2 source carries its flow window in `start`
+  // and `end` (epoch seconds), and no detection candidate matches either, so it
+  // fell back to the literal "TimeGenerated" - a field no event has - and every
+  // event was stamped with INGESTION time. Keyed on positionalColumns, the
+  // parser's own verdict, so an unrecognised field1..fieldN source is untouched.
+  const vpcFlowStamp =
+    sourceFormat === "positional" &&
+    timestampField === "TimeGenerated" &&
+    positionalColumns(fields).some((c) => c.name === "start");
+  if (vpcFlowStamp) {
+    timestampField = "start";
+  }
 
-  // Step 1 (extract group): Parse fields from _raw
-  if (sourceFormat === "cef") {
+  // Step 1 (extract group): Parse fields from _raw.
+  //
+  // DBT-116: the ladder branches on extractionFor's answer, not on the raw
+  // string, so the trailing else is reachable ONLY by the serde kinds - the
+  // `const serdeType: SerdeExtraction = extraction` there fails to compile if a
+  // kind is ever added without a branch above it. It used to be the landing
+  // place for ANY format nobody had taught it, which is how syslog got a JSON
+  // serde.
+  const extraction = extractionFor(toSampleFormat(sourceFormat));
+  if (extraction === "cef") {
     // CEF two-step extraction: (1) eval to parse the pipe-delimited header
     // (avoids regex_extract conf differences across Cribl versions); (2) serde
     // kvp for the extension key=value pairs. The __cefParts value GUARDS the
@@ -553,7 +785,7 @@ export function generatePipelineConf(
         "    groupId: extract",
       ].join("\n"),
     );
-  } else if (sourceFormat === "leef") {
+  } else if (extraction === "leef") {
     // LEEF: serde kvp with a tab delimiter
     functions.push(
       [
@@ -570,7 +802,7 @@ export function generatePipelineConf(
         "    groupId: extract",
       ].join("\n"),
     );
-  } else if (sourceFormat === "csv") {
+  } else if (extraction === "csv") {
     // CSV: strip the syslog prefix, split on comma, assign positional names.
     const isPanOS =
       solutionName.toLowerCase().includes("paloalto") ||
@@ -648,12 +880,16 @@ export function generatePipelineConf(
         ].join("\n"),
       );
     }
-  } else if (sourceFormat === "positional") {
+  } else if (extraction === "positional") {
     // GEN-6. See positionalExtractFunctions - this branch is the whole fix, and
     // its absence is why a positional sample used to be handed to a JSON serde.
     functions.push(...positionalExtractFunctions(positionalColumns(fields), "extract"));
+  } else if (extraction === "syslog") {
+    // DBT-116. The same defect GEN-6 closed for positional, one format over:
+    // see syslogExtractFunction.
+    functions.push(syslogExtractFunction("extract"));
   } else {
-    const serdeType = sourceFormat === "kv" ? "kvp" : "json";
+    const serdeType: SerdeExtraction = extraction;
     const serdeDesc =
       serdeType === "json"
         ? "Parse JSON from _raw"
@@ -862,6 +1098,50 @@ export function generatePipelineConf(
     );
   }
 
+  // Step 3a1 (enrich group): GEN-7 VPC Flow flow-time stamp.
+  //
+  // OPERATOR DECISION 2026-10-02: TimeGenerated is the flow START, and the
+  // epoch-to-datetime conversion lives HERE, in the pack, not in the DCR
+  // transform (which stays `source` - see DEFAULT_TRANSFORM_KQL). Without this
+  // step nothing wrote TimeGenerated: auto_timestamp's _time is removed in
+  // cleanup, so Azure stamped every flow with ingestion time, minutes off and
+  // unrecoverable once ingested. Start and End are converted in the same step
+  // because they are declared datetime and were shipping as raw epoch strings.
+  //
+  // Placed AFTER the rename so it reads whatever name `start`/`end` now carry.
+  // ORDER INSIDE THE EVAL MATTERS: TimeGenerated is computed from the epoch
+  // value BEFORE Start is overwritten with its ISO form. A non-numeric value
+  // (the '-' a SKIPDATA row can carry) yields undefined - the field is left
+  // unset - rather than the string 'Invalid Date'.
+  if (vpcFlowStamp) {
+    const renamedName = (source: string): string =>
+      vendorRenames.find((m) => m.sourceName === source)?.destName ??
+      presetRenames.find((f) => f.source === source)?.target ??
+      source;
+    const epochToIso = (name: string): string =>
+      `(${name} != null && String(${name}).trim() !== '' && isFinite(${name})) ? new Date(Number(${name}) * 1000).toISOString() : undefined`;
+    const startName = renamedName("start");
+    const endName = renamedName("end");
+    functions.push(
+      [
+        "  - id: eval",
+        '    filter: "true"',
+        "    disabled: false",
+        "    conf:",
+        "      add:",
+        "        - name: TimeGenerated",
+        `          value: "${epochToIso(startName)}"`,
+        `        - name: ${startName}`,
+        `          value: "${epochToIso(startName)}"`,
+        `        - name: ${endName}`,
+        `          value: "${epochToIso(endName)}"`,
+        "      remove: []",
+        "    description: Convert VPC Flow epoch start/end to ISO-8601 and stamp TimeGenerated from the flow start",
+        "    groupId: enrich",
+      ].join("\n"),
+    );
+  }
+
   // Step 3a2 (enrich group): base64-decode documented encoded fields into
   // their destination columns (e.g. Zscaler b64url -> RequestURL). A rename
   // would carry base64 text where rules expect decoded content; the source
@@ -919,7 +1199,7 @@ export function generatePipelineConf(
     const expr = buildCoercionExpr(fieldName, m.sourceType, m.destType);
     if (expr) {
       coercionExprs.push(
-        `        - name: ${fieldName}\n          value: "${expr}"`,
+        `        - name: ${fieldName}\n          value: "${escapeYamlFilter(expr)}"`,
       );
     }
   }
@@ -927,7 +1207,7 @@ export function generatePipelineConf(
     const expr = buildCoercionExpr(f.target || f.source, "string", f.type);
     if (expr) {
       coercionExprs.push(
-        `        - name: ${f.target || f.source}\n          value: "${expr}"`,
+        `        - name: ${f.target || f.source}\n          value: "${escapeYamlFilter(expr)}"`,
       );
     }
   }
@@ -1185,12 +1465,13 @@ export function generateReductionConfForPlan(
 
 /**
  * A no-op reduction pipeline emitted when no rules match the table/vendor.
- * Ported verbatim from legacy generateFallbackReductionConf, with ONE change:
- * a positional source gets the GEN-6 split-and-name extraction instead of a
- * serde, because its whole purpose is to let a hand-written drop filter read a
- * field, and a JSON serde over a whitespace-positional line produces none.
+ * Ported verbatim from legacy generateFallbackReductionConf, with TWO changes:
+ * a positional source gets the GEN-6 split-and-name extraction, and a syslog
+ * source the DBT-116 regex extraction, instead of a serde - because its whole
+ * purpose is to let a hand-written drop filter read a field, and a JSON serde
+ * over a whitespace-positional or syslog line produces none.
  * `fields` is optional so the legacy 3-argument call still compiles and still
- * behaves identically for every non-positional format.
+ * behaves identically for every other format.
  */
 export function generateFallbackReductionConf(
   solutionName: string,
@@ -1198,33 +1479,51 @@ export function generateFallbackReductionConf(
   sourceFormat?: string,
   fields: readonly PipelineFieldMapping[] = [],
 ): string {
-  const serdeType =
-    sourceFormat === "csv"
-      ? "csv"
-      : sourceFormat === "kv" ||
-          sourceFormat === "cef" ||
-          sourceFormat === "leef"
-        ? "kvp"
-        : "json";
-  const triage =
-    sourceFormat === "positional"
-      ? positionalExtractFunctions(positionalColumns(fields), "triage")
-      : [
-          [
-            "  - id: serde",
-            '    filter: "true"',
-            "    disabled: false",
-            "    conf:",
-            "      mode: extract",
-            `      type: ${serdeType}`,
-            "      srcField: _raw",
-            ...(serdeType === "kvp"
-              ? ['      delimChar: " "', '      pairDelim: "="']
-              : []),
-            `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
-            "    groupId: triage",
-          ].join("\n"),
-        ];
+  // DBT-116: the same extractionFor the transformation conf asks, so the two
+  // confs a pack ships cannot disagree about a format again. This was its own
+  // ladder - csv, then kv/cef/leef, then json for everything else - and syslog
+  // fell to the json. The kvp mapping for cef and leef (space delimiter, no
+  // header eval) is the legacy fallback's and is kept: this triage serde only
+  // has to make fields visible to a hand-written filter.
+  const extraction = extractionFor(toSampleFormat(sourceFormat));
+  const triageSerde = (serdeType: "csv" | "kvp" | "json"): string[] => [
+    [
+      "  - id: serde",
+      '    filter: "true"',
+      "    disabled: false",
+      "    conf:",
+      "      mode: extract",
+      `      type: ${serdeType}`,
+      "      srcField: _raw",
+      ...(serdeType === "kvp"
+        ? ['      delimChar: " "', '      pairDelim: "="']
+        : []),
+      `    description: Parse ${sourceFormat || "JSON"} from _raw so reduction filters can inspect fields.`,
+      "    groupId: triage",
+    ].join("\n"),
+  ];
+  let triage: string[];
+  switch (extraction) {
+    case "positional":
+      triage = positionalExtractFunctions(positionalColumns(fields), "triage");
+      break;
+    case "syslog":
+      triage = [syslogExtractFunction("triage")];
+      break;
+    case "csv":
+      triage = triageSerde("csv");
+      break;
+    case "cef":
+    case "leef":
+    case "kvp":
+      triage = triageSerde("kvp");
+      break;
+    case "json":
+      triage = triageSerde("json");
+      break;
+    default:
+      return assertNeverExtraction(extraction);
+  }
   return [
     `# Reduction Pipeline: ${solutionName} - ${tableName}`,
     "#",

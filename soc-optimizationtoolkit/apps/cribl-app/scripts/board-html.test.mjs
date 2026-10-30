@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { columnsFrom, renderBoardHtml } from './board-html.mjs';
-import { STATUSES } from './board.mjs';
+import { STATUSES, danglingLinks } from './board.mjs';
 
 const story = (over) => ({
   id: 'REL-1',
@@ -163,7 +163,9 @@ describe('renderBoardHtml', () => {
 
   it('renders code spans and card links inside detail', () => {
     const html = renderBoardHtml(
-      board([story({ detail: 'see `install-pack.ts` and [[REL-2]]' })]),
+      // REL-2 is on the board: since DBT-120 a link only anchors when its card
+      // is on the page, and this fixture used to link to a card that was not.
+      board([story({ detail: 'see `install-pack.ts` and [[REL-2]]' }), story({ id: 'REL-2' })]),
       '2026-08-27',
     );
 
@@ -336,5 +338,59 @@ describe('DBT-30 - a grouping at 100% collapses, and is never given a status', (
 
     expect(Object.keys(data.epics[0])).not.toContain('status');
     expect(Object.keys(data.features[0])).not.toContain('status');
+  });
+});
+
+/**
+ * DBT-120: the kanban linked every `[[X]]` to `#card-X` without asking whether
+ * that card is on the page, so a link to a pruned card was an anchor that went
+ * nowhere. An unresolved link renders as marked text instead.
+ */
+describe('DBT-120 - a [[link]] to a card not on the page is not an anchor', () => {
+  it('anchors a link to a card on the page and marks one that is not', () => {
+    const html = renderBoardHtml(
+      board([
+        story({ id: 'REL-1', detail: 'see [[REL-2]] and [[GONE-7]]' }),
+        story({ id: 'REL-2' }),
+      ]),
+      '2026-10-02',
+    );
+
+    expect(html.match(/<a class="xref" href="#card-[^"]*">/g)).toEqual([
+      '<a class="xref" href="#card-REL-2">',
+    ]);
+    expect(html.match(/<span class="xref-gone"[^>]*>GONE-7<\/span>/g)).toHaveLength(1);
+    expect(html).not.toContain('href="#card-GONE-7"');
+  });
+
+  // DBT-120 follow-up (architecture audit 2026-10-02): richText matched ANY
+  // `[[...]]` and resolved it against stories only, while check-board's
+  // danglingLinks matches id-shaped links and knows features too. So a link to
+  // a feature rendered struck through as "not on this board", and prose ABOUT
+  // links lost its brackets and rendered as a gone card - both of which
+  // check-board considered fine. Both now share LINK and knownIds.
+  it('agrees with danglingLinks: feature links resolve and link-shaped prose stays text', () => {
+    const data = {
+      ...board([
+        story({
+          id: 'REL-1',
+          feature: 'REL-F1',
+          detail: 'see [[REL-F1]], [[GONE-7]] and prose about [[link]] and [[CARD-ID]] syntax',
+        }),
+      ]),
+      features: [{ id: 'REL-F1', epic: 'REL', title: 'Feature one' }],
+    };
+    const html = renderBoardHtml(data, '2026-10-02');
+
+    expect(html.match(/<a class="xref" href="#card-[^"]*">[^<]*<\/a>/g)).toEqual([
+      '<a class="xref" href="#card-REL-F1">REL-F1</a>',
+    ]);
+    // The anchor has somewhere to land: the feature card carries the id.
+    expect(html.match(/id="card-REL-F1"/g)).toHaveLength(1);
+    expect(html.match(/<span class="xref-gone"[^>]*>[^<]*<\/span>/g)).toEqual([
+      '<span class="xref-gone" title="Not on this board - see backlog.md or the git history of board.json">GONE-7</span>',
+    ]);
+    expect(danglingLinks(data).map((d) => d.target)).toEqual(['GONE-7']);
+    expect(html).toContain('prose about [[link]] and [[CARD-ID]] syntax');
   });
 });

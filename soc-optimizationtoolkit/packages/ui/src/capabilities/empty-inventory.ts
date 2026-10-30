@@ -153,7 +153,7 @@ export function emptyInventoryMessage(input: EmptyInventoryInput): EmptyInventor
   switch (verdict) {
     case "granted":
       // The ONLY case that may claim a zero - permission was measured, here.
-      return { text: `No ${noun} found`, verified: true };
+      return verifiedNoneInventoryMessage(noun);
     case "denied":
       return {
         text: `Cannot list ${noun} - the connected identity does not have permission to read them`,
@@ -168,6 +168,20 @@ export function emptyInventoryMessage(input: EmptyInventoryInput): EmptyInventor
         verified: false,
       };
   }
+}
+
+/**
+ * The line for a VERIFIED zero - the one wording every lister uses to say
+ * "there are none", whichever way it established that.
+ *
+ * {@link emptyInventoryMessage} reaches it through a measured grant. A
+ * `Listing` of kind `none` reaches it structurally: `filterListing` only
+ * mints `none` from a source read that returned rows, so the zero is already
+ * measured and there is no capability to consult. Both say the same thing, so
+ * they share the text rather than each screen phrasing its own zero.
+ */
+export function verifiedNoneInventoryMessage(noun: string): EmptyInventoryMessage {
+  return { text: `No ${noun} found`, verified: true };
 }
 
 /**
@@ -207,7 +221,9 @@ export function unauditedScopeInventoryMessage(
  * The honest line for an empty inventory NO CAPABILITY COVERS.
  *
  * The settled taxonomy has no capability for listing subscriptions, resource
- * groups, Resource Graph results, or Cribl worker groups, and the standing rule
+ * groups, or Cribl worker groups, and none that makes a Resource Graph result
+ * complete (`resourcegraph.read` proves the query returns rows; Resource Graph
+ * still filters them by what the identity can read), and the standing rule
  * is not to quietly reuse a neighbouring one - mapping a subscription list onto
  * `workspace.read` would misreport what was actually checked.
  *

@@ -2,7 +2,9 @@
 
 Status: Record - BUILT 2026-08-25, all four steps. Kept as the record of WHY, not as a
 to-do list - the sequencing and the decisions below are what the code now
-implements, and the two remaining gaps are named at the end.
+implements. Both follow-on gaps named at the end were built by 2026-08-29
+(the chip override notice, and operator-named vendors as VND-1); one open
+question remains at the end (versioning a persisted order).
 
 Confirmed working against the live preview the same day: pasting a PAN-OS
 USERID line (a type with no bundled column order) opens "Headerless CSV

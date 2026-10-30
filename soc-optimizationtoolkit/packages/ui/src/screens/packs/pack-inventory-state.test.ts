@@ -17,6 +17,7 @@ import {
   PACK_INVENTORY_EMPTY_REASON,
   PACK_INVENTORY_LOADING_REASON,
   PACK_INVENTORY_UNAVAILABLE_REASON,
+  deployedUnreadReason,
   deriveDeployedBadge,
   deriveInventoryRows,
   deriveStorageSummary,
@@ -138,6 +139,45 @@ describe("deriveDeployedBadge", () => {
       [group("wg-a", ["p"]), group("wg-b", ["p"])],
     );
     expect(deriveDeployedBadge(row).label).toBe("Deployed on 2 groups: wg-a, wg-b");
+  });
+
+  it("says the status was not read, never 'Not deployed', when given a reason", () => {
+    // Even a row the snapshot WOULD call deployed: an unread status cites nothing.
+    const [row] = deriveInventoryRows(
+      [storedPack({ packName: "p" })],
+      [group("wg-a", ["p"])],
+    );
+    const badge = deriveDeployedBadge(row, "worker groups unavailable");
+    expect(badge).toEqual({
+      deployed: false,
+      count: 0,
+      label: "Deployed status not read - worker groups unavailable",
+      tone: "unknown",
+    });
+  });
+});
+
+describe("deployedUnreadReason (DBT-134 review)", () => {
+  const read = { kind: "read", snapshot: [] } as const;
+
+  it("lets the badges speak only after a successful read for a listing with groups", () => {
+    expect(deployedUnreadReason("loaded", 2, read)).toBeNull();
+  });
+
+  it("names the group listing first, whatever an earlier snapshot said", () => {
+    expect(deployedUnreadReason("loading", 2, read)).toBe("worker groups still loading");
+    expect(deployedUnreadReason("idle", 0, read)).toBe("worker groups still loading");
+    expect(deployedUnreadReason("failed", 0, read)).toBe("worker groups unavailable");
+    expect(deployedUnreadReason("loaded", 0, read)).toBe("no Stream worker group listed");
+  });
+
+  it("names a pending or failed packs read once the groups are listed", () => {
+    expect(deployedUnreadReason("loaded", 1, { kind: "pending" })).toBe(
+      "reading the groups' packs",
+    );
+    expect(deployedUnreadReason("loaded", 1, { kind: "failed" })).toBe(
+      "the packs read failed",
+    );
   });
 });
 

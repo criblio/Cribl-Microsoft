@@ -18,6 +18,8 @@ import { parseSampleContent } from "./parse-sample";
 import { checkCriblYaml } from "../pipeline-generation/cribl-yaml-validator";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "../pipeline-generation/plan";
+import { checkPlanFieldAccessors } from "../pipeline-generation/plan-accessor-check";
+import type { TablePlan } from "../pipeline-generation/models";
 import {
   generatePipelineConfForPlan,
   generateReductionConfForPlan,
@@ -134,14 +136,17 @@ describe("unaddressableFieldNote (DBT-78)", () => {
     ).toEqual([]);
 
     // TRIPWIRE FOR THE NEXT CHANGE, in the same style as the one that brought
-    // you here. The remaining hole is GEN-5: an unmatched or kept name reaches
-    // no `name:` line at all, so no character class can catch it - it needs the
-    // validator to read `remove:` bullets, and a live Cribl measurement of what
-    // a glob list does with an unaddressable name. WHEN THE "SHIPS" PINS BELOW
-    // FAIL, that is the good outcome: someone closed GEN-5. Re-read the note's
-    // WHETHER paragraph in accessor-names.ts at the same time, because at that
-    // point the note stops being the only warning those fates ever get, and
-    // (a) above becomes the claim to re-argue rather than to preserve.
+    // you here. GEN-5 closed its KEPT leg on 2026-10-02 - a kept name reaches
+    // no `name:` line, so checkPlanFieldAccessors refuses it from the plan
+    // instead (the two "REFUSES ... kept" pins below were "SHIPS" pins until
+    // then). The remaining hole is GEN-5's DROP leg: an unmatched name reaches
+    // only a `remove:` bullet, and closing it waits on a live Cribl measurement
+    // of what a glob list does with an unaddressable name. WHEN THE TWO
+    // REMAINING "SHIPS" PINS BELOW FAIL, that is the good outcome: someone
+    // closed the drop leg. Re-read the note's WHETHER paragraph in
+    // accessor-names.ts at the same time, because at that point the note stops
+    // being the only warning those fates ever get, and (a) above becomes the
+    // claim to re-argue rather than to preserve.
   });
 
   it("is not early-because-clearer: the build message already names the field", () => {
@@ -206,8 +211,10 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     actions: string[];
     issues: string[];
     reductionIssues: string[];
+    planIssues: string[];
     conf: string;
     reductionConf: string;
+    table: TablePlan;
   } {
     const parsed = parseSampleContent(content, { sourceName: "s" });
     const match = matchSampleToSchema(
@@ -251,8 +258,13 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
       actions: table.fields.map((f) => `${f.source}:${f.action}`),
       issues: checkCriblYaml(conf, "conf.yml"),
       reductionIssues: checkCriblYaml(reductionConf, "conf.yml"),
+      // GEN-5: the plan-level half of the refusal - the names no conf line
+      // presents. The preview adds these to the YAML issues, so a pin on
+      // `issues` alone would read a refused build as a shipping one.
+      planIssues: checkPlanFieldAccessors(table),
       conf,
       reductionConf,
+      table,
     };
   }
 
@@ -277,7 +289,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
 
   it("REFUSES an unaddressable name that the schema has a home for", () => {
     // The case the rule was written for, driven all the way from bytes.
-    const { actions, issues } = issuesForSample(
+    const { actions, issues, planIssues } = issuesForSample(
       "src-ip=1.1.1.1 dst-ip=2.2.2.2 account-id=999",
       [
         { name: "SrcIpAddr", type: "string" },
@@ -294,6 +306,9 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
       "src-ip:rename",
     ]);
     expect(issues).toHaveLength(3);
+    // GEN-5: a renamed name is the YAML rule's to refuse; the plan check must
+    // not report it a second time.
+    expect(planIssues).toEqual([]);
     expect(issues.join("\n")).toContain('field name "account-id"');
   });
 
@@ -302,7 +317,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     // note may not promise a safety net: the only trace of a dropped field in
     // the conf is a bullet under the cleanup eval's `remove:`, which is not a
     // name:/currentName:/newName: line, so the rule never runs on it.
-    const { actions, issues, conf } = issuesForSample(
+    const { actions, issues, planIssues, conf } = issuesForSample(
       '[{"src-ip":"1.1.1.1","vendor-thing":"x"}]',
       [{ name: "SomethingElse", type: "string" }, TIME],
     );
@@ -335,22 +350,96 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     // fail.
     expect(nameLinesFor(conf, "Type")).toHaveLength(1);
     expect(issues).toEqual([]);
+    // GEN-5's DROP leg is deliberately still open (it waits on a live Cribl
+    // measurement), so the kept-leg plan check must not reach a drop either.
+    expect(planIssues).toEqual([]);
   });
 
-  it("SHIPS a dotted name kept under its own spelling", () => {
+  it("REFUSES a dotted name kept under its own spelling (GEN-5)", () => {
     // The silent half of DBT-78 at its worst: `a.b` matched to a column also
     // called `a.b` needs no rename, so the conf carries no line bearing the
-    // name at all and there is nothing for the rule to read.
-    const { actions, issues, conf } = issuesForSample('[{"a.b":"x"}]', [
+    // name at all and there is nothing for the YAML rule to read. Until GEN-5
+    // this pin was "SHIPS": the build was green and the accessor unbuildable.
+    const { actions, issues, planIssues, conf } = issuesForSample(
+      '[{"a.b":"x"}]',
+      [{ name: "a.b", type: "string" }, TIME],
+    );
+    expect(actions).toEqual(["a.b:keep"]);
+    expect(conf).not.toContain("a.b");
+    // Same asymmetry as above: the YAML rule DID read a name here (`Type`), it
+    // was addressable, and the dotted one was never presented to it - which is
+    // still true, and is WHY the refusal has to come from the plan.
+    expect(nameLinesFor(conf, "Type")).toHaveLength(1);
+    expect(issues).toEqual([]);
+    expect(planIssues).toHaveLength(1);
+    expect(planIssues[0]).toContain('field name "a.b"');
+    expect(planIssues[0]).toContain("(keep)");
+    expect(planIssues[0]).toContain("TestTable_CL");
+  });
+
+  it("REFUSES a dotted name renamed to its own spelling (GEN-5)", () => {
+    // NOT IN THE CARD, FOUND MEASURING IT: a type mismatch between the sample
+    // and a column of the SAME name comes out of the matcher as `rename`, not
+    // `keep` or `coerce` - and the emitter skips a rename whose source equals
+    // its target (presetRenames in pipeline-conf.ts), so no conf line names
+    // the field either. It is a kept field in every way the conf can see.
+    const { actions, issues, planIssues, conf } = issuesForSample(
+      '[{"a.b":5}]',
+      [{ name: "a.b", type: "string" }, TIME],
+    );
+    expect(actions).toEqual(["a.b:rename"]);
+    expect(conf).not.toContain("a.b");
+    expect(issues).toEqual([]);
+    expect(planIssues).toHaveLength(1);
+    expect(planIssues[0]).toContain('field name "a.b"');
+    expect(planIssues[0]).toContain("(rename)");
+  });
+
+  it("REFUSES a COERCED unaddressable name exactly once (GEN-5)", () => {
+    // plan.ts maps keep+needsCoercion to `coerce`, and the field is still read
+    // by its own spelling. The plan carries the action directly here rather
+    // than through the matcher, which (measured) did not emit `coerce` for any
+    // of int/string/guid/dynamic/datetime against a same-named column.
+    const { table } = issuesForSample('[{"a.b":"x"}]', [
       { name: "a.b", type: "string" },
       TIME,
     ]);
-    expect(actions).toEqual(["a.b:keep"]);
-    expect(conf).not.toContain("a.b");
-    // Same asymmetry as above: the rule DID read a name here (`Type`), it was
-    // addressable, and the dotted one was never presented to it.
-    expect(nameLinesFor(conf, "Type")).toHaveLength(1);
+    const coerced = (type: string): TablePlan => ({
+      ...table,
+      fields: [{ source: "a.b", target: "a.b", type, action: "coerce" }],
+    });
+
+    // A coercion the emitter CAN express writes `- name: a.b` under the enrich
+    // eval's `add:`, so the YAML rule already refuses it - and the plan check
+    // must NOT report it a second time.
+    const int = coerced("int");
+    expect(
+      checkCriblYaml(generatePipelineConfForPlan(int, "Test Solution"), "conf.yml"),
+    ).toHaveLength(1);
+    expect(checkPlanFieldAccessors(int)).toEqual([]);
+
+    // A coercion it CANNOT express (buildCoercionExpr returns null for guid)
+    // writes no line at all, and that one is the plan check's to refuse.
+    const guid = coerced("guid");
+    const guidConf = generatePipelineConfForPlan(guid, "Test Solution");
+    expect(guidConf).not.toContain("a.b");
+    expect(checkCriblYaml(guidConf, "conf.yml")).toEqual([]);
+    const guidIssues = checkPlanFieldAccessors(guid);
+    expect(guidIssues).toHaveLength(1);
+    expect(guidIssues[0]).toContain('field name "a.b"');
+    expect(guidIssues[0]).toContain("(coerce)");
+  });
+
+  it("does not refuse an addressable name kept under its own spelling", () => {
+    // The control: the plan check reads every kept field, and a bare
+    // identifier must cost nothing.
+    const { actions, issues, planIssues } = issuesForSample(
+      '[{"SrcIpAddr":"1.1.1.1"}]',
+      [{ name: "SrcIpAddr", type: "string" }, TIME],
+    );
+    expect(actions).toEqual(["SrcIpAddr:keep"]);
     expect(issues).toEqual([]);
+    expect(planIssues).toEqual([]);
   });
 
   /**
@@ -389,7 +478,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
       TIME,
     ];
 
-    const { actions, issues, reductionIssues, reductionConf } = issuesForSample(
+    const { actions, issues, reductionIssues, planIssues, reductionConf } = issuesForSample(
       CSV,
       COLUMNS,
     );
@@ -403,6 +492,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
       "Source Port:rename",
     ]);
     expect(issues).toHaveLength(5);
+    expect(planIssues).toEqual([]);
     expect(issues.join("\n")).toContain('field name "Source IP"');
 
     // THE REDUCTION CONF READS 0 HERE, AND THAT IS NOT A HOLE - it is the
@@ -429,7 +519,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     // GEN-5's hole, in the shape GEN-4 could not reach: same name, no column,
     // so the matcher drops it and no rename line is ever emitted. No character
     // class can close this one - there is nothing to read.
-    const { actions, issues, reductionIssues, conf } = issuesForSample(
+    const { actions, issues, reductionIssues, planIssues, conf } = issuesForSample(
       '[{"Source IP":"1.1.1.1","Bad Thing":"x"}]',
       [{ name: "SomethingElse", type: "string" }, TIME],
     );
@@ -447,6 +537,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     // means "nothing unaddressable reached it", not "nothing reached it".
     expect(nameLinesFor(conf, "Type")).toHaveLength(1);
     expect(issues).toEqual([]);
+    expect(planIssues).toEqual([]);
     expect(reductionIssues).toEqual([]);
     // ...on BOTH reduction paths. The line above is the no-op fallback, where 0
     // is cheap; this is the full pipeline a table WITH reduction rules gets,
@@ -460,19 +551,24 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
     ).toEqual([]);
   });
 
-  it("SHIPS a whitespace name kept under its own spelling", () => {
+  it("REFUSES a whitespace name kept under its own spelling (GEN-5)", () => {
     // The worst of the three: the destination column IS "Source IP", so the
     // match succeeds, no rename is needed, and the conf carries no line bearing
-    // the name at all. The build is green and the accessor is unbuildable.
-    const { actions, issues, reductionIssues, conf } = issuesForSample(
-      '[{"Source IP":"1.1.1.1"}]',
-      [{ name: "Source IP", type: "string" }, TIME],
-    );
+    // the name at all. Until GEN-5 the build was green and the accessor
+    // unbuildable; the YAML counts below are still 0 because there is still
+    // nothing for that rule to read - the refusal is the plan check's.
+    const { actions, issues, reductionIssues, planIssues, conf } =
+      issuesForSample('[{"Source IP":"1.1.1.1"}]', [
+        { name: "Source IP", type: "string" },
+        TIME,
+      ]);
     expect(actions).toEqual(["Source IP:keep"]);
     expect(conf).not.toContain("Source IP");
     expect(nameLinesFor(conf, "Type")).toHaveLength(1);
     expect(issues).toEqual([]);
     expect(reductionIssues).toEqual([]);
+    expect(planIssues).toHaveLength(1);
+    expect(planIssues[0]).toContain('field name "Source IP"');
     // Same on the rules-carrying reduction path, for the same reason: there is
     // no line bearing the name on either.
     const withRules = issuesForSample(
@@ -487,7 +583,7 @@ describe("what a whole generated pack actually refuses (DBT-78)", () => {
   it("still says it at parse time in every one of those cases", () => {
     // The asymmetry above is only tolerable because the note is unconditional -
     // it fires on all six, refused and shipping alike, and does not try to
-    // predict the fate. The four SHIPPING cases in this list have no other
+    // predict the fate. The two SHIPPING (dropped) cases in this list have no other
     // warning anywhere in the product.
     for (const content of [
       "src-ip=1.1.1.1 dst-ip=2.2.2.2 account-id=999",

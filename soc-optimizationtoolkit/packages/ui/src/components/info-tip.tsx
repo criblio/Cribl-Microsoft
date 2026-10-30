@@ -40,9 +40,22 @@ const GAP = 6;
 const EDGE = 8;
 
 export function InfoTip({ text }: InfoTipProps) {
-  const [open, setOpen] = useState(false);
+  // TWO reasons to be open (DBT-126, claude-kit standards/info-affordances.md):
+  // hovered, or pinned by focus / click / keyboard. One shared flag let a
+  // pointer press open the tip on focus and shut it on the click that followed
+  // - so clicking the (i) closed it, and on touch a tap did both at once.
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const open = hovered || pinned;
+  // A press focuses the icon and THEN clicks it. Remembering that the focus
+  // came from the press lets the click pin the tip instead of toggling it off.
+  const focusedByPress = useRef(false);
   const iconRef = useRef<HTMLSpanElement>(null);
   const popRef = useRef<HTMLSpanElement>(null);
+  const close = useCallback(() => {
+    setHovered(false);
+    setPinned(false);
+  }, []);
 
   // Position the tip from the icon's CURRENT viewport rect. Runs on open and
   // again on scroll/resize, so a pinned tip tracks its icon instead of
@@ -103,16 +116,31 @@ export function InfoTip({ text }: InfoTipProps) {
     window.addEventListener("resize", reposition, { passive: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        close();
+      }
+    };
+    // An outside press closes it - touchstart too, or a tablet never can.
+    const onOutside = (event: Event) => {
+      const target = event.target;
+      const inside =
+        target instanceof Node &&
+        (iconRef.current?.contains(target) === true ||
+          popRef.current?.contains(target) === true);
+      if (!inside) {
+        close();
       }
     };
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside);
     return () => {
       window.removeEventListener("scroll", reposition, { capture: true });
       window.removeEventListener("resize", reposition);
       window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
     };
-  }, [open, place]);
+  }, [open, place, close]);
 
   return (
     <span className="info-tip">
@@ -122,13 +150,32 @@ export function InfoTip({ text }: InfoTipProps) {
         role="button"
         tabIndex={0}
         aria-label="More information"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        aria-expanded={open}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onMouseDown={() => {
+          focusedByPress.current = document.activeElement !== iconRef.current;
+        }}
+        onFocus={() => setPinned(true)}
+        onBlur={close}
         onClick={(event) => {
+          // preventDefault as well as stopPropagation: inside a <label> the
+          // click would otherwise also operate the labelled control.
+          event.preventDefault();
           event.stopPropagation();
-          setOpen((current) => !current);
+          if (focusedByPress.current) {
+            focusedByPress.current = false;
+            setPinned(true);
+            return;
+          }
+          setPinned((current) => !current);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            setPinned((current) => !current);
+          }
         }}
       >
         i
@@ -143,8 +190,8 @@ export function InfoTip({ text }: InfoTipProps) {
         popover="manual"
         // Keeping the pointer on the tip keeps it open, so a long tip can be
         // read and scrolled; leaving it closes, same as leaving the icon.
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         {text}
       </span>

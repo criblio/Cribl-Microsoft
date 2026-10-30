@@ -6,7 +6,7 @@
  * screen is its successor, composing the ALREADY-SHIPPED screens as sections
  * rather than scattering them across sidebar routes.
  *
- * The NINE sections render in page order from @soc/core INTEGRATE_SECTIONS,
+ * The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS,
  * all BUILT and operable. The numbers below ARE the array order - it is the
  * map a reader uses before touching this file, so it has to match the data:
  *
@@ -25,21 +25,29 @@
  *      mapping table (with field search), vendor-identity forced inputs,
  *      enrichment editors, and the approval state machine. Gates the content
  *      path only (Unit 18); the native deploy stays independent.
- *   4. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
+ *   4. Review Coverage - ONE step with a Rules / Workbooks switch (DBT-226)
+ *      over two RuleCoverageSection instances, both kept mounted: rules -
  *      three-way coverage with clickable missing-field close-match review and
- *      multi-format custom-rule upload. Informational; lights RULE badges.
- *   5. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
- *      the solution's shipped workbooks plus solution-related deployed ones.
- *      Informational.
- *   6. Enable Sentinel Content - ContentInstallSection: loads the selected
+ *      multi-format custom-rule upload, lighting RULE badges; workbooks - the
+ *      solution's shipped workbooks. Informational. Both instances read the
+ *      EFFECTIVE mappings, and a close match applied there reaches the Gap
+ *      Analysis as a remapEvent (DBT-203).
+ *   5. Enable Sentinel Content - ContentInstallSection: loads the selected
  *      solution's content and installs it. Informational; never gates a
  *      deploy.
- *   7. Select Azure Resources - the AzureTargetingScreen cascade, capability
+ *   6. Select Azure Resources - the AzureTargetingScreen cascade, capability
  *      checkboxes, Sentinel-enabled auto-check, and the operable
- *      RoleAssignmentSection (Unit 8). Additive + non-gating.
- *   8. Configure Cribl      - Stream-only worker-group select, pack name,
- *      multi-group fan-out, and the pack overwrite check.
- *   9. Deploy               - the operable onboard (native + custom _CL
+ *      RoleAssignmentSection (Unit 8). Additive + non-gating. On the
+ *      existing-destination path (section 7) none of it renders: the section
+ *      is 'not-needed' and nothing in Azure is read ([[GEN-21]]), from the
+ *      moment the radio is on, before any pick ([[GEN-28]]).
+ *   7. Configure Cribl      - Stream-only worker-group select, pack name,
+ *      multi-group fan-out, the pack overwrite check, and the Sentinel
+ *      destination radio ([[GEN-21]]): create a new destination (Deploy does)
+ *      or point every detected table at an EXISTING Cribl Sentinel destination
+ *      in the group, which forces the routable pack shape. Offline starts on
+ *      the existing choice.
+ *   8. Deploy               - the operable onboard (native + custom _CL
  *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
  *      content path with real DCR values in outputs.yml, gated by the
  *      vendor-identity check and the overwrite acknowledgment. Alongside it,
@@ -47,6 +55,15 @@
  *      saves one .tgz - an ARM deployment template, the assembled pack, and a
  *      README naming the exact deploy scope. It gates on READ prerequisites
  *      only, so it stays available when the deploy button cannot unlock.
+ *      On the existing-destination path ([[GEN-21]]) the run IS the pack: it
+ *      builds and installs the routable pack, creates nothing in Azure and no
+ *      Cribl destination, and asks for no table name or ingestion client id
+ *      (@soc/core deployAzureRequirements, [[GEN-28]]). Export stays disabled
+ *      there - there are no Azure resources to export. In place of source
+ *      wiring, a Source connection block shows the group route to add by
+ *      hand once every table has a confirmed pick - before the pack is
+ *      installed - and warns when the source is QuickConnected, so the route
+ *      would not fire. The app writes no route.
  *
  * The user validated the native-table onboard live end to end; it stays fully
  * operable THROUGH this page. NONE of the standalone Onboard / Azure
@@ -54,7 +71,7 @@
  * said they were "parked in the Development nav section; they stay
  * reachable", and all four are absent from the route table. Three survive
  * COMPOSED rather than routed: Onboard and Batch as tabs of DCR Automation,
- * and AzureTargetingScreen inside section 7 of this page. Review is not
+ * and AzureTargetingScreen inside section 6 of this page. Review is not
  * reachable at all - its screen was deleted 2026-08-24 ([[HON-8]]).
  *
  * Read-ahead contract: every section is visible; gating lives only at the
@@ -69,6 +86,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import {
   DEFAULT_OPERATION_OPTIONS,
   artifactsToOffer,
@@ -86,7 +104,6 @@ import {
   listingCount,
   listingRows,
   placeholderWarning,
-  resolveDestinations,
   canWireSource,
   captureSamples,
   compareLogTypeCoverage,
@@ -97,11 +114,12 @@ import {
   mergeLogTypeSources,
   rankUnreferencedByVolume,
   deployedGroups,
+  deployAzureRequirements,
   deriveSectionStatuses,
+  sectionForPill,
   destinationIdFromOptions,
   identityGateMessage,
   installedPackVersions,
-  isStreamWorkerGroup,
   missingIdentityFields,
   nextPackVersion,
   onboardTable,
@@ -118,7 +136,6 @@ import type {
 } from "@soc/core";
 import type {
   ContentItem,
-  CriblGroupSummary,
   PackShape,
   CriblOptions,
   DcrRoleTarget,
@@ -137,7 +154,6 @@ import type {
   SolutionRef,
   CefIdentityFinding,
   CefIdentityOverride,
-  DcrInventoryEntry,
   LogTypeFieldValues,
   SessionDestination,
   TableAssemblyInput,
@@ -157,14 +173,17 @@ import { NumberedSection } from "../../components/numbered-section";
 import {
   deriveLogTypeRecommendation,
   deriveSampleCoverageView,
-  packShapeSummary,
+  PACK_COUNTS_TIP,
+  packCountsSummary,
   sampleCoverageGateReason,
 } from "../samples/sample-coverage-state";
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { SampleSourcePicker } from "../samples/sample-source-picker";
 import { findEntry } from "../samples/sample-source-picker-state";
+import type { SampleMethod } from "../samples/sample-source-picker-state";
 import { CapturePanel } from "../samples/capture-panel";
 import { LakePanel } from "../samples/lake-panel";
+import { storedEventShortfalls } from "../samples/planned-samples";
 import { useSampleSources } from "../samples/use-sample-sources";
 import { InfoTip } from "../../components/info-tip";
 import { ReadinessFooter } from "../../components/readiness-footer";
@@ -176,8 +195,20 @@ import { RecentRuns } from "../../onboarding/recent-runs";
 import { SampleIntakeSection } from "../samples/sample-intake-section";
 import type { SampleArrivalEvent } from "../samples/sample-intake-section";
 import { MappingReviewSection } from "../mapping-review/mapping-review-section";
-import type { MappingReviewRenameEvent } from "../mapping-review/mapping-review-section";
-import { PipelinePreviewSection } from "../pipeline-preview/pipeline-preview-section";
+import {
+  ruleFieldsFromGapReports,
+  unionRuleFields,
+} from "../rule-coverage/rule-coverage-state";
+import type {
+  MappingReviewRemapEvent,
+  MappingReviewRemoveEvent,
+  MappingReviewRenameEvent,
+} from "../mapping-review/mapping-review-section";
+import { withoutKey } from "../mapping-review/mapping-review-state";
+import {
+  PIPELINE_PREVIEW_TIP,
+  PipelinePreviewSection,
+} from "../pipeline-preview/pipeline-preview-section";
 import { ANALYSIS_STALE_NOTICE } from "../table-picker/table-picker-state";
 import { createTableSchemaResolver } from "../table-picker/table-schema-resolver";
 import { useWorkspaceTables } from "../table-picker/use-workspace-tables";
@@ -193,6 +224,12 @@ import {
   SearchableMultiSelect,
   SearchableSelect,
 } from "../../components/searchable-select";
+import { WorkerGroupField } from "../../components/worker-group-field";
+import {
+  streamGroupRows,
+  useInitialWorkerGroup,
+  useStreamWorkerGroups,
+} from "../../components/worker-group-listing";
 import { sleep } from "../../polling/sleep";
 import { RoleAssignmentSection } from "../role-assignment/role-assignment-section";
 import {
@@ -204,7 +241,40 @@ import {
   defaultPackName,
   deployDisabledReason,
   deriveSectionInputs,
+  sectionSummary,
 } from "./integrate-screen-state";
+import {
+  deploySettingsSummary,
+  foldableWithoutShift,
+  parsePinnedSections,
+  pinnedSectionsKey,
+  sectionsToCollapseOnMove,
+} from "./integrate-screen-state";
+import {
+  captureGroupDefault,
+  describeOutputRow,
+  expectedPackId,
+  existingDestinationForArc,
+  existingDestinationGateReason,
+  existingDestinationRoute,
+  existingPickerView,
+  ingestionClientIdHint,
+  initialDestinationMode,
+  sourceRouting,
+  sourceRoutingNotice,
+  tablePick,
+} from "./existing-destination-state";
+import type {
+  DestinationMode,
+  ExistingOutputsRead,
+  SourceRouting,
+} from "./existing-destination-state";
+import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
+import {
+  buildDestinationPath,
+  definitionDestinationFields,
+  resolveBuildDestinations,
+} from "./build-destinations";
 import { WiringSection } from "./wiring-section";
 
 /**
@@ -236,6 +306,11 @@ const DEPLOY_WRITE_CAPABILITIES: readonly Capability[] = Object.freeze([
 ]);
 
 /** Bare file name for an export archive - deterministic, keyed by the run. */
+/** The DOM id a section scrolls to (DBT-127). */
+function sectionAnchor(id: IntegrateSectionId): string {
+  return `integrate-section-${id}`;
+}
+
 export function exportArchiveName(workspaceName: string, jobId: string): string {
   const part = (value: string): string => {
     const safe = value.replace(/[^A-Za-z0-9._-]/g, "_");
@@ -418,8 +493,6 @@ export function IntegrateScreen({
   const { ports, config, capabilities, capabilityContext } = usePorts();
 
   // ---- Cribl Configuration section (worker group + pack name) -----------
-  const [groups, setGroups] = useState<CriblGroupSummary[] | null>(null);
-  const [groupsError, setGroupsError] = useState("");
   const [groupId, setGroupId] = useState("");
   // NO solution here: it is declared below, and a useState initializer runs
   // IMMEDIATELY on first render, so reading it would throw before the component
@@ -433,6 +506,29 @@ export function IntegrateScreen({
   // needs the Sentinel destination to already exist in the worker group.
   // Defaults to all-inclusive - the shape every pack had before this existed.
   const [packShape, setPackShape] = useState<PackShape>("all-inclusive");
+  // GEN-21: where the pack's events go. Both choices are always offered; an
+  // offline operator (no Azure identity) starts on the existing destination,
+  // because Deploy cannot create one for them.
+  const [destinationMode, setDestinationMode] = useState<DestinationMode>(() =>
+    initialDestinationMode(offline),
+  );
+  const existingMode = destinationMode === "existing";
+  // The same derivation the capability audit and Enable Sentinel Content use.
+  const azureIdentityPresent = hasAzureIdentity(config);
+  // The group's outputs, read for the picker on a group change or when the
+  // operator asks - never per render, never per table (the proxy budget).
+  const [existingRead, setExistingRead] = useState<ExistingOutputsRead>({
+    state: "idle",
+  });
+  const [existingReadNonce, setExistingReadNonce] = useState(0);
+  // Per table: the picked destination id, and the id a confirmation was given
+  // for (a different pick asks again).
+  const [chosenByTable, setChosenByTable] = useState<Readonly<Record<string, string>>>({});
+  const [confirmedByTable, setConfirmedByTable] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  // DBT-201: a hand-picked worker group is never replaced by the capture group.
+  const groupTouchedRef = useRef(false);
   // Multi-group deploy: opt-in fan-out beyond the primary worker group.
   const [multiGroup, setMultiGroup] = useState(false);
   const [extraGroups, setExtraGroups] = useState<string[]>([]);
@@ -586,7 +682,7 @@ export function IntegrateScreen({
   // (the kept Unit 18 ruleReferencedFields contract) back UP so the Gap
   // Analysis mapping table lights its RULE badges. Informational only - it
   // never participates in the deploy gate.
-  const [ruleFields, setRuleFields] = useState<ReadonlySet<string>>();
+  const [coverageRuleFields, setRuleFields] = useState<ReadonlySet<string>>();
 
   // CONTENT-FIRST ORDER (2026-07-12): each coverage instance reports what
   // its content REQUIRES; merged here and fed to the mapping review's
@@ -615,6 +711,18 @@ export function IntegrateScreen({
         ? "The solution's content parses the catch-all column opaquely - dropping fields could break it, so the action is disabled."
         : undefined;
   const dropUnneededEvent = useMemo(() => ({ nonce: dropNonce }), [dropNonce]);
+  // DBT-203: a coverage section's "Use this field". Same precedent as the drop
+  // action - a nonce the mapping review consumes - so the apply goes through
+  // the review's one apply-suggestion path rather than a second copy here.
+  const [remapEvent, setRemapEvent] = useState<MappingReviewRemapEvent>();
+  const remapNonce = useRef(0);
+  const requestRemap = useCallback(
+    (choice: { logType: string; sourceField: string; dest: string }) => {
+      remapNonce.current += 1;
+      setRemapEvent({ ...choice, nonce: remapNonce.current });
+    },
+    [],
+  );
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -635,15 +743,22 @@ export function IntegrateScreen({
    * intake section can offer to NAME the positional columns of a headerless
    * one, because the dialog and its queue live there. Both panels are wired to
    * this one callback so neither can drift away from that offer again.
+   *
+   * It resolves with what the store TRIMMED (DBT-197), read from the same
+   * listing the page is refreshed from: the cloud store byte-caps each sample
+   * and keeps only the first events that fit, and a 100-event capture reported
+   * as added in full while 9 were stored is the defect this answers.
    */
   const commitAcquiredSamples = useCallback(
     async (acquired: TaggedSample[]) => {
       for (const sample of acquired) {
         await ports.samples.upsert(sample);
       }
-      handleSamplesChange(await ports.samples.list());
+      const stored = await ports.samples.list();
+      handleSamplesChange(stored);
       arrivalNonce.current += 1;
       setSampleArrival({ nonce: arrivalNonce.current, samples: acquired });
+      return storedEventShortfalls(acquired, stored);
     },
     [ports.samples, handleSamplesChange],
   );
@@ -788,30 +903,46 @@ export function IntegrateScreen({
     [ports],
   );
 
-  // Populate the worker-group dropdown from the CriblClient port (same
-  // pattern as OnboardTableScreen: raw error + retry, no silent empty list).
-  // The persisted worker-group default wins the initial selection when it
-  // exists in the live list; otherwise the first discovered group is used.
-  const preferredGroup = criblDefaults?.workerGroup ?? "";
-  const loadGroups = useCallback(async () => {
-    setGroups(null);
-    setGroupsError("");
-    try {
-      // Edge fleets cannot run these pipelines: Stream worker groups only.
-      const list = (await ports.cribl.listGroups()).filter(isStreamWorkerGroup);
-      setGroups(list);
-      const preferred = list.some((g) => g.id === preferredGroup)
-        ? preferredGroup
-        : (list[0]?.id ?? "");
-      setGroupId((current) => (current !== "" ? current : preferred));
-    } catch (err) {
-      setGroupsError(String(err));
-    }
-  }, [ports.cribl, preferredGroup]);
+  // Remove contract (DBT-143). TWO origins, ONE delete: the Sample Data chip
+  // removes from the store itself and reports here; the Gap Analysis card asks
+  // here, and the request is routed back into the Sample Data section so its
+  // own remove does the deleting. Either way handleRemovedLogType runs once,
+  // after the store entry is gone, and prunes everything keyed by log type -
+  // the gap section's review via removeEvent, and the two per-log-type maps
+  // held at this level. Reports, effective mappings and enrichments are
+  // surfaced by the gap section, so rule coverage, the pipeline preview and
+  // the deploy follow from its prune without wiring of their own.
+  const [removeEvent, setRemoveEvent] = useState<MappingReviewRemoveEvent>();
+  const [removeRequest, setRemoveRequest] = useState<{
+    logType: string;
+    nonce: number;
+  }>();
+  const removeNonce = useRef(0);
+  const handleRemovedLogType = useCallback(
+    (logType: string) => {
+      ports.logger?.info("sample log type removed", { logType });
+      removeNonce.current += 1;
+      setRemoveEvent({ logType, nonce: removeNonce.current });
+      setIdentityOverrides((prev) => withoutKey(prev, logType));
+      setRouteFilterOverrides((prev) => withoutKey(prev, logType));
+    },
+    [ports],
+  );
+  const requestRemoveLogType = useCallback((logType: string) => {
+    removeNonce.current += 1;
+    setRemoveRequest({ logType, nonce: removeNonce.current });
+  }, []);
 
-  useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+  // Populate the worker-group dropdown from the CriblClient port. Every
+  // listing state - loading, refused, an unverified empty, groups none of
+  // which is Stream - is WorkerGroupField's to render (DBT-134), shared with
+  // the onboarding screens and Pack Inventory. Edge fleets cannot run these
+  // pipelines: Stream worker groups only. The persisted worker-group default
+  // wins the initial selection when it exists in the live list; otherwise the
+  // first discovered group is used.
+  const preferredGroup = criblDefaults?.workerGroup ?? "";
+  const workerGroups = useStreamWorkerGroups(ports.cribl, { logger: ports.logger });
+  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   // Distinct worker groups the pack would be deployed to: the primary group
   // plus any extra groups when the multi-group toggle is on.
@@ -842,7 +973,13 @@ export function IntegrateScreen({
   >(null);
   const detectedTableKey = detectedTables.join(",");
   useEffect(() => {
-    if (!shouldCheckRoutablePrerequisites(packShape, groupId, detectedTables.length)) {
+    // GEN-21: the existing path reads the same listing for its picker and
+    // checks the pick against it, so a second GET here would only spend budget
+    // to report the convention ids that path does not use.
+    if (
+      existingMode ||
+      !shouldCheckRoutablePrerequisites(packShape, groupId, detectedTables.length)
+    ) {
       setRoutableCheck(null);
       return;
     }
@@ -868,9 +1005,12 @@ export function IntegrateScreen({
         }
         setRoutableCheck({
           state: "done",
+          // GEN-18 follow-through: the same criblDefaults Deploy names the
+          // destination from, or this reports a non-default-named one missing.
           report: checkRoutablePrerequisites(
             detectedTables,
             parseOutputListing(res.body).map((o) => o.id),
+            criblDefaults,
           ),
         });
       } catch (err) {
@@ -883,7 +1023,97 @@ export function IntegrateScreen({
     // detectedTableKey stands in for detectedTables: a new array with the same
     // names must not re-issue the request on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packShape, groupId, detectedTableKey, ports.cribl]);
+  }, [packShape, groupId, detectedTableKey, ports.cribl, criblDefaults, existingMode]);
+
+  // GEN-21: the group's existing Sentinel destinations, read when the operator
+  // chooses the existing path, when the group changes under it, or when they
+  // ask again - and at no other time. The response is held raw and parsed in
+  // the view below, so a new gap analysis re-infers each row's table without
+  // another request.
+  useEffect(() => {
+    if (!existingMode || groupId === "") {
+      setExistingRead({ state: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setExistingRead({ state: "loading", groupId });
+    void (async () => {
+      try {
+        const res = await ports.cribl.request({
+          method: "GET",
+          path: "/system/outputs",
+          groupId,
+        });
+        if (cancelled) return;
+        setExistingRead({
+          state: "done",
+          groupId,
+          response: { status: res.status, body: res.body },
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setExistingRead({
+          state: "error",
+          groupId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [existingMode, groupId, existingReadNonce, ports.cribl]);
+  // A pick names a destination in ONE group; another group's ids are not it.
+  useEffect(() => {
+    setChosenByTable({});
+    setConfirmedByTable({});
+  }, [groupId]);
+  const existingView = useMemo(
+    () => existingPickerView(existingRead, detectedTables, groupId),
+    // detectedTableKey stands in for detectedTables, as in the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [existingRead, detectedTableKey, groupId],
+  );
+  const existingDestination = existingDestinationForArc(
+    destinationMode,
+    detectedTables,
+    chosenByTable,
+  );
+  const existingGateReason = existingMode
+    ? existingDestinationGateReason({
+        groupId,
+        tables: detectedTables,
+        view: existingView,
+        chosen: chosenByTable,
+        confirmed: confirmedByTable,
+        ...(criblDefaults !== undefined ? { naming: criblDefaults } : {}),
+      })
+    : null;
+  // An existing destination is reached through a group route, which only a
+  // routable pack can be the pipeline of - so the shape is not a choice there.
+  const effectivePackShape: PackShape = existingMode ? "routable" : packShape;
+
+  // The arc's inputs, derived here rather than beside the section statuses
+  // because the Azure reads below are enabled by what the core says they need.
+  // GEN-28: the radio goes in as `existingMode`, so the arc and this screen
+  // read ONE signal for "on the existing-destination path"; the pick only
+  // names the destination in the arc's text.
+  const sectionInputs = deriveSectionInputs({
+    solutionSelected,
+    scopeCommitted,
+    workerGroup: groupId,
+    packName,
+    deployCompleted,
+    sampleCount,
+    mappingsApproved,
+    existingMode,
+    ...(existingDestination !== undefined ? { existingDestination } : {}),
+  });
+  // Which Azure reads and fields this run needs - all of them on the native
+  // path, none on the existing one. The workspace table listing, the Content
+  // Hub cross-reference, the pack build's DCR inventory read and the run's
+  // table-name and client-id gates key off this, not off the radio directly.
+  const azureNeeds = deployAzureRequirements(sectionInputs);
 
   // Any change to the pack name or target groups invalidates a prior
   // conflict check and its overwrite acknowledgment.
@@ -941,7 +1171,8 @@ export function IntegrateScreen({
   // the summary showed only the native outcome, never the pack).
   const [packOutcome, setPackOutcome] = useState<{
     name: string;
-    installs: Array<{ group: string; ok: boolean; detail: string }>;
+    /** `packId` is the id Cribl installed it under - what a route names. */
+    installs: Array<{ group: string; ok: boolean; detail: string; packId?: string }>;
     /**
      * Tables whose destination shipped placeholder DCR values. Carried into the
      * summary because the build log scrolls and this is the one thing an
@@ -974,6 +1205,18 @@ export function IntegrateScreen({
   // and parses them - nothing is fetched twice. Until they do, the view reads
   // 'unknown' and gates nothing.
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  // RULE badges light on EVERY gap analysis (DBT-121), not only after the
+  // Rule Coverage section's own Analyze click: derived from the rules already
+  // fetched at solution selection plus the reports' destination columns, and
+  // unioned with whatever the coverage section reports (custom uploads).
+  const ruleFields = useMemo(
+    () =>
+      unionRuleFields(
+        ruleFieldsFromGapReports(contentItems, gapReports),
+        coverageRuleFields,
+      ),
+    [contentItems, gapReports, coverageRuleFields],
+  );
   // Corrected DeviceVendor/DeviceProduct per logType. Keyed by logType because
   // one solution can send several feeds whose headers differ - a single override
   // would silently rewrite the ones that were already right.
@@ -1021,7 +1264,9 @@ export function IntegrateScreen({
       azureIdentityPresent: false,
       criblReachable: false,
     },
-    enabled: scopeCommitted,
+    // GEN-21: the existing-destination path reads nothing from Azure, even
+    // with a scope left over from an earlier session.
+    enabled: scopeCommitted && azureNeeds.scope,
   });
   const workspaceTables = workspaceTableListing.names;
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
@@ -1081,7 +1326,11 @@ export function IntegrateScreen({
       enrichments,
       approved: mappingsApproved,
       toolkitVersion,
-      packShape,
+      // GEN-21: forced routable on the existing-destination path.
+      packShape: effectivePackShape,
+      // GEN-18 follow-through: the criblDefaults Deploy names the destination
+      // from, so the pack routes to the id Deploy creates.
+      destinationNaming: criblDefaults ?? null,
     }),
     [
       solution?.name,
@@ -1094,7 +1343,8 @@ export function IntegrateScreen({
       enrichments,
       mappingsApproved,
       toolkitVersion,
-      packShape,
+      effectivePackShape,
+      criblDefaults,
     ],
   );
   // What the solution's OWN analytic rules compare these fields against, per
@@ -1137,6 +1387,10 @@ export function IntegrateScreen({
   const criblReachable = capabilityContext?.criblReachable ?? true;
   const sampleSources = useSampleSources({ enabled: criblReachable });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
+  // DBT-224: how the operator supplies samples, asked before any method's
+  // controls are shown. Not persisted - a reload asks again.
+  const [sampleMethod, setSampleMethod] = useState<SampleMethod | null>(null);
+  const [coverageView, setCoverageView] = useState<"rules" | "workbooks">("rules");
   // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
   // the entry in its own state gave one question two answers, and only one of
   // them was ever cleared: switching worker group and switching mode both reset
@@ -1163,6 +1417,71 @@ export function IntegrateScreen({
   // LISTING Lake datasets is a leader route. It comes from stage one instead.
   const lakeTarget =
     sampleSourceEntry?.kind === "lake-dataset" ? sampleSourceEntry : null;
+
+  // DBT-201: the samples came from the capture group, so that is where the
+  // pack belongs - not the saved Options default the listing preselected. Only
+  // when the group is in the live list, and never over the operator's pick.
+  const captureGroup = captureTarget?.groupId;
+  useEffect(() => {
+    const next = captureGroupDefault({
+      liveGroupIds: streamGroupRows(workerGroups.state).map((g) => g.id),
+      captureGroup,
+      current: groupId,
+      touched: groupTouchedRef.current,
+    });
+    if (next !== null) setGroupId(next);
+  }, [captureGroup, workerGroups.state, groupId]);
+
+  // GEN-21: the source the existing-destination route selects - the live
+  // source the samples were captured from, when it is in the pack's group. Its
+  // type is what the route filter needs (`<type>:<id>`), so without one there
+  // is no route to show.
+  const routeSource =
+    captureTarget !== null &&
+    captureTarget.groupId === groupId &&
+    captureTarget.detail !== undefined &&
+    captureTarget.detail !== ""
+      ? { type: captureTarget.detail, id: captureTarget.id }
+      : null;
+  // Whether that source sends to routes or is QuickConnected, read once per
+  // source (GET /system/inputs/:id) and only on the existing path.
+  const [routeSourceRouting, setRouteSourceRouting] = useState<{
+    key: string;
+    routing: SourceRouting | null;
+  } | null>(null);
+  const routeSourceKey =
+    existingMode && routeSource !== null ? `${groupId}/${routeSource.id}` : "";
+  useEffect(() => {
+    if (routeSourceKey === "" || routeSource === null) {
+      setRouteSourceRouting(null);
+      return;
+    }
+    let cancelled = false;
+    setRouteSourceRouting({ key: routeSourceKey, routing: null });
+    void (async () => {
+      let routing: SourceRouting;
+      try {
+        const res = await ports.cribl.request({
+          method: "GET",
+          path: `/system/inputs/${encodeURIComponent(routeSource.id)}`,
+          groupId,
+        });
+        routing = sourceRouting({ status: res.status, body: res.body });
+      } catch (err) {
+        routing = {
+          kind: "unknown",
+          reason: err instanceof Error ? err.message : String(err),
+        };
+      }
+      if (!cancelled) setRouteSourceRouting({ key: routeSourceKey, routing });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // routeSourceKey names the group and the source; the object is rebuilt
+    // every render and must not re-issue the read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeSourceKey, ports.cribl]);
   const [sampleSetConfirmed, setSampleSetConfirmed] = useState(false);
   // MEASURED VOLUMES, lifted out of the Lake panel (plan Phase 5).
   //
@@ -1243,7 +1562,11 @@ export function IntegrateScreen({
         ? "Approve the DCR Gap Analysis mappings (section 3) first - the pack is built from them."
         : identityGateReason !== null
           ? identityGateReason
-          : packName.trim() === ""
+          : // GEN-21: a pack for an existing destination is only right once
+            // the pick is complete and confirmed.
+            existingGateReason !== null
+            ? existingGateReason
+            : packName.trim() === ""
             ? "Enter a pack name."
             : packTargetGroups.length === 0
               ? "Select at least one worker group."
@@ -1280,7 +1603,8 @@ export function IntegrateScreen({
       installPrerequisitesUnmet ||
       name === "" ||
       !mappingsApproved ||
-      identityGateReason !== null
+      identityGateReason !== null ||
+      existingGateReason !== null
     ) {
       // NEVER skip silently (live 2026-07-13: a green Deploy run shipped no
       // pack and nothing said why) - name the first unmet prerequisite.
@@ -1294,7 +1618,9 @@ export function IntegrateScreen({
                 ? "no worker group selected."
                 : !mappingsApproved
                   ? "the DCR Gap Analysis mappings are not approved (section 3)."
-                  : (identityGateReason ?? "a build is already running.")
+                  : (identityGateReason ??
+                    existingGateReason ??
+                    "a build is already running.")
         }`,
       ]);
       return null;
@@ -1308,7 +1634,12 @@ export function IntegrateScreen({
     };
     setPackBuildLines([]);
     setPackOutcome(null);
-    const installs: Array<{ group: string; ok: boolean; detail: string }> = [];
+    const installs: Array<{
+      group: string;
+      ok: boolean;
+      detail: string;
+      packId?: string;
+    }> = [];
     try {
       // 1. Overwrite guard: always re-check live, then honor the acknowledgment.
       // EXPORT SKIPS THIS ENTIRELY - it overwrites nothing, and asking an
@@ -1347,7 +1678,8 @@ export function IntegrateScreen({
       const packVersion = nextPackVersion(installedPackVersions(deployed, name));
 
       // 2. Resolve the plan from the SAME object the pipeline preview renders,
-      // including the Cribl YAML validation (an invalid plan never ships).
+      // including the pipeline validation - Cribl YAML plus the GEN-5 plan
+      // field-name check (an invalid plan never ships).
       // Only packName and version differ - a build ships an incremented
       // version. Every content decision is spread from contentPlanInputs
       // rather than re-listed here, because when it WAS re-listed the two
@@ -1363,7 +1695,7 @@ export function IntegrateScreen({
       }
       if (!preview.valid) {
         push(
-          `Cannot build: Cribl YAML validation found ${preview.totalYamlIssues} ` +
+          `Cannot build: pipeline validation found ${preview.totalYamlIssues} ` +
             "issue(s) - see the pipeline preview in section 3.",
         );
         return null;
@@ -1397,27 +1729,28 @@ export function IntegrateScreen({
         streamName: o.outcome.streamName,
       }));
       const planTables = plan.tables.map((t) => t.sentinelTable);
-      const needsLookup = planTables.some(
-        (t) => !sessionDestinations.some((s) => s.table === t),
-      );
-      let inventory: DcrInventoryEntry[] = [];
-      if (needsLookup) {
-        // A failed listing must never read as "no DCRs" - that would silently
-        // downgrade every table to placeholders and blame the environment.
-        // listDcrInventory throws; the reason is surfaced and the build goes on
-        // with placeholders that are now explicitly reported below.
-        //
+      // GEN-21: null on the existing-destination path, which reads no Azure
+      // and bakes no destination values (resolveBuildDestinations says why).
+      // GEN-25: a native-path routable pack writes no outputs.yml either, so
+      // it reads no inventory and logs no placeholders it will not ship.
+      const resolved = await resolveBuildDestinations({
+        ...buildDestinationPath({
+          dcrInventory: azureNeeds.dcrInventory,
+          existingDestination,
+          packShape: plan.packShape,
+        }),
+        planTables,
+        sessionDestinations,
         // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
-        // with an empty array, so the success path had the same defect this
-        // catch block was written for - and said "Read 0 deployed DCR(s)" as if
-        // it were a fact. dcrInventoryReadNotice consults `dcr.read` and only
-        // calls it a zero when the read was verified.
-        try {
+        // with an empty array, so the success path had the same defect the
+        // helper's catch block was written for - and said "Read 0 deployed
+        // DCR(s)" as if it were a fact. dcrInventoryReadNotice consults
+        // `dcr.read` and only calls it a zero when the read was verified.
+        readInventory: async () => {
           const listed = await listDcrInventory(ports.azure, {
             subscriptionId: config.subscriptionId,
             resourceGroup: config.resourceGroup,
           });
-          inventory = [...listingRows(listed)];
           push(
             dcrInventoryReadNotice({
               // DBT-61: `listingCount(..., 0)` is the sanctioned use - the 0
@@ -1439,19 +1772,11 @@ export function IntegrateScreen({
               },
             }),
           );
-        } catch (err) {
-          push(
-            `Could not read deployed DCRs (${String(err)}) - tables not deployed ` +
-              "in this session will ship placeholder destination values.",
-          );
-        }
-      }
-      const resolved = resolveDestinations(
-        planTables,
-        sessionDestinations,
-        inventory,
-      );
-      for (const entry of resolved) {
+          return [...listingRows(listed)];
+        },
+        push,
+      });
+      for (const entry of resolved ?? []) {
         if (entry.source === "inventory") {
           push(
             `${entry.table}: resolved destination from deployed DCR ` +
@@ -1459,7 +1784,7 @@ export function IntegrateScreen({
           );
         }
       }
-      const resolvedByTable = new Map(resolved.map((r) => [r.table, r]));
+      const resolvedByTable = new Map((resolved ?? []).map((r) => [r.table, r]));
       const tableInputs: TableAssemblyInput[] = plan.tables.map((table) => {
         const report = reportByLogType.get(table.logType);
         const effective =
@@ -1514,7 +1839,16 @@ export function IntegrateScreen({
         tableInputs,
         vendorSamples,
         builtAtMs: Date.now(),
-        outputsDefaults: { tenantId: config.tenantId, ingestionClientId: ingestId },
+        // GEN-21: the existing destination carries its own tenant and client
+        // id, and a routable pack writes no outputs.yml - nothing is stamped.
+        // GEN-25: its id goes in instead, so the README names the destination
+        // the route will send to rather than convention ids that do not exist.
+        ...definitionDestinationFields({
+          resolved,
+          existingDestination,
+          tenantId: config.tenantId,
+          ingestionClientId: ingestId,
+        }),
       };
 
       // 4. Assemble deterministically and persist the build record.
@@ -1531,10 +1865,12 @@ export function IntegrateScreen({
       // intended to resolve. The summary below reads the same field, so the
       // build log and the summary cannot disagree about which tables shipped
       // placeholders.
-      const placeholderNotice = placeholderWarning(
-        assembled.placeholderTables,
-        resolved,
-      );
+      //
+      // A routable pack - every existing-path pack (resolved null) and a
+      // native-path routable one - ships no destination, and core reports no
+      // placeholders for it (GEN-25), so no shape is special-cased here.
+      const placeholderTables = assembled.placeholderTables;
+      const placeholderNotice = placeholderWarning(placeholderTables, resolved ?? []);
       if (placeholderNotice !== null) {
         push(placeholderNotice);
       }
@@ -1577,6 +1913,7 @@ export function IntegrateScreen({
             group,
             ok: true,
             detail: `installed as '${installed.id}'`,
+            packId: installed.id,
           });
         } catch (err) {
           push(
@@ -1589,9 +1926,11 @@ export function IntegrateScreen({
           });
         }
       }
-      setPackOutcome({ name, installs, placeholderTables: assembled.placeholderTables });
+      setPackOutcome({ name, installs, placeholderTables });
       push(
-        "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
+        resolved === null
+          ? "Done. Add the group route shown under Source connection below in Cribl, then commit and deploy the group - this app does not write it."
+          : "Done. Wire a source below (or commit and deploy in Cribl) to activate the pack.",
       );
       return { crblFileName: assembled.crblFileName, crbl: assembled.crbl };
     } catch (err) {
@@ -1626,6 +1965,10 @@ export function IntegrateScreen({
     packTargetGroups,
     overwriteAcked,
     identityGateReason,
+    // GEN-21: the existing path's gate and the destination it builds for.
+    existingGateReason,
+    existingDestination,
+    azureNeeds.dcrInventory,
     outcomes,
     samples,
     config,
@@ -1637,16 +1980,160 @@ export function IntegrateScreen({
   ]);
 
   // ---- Derived section states, readiness pills, deploy gate -------------
-  const sectionInputs = deriveSectionInputs({
-    solutionSelected,
+  // (sectionInputs and azureNeeds are derived above, beside the radio.)
+  const resolved = deriveSectionStatuses(sectionInputs);
+  // DBT-232: moveToSection reads these through refs so its identity does not
+  // churn every render.
+  const resolvedRef = useRef(resolved);
+  resolvedRef.current = resolved;
+  const deployingRef = useRef(false);
+  deployingRef.current = deploying || packBuilding;
+
+  // DBT-127: the page owns which sections are folded, so "Done - next" and
+  // the footer pills can fold and open them. Nothing folds because a status
+  // changed - a section can turn complete while the operator is still working
+  // in it. Since DBT-232 sections DO fold when the operator explicitly moves
+  // to another one (see moveToSection), never on a status flip or a scroll.
+  const [collapsedSections, setCollapsedSections] = useState<
+    ReadonlySet<IntegrateSectionId>
+  >(() => new Set());
+  const setSectionCollapsed = useCallback(
+    (id: IntegrateSectionId, collapsed: boolean) => {
+      setCollapsedSections((prev) => {
+        if (prev.has(id) === collapsed) return prev;
+        const next = new Set(prev);
+        if (collapsed) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    },
+    [],
+  );
+  // DBT-232: sections the operator pinned open, remembered per user. The key
+  // carries the user's id; with no identity (or a refused read) pins live for
+  // this session only - nothing is written under a shared key.
+  const [pinnedSections, setPinnedSections] = useState<ReadonlySet<IntegrateSectionId>>(
+    () => new Set(),
+  );
+  const pinKeyRef = useRef<string | null>(null);
+  const pinCache = ports.contentCache;
+  const pinUser = ports.user;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const me = await pinUser.current();
+        const key = pinnedSectionsKey(me.id);
+        pinKeyRef.current = key;
+        const raw = await pinCache?.get(key);
+        if (!cancelled) {
+          setPinnedSections(
+            new Set(parsePinnedSections(raw, resolvedIdsRef.current)),
+          );
+        }
+      } catch {
+        // No identity, or the store refused the read: pins stay session-only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinCache, pinUser]);
+  const setSectionPinned = useCallback(
+    (id: IntegrateSectionId, pin: boolean) => {
+      const next = new Set(pinnedSections);
+      if (pin) next.add(id);
+      else next.delete(id);
+      setPinnedSections(next);
+      const key = pinKeyRef.current;
+      if (key !== null) {
+        void pinCache?.set(key, JSON.stringify([...next])).catch(() => {
+          // Best effort: the pin still holds for this session.
+        });
+      }
+    },
+    [pinnedSections, pinCache],
+  );
+
+  // DBT-232: moving to a section folds the others the operator is not using -
+  // except pinned ones, the arc's current section (the one asking for action)
+  // and Deploy while it runs. Only explicit moves get here (acting inside a
+  // section, Done - next, a footer pill), never scrolling. The section moved
+  // to is kept exactly where it was on screen.
+  const activeSectionRef = useRef<IntegrateSectionId | null>(null);
+  const resolvedIdsRef = useRef<IntegrateSectionId[]>([]);
+  resolvedIdsRef.current = resolved.map((r) => r.section.id);
+  const moveToSection = useCallback(
+    (id: IntegrateSectionId) => {
+      if (activeSectionRef.current === id) return;
+      activeSectionRef.current = id;
+      const keepOpen = new Set<IntegrateSectionId>();
+      const current = resolvedRef.current.find((r) => r.status === "current");
+      if (current !== undefined) keepOpen.add(current.section.id);
+      if (deployingRef.current) keepOpen.add("deploy");
+      const candidates = sectionsToCollapseOnMove(
+        id,
+        resolvedIdsRef.current,
+        collapsedSections,
+        pinnedSections,
+        keepOpen,
+      );
+      // DBT-234: near the top of the page there is no room to scroll back by
+      // the height of a folded section above, so those stay open.
+      const heights: Partial<Record<IntegrateSectionId, number>> = {};
+      for (const c of candidates) {
+        const el = document.getElementById(sectionAnchor(c));
+        if (el !== null) heights[c] = el.getBoundingClientRect().height;
+      }
+      const toFold = foldableWithoutShift(
+        candidates,
+        resolvedIdsRef.current,
+        id,
+        heights,
+        window.scrollY,
+      );
+      if (toFold.length === 0) return;
+      const anchor = document.getElementById(sectionAnchor(id));
+      const before = anchor?.getBoundingClientRect().top;
+      setCollapsedSections((prev) => {
+        const next = new Set(prev);
+        for (const f of toFold) next.add(f);
+        return next;
+      });
+      requestAnimationFrame(() => {
+        if (anchor === null || before === undefined) return;
+        const shift = anchor.getBoundingClientRect().top - before;
+        if (shift !== 0) window.scrollBy(0, shift);
+      });
+    },
+    [collapsedSections, pinnedSections],
+  );
+
+  // Open a section and bring it into view. The scroll waits a frame so it
+  // measures the section after it has expanded.
+  const goToSection = useCallback(
+    (id: IntegrateSectionId) => {
+      moveToSection(id);
+      setSectionCollapsed(id, false);
+      requestAnimationFrame(() => {
+        document
+          .getElementById(sectionAnchor(id))
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [setSectionCollapsed, moveToSection],
+  );
+  const summaryFacts = {
+    solutionName: solution?.name ?? "",
+    sampleLogTypes: samples.map((s) => s.logType),
+    analyzedLogTypes: gapReports.length,
+    mappingsApproved,
     scopeCommitted,
+    workspaceName: config.workspaceName,
     workerGroup: groupId,
     packName,
     deployCompleted,
-    sampleCount,
-    mappingsApproved,
-  });
-  const resolved = deriveSectionStatuses(sectionInputs);
+  };
   // Mode-aware pills (Unit 20): the full pill set with the skipped side's
   // prerequisite hidden. In "full" this is identical to the un-gated set, so
   // the operable native path is unchanged.
@@ -1655,12 +2142,14 @@ export function IntegrateScreen({
   // The single unlock condition, in dependency order: the arc's built
   // prerequisites first (scope -> worker group -> pack name, from the pure
   // module), then the concrete native-run fields the arc model does not
-  // track (a table name and an ingestion identity).
+  // track (a table name and an ingestion identity) - each asked for only when
+  // the core says the run needs it (GEN-28), which on the existing path is
+  // never.
   const runDisabledReason =
     deployDisabledReason(sectionInputs) ??
-    (deployTargets.length === 0
+    (azureNeeds.scope && deployTargets.length === 0
       ? "Enter a native table name in the Deploy section."
-      : ingestionClientId.trim() === ""
+      : azureNeeds.ingestionClientId && ingestionClientId.trim() === ""
         ? "Enter an ingestion client id in the Deploy section."
         : null);
 
@@ -1793,9 +2282,21 @@ export function IntegrateScreen({
   const packPortsAvailable =
     ports.packs !== undefined && ports.packInstall !== undefined;
   const contentEngaged = gapReports.length > 0 && packPortsAvailable;
-  const deployEverythingDisabledReason =
-    runDisabledReason ?? (contentEngaged ? packBuildDisabledReason : null);
+  // GEN-21: on the existing path the run IS the pack - nothing in Azure is
+  // deployed - so its gate is the pick, then the run's own prerequisites
+  // (which on this path drop the scope, the table name and the ingestion
+  // client id - GEN-28), then the pack's own.
+  const deployEverythingDisabledReason = existingMode
+    ? (existingGateReason ?? runDisabledReason ?? packBuildDisabledReason)
+    : (runDisabledReason ?? (contentEngaged ? packBuildDisabledReason : null));
   const runDeployEverything = useCallback(async () => {
+    if (existingMode) {
+      ports.logger?.info("deploy-everything: existing destination, pack only", {
+        destination: existingDestination ?? "",
+      });
+      await buildAndInstallPack();
+      return;
+    }
     ports.logger?.info("deploy-everything: starting", {
       targets: deployTargets.join(","),
       contentPack: contentEngaged,
@@ -1808,7 +2309,15 @@ export function IntegrateScreen({
       await buildAndInstallPack();
       ports.logger?.info("deploy-everything: pack build finished");
     }
-  }, [runDeploy, buildAndInstallPack, contentEngaged, deployTargets, ports.logger]);
+  }, [
+    runDeploy,
+    buildAndInstallPack,
+    contentEngaged,
+    deployTargets,
+    ports.logger,
+    existingMode,
+    existingDestination,
+  ]);
 
   // ---- Export instead of deploy (DBT-35) --------------------------------
   // The same run, stopping before every write. onboardBatch's templateOnly
@@ -1830,7 +2339,12 @@ export function IntegrateScreen({
   const exportDisabledReason =
     ports.artifacts === undefined
       ? "This host cannot save files."
-      : deployTargets.length === 0
+      : // GEN-21: the export collects the Azure resources a native deploy
+        // creates. With an existing destination there are none, and the pack
+        // alone is on the Packs screen once built.
+        existingMode
+        ? "Not used with an existing destination: there are no Azure resources to export. Build the pack and download it from the Packs screen."
+        : deployTargets.length === 0
         ? "Enter a native table name in the Deploy section."
         : config.subscriptionId === "" ||
             config.resourceGroup === "" ||
@@ -1840,7 +2354,13 @@ export function IntegrateScreen({
 
   const runExport = useCallback(async () => {
     const artifacts = ports.artifacts;
-    if (artifacts === undefined || exporting || deployTargets.length === 0) {
+    if (
+      artifacts === undefined ||
+      exporting ||
+      deployTargets.length === 0 ||
+      // Its reads are Azure reads; the existing path makes none (GEN-21).
+      existingMode
+    ) {
       return;
     }
     setExporting(true);
@@ -1942,6 +2462,7 @@ export function IntegrateScreen({
     buildAndInstallPack,
     solution?.name,
     packName,
+    existingMode,
   ]);
 
   // ---- The fallback offer beside the deploy (HON-7) ----------------------
@@ -2006,7 +2527,9 @@ export function IntegrateScreen({
   const solutionBody = (
     <SolutionBrowser
       onSelect={handleSolutionChange}
-      scopeCommitted={scopeCommitted}
+      // GEN-21: its Content Hub cross-reference is an Azure read, and the
+      // existing-destination path makes none; the repo heuristics still run.
+      scopeCommitted={scopeCommitted && azureNeeds.scope}
       // Keep this section in agreement with the rest of the page: the solution
       // restored from the content cache above drives every other section and
       // the readiness pill, so the browser must show it as selected too rather
@@ -2047,8 +2570,11 @@ export function IntegrateScreen({
           // dropdown no longer offers, and (because the panels below are
           // derived from it) a capture panel sitting over a Lake inventory.
           setSampleSourceChoice("");
+          setSampleMethod(next);
           sampleSources.selectMode(next);
         }}
+        method={sampleMethod}
+        onSelectMethod={setSampleMethod}
         onSelectGroup={(groupId) => {
           // Same reason, one level down: a source id is only addressable through
           // the group it was listed from, so the pick does not survive the move.
@@ -2060,7 +2586,7 @@ export function IntegrateScreen({
         onChange={setSampleSourceChoice}
         onReload={sampleSources.reload}
       />
-      {captureTarget !== null && (
+      {captureTarget !== null && sampleMethod === "live-capture" && (
         <CapturePanel
           key={captureTarget.id}
           source={captureTarget}
@@ -2081,7 +2607,7 @@ export function IntegrateScreen({
           onCommit={commitAcquiredSamples}
         />
       )}
-      {lakeTarget !== null && (
+      {lakeTarget !== null && sampleMethod === "lake-query" && (
         <LakePanel
           key={lakeTarget.id}
           datasetId={lakeTarget.id}
@@ -2144,7 +2670,14 @@ export function IntegrateScreen({
         definitionCache={ports.contentCache}
         onSamplesChange={handleSamplesChange}
         onRenameLogType={handleRenameLogType}
+        onRemoveLogType={handleRemovedLogType}
+        removeRequest={removeRequest}
         arrivalEvent={sampleArrival}
+        entry={
+          sampleMethod === "paste" || sampleMethod === "upload"
+            ? sampleMethod
+            : "none"
+        }
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,
@@ -2158,7 +2691,9 @@ export function IntegrateScreen({
         * that is only true down here: the pack-shape consequence and the
         * acknowledgement that arms the build. */}
       <div className="sample-coverage">
-        <p className="field-hint">{packShapeSummary(samples.length)}</p>
+        <p className="field-hint">
+          {packCountsSummary(samples.length)} <InfoTip text={PACK_COUNTS_TIP} />
+        </p>
         <p
           className={
             sampleCoverageView.verdict === "gaps"
@@ -2214,8 +2749,11 @@ export function IntegrateScreen({
         onEffectiveMappingsChange={setMappingOverrides}
         onEnrichmentsChange={setEnrichments}
         renameEvent={renameEvent}
+        removeEvent={removeEvent}
+        onRemoveLogType={requestRemoveLogType}
         contentRequirements={contentRequirements}
         dropUnneededEvent={dropUnneededEvent}
+        remapEvent={remapEvent}
         identityFindings={identityFindings}
         identityOverrides={identityOverrides}
         onIdentityOverridesChange={setIdentityOverrides}
@@ -2227,9 +2765,9 @@ export function IntegrateScreen({
         <summary className="pipeline-preview-summary">
           Pipeline preview
           <span className="field-hint pipeline-preview-summary-hint">
-            the exact pipelines, reduction rules, and routes a build would
-            generate - expand to review
+            what a build would generate
           </span>
+          <InfoTip text={PIPELINE_PREVIEW_TIP} />
         </summary>
         <PipelinePreviewSection
           key={contentResetKey}
@@ -2242,7 +2780,7 @@ export function IntegrateScreen({
     </>
   );
 
-  const ruleCoverageBody = (
+  const rulePanel = (
     <RuleCoverageSection
       key={contentResetKey}
       solutionName={solution?.name ?? ""}
@@ -2255,10 +2793,13 @@ export function IntegrateScreen({
       onContentRequirementsChange={setRuleRequirements}
       onDropUnneededFields={requestDropUnneeded}
       {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
+      effectiveMappings={mappingOverrides}
+      onApplyCloseMatch={requestRemap}
+      ruleFields={ruleFields}
     />
   );
 
-  const workbookCoverageBody = (
+  const workbookPanel = (
     <RuleCoverageSection
       key={contentResetKey}
       solutionName={solution?.name ?? ""}
@@ -2269,10 +2810,38 @@ export function IntegrateScreen({
       onContentRequirementsChange={setWorkbookRequirements}
       onDropUnneededFields={requestDropUnneeded}
       {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
+      effectiveMappings={mappingOverrides}
+      onApplyCloseMatch={requestRemap}
+      ruleFields={ruleFields}
     />
   );
 
-  // Enable Sentinel Content (section 6): install the solution, its analytics
+  // DBT-226: ONE coverage step with a Rules / Workbooks switch. Both panels
+  // stay MOUNTED and the hidden one is only hidden: the rules panel feeds the
+  // mapping table's RULE badges and both feed the coverage requirements, which
+  // must keep flowing whichever view is showing.
+  const coverageBody = (
+    <>
+      <div className="arch-view-tabs" role="tablist" aria-label="Coverage view">
+        {(["rules", "workbooks"] as const).map((view) => (
+          <button
+            key={view}
+            type="button"
+            role="tab"
+            aria-selected={coverageView === view}
+            className={"arch-view-tab" + (coverageView === view ? " arch-view-tab-active" : "")}
+            onClick={() => setCoverageView(view)}
+          >
+            {view === "rules" ? "Analytics rules" : "Workbooks"}
+          </button>
+        ))}
+      </div>
+      <div hidden={coverageView !== "rules"}>{rulePanel}</div>
+      <div hidden={coverageView !== "workbooks"}>{workbookPanel}</div>
+    </>
+  );
+
+  // Enable Sentinel Content (section 5): install the solution, its analytics
   // rules, and its workbooks - Sentinel-side, informational, never gates the
   // deploy. Keyed by solution so switching solutions resets its state.
   const enableContentBody = (
@@ -2283,7 +2852,19 @@ export function IntegrateScreen({
     />
   );
 
-  const azureResourcesBody = (
+  // GEN-21 (F2-f): with an existing destination nothing in Azure is targeted,
+  // so the cascade, the capability rows and the role step are not rendered at
+  // all - an offline operator otherwise met a Reload button and "Always on"
+  // facts about a deploy that will not run.
+  const azureResourcesBody = existingMode ? (
+    // DBT-225: one line - the step does not apply, and why is in the tip.
+    <p className="panel-desc">
+      {existingDestination !== undefined
+        ? `Not needed - using ${existingDestination}.`
+        : "Not needed with an existing destination."}{" "}
+      <InfoTip text="Nothing in Azure is read or written on this path: the pack hands its events to the destination you pick in Configure Cribl. Choose Create a new destination there to target Azure instead." />
+    </p>
+  ) : (
     <>
       {/* D-3: no capability pass-through. This screen and the targeting
           cascade it composes read the same PortsContext, so the audit reaches
@@ -2292,7 +2873,7 @@ export function IntegrateScreen({
       <div className="discovery-result">
         <span className="field-label">
           Deployment capabilities
-          <InfoTip text="What the deploy provisions and grants. Toggle the optional DCE here (saved with your deployment Options); the DCR and the ingestion-role grant are always part of the deploy." />
+          <InfoTip text="What the deploy provisions and grants. Toggle the optional DCE here (saved with your deployment Options). Always part of the deploy: the Data Collection Rule the Cribl destination sends to, and the Monitoring Metrics Publisher grant to the ingestion identity per deployed DCR - data cannot flow to a DCR without it." />
         </span>
         <label className="integrate-check">
           <input
@@ -2311,20 +2892,9 @@ export function IntegrateScreen({
             <InfoTip text="A Data Collection Endpoint enables private-endpoint (AMPLS) connectivity. Toggled here and saved with your deployment Options; without it the DCR uses its direct ingestion endpoint." />
           </span>
         </label>
-        <div className="integrate-fact">
-          <span className="integrate-fact-badge">Always on</span>
-          <span className="integrate-check-text">
-            DCR provisioning
-            <InfoTip text="The Data Collection Rule the Cribl destination sends events to is always provisioned by the deploy." />
-          </span>
-        </div>
-        <div className="integrate-fact">
-          <span className="integrate-fact-badge">Always on</span>
-          <span className="integrate-check-text">
-            Ingestion role grant
-            <InfoTip text="Monitoring Metrics Publisher is assigned to the ingestion identity per deployed DCR (in the step below) - data cannot flow to a DCR without it." />
-          </span>
-        </div>
+        {/* DBT-230: the DCR and the ingestion-role grant are not choices - they
+            are always part of the deploy, which the heading's tip says. They
+            used to be two "Always on" rows here. */}
         {onOpenOptions !== undefined && (
           <div className="panel-controls">
             <button className="run-button" onClick={onOpenOptions}>
@@ -2343,39 +2913,152 @@ export function IntegrateScreen({
 
   const criblConfigBody = (
     <div className="form-grid">
-      <label className="field">
-        <span className="field-label">Cribl worker group</span>
-        {groups !== null ? (
-          <SearchableSelect
-            options={groups.map((g) => ({
-              value: g.id,
-              label: g.id,
-              hint: g.product,
-            }))}
-            value={groupId}
-            onChange={setGroupId}
-            placeholder="Select a worker group..."
-            ariaLabel="Filter worker groups"
-          />
-        ) : groupsError === "" ? (
-          <span className="field-hint">Loading worker groups...</span>
-        ) : (
-          <span className="field-hint">
-            Could not list worker groups: {groupsError}
-          </span>
-        )}
-        {groupsError !== "" && (
-          <button className="run-button" onClick={() => void loadGroups()}>
-            Retry loading groups
-          </button>
-        )}
-        <span className="field-hint">
-          The worker group that will run the pipelines. Prefilled from your
-          saved Options when that group exists in the live list.
+      {/* DBT-225: where the events go is asked FIRST - it decides which of
+          the fields below apply (an existing destination needs no Azure, is
+          always routable, and is picked per table). Both are always offered;
+          an offline operator starts on the existing destination (GEN-21). */}
+      <div className="discovery-result">
+      <div role="radiogroup" aria-labelledby="integrate-destination-mode-label">
+        <span className="field-label" id="integrate-destination-mode-label">
+          Sentinel destination{" "}
+          <InfoTip text="Create: Deploy creates the Data Collection Rule in Azure and the matching Cribl Sentinel destination, which needs an Azure connection and an app registration. Existing: pick a Sentinel destination already configured in this worker group; the pack is built routable and nothing in Azure is read or written." />
         </span>
-      </label>
+        <label className="integrate-check">
+          <input
+            type="radio"
+            name="integrate-destination-mode"
+            checked={!existingMode}
+            onChange={() => setDestinationMode("create")}
+          />
+          <span className="integrate-check-text">
+            Create a new destination with Deploy (needs an Azure connection)
+          </span>
+        </label>
+        <label className="integrate-check">
+          <input
+            type="radio"
+            name="integrate-destination-mode"
+            checked={existingMode}
+            onChange={() => setDestinationMode("existing")}
+          />
+          <span className="integrate-check-text">
+            Use an existing Cribl Sentinel destination (no Azure connection)
+          </span>
+        </label>
+      </div>
+      </div>
       <label className="field">
-        <span className="field-label">Pack name</span>
+        <span className="field-label">
+          Cribl worker group{" "}
+          <InfoTip text="The worker group that runs the pipelines. Prefilled from the group your samples were captured on when it is in the live list, otherwise from the saved default worker group. Your pick is never overwritten." />
+        </span>
+        <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+          {(groups) => (
+            <SearchableSelect
+              options={groups.map((g) => ({
+                value: g.id,
+                label: g.id,
+                hint: g.product,
+              }))}
+              value={groupId}
+              onChange={(next) => {
+                groupTouchedRef.current = true;
+                setGroupId(next);
+              }}
+              placeholder="Select a worker group..."
+              ariaLabel="Filter worker groups"
+            />
+          )}
+        </WorkerGroupField>
+      </label>
+      {/* GEN-21. Where the pack's events go. Both are always offered; an
+          offline operator starts on the existing destination. */}
+      {existingMode && (
+      <div className="discovery-result">
+          <>
+            <p className="panel-desc" data-testid="existing-destination-listing" data-status={existingView.kind}>
+              {existingView.text}
+            </p>
+            {existingView.kind === "rows" && (
+              <pre className="result">
+                {existingView.rows.map(describeOutputRow).join("\n")}
+              </pre>
+            )}
+            <div className="panel-controls">
+              <button
+                className="run-button"
+                disabled={groupId === "" || existingView.kind === "loading"}
+                onClick={() => setExistingReadNonce((n) => n + 1)}
+              >
+                Read destinations again
+              </button>
+            </div>
+            {existingView.kind === "rows" && detectedTables.length === 0 && (
+              <p className="field-hint">
+                Run the DCR Gap Analysis (section 3) to pick a destination for
+                each table it finds.
+              </p>
+            )}
+            {existingView.kind === "rows" &&
+              detectedTables.map((sentinelTable) => {
+                const pick = tablePick(
+                  sentinelTable,
+                  chosenByTable[sentinelTable] ?? "",
+                  confirmedByTable[sentinelTable] ?? "",
+                  existingView.rows,
+                );
+                const pickedRow = pick.row;
+                return (
+                  <div key={sentinelTable}>
+                    <label className="field">
+                      <span className="field-label">
+                        Destination for {sentinelTable}
+                      </span>
+                      <select
+                        aria-label={`Existing destination for ${sentinelTable}`}
+                        value={pickedRow?.id ?? ""}
+                        onChange={(e) =>
+                          setChosenByTable((prev) => ({
+                            ...prev,
+                            [sentinelTable]: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select a destination...</option>
+                        {existingView.rows.map((row) => (
+                          <option key={row.id} value={row.id}>
+                            {describeOutputRow(row)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {pickedRow !== null && pick.prompt !== null && (
+                      <label className="integrate-check">
+                        <input
+                          type="checkbox"
+                          checked={pick.confirmed}
+                          onChange={(e) => {
+                            const confirmed = e.target.checked;
+                            setConfirmedByTable((prev) => ({
+                              ...prev,
+                              [sentinelTable]: confirmed ? pickedRow.id : "",
+                            }));
+                          }}
+                        />
+                        <span className="integrate-check-text">{pick.prompt}</span>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+          </>
+      </div>
+      )}
+      <label className="field">
+        <span className="field-label">
+          Pack name{" "}
+          <InfoTip text="The pack Build and install pack creates from the approved Gap Analysis mappings. Prefilled from your destination prefix plus the solution, so each solution gets its own pack. Your edit is never overwritten." />
+        </span>
         <input
           type="text"
           value={packName}
@@ -2386,13 +3069,6 @@ export function IntegrateScreen({
           autoComplete="off"
           spellCheck={false}
         />
-        <span className="field-hint">
-          The pack that will be built and installed by Build and install pack
-          below (from the approved Gap Analysis mappings). Prefilled from the
-          destination prefix in Options plus the selected solution, so each
-          solution gets its own pack; editable, and an edit is never
-          overwritten.
-        </span>
       </label>
       {/* GEN-13. Reported after a pack installed fine and then could not be
           picked from the Cribl Routes page dropdown. The cause is structural -
@@ -2400,25 +3076,48 @@ export function IntegrateScreen({
           as a route pipeline - and BOTH shapes are legitimate, so this is a
           choice rather than a fix. The wording names the consequence for each,
           because "all-inclusive" and "routable" mean nothing on their own. */}
-      <label className="field">
-        <span className="field-label">Pack wiring</span>
-        <select
-          value={packShape}
-          onChange={(e) => setPackShape(e.target.value as PackShape)}
-        >
-          <option value="all-inclusive">
-            Self-contained - the pack carries its own Sentinel destination
-          </option>
-          <option value="routable">
-            Routable - selectable from the Cribl Routes page
-          </option>
-        </select>
-        <span className="field-hint">
-          {packShape === "all-inclusive"
-            ? "The pack ships the Sentinel destination and its secret, so it works on install and nothing has to exist in the worker group first. It will NOT appear in the pipeline dropdown on the Cribl Routes page: verified 2026-09-04, a pack holding a destination is withheld from that list, and changing its routes to Send to Worker Group Routes does not change that. This is what Build and install pack wires for you."
-            : "No destination ships inside the pack and every route hands events back, so the pack DOES appear in the pipeline dropdown on the Cribl Routes page and can be dropped into a flow you already have. The Sentinel destination and its secret must ALREADY EXIST in the worker group - this pack does not carry them. Deploy is what puts them there: it creates the destination in the worker group, not in the pack, so a table you have deployed is a table this pack can send."}
-        </span>
-      </label>
+      {/* DBT-225: on the existing path the shape is not a choice, so it is one
+          line rather than a disabled select and its explanation. */}
+      {existingMode ? (
+        <p className="field-hint" data-testid="pack-wiring-fixed">
+          Pack wiring: Routable{" "}
+          <InfoTip text="Required with an existing destination: a group route sends the source through the pack to that destination, so no destination ships in the pack." />
+        </p>
+      ) : (
+        <label className="field">
+          <span className="field-label">
+            Pack wiring{" "}
+            <InfoTip
+              text={
+                effectivePackShape === "all-inclusive"
+                  ? "Self-contained: the pack ships the Sentinel destination and its secret, so it works on install with nothing set up first. Cribl does not offer a pack that holds a destination in the Routes page pipeline list. This is what Build and install pack wires for you."
+                  : "Routable: no destination ships in the pack and every route hands events back, so it appears in the Routes page pipeline list and drops into a flow you already have. The Sentinel destination must already exist in the worker group - Deploy is what creates it there."
+              }
+            />
+          </span>
+          <select
+            value={effectivePackShape}
+            disabled={existingMode}
+            onChange={(e) => setPackShape(e.target.value as PackShape)}
+          >
+            <option value="all-inclusive">
+              Self-contained - the pack carries its own Sentinel destination
+            </option>
+            <option value="routable">
+              Routable - selectable from the Cribl Routes page
+            </option>
+          </select>
+          {/* Stays VISIBLE (GEN-16): it is the one instruction this choice
+              creates, and the only link between it and the action that
+              satisfies it. Everything else about the shapes is in the tip. */}
+          {packShape === "routable" && (
+            <span className="field-hint">
+              The Sentinel destination must already exist in the worker group -
+              Deploy is what puts it there.
+            </span>
+          )}
+        </label>
+      )}
       {/* GEN-16. The dependency a routable pack creates, checked rather than
           described. Never blocks the build - see the effect that fills this. */}
       {routableCheck !== null && (
@@ -2483,14 +3182,24 @@ export function IntegrateScreen({
             )}
         </div>
       )}
+      {/* DBT-225: the optional pack actions (more worker groups, the
+          overwrite check, rebuild only) wait behind a disclosure. It opens on
+          its own whenever something in it asks the operator to act - a found
+          conflict, a read error, a build in progress or its log - so a warning
+          is never hidden. */}
+      <details
+        className="gap-handles integrate-pack-options"
+        open={openWhen((packConflicts !== null && packConflicts.length > 0) ||
+          conflictError !== "" ||
+          packBuilding ||
+          packBuildLines.length > 0)}
+      >
+        <summary>More pack options: more worker groups, overwrite check, rebuild only</summary>
       <div className="discovery-result">
-        <span className="field-label">Deploy targets and overwrite check</span>
-        <p className="panel-desc">
-          The pack deploys to the primary worker group above. Optionally fan it
-          out to additional groups, then check whether the name is already in
-          use before building - a matching pack is overwritten, so the check
-          must be acknowledged first.
-        </p>
+        <span className="field-label">
+          Deploy targets and overwrite check{" "}
+          <InfoTip text="The pack deploys to the worker group above, and optionally to more. A pack with the same name is overwritten, so check for one before building and acknowledge any match." />
+        </span>
         <label className="integrate-check">
           <input
             type="checkbox"
@@ -2502,29 +3211,40 @@ export function IntegrateScreen({
             {multiGroup ? " Select the additional groups below." : ""}
           </span>
         </label>
-        {multiGroup &&
-          (groups !== null ? (
-            groups.filter((g) => g.id !== groupId).length > 0 ? (
-              <label className="field">
-                <span className="field-label">Additional worker groups</span>
-                <SearchableMultiSelect
-                  options={groups
-                    .filter((g) => g.id !== groupId)
-                    .map((g) => ({ value: g.id, label: g.id, hint: g.product }))}
-                  values={extraGroups}
-                  onChange={setExtraGroups}
-                  placeholder="Select additional worker groups..."
-                  ariaLabel="Filter worker groups"
-                />
-              </label>
-            ) : (
-              <span className="field-hint">
-                No other worker groups are available to fan out to.
-              </span>
-            )
-          ) : (
-            <span className="field-hint">Loading worker groups...</span>
-          ))}
+        {/* DBT-134: the fan-out renders the SAME listing states as the
+            picker above. It used to show "Loading worker groups..." forever
+            when the listing had failed, and state a zero it had not verified
+            when only the primary group was listed. */}
+        {multiGroup && (
+          <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
+            {(groups) => {
+              const others = groups.filter((g) => g.id !== groupId);
+              return others.length > 0 ? (
+                <label className="field">
+                  <span className="field-label">Additional worker groups</span>
+                  <SearchableMultiSelect
+                    options={others.map((g) => ({
+                      value: g.id,
+                      label: g.id,
+                      hint: g.product,
+                    }))}
+                    values={extraGroups}
+                    onChange={setExtraGroups}
+                    placeholder="Select additional worker groups..."
+                    ariaLabel="Filter worker groups"
+                  />
+                </label>
+              ) : (
+                <span className="field-hint">
+                  {groups.map((g) => g.id).join(", ")} is the only Stream worker
+                  group Cribl returned, and it is already the target above, so
+                  there is no other group to fan out to. Groups your Cribl role
+                  cannot see are not listed.
+                </span>
+              );
+            }}
+          </WorkerGroupField>
+        )}
         <div className="integrate-check">
           <button
             className="run-button"
@@ -2605,17 +3325,121 @@ export function IntegrateScreen({
           <pre className="result">{packBuildLines.join("\n")}</pre>
         )}
       </div>
+      </details>
+    </div>
+  );
+
+  // ---- Source connection on the existing path (GEN-21) ------------------
+  // DECIDED 2026-10-29: ROUTE ONLY, and SHOWN, not written. The app's route
+  // writer (guided-deploy wire-source) still commits every pending change in
+  // the group with no file scope and filters on the bare input id, which
+  // matches no event - so the operator adds this route by hand, and a
+  // QuickConnected source is warned about, never rewritten.
+  // The installed id only while it is still THIS pack: a renamed pack is a
+  // different pack, and its route must not name the old one.
+  const installedPackId =
+    packOutcome !== null && packOutcome.name === packName.trim()
+      ? packOutcome.installs.find((i) => i.group === groupId && i.ok)?.packId
+      : undefined;
+  // Before install, the id the build will install under - not the typed name,
+  // which Cribl's id does not keep verbatim.
+  const routePackId =
+    installedPackId ?? (packName.trim() === "" ? "" : expectedPackId(packName));
+  const existingRoute =
+    existingMode &&
+    existingGateReason === null &&
+    existingDestination !== undefined &&
+    routeSource !== null &&
+    routePackId !== ""
+      ? existingDestinationRoute({
+          source: routeSource,
+          packId: routePackId,
+          destinationId: existingDestination,
+        })
+      : null;
+  const routingNotice =
+    routeSource === null ||
+    routeSourceRouting === null ||
+    routeSourceRouting.key !== routeSourceKey
+      ? null
+      : routeSourceRouting.routing === null
+        ? `Checking whether ${routeSource.id} sends to routes...`
+        : sourceRoutingNotice(routeSource.id, routeSourceRouting.routing);
+  const sourceConnectionBody = (
+    <div className="integrate-subsection" data-testid="existing-source-connection">
+      <span className="field-label">
+        Source connection{" "}
+        <InfoTip text="A group route sends the source's events through the routable pack to the existing destination. Add it on the worker group's Data Routes page, above any catch-all route, then commit and deploy the group in Cribl." />
+      </span>
+      {existingGateReason !== null ? (
+        <p className="panel-desc">
+          The route appears here once the destination is picked: {existingGateReason}
+        </p>
+      ) : routeSource === null ? (
+        <p className="panel-desc">
+          {captureTarget !== null && captureTarget.groupId !== groupId
+            ? `The samples were captured from ${captureTarget.id} in ${captureTarget.groupId ?? "another group"}, not in ${groupId}, so there is no source in this group to route yet.`
+            : captureTarget !== null
+              ? `Cribl did not list ${captureTarget.id}'s type, so its __inputId filter cannot be written.`
+              : "No live source is selected. Pick the source in Add Sample Data (Capture from a live source) and the route that connects it appears here."}
+        </p>
+      ) : existingRoute !== null ? (
+        <>
+          <p className="panel-desc">
+            Add this route to {groupId}&apos;s Data Routes, above any catch-all
+            route, then commit and deploy {groupId} in Cribl
+            {installedPackId === undefined
+              ? ` (install the pack first - the route names pack:${routePackId}, the id it is built under)`
+              : ""}
+            :
+          </p>
+          <pre className="result" data-testid="existing-route-json">
+            {JSON.stringify(existingRoute, null, 2)}
+          </pre>
+        </>
+      ) : null}
+      {routingNotice !== null && <p className="connection-notice">{routingNotice}</p>}
+      <p className="field-hint">
+        This app does not add the route itself yet: its route writer commits
+        every pending change in the group, including other admins&apos;
+        unfinished edits, and names the source in a form that matches no
+        events. Adding it by hand keeps the commit yours.
+      </p>
     </div>
   );
 
   const deployBody = (
     <>
-      <p className="panel-desc">
-        Workspace:{" "}
-        {config.workspaceName === "" ? "(not set)" : config.workspaceName};
-        worker group: {groupId === "" ? "(none selected)" : groupId}.
-        <InfoTip text="Deploys a Kind:Direct Data Collection Rule per detected table in the workspace and creates the matching Cribl Sentinel destination in the worker group. Custom (_CL) tables that do not exist yet are created first from the Gap Analysis schema (an existing table's schema always wins). Each step reports its real outcome." />
-      </p>
+      {existingMode ? (
+        <p className="panel-desc">
+          Existing destination:{" "}
+          {existingDestination ?? "(not picked yet)"}; worker group:{" "}
+          {groupId === "" ? "(none selected)" : groupId}.
+          <InfoTip text="With an existing destination, Deploy builds the pack ROUTABLE from the approved Gap Analysis mappings and installs it into the worker group - nothing else. Nothing in Azure is read or written and no destination is created: the pack hands its events back to the group, and the group route under Source connection sends them to the destination you picked." />
+        </p>
+      ) : (
+        <p className="panel-desc">
+          Workspace:{" "}
+          {config.workspaceName === "" ? "(not set)" : config.workspaceName};
+          worker group: {groupId === "" ? "(none selected)" : groupId}.
+          <InfoTip text="Deploys a Kind:Direct Data Collection Rule per detected table in the workspace and creates the matching Cribl Sentinel destination in the worker group. Custom (_CL) tables that do not exist yet are created first from the Gap Analysis schema (an existing table's schema always wins). Each step reports its real outcome." />
+        </p>
+      )}
+      {/* GEN-21: the table, client id and secret are the native run's - the
+          existing destination already carries its own credentials. */}
+      {/* DBT-231: the three fields are prefilled with the right defaults, so
+          they wait behind one summary line. It opens by itself when the table
+          or client id is empty (either blocks the run) or once edited. */}
+      {!existingMode && (
+      <details
+        className="gap-handles deploy-settings-details"
+        open={openWhen(table.trim() === "" ||
+          ingestionClientId.trim() === "" ||
+          tableTouchedRef.current)}
+      >
+        <summary>
+          {deploySettingsSummary(table, ingestionClientId, ingestionClientSecret !== "")}
+        </summary>
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Table name</span>
@@ -2655,9 +3479,17 @@ export function IntegrateScreen({
             autoComplete="off"
             spellCheck={false}
           />
+          {/* DBT-200: the default exists only when the connection has an
+              identity; offline the hint used to promise one that was not there. */}
           <span className="field-hint">
-            Defaults to the active connection.
-            <InfoTip text="The app registration the Cribl destination authenticates with when sending events. Defaults to the active connection's client id." />
+            {ingestionClientIdHint(azureIdentityPresent)}
+            <InfoTip
+              text={
+                azureIdentityPresent
+                  ? "The app registration the Cribl destination authenticates with when sending events. Defaults to the active connection's client id."
+                  : "The app registration the Cribl destination authenticates with when sending events. No Azure identity is connected on Setup, so there is no client id to default to."
+              }
+            />
           </span>
         </label>
         <label className="field">
@@ -2673,11 +3505,13 @@ export function IntegrateScreen({
           <span className="field-hint">
             Optional; used for this run only.
             <InfoTip
-              text={`Transient: this platform's encrypted storage is write-only, so the app cannot reuse a stored secret here. Provide it to bake it into the destination for this run only, or leave blank to create the destination with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real secret in Cribl's UI.`}
+              text={`Transient: this platform's encrypted storage is write-only, so the app cannot reuse a stored secret here. Provide it to store it once as a Cribl secret the destination references (never in the destination itself), or leave blank to create the destination with the ${SENTINEL_SECRET_PLACEHOLDER} placeholder and paste the real secret in Cribl's UI.`}
             />
           </span>
         </label>
       </div>
+      </details>
+      )}
       <div className="panel-controls">
         <button
           className="run-button"
@@ -2701,7 +3535,9 @@ export function IntegrateScreen({
         <span className={`status status-${deployStatus}`}>{deployStatus}</span>
         <InfoTip
           text={
-            "One action, in order: per detected table - create the custom table if needed, deploy its Kind:Direct DCR, create the matching Cribl Sentinel destination; then, when the Gap Analysis mappings are approved, build the content pack from them and install it into every selected worker group. The button unlocks only when every prerequisite for the whole run is met (the tooltip names the first missing one)."
+            existingMode
+              ? "With an existing destination: build the routable pack from the approved Gap Analysis mappings and install it into every selected worker group. No Azure resource and no Cribl destination is created, and no route is written. The button unlocks only when every prerequisite is met (the tooltip names the first missing one)."
+              : "One action, in order: per detected table - create the custom table if needed, deploy its Kind:Direct DCR, create the matching Cribl Sentinel destination; then, when the Gap Analysis mappings are approved, build the content pack from them and install it into every selected worker group. The button unlocks only when every prerequisite for the whole run is met (the tooltip names the first missing one)."
           }
         />
         {deployEverythingDisabledReason !== null && !deploying && (
@@ -2736,15 +3572,14 @@ export function IntegrateScreen({
           `runExport` for every offer here because all four capabilities map to
           RUN kinds and this screen owns that run - it is literally the same
           deploy stopping before every write, so nothing is fabricated. */}
-      {deployOffers.length > 0 && (
+      {/* Not on the existing path (GEN-21): these are the AZURE writes this
+          identity lacks, and that path makes none. */}
+      {!existingMode && deployOffers.length > 0 && (
         <div className="integrate-subsection">
-          <span className="field-label">Take these to someone who can</span>
-          <p className="panel-desc">
-            Deploy above stays available - the audit reports access, it does
-            not gate anything, and Azure's own refusal is the real gate. These
-            are the artifacts for the writes this connection was measured to
-            lack. One export run produces all of them and changes nothing.
-          </p>
+          <span className="field-label">
+            Take these to someone who can{" "}
+            <InfoTip text="The artifacts for the writes this connection was measured to lack. One export run produces all of them and changes nothing. Deploy stays available: the access audit never gates it - Azure's own refusal is the real gate." />
+          </span>
           {deployOffers.map((offer) => (
             <FallbackNotice
               key={offer.kind}
@@ -2801,22 +3636,23 @@ export function IntegrateScreen({
           </pre>
         </div>
       )}
-      <p className="panel-desc">
-        What a green run proves: the DCR provisioned and the Cribl destination
-        exists. It does NOT validate data flow - that requires a source
-        actually sending events through the destination. Before events ingest,
-        the ingestion identity needs the Monitoring Metrics Publisher role on
-        the deployed DCR (see the Azure Resources section above).
-      </p>
+      {!existingMode && (
+        <p className="panel-desc">
+          A green run proves the DCR and the Cribl destination exist, not that
+          data flows.{" "}
+          <InfoTip text="Data flow needs a source actually sending events through the destination. Before events ingest, the ingestion identity also needs the Monitoring Metrics Publisher role on the deployed DCR - granted in Select Azure Resources." />
+        </p>
+      )}
       <RecentRuns refreshToken={historyToken} />
-      {canWireSource(deployCompleted, mode) && (
+      {existingMode && sourceConnectionBody}
+      {!existingMode && canWireSource(deployCompleted, mode) && (
         <div className="integrate-subsection">
-          <span className="field-label">Source wiring</span>
+          <span className="field-label">
+            Source wiring{" "}
+            <InfoTip text="Creates the Sentinel route (and, on Cribl.Cloud, an optional non-final Cribl Lake route above it), commits, and deploys to the worker group. Each action can be re-run on its own." />
+          </span>
           <p className="panel-desc">
-            The destination is live - now connect a Cribl source to it. This
-            creates the Sentinel route (and an optional non-final Cribl Lake
-            route above it, cloud only), commits, and deploys to the worker
-            group. Each action below is independently re-runnable.
+            The destination is live - connect a Cribl source to it.
           </p>
           <WiringSection
             deployCompleted={deployCompleted}
@@ -2843,9 +3679,7 @@ export function IntegrateScreen({
       case "gap-analysis":
         return gapAnalysisBody;
       case "rule-coverage":
-        return ruleCoverageBody;
-      case "workbook-coverage":
-        return workbookCoverageBody;
+        return coverageBody;
       case "enable-content":
         return enableContentBody;
       case "deploy":
@@ -2861,24 +3695,41 @@ export function IntegrateScreen({
        * ("Sentinel Integration") directly above this screen, so a second
        * title and description stacked three names for one page. The route
        * header is the single title. */}
-      {resolved.map(({ section, status, reason }) => (
-        <NumberedSection
-          key={section.id}
-          number={section.number}
-          title={section.title}
-          status={status}
-          infoTip={section.infoTip}
-          reason={reason}
-        >
-          {sectionBody(section.id)}
-        </NumberedSection>
-      ))}
+      {resolved.map(({ section, status, reason }, index) => {
+        const next = resolved
+          .slice(index + 1)
+          .find((r) => r.status !== "coming-soon");
+        return (
+          <NumberedSection
+            key={section.id}
+            number={section.number}
+            title={section.title}
+            status={status}
+            infoTip={section.infoTip}
+            reason={reason}
+            anchorId={sectionAnchor(section.id)}
+            collapsed={collapsedSections.has(section.id)}
+            onCollapsedChange={(c) => setSectionCollapsed(section.id, c)}
+            pinned={pinnedSections.has(section.id)}
+            onPinnedChange={(p) => setSectionPinned(section.id, p)}
+            onActivate={() => moveToSection(section.id)}
+            summary={sectionSummary(section.id, summaryFacts)}
+            onDone={() => {
+              setSectionCollapsed(section.id, true);
+              if (next !== undefined) goToSection(next.section.id);
+            }}
+          >
+            {sectionBody(section.id)}
+          </NumberedSection>
+        );
+      })}
       <ReadinessFooter
         pills={pills}
         canDeploy={deployEverythingDisabledReason === null}
         onDeploy={() => void runDeployEverything()}
         deploying={deploying || packBuilding}
         disabledReason={deployEverythingDisabledReason}
+        onPillClick={(id) => goToSection(sectionForPill(id))}
       />
     </div>
   );

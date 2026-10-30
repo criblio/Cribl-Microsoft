@@ -3,11 +3,13 @@
  * behind docs/ai-assisted-analysis-plan.md): the curated ALIAS_TABLE extension
  * and the case-insensitive alias-key fallback. Every extension entry is pinned
  * here so vendor knowledge cannot regress silently; the no-regression block
- * re-asserts legacy behavior stayed intact.
+ * re-asserts legacy behavior stayed intact. DBT-204 adds the CEF
+ * deviceProcessName alias and the stripped-affix suffix tie-break behind it.
  */
 
 import { describe, expect, it } from "vitest";
 
+import { resolveSchemaFromCatalog } from "./bundled-schema-catalog";
 import { matchFields } from "./match-fields";
 import { scoreMatch, typeValueBoost } from "./scoring";
 import type { DestField, SourceField } from "./models";
@@ -465,6 +467,70 @@ describe("matcher engine improvements (2026-07-09, pinned)", () => {
     expect(typeValueBoost("deadbeef", "DeviceAddress", "string")).toBe(0);
     expect(typeValueBoost("fe80::1", "SourceIP", "string")).toBe(12);
     expect(typeValueBoost("10.0.0.1", "SourceIP", "string")).toBe(12);
+  });
+});
+
+describe("CEF deviceProcessName reaches ProcessName (DBT-204)", () => {
+  it("maps to ProcessName by alias on the bundled CommonSecurityLog schema", () => {
+    // The Mapping Catalog (CEF_CATALOG_PACK) claimed this all along; the
+    // matcher sent it to ProcessID. Real columns, not the CSL subset above:
+    // the defect lived in the schema ORDER, which a subset would not carry.
+    const columns = resolveSchemaFromCatalog("CommonSecurityLog") ?? [];
+    expect(columns.map((c) => c.name)).toEqual(
+      expect.arrayContaining(["ProcessID", "ProcessName", "SourceProcessName"]),
+    );
+    const result = matchFields(
+      [{ name: "deviceProcessName", type: "string" }],
+      columns,
+      undefined,
+      "CommonSecurityLog",
+    );
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]).toMatchObject({
+      sourceName: "deviceProcessName",
+      destName: "ProcessName",
+      confidence: "alias",
+      action: "rename",
+    });
+  });
+
+  it("a stripped-affix tie prefers the column with the same suffix (name vs id)", () => {
+    // WHY it went to ProcessID: rung 5 strips the device/source prefixes AND
+    // the name/id suffixes, so deviceProcessName, ProcessID, ProcessName and
+    // SourceProcessName all reduce to "process" and tied at 70; the schema
+    // order (ProcessID first) broke the tie. A name must not land on an id
+    // because a column happened to come first, so a mismatched suffix now
+    // scores just under a matching one - still above every substring rung.
+    expect(scoreMatch("deviceWidgetName", "WidgetName").score).toBe(70);
+    expect(scoreMatch("deviceWidgetName", "WidgetID").score).toBe(68);
+    expect(scoreMatch("deviceWidgetId", "WidgetID").score).toBe(70);
+    expect(scoreMatch("deviceWidgetId", "WidgetName").score).toBe(68);
+    // Order-independent at matchFields: the id column first, then last.
+    const pick = (source: string, columns: string[]) =>
+      matchFields(
+        [{ name: source, type: "string" }],
+        columns.map((name) => ({ name, type: "string" })),
+      ).matched[0]?.destName;
+    expect(pick("deviceWidgetName", ["WidgetID", "WidgetName"])).toBe("WidgetName");
+    expect(pick("deviceWidgetId", ["WidgetName", "WidgetID"])).toBe("WidgetID");
+    // Demoted, not blocked: with no same-suffix column the fallback the
+    // ladder always made is unchanged.
+    expect(pick("deviceWidgetName", ["WidgetID"])).toBe("WidgetID");
+  });
+
+  it("only two DIFFERENT suffixes demote; a side with no suffix keeps 70", () => {
+    // The guard is "both carry a suffix AND they differ". A bare column is no
+    // evidence of a name/id mismatch, so it keeps the legacy 70 in both
+    // directions - and so beats a column whose suffix contradicts the
+    // source. This is the shape that moved CrowdStrike_Additional_Events_CL
+    // severity_id off SeverityName onto Severity.
+    expect(scoreMatch("deviceWidgetName", "Widget").score).toBe(70);
+    expect(scoreMatch("deviceWidget", "WidgetID").score).toBe(70);
+    const picked = matchFields(
+      [{ name: "widget_id", type: "string" }],
+      ["WidgetName", "Widget"].map((name) => ({ name, type: "string" })),
+    ).matched[0]?.destName;
+    expect(picked).toBe("Widget");
   });
 });
 

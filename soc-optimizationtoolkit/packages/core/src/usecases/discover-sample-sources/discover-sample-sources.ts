@@ -32,13 +32,9 @@
  */
 
 import type { CriblClient, CriblGroupSummary } from "../../ports/cribl-client";
-import {
-  filterListing,
-  listingCount,
-  listingRows,
-  toListing,
-} from "../../domain/inventory-listing";
-import { isSearchGroup, isStreamWorkerGroup } from "../../ports/cribl-client";
+import { listingCount, listingRows } from "../../domain/inventory-listing";
+import type { Listing } from "../../domain/inventory-listing";
+import { isSearchGroup, streamWorkerGroups } from "../../ports/cribl-client";
 import type { Logger } from "../../ports/logger";
 import { buildSampleSourceInventory } from "../../domain/sample-sources/inventory";
 import type {
@@ -96,9 +92,9 @@ export async function listSampleSourceGroups(
   cribl: CriblClient,
   logger?: Logger,
 ): Promise<SampleSourceGroups> {
-  let groups: CriblGroupSummary[] = [];
+  let listed: Listing<CriblGroupSummary>;
   try {
-    groups = await cribl.listGroups();
+    listed = await cribl.listGroups();
   } catch (err) {
     logger?.warn("discover-sample-sources: listGroups failed", {
       error: String(err),
@@ -115,14 +111,12 @@ export async function listSampleSourceGroups(
   // DBT-62: the Cribl group listing carries the same ambiguity as an ARM one -
   // a token scoped to one worker group lists what it can reach, not what
   // exists - so the two ways of ending up with no Stream group get different
-  // sentences. `filterListing` demands the source read to tell them apart.
-  const listed = toListing(groups);
-  const streamGroups = filterListing(
-    listed,
-    groups.filter(isStreamWorkerGroup),
-  );
+  // sentences. Since DBT-134 the port itself returns the listing, so the
+  // source read reaches `streamWorkerGroups` intact rather than being
+  // re-wrapped here.
+  const streamGroups = streamWorkerGroups(listed).stream;
   const streamGroupIds = listingRows(streamGroups).map((g) => g.id);
-  const searchGroupId = groups.find(isSearchGroup)?.id;
+  const searchGroupId = listingRows(listed).find(isSearchGroup)?.id;
   const notes: string[] = [];
   if (streamGroups.kind === "none") {
     // EARNED: groups came back and none of them is a Stream group. The

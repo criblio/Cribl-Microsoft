@@ -22,6 +22,7 @@
  *     and one the operator believes came from the source now on screen.
  */
 
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
@@ -96,6 +97,7 @@ const result = (over: Partial<CaptureSamplesResult> = {}): CaptureSamplesResult 
   rawEvents: [],
   format: "ndjson",
   noDiscriminator: false,
+  leftOutEvents: 0,
   notes: [],
   ok: true,
   ...over,
@@ -167,11 +169,11 @@ const resultRows = (c: HTMLElement) => c.querySelectorAll(".capture-results li")
 const status = (c: HTMLElement) =>
   c.querySelector(".capture-panel")?.getAttribute("data-status");
 /** What the last commit established, which outlives the preview it came from. */
-const outcomes = (c: HTMLElement) => c.querySelectorAll(".capture-outcome");
+const outcomes = (c: HTMLElement) => c.querySelectorAll('[data-testid="capture-outcome"]');
 const outcomeStatus = (c: HTMLElement) =>
-  c.querySelector(".capture-outcome")?.getAttribute("data-status");
+  c.querySelector('[data-testid="capture-outcome"]')?.getAttribute("data-status");
 const outcomeHeadline = (c: HTMLElement) =>
-  c.querySelector(".capture-outcome .panel-desc")?.textContent;
+  c.querySelector('[data-testid="capture-outcome"] .panel-desc')?.textContent;
 /** The query headline. The outcome renders a .panel-desc of its own. */
 const headline = (c: HTMLElement) =>
   c.querySelector(".capture-panel > .panel-desc")?.textContent;
@@ -225,13 +227,20 @@ describe("CapturePanel - what it offers before a run", () => {
 
     const rows = container.querySelectorAll(".capture-log-types li");
     expect(rows[2].textContent).toContain("capturing again replaces that sample");
-    expect(rows[3].textContent).toContain("documented by the vendor");
+    // DBT-228: the vendor-documented row sits in its own group, whose summary
+    // says so once - the per-row note is gone, the claim is not.
+    const group = rows[3].closest("details.capture-log-types-documented");
+    expect(group).not.toBeNull();
+    expect(group!.querySelector("summary")!.textContent).toContain("documented by the vendor");
     expect(status(container)).toBe("idle");
   });
 
   it("SHOWS the filter it would send, and captures nothing on its own", () => {
     // The plan's whole position on the filter is that it is visible and the
-    // operator's. A panel that composed a correct filter and never rendered it
+    // operator's. DBT-228 (operator decision 2026-10-30) moved it behind an
+    // Edit filter disclosure: still the operator's and one click away, and it
+    // opens by itself once edited - the generated expression no longer sits
+    // above Run capture by default. A panel that composed a correct filter and never rendered it
     // would pass every state test in the suite.
     const { container, onCapture } = renderPanel();
 
@@ -356,6 +365,30 @@ describe("CapturePanel - the filter belongs to the operator", () => {
     expect(
       container.querySelector(".capture-filter-warning")?.textContent,
     ).toContain("An empty filter captures every event");
+  });
+
+  /**
+   * DBT-169: the warning needs the source's TYPE to recognise the typed
+   * `__inputId` form, and a Cribl source carries it as `detail` (inventory.ts
+   * parseCriblSources). A panel that passed only the id would warn on the
+   * correct filter and say the type is unknown.
+   */
+  it("is silent for the typed form and flags the bare id, using the source's type", () => {
+    const { container } = renderPanel({ source: { ...SOURCE, detail: "syslog" } });
+
+    fireEvent.change(filterBox(container), {
+      target: { value: "__inputId=='syslog:in_syslog' && /TRAFFIC/i.test(_raw)" },
+    });
+    expect(container.querySelectorAll(".capture-filter-warning")).toHaveLength(0);
+
+    fireEvent.change(filterBox(container), {
+      target: { value: "__inputId=='in_syslog'" },
+    });
+    const warnings = container.querySelectorAll(".capture-filter-warning");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].textContent).toBe(
+      'This filter names the bare input id "in_syslog" (unconfirmed: events carry __inputId as "syslog:in_syslog", and the bare form matched nothing when captured), so it will likely capture nothing. Write __inputId === "syslog:in_syslog" || __inputId.startsWith("syslog:in_syslog:") instead.',
+    );
   });
 });
 
@@ -779,6 +812,139 @@ describe("CapturePanel - what the commit reports afterwards", () => {
   });
 });
 
+/**
+ * THE OPERATOR'S TICKS SURVIVE THE COMMIT (DBT-198, offline UAT 2026-10-29).
+ *
+ * The UAT unticked all but THREAT and TRAFFIC of 13 solution log types, pressed
+ * "Add these as samples", and all 13 came back ticked. The re-seed effect
+ * replaced the list with the seed on every new `recommended`, and the commit
+ * always produces one.
+ *
+ * Driven through a PARENT that does what integrate-screen does: hold the
+ * recommendation in state and rebuild it, with the committed log types now
+ * `provided`, when the store write lands. A bare rerender would not reproduce
+ * the sequence - the new seed has to arrive on the render the commit provoked.
+ */
+describe("CapturePanel - the operator's picks survive a commit (DBT-198)", () => {
+  const FIVE: readonly RecommendedLogType[] = [
+    { value: "TRAFFIC", evidence: "detection", provided: false },
+    { value: "THREAT", evidence: "detection", provided: false },
+    { value: "CONFIG", evidence: "detection", provided: false },
+    { value: "SYSTEM", evidence: "workbook", provided: false },
+    { value: "URL", evidence: "detection", provided: false },
+  ];
+
+  function Parent({ onCapture }: Pick<CapturePanelProps, "onCapture">) {
+    const [recommended, setRecommended] = useState<readonly RecommendedLogType[]>(FIVE);
+    const [existing, setExisting] = useState<string[]>([]);
+    return (
+      <CapturePanel
+        source={SOURCE}
+        recommended={recommended}
+        existingLogTypes={existing}
+        onCapture={onCapture}
+        onCommit={async (samples) => {
+          const stored = samples.map((s) => s.logType);
+          setExisting(stored);
+          setRecommended(
+            FIVE.map((r) => ({ ...r, provided: stored.includes(r.value) })),
+          );
+        }}
+      />
+    );
+  }
+
+  const tickedNames = (c: HTMLElement) =>
+    [...c.querySelectorAll(".capture-log-types li")]
+      .filter((li) => (li.querySelector("input") as HTMLInputElement).checked)
+      .map((li) => li.querySelector(".capture-log-type-name")?.textContent);
+
+  it("keeps exactly the two the operator left ticked after Add these as samples", async () => {
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(<Parent onCapture={onCapture} />);
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT", "CONFIG", "SYSTEM", "URL"]);
+
+    // Untick all but TRAFFIC and THREAT.
+    fireEvent.click(boxes(container)[2]);
+    fireEvent.click(boxes(container)[3]);
+    fireEvent.click(boxes(container)[4]);
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await act(async () => {
+      fireEvent.click(commitButton(container) as HTMLButtonElement);
+    });
+
+    // The commit landed and the parent re-seeded from new coverage...
+    expect(outcomeHeadline(container)).toBe("Added 2 samples from this capture.");
+    const rows = container.querySelectorAll(".capture-log-types li");
+    expect(rows[0].textContent).toContain("capturing again replaces that sample");
+    expect(rows[1].textContent).toContain("capturing again replaces that sample");
+    // ...and the ticks are still the operator's: not all five back, and not the
+    // seed's opposite (the two just provided un-ticked, the rest ticked).
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+    // The filter follows the kept picks, not the seed.
+    const shown = filterBox(container).value;
+    expect(select(shown, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(shown, "syslog:in_syslog", "1,x,THREAT,y")).toBe(true);
+    expect(select(shown, "syslog:in_syslog", "1,x,CONFIG,y")).toBe(false);
+    expect(select(shown, "syslog:in_syslog", "1,x,URL,y")).toBe(false);
+  });
+
+  it("keeps them under StrictMode and across a second capture and commit", async () => {
+    // The shipped app mounts under StrictMode (apps/cribl-app/src/main.tsx), so
+    // every effect runs twice on mount; the pin above renders without it. And
+    // the UAT's next step is to capture again - the picks must survive every
+    // commit, not just the first one.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(
+      <StrictMode>
+        <Parent onCapture={onCapture} />
+      </StrictMode>,
+    );
+    fireEvent.click(boxes(container)[2]);
+    fireEvent.click(boxes(container)[3]);
+    fireEvent.click(boxes(container)[4]);
+
+    for (let round = 0; round < 2; round += 1) {
+      await act(async () => {
+        fireEvent.click(runButton(container));
+      });
+      await act(async () => {
+        fireEvent.click(commitButton(container) as HTMLButtonElement);
+      });
+      expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+    }
+    expect(onCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it("still follows the seed when the operator never touched a tick", async () => {
+    // The other half: an untouched panel keeps taking the app's suggestion, so
+    // the two just committed un-tick themselves rather than being re-captured
+    // over the samples that now exist. A latch stuck closed would pass the pin
+    // above and fail this one.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(<Parent onCapture={onCapture} />);
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await act(async () => {
+      fireEvent.click(commitButton(container) as HTMLButtonElement);
+    });
+
+    expect(tickedNames(container)).toEqual(["CONFIG", "SYSTEM", "URL"]);
+  });
+});
+
 describe("CapturePanel - changing source", () => {
   it("drops the previous source's result, filter edit and toggles", async () => {
     // A result left on screen after the source changed is the worst kind of
@@ -810,5 +976,17 @@ describe("CapturePanel - changing source", () => {
     expect(recomposed).not.toContain("hand_edited");
     expect(ticked(container)).toBe(2);
     expect(screen.getByText("Capture from in_http")).toBeTruthy();
+  });
+});
+
+describe("CapturePanel - grouped checklist and Edit filter (DBT-228)", () => {
+  it("keeps the vendor group and the filter closed until they are needed", () => {
+    const { container } = renderPanel();
+    const vendor = container.querySelector("details.capture-log-types-documented") as HTMLDetailsElement;
+    expect(vendor).not.toBeNull();
+    expect(vendor.open).toBe(false);
+    const filter = container.querySelector("details.capture-filter-details") as HTMLDetailsElement;
+    expect(filter.open).toBe(false);
+    expect(filter.querySelector("textarea.capture-filter")).not.toBeNull();
   });
 });

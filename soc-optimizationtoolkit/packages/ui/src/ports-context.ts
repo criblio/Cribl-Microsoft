@@ -59,10 +59,10 @@ import type {
   GraphDirectory,
   InstalledPack,
   JobStore,
+  KvDocumentStore,
   Logger,
   PackBuildRecord,
   PackScaffoldInput,
-  RemoteSampleSource,
   SecretsStore,
   SentinelContent,
   TaggedSampleStore,
@@ -168,18 +168,6 @@ export interface UiPorts {
    */
   contentCache?: ContentCache;
   /**
-   * OPTIONAL seam over the two sibling GitHub repos the SentinelContent port
-   * cannot address (elastic/integrations, criblpacks/*), bound by each shell
-   * over the same api.github.com + raw.githubusercontent.com hosts.
-   *
-   * Its original consumer - the Browse Samples modal's elastic and cribl tiers -
-   * was deleted with the sample browser (ADR 0003). What kept the port alive is
-   * the REPOSITORIES screen, which lists an Elastic package's test files as a
-   * connectivity check that the proxied GitHub path works. Absent = that check
-   * is not offered; nothing else depends on it.
-   */
-  sampleSource?: RemoteSampleSource;
-  /**
    * OPTIONAL GitHub PAT lifecycle manager (porting-plan Unit 14). The
    * Repositories settings page validates-then-stores a PAT through it and reads
    * back only hasPat + login (never the token).
@@ -232,6 +220,15 @@ export interface UiPorts {
    * (exactly today's behavior); a denied directory read degrades the same way.
    */
   graph?: GraphDirectory;
+  /**
+   * OPTIONAL plain-JSON document store with a three-way read (AZR-18): absent,
+   * value, or unknown. The Azure Native Source Onboarding screen loads and
+   * saves its coverage selection through it, and blocks Save on an unknown
+   * read rather than mistaking a refused read for a first run. Absent = that
+   * screen shows a shell-wiring gap and keeps Save disabled; every other screen
+   * is unaffected.
+   */
+  kvDocuments?: KvDocumentStore;
 }
 
 /**

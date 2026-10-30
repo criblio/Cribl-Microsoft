@@ -94,6 +94,7 @@ describe("assembleFlowLogPack", () => {
       .map((e) => e.path)
       .sort();
     expect(names).toEqual([
+      "README.md",
       "default/breakers.yml",
       "default/jobs.yml",
       "default/pack.yml",
@@ -101,5 +102,22 @@ describe("assembleFlowLogPack", () => {
       "default/pipelines/route.yml",
       "package.json",
     ]);
+  });
+
+  it("ships a README naming its job, pipeline and secret - and no operator values (GEN-14)", () => {
+    // Without a README.md, Cribl shows its stock "This is a paragraph..."
+    // template in Pack Settings. The lab pack's README is static, so it
+    // must name the pieces without echoing the tenant or client id.
+    const entry = parseUstarTar(ungzipStored(assembleFlowLogPack(PARAMS, 1_760_000_000_000).crbl))
+      .find((e) => e.path === "README.md");
+    expect(entry).toBeDefined();
+    const text = new TextDecoder().decode(entry!.content);
+    expect(text.startsWith("# Azure vNet Flow Logs\n")).toBe(true);
+    expect(text).toContain(`\`${FLOWLOG_JOB_ID}\``);
+    expect(text).toContain("`Azure_vNet_FlowLogs_PreProcessing`");
+    expect(text).toContain(`\`${FLOWLOG_SECRET_NAME}\``);
+    expect(text).not.toContain(PARAMS.tenantId);
+    expect(text).not.toContain(PARAMS.clientId);
+    expect(text).not.toContain("This is a paragraph");
   });
 });

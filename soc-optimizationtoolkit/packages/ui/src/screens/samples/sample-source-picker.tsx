@@ -1,9 +1,13 @@
 /**
- * SampleSourcePicker - "where do my samples come from?" (plan Phase 3).
+ * SampleSourcePicker - "how will you supply samples?" (plan Phase 3; the
+ * question since DBT-224).
  *
- * TWO CHOICES, made explicitly before anything is fetched (user direction
- * 2026-08-19): query an existing Cribl Lake dataset, or capture from a live
- * source. The mode decides what is read and what is shown:
+ * Two CRIBL modes, chosen explicitly before anything is fetched (user
+ * direction 2026-08-19): query an existing Cribl Lake dataset, or capture from
+ * a live source. With `onSelectMethod` (DBT-224) the same question also offers
+ * the two manual methods, Paste and Upload, which need no Cribl access and are
+ * offered whatever Cribl's state; the Cribl controls then show only for a Cribl
+ * method. The mode decides what is read and what is shown:
  *
  *   lake-query    one leader request, NO worker group involved
  *   live-capture  a worker group first, then that group's sources
@@ -15,8 +19,9 @@
  * It DISCOVERS; it does not acquire. Phase 4 runs the query or the capture.
  *
  * ADVISORY: no gate, no blocking. Every dead end ends with "uploading a file
- * works", because manual upload needs no Cribl access - which is also why it is
- * not a mode here, but a permanent option in the intake section below.
+ * works", because manual upload needs no Cribl access - which is why Paste and
+ * Upload are METHODS here, never Cribl modes, and the intake section below
+ * shows whichever one is chosen.
  *
  * All decisions are the pure sample-source-picker-state; this renders and wires.
  */
@@ -28,11 +33,14 @@ import type {
   SampleSourceInventory,
 } from "@soc/core";
 import {
+  MANUAL_METHOD_CHOICES,
   MODE_CHOICES,
   derivePickerView,
   findEntry,
   groupOptions,
+  isCriblMethod,
 } from "./sample-source-picker-state";
+import type { SampleMethod } from "./sample-source-picker-state";
 
 export interface SampleSourcePickerProps {
   /** Stage one: the worker group listing, or null before it lands. */
@@ -60,6 +68,14 @@ export interface SampleSourcePickerProps {
    */
   onChange: (value: string) => void;
   onReload: () => void;
+  /**
+   * DBT-224: the operator's chosen METHOD, when the screen asks how samples are
+   * supplied. With this set the picker also offers Paste and Upload, and shows
+   * its group and source controls only for a Cribl method. Absent = the
+   * original two-mode picker.
+   */
+  method?: SampleMethod | null;
+  onSelectMethod?: (method: "paste" | "upload") => void;
 }
 
 export function SampleSourcePicker({
@@ -76,6 +92,8 @@ export function SampleSourcePicker({
   onSelectGroup,
   onChange,
   onReload,
+  method,
+  onSelectMethod,
 }: SampleSourcePickerProps) {
   const view = derivePickerView({
     groups,
@@ -89,49 +107,77 @@ export function SampleSourcePicker({
   const selected = findEntry(inventory, value);
   const groupChoices = groupOptions(groups);
   const busy = loadingGroups || loadingSources;
+  const asksMethod = onSelectMethod !== undefined;
+  // The Cribl controls belong to a Cribl method; with the method question
+  // asked and Paste or Upload chosen (or nothing yet), they stay hidden.
+  const showCribl = !asksMethod || isCriblMethod(method ?? null);
+  const activeMode = asksMethod ? (isCriblMethod(method ?? null) ? method : null) : mode;
   const showRetry =
+    showCribl &&
     enabled && !busy && (view.status === "degraded" || view.status === "empty");
 
   return (
     <div className="sample-source-picker" data-status={view.status}>
-      <span className="field-label">Where your samples come from</span>
-      <p className="panel-desc">{view.headline}</p>
+      <span className="field-label">
+        {asksMethod ? "How will you supply samples?" : "Where your samples come from"}
+      </span>
+      {showCribl && <p className="panel-desc">{view.headline}</p>}
 
-      {/* THE CHOICE. Rendered as soon as the workspace is reachable, and before
-          anything about either surface is fetched - the modes are two different
-          questions, and asking which one they mean is cheaper and clearer than
-          answering both. */}
-      {enabled && groups !== null && groups.ok && (
+      {/* THE CHOICE. The Cribl modes render as soon as the workspace is
+          reachable, and before anything about either surface is fetched - the
+          modes are two different questions, and asking which one they mean is
+          cheaper and clearer than answering both. Paste and Upload (DBT-224)
+          need no Cribl access, so they are offered whatever Cribl's state. */}
+      {((enabled && groups !== null && groups.ok) || asksMethod) && (
         <div className="acquisition-modes" role="radiogroup" aria-label="Sample source mode">
-          {MODE_CHOICES.map((choice) => (
-            <button
-              key={choice.mode}
-              type="button"
-              role="radio"
-              aria-checked={mode === choice.mode}
-              className={
-                mode === choice.mode
-                  ? "acquisition-mode acquisition-mode-active"
-                  : "acquisition-mode"
-              }
-              onClick={() => onSelectMode(choice.mode)}
-              disabled={busy}
-            >
-              <span className="acquisition-mode-label">{choice.label}</span>
-              <span className="field-hint">{choice.detail}</span>
-            </button>
-          ))}
+          {enabled && groups !== null && groups.ok &&
+            MODE_CHOICES.map((choice) => (
+              <button
+                key={choice.mode}
+                type="button"
+                role="radio"
+                aria-checked={activeMode === choice.mode}
+                className={
+                  activeMode === choice.mode
+                    ? "acquisition-mode acquisition-mode-active"
+                    : "acquisition-mode"
+                }
+                onClick={() => onSelectMode(choice.mode)}
+                disabled={busy}
+              >
+                <span className="acquisition-mode-label">{choice.label}</span>
+                <span className="field-hint">{choice.detail}</span>
+              </button>
+            ))}
+          {asksMethod &&
+            MANUAL_METHOD_CHOICES.map((choice) => (
+              <button
+                key={choice.method}
+                type="button"
+                role="radio"
+                aria-checked={method === choice.method}
+                className={
+                  method === choice.method
+                    ? "acquisition-mode acquisition-mode-active"
+                    : "acquisition-mode"
+                }
+                onClick={() => onSelectMethod(choice.method)}
+              >
+                <span className="acquisition-mode-label">{choice.label}</span>
+                <span className="field-hint">{choice.detail}</span>
+              </button>
+            ))}
         </div>
       )}
 
       {/* Stated up front rather than discovered in Phase 4. */}
-      {view.modeWarning !== null && (
+      {showCribl && view.modeWarning !== null && (
         <p className="field-hint sample-source-warning">{view.modeWarning}</p>
       )}
 
       {/* Capture only: which worker group. Lake datasets are a leader route and
           need no group at all, which is why this is conditional. */}
-      {view.showGroupPicker && groupChoices.length > 0 && (
+      {showCribl && view.showGroupPicker && groupChoices.length > 0 && (
         <label className="field">
           <span className="field-label">Worker group</span>
           <SearchableSelect
@@ -145,7 +191,7 @@ export function SampleSourcePicker({
         </label>
       )}
 
-      {view.options.length > 0 && (
+      {showCribl && view.options.length > 0 && (
         <label className="field">
           <span className="field-label">
             {mode === "lake-query" ? "Lake dataset" : "Source"}
@@ -162,14 +208,14 @@ export function SampleSourcePicker({
         </label>
       )}
 
-      {selected?.disabled === true && (
+      {showCribl && selected?.disabled === true && (
         <p className="field-hint">
           This source is disabled, so a capture from it will return no events
           until it is enabled.
         </p>
       )}
 
-      {notes.map((note) => (
+      {showCribl && notes.map((note) => (
         <p className="field-hint" key={note}>
           {note}
         </p>

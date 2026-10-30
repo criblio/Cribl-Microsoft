@@ -13,8 +13,6 @@ import type {
   AzureManagementRequest,
   AzureManagementUrlRequest,
   ContentCache,
-  FetchedSampleFile,
-  RemoteSampleSource,
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
@@ -23,6 +21,8 @@ import type {
   InstalledPack,
   JobRecord,
   JobStore,
+  KvDocumentStore,
+  Listing,
   Logger,
   PatManagerStatus,
   PortHttpResponse,
@@ -51,6 +51,7 @@ import {
   patFormatIssue,
   patStatusFrom,
   selectConnectorFiles,
+  toListing,
 } from '@soc/core';
 // Pack store + install-client contracts are @soc/ui-owned ports (they carry the
 // StoredPack definition the UI regenerates from); the CloudPorts bundle
@@ -62,6 +63,7 @@ import type {
   StoredPack,
 } from '@soc/ui';
 import { acquireArmToken, acquireGraphToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
+import { PlatformKvDocumentStore } from './kv-document-store';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -102,6 +104,27 @@ function bodyText(body: unknown): string {
   }
 }
 
+// The body the platform sends with the 403 for an encrypted (write-only) KV
+// entry (verified live; see platform/http.ts).
+const KV_ENCRYPTED_VALUE_MESSAGE = 'Cannot read encrypted value';
+
+/**
+ * Read a KV GET's 403 body and say whether it is the encrypted-value refusal
+ * (DBT-145). That 403 is the ONLY one that may read as absent; any other 403
+ * is a refused read (role or grant) of an entry that may well exist. A body
+ * that cannot be read is not the marker - guessing "encrypted" would turn the
+ * refusal back into an absence.
+ */
+async function kvRead403(res: Response): Promise<{ encrypted: boolean; body: string }> {
+  let body = '';
+  try {
+    body = await res.text();
+  } catch {
+    // Unreadable body: report the bare 403.
+  }
+  return { encrypted: body.includes(KV_ENCRYPTED_VALUE_MESSAGE), body };
+}
+
 // ---------------------------------------------------------------------------
 // SecretsStore
 // ---------------------------------------------------------------------------
@@ -112,9 +135,10 @@ function bodyText(body: unknown): string {
  * WRITE-ONLY ENCRYPTED ENTRIES: values written with `{ encrypted: true }`
  * (PUT ...?encrypted=true) can NEVER be read back - GET returns HTTP 403
  * {"message":"Cannot read encrypted value"} (verified live; the docs'
- * "redacted placeholder" does not happen). This adapter maps that 403 to
+ * "redacted placeholder" does not happen). This adapter maps THAT 403 to
  * null, same as a missing key, so callers must treat "null" as "not readable
- * here" and re-`set` rather than read-modify-write secrets. Encrypted values
+ * here" and re-`set` rather than read-modify-write secrets. Any other 403
+ * rejects (DBT-145): it is a refused read, not an absence. Encrypted values
  * are still USABLE server-side via proxies.yml `kv.*` header injection.
  */
 export class PlatformSecretsStore implements SecretsStore {
@@ -128,11 +152,19 @@ export class PlatformSecretsStore implements SecretsStore {
 
   async get(key: string): Promise<string | null> {
     const res = await fetchWithTimeout(kvUrl(key));
-    // 404: the key does not exist. 403: the key exists but was written
-    // encrypted and is write-only ("Cannot read encrypted value") - the
-    // plaintext is unreadable by design, so surface it as absent too.
-    if (res.status === 404 || res.status === 403) {
+    // 404: the key does not exist. The encrypted-value 403: the key exists
+    // but is write-only - the plaintext is unreadable by design, so surface it
+    // as absent too. Any OTHER 403 rejects: folding it into null sent a
+    // finished install back into setup (DBT-145).
+    if (res.status === 404) {
       return null;
+    }
+    if (res.status === 403) {
+      const refusal = await kvRead403(res);
+      if (refusal.encrypted) {
+        return null;
+      }
+      throw new Error(`GET kvstore/${key}: HTTP 403\n${refusal.body}`);
     }
     if (!res.ok) {
       throw new Error(`GET kvstore/${key}: HTTP ${res.status}\n${await res.text()}`);
@@ -499,7 +531,7 @@ export class PlatformCriblClient implements CriblClient {
     return { status: res.status, body: await readPortBody(res) };
   }
 
-  async listGroups(): Promise<CriblGroupSummary[]> {
+  async listGroups(): Promise<Listing<CriblGroupSummary>> {
     const response = await this.request({ method: 'GET', path: '/master/groups' });
     // listGroups is a convenience that must yield a real list; an HTTP error
     // here leaves nothing sensible to return, so it surfaces as a rejection
@@ -533,7 +565,10 @@ export class PlatformCriblClient implements CriblClient {
       );
       groups.push(product !== undefined ? { id, product } : { id });
     }
-    return groups;
+    // An empty `items` is a 2xx the leader also sends when the caller's role,
+    // or the app's policies.yml grant, covers no group (DBT-134) - so it stays
+    // an unverified `empty`, never a zero the screens may state.
+    return toListing(groups);
   }
 }
 
@@ -1265,100 +1300,6 @@ export class PlatformSentinelContent implements SentinelContent {
 }
 
 // ---------------------------------------------------------------------------
-// RemoteSampleSource (Elastic integrations + Cribl packs) - porting-plan Unit 16
-// ---------------------------------------------------------------------------
-
-const ELASTIC_OWNER_REPO = 'elastic/integrations';
-const ELASTIC_BRANCH = 'main';
-const CRIBLPACKS_OWNER = 'criblpacks';
-const CRIBLPACKS_BRANCH = 'main';
-
-// The Elastic test-pipeline raw sample files: the .log inputs and .json inputs,
-// excluding the pipeline's -expected outputs and -config files (legacy filter).
-function isElasticSampleFile(name: string): boolean {
-  return (
-    name.endsWith('.log') ||
-    (name.endsWith('.json') && !name.includes('-expected') && !name.includes('-config'))
-  );
-}
-
-/**
- * RemoteSampleSource over the proxied GitHub API (porting-plan Unit 16): the two
- * sibling repos the SentinelContent port cannot address. Elastic test-pipeline
- * files for a package + data stream (raw vendor samples) and a Cribl pack repo's
- * data/samples. Same hosts as PlatformSentinelContent (api.github.com +
- * raw.githubusercontent.com); the PAT is injected server-side (proxies.yml), so
- * this adapter never sets an Authorization header. A missing directory (404)
- * resolves to []; a missing raw file resolves to null and is skipped.
- */
-export class PlatformRemoteSampleSource implements RemoteSampleSource {
-  private async listContents(path: string): Promise<GithubContentEntry[]> {
-    const res = await githubFetchWithRetry(`${GITHUB_API}${path}`, {
-      method: 'GET',
-      headers: { Accept: GITHUB_JSON_ACCEPT },
-    });
-    if (res.status === 404) {
-      return [];
-    }
-    if (!res.ok) {
-      throw new Error(`GET GitHub ${path}: HTTP ${res.status}\n${errorSnippet(await res.text())}`);
-    }
-    return asContentEntries(await readPortBody(res));
-  }
-
-  private async fetchRawText(url: string): Promise<string | null> {
-    const res = await githubFetchWithRetry(url, { method: 'GET' });
-    if (res.status === 404) {
-      return null;
-    }
-    if (!res.ok) {
-      throw new Error(`GET raw ${url}: HTTP ${res.status}`);
-    }
-    return res.text();
-  }
-
-  async listElasticTestFiles(packageName: string, stream: string): Promise<FetchedSampleFile[]> {
-    const dir = `packages/${packageName}/data_stream/${stream}/_dev/test/pipeline`;
-    const entries = await this.listContents(
-      `/repos/${ELASTIC_OWNER_REPO}/contents/${encodeRepoPath(dir)}`,
-    );
-    const out: FetchedSampleFile[] = [];
-    for (const e of entries) {
-      if (e.type !== 'file' || !isElasticSampleFile(e.name)) {
-        continue;
-      }
-      const text = await this.fetchRawText(
-        `${GITHUB_RAW}/${ELASTIC_OWNER_REPO}/${ELASTIC_BRANCH}/${encodeRepoPath(`${dir}/${e.name}`)}`,
-      );
-      if (text !== null) {
-        out.push({ fileName: e.name, content: text });
-      }
-    }
-    return out;
-  }
-
-  async listCriblPackSamples(repoName: string): Promise<FetchedSampleFile[]> {
-    const dir = 'data/samples';
-    const entries = await this.listContents(
-      `/repos/${CRIBLPACKS_OWNER}/${repoName}/contents/${dir}`,
-    );
-    const out: FetchedSampleFile[] = [];
-    for (const e of entries) {
-      if (e.type !== 'file') {
-        continue;
-      }
-      const text = await this.fetchRawText(
-        `${GITHUB_RAW}/${CRIBLPACKS_OWNER}/${repoName}/${CRIBLPACKS_BRANCH}/${dir}/${encodeURIComponent(e.name)}`,
-      );
-      if (text !== null) {
-        out.push({ fileName: e.name, content: text });
-      }
-    }
-    return out;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // ContentCache (KV) - porting-plan Unit 14
 // ---------------------------------------------------------------------------
 
@@ -1392,8 +1333,17 @@ export class KvContentCache implements ContentCache {
 
   async get(cacheKey: string): Promise<unknown | null> {
     const res = await fetchWithTimeout(kvUrl(this.key(cacheKey)));
-    if (res.status === 404 || res.status === 403) {
+    // A 404 or the encrypted-value 403 is a miss; any other 403 is a refused
+    // read and rejects like any backend failure (DBT-145).
+    if (res.status === 404) {
       return null;
+    }
+    if (res.status === 403) {
+      const refusal = await kvRead403(res);
+      if (refusal.encrypted) {
+        return null;
+      }
+      throw new Error(`GET content-cache ${cacheKey}: HTTP 403\n${refusal.body}`);
     }
     if (!res.ok) {
       throw new Error(`GET content-cache ${cacheKey}: HTTP ${res.status}\n${await res.text()}`);
@@ -1447,7 +1397,10 @@ const GITHUB_PAT_STATUS_KEY = 'githubPatStatus';
 export class PlatformGithubPat implements GithubPatManager {
   async status(): Promise<PatManagerStatus> {
     const res = await fetchWithTimeout(kvUrl(GITHUB_PAT_STATUS_KEY));
-    if (res.status === 404 || res.status === 403) {
+    // Only a 404 means "no PAT". githubPatStatus is always written plain, so
+    // EVERY 403 - the encrypted-value one included - is a refused read and
+    // falls through to the throw below (DBT-145).
+    if (res.status === 404) {
       return { hasPat: false };
     }
     if (!res.ok) {
@@ -1857,8 +1810,6 @@ export interface CloudPorts {
   content: SentinelContent;
   /** Parsed-content cache over plain KV entries, keyed by solution+commit (Unit 14). */
   contentCache: ContentCache;
-  /** Elastic + Cribl-pack raw sample fetch over the proxied GitHub API (Unit 16). */
-  sampleSource: RemoteSampleSource;
   /** GitHub PAT lifecycle: validate-then-store, hasPat-only (Unit 14). */
   githubPat: GithubPatManager;
   /** Pack build-record store over plain KV entries - definitions only (Unit 19). */
@@ -1867,6 +1818,13 @@ export interface CloudPorts {
   packInstall: PackInstallClient;
   /** Entra directory reader for the ingestion service-principal picker (B3). */
   graph: GraphDirectory;
+  /**
+   * Plain JSON documents in KV with a three-way read - absent, value, or
+   * unknown (AZR-18). A 403 here is unknown, never absent - even the
+   * encrypted-value 403 that secrets/contentCache read as null; see
+   * platform/kv-document-store.ts.
+   */
+  kvDocuments: KvDocumentStore;
   /**
    * Shell-minted GUID provider for role-assignment names (Unit 8, ENG-37
    * runtime half). The SHELL owns id conventions - @soc/core never mints - so
@@ -1909,11 +1867,11 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     samples: new PlatformTaggedSampleStore(),
     content: new PlatformSentinelContent(),
     contentCache: new KvContentCache(),
-    sampleSource: new PlatformRemoteSampleSource(),
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl, logger),
     graph: new PlatformGraphDirectory(tenantId),
+    kvDocuments: new PlatformKvDocumentStore(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
     // The app is hosted inside a Cribl.Cloud workspace: Lake federation applies.

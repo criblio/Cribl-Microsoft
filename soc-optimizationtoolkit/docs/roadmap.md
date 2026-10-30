@@ -104,7 +104,7 @@ Exit: solution browsed -> samples -> pipeline -> pack -> installed destination e
 
 ## Phase 6: Drift engine
 
-- Shared drift-check implementation (SYN-04 through SYN-09), on-demand in cloud, scheduled by the local host (resolved); AI schema extraction/inference and pack generation/correction via Anthropic proxy (SYN-02/03/12/13), deterministic fallback (SYN-14), cost tracking (SYN-11), audit logging (SYN-10). GitOps/GitHub Actions flow retires.
+- Shared drift-check implementation (SYN-04 through SYN-09), on-demand in cloud, scheduled by the local host (resolved); AI schema extraction/inference and pack generation/correction via Anthropic proxy (SYN-02/03/12/13) [2026-07-08: runtime AI items WITHDRAWN - the app must not call an LLM; see ai-assisted-analysis-plan.md], deterministic fallback (SYN-14), cost tracking (SYN-11), audit logging (SYN-10). GitOps/GitHub Actions flow retires.
 
 ## Phase 7: Long tail, parity audit, archival
 

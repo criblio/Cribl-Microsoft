@@ -8,6 +8,234 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.13.0
+
+**Sentinel Integration folds what you are not using (DBT-232).** When you work in a section - click or tab into it, press Done - next, or use a footer pill - the other open sections fold to their one-line summary. Pinned sections stay open (the Pin button on each header, remembered for you), as do the section waiting for your action and Deploy while it runs. Scrolling never folds anything. Near the top of the page, sections above the one you are in stay open, so it never jumps under the pointer (DBT-234).
+
+**Less on screen after each step (DBT-228 to DBT-231).** Sample cards carry one line, and the routing caveat for column-order samples is said once below them. The capture checklist is a compact grid with the vendor-documented log types grouped, and the generated filter is behind Edit filter. Gap Analysis shows destination, learned decisions and unused fields on one line; enrichment fields and a satisfied vendor identity are one line each until you edit them. Select Azure Resources keeps creating a resource group or workspace, and the ingestion role, closed until they are needed. Deploy shows its prefilled table, client id and secret as one summary line. Anything that needs your attention, such as a missing required value, opens by itself.
+
+**Select Sentinel Solution waits for a search (DBT-227).** Before you pick a solution the section shows the search box and how many solutions there are, not the whole list. Type to filter, or press Browse all to see every solution.
+
+**One coverage step, and Enable Sentinel Content waits for a load (DBT-226).** Review Analytics Rule Coverage and Review Workbook Coverage are now one step, Review Coverage, with an Analytics rules / Workbooks switch, so Sentinel Integration has eight sections instead of nine. Enable Sentinel Content shows only its Load button until the solution content has been read.
+
+**Configure Cribl asks where events go first (DBT-225).** The Sentinel destination question (new or existing) now opens the section. With an existing destination, Pack wiring is a single line and Select Azure Resources says only that it is not needed, with the detail behind (i). Adding more worker groups, the overwrite check and Rebuild pack only are under More pack options, which opens by itself when one of them needs your attention.
+
+**Sample Data asks how you will supply samples (DBT-224).** Sentinel Integration no longer shows Lake, live capture, paste and upload at once: it asks How will you supply samples? and shows only the chosen method. Paste and Upload are offered even without a Cribl connection. Selecting a solution now shows how many log types it expects, with the full list behind Show the expected log types instead of printed in full.
+
+**Rule Coverage counts a column per log type (DBT-223).** With more than one
+log type, a column used to count as covered once any one log type filled it,
+so choosing a close match for TRAFFIC cleared the missing-field chip for
+THREAT as well, and a THREAT detection reading that column was reported
+covered. A column now counts as covered only when every log type whose table
+has it fills it. A chip names the log types still missing a field ("ReceivedBytes
+- missing in THREAT"), and its close matches are offered per log type, so each
+log type gets its own choice. Coverage figures can read lower than before: they
+no longer count a column for log types that never carry it.
+
+**SIEM Migration can inventory an existing Sentinel workspace (MIG-1..3).** A
+new panel at the foot of the SIEM Migration screen finds the Log Analytics
+workspaces the connected identity can see across the tenant, marks which have
+Sentinel enabled, and inventories the one you pick. It lists every table with
+data in the last 30 complete UTC days, the daily average and billable volume
+for each table (from the Usage table), and the sources feeding each table (from
+`_BilledSize`, attributed to `_ResourceId`, `Computer` or the CEF device). The
+workspace-wide daily average is shown above the table, and the inventory
+downloads as CSV. The workspace picker has a filter box that matches name, subscription, resource group and Sentinel state, and switching workspace keeps the shown inventory until the next one is read, saying which workspace it belongs to. It needs Log Analytics Reader on the workspace. A refused read
+is reported as a refusal, not as an empty workspace. A table whose source
+breakdown fails keeps its volume and says why.
+
+**Ensure Cribl secret no longer overwrites a secret it cannot show it wrote
+(DBT-152).** Sentinel Integration's "Ensure Cribl secret" and the Labs
+flow-log pack used to replace an existing secret of the same name
+(`sentinel_client_secret`, `Azure_vNet_Flowlogs_Secret`) whoever had made it,
+and the pack did so on a 400 as well. Now a create that answers 409 is followed
+by a read of the secret, and it is updated only when its description carries
+this app's `[managed-by:soc-optimizationtoolkit]` stamp. Otherwise it is left
+unchanged and the operator is told why. A 400 is reported as an error. Secrets
+written by 1.12.9 and earlier carry no stamp, so updating one of those is
+refused the first time: delete it in Cribl, or add the stamp to its
+description, then run the action again. A refused flow-log pack secret stops
+the finish before the commit; the pack itself has already been installed.
+
+**A failed read of the saved deployment options no longer leads to them being
+overwritten (DBT-158).** When the app could not read its saved options, it
+showed the defaults, and the next Sentinel Integration DCE toggle saved those
+defaults over the real options. Sentinel Integration and DCR Automation (single
+and batch) now say the saved options could not be read and offer "Retry
+reading options". Until a read succeeds, the toggle is read-only and nothing is
+saved; the values on screen are the defaults.
+
+**A refused cache or token-status read is no longer reported as something
+else (DBT-159).** Repositories shows "Token status unknown" instead of saying no
+token is saved when the saved-token status cannot be read. The solution browser
+fetches from GitHub when its content cache refuses a read or a write, and shows
+a note saying so; it no longer fails the index load with a message that blamed
+the GitHub token. Sample intake says when a saved vendor name could not be read.
+
+## 1.12.9
+
+**An empty worker-group list now says why (DBT-134).** A tester saw a worker
+group picker with nothing in it and no explanation. Every picker - Sentinel
+Integration (and its multi-group option), DCR Automation's single-table and
+batch forms, Pack Maintenance's Deploy target, the Dataflow live views and the
+Labs flow-log panel - now shows one of four states: loading; an error with
+Retry; "Cribl returned no worker groups this account can see", naming the
+likely causes (the Cribl role, or the app's policies awaiting an admin's
+re-approval); or "none are Stream worker groups", naming each group Cribl did
+return and its type. An empty list no longer reads "No matches", which is what a
+filter typo shows. Pack Maintenance always shows its Deploy target, reports a
+failed group listing as a worker-group problem rather than "Deployed status
+unavailable", and no longer badges a pack "Not deployed" from a read that never
+ran. The multi-group option shows an error instead of "Loading worker groups..."
+forever. A group now counts as Stream when either its product or its type says
+so.
+
+**One more API path to approve.** The app now declares `GET /master/groups/:id`
+in its policies, alongside the group list it already read. An admin re-approves
+the policies when upgrading.
+
+**The permission audit shows its age (HON-6).** The connection bar now says when
+this connection's Azure and Cribl permissions were last checked - "permissions:
+checked 4 days ago" - with an (i) and a Re-check permissions button. The age
+keeps counting while the page stays open.
+
+**Sentinel Integration reads in one line per section (DBT-125, DBT-126,
+DBT-127).** Each step leads with one line; the detail moved behind (i) icons,
+and an (i) stays open when clicked. Done folds a finished section to a summary,
+and the footer's pills jump back to their section.
+
+**Security.** react-router moves to 7.18.4, which clears a high-severity
+advisory in the shipped bundle.
+
+## 1.12.8
+
+**Captures with hyphenated keys now split by their real log type, and some will
+regroup (DBT-84).** The capture splitter read `key=value` lines with a key class
+that stopped at the first hyphen, so `log-type`, `sub-type` and `src-ip` became
+`type`, `type` and `ip`. Keys that truncated to the same name collided and the
+last one won: `log-type=TRAFFIC sub-type=end` grouped by the SUBTYPE (`END`),
+which one won depended on the order the pairs were written in, and a line such
+as `src-ip=.. dst-ip=.. action=..` counted as two pairs instead of three and
+sent the whole capture to the single fallback group. Keys are now read whole.
+Three hyphenated keys are aliased to a discriminator: `log-type` to `type`
+(what it used to truncate to), `sub-type` to `subtype` and `event-type` to
+`eventType` (both used to truncate to `type`). Any other hyphenated key that
+used to truncate onto a discriminator no longer does, so a capture grouped only
+by such a key now lands in the single fallback group - re-capture it.
+When a line carries both `type=` and `log-type=`, the exact `type` wins. A
+CEF or LEEF header, a `prog:` tag or a `[timestamp]` in front of the first pair
+still ends at the `|`, `:` or `]`, so the first extension key is read as itself.
+
+**A pack that keeps a field Cribl cannot address no longer builds (GEN-5).** A
+source field kept under its own name - because the destination has a column
+spelled the same - was never checked, so a name like `Source IP` or `aws.account`
+built cleanly and then read as nothing at runtime. The preview now reports it
+and the build is blocked, the same as an unaddressable rename already was. The
+same now holds for a field read as the input of a base64 decode. A field that is
+only dropped is not checked yet; that waits on a live Cribl measurement. The
+build refusal now reads "pipeline validation found N issue(s)", because the
+count includes these field-name checks as well as the Cribl YAML loader's.
+
+**Dotted keys regroup too.** A dot cut a key the same way a hyphen did, so
+`event.type` used to be read as `type` and split the capture by it. Dotted keys
+are now read whole and are NOT treated as `type`, so a capture that was grouped
+through a dotted key such as `event.type` comes back as one group (or under a
+different discriminator) and should be re-captured like the hyphenated case.
+
+**Re-capture affected samples.** A log type is the tagged-sample store's key, so
+a capture that contained colliding hyphenated or dotted keys - one that was
+grouped under a subtype, or that came back as one undifferentiated group - or
+that was grouped through a dotted key, will split differently now, under new
+names. Samples stored under the old names stay
+where they are and are not migrated; capture those sources again to get the
+corrected groups.
+
+**Rebuild packs to pick up the changes below.** Each one changes what a newly
+built pack contains. A pack built and installed before this release keeps its
+old output until it is rebuilt and reinstalled.
+
+**VPC Flow packs stamp TimeGenerated from the flow start (GEN-7).** A
+recognised VPC Flow v2 pack looked for a timestamp field no event carries, so
+Azure stamped every flow with its ingestion time, and `Start` and `End` shipped
+as raw epoch-second strings into datetime columns. The pack now carries an Eval
+that sets TimeGenerated from the flow start and rewrites `Start` and `End` as
+ISO-8601; a non-numeric value such as `-` leaves the field unset. The DCR
+transform is unchanged. Flow events from a rebuilt pack will carry a different
+TimeGenerated than the same flows did before.
+
+**Syslog packs parse syslog instead of JSON (DBT-116).** A syslog pack's
+pipeline, and its fallback reduction pipeline, were generated with a JSON serde,
+so every field the sample parser had read (Hostname, Program, Message ...) was
+undefined in the installed pipeline. Both now extract RFC 3164 and RFC 5424
+with an Eval built from the sample parser's own patterns, including integer
+Priority, PID and Version. The route filter for an NDJSON log type now looks
+for a token a JSON line actually contains, where it used to look for a
+`key=value` token.
+
+**The pack's Sentinel destination id now matches the one Deploy creates
+(GEN-18).** For a table name with a hyphen, dot or space, the pack generator
+only stripped `_CL`, while Deploy also replaced every non-alphanumeric
+character with `_`. A pack for such a table wrote an `outputs.yml` id and route
+outputs that Deploy never creates. The pack now uses Deploy's rule, so for
+those table names the destination id in `outputs.yml` and in every route output
+CHANGES on rebuild - for `My-App_CL`, from `MS-Sentinel-My-App-dest` to
+`MS-Sentinel-My_App-dest`.
+A routable pack's prerequisite check now expects that one id. The pack and that
+check also now apply your Cribl destination prefix and suffix, as Deploy always
+did; before, they used the default naming whatever you had set. Table names made
+only of letters, digits and underscores, with default prefix and suffix, are
+unaffected.
+
+**An undetected sample gets a placeholder route, not a filter that cannot match
+(GEN-11).** A sample whose format was not detected was routed as JSON, and the
+log type got a filter on a parsed field that no unparsed event at route time
+carries; the preview still read valid. Such a log type now gets a placeholder
+route, and the preview reports it, offering a `_raw` filter example and saying
+which formats reach the route unparsed. Detected JSON and NDJSON routing, and
+route conditions set by hand, are unchanged.
+
+**Every built pack ships a README (GEN-14).** App-built packs carried no
+`README.md`, so Cribl's Pack Settings showed its own unedited placeholder
+template. Each pack now ships one naming the solution, its tables, one row per
+log type (table, pipelines, destination, stream) and how the pack is wired; it
+carries no DCR id, endpoint, tenant or client id. The Labs flow-log pack ships a
+fixed README of its own.
+
+**Unreadable CEF lines are dropped and reported (DBT-109).** A syslog-wrapped
+line whose CEF header could not be read (a dangling trailing backslash, or
+fewer than seven header fields) used to be kept as an event carrying only its
+syslog header, counted in the sample's event total and shipped in the pack's
+sample file. It is now
+dropped, and the sample shows a parse note counting the lines that were
+skipped. Event counts for affected CEF samples go down.
+
+**RULE badges appear as soon as the DCR Gap Analysis runs (DBT-121).** The badges
+on the Field Mappings table that mark columns an analytics rule references used
+to appear only after a separate click on Analyze in Rule Coverage, so an
+operator who ran the gap analysis alone saw none and read the feature as
+missing. They now light on every gap analysis, from the solution's rules already
+fetched when it was selected. Rules uploaded in Rule Coverage still add to them.
+The rules come from GitHub; without a GitHub token the fetch can fail silently
+and no badges appear.
+
+**Smaller fixes.**
+- AZR-13: the coverage catalog derives its Entra profile options from the
+  three profiles the app knows, so a stored SecurityOnly selection is kept
+  rather than silently reverted to Standard. No screen reads that catalog yet.
+- DBT-118: Repositories no longer shows the Elastic sample section, which
+  described a fetch the app stopped doing and spent GitHub calls on a probe;
+  the Add Sample Data tip now names capture and Lake query.
+- DBT-14: the solution list only holds the mouse wheel while it actually
+  scrolls, so a short list no longer stops the page from scrolling.
+- DBT-58: the workbook-coverage tip now says that workbooks already deployed
+  in your subscription are not analyzed.
+- DBT-106: DCR Gap Analysis shows AWS's own hyphenated spelling beside each VPC
+  Flow v2 field. Display only - the pipeline still uses the parsed name.
+- DBT-122: the DCR Gap Analysis Field Mappings table has an Example Value
+  column showing the first value seen for each source field.
+
+---
+
 ## 1.12.7
 
 **A pack can now be wired either way, and the routable way says what it needs.**

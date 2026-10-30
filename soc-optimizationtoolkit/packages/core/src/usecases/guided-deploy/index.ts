@@ -64,8 +64,7 @@ export type {
 
 // The one secret convention + ensure-secret
 export {
-  buildEnsureSecretRequest,
-  buildUpdateSecretRequest,
+  SENTINEL_CLIENT_SECRET_DESCRIPTION,
   SENTINEL_CLIENT_SECRET_NAME,
   SENTINEL_CLIENT_SECRET_REFERENCE,
   SECRETS_API_PATH,

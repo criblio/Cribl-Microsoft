@@ -37,6 +37,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import {
   FakeContentCache,
   buildVendorFieldDefinition,
+  capTaggedSampleBytes,
   vendorFieldDefinitionKey,
 } from "@soc/core";
 import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
@@ -614,5 +615,654 @@ describe("SampleIntakeSection - where a chip's column names came from", () => {
     });
     expect(view.container.querySelector(".csv-dialog-prefill")).toBeNull();
     expect(dialogTextarea(view.container).value).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Removing one log type (DBT-143)
+// ---------------------------------------------------------------------------
+
+describe("SampleIntakeSection - removing one log type", () => {
+  const seed = () => [
+    lakeSample("Traffic", NAMED_JSON),
+    lakeSample("Decryption", NAMED_JSON),
+  ];
+
+  it("reports the chip's Remove upward AFTER the store entry is gone", async () => {
+    const { store, byType } = makeStore(seed());
+    const removedAt: boolean[] = [];
+    const onRemoveLogType = vi.fn((logType: string) => {
+      removedAt.push(byType.has(logType));
+    });
+    const view = render(
+      <SampleIntakeSection store={store} onRemoveLogType={onRemoveLogType} />,
+    );
+    await waitFor(() => expect(chipNames(view.container)).toHaveLength(2));
+
+    const chip = Array.from(view.container.querySelectorAll(".sample-chip")).find(
+      (el) => el.querySelector(".sample-chip-name")?.textContent === "Decryption",
+    )!;
+    const remove = Array.from(chip.querySelectorAll("button")).find(
+      (b) => b.textContent === "Remove",
+    )!;
+    fireEvent.click(remove);
+
+    await waitFor(() => expect(onRemoveLogType).toHaveBeenCalledWith("Decryption"));
+    expect(onRemoveLogType).toHaveBeenCalledTimes(1);
+    // Downstream prunes only once the sample really is gone from the store.
+    expect(removedAt).toEqual([false]);
+    expect(chipNames(view.container)).toEqual(["Traffic"]);
+  });
+
+  it("performs a removal asked for from elsewhere, once per nonce", async () => {
+    const { store, byType } = makeStore(seed());
+    const onRemoveLogType = vi.fn();
+    const onSamplesChange = vi.fn();
+    const props = { store, onRemoveLogType, onSamplesChange };
+    const view = render(<SampleIntakeSection {...props} />);
+    await waitFor(() => expect(chipNames(view.container)).toHaveLength(2));
+
+    const request = { logType: "Decryption", nonce: 1 };
+    view.rerender(<SampleIntakeSection {...props} removeRequest={request} />);
+    await waitFor(() => expect(chipNames(view.container)).toEqual(["Traffic"]));
+    expect([...byType.keys()]).toEqual(["Traffic"]);
+    expect(onRemoveLogType).toHaveBeenCalledWith("Decryption");
+    // The page's list follows too: the last report carries only Traffic.
+    const last = onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(last.map((s) => s.logType)).toEqual(["Traffic"]);
+
+    // A re-render carrying the same request does not remove again.
+    view.rerender(<SampleIntakeSection {...props} removeRequest={{ ...request }} />);
+    await act(async () => {});
+    expect(store.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A REFUSED READ OF THE OPERATOR'S VENDOR NAME (DBT-159).
+ *
+ * Since DBT-145 the KV store throws on a non-encrypted 403. The VND-1 effect
+ * awaited definitionCache.get inside a `void (async () => ...)()` with no
+ * catch, so a refused read became an UNHANDLED REJECTION: nothing on screen,
+ * an empty Vendor name box that looked like "never named", and an error only
+ * the console saw. A failed read is a miss for the box - and it is SAID, since
+ * "we could not read it" and "you never named it" ask different things of the
+ * operator.
+ */
+describe("SampleIntakeSection - a refused vendor-name read (DBT-159)", () => {
+  // Not in the curated vendor list, so the operator-name box is what applies.
+  const UNLISTED = "Acme Widget Telemetry";
+
+  it("says the saved name could not be read, and rejects nothing unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+      const refusingCache = {
+        get: vi.fn(async () => {
+          throw new Error("KV read refused (403)");
+        }),
+        set: vi.fn(async () => undefined),
+      } as unknown as ContentCache;
+      const onSamplesChange = vi.fn();
+      const view = render(
+        <SampleIntakeSection
+          store={store}
+          solutionName={UNLISTED}
+          definitionCache={refusingCache}
+          onSamplesChange={onSamplesChange}
+        />,
+      );
+      await waitFor(() => {
+        expect(
+          view.container.querySelectorAll(".sample-intake-vendor-unread"),
+        ).toHaveLength(1);
+      });
+      expect(
+        view.container.querySelector(".sample-intake-vendor-unread")?.textContent,
+      ).toContain("KV read refused (403)");
+      // The box still works: empty, and the operator can name the vendor.
+      const input = view.container.querySelector<HTMLInputElement>("#operator-vendor");
+      expect(input?.value).toBe("");
+      // Let any stray rejection reach the process before counting.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+});
+
+/**
+ * NAMING THE VENDOR AGAINST A STORE THAT REFUSES THE WRITE (DBT-175).
+ *
+ * The button handler was `void definitionCache.set(...)` followed at once by
+ * setVendorSaved(true): no catch, and "Saved" before the write had landed. A
+ * refused write was therefore an UNHANDLED REJECTION under a button reading
+ * "Saved" - and column orders, which only key under a saved name, quietly went
+ * unremembered. The DBT-159 hint beside it ("Naming it again replaces whatever
+ * is stored") was false in exactly that case. "Saved" now means the store said
+ * yes, and a refusal is said with its reason.
+ */
+describe("SampleIntakeSection - naming the vendor (DBT-175)", () => {
+  const UNLISTED = "Acme Widget Telemetry";
+
+  function vendorButton(c: HTMLElement): HTMLButtonElement {
+    const input = c.querySelector<HTMLInputElement>("#operator-vendor");
+    const button = input?.parentElement?.querySelector<HTMLButtonElement>(
+      "button.run-button",
+    );
+    if (button === null || button === undefined) throw new Error("no vendor button");
+    return button;
+  }
+
+  async function mountUnlisted(cache: ContentCache) {
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(view.container.querySelectorAll("#operator-vendor")).toHaveLength(1);
+    });
+    fireEvent.change(
+      view.container.querySelector("#operator-vendor") as HTMLInputElement,
+      { target: { value: "  Acme Corp  " } },
+    );
+    return view;
+  }
+
+  it("a refused write never reads 'Saved', says why, and rejects nothing unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const cache = {
+        get: vi.fn(async () => null),
+        set: vi.fn(async () => {
+          throw new Error("KV write refused (403)");
+        }),
+      } as unknown as ContentCache;
+      const view = await mountUnlisted(cache);
+      await act(async () => {
+        fireEvent.click(vendorButton(view.container));
+      });
+      await waitFor(() => {
+        expect(
+          view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+        ).toHaveLength(1);
+      });
+      expect(
+        view.container.querySelector(".sample-intake-vendor-unsaved")?.textContent,
+      ).toContain("KV write refused (403)");
+      expect(cache.set).toHaveBeenCalledTimes(1);
+      expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  it("says 'Saved' only once the write has LANDED", async () => {
+    let land!: () => void;
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            land = resolve;
+          }),
+      ),
+    } as unknown as ContentCache;
+    const view = await mountUnlisted(cache);
+    await act(async () => {
+      fireEvent.click(vendorButton(view.container));
+    });
+    // In flight: the store has not answered, so nothing is claimed yet.
+    expect(vendorButton(view.container).textContent).toBe("Saving...");
+    expect(cache.set).toHaveBeenCalledTimes(1);
+    expect(cache.set).toHaveBeenCalledWith(
+      "operator-vendor-v1-acmewidgettelemetry",
+      "Acme Corp",
+    );
+    await act(async () => {
+      land();
+    });
+    expect(vendorButton(view.container).textContent).toBe("Saved");
+    expect(
+      view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+    ).toHaveLength(0);
+  });
+
+  it("a write that lands AFTER the solution changed claims nothing for the new one", async () => {
+    // Review of DBT-175: the awaited write outlived a solution switch, and its
+    // late answer set "Saved" (or the refusal note) on the NEXT solution,
+    // whose box the switch had just reset.
+    const answers: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            answers.push({ resolve, reject });
+          }),
+      ),
+    } as unknown as ContentCache;
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const onSamplesChange = vi.fn();
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={onSamplesChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(view.container.querySelectorAll("#operator-vendor")).toHaveLength(1);
+    });
+    const typeAndSave = async (value: string) => {
+      fireEvent.change(
+        view.container.querySelector("#operator-vendor") as HTMLInputElement,
+        { target: { value } },
+      );
+      await act(async () => {
+        fireEvent.click(vendorButton(view.container));
+      });
+    };
+    const switchTo = async (solutionName: string) => {
+      await act(async () => {
+        view.rerender(
+          <SampleIntakeSection
+            store={store}
+            solutionName={solutionName}
+            definitionCache={cache}
+            onSamplesChange={onSamplesChange}
+          />,
+        );
+      });
+    };
+
+    await typeAndSave("Acme Corp");
+    await switchTo("Quuxbar Unlisted Gadget Feed");
+    await act(async () => {
+      answers[0]?.resolve();
+    });
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+
+    await typeAndSave("Quuxbar Corp");
+    await switchTo(UNLISTED);
+    await act(async () => {
+      answers[1]?.reject(new Error("KV write refused (403)"));
+    });
+    expect(answers).toHaveLength(2);
+    expect(
+      view.container.querySelectorAll(".sample-intake-vendor-unsaved"),
+    ).toHaveLength(0);
+    expect(vendorButton(view.container).textContent).toBe("Use this vendor");
+  });
+
+  it("the unread-name hint no longer promises the next save will land", async () => {
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const { store } = makeStore([lakeSample("Events", NAMED_JSON)]);
+    const view = render(
+      <SampleIntakeSection
+        store={store}
+        solutionName={UNLISTED}
+        definitionCache={cache}
+        onSamplesChange={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-vendor-unread"),
+      ).toHaveLength(1);
+    });
+    const hint =
+      view.container.querySelector(".sample-intake-vendor-unread")?.textContent ?? "";
+    // The store that refused the read may refuse the write too.
+    expect(hint.split("replaces whatever is stored").length - 1).toBe(0);
+    expect(hint).toMatch(/if the store accepts/);
+  });
+});
+
+/**
+ * COLUMN-ORDER REUSE AGAINST A REFUSING STORE (DBT-175).
+ *
+ * useVendorColumnOrder swallowed a refused read, so the dialog opened with no
+ * remembered order and nothing said that one might exist. The section now
+ * says reuse is off and why - ONCE, though the queued item and every chip each
+ * read the store, because the note describes the store, not a key.
+ */
+describe("SampleIntakeSection - a refused column-order store (DBT-175)", () => {
+  it("says column-order reuse is off, with the reason, once", async () => {
+    const { store } = makeStore();
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const view = await mountWithVendor(store, cache);
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-column-order-refused"),
+      ).toHaveLength(1);
+    });
+    const note =
+      view.container.querySelector(".sample-intake-column-order-refused")
+        ?.textContent ?? "";
+    expect(note).toContain("KV read refused (403)");
+    expect(note).toMatch(/could not be read/);
+  });
+
+  it("keeps saying so once the dialog closes, from the chips' own reads", async () => {
+    // With the queue empty the section's own hook has no scope and asks the
+    // store nothing; the chips still do, and their refusal is the same news.
+    const { store } = makeStore();
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("KV read refused (403)");
+      }),
+      set: vi.fn(async () => undefined),
+    } as unknown as ContentCache;
+    const view = await mountWithVendor(store, cache);
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    await act(async () => {
+      clickButton(view.container, "Skip");
+    });
+    expect(dialogs(view.container)).toHaveLength(0);
+    await waitFor(() => {
+      expect(
+        view.container.querySelectorAll(".sample-intake-column-order-refused"),
+      ).toHaveLength(1);
+    });
+    expect(
+      view.container.querySelector(".sample-intake-column-order-refused")
+        ?.textContent,
+    ).toContain("KV read refused (403)");
+  });
+
+  it("says nothing when the store answers", async () => {
+    const { store } = makeStore();
+    const view = await mountWithVendor(store, new FakeContentCache());
+    await paste(view.container, "AUTH", PANOS.auth);
+    await waitFor(() => {
+      expect(dialogs(view.container)).toHaveLength(1);
+    });
+    expect(
+      view.container.querySelectorAll(".sample-intake-column-order-refused"),
+    ).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-206: what the store KEPT, said on paste and upload the way capture says it
+// ---------------------------------------------------------------------------
+
+/**
+ * DBT-206, the third intake path of DBT-197's trim. The cloud store byte-caps
+ * each sample and keeps the first events that fit (core capTaggedSampleBytes);
+ * paste and upload put the sample they HANDED the store into the list, so the
+ * chip read the full count until a reload and then the smaller stored count
+ * with no word about why. The store here caps the way the adapter does, at a
+ * budget small enough that a few dozen short events cross it.
+ */
+describe("SampleIntakeSection - a sample the store trimmed (DBT-206)", () => {
+  const BUDGET = 4096;
+  const EVENTS = 60;
+
+  /** NDJSON of `n` events, each long enough that 60 cross BUDGET and 3 do not. */
+  const ndjson = (n: number): string =>
+    Array.from({ length: n }, (_, i) =>
+      JSON.stringify({
+        user: `user${i}`,
+        action: "login",
+        detail: `event ${i} carrying enough text to make sixty of them large`,
+      }),
+    ).join("\n");
+
+  /** Replace-by-logType like makeStore, byte-capped like the KV adapter. */
+  function cappedStore() {
+    const byType = new Map<string, TaggedSample>();
+    const store: TaggedSampleStore = {
+      upsert: vi.fn(async (sample: TaggedSample) => {
+        byType.set(sample.logType, capTaggedSampleBytes(sample, BUDGET).sample);
+      }),
+      get: vi.fn(async (logType: string) => byType.get(logType) ?? null),
+      list: vi.fn(async () => [...byType.values()]),
+      remove: vi.fn(async (logType: string) => {
+        byType.delete(logType);
+      }),
+    };
+    return { store, byType };
+  }
+
+  const chipCounts = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll(".sample-chip-counts")).map(
+      (n) => n.textContent ?? "",
+    );
+
+  const trimNotes = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll(".sample-intake-trimmed")).map(
+      (n) => n.textContent ?? "",
+    );
+
+  /** The DBT-197 sentence, word for word, for one trimmed log type. */
+  const sentence = (logType: string, kept: number, handed: number) =>
+    `"${logType}" kept ${kept} of its ${handed} events: the sample store limits how large one log type's sample can be, and these events are large. Its field list was still read from all ${handed}.`;
+
+  /** Upload `files` through the section's (hidden) native file input. */
+  async function upload(container: HTMLElement, files: File[]): Promise<void> {
+    const input = container.querySelector(
+      "input.sample-file-input",
+    ) as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    await act(async () => {
+      fireEvent.change(input);
+    });
+  }
+
+  it("a paste over the cap shows the STORED count and says why at once", async () => {
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await paste(view.container, "Logins", ndjson(EVENTS));
+
+    const kept = byType.get("Logins")?.parsed.records.length ?? -1;
+    // The fixture must really cross the cap, or this pin proves nothing.
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([sentence("Logins", kept, EVENTS)]);
+    // Reported upward as stored, so the rest of the page counts the same.
+    const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(reported.map((s) => s.parsed.records.length)).toEqual([kept]);
+  });
+
+  it("an upload over the cap shows the STORED count and says why at once", async () => {
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await upload(view.container, [
+      new File([ndjson(EVENTS)], "logins.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(1);
+    });
+    const logTypes = [...byType.keys()];
+    expect(logTypes).toHaveLength(1);
+    const kept = byType.get(logTypes[0])?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([
+      sentence(logTypes[0], kept, EVENTS),
+    ]);
+  });
+
+  it("says nothing for a paste or an upload under the cap", async () => {
+    const { store } = cappedStore();
+    const view = await mount(store);
+
+    await paste(view.container, "Few", ndjson(3));
+    // Asked after EACH way in: an upload replaces the paste's note, so one
+    // check at the end would never see a note the paste wrongly wrote.
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(trimNotes(view.container)).toEqual([]);
+
+    await upload(view.container, [
+      new File([ndjson(2)], "two.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(2);
+    });
+    expect(chipCounts(view.container).map((t) => t.split(",")[0])).toEqual([
+      "3 events",
+      "2 events",
+    ]);
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+
+  it("naming a trimmed headerless CSV's columns still shows the STORED count", async () => {
+    // The paste path's second write. The dialog re-parses the FULL pasted text
+    // (so the field list still comes from every event) and writes it again;
+    // that write is capped too, so what it lists has to be read back as well,
+    // or the chip returns to the full count under a note saying otherwise.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+    const rows = Array.from(
+      { length: EVENTS },
+      (_, i) =>
+        `1,2026/08/13 10:49:02,013201031064,AUTH,0,${2817 + i},2026/08/13 10:48:54,vsys1,user${i}-with-a-longer-name`,
+    ).join("\n");
+
+    await paste(view.container, "PanAuth", rows);
+    expect(dialogs(view.container)).toHaveLength(1);
+    fireEvent.change(
+      view.container.querySelector(".csv-dialog textarea.sample-paste") as HTMLTextAreaElement,
+      { target: { value: "a,b,c,d,e,f,g,h,i" } },
+    );
+    await act(async () => {
+      clickButton(view.container, "Apply headers");
+    });
+
+    const stored = byType.get("PanAuth");
+    expect(stored?.parsed.fields.map((f) => f.name)).toContain("a");
+    const kept = stored?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([sentence("PanAuth", kept, EVENTS)]);
+    const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(reported.map((s) => s.parsed.records.length)).toEqual([kept]);
+  });
+
+  it("names only the LATER file's trim when two uploaded files share a log type", async () => {
+    // The store replaces by log type, so the first file's entry is gone by the
+    // time the batch ends: a note for it would describe nothing on the page.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await upload(view.container, [
+      new File([ndjson(EVENTS)], "logins.json", { type: "application/json" }),
+      new File([ndjson(40)], "logins.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(1);
+    });
+    const logTypes = [...byType.keys()];
+    expect(logTypes).toHaveLength(1);
+    const kept = byType.get(logTypes[0])?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(40);
+    expect(trimNotes(view.container)).toEqual([sentence(logTypes[0], kept, 40)]);
+  });
+
+  it("drops the note with the chip it explains", async () => {
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    const remove = Array.from(
+      view.container.querySelectorAll(".sample-chip button"),
+    ).find((b) => b.textContent === "Remove");
+    expect(remove).toBeDefined();
+    await act(async () => {
+      fireEvent.click(remove!);
+    });
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(0);
+    });
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+
+  it("drops the note when a sibling panel replaces the trimmed log type", async () => {
+    // The note describes the paste's write. A capture or Lake commit of the
+    // same log type replaces that entry, and a note still saying "kept 10 of
+    // 60" above a chip reading 2 events would contradict the chip.
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    await siblingCommits(
+      view,
+      store,
+      [tagSampleFromContent("Logins", ndjson(2), "lake:Logins")],
+      1,
+    );
+
+    expect(chipCounts(view.container).map((t) => t.split(",")[0])).toEqual([
+      "2 events",
+    ]);
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+});
+
+describe("routing caveat said once (DBT-228)", () => {
+  it("groups the column-order caveat across chips and names each log type", async () => {
+    const { routingWarningGroups } = await import("./sample-intake-section");
+    const mk = (logType: string, format: string) =>
+      ({ logType, format, parsed: { fields: [], errors: [] } }) as never;
+    const groups = routingWarningGroups([mk("TRAFFIC", "csv"), mk("AUDIT", "csv"), mk("THREAT", "json")]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.logTypes).toEqual(["TRAFFIC", "AUDIT"]);
+    expect(groups[0]!.warning).toMatch(/cannot be routed automatically/);
+    // A single log type keeps a working match-all: no caveat at all.
+    expect(routingWarningGroups([mk("TRAFFIC", "csv")])).toEqual([]);
   });
 });

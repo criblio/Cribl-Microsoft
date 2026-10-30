@@ -1,5 +1,7 @@
 # Quick Start
 
+Status: Living - the install guide; corrected to match the app.
+
 The active project is the SOC Optimization Toolkit in
 `soc-optimizationtoolkit/` - a Cribl App for the Cribl Apps platform
 (Cribl.Cloud). This page gets the app installed and producing value; the
@@ -27,8 +29,8 @@ administrators can install, upgrade, or delete Apps.
 1. In your Cribl.Cloud workspace, select **Apps** in the top navigation.
 2. Select **Add App**, then **Import from File**, and choose the `.tgz`.
 3. Review the install summary. The app declares up front:
-   - External endpoints it calls (`proxies.yml`): Azure management and
-     login endpoints, GitHub content access.
+   - External endpoints it calls (`proxies.yml`): Azure management, login
+     and Microsoft Graph endpoints, and GitHub content access.
    - Cribl product-API routes it may call (`policies.yml`): read/write
      scopes reviewed line by line at install time.
 4. Confirm to finish the install.
@@ -49,8 +51,8 @@ The app lands on **Dataflow** (the journey overview). Do these once:
    secret - stored in the app's encrypted KV store), discover and select
    the Azure subscription/resource group/workspace, and run the generated
    role-assignment script if permissions are missing.
-2. Optional: connect a GitHub PAT on **Repositories** for Sentinel
-   solution content access.
+2. Optional: on the same Setup page, connect a GitHub PAT for Sentinel
+   solution content access (also available under **Repositories**).
 
 From there the journey is: **Sentinel Integration** (pick a solution,
 analyze samples, deploy DCRs + Cribl pack) - **DCR Automation** -
@@ -78,6 +80,8 @@ parameters each template takes, are in
 The [README](README.md#the-manual-option) compares the two paths.
 
 ## Build the package from source
+
+Requires Node 22 (the version CI uses).
 
 ```bash
 cd soc-optimizationtoolkit

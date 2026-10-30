@@ -22,10 +22,12 @@ import {
   INTEGRATE_SECTIONS,
   canDeploy,
   canDeployContentPath,
+  deployAzureRequirements,
   deriveReadinessPills,
   deriveSectionStatus,
   deriveSectionStatuses,
   integrateSection,
+  sectionForPill,
 } from "../../index";
 import type {
   IntegratePillId,
@@ -86,7 +88,6 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "cribl-config",
   "gap-analysis",
   "rule-coverage",
-  "workbook-coverage",
   "enable-content",
   "deploy",
 ];
@@ -98,7 +99,6 @@ const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [];
 // "is the page finished?" reckoning.
 const INFORMATIONAL_IDS: readonly IntegrateSectionId[] = [
   "rule-coverage",
-  "workbook-coverage",
   "enable-content",
 ];
 // The sections that can actually be finished - the only ones a "fully
@@ -116,9 +116,20 @@ function statusOf(id: IntegrateSectionId, i: SectionInputs): SectionStatus {
 // ---------------------------------------------------------------------------
 
 describe("INTEGRATE_SECTIONS metadata", () => {
-  it("has nine sections numbered 1..9 in page order", () => {
+  // DBT-118: the Add Sample Data tip promised a Browse Samples action that
+  // pulled events from the Sentinel and Elastic repositories. ADR 0003 deleted
+  // that browser, so the tip described a source the operator cannot use.
+  it("Add Sample Data names no deleted sample source", () => {
+    const tip = integrateSection("sample-data").infoTip;
+    expect(tip.match(/Browse Samples/g)).toBeNull();
+    expect(tip.match(/Elastic/g)).toBeNull();
+  });
+
+  // DBT-226: eight, not nine - rule and workbook coverage are one step with a
+  // Rules / Workbooks switch, kept under the rule-coverage id.
+  it("has eight sections numbered 1..8 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
     expect(INTEGRATE_SECTIONS.map((s) => s.id)).toEqual([
       "solution",
@@ -127,7 +138,6 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       // the coverage sections then offer the explicit Drop action.
       "gap-analysis",
       "rule-coverage",
-      "workbook-coverage",
       // Enable Sentinel Content follows the coverage arc (you review what the
       // rules/workbooks need, then install them); Sentinel-side + informational.
       "enable-content",
@@ -194,7 +204,6 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       "gap-analysis": "none",
       // Rules and workbooks both come from the solution repo via ports.content.
       "rule-coverage": "none",
-      "workbook-coverage": "none",
       // Installs into the workspace - a genuine live Azure connection.
       "enable-content": "azure",
       "azure-resources": "azure",
@@ -213,11 +222,35 @@ describe("INTEGRATE_SECTIONS metadata", () => {
   // deployed subscription workbooks are deliberately not enumerated, because a
   // shared subscription carries unrelated dashboards and local copies drift.
   // The copy was inviting an operator to expect a read that never happens.
+  //
+  // DBT-58. The original pin here banned the NOUN "subscription" anywhere in
+  // the tip, while rule-coverage-state.test.ts REQUIRED the empty-workbook
+  // summary line to name the subscription beside its exclusion - opposite
+  // policies for the same fact, so no honest string could satisfy both. The
+  // operator decided (2026-10-02) that BOTH surfaces name the exclusion, so
+  // this pin now forbids the CLAIM rather than the word: the subscription may
+  // appear only in a fragment that also says it is not analyzed. The same
+  // fragment rule is mirrored on the summary line in rule-coverage-state.test.ts.
   it("never promises workbook coverage reads deployed subscription workbooks", () => {
-    const tip = integrateSection("workbook-coverage").infoTip;
+    // DBT-226: the workbook view lives in the merged coverage step now, so its
+    // tip carries the workbook exclusion - the same rule, same section.
+    const tip = integrateSection("rule-coverage").infoTip;
     expect(tip).toContain("solution repo only");
-    expect(tip).not.toContain("deployed in your subscription");
-    expect(tip.toLowerCase()).not.toContain("subscription");
+    // The old promise was "folds in any deployed in your subscription".
+    expect(tip).not.toMatch(/folds? in/i);
+    // Every fragment naming the subscription must also state its exclusion.
+    // toEqual([]) rather than a length check so a failure names the text.
+    const offending = tip
+      .split(/[.;]/)
+      .filter((fragment) => /subscription/i.test(fragment))
+      .filter((fragment) => !/\bnot (analyzed|read|enumerated)\b/i.test(fragment))
+      .map((fragment) => fragment.trim());
+    expect(offending).toEqual([]);
+    // The operator's decision: the tip names the excluded source, in the
+    // same words as the empty-workbook summary line.
+    expect(tip).toContain(
+      "workbooks already deployed in your subscription are not analyzed",
+    );
   });
 
   it("gives every section a non-empty title and infoTip with no emojis", () => {
@@ -283,7 +316,6 @@ describe("rule-coverage is built and informational", () => {
     for (const i of everyInputCombination()) {
       for (const id of [
         "rule-coverage",
-        "workbook-coverage",
         "enable-content",
       ] as const) {
         expect(statusOf(id, i)).toBe("informational");
@@ -532,10 +564,10 @@ describe("read-ahead and single-current invariants", () => {
     }
   });
 
-  it("deriveSectionStatuses preserves page order and covers all nine", () => {
+  it("deriveSectionStatuses preserves page order and covers all eight", () => {
     const resolved = deriveSectionStatuses(inputs());
     expect(resolved.map((r) => r.section.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
   });
 });
@@ -726,6 +758,212 @@ describe("canDeployContentPath is the additive content-path gate", () => {
       } else {
         expect(canDeployContentPath(i)).toBe(false);
       }
+    }
+  });
+});
+
+describe("sectionForPill (DBT-127)", () => {
+  it("sends every footer pill to the section where it is satisfied", () => {
+    const pills = deriveReadinessPills(inputs());
+    expect(Object.fromEntries(pills.map((p) => [p.id, sectionForPill(p.id)]))).toEqual({
+      solution: "solution",
+      samples: "sample-data",
+      mappings: "gap-analysis",
+      workspace: "azure-resources",
+      "worker-groups": "cribl-config",
+      "pack-name": "cribl-config",
+    });
+  });
+
+  it("names only sections that exist on the page", () => {
+    const ids = new Set(INTEGRATE_SECTIONS.map((s) => s.id));
+    const pills: IntegratePillId[] = deriveReadinessPills(inputs()).map((p) => p.id);
+    expect(pills).toHaveLength(6);
+    expect(pills.filter((p) => !ids.has(sectionForPill(p)))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GEN-21: an existing Cribl Sentinel destination is picked
+// ---------------------------------------------------------------------------
+
+describe("existingDestination (GEN-21)", () => {
+  const picked = (overrides: Partial<SectionInputs> = {}) =>
+    inputs({ existingDestination: "PAN-CSL", ...overrides });
+
+  it("resolves Select Azure Resources to not-needed, naming the destination", () => {
+    for (const i of everyInputCombination()) {
+      expect(
+        deriveSectionStatus(integrateSection("azure-resources"), {
+          ...i,
+          existingDestination: "PAN-CSL",
+        }),
+      ).toEqual({ status: "not-needed", reason: "Not needed - using PAN-CSL" });
+    }
+  });
+
+  it("never lets a not-needed section take the single 'current' slot", () => {
+    // Solution, samples and mappings done: without a pick, Azure Resources is
+    // current; with one, Configure Cribl is.
+    const arcDone = {
+      solutionSelected: true,
+      samplesProvided: true,
+      mappingsApproved: true,
+    };
+    expect(statusOf("azure-resources", inputs(arcDone))).toBe("current");
+    expect(statusOf("cribl-config", inputs(arcDone))).toBe("available");
+    expect(statusOf("cribl-config", picked(arcDone))).toBe("current");
+  });
+
+  it("deploys with no committed scope; worker group and pack name still gate it", () => {
+    expect(canDeploy(picked({ workerGroupSelected: true, packNameSet: true })))
+      .toBe(true);
+    expect(canDeploy(picked({ workerGroupSelected: true }))).toBe(false);
+    expect(canDeploy(picked({ packNameSet: true }))).toBe(false);
+    expect(deriveSectionStatus(integrateSection("deploy"), picked())).toEqual({
+      status: "blocked",
+      reason: "Select a Cribl worker group in Cribl Configuration first.",
+    });
+    expect(
+      deriveSectionStatus(
+        integrateSection("deploy"),
+        picked({ workerGroupSelected: true }),
+      ),
+    ).toEqual({
+      status: "blocked",
+      reason: "Set a pack name in Cribl Configuration first.",
+    });
+  });
+
+  it("treats a blank pick as no pick - the native scope gate stands", () => {
+    const blank = inputs({
+      existingDestination: "   ",
+      workerGroupSelected: true,
+      packNameSet: true,
+    });
+    expect(canDeploy(blank)).toBe(false);
+    expect(statusOf("azure-resources", blank)).not.toBe("not-needed");
+    expect(deployAzureRequirements(blank)).toEqual({
+      scope: true,
+      ingestionClientId: true,
+      dcrInventory: true,
+    });
+  });
+
+  it("drops scope, client id and DCR inventory from the requirements", () => {
+    expect(deployAzureRequirements(picked())).toEqual({
+      scope: false,
+      ingestionClientId: false,
+      dcrInventory: false,
+    });
+    expect(deployAzureRequirements(inputs())).toEqual({
+      scope: true,
+      ingestionClientId: true,
+      dcrInventory: true,
+    });
+  });
+
+  it("drops the Workspace pill and keeps the other five in order", () => {
+    expect(deriveReadinessPills(picked()).map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+
+  it("keeps canDeployContentPath a strict superset of canDeploy with a pick", () => {
+    for (const i of everyInputCombination()) {
+      const p = { ...i, existingDestination: "PAN-CSL" };
+      expect(canDeployContentPath(p)).toBe(
+        canDeploy(p) && p.mappingsApproved === true,
+      );
+      if (canDeployContentPath(p)) expect(canDeploy(p)).toBe(true);
+    }
+  });
+
+  it("leaves the native path byte-identical when nothing is picked", () => {
+    // The whole 2^7 matrix with and without an explicit `undefined` pick: no
+    // status, gate or pill may move.
+    for (const i of everyInputCombination()) {
+      const u = { ...i, existingDestination: undefined };
+      expect(deriveSectionStatuses(u)).toEqual(deriveSectionStatuses(i));
+      expect(canDeploy(u)).toBe(i.scopeCommitted && i.workerGroupSelected && i.packNameSet);
+      expect(deriveReadinessPills(u)).toEqual(deriveReadinessPills(i));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GEN-28: the existing path is on from the radio, before any pick
+// ---------------------------------------------------------------------------
+
+describe("existingMode (GEN-28)", () => {
+  // The screen switches on the radio; the pick only completes once a gap
+  // analysis has produced tables. The arc must say the same thing for that
+  // whole stretch, not ask for a scope the page says it will not use.
+  const onPath = (overrides: Partial<SectionInputs> = {}) =>
+    inputs({ existingMode: true, ...overrides });
+
+  it("resolves Select Azure Resources to not-needed before anything is picked", () => {
+    for (const i of everyInputCombination()) {
+      expect(
+        deriveSectionStatus(integrateSection("azure-resources"), {
+          ...i,
+          existingMode: true,
+        }),
+      ).toEqual({
+        status: "not-needed",
+        reason: "Not needed with an existing destination",
+      });
+    }
+  });
+
+  it("names the destination once one is picked", () => {
+    expect(
+      deriveSectionStatus(
+        integrateSection("azure-resources"),
+        onPath({ existingDestination: "PAN-CSL" }),
+      ),
+    ).toEqual({ status: "not-needed", reason: "Not needed - using PAN-CSL" });
+  });
+
+  it("drops the Workspace pill with no pick", () => {
+    expect(deriveReadinessPills(onPath()).map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+
+  it("takes the scope out of the deploy gate: the reason is the next Cribl prerequisite", () => {
+    expect(deriveSectionStatus(integrateSection("deploy"), onPath())).toEqual({
+      status: "blocked",
+      reason: "Select a Cribl worker group in Cribl Configuration first.",
+    });
+    expect(canDeploy(onPath({ workerGroupSelected: true, packNameSet: true })))
+      .toBe(true);
+    expect(canDeploy(onPath({ workerGroupSelected: true }))).toBe(false);
+  });
+
+  it("drops every Azure requirement with no pick", () => {
+    expect(deployAzureRequirements(onPath())).toEqual({
+      scope: false,
+      ingestionClientId: false,
+      dcrInventory: false,
+    });
+  });
+
+  it("is the native path when false: nothing moves", () => {
+    for (const i of everyInputCombination()) {
+      const off = { ...i, existingMode: false };
+      expect(deriveSectionStatuses(off)).toEqual(deriveSectionStatuses(i));
+      expect(canDeploy(off)).toBe(canDeploy(i));
+      expect(deriveReadinessPills(off)).toEqual(deriveReadinessPills(i));
+      expect(deployAzureRequirements(off)).toEqual(deployAzureRequirements(i));
     }
   });
 });

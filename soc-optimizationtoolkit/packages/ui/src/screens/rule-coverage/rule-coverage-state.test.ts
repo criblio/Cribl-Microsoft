@@ -22,6 +22,8 @@ import type {
 import {
   ANALYTIC_RULE_DIR_VARIANTS,
   availableFieldsFromReports,
+  fieldMissingLogTypes,
+  closeMatchTargetColumn,
   contentTypeNoun,
   coverageCountChips,
   coveragePercent,
@@ -35,9 +37,12 @@ import {
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  reportsWithEffectiveMappings,
   resolveSchemaUnion,
   ruleFieldSet,
+  ruleFieldsFromGapReports,
   severityTone,
+  unionRuleFields,
 } from "./rule-coverage-state";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +242,61 @@ describe("ruleFieldSet", () => {
   });
 });
 
+describe("ruleFieldsFromGapReports (DBT-121)", () => {
+  const report = gapReport({
+    tableName: "CommonSecurityLog",
+    fieldMappings: [],
+    destSchema: [
+      { name: "SourceIP", type: "string" },
+      { name: "DestinationPort", type: "int" },
+      { name: "DeviceAction", type: "string" },
+    ],
+  });
+  const rule: ContentItem = {
+    type: "alert-rule",
+    id: "r1",
+    name: "Blocked traffic",
+    queries: [
+      "CommonSecurityLog | where DeviceAction == 'block' | summarize c = count() by SourceIP",
+    ],
+  };
+
+  it("tags the rule-referenced destination columns as soon as a gap report exists, with no coverage run", () => {
+    const set = ruleFieldsFromGapReports([rule], [report]);
+    expect(set !== undefined && [...set].sort()).toEqual(["deviceaction", "sourceip"]);
+  });
+
+  it("never tags a column no rule references, nor a referenced name the schema lacks", () => {
+    const set = ruleFieldsFromGapReports([rule], [report]);
+    expect(set?.has("destinationport")).toBe(false);
+    // `c` is a computed KQL variable - unknown to the schema, never a badge
+    expect(set?.has("c")).toBe(false);
+  });
+
+  it("ignores workbook fields - only rules light RULE badges", () => {
+    const workbook: ContentItem = {
+      type: "workbook",
+      id: "w1",
+      name: "Dashboard",
+      queries: ["CommonSecurityLog | summarize count() by DestinationPort"],
+    };
+    const set = ruleFieldsFromGapReports([rule, workbook], [report]);
+    expect(set?.size).toBe(2);
+    expect(set?.has("destinationport")).toBe(false);
+  });
+
+  it("reports nothing until both rules and gap reports exist", () => {
+    expect(ruleFieldsFromGapReports([rule], [])).toBeUndefined();
+    expect(ruleFieldsFromGapReports([], [report])).toBeUndefined();
+  });
+
+  it("unions with the coverage section's set so custom uploads still tag", () => {
+    const merged = unionRuleFields(new Set(["sourceip"]), new Set(["customfield"]));
+    expect(merged !== undefined && [...merged].sort()).toEqual(["customfield", "sourceip"]);
+    expect(unionRuleFields(undefined, undefined)).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Three-way counts
 // ---------------------------------------------------------------------------
@@ -391,6 +451,15 @@ describe("coverageSummaryLine", () => {
     expect(line).toContain(
       "workbooks already deployed in your subscription are not analyzed",
     );
+    // DBT-58: the SAME fragment rule the workbook-coverage infoTip pin in
+    // integrate-arc.test.ts applies, so the two surfaces encode one policy -
+    // every fragment naming the subscription also states its exclusion.
+    const offending = line
+      .split(/[.;]/)
+      .filter((fragment) => /subscription/i.test(fragment))
+      .filter((fragment) => !/\bnot (analyzed|read|enumerated)\b/i.test(fragment))
+      .map((fragment) => fragment.trim());
+    expect(offending).toEqual([]);
   });
 });
 
@@ -553,5 +622,147 @@ describe("resolveSchemaUnion", () => {
     const union = await resolveSchemaUnion(catalog, reports);
     expect(union).toContain("ColA");
     expect(union).toContain("ColB");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-203: coverage reads the EFFECTIVE mappings; a close match lands in its
+// own log type's table
+// ---------------------------------------------------------------------------
+
+describe("reportsWithEffectiveMappings (DBT-203)", () => {
+  const baseline = [
+    mapping({ source: "in", dest: "AdditionalExtensions", action: "overflow" }),
+  ];
+  const edited = [
+    mapping({ source: "in", dest: "ReceivedBytes", action: "rename" }),
+  ];
+  const panos = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "PanOS",
+    fieldMappings: baseline,
+  });
+  const asa = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "ASA",
+    fieldMappings: [mapping({ source: "src", dest: "SourceIP", action: "rename" })],
+  });
+
+  it("swaps in the edited rows, so the applied column becomes available", () => {
+    const live = reportsWithEffectiveMappings([panos, asa], { PanOS: edited });
+    expect(live[0]!.fieldMappings).toEqual(edited);
+    // DBT-223: availability is per log type, so the swap is read on PanOS's
+    // own report - with ASA beside it, ReceivedBytes is still missing in ASA.
+    expect(availableFieldsFromReports([live[0]!])).toEqual(["ReceivedBytes"]);
+    // The baseline is what the analysis said; coverage must not read it.
+    expect(availableFieldsFromReports([panos])).toEqual([
+      "AdditionalExtensions",
+      "in",
+    ]);
+    expect(fieldMissingLogTypes("ReceivedBytes", live)).toEqual(["ASA"]);
+  });
+
+  it("keeps the baseline for a log type with no entry, and leaves the input alone", () => {
+    const live = reportsWithEffectiveMappings([panos, asa], { PanOS: edited });
+    expect(live[1]).toBe(asa);
+    expect(panos.fieldMappings).toBe(baseline);
+    expect(reportsWithEffectiveMappings([panos], undefined)).toEqual([panos]);
+  });
+});
+
+describe("closeMatchTargetColumn (DBT-203)", () => {
+  const reports = [
+    gapReport({
+      tableName: "CommonSecurityLog",
+      logType: "PanOS",
+      fieldMappings: [],
+      destSchema: [{ name: "ReceivedBytes", type: "long" }],
+    }),
+    gapReport({
+      tableName: "Syslog",
+      logType: "Linux",
+      fieldMappings: [],
+      destSchema: [{ name: "SyslogMessage", type: "string" }],
+    }),
+  ];
+
+  it("returns the column in the schema's own spelling", () => {
+    expect(closeMatchTargetColumn("receivedbytes", "PanOS", reports)).toBe(
+      "ReceivedBytes",
+    );
+  });
+
+  it("is null when the candidate's table lacks the column, or the log type has no report", () => {
+    expect(closeMatchTargetColumn("ReceivedBytes", "Linux", reports)).toBeNull();
+    expect(closeMatchTargetColumn("ReceivedBytes", "Gone", reports)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-223: a field is available only where every log type it applies to
+// provides it (backlog.md section 25)
+// ---------------------------------------------------------------------------
+
+describe("availability per log type (DBT-223)", () => {
+  const cols = (...names: string[]) => names.map((name) => ({ name, type: "string" }));
+  const traffic = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "TRAFFIC",
+    destSchema: cols("SourceUserID", "DestinationIP"),
+    fieldMappings: [
+      mapping({ source: "suser", dest: "SourceUserID", action: "rename" }),
+      mapping({ source: "dst", dest: "DestinationIP", action: "rename" }),
+    ],
+  });
+  const threat = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "THREAT",
+    destSchema: cols("SourceUserID", "DestinationIP"),
+    fieldMappings: [mapping({ source: "dst", dest: "DestinationIP", action: "rename" })],
+  });
+
+  it("does not count a column one log type fills as available for all (the reported case)", () => {
+    expect(availableFieldsFromReports([traffic, threat])).toEqual(["DestinationIP"]);
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, threat])).toEqual(["THREAT"]);
+    expect(fieldMissingLogTypes("sourceuserid", [traffic, threat])).toEqual(["THREAT"]);
+  });
+
+  it("becomes available once the second log type fills it too", () => {
+    const threatFilled = {
+      ...threat,
+      fieldMappings: [
+        ...threat.fieldMappings,
+        mapping({ source: "duser", dest: "SourceUserID", action: "rename" }),
+      ],
+    };
+    expect(availableFieldsFromReports([traffic, threatFilled])).toContain("SourceUserID");
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, threatFilled])).toEqual([]);
+  });
+
+  it("does not hold a log type whose table lacks the column against it", () => {
+    const syslog = gapReport({
+      tableName: "Syslog",
+      logType: "SYSTEM",
+      destSchema: cols("SyslogMessage"),
+      fieldMappings: [mapping({ source: "msg", dest: "SyslogMessage", action: "rename" })],
+    });
+    expect(availableFieldsFromReports([traffic, syslog])).toContain("SourceUserID");
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, syslog])).toEqual([]);
+  });
+
+  it("requires a field that is no column anywhere from every log type", () => {
+    const withOverflow = {
+      ...traffic,
+      fieldMappings: [
+        ...traffic.fieldMappings,
+        mapping({ source: "PanOSRuleUUID", dest: "AdditionalExtensions", action: "overflow" }),
+      ],
+    };
+    expect(availableFieldsFromReports([withOverflow, threat])).not.toContain("PanOSRuleUUID");
+    expect(fieldMissingLogTypes("PanOSRuleUUID", [withOverflow, threat])).toEqual(["THREAT"]);
+  });
+
+  it("is unchanged for a single log type", () => {
+    expect(availableFieldsFromReports([traffic])).toEqual(["DestinationIP", "SourceUserID"]);
   });
 });

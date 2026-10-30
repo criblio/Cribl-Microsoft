@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # PostToolUse hook: run the docs-drift check the moment a document is edited.
 #
-# THIS IS THE FAST HALF, NOT THE GATE. .claude/ is gitignored in this repo, so
-# nothing here travels with a clone - the real enforcement is the "Check docs
-# drift" step in .github/workflows/soc-toolkit-ci.yml, which fails the build.
+# THIS IS THE FAST HALF, NOT THE GATE. .claude/hooks/ is tracked, but the hooks
+# are wired up only in .claude/settings.local.json, which is gitignored, so in a
+# fresh clone they never fire unless someone registers them. The real
+# enforcement is the "Check docs drift" step in
+# .github/workflows/soc-toolkit-ci.yml, which fails the build.
 # What this adds is the seconds-later feedback that stops a stale claim being
 # written in the first place, rather than found on a pull request.
 #

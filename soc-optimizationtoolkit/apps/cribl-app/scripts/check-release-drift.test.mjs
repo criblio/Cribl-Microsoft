@@ -2,8 +2,11 @@
 // these cases can be stated without a repo, a git history or a tarball - the
 // facts are the argument.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { evaluateReleaseDrift } from './check-release-drift.mjs';
+import { BACKLOG_CURRENT, evaluateReleaseDrift, readLockVersion } from './check-release-drift.mjs';
+import { lockWorkspaceKey, syncLockVersion } from './lock-version.mjs';
 
 const CONSISTENT = {
   manifestVersion: '1.12.0',
@@ -220,5 +223,104 @@ describe('evaluateReleaseDrift', () => {
     expect(result.errors.filter((e) => e.includes('release-notes.md'))).toHaveLength(1);
     expect(result.errors.filter((e) => e.includes('backlog.md'))).toHaveLength(1);
     expect(result.warnings).toHaveLength(1);
+  });
+});
+
+// DBT-92: the file that exists because version literals in prose decay once
+// carried one of its own - the BACKLOG_CURRENT comment named 1.12.0 while the
+// backlog said 1.12.3 (corrected in 0aa6917, #173). The fix there was to DERIVE:
+// the comment now shows the shape "X.Y.Z", which has no version to go stale.
+// What was missing is anything stopping a concrete version creeping back in, so
+// this reads the script's own source with the SAME regex the check applies to
+// backlog.md. Deliberately not a blanket N.N.N scan: the dated history in the
+// header (1.5.4, 1.11.11, 1.12.3 ...) and the sort examples are meant to stay.
+describe('the script holds itself to its own rule', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./check-release-drift.mjs', import.meta.url)),
+    'utf8',
+  );
+
+  it('states no concrete "N.N.N IS CURRENT" version in its own source', () => {
+    // Shared regex, not a copy: a copy could be loosened here while the real
+    // check stays strict, and the guard would stop meaning anything.
+    // If this fails, write the example as "**X.Y.Z IS CURRENT" instead.
+    const matches = source.match(new RegExp(BACKLOG_CURRENT.source, 'g')) ?? [];
+
+    expect(matches).toEqual([]);
+  });
+
+  it('still documents the placeholder shape in both places that show it', () => {
+    // A count, not an existence check: the comment above BACKLOG_CURRENT and the
+    // error raised when backlog.md stops stating a version. Deleting either one
+    // (rather than rewording it) is how the shape gets lost.
+    expect(source.match(/\*\*X\.Y\.Z IS CURRENT/g)).toHaveLength(2);
+  });
+});
+
+// DBT-82: package.mjs now writes the lock's version field itself, so the state
+// it leaves behind must be one this check passes - before that, every faithful
+// release came out red until "npm install --package-lock-only" was run by hand.
+// This replays the lock half of that release against the REAL lock: bump, write
+// through syncLockVersion, then read back through the check's own reader. It
+// does not run package.mjs - the block after it holds package.mjs to making
+// this call. The writer and the reader share lockWorkspaceKey; if either ever
+// picked a different entry, the version read back would be the old one and
+// this fails.
+describe('the lock write package.mjs makes', () => {
+  it('leaves the lock in the state check-release accepts', () => {
+    const lockPath = fileURLToPath(new URL('../../../package-lock.json', import.meta.url));
+    const appDir = fileURLToPath(new URL('..', import.meta.url));
+    const toolkitDir = fileURLToPath(new URL('../../..', import.meta.url));
+    const bumped = '99.0.0';
+
+    const lock = syncLockVersion(
+      readFileSync(lockPath, 'utf8'),
+      lockWorkspaceKey(toolkitDir, appDir),
+      bumped,
+    );
+
+    const result = evaluateReleaseDrift(
+      facts({
+        manifestVersion: bumped,
+        lockVersion: readLockVersion(lock),
+        releaseTarballs: [`soc-optimizationtoolkit-${bumped}.tgz`],
+        releaseNotes: `# Release notes\n\n## ${bumped}\n`,
+        backlog: `**${bumped} IS CURRENT (2026-10-20).**\n`,
+      }),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.packagedVersion).toBe(bumped);
+  });
+});
+
+// The round trip above calls syncLockVersion itself, so it stays green if
+// package.mjs stops calling it - reverting package.mjs to before DBT-82 passed
+// every pin. These read package.mjs's own source for the wiring: one sync call
+// keyed through lockWorkspaceKey, its result written to the lock, and the sync
+// computed BEFORE package.json is written, so a lock that throws leaves the
+// tree un-bumped instead of half-bumped.
+describe('package.mjs writes the lock it computes', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./package.mjs', import.meta.url)),
+    'utf8',
+  );
+  const sync = source.match(/const (\w+) = syncLockVersion\(([^;]*)\);/);
+
+  it('computes the lock text once, keyed through lockWorkspaceKey', () => {
+    expect(source.match(/syncLockVersion\(/g)).toHaveLength(1);
+    expect(sync?.[2]).toMatch(/lockWorkspaceKey\(toolkitDir, rootDir\)/);
+    expect(sync?.[2]).toMatch(/packageInfo\.version/);
+  });
+
+  it('writes that text to the lock', () => {
+    expect(source).toContain(`await writeFile(lockPath, ${sync?.[1]});`);
+  });
+
+  it('computes it before package.json is written', () => {
+    const packageWrite = source.indexOf('await writeFile(packageJsonPath,');
+
+    expect(packageWrite).toBeGreaterThan(-1);
+    expect(sync?.index).toBeLessThan(packageWrite);
   });
 });

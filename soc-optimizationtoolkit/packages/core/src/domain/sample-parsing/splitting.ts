@@ -24,57 +24,160 @@
  */
 
 import type { SampleFormat, SplitSample } from "./models";
+import { assertNeverFormat } from "./models";
 import { selectDiscriminatorField } from "./discriminators";
+import { positionalHasNamedFields } from "./positional";
 import {
   PANOS_LOG_TYPES,
   isPanosFormat,
   convertPanosToJson,
 } from "./panos-dictionary";
+import { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+
+/**
+ * Whether a CEF header's DeviceVendor and DeviceProduct name PAN-OS - the ONE
+ * scope rule for DBT-196's split and GEN-24's route by the same header TYPE.
+ * Case-insensitive; the caller trims. Exported so the route filter cannot cover
+ * a different set of devices than the split that named its log types.
+ */
+export function isPanosCefIdentity(vendor: string, product: string): boolean {
+  return (
+    vendor.toLowerCase() === "palo alto networks" &&
+    product.toLowerCase() === "pan-os"
+  );
+}
+
+/**
+ * The PAN-OS log TYPE a CEF line names in its header, or undefined when the
+ * line is not PAN-OS CEF (DBT-196).
+ *
+ * PAN-OS writes CEF as `CEF:0|Palo Alto Networks|PAN-OS|ver|SUBTYPE|TYPE|sev|`:
+ * header field 5 (DeviceEventClassID) is the subtype - `url`, `end`, `start` -
+ * and field 6 (Name) is the log type - `THREAT`, `TRAFFIC`. {@link parseKvLine}
+ * reads only `key=value` pairs, so neither field reached the discriminator
+ * selector and a mixed PAN-OS CEF capture fell back to one group ("Captured
+ * 100 events in 1 log type"), while the solution's needs list - TRAFFIC,
+ * THREAT, ... from the PAN-OS catalog - stayed at none provided.
+ *
+ * VENDOR-SCOPED ON PURPOSE (operator decision on DBT-196, 2026-10-29): split by
+ * TYPE, for PAN-OS CEF only. Two rejected alternatives, both silent:
+ *   - reading the header into the record generally would let the shared
+ *     selector rank DeviceEventClassID above everything after `subtype`, so
+ *     PAN-OS would split by SUBTYPE (`URL`, `END`), names the needs list never
+ *     matches; and
+ *   - every other CEF vendor's split would change underneath its stored
+ *     samples - a log type is the tagged-sample store's KEY (see DETERMINISM).
+ *
+ * The header is read with the parser's own {@link CEF_HEADER_PATTERN} and
+ * escape rule, from wherever `CEF:` starts, so a syslog-wrapped line (the
+ * standard transport) reads the same as a bare one.
+ */
+function panosCefLogType(line: string): string | undefined {
+  const cefStart = line.indexOf("CEF:");
+  if (cefStart < 0) return undefined;
+  const header = CEF_HEADER_PATTERN.exec(line.slice(cefStart));
+  if (header === null) return undefined;
+  const field = (i: number) => header[i].replace(CEF_HEADER_ESCAPE, "$1").trim();
+  if (!isPanosCefIdentity(field(2), field(3))) return undefined;
+  const type = field(6);
+  return type === "" ? undefined : type;
+}
 
 /**
  * Quick KV parser for discriminator detection (NOT full field parsing). Ported
- * verbatim from legacy `parseKvLine`: strips a syslog priority prefix, then
- * pulls `key=value` and `key="quoted value"` pairs.
+ * from legacy `parseKvLine`: strips a syslog priority prefix, then pulls
+ * `key=value` and `key="quoted value"` pairs.
  *
  * Sibling to `parseKv` in ./parsers since the rehome (ADR 0003), and kept
- * separate on purpose - see that function's note.
+ * separate on purpose - see that function's note. As of DBT-84 the two AGREE
+ * ON ORDINARY VENDOR KEYS - word characters, hyphens and dots, read whole - but
+ * NOT on parseKv's full key class, and that difference is deliberate:
  *
- * THEY DISAGREE, as of DBT-79, and this is the place someone checking the
- * divergence looks - so it is written here rather than only on `parseKv`. That
- * function's key class was widened to the whole token before the `=`; this one
- * still truncates on `\w+`. Measured:
+ *   KEY CLASS `[\w.-]+`, LEFT BOUNDARY "not preceded by one of those". parseKv
+ *   reads a body whose header was already split off; this probe sees the RAW
+ *   line, CEF/LEEF `|` header, `prog:` tag, `[timestamp]` and all. The first cut
+ *   of DBT-84 copied parseKv's `[^\s=,"]+` and glued the header onto the first
+ *   key (`...|5|cat=X` -> `CEF:0|...|5|cat`), so a capture whose discriminator
+ *   was the first extension key fell back to one group - a regression on lines
+ *   `\w+` had always split correctly (review finding, 2026-10-02). With this
+ *   class any other punctuation is a boundary, exactly as it was under `\w+`,
+ *   and the only thing that changed is that `-` and `.` no longer cut a key.
+ *   The lookbehind keeps the scan linear (see parseKv's timing note).
  *
- *   "src-ip=1.1.1.1 action=A"
- *     parseKv     -> ["src-ip", "action"]
- *     parseKvLine -> ["ip",     "action"]
+ * The VALUE handling stays this probe's own (whitespace-terminated, or a quoted
+ * run), because a discriminator value never needs parseKv's comma-tolerant
+ * value class.
  *
- * THE TRUNCATION IS LOAD-BEARING HERE, which is why it was not fixed at the same
- * time. This function exists to find a DISCRIMINATOR, and `DISCRIMINATOR_FIELDS`
- * holds word-only spellings (`type`, `subtype`, `action`, `category`,
- * `logType`, ...) that hyphenated vendor keys truncate straight INTO. Measured:
+ * WHY THIS USED TO TRUNCATE, AND WHAT REPLACED THE TRUNCATION. Until DBT-84 the
+ * key class was `\w+`, which cut `src-ip` to `ip` and `log-type` to `type`. Half
+ * of that was load-bearing by accident - `type` is on DISCRIMINATOR_FIELDS, so a
+ * PAN-OS-style `log-type=TRAFFIC` selected through it - and half was harm:
+ * truncated keys COLLIDED, last one winning. Measured before the fix:
  *
- *   "log-type=TRAFFIC src-ip=1.1.1.1 action=A"
- *     parseKvLine -> ["type", "ip", "action"]
+ *   "log-type=TRAFFIC sub-type=end src-ip=1 dst-ip=2"
+ *     parseKvLine -> { type: "end", ip: "2" }
  *
- * `type` is the second entry in the list and in its high-confidence prefix, so
- * a single distinct value selects it - today's split works BY ACCIDENT. Give
- * this function the correct key `log-type`, which is in no list, and the field
- * stops matching, the split falls back, and every stored sample is re-keyed
- * (a log type is the tagged-sample store's KEY, see the DETERMINISM note above).
+ * So the SUBTYPE overwrote the log type (and which one won depended on pair
+ * order), and four real pairs counted as two, failing the splitter's >= 3 gate
+ * and dropping the whole sample into the fallback group. The load-bearing half
+ * now lives in {@link SPLITTER_DISCRIMINATOR_ALIASES}, applied by the splitter
+ * after this returns; this function only reports what the line says.
  *
- * So the ORDER of the eventual fix is fixed: teach `DISCRIMINATOR_FIELDS` the
- * hyphenated aliases FIRST, then widen the key here - never the reverse. That
- * sequencing is on the card requested with DBT-79, not a drive-by.
+ * Dotted keys are read whole for the same reason (`src.ip`/`dst.ip` collided
+ * onto `ip`), and are NOT aliased: `event.type` used to truncate into `type`
+ * and no longer does, a regroup the release notes name.
  */
 export function parseKvLine(line: string): Record<string, string> {
   const fields: Record<string, string> = {};
   const cleaned = line.replace(/^<\d+>/, "");
-  const re = /(\w+)=(?:"([^"]*)"|(\S*))/g;
+  // Key: a whole run of word characters, `-` and `.`, starting where the
+  // previous character is NOT one of those - so `|`, `:`, `]`, `[`, `"` and
+  // whitespace all end a header and begin a key (DBT-84 review), while
+  // `src-ip` and `event.type` stay whole.
+  const re = /(?<![\w.-])([\w.-]+)=(?:"([^"]*)"|(\S*))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cleaned)) !== null) {
     fields[m[1]] = m[2] !== undefined ? m[2] : m[3];
   }
   return fields;
+}
+
+/**
+ * Vendor key spellings the splitter reads AS a DISCRIMINATOR_FIELDS entry
+ * (DBT-84). Each maps a full key to the spelling `\w+` used to truncate it to,
+ * or to the list entry it plainly means, so a sample that was split correctly
+ * before keys were widened keeps its log-type names - a log type is the
+ * tagged-sample store's KEY (see the DETERMINISM note above).
+ *
+ * SPLITTER-LOCAL ON PURPOSE. DISCRIMINATOR_FIELDS is shared: query-lake-samples
+ * interpolates its entries unquoted into KQL as plain identifiers (a hyphenated
+ * `isnotempty(log-type)` parses as a subtraction), and route-discriminator,
+ * capture-filter and expected-log-types read it too. Adding `log-type` there
+ * would change Lake queries, routes and capture filters through a back door.
+ * Every TARGET here must be a member of that list; a test holds it.
+ *
+ * An alias never overwrites an exact key: a line carrying both `type=` and
+ * `log-type=` selects on `type` (operator decision on DBT-84, 2026-10-02).
+ */
+export const SPLITTER_DISCRIMINATOR_ALIASES: Readonly<Record<string, string>> =
+  Object.freeze({
+    "log-type": "type", // PAN-OS / generic primary
+    "sub-type": "subtype", // PAN-OS secondary
+    "event-type": "eventType", // generic; `\w+` used to cut it to `type`
+  });
+
+/**
+ * The record the discriminator selector sees for one KV line: every real pair,
+ * plus each aliased spelling the line does NOT already carry exactly.
+ */
+function withDiscriminatorAliases(
+  fields: Record<string, string>,
+): Record<string, string> {
+  const record: Record<string, string> = { ...fields };
+  for (const [from, to] of Object.entries(SPLITTER_DISCRIMINATOR_ALIASES)) {
+    if (from in fields && !(to in fields)) record[to] = fields[from];
+  }
+  return record;
 }
 
 /** Sanitize a discriminator value into a log-type name (legacy cleanup). */
@@ -97,29 +200,89 @@ function cleanLogTypeValue(value: string): string {
  *   position-3 type field applies.
  * - DeviceEventClassID numeric ids map to PAN-OS names; values are sanitized;
  *   group logType names are UPPERCASED.
+ * - PAN-OS CEF lines (and ONLY those) split by the header's TYPE field -
+ *   see {@link panosCefLogType} (DBT-196).
  * - Group iteration is insertion order (first-seen), so ids are deterministic.
  *
  * A single returned group named `fallbackLogType` means NO discriminator was
  * found. Callers must say so rather than presenting it as one real log type -
  * see {@link splitFoundNoDiscriminator}.
+ *
+ * The groups can hold FEWER lines than `rawEvents` when a discriminator was
+ * found: a line that parses to no record cannot be classified and is in no
+ * group. A caller that shows a count of what it split should use
+ * {@link splitSamplesWithLeftOut}, which reports that shortfall (DBT-205).
  */
 export function splitSamplesByLogType(
   rawEvents: readonly string[],
   fallbackLogType: string,
   format: SampleFormat,
 ): SplitSample[] {
+  return splitSamplesWithLeftOut(rawEvents, fallbackLogType, format).splits;
+}
+
+/** What {@link splitSamplesWithLeftOut} returns: the groups, and the gap. */
+export interface SplitOutcome {
+  /** The per-log-type groups, exactly what {@link splitSamplesByLogType} returns. */
+  splits: SplitSample[];
+  /**
+   * Input lines filed under NO group (DBT-205): a key=value line under the
+   * three-pair gate, or a line that parses to nothing, when the other lines
+   * did yield a discriminator. Group event counts plus this equal
+   * `rawEvents.length`. Always 0 on the fallback paths and the PAN-OS
+   * headerless-CSV grouping, which carry every line.
+   */
+  leftOut: number;
+}
+
+/**
+ * {@link splitSamplesByLogType}, plus the count of input lines it left out of
+ * every group, so a caller that says "N events in K log types" can also say how
+ * many of the N are in none of them (DBT-205). Before this the shortfall was
+ * silent: the group counts simply summed below the captured count.
+ */
+export function splitSamplesWithLeftOut(
+  rawEvents: readonly string[],
+  fallbackLogType: string,
+  format: SampleFormat,
+): SplitOutcome {
+  const all = (splits: SplitSample[]): SplitOutcome => ({ splits, leftOut: 0 });
   const eventObjects: Array<Record<string, unknown>> = [];
+  // The raw line each entry of `eventObjects` was parsed FROM (DBT-196). A line
+  // that parses to nothing (non-KV text, a KV line under the pair gate) adds no
+  // object, so indexing `rawEvents` by the object's position shifted every
+  // later line by one: measured on [sshd line, PAN THREAT, PAN TRAFFIC], the
+  // THREAT group carried the sshd line and the TRAFFIC group the THREAT line,
+  // and the tagged-sample store is keyed by that log type. The two arrays grow
+  // together, one entry per PARSED line; a line that adds no object is in
+  // neither, and is what `leftOut` counts (DBT-205).
+  const sourceLines: string[] = [];
   for (const raw of rawEvents) {
+    const before = eventObjects.length;
     try {
       eventObjects.push(JSON.parse(raw) as Record<string, unknown>);
     } catch {
-      if (/\w+=/.test(raw)) {
+      const panosType = panosCefLogType(raw);
+      if (panosType !== undefined) {
+        // PAN-OS CEF (DBT-196): the header's TYPE is the discriminator, and it
+        // is set on `type` - the high-confidence list entry PAN-OS already
+        // splits on in its KV and CSV forms - over any extension key of that
+        // name, because the header is the device's own statement of the type.
+        // No pair-count gate: the header is the evidence, not the pairs.
+        eventObjects.push({
+          ...withDiscriminatorAliases(parseKvLine(raw)),
+          type: panosType,
+        });
+      } else if (/\w+=/.test(raw)) {
         const kvFields = parseKvLine(raw);
+        // The gate counts the line's REAL pairs, before aliasing adds any
+        // (DBT-84) - an alias is a second name for a pair, not another pair.
         if (Object.keys(kvFields).length >= 3) {
-          eventObjects.push(kvFields);
+          eventObjects.push(withDiscriminatorAliases(kvFields));
         }
       }
     }
+    if (eventObjects.length > before) sourceLines.push(raw);
   }
 
   // CSV fallback (PAN-OS headerless CSV): nothing parsed, lines look like CSV.
@@ -135,30 +298,32 @@ export function splitSamplesByLogType(
         groups.get(logType)!.push(line);
       }
       if (groups.size > 1 || (groups.size === 1 && !groups.has(fallbackLogType))) {
-        return [...groups.entries()].map(([logType, events]) => ({
-          logType,
-          rawEvents: events,
-          format,
-          eventCount: events.length,
-        }));
+        return all(
+          [...groups.entries()].map(([logType, events]) => ({
+            logType,
+            rawEvents: events,
+            format,
+            eventCount: events.length,
+          })),
+        );
       }
     }
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   if (eventObjects.length === 0) {
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   const discriminator = selectDiscriminatorField(eventObjects);
   if (!discriminator) {
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   const groups = new Map<string, string[]>();
@@ -169,15 +334,18 @@ export function splitSamplesByLogType(
     }
     val = cleanLogTypeValue(val);
     if (!groups.has(val)) groups.set(val, []);
-    groups.get(val)!.push(rawEvents[i] ?? JSON.stringify(eventObjects[i]));
+    groups.get(val)!.push(sourceLines[i]);
   }
 
-  return [...groups.entries()].map(([logType, events]) => ({
-    logType: logType.toUpperCase(),
-    rawEvents: events,
-    format,
-    eventCount: events.length,
-  }));
+  return {
+    splits: [...groups.entries()].map(([logType, events]) => ({
+      logType: logType.toUpperCase(),
+      rawEvents: events,
+      format,
+      eventCount: events.length,
+    })),
+    leftOut: rawEvents.length - sourceLines.length,
+  };
 }
 
 /**
@@ -216,6 +384,12 @@ export function splitSampleId(source: string, logType: string): string {
  * CEF/LEEF/KV always qualify; JSON/NDJSON qualify unless > half the keys are
  * numeric indices; CSV qualifies when the first line is mostly identifiers;
  * syslog qualifies for PAN-OS CSV, embedded `key=value`, or embedded CEF.
+ *
+ * POSITIONAL (DBT-117, added after the port - legacy had no positional format,
+ * so the DBT-77 member fell off the end to `false` even for a VPC Flow v2
+ * capture parsePositional names). It qualifies exactly when parsePositional
+ * would name the columns, via the shared `positionalHasNamedFields`: blank
+ * lines dropped, then EVERY line checked, unlike the first-line rules above.
  */
 export function hasNamedFields(
   rawEvents: readonly string[],
@@ -254,7 +428,12 @@ export function hasNamedFields(
     return false;
   }
 
-  return false;
+  if (format === "positional") return positionalHasNamedFields(rawEvents);
+
+  // Unreachable while the ladder covers the union. A member added later fails
+  // typecheck here instead of quietly answering false, as positional did before
+  // DBT-117 (audit follow-up to DBT-116).
+  return assertNeverFormat(format);
 }
 
 /**

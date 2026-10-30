@@ -121,17 +121,39 @@ const RETIRED = [
  * under a known root AND either carry a real extension or end in a slash. A
  * looser rule matches prose like `_raw` or `Status:` and drowns the real
  * findings, and a check people learn to ignore is worse than no check.
+ *
+ * An optional `:N` or `:N-M` line suffix is allowed before the closing backtick
+ * and is NOT part of the capture (DBT-95). `file.ts:43-54` is the citation form
+ * this repo uses most, and before the suffix was allowed it was the form the
+ * check never saw. The line numbers themselves are deliberately not validated:
+ * they drift on every edit above them, and a gate that failed on that would be
+ * bypassed within a week.
  */
 const PATH_IN_BACKTICKS =
-  /`((?:soc-optimizationtoolkit|packages|apps|docs|scripts|deprecated|Azure|KnowledgeArticles)\/[A-Za-z0-9._/-]*?(?:\.(?:ts|tsx|mjs|js|json|md|yml|yaml|ps1|html|css)|\/))`/g;
+  /`((?:soc-optimizationtoolkit|packages|apps|docs|scripts|deprecated|Azure|KnowledgeArticles)\/[A-Za-z0-9._/-]*?(?:\.(?:ts|tsx|mjs|js|json|md|yml|yaml|ps1|html|css)|\/))(?::\d+(?:-\d+)?)?`/g;
+
+/**
+ * `npm run <name>` as a document cites it. Lowercase only, which is what lets
+ * the placeholder `npm run X` fall out: it appears in Living prose and in the
+ * GENERATED board.md, and generated text cannot carry a suppress marker.
+ */
+const NPM_RUN = /npm run ([a-z0-9][a-z0-9:_-]*)/g;
+
+/** `--workspace apps/cribl-app` or `--workspace=apps/cribl-app`, but not `--workspaces`. */
+const WORKSPACE_FLAG = /--workspace(?:=|\s+)([A-Za-z0-9._/-]+)/;
 
 /**
  * @param {{
  *   docs: {path: string, text: string}[],
  *   adrs: {path: string, text: string}[],
  *   existingPaths: Set<string>,
+ *   manifests: Record<string, Record<string, string>>,
  *   today: string,
  * }} facts
+ *
+ * `manifests` maps a workspace directory, relative to the toolkit root ('.' for
+ * the root itself), to the `scripts` block of its package.json. It is kept PER
+ * MANIFEST on purpose - see unresolvedScripts.
  * @returns {{errors: string[], warnings: string[], notes: string[], checked: number}}
  */
 export function evaluateDocsDrift(facts) {
@@ -171,6 +193,7 @@ export function evaluateDocsDrift(facts) {
 
     if (status === 'Living') {
       for (const finding of brokenPaths(doc, facts.existingPaths)) errors.push(finding);
+      for (const finding of unresolvedScripts(doc, facts.manifests)) errors.push(finding);
     }
 
     if (status === 'Proposed') {
@@ -234,6 +257,8 @@ export function evaluateDocsDrift(facts) {
       }
     }
   }
+
+  for (const finding of brokenForwards(facts.manifests)) errors.push(finding);
 
   // Counted and said out loud. A suppression nobody can see is how this check
   // would quietly stop meaning anything.
@@ -349,6 +374,71 @@ function* brokenPaths(doc, existingPaths) {
   }
 }
 
+/**
+ * `npm run X` named in a Living document must resolve (DBT-101). DBT-90 was
+ * this exactly: the docs said to run check-release, no root manifest forwarded
+ * it, and the documented command exited 1 for everyone who followed it.
+ *
+ * WHERE A NAME RESOLVES is the whole rule. A mention resolves against the
+ * TOOLKIT ROOT package.json - the directory the docs tell a reader to work
+ * from - unless the command itself carries `--workspace <dir>`, in which case it
+ * resolves against that workspace. It does NOT resolve against the union of
+ * every manifest: check-release lives in apps/cribl-app too, so a union would
+ * stay green with the root forward deleted, which is the DBT-90 regression this
+ * rule exists to catch.
+ *
+ * Existence only. Running the scripts would turn this into a second CI, and it
+ * would be switched off.
+ */
+function* unresolvedScripts(doc, manifests) {
+  const lines = doc.text.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.includes(SUPPRESS)) continue;
+    for (const hit of line.matchAll(NPM_RUN)) {
+      const name = hit[1];
+      // The retired-token rule owns this one and says WHY it is gone; a second
+      // "does not resolve" on the same line would only bury that.
+      if (name === 'local') continue;
+      // The flag belongs to THIS command only: the rest of the line up to the
+      // closing backtick or the next `npm run`. "`npm run a` works, as does
+      // `npm run a --workspace w`" names two commands that resolve differently.
+      const after = line.slice(hit.index + hit[0].length);
+      const own = after.split(/`|npm run /)[0];
+      const workspace = WORKSPACE_FLAG.exec(own)?.[1]?.replace(/\/$/, '') ?? '.';
+      const scripts = manifests[workspace];
+      if (scripts === undefined) {
+        yield `${doc.path}:${i + 1} runs \`npm run ${name}\` in workspace \`${workspace}\`, which has no package.json this check knows.`;
+        continue;
+      }
+      if (Object.hasOwn(scripts, name)) continue;
+      const where = workspace === '.' ? 'the toolkit root package.json' : `${workspace}/package.json`;
+      const elsewhere = Object.keys(manifests).filter((w) => w !== workspace && Object.hasOwn(manifests[w], name));
+      const hint =
+        elsewhere.length > 0
+          ? ` It exists in ${elsewhere.join(', ')} - add a forward to ${where}, or write \`--workspace ${elsewhere[0]}\` on the command.`
+          : '';
+      yield `${doc.path}:${i + 1} says \`npm run ${name}\`, which ${where} does not define.${hint} A documented command that exits 1 is an instruction that cannot be followed.`;
+    }
+  }
+}
+
+/**
+ * Every root script of the form `npm run Y --workspace W` must find Y in W. The
+ * root forwards are what make the documented commands work from the toolkit
+ * root, and a forward pointing at nothing fails exactly like a missing one.
+ */
+function* brokenForwards(manifests) {
+  for (const [name, body] of Object.entries(manifests['.'] ?? {})) {
+    const hit = /^npm run ([A-Za-z0-9:_-]+)\s+--workspace(?:=|\s+)([A-Za-z0-9._/-]+)/.exec(body);
+    if (hit === null) continue;
+    const [, target, workspace] = hit;
+    const scripts = manifests[workspace.replace(/\/$/, '')];
+    if (scripts !== undefined && Object.hasOwn(scripts, target)) continue;
+    yield `package.json script "${name}" forwards to \`npm run ${target}\` in ${workspace}, which ${scripts === undefined ? 'has no package.json this check knows' : 'does not define it'}. Every document citing \`npm run ${name}\` now names a command that exits 1.`;
+  }
+}
+
 /** Whole days from an ISO date to another, or null if either will not parse. */
 function daysBetween(from, to) {
   const start = Date.parse(`${from}T00:00:00Z`);
@@ -396,8 +486,31 @@ async function gatherFacts(today) {
     docs: all.filter((d) => !isAdr(d)),
     adrs: all.filter(isAdr),
     existingPaths: await listRepoPaths(repoRoot),
+    manifests: await readManifests(),
     today,
   };
+}
+
+/**
+ * The root manifest plus every workspace it declares, each kept separate. The
+ * workspace globs are the `dir/*` form package.json uses here; anything else is
+ * refused loudly rather than silently matching nothing.
+ */
+async function readManifests() {
+  const scriptsOf = async (dir) => JSON.parse(await readFile(join(toolkitDir, dir, 'package.json'), 'utf8')).scripts ?? {};
+  const root = JSON.parse(await readFile(join(toolkitDir, 'package.json'), 'utf8'));
+  const manifests = { '.': root.scripts ?? {} };
+  for (const pattern of root.workspaces ?? []) {
+    if (!pattern.endsWith('/*')) throw new Error(`check-docs cannot expand workspace pattern "${pattern}".`);
+    const parent = pattern.slice(0, -2);
+    for (const entry of await readdir(join(toolkitDir, parent), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = `${parent}/${entry.name}`;
+      if (!(await stat(join(toolkitDir, dir, 'package.json')).then(() => true, () => false))) continue;
+      manifests[dir] = await scriptsOf(dir);
+    }
+  }
+  return manifests;
 }
 
 function annotate(level, message) {
@@ -421,7 +534,7 @@ async function main() {
   }
 
   console.log(
-    `${checked} document(s) declare a status, and every Living and Proposed one is free of retired paths, broken references and expired plans (as of ${today}).`,
+    `${checked} document(s) declare a status, and every Living and Proposed one is free of retired paths, broken references, unresolvable npm scripts and expired plans (as of ${today}).`,
   );
 }
 

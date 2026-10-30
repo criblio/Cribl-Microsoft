@@ -29,6 +29,7 @@
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
+import { jsStringExpression } from "../cribl-onboarding-source/input-bodies";
 import { buildEventHubSourceConfig } from "../eventhub-discovery";
 import type { LabComponentFlags } from "./lab-profiles";
 import type { LabEventHub } from "./lab-naming";
@@ -112,7 +113,14 @@ export function buildLabAdxDestination(
   };
 }
 
-/** The legacy queue-discovery blob source (Generate-CriblConfigs 228-250, verbatim). */
+/**
+ * The legacy queue-discovery blob source (Generate-CriblConfigs 228-250,
+ * verbatim) with ONE deliberate departure (DBT-154): `queueName` is a Cribl
+ * JavaScript expression (InputAzureBlob.queueName, cribl-openapi.json), so the
+ * raw name the legacy emitted read `flowlogs` as an identifier and `blob-q` as
+ * a subtraction. It is backtick-quoted by the same jsStringExpression the
+ * AZR-34 onboarding blob input uses, so the two writers cannot disagree.
+ */
 export function buildLabBlobQueueSource(
   containerName: string,
   queueName: string,
@@ -137,7 +145,7 @@ export function buildLabBlobQueueSource(
     parquetChunkDownloadTimeout: 600,
     authType: "clientSecret",
     type: "azure_blob",
-    queueName,
+    queueName: jsStringExpression(queueName),
     tenantId,
     clientId,
     clientTextSecret: "Azure_Blob_Queue_Secret",

@@ -13,8 +13,15 @@ import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
   deployDisabledReason,
+  deploySettingsSummary,
   deriveSectionInputs,
+  foldableWithoutShift,
+  parsePinnedSections,
+  pinnedSectionsKey,
+  sectionSummary,
+  sectionsToCollapseOnMove,
 } from "./integrate-screen-state";
+import type { SectionSummaryFacts } from "./integrate-screen-state";
 
 describe("deriveSectionInputs", () => {
   it("passes solution, scope and deploy flags through and reduces the text fields to booleans", () => {
@@ -73,6 +80,24 @@ describe("deriveSectionInputs", () => {
     );
     expect(canDeploy(deriveSectionInputs({ ...base, workerGroup: "" }))).toBe(false);
     expect(canDeploy(deriveSectionInputs({ ...base, packName: "  " }))).toBe(false);
+  });
+
+  it("passes the existing-destination mode through, so the arc reads the radio the screen reads (GEN-28)", () => {
+    const raw = {
+      solutionSelected: false,
+      scopeCommitted: false,
+      workerGroup: "",
+      packName: "",
+      deployCompleted: false,
+      sampleCount: 0,
+      mappingsApproved: false,
+    };
+    expect(deriveSectionInputs({ ...raw, existingMode: true }).existingMode).toBe(true);
+    expect(deriveSectionInputs({ ...raw, existingMode: false }).existingMode).toBe(false);
+    // With the mode and no pick, the footer hint is never the Azure scope.
+    expect(deployDisabledReason(deriveSectionInputs({ ...raw, existingMode: true }))).toBe(
+      "Select a Cribl worker group in Cribl Configuration first.",
+    );
   });
 });
 
@@ -170,5 +195,128 @@ describe("deployDisabledReason", () => {
 describe("INTEGRATE_DEFAULT_TABLE", () => {
   it("is the validated native table", () => {
     expect(INTEGRATE_DEFAULT_TABLE).toBe("SecurityEvent");
+  });
+});
+
+describe("sectionSummary (DBT-127)", () => {
+  const facts: SectionSummaryFacts = {
+    solutionName: "PaloAlto-PAN-OS",
+    sampleLogTypes: ["THREAT", "TRAFFIC"],
+    analyzedLogTypes: 2,
+    mappingsApproved: false,
+    scopeCommitted: true,
+    workspaceName: "law-jpederson-eastus",
+    workerGroup: "default",
+    packName: "MS-Sentinel-PaloAlto-PAN",
+    deployCompleted: false,
+  };
+
+  it("says what was chosen in each section, in a few words", () => {
+    expect(
+      Object.fromEntries(
+        (
+          [
+            "solution",
+            "sample-data",
+            "gap-analysis",
+            "azure-resources",
+            "cribl-config",
+            "deploy",
+          ] as const
+        ).map((id) => [id, sectionSummary(id, facts)]),
+      ),
+    ).toEqual({
+      solution: "PaloAlto-PAN-OS",
+      "sample-data": "2 samples: THREAT, TRAFFIC",
+      "gap-analysis": "2 log types analyzed - not yet approved",
+      "azure-resources": "law-jpederson-eastus",
+      "cribl-config": "MS-Sentinel-PaloAlto-PAN in default",
+      deploy: "not deployed yet",
+    });
+  });
+
+  it("states the unfinished case rather than going blank", () => {
+    const empty: SectionSummaryFacts = {
+      solutionName: "",
+      sampleLogTypes: [],
+      analyzedLogTypes: 0,
+      mappingsApproved: false,
+      scopeCommitted: false,
+      workspaceName: "",
+      workerGroup: "",
+      packName: "",
+      deployCompleted: false,
+    };
+    expect(sectionSummary("solution", empty)).toBe("no solution selected");
+    expect(sectionSummary("sample-data", empty)).toBe("no samples");
+    expect(sectionSummary("gap-analysis", empty)).toBe("not analyzed");
+    expect(sectionSummary("azure-resources", empty)).toBe("no target committed");
+    expect(sectionSummary("cribl-config", empty)).toBe("not configured");
+  });
+
+  it("caps a long sample list instead of running off the line", () => {
+    const many = { ...facts, sampleLogTypes: ["a", "b", "c", "d", "e"] };
+    expect(sectionSummary("sample-data", many)).toBe("5 samples: a, b, c and 2 more");
+    expect(sectionSummary("sample-data", { ...facts, sampleLogTypes: ["a"] })).toBe(
+      "1 sample: a",
+    );
+  });
+
+  it("reads approved and deployed once they are", () => {
+    const done = { ...facts, mappingsApproved: true, deployCompleted: true };
+    expect(sectionSummary("gap-analysis", done)).toBe("2 log types analyzed - approved");
+    expect(sectionSummary("deploy", done)).toBe("deployed");
+  });
+
+  it("has nothing to summarize for the read-only coverage and content sections", () => {
+    expect(sectionSummary("rule-coverage", facts)).toBe("");
+    expect(sectionSummary("enable-content", facts)).toBe("");
+  });
+});
+
+describe("deploySettingsSummary (DBT-231)", () => {
+  it("names what Deploy will use, with the client id shortened and missing values named", () => {
+    expect(
+      deploySettingsSummary("CommonSecurityLog", "2c06cab1-87a5-4153-8970-97d8a22c347f", false),
+    ).toBe("Deploy settings: table CommonSecurityLog - client 2c06...347f - secret: placeholder (change)");
+    expect(deploySettingsSummary("", "", true)).toBe(
+      "Deploy settings: no table yet - no client id - secret given (change)",
+    );
+  });
+});
+
+describe("auto-collapse on move (DBT-232)", () => {
+  it("folds every other open section except pinned, kept-open and already-folded ones", () => {
+    const all = ["solution", "sample-data", "gap-analysis", "rule-coverage", "deploy"] as const;
+    expect(
+      sectionsToCollapseOnMove(
+        "sample-data",
+        all,
+        new Set(["solution"]),
+        new Set(["rule-coverage"]),
+        new Set(["deploy"]),
+      ),
+    ).toEqual(["gap-analysis"]);
+  });
+
+  it("reads a stored pin list, dropping ids the page no longer has", () => {
+    expect(pinnedSectionsKey("u-1")).toBe("integrate-pinned-sections:u-1");
+    expect(parsePinnedSections('["deploy","workbook-coverage"]', ["solution", "deploy"])).toEqual(["deploy"]);
+    expect(parsePinnedSections("not json", ["deploy"])).toEqual([]);
+    expect(parsePinnedSections(null, ["deploy"])).toEqual([]);
+  });
+});
+
+describe("folds above the active section only when the shift can be absorbed (DBT-234)", () => {
+  const order = ["solution", "sample-data", "gap-analysis", "deploy"] as const;
+  it("keeps the sections above open at the top of the page, still folding those below", () => {
+    expect(
+      foldableWithoutShift(["solution", "gap-analysis", "deploy"], order, "sample-data", { solution: 180 }, 0),
+    ).toEqual(["gap-analysis", "deploy"]);
+  });
+  it("folds them once the page is scrolled far enough to compensate", () => {
+    expect(
+      foldableWithoutShift(["solution", "gap-analysis"], order, "sample-data", { solution: 180 }, 400),
+    ).toEqual(["solution", "gap-analysis"]);
   });
 });
