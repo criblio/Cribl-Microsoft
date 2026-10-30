@@ -3673,6 +3673,30 @@
       "title": "Folding a section above the one in use moves it under the pointer at the top of the page",
       "detail": "FOUND 2026-10-30 in the DBT-232 live check (jpederson org): with the page scrolled to the top, clicking inside Add Sample Data folded Select Sentinel Solution above it, and there was no room to scroll up by the shift, so Add Sample Data moved up about 100 px under the pointer - the MIG-7 failure the scroll compensation exists to prevent. Operator chose to fix it before 1.13.0. Fix: fold a section ABOVE the active one only when the current scroll position can absorb the combined height of those sections; otherwise leave them open (sections below always fold - they never move the active one). DONE: foldableWithoutShift (integrate-screen-state.ts) drops the above-active candidates when their summed height exceeds window.scrollY; pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson org: at scroll top, clicking inside Add Sample Data left Select Sentinel Solution open and Add Sample Data in place, and sections 3-8 folded.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-235",
+      "type": "story",
+      "priority": "next",
+      "title": "Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor",
+      "detail": "PARKED 2026-10-29 on local branch wip/dbt-195-review-uncommitted-wt15 (uncommitted review edits preserved during branch cleanup; DBT-195 itself is done). Adds documentedSources and tokensOverlap in core field-matcher/close-matches.ts so a PAN-OS field never cites another vendor's pack, a direction qualifier does not match inside another word, and the CEF catalog stays documented with no solution named; 4 pins. Does NOT apply cleanly to the 1.13.0 head (rule-coverage-section.tsx moved under DBT-223) - rebase, re-run the pins, mutation-check, confirm in Rule Coverage live."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-236",
+      "type": "story",
+      "priority": "next",
+      "title": "Finish the DBT-197 review follow-up: name what the sample store kept after a trim",
+      "detail": "PARKED 2026-10-29 on local branch wip/dbt-197-review-leftover (DBT-197 itself is done, verified both). Adds storedTrimSentences (planned-samples.ts) so the Lake and capture headlines say what the STORE trimmed, not only what the panel fetched; 2 pins plus a DOM test. Does NOT apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture live."
     }
   ],
   "features": [
