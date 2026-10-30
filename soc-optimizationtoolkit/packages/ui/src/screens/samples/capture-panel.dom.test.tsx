@@ -22,6 +22,7 @@
  *     and one the operator believes came from the source now on screen.
  */
 
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
@@ -800,6 +801,139 @@ describe("CapturePanel - what the commit reports afterwards", () => {
     expect(container.textContent).not.toContain(
       "Nothing is added until you confirm",
     );
+  });
+});
+
+/**
+ * THE OPERATOR'S TICKS SURVIVE THE COMMIT (DBT-198, offline UAT 2026-10-29).
+ *
+ * The UAT unticked all but THREAT and TRAFFIC of 13 solution log types, pressed
+ * "Add these as samples", and all 13 came back ticked. The re-seed effect
+ * replaced the list with the seed on every new `recommended`, and the commit
+ * always produces one.
+ *
+ * Driven through a PARENT that does what integrate-screen does: hold the
+ * recommendation in state and rebuild it, with the committed log types now
+ * `provided`, when the store write lands. A bare rerender would not reproduce
+ * the sequence - the new seed has to arrive on the render the commit provoked.
+ */
+describe("CapturePanel - the operator's picks survive a commit (DBT-198)", () => {
+  const FIVE: readonly RecommendedLogType[] = [
+    { value: "TRAFFIC", evidence: "detection", provided: false },
+    { value: "THREAT", evidence: "detection", provided: false },
+    { value: "CONFIG", evidence: "detection", provided: false },
+    { value: "SYSTEM", evidence: "workbook", provided: false },
+    { value: "URL", evidence: "detection", provided: false },
+  ];
+
+  function Parent({ onCapture }: Pick<CapturePanelProps, "onCapture">) {
+    const [recommended, setRecommended] = useState<readonly RecommendedLogType[]>(FIVE);
+    const [existing, setExisting] = useState<string[]>([]);
+    return (
+      <CapturePanel
+        source={SOURCE}
+        recommended={recommended}
+        existingLogTypes={existing}
+        onCapture={onCapture}
+        onCommit={async (samples) => {
+          const stored = samples.map((s) => s.logType);
+          setExisting(stored);
+          setRecommended(
+            FIVE.map((r) => ({ ...r, provided: stored.includes(r.value) })),
+          );
+        }}
+      />
+    );
+  }
+
+  const tickedNames = (c: HTMLElement) =>
+    [...c.querySelectorAll(".capture-log-types li")]
+      .filter((li) => (li.querySelector("input") as HTMLInputElement).checked)
+      .map((li) => li.querySelector(".capture-log-type-name")?.textContent);
+
+  it("keeps exactly the two the operator left ticked after Add these as samples", async () => {
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(<Parent onCapture={onCapture} />);
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT", "CONFIG", "SYSTEM", "URL"]);
+
+    // Untick all but TRAFFIC and THREAT.
+    fireEvent.click(boxes(container)[2]);
+    fireEvent.click(boxes(container)[3]);
+    fireEvent.click(boxes(container)[4]);
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await act(async () => {
+      fireEvent.click(commitButton(container) as HTMLButtonElement);
+    });
+
+    // The commit landed and the parent re-seeded from new coverage...
+    expect(outcomeHeadline(container)).toBe("Added 2 samples from this capture.");
+    const rows = container.querySelectorAll(".capture-log-types li");
+    expect(rows[0].textContent).toContain("capturing again replaces that sample");
+    expect(rows[1].textContent).toContain("capturing again replaces that sample");
+    // ...and the ticks are still the operator's: not all five back, and not the
+    // seed's opposite (the two just provided un-ticked, the rest ticked).
+    expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+    // The filter follows the kept picks, not the seed.
+    const shown = filterBox(container).value;
+    expect(select(shown, "syslog:in_syslog", "1,x,TRAFFIC,y")).toBe(true);
+    expect(select(shown, "syslog:in_syslog", "1,x,THREAT,y")).toBe(true);
+    expect(select(shown, "syslog:in_syslog", "1,x,CONFIG,y")).toBe(false);
+    expect(select(shown, "syslog:in_syslog", "1,x,URL,y")).toBe(false);
+  });
+
+  it("keeps them under StrictMode and across a second capture and commit", async () => {
+    // The shipped app mounts under StrictMode (apps/cribl-app/src/main.tsx), so
+    // every effect runs twice on mount; the pin above renders without it. And
+    // the UAT's next step is to capture again - the picks must survive every
+    // commit, not just the first one.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(
+      <StrictMode>
+        <Parent onCapture={onCapture} />
+      </StrictMode>,
+    );
+    fireEvent.click(boxes(container)[2]);
+    fireEvent.click(boxes(container)[3]);
+    fireEvent.click(boxes(container)[4]);
+
+    for (let round = 0; round < 2; round += 1) {
+      await act(async () => {
+        fireEvent.click(runButton(container));
+      });
+      await act(async () => {
+        fireEvent.click(commitButton(container) as HTMLButtonElement);
+      });
+      expect(tickedNames(container)).toEqual(["TRAFFIC", "THREAT"]);
+    }
+    expect(onCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it("still follows the seed when the operator never touched a tick", async () => {
+    // The other half: an untouched panel keeps taking the app's suggestion, so
+    // the two just committed un-tick themselves rather than being re-captured
+    // over the samples that now exist. A latch stuck closed would pass the pin
+    // above and fail this one.
+    const onCapture = vi.fn(
+      async (_filter: string, _maxEvents: number, _duration: number) => TWO_TYPES,
+    );
+    const { container } = render(<Parent onCapture={onCapture} />);
+
+    await act(async () => {
+      fireEvent.click(runButton(container));
+    });
+    await act(async () => {
+      fireEvent.click(commitButton(container) as HTMLButtonElement);
+    });
+
+    expect(tickedNames(container)).toEqual(["CONFIG", "SYSTEM", "URL"]);
   });
 });
 

@@ -27,6 +27,7 @@ import {
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
+  reseedKeepingPicks,
   selectedValues,
   toggleChoice,
 } from "./capture-panel-state";
@@ -92,6 +93,56 @@ function select(filter: string, inputId: string, raw: string): boolean {
     raw,
   ) as boolean;
 }
+
+describe("reseedKeepingPicks (DBT-198)", () => {
+  it("keeps the operator's ticks and takes the seed's notes and order", () => {
+    // What the panel had after the operator narrowed it to two.
+    const previous = captureLogTypeChoices([
+      rec("TRAFFIC", "detection"),
+      rec("THREAT", "detection"),
+      rec("CONFIG", "workbook"),
+      rec("SYSTEM", "detection"),
+    ]).map((c) => ({ ...c, selected: c.value === "TRAFFIC" || c.value === "THREAT" }));
+    // The seed the commit provokes: TRAFFIC and THREAT now provided (so the seed
+    // alone would UN-tick them), the others still needed (so it would tick
+    // them), and a type nobody has been offered yet.
+    const seeded = captureLogTypeChoices([
+      rec("THREAT", "detection", true),
+      rec("TRAFFIC", "detection", true),
+      rec("CONFIG", "workbook"),
+      rec("SYSTEM", "detection"),
+      rec("URL", "detection"),
+    ]);
+
+    const next = reseedKeepingPicks(seeded, previous);
+
+    expect(next.map((c) => [c.value, c.selected])).toEqual([
+      ["THREAT", true],
+      ["TRAFFIC", true],
+      ["CONFIG", false],
+      ["SYSTEM", false],
+      // Never offered before, so nobody chose against it: the seed's default.
+      ["URL", true],
+    ]);
+    // The facts the commit changed still arrive.
+    expect(next[0].note).toBe("already provided - capturing again replaces that sample");
+    expect(next[1].note).toBe("already provided - capturing again replaces that sample");
+    expect(next[2].note).toBeUndefined();
+  });
+
+  it("drops a value the new seed no longer offers", () => {
+    const previous = captureLogTypeChoices([rec("A", "detection"), rec("B", "detection")]);
+    const next = reseedKeepingPicks(captureLogTypeChoices([rec("B", "vendor")]), previous);
+    expect(next).toEqual([
+      {
+        value: "B",
+        evidence: "vendor",
+        selected: true,
+        note: "documented by the vendor, not required by this solution",
+      },
+    ]);
+  });
+});
 
 describe("toggle + compose", () => {
   const choices = captureLogTypeChoices([
