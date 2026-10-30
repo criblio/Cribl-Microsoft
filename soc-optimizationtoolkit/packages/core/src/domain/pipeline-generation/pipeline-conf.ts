@@ -24,7 +24,8 @@
  *     a whitespace line, which extracted nothing while every screen reported
  *     success. See positionalColumns / positionalExtractFunctions.
  * Timestamp logic (candidate list, CrowdStrike eval-first + backup
- * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map, the
+ * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map (but NOT its
+ * boolean, numeric and dynamic expressions - GEN-23, see buildCoercionExpr), the
  * `Type=<table>` enrichment, the fixed cleanup field list, and escapeYamlFilter
  * ordering are all verbatim - with ONE timestamp exception, added 2026-10-02
  * (GEN-7, operator decision): a RECOGNISED VPC Flow v2 positional source gets
@@ -89,7 +90,32 @@ export interface PipelineVendorMapping {
   description?: string;
 }
 
-/** Build a type coercion expression for the Cribl Eval function (verbatim). */
+/**
+ * Build a type coercion expression for the Cribl Eval function.
+ *
+ * The type map is legacy; THREE of its expressions are not (GEN-23,
+ * 2026-10-29), because legacy's corrupted data silently:
+ *   - boolean: legacy `Boolean(x)` made '0', 'no' and 'false' true (every
+ *     non-empty string is truthy). Now value-aware: true/1/yes -> true,
+ *     false/0/no -> false, case-insensitive and trimmed; a real boolean passes
+ *     through; anything else yields undefined.
+ *   - int/long/real: legacy `Number(x) || 0` / `parseFloat(x) || 0.0` turned a
+ *     value that does not convert into a real 0, indistinguishable from a
+ *     measured zero. Now the epochToIso guard (non-null, non-blank, isFinite)
+ *     decides, then Number(); otherwise undefined. real also loses parseFloat's
+ *     partial parse ('12.5ms' -> 12.5).
+ *   - dynamic: legacy `JSON.parse(x)` threw on any non-JSON string. Now the
+ *     parse sits in a try/catch and a string that does not parse is KEPT AS IT
+ *     ARRIVED - not nulled - because a dynamic column holds a string, and the
+ *     text is the only copy of the vendor's value.
+ * "Empty" is undefined, the same convention as the VPC Flow stamp: Cribl's Eval
+ * leaves the field unset. The emitter writes these inside a YAML double-quoted
+ * `value:`, so they use single quotes and no backslashes. The dynamic one is
+ * the first emitted expression with a statement body (an arrow IIFE); it is
+ * valid JavaScript and evaluated in the pins, NOT VERIFIED AGAINST A LIVE CRIBL
+ * INSTANCE in this change. Pinned by coercion-expr.test.ts through
+ * generatePipelineConfForPlan, evaluating each expression on sample values.
+ */
 export function buildCoercionExpr(
   fieldName: string,
   sourceType: string,
@@ -98,13 +124,18 @@ export function buildCoercionExpr(
   if (sourceType === targetType) return null;
   const t = targetType.toLowerCase();
   const escaped = fieldName.replace(/'/g, "\\'");
-  if (t === "int" || t === "long") return `Number(${escaped}) || 0`;
-  if (t === "real") return `parseFloat(${escaped}) || 0.0`;
-  if (t === "boolean") return `Boolean(${escaped})`;
+  const toNumber = `(${escaped} != null && String(${escaped}).trim() !== '' && isFinite(${escaped})) ? Number(${escaped}) : undefined`;
+  if (t === "int" || t === "long" || t === "real") return toNumber;
+  if (t === "boolean")
+    return (
+      `typeof ${escaped} === 'boolean' ? ${escaped} : ` +
+      `/^(true|1|yes)$/i.test(String(${escaped}).trim()) ? true : ` +
+      `/^(false|0|no)$/i.test(String(${escaped}).trim()) ? false : undefined`
+    );
   if (t === "datetime") return `${escaped}`;
   if (t === "string") return `String(${escaped} || '')`;
   if (t === "dynamic")
-    return `typeof ${escaped} === 'string' ? JSON.parse(${escaped}) : ${escaped}`;
+    return `typeof ${escaped} === 'string' ? (() => { try { return JSON.parse(${escaped}); } catch (err) { return ${escaped}; } })() : ${escaped}`;
   return null;
 }
 

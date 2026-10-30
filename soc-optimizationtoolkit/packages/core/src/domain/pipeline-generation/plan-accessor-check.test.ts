@@ -116,7 +116,7 @@ describe("checkPlanFieldAccessors - self-rename with a coercion (F1-e)", () => {
       { source: "a.b", target: "a.b", type: "long", action: "rename", needsCoercion: true },
     ]);
     const conf = generatePipelineConfForPlan(table, "Test Solution");
-    expect(conf).toContain('- name: a.b\n          value: "Number(a.b) || 0"');
+    expect(conf).toContain(`- name: a.b\n          value: "(a.b != null && String(a.b).trim() !== '' && isFinite(a.b)) ? Number(a.b) : undefined"`);
     expect(checkCriblYaml(conf, "conf.yml")).toHaveLength(1);
     expect(checkPlanFieldAccessors(table)).toEqual([]);
   });

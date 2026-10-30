@@ -427,13 +427,16 @@ describe("reduction runs BEFORE rename (pinned order)", () => {
 });
 
 describe("coercion emission", () => {
-  it("emits a Number() coercion for an int-typed coerce field", () => {
+  // GEN-23 (2026-10-29) changed the numeric expression from `Number(x) || 0`
+  // to the NaN-to-undefined guard below - a deliberate spec change, not a
+  // weakened pin. What the expression DOES is pinned in coercion-expr.test.ts.
+  it("emits a guarded Number() coercion for an int-typed coerce field", () => {
     const fields: PipelineFieldMapping[] = [
       { source: "bytes", target: "SentBytes", type: "int", action: "coerce" },
     ];
     const yaml = generatePipelineConf("p", "Acme", "Acme_CL", fields, undefined, "json");
     expect(yaml).toContain("name: SentBytes");
-    expect(yaml).toContain("Number(SentBytes) || 0");
+    expect(yaml).toContain("(SentBytes != null && String(SentBytes).trim() !== '' && isFinite(SentBytes)) ? Number(SentBytes) : undefined");
   });
 
   // F1-e: a rename across types used to be counted by the gap report as a
@@ -446,7 +449,7 @@ describe("coercion emission", () => {
     expect(yaml).toContain("currentName: in\n");
     expect(yaml).toContain("newName: ReceivedBytes");
     expect(yaml).toContain(
-      '        - name: ReceivedBytes\n          value: "Number(ReceivedBytes) || 0"',
+      `        - name: ReceivedBytes\n          value: "(ReceivedBytes != null && String(ReceivedBytes).trim() !== '' && isFinite(ReceivedBytes)) ? Number(ReceivedBytes) : undefined"`,
     );
     // The coercion sits in the enrich eval, after the rename has run.
     expect(yaml.indexOf("Number(ReceivedBytes)")).toBeGreaterThan(
