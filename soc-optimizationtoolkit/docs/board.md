@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**87 in the backlog, 44 in progress, 93 done.**
+**90 in the backlog, 38 in progress, 99 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 55 | 45 | 32 |
+| Sentinel Integration | 52 | 51 | 28 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -39,7 +39,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 131.
+Open work totals 128.
 
 ## Epics and features
 
@@ -81,13 +81,13 @@ Measured gaps where the app reports a confident wrong answer
 |---|---|---|---|
 | `HON-F1` Capability model follow-ons | Permission Verification | 3/4 | HON-6, D-1, DBT-137, DBT-139 |
 
-### `GEN` Pipeline and pack generation - 50% (10/20)
+### `GEN` Pipeline and pack generation - 59% (13/22)
 
 What the build actually emits
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 10/20 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18, GEN-19, GEN-20, GEN-21, GEN-22, GEN-23, GEN-24, GEN-25, GEN-26, GEN-27, GEN-28 |
+| `GEN-F1` Pack generation correctness and provenance | Sentinel Integration | 13/22 | GEN-5, GEN-7, GEN-9, GEN-10, GEN-11, GEN-12, GEN-14, GEN-15, GEN-17*, GEN-18, GEN-19, GEN-20, GEN-21, GEN-22, GEN-23, GEN-24, GEN-25, GEN-26, GEN-27, GEN-28, GEN-29, GEN-30 |
 
 ### `PK` Pack maintenance parity - 0% (0/3)
 
@@ -113,14 +113,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 45% (60/132)
+### `DBT` Quality and technical debt _(enabler)_ - 47% (63/133)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 34/84 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 15/28 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 18/29 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (44)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1084,85 +1084,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **GEN-23** buildCoercionExpr corrupts boolean, int and dynamic conversions, and GEN-19 widened its reach
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
-  pipeline-conf.ts buildCoercionExpr emits Boolean(x) for a boolean column (so
-  '0', 'no', 'false' become true), Number(x) || 0 for int/long (a value that
-  does not convert arrives as 0, not empty), and JSON.parse(x) for dynamic
-  (throws on non-JSON text). Pre-existing on coerce rows; GEN-19 now also
-  routes matcher cross-type renames through it, so packs rebuilt from the
-  field-match rung can newly corrupt data. Fix: a value-aware boolean
-  expression, a NaN-to-empty numeric conversion, a guarded JSON.parse; pin
-  each through generatePipelineConfForPlan.
-
-- **GEN-24** A multi-type PAN-OS CEF pack gets placeholder route filters: the header TYPE cannot be routed on
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). DBT-196 splits
-  PAN-OS CEF captures into THREAT and TRAFFIC samples, but route-discriminator
-  excludes CEF header fields (isMintedHeaderField), so the pack built from
-  both gets a placeholder route filter instead of routing by type. The only
-  raw-text test available is a delimited token such as '|THREAT|'. Fix: a
-  route filter on the header TYPE token for PAN-OS CEF; pin the generated
-  route.yml. This is on the operator's PAN-OS path, so it blocks a working
-  two-type pack.
-
-- **DBT-208** Field Mappings: two rows pointed at one column silently overwrite each other
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). applyRemap
-  reports claimedBy and displaced, but the Dest-select path discards both and
-  the table shows nothing: point two rows at one column and the second Rename
-  overwrites the first; the value reaches neither the column nor overflow.
-  DBT-202's panel moves with a warning, the Dest select does not. Fix: show
-  the claim and offer 'Move from X' on the Dest path too.
-
-- **GEN-28** The existing-destination path has two deciders: the screen keys off the radio, the arc off a complete pick
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
-  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
-  build, each finding adversarially verified. C0: integrate-screen
-  existingMode (the radio, on by default offline) skips the Azure reads and
-  says Azure Resources is 'Not needed', while integrate-arc only sees
-  existingDestination, which stays undefined until every table is picked; for
-  that stretch the section status, the Workspace pill and the Deploy header
-  all ask for an Azure scope the page says it will not use. C1: core
-  deployAzureRequirements and canWireSource's GEN-21 driver have no production
-  caller (deriveGuidedWorkflow is unused by any screen), so their pins
-  describe behaviour no screen shows. C4: the QuickConnect warning and the
-  route-to-copy are pinned only as pure functions. Fix: give SectionInputs the
-  mode, key not-needed/pill/scope off it; either route the shell through the
-  core gates or delete the unused ones; add a DOM pin for the QuickConnect
-  warning on the existing path.
-
-- **DBT-213** A Dest Field edit and 'Use this field' re-point a row the same way but differ on approval and the auto-drop key
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
-  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
-  build, each finding adversarially verified. C2: applySuggestion forgets the
-  auto-drop key; updateMapping's dest branch does not, so switching the drop
-  policy can undo a hand re-point. C3: apply-suggestion withdraws the table's
-  approval (F1-c); edit-mapping dest keeps it, so a hand re-point can ship
-  under an approval given to different rows. Fix: one helper for both paths;
-  withdraw approval on an applied or reverted dest edit; pin both.
-
-- **DBT-214** Stale docs and dead exports after the F1/F2 build
-  `DBT-F2` `bug` `settled`
-  Not now because: Comments, test fixtures and export lists only: nothing an
-  operator sees changes, but each misleads the next reader of code that just
-  landed, so it goes in the same pass as GEN-28.
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
-  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
-  build, each finding adversarially verified. C5: integrate-screen module
-  header omits the GEN-21 path in sections 7-9. C6: integrate-arc docstrings
-  predate 'not-needed'. C7: NumberedSection reason prop doc says it is ignored
-  except for blocked/coming-soon. C8: nav-annotation and app-frame fixtures
-  still model integrate as requiring dcr.write. C9: isTypeMismatch re-exported
-  from the field-matcher index, COLUMN_SUGGESTION_LIMIT and panosCefRaw
-  exported with no outside importer.
-
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1365,9 +1289,19 @@ Next to pick up. Nothing blocks these.
   satisfied when it is not. Fix: extract every comparison operand in a where
   predicate (and/or/not, parentheses); pin with exact field lists.
 
+- **GEN-29** String coercion turns 0 and false into an empty string
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 follow-up review (wf_9121dfa7-b23).
+  buildCoercionExpr's string branch emits String(x || ''), so an int 0 or a
+  boolean false going into a string column arrives as ''. Reached through
+  vendorCoercions and, since GEN-19, matcher cross-type renames. Same class as
+  GEN-23: use x == null ? x : String(x), pinned through
+  generatePipelineConfForPlan with evaluated samples. Also check the
+  single-quote escape in field names inside YAML double-quoted values.
+
 ---
 
-## Backlog - next (39)
+## Backlog - next (41)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1952,6 +1886,30 @@ Settled and unblocked, sequenced behind now.
   DeviceName on in_syslog) as candidate-only rows, which CRIBL_INTERNAL_FIELDS
   strips before a gap row exists and so needs a new row kind.
 
+- **DBT-216** Two re-point paths give no feedback: a coverage apply onto a filled column, and a Dest edit that vacates a rule column
+  `DBT-F2` `bug` `settled`
+  Not now because: No data is lost on either path: the refusal is strictly
+  safer than the double Rename it replaced, and a free-column edit moves only
+  that row. The cost is a missing warning and a silent no-op, behind the data
+  bugs GEN-29 and DBT-215.
+  FOUND 2026-10-29 by the F1/F2 follow-up review (wf_9121dfa7-b23). (1) A Rule
+  Coverage 'Use this field' (DBT-203 remapEvent) aimed at a column another row
+  fills is refused by the reducer with no word (it needs a stale coverage
+  report to reach); route it into the DBT-208 claim panel. (2) A Dest Field
+  edit onto a FREE column that vacates an analytics-rule column shows no
+  warning; only the claim panel carries the DBT-202 rule-column warning.
+
+- **GEN-30** Does guided deploy route a two-type PAN-OS pack correctly?
+  `GEN-F1` `spike` `settled`
+  FOUND 2026-10-29 by the F1/F2 follow-up review (wf_9121dfa7-b23). GEN-24
+  fixed route generation in buildPipelinePlan. Guided deploy has its own
+  legacy discriminator (usecases/guided-deploy/route-discriminator.ts:
+  first-event field cascade, sourcetype fallback) that GEN-24 does not reach.
+  Check what it emits for the UAT THREAT+TRAFFIC samples; file a bug if it
+  routes wrong. Also: deriveGuidedWorkflow is still exported with no screen
+  caller (GEN-28 removed only its GEN-21 driver), and the pack build's
+  DCR-inventory gate on the existing path has no screen-level pin.
+
 ---
 
 ## Backlog - later (36)
@@ -2443,7 +2401,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (93)
+## Done (99)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5348,3 +5306,208 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   mutation-checked. Verified by pins only; no live check yet. Still owed: the
   live L7 check (picker lists PAN-CSL, no Azure call), and GEN-22 (the
   operator connects the destination by hand).
+
+- **GEN-23** buildCoercionExpr corrupts boolean, int and dynamic conversions, and GEN-19 widened its reach
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
+  pipeline-conf.ts buildCoercionExpr emits Boolean(x) for a boolean column (so
+  '0', 'no', 'false' become true), Number(x) || 0 for int/long (a value that
+  does not convert arrives as 0, not empty), and JSON.parse(x) for dynamic
+  (throws on non-JSON text). Pre-existing on coerce rows; GEN-19 now also
+  routes matcher cross-type renames through it, so packs rebuilt from the
+  field-match rung can newly corrupt data. Fix: a value-aware boolean
+  expression, a NaN-to-empty numeric conversion, a guarded JSON.parse; pin
+  each through generatePipelineConfForPlan. DONE 2026-10-29: buildCoercionExpr
+  in pipeline-conf.ts now converts by value for three types. Boolean:
+  true/1/yes give true and false/0/no give false, ignoring case and
+  surrounding spaces, and only as the whole value. A real boolean passes
+  through and anything else is left empty (undefined). int, long and real: a
+  value converts only if it is not null, not blank and passes isFinite;
+  otherwise it is left empty, not set to 0. real no longer uses parseFloat, so
+  '12.5ms' is left empty instead of becoming 12.5. Dynamic: only a string is
+  parsed, inside a try/catch, and a string that is not JSON is kept as it
+  arrived. coercion-expr.test.ts pins this with 11 tests. Each builds a real
+  planned table, runs it through generatePipelineConfForPlan, reads the
+  emitted value expression back, and runs it on the card's samples plus
+  already-typed, absent, whole-token and array inputs. The tests also require
+  checkCriblYaml and checkPlanFieldAccessors to report nothing. The matcher's
+  cross-type rename path (GEN-19) is pinned the same way. Five existing pins
+  that expected the old `Number(x) || 0` text now expect the new expression;
+  this is a deliberate change of spec and none of them was loosened. 12 of the
+  13 mutants tried make a pin fail (6 by the implementer, 7 in review). The
+  one that survives removes the typeof-boolean branch, which changes no
+  result. Core did not get a fully clean run: the full npm test run had 6 core
+  test files fail, and a core-only rerun had one unrelated timeout. That
+  timed-out file passes when re-run. Still to check in Cribl Live Preview:
+  whether Cribl's parser accepts the dynamic expression's try/catch, and
+  whether Eval removes an existing field when it is assigned undefined.
+
+- **GEN-24** A multi-type PAN-OS CEF pack gets placeholder route filters: the header TYPE cannot be routed on
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). DBT-196 splits
+  PAN-OS CEF captures into THREAT and TRAFFIC samples, but route-discriminator
+  excludes CEF header fields (isMintedHeaderField), so the pack built from
+  both gets a placeholder route filter instead of routing by type. The only
+  raw-text test available is a delimited token such as '|THREAT|'. Fix: a
+  route filter on the header TYPE token for PAN-OS CEF; pin the generated
+  route.yml. This is on the operator's PAN-OS path, so it blocks a working
+  two-type pack. DONE 2026-10-29: A pack built from DBT-196's THREAT and
+  TRAFFIC split now routes each log type by the TYPE in CEF header field 6,
+  not by a placeholder or by a content-version value. The new
+  route-panos-cef.ts matches _raw with a regex that walks the header using the
+  parser's own escape-aware field body and pins vendor, product and field 6.
+  Because of that, a TRAFFIC line whose subtype or extension reads THREAT does
+  not match the THREAT route, and a syslog prefix in front of CEF: still
+  matches. The filter is used only for PAN-OS CEF, through the
+  isPanosCefIdentity predicate the split also uses, and only when the TYPE is
+  the same in every event, is a plain token, and is not shared with a sibling
+  log type. In every other case the existing value/presence ladder runs
+  unchanged. plan.ts tries this filter before that ladder. route.yml now
+  escapes backslashes as well as quotes (escapeYamlFilter), because a filter
+  containing backslashes was invalid YAML before; this also fixes value
+  filters containing ' or \. Pins in core route-panos-cef.test.ts (10 tests)
+  run the whole path: split, parse, plan, route.yml. They assert the exact
+  filters and that there are no placeholders. They read the filters back out
+  of route.yml through a strict YAML unescape and evaluate them, and each one
+  selects exactly its own lines, including the tricky ones. There are also
+  guard pins for another vendor, another product, json format, a TYPE that
+  varies or is missing, a TYPE shared with a sibling, and a TYPE that would
+  need escaping. route-yml.test.ts pins the backslash escaping. The ui test
+  panos-cef-type-routes.test.ts runs the UAT capture through
+  derivePipelinePreview and checks THREAT 50 / TRAFFIC 50 with exact filters,
+  no placeholder, unreachable or routeYml issues, and that each filter loaded
+  from route.yml selects exactly its own 50 of the 100 lines. Review: 11
+  independent mutations, all caught. Review commit bf254b9 also updates the
+  formatRoutingWarning comment in route-placeholder.ts to name the PAN-OS
+  exception. Not confirmed in Cribl Live Preview: whether Cribl accepts the
+  regex literal in a route filter.
+
+- **DBT-208** Field Mappings: two rows pointed at one column silently overwrite each other
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). applyRemap
+  reports claimedBy and displaced, but the Dest-select path discards both and
+  the table shows nothing: point two rows at one column and the second Rename
+  overwrites the first; the value reaches neither the column nor overflow.
+  DBT-202's panel moves with a warning, the Dest select does not. Fix: show
+  the claim and offer 'Move from X' on the Dest path too. DONE 2026-10-29:
+  Pointing a row's Dest Field at a column another row already fills no longer
+  writes two Renames onto one name. The reducer refuses that edit unless it
+  arrives with moveClaimed. The section first opens an inline claim panel
+  ('<column> is already filled by <field>'), which explains the move, carries
+  the DBT-202 rule-column warning, and offers 'Keep <field>' or 'Move <column>
+  from <field>'. Move calls core applyRemap with moveClaimed, which sends
+  every row in the column to the catch-all as overflow and reports it as
+  `moved`. With no catch-all in the schema nothing moves, the claim is still
+  reported, and the reducer refuses the edit. Review fixed two defects. (1)
+  The panel held a stale claim; it now re-derives the claim from the current
+  rows each render and closes once the claim no longer holds, including after
+  a re-analysis. (2) Under the drop-unneeded policy a moved field could be
+  dropped right away, breaking the panel's 'so its value is kept'; destClaim
+  now lists the rows Move sends, and autoDropPlan skips them through a new
+  reviewerKept set. Pinned by core apply-remap tests: the move, every claimant
+  moved, no catch-all leaves the claim. Reducer pins: refusal, the move,
+  refusal with no catch-all. destClaim pins: the claim, the warning, no
+  fallback, moves. An autoDropPlan reviewerKept pin. DOM tests: asks first,
+  Keep/Escape, Move gives exactly one Rename in the generated pipeline with
+  the other field in overflowConfig, the warning, the panel closes when the
+  claim lapses, and the moved field stays in overflow under the drop policy.
+  Every new pin was mutation-checked. Not yet confirmed in Cribl Live Preview.
+
+- **GEN-28** The existing-destination path has two deciders: the screen keys off the radio, the arc off a complete pick
+  `GEN-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
+  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
+  build, each finding adversarially verified. C0: integrate-screen
+  existingMode (the radio, on by default offline) skips the Azure reads and
+  says Azure Resources is 'Not needed', while integrate-arc only sees
+  existingDestination, which stays undefined until every table is picked; for
+  that stretch the section status, the Workspace pill and the Deploy header
+  all ask for an Azure scope the page says it will not use. C1: core
+  deployAzureRequirements and canWireSource's GEN-21 driver have no production
+  caller (deriveGuidedWorkflow is unused by any screen), so their pins
+  describe behaviour no screen shows. C4: the QuickConnect warning and the
+  route-to-copy are pinned only as pure functions. Fix: give SectionInputs the
+  mode, key not-needed/pill/scope off it; either route the shell through the
+  core gates or delete the unused ones; add a DOM pin for the QuickConnect
+  warning on the existing path. DONE 2026-10-29: The existing-destination path
+  now has one decider. SectionInputs gains existingMode (the Sentinel
+  destination radio). A new onExistingPath helper is true when the mode is on
+  or a pick is complete. Four rules key off it: the not-needed status for
+  Select Azure Resources ('Not needed with an existing destination' before a
+  pick, 'Not needed - using <id>' after), the dropped Workspace pill, the
+  scope dropped from the deploy gate (deployBlockedReason and canDeploy), and
+  deployAzureRequirements (scope, ingestion client id, DCR inventory; the
+  unused directoryRead entry is removed). readinessPillsForMode clears the
+  mode for skipCribl modes, so azure-only keeps its Workspace pill. The
+  Integrate screen derives sectionInputs early and reads
+  deployAzureRequirements to enable the workspace-table listing, the Content
+  Hub read and the pack build's DCR inventory read, and to decide whether it
+  asks for a table name and client id. canWireSource and deriveGuidedWorkflow
+  lose the unused GEN-21 install driver. Pins: a 6-test existingMode block in
+  integrate-arc.test.ts, including a check across every input combination that
+  existingMode:false changes nothing; an azure-only pill pin in
+  workflow-state; a passthrough pin in integrate-screen-state; a DOM pin that
+  nothing points at an Azure scope before the pick; and a new mounted file,
+  integrate-screen-existing-route.dom.test.tsx. That file pins the exact
+  QuickConnect warning and the source read's path and group, the 'could not
+  tell' text when the read throws, the exact route JSON shown before install,
+  and the exact footer gate. Reviewer and implementer mutations were each
+  caught, with one exception: the pack build's DCR-inventory gate on the
+  existing path has no screen-level pin.
+
+- **DBT-213** A Dest Field edit and 'Use this field' re-point a row the same way but differ on approval and the auto-drop key
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
+  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
+  build, each finding adversarially verified. C2: applySuggestion forgets the
+  auto-drop key; updateMapping's dest branch does not, so switching the drop
+  policy can undo a hand re-point. C3: apply-suggestion withdraws the table's
+  approval (F1-c); edit-mapping dest keeps it, so a hand re-point can ship
+  under an approval given to different rows. Fix: one helper for both paths;
+  withdraw approval on an applied or reverted dest edit; pin both. DONE
+  2026-10-29: The Dest Field select and the 'Use this field' suggestion now go
+  through one reviewer re-point. In the reducer that is reviewerRemap in
+  mapping-review-state.ts; in the section it is repoint in
+  mapping-review-section.tsx. Two things follow. First, an applied or reverted
+  Dest edit withdraws the table's approval the same way an applied suggestion
+  does (decision F1-c), and a re-point that changes nothing keeps it. Second,
+  the Dest path forgets the auto-drop key before it dispatches, so switching
+  the drop policy back to preserve no longer undoes a hand re-point. The
+  approve-again note covers both paths. Pinned by reducer tests (approval
+  withdrawn on an applied Dest edit, equal to apply-suggestion; withdrawn on a
+  revert; kept on a no-op). Also pinned by DOM tests in
+  mapping-review-dest-claim.dom.test.tsx: a Dest re-point withdraws approval
+  and shows the note, and a hand re-point of an auto-dropped field survives
+  'Restore all dropped fields'. Each pin was mutation-checked by the
+  implementer and spot-checked in review. The review also corrected the
+  section's module header to say approvals reset on any re-point. Not yet
+  confirmed in Cribl Live Preview.
+
+- **DBT-214** Stale docs and dead exports after the F1/F2 build
+  `DBT-F2` `bug` `settled` `verified: pins`
+  Not now because: Comments, test fixtures and export lists only: nothing an
+  operator sees changes, but each misleads the next reader of code that just
+  landed, so it goes in the same pass as GEN-28.
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). FOUND
+  2026-10-29 by architecture audit r7 (wf_279a5572-d12) on the merged F1/F2
+  build, each finding adversarially verified. C5: integrate-screen module
+  header omits the GEN-21 path in sections 7-9. C6: integrate-arc docstrings
+  predate 'not-needed'. C7: NumberedSection reason prop doc says it is ignored
+  except for blocked/coming-soon. C8: nav-annotation and app-frame fixtures
+  still model integrate as requiring dcr.write. C9: isTypeMismatch re-exported
+  from the field-matcher index, COLUMN_SUGGESTION_LIMIT and panosCefRaw
+  exported with no outside importer. DONE 2026-10-29: Stale docs and dead
+  exports from the F1/F2 build are fixed, with no behaviour change. The
+  integrate-screen header now describes the GEN-21 existing-destination path
+  in sections 7-9. The integrate-arc status docs (SectionStatus, the
+  not-needed member, SectionState, the deriveSectionStatus rules, the
+  deriveSectionStatuses guarantees) cover not-needed and count nine sections.
+  The NumberedSection reason prop doc covers the not-needed badge. The
+  nav-annotation and app-frame test fixtures now model integrate as needing
+  destination.manage, as route-capabilities.ts does. The pins that relied on
+  the old modelling use an inline mixed route and the DCR Automation route,
+  with unchanged assertions, and the re-homed missing-capabilities pin was
+  mutation-checked. isTypeMismatch is out of the field-matcher index; it is
+  still exported from close-matches, where its test imports it.
+  COLUMN_SUGGESTION_LIMIT and panosCefRaw are module-private. Confirmed by
+  lint, typecheck, the full npm test run and check-docs.
