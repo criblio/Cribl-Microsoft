@@ -105,6 +105,20 @@ describe("buildCoercionExpr - boolean is value-aware (GEN-23)", () => {
     ]);
   });
 
+  // Review of GEN-23: the card's samples hold every token alone, so an
+  // unanchored match passed them all. A word only CONTAINING a token is not
+  // that token - '10' is not false and 'notrue' is not true.
+  it("matches a whole token only, not one inside a longer value", () => {
+    expect(["10", "01", "notrue", "nayes", "casino", "yes no"].map(run)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
   it("stays clean under both checks", () => {
     expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
     expect(checkPlanFieldAccessors(table)).toEqual([]);
@@ -188,6 +202,12 @@ describe("buildCoercionExpr - dynamic never throws on text (GEN-23)", () => {
     expect(run(obj)).toBe(obj);
     expect(run(null)).toBe(null);
     expect(run(undefined)).toBe(undefined);
+    // Review of GEN-23: only a STRING is parsed. JSON.parse stringifies what it
+    // is given, so without the typeof guard ['5'] would collapse to 5 and
+    // [true] to true - the catch alone does not protect a structured value.
+    const arr = ["5"];
+    expect(run(arr)).toBe(arr);
+    expect(run([true])).toEqual([true]);
   });
 
   it("stays clean under both checks", () => {
