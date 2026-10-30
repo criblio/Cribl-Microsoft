@@ -223,7 +223,7 @@ export interface WorkspaceInventory {
 }
 
 /** One query through the ARM passthrough. Throws with greppable text on non-2xx. */
-export async function runWorkspaceQuery(
+async function runWorkspaceQuery(
   azure: AzureManagement,
   workspaceId: string,
   query: string,

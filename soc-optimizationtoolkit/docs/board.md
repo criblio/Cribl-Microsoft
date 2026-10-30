@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**76 in the backlog, 53 in progress, 82 done.**
+**76 in the backlog, 53 in progress, 83 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| SIEM Migration | 1 | 4 | 1 |
+| SIEM Migration | 1 | 5 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
@@ -135,13 +135,13 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 80% (4/5)
+### `MIG` SIEM migration analysis - 83% (5/6)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 4/5 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5 |
+| `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 5/6 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6 |
 
 ---
 
@@ -2449,7 +2449,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (82)
+## Done (83)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5096,3 +5096,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   moved to MIG-5. The portal Usage blade was not opened; the comparison is
   against the same Usage table queried by hand, which is what that blade
   reads.
+
+- **MIG-6** The workspace inventory published its KQL internals on the @soc/core barrel
+  `MIG-F1` `enabler` `settled` `verified: pins`
+  FOUND 2026-10-30 by the architecture audit, in a230f02. core/index.ts
+  re-exported domain/workspace-inventory wholesale, and the usecase index
+  exported runWorkspaceQuery, workspaceArmId, SOURCE_BATCH_SIZE and
+  WORKSPACE_QUERY_API_VERSION: about 25 names with no consumer outside the
+  feature and its tests - the shape AZR-53 removed a day earlier. Fix: drop
+  the domain from the root barrel; the usecase index publishes
+  discoverWorkspaces, inventoryWorkspace and the result types (re-exporting
+  InventorySource, InventoryTable and TableSources, which the panel needs);
+  runWorkspaceQuery becomes module-local. DONE 2026-10-30 (pins):
+  barrel-exports.test.ts asserts both usecases reach the root by identity and
+  that twelve internals do not; mutation-checked by re-adding the wholesale
+  export, which fails the pin.

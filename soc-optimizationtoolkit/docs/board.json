@@ -3023,6 +3023,19 @@
       "priority": "now",
       "title": "What does the Usage query answer for an identity without workspaces/query/read?",
       "detail": "FILED 2026-10-30 from MIG-1 question (2), which MIG-4 could not answer: no reader-less identity was at hand. The panel treats any non-2xx from POST {workspace}/query as a refusal (Could not read this workspace's Usage table) and a 200 with no rows as a measured zero (The Usage table answered and reports no ingested data). That second rule rests on the belief that a workspace-context query is refused rather than RBAC-filtered into an empty 200. Measure with an app registration holding Reader but not Log Analytics Reader on one workspace (and, if possible, a table-level RBAC custom role excluding Usage). If either answers 200 with no rows, the measured-zero copy is a confident wrong answer and becomes a bug card."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-6",
+      "type": "enabler",
+      "priority": "now",
+      "title": "The workspace inventory published its KQL internals on the @soc/core barrel",
+      "detail": "FOUND 2026-10-30 by the architecture audit, in a230f02. core/index.ts re-exported domain/workspace-inventory wholesale, and the usecase index exported runWorkspaceQuery, workspaceArmId, SOURCE_BATCH_SIZE and WORKSPACE_QUERY_API_VERSION: about 25 names with no consumer outside the feature and its tests - the shape AZR-53 removed a day earlier. Fix: drop the domain from the root barrel; the usecase index publishes discoverWorkspaces, inventoryWorkspace and the result types (re-exporting InventorySource, InventoryTable and TableSources, which the panel needs); runWorkspaceQuery becomes module-local.\n\nDONE 2026-10-30 (pins): barrel-exports.test.ts asserts both usecases reach the root by identity and that twelve internals do not; mutation-checked by re-adding the wholesale export, which fails the pin.",
+      "verified": "pins"
     }
   ],
   "features": [

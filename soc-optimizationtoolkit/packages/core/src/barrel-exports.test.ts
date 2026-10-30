@@ -34,6 +34,7 @@ import * as validateAzureOnboarding from "./usecases/validate-azure-onboarding";
 import * as readSourceFlow from "./usecases/read-source-flow";
 import * as onboardBatch from "./usecases/onboard-batch";
 import * as kitMetricsQuery from "./kit/metrics/metricsQuery";
+import * as workspaceInventory from "./usecases/workspace-inventory";
 
 type Entry = readonly [name: string, source: Record<string, unknown>, kind: string];
 
@@ -140,5 +141,16 @@ describe("@soc/core entry point exports the Azure onboarding surface", () => {
     expect(["verdictStatus", "groupStatus"].filter((name) => name in onboardingDataflow)).toEqual([]);
     expect(["planValueOf"].filter((name) => name in onboardingHowto)).toEqual([]);
     expect(["communityDefinitionName"].filter((name) => name in onboardingHowtoSteps)).toEqual([]);
+  });
+
+  it("publishes the workspace inventory's two usecases and none of its KQL internals (MIG-2)", () => {
+    expect(core.discoverWorkspaces).toBe(workspaceInventory.discoverWorkspaces);
+    expect(core.inventoryWorkspace).toBe(workspaceInventory.inventoryWorkspace);
+    const internals = [
+      "USAGE_QUERY", "sourceBreakdownQuery", "parseQueryResult", "parseUsageRows",
+      "parseSourceRows", "sourcesFor", "answeredOutcome", "chunk", "kqlTableRef",
+      "runWorkspaceQuery", "workspaceArmId", "SOURCE_BATCH_SIZE",
+    ];
+    expect(internals.filter((name) => name in core)).toEqual([]);
   });
 });
