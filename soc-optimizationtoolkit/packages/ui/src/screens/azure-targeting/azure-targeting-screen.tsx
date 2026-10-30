@@ -879,7 +879,15 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
       {depLoad.status === "error" && <pre className="result">{depLoad.error}</pre>}
 
       <div className="discovery-result">
-        <span className="field-label">Create what is missing</span>
+        {/* DBT-230: creating a resource group or workspace is the exception
+            once one is selected, so the form waits behind a disclosure. It
+            opens by itself while the target is incomplete or a name is typed.
+            Sentinel's status and its Enable action stay outside, visible. */}
+        <details
+          className="gap-handles azure-create-missing"
+          open={!scopeComplete || newRgName !== "" || newWsName !== "" || undefined}
+        >
+          <summary>Create a new resource group or workspace</summary>
         <div className="form-grid">
           <label className="field">
             <span className="field-label">
@@ -925,6 +933,9 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
           >
             Create workspace
           </button>
+        </div>
+        </details>
+        <div className="panel-controls">
           {sentinelStatus === "enabled" ? (
             <span
               className="field-hint"

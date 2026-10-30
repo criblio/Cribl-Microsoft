@@ -3611,19 +3611,20 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-230",
       "type": "story",
       "priority": "now",
       "title": "Select Azure Resources: Create what is missing waits; Always-on facts and the early role step fold away",
-      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (F) the Create what is missing form shows with everything already selected; (G) Always on rows are facts not choices, and the role-assignment controls show while saying Deploy a DCR first. Build: create form behind Create a new resource group or workspace; Always-on facts into the capabilities (i); role assignment one line until a DCR exists."
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (F) the Create what is missing form shows with everything already selected; (G) Always on rows are facts not choices, and the role-assignment controls show while saying Deploy a DCR first. Build: create form behind Create a new resource group or workspace; Always-on facts into the capabilities (i); role assignment one line until a DCR exists. DONE 2026-10-30 (pins; live check batched with DBT-228..231). (F) the create form and its two buttons sit in Create a new resource group or workspace, open while the scope is incomplete or a name is typed; Sentinel status and Enable Sentinel stay outside, visible. (G) the two Always on rows are gone and their facts are in the capabilities heading tip (the existing-path pin already asserted no Always on); RoleAssignmentSection is a disclosure summarised as granted per DCR after Deploy, opening itself when a DCR exists, a principal is set, or a run happened or failed - the principal can still be picked early. Pins for both, mutation-checked (forced open).",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "id": "DBT-231",
       "type": "story",

@@ -2756,7 +2756,7 @@ export function IntegrateScreen({
       <div className="discovery-result">
         <span className="field-label">
           Deployment capabilities
-          <InfoTip text="What the deploy provisions and grants. Toggle the optional DCE here (saved with your deployment Options); the DCR and the ingestion-role grant are always part of the deploy." />
+          <InfoTip text="What the deploy provisions and grants. Toggle the optional DCE here (saved with your deployment Options). Always part of the deploy: the Data Collection Rule the Cribl destination sends to, and the Monitoring Metrics Publisher grant to the ingestion identity per deployed DCR - data cannot flow to a DCR without it." />
         </span>
         <label className="integrate-check">
           <input
@@ -2775,20 +2775,9 @@ export function IntegrateScreen({
             <InfoTip text="A Data Collection Endpoint enables private-endpoint (AMPLS) connectivity. Toggled here and saved with your deployment Options; without it the DCR uses its direct ingestion endpoint." />
           </span>
         </label>
-        <div className="integrate-fact">
-          <span className="integrate-fact-badge">Always on</span>
-          <span className="integrate-check-text">
-            DCR provisioning
-            <InfoTip text="The Data Collection Rule the Cribl destination sends events to is always provisioned by the deploy." />
-          </span>
-        </div>
-        <div className="integrate-fact">
-          <span className="integrate-fact-badge">Always on</span>
-          <span className="integrate-check-text">
-            Ingestion role grant
-            <InfoTip text="Monitoring Metrics Publisher is assigned to the ingestion identity per deployed DCR (in the step below) - data cannot flow to a DCR without it." />
-          </span>
-        </div>
+        {/* DBT-230: the DCR and the ingestion-role grant are not choices - they
+            are always part of the deploy, which the heading's tip says. They
+            used to be two "Always on" rows here. */}
         {onOpenOptions !== undefined && (
           <div className="panel-controls">
             <button className="run-button" onClick={onOpenOptions}>

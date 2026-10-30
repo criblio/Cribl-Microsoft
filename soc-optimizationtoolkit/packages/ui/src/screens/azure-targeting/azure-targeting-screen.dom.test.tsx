@@ -394,3 +394,23 @@ describe("AzureTargetingScreen - a DENIED Sentinel check never reads as 'not ena
     expect(screen.getByText(/403|denied by RBAC/)).toBeTruthy();
   });
 });
+
+describe("AzureTargetingScreen - creating waits behind a disclosure (DBT-230)", () => {
+  it("keeps Create a new resource group or workspace closed once the scope is complete, Sentinel outside it", async () => {
+    const azure = makeRecordingAzure();
+    const { container } = render(
+      <PortsProvider ports={({ azure: { request: azure.port.request } }) as unknown as UiPorts} config={CONFIG}>
+        <AzureTargetingScreen offline={false} onCommitScope={async () => ({ committed: true, notice: "" })} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(countOf(azure.calls, SENTINEL_SOLUTION)).toBe(1);
+    });
+    const details = container.querySelector("details.azure-create-missing") as HTMLDetailsElement;
+    expect(details).not.toBeNull();
+    expect(details.open).toBe(false);
+    // The create buttons are inside; nothing about Sentinel is.
+    expect(details.textContent).toContain("Create workspace");
+    expect(details.textContent).not.toMatch(/Sentinel/);
+  });
+});
