@@ -43,12 +43,12 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'GET', path: '/products/lake/lakes/:lakeId/datasets', caller: 'core usecases/discover-sample-sources/discover-sample-sources.ts' },
 
   // ---- Worker group context ---------------------------------------------
-  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx` },
+  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx (routable check; GEN-21 existing Sentinel destination picker, parsed by core domain/sentinel-destination/existing-outputs.ts)` },
   { method: 'POST', path: '/m/:gid/system/outputs', caller: ONBOARD },
   { method: 'GET', path: '/m/:gid/system/outputs/:id', caller: `${ONBOARD} (verify step)` },
   { method: 'GET', path: '/m/:gid/system/inputs', caller: `${LIVE_ARCH}; ${PREFLIGHT}; discover-sample-sources.ts; ${CREATE_SOURCE}; read-source-flow/read-onboarding-cribl-side.ts` },
   { method: 'POST', path: '/m/:gid/system/inputs', caller: `${CREATE_SOURCE} apply-cribl-source.ts` },
-  { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored)` },
+  { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored); ui screens/integrate/integrate-screen.tsx (GEN-21 QuickConnect check, parsed by existing-destination-state.ts sourceRouting)` },
   { method: 'GET', path: '/m/:gid/pipelines', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/lib/breakers', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/jobs', caller: LIVE_ARCH },

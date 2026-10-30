@@ -361,6 +361,28 @@ export interface SectionInputs {
    * 'missing'.
    */
   mappingsApproved?: boolean;
+  /**
+   * The id of an EXISTING Cribl Sentinel destination the operator picked
+   * instead of letting Deploy create one ([[GEN-21]]); absent or blank means
+   * no pick. Picking one is the offline path: the pack is built routable and
+   * hands its events to that destination, so nothing in Azure is read or
+   * written by this app. It therefore:
+   *   - resolves Select Azure Resources to 'not-needed' ("Not needed - using
+   *     <id>") instead of asking for a scope nobody will use,
+   *   - drops the committed scope from the deploy gate (worker group and pack
+   *     name still gate it), and drops the Workspace pill,
+   *   - turns off the Azure-identity requirements
+   *     ({@link deployAzureRequirements}): scope, ingestion client id, the
+   *     directory read, and the DCR inventory read.
+   * The native path (no pick) is unchanged in every respect - pinned.
+   */
+  existingDestination?: string;
+}
+
+/** The chosen existing destination id, or null when none is picked. */
+function chosenDestination(inputs: SectionInputs): string | null {
+  const id = inputs.existingDestination?.trim() ?? "";
+  return id === "" ? null : id;
 }
 
 /**
@@ -396,12 +418,23 @@ export type SectionStatus =
    * deploy-gate partition (canDeploy / canDeployContentPath) is unchanged:
    * informational sections were never in it and still are not.
    */
-  | "informational";
+  | "informational"
+  /**
+   * The section's job is done some other way, so there is nothing to fill in
+   * and nothing to finish: Select Azure Resources when the operator picked an
+   * existing Cribl Sentinel destination ([[GEN-21]]). Not 'complete' - no
+   * scope was committed - and not 'informational' - the section is not a
+   * diagnostic. Reason names what replaced it.
+   */
+  | "not-needed";
 
 /** A section's resolved status plus a reason for 'blocked' / 'coming-soon'. */
 export interface SectionState {
   status: SectionStatus;
-  /** Single unlock condition (blocked) or honest not-shipped note (coming-soon). */
+  /**
+   * Single unlock condition (blocked), honest not-shipped note (coming-soon),
+   * or what made the section unnecessary (not-needed).
+   */
   reason?: string;
 }
 
@@ -482,7 +515,8 @@ function sectionComplete(
  * and Cribl Config have no upstream prerequisite (they can be filled anytime).
  */
 function deployBlockedReason(inputs: SectionInputs): string | null {
-  if (!inputs.scopeCommitted) {
+  // An existing destination replaces everything the scope was for (GEN-21).
+  if (!inputs.scopeCommitted && chosenDestination(inputs) === null) {
     return DEPLOY_NEEDS_SCOPE_REASON;
   }
   if (!inputs.workerGroupSelected) {
@@ -490,6 +524,22 @@ function deployBlockedReason(inputs: SectionInputs): string | null {
   }
   if (!inputs.packNameSet) {
     return DEPLOY_NEEDS_PACK_NAME_REASON;
+  }
+  return null;
+}
+
+/**
+ * The 'not-needed' reason for a section the operator's choices made
+ * unnecessary, or null. Today exactly one: Select Azure Resources once an
+ * existing Sentinel destination is picked (GEN-21).
+ */
+function sectionNotNeeded(
+  section: IntegrateSection,
+  inputs: SectionInputs,
+): string | null {
+  const chosen = chosenDestination(inputs);
+  if (section.id === "azure-resources" && chosen !== null) {
+    return `Not needed - using ${chosen}`;
   }
   return null;
 }
@@ -508,6 +558,7 @@ function sectionActionable(
   if (
     !section.built ||
     section.informational === true ||
+    sectionNotNeeded(section, inputs) !== null ||
     sectionComplete(section, inputs)
   ) {
     return false;
@@ -559,6 +610,10 @@ export function deriveSectionStatus(
   // finished nor unfinished, and they never gate a deploy.
   if (section.informational === true) {
     return { status: "informational" };
+  }
+  const notNeeded = sectionNotNeeded(section, inputs);
+  if (notNeeded !== null) {
+    return { status: "not-needed", reason: notNeeded };
   }
   if (sectionComplete(section, inputs)) {
     return { status: "complete" };
@@ -656,7 +711,7 @@ export function sectionForPill(id: IntegratePillId): IntegrateSectionId {
 }
 
 export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
-  return [
+  const pills: ReadinessPill[] = [
     {
       id: "solution",
       label: "Solution",
@@ -727,6 +782,13 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
         : "Set a pack name in Cribl Configuration.",
     },
   ];
+  // With an existing destination picked there is no workspace to commit, so
+  // its pill would be a permanent 'missing' for a prerequisite that is not one
+  // (GEN-21) - the same reason readinessPillsForMode hides it when Azure is
+  // skipped.
+  return chosenDestination(inputs) === null
+    ? pills
+    : pills.filter((pill) => pill.id !== "workspace");
 }
 
 /**
@@ -746,10 +808,13 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
  *
  * Note: deployCompleted is intentionally NOT a factor - a finished run does
  * not disable deploying again (each step is independently re-runnable).
+ *
+ * GEN-21: a picked existing destination stands in for the committed scope -
+ * that run writes nothing to Azure. Without a pick the rule is unchanged.
  */
 export function canDeploy(inputs: SectionInputs): boolean {
   return (
-    inputs.scopeCommitted &&
+    (inputs.scopeCommitted || chosenDestination(inputs) !== null) &&
     inputs.workerGroupSelected &&
     inputs.packNameSet
   );
@@ -773,4 +838,38 @@ export function canDeploy(inputs: SectionInputs): boolean {
  */
 export function canDeployContentPath(inputs: SectionInputs): boolean {
   return canDeploy(inputs) && inputs.mappingsApproved === true;
+}
+
+/**
+ * The Azure-side things a deploy run needs from the operator ([[GEN-21]]).
+ * Each is true on the native path, where Deploy creates the DCR and the Cribl
+ * Sentinel destination, and false once an existing destination is picked,
+ * because that run is Cribl-only - it builds and installs a routable pack and
+ * connects the source - and never reads or writes Azure:
+ *   scope             - a committed subscription, resource group and workspace.
+ *   ingestionClientId - the app-registration client id stamped on a NEW
+ *                       destination; the existing one already carries its own.
+ *   directoryRead     - the Entra directory read that resolves the ingestion
+ *                       service principal for the role grant.
+ *   dcrInventory      - the Azure DCR inventory read that finds DCRs to reuse.
+ * The shell gates its run button and skips the reads by these, so the core
+ * says once which gates the existing-destination path drops.
+ */
+export interface DeployAzureRequirements {
+  scope: boolean;
+  ingestionClientId: boolean;
+  directoryRead: boolean;
+  dcrInventory: boolean;
+}
+
+export function deployAzureRequirements(
+  inputs: SectionInputs,
+): DeployAzureRequirements {
+  const native = chosenDestination(inputs) === null;
+  return {
+    scope: native,
+    ingestionClientId: native,
+    directoryRead: native,
+    dcrInventory: native,
+  };
 }

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   findInputIdClauses,
   inputIdValue,
+  inputRouteFilter,
   matchInputIdFilter,
   parseInputIdClause,
 } from "./input-id";
@@ -17,6 +18,33 @@ describe("inputIdValue", () => {
   it("is <type>:<id>", () => {
     expect(inputIdValue(EH)).toBe("eventhub:hub");
     expect(inputIdValue({ type: "collection", id: "job" })).toBe("collection:job");
+  });
+});
+
+describe("inputRouteFilter (GEN-21)", () => {
+  const SYSLOG = { type: "syslog", id: "in_syslog" };
+
+  it("selects a syslog source by the prefix its events carry", () => {
+    const filter = inputRouteFilter(SYSLOG);
+    expect(filter).toBe("__inputId.startsWith('syslog:in_syslog:')");
+    // The UAT's events read syslog:in_syslog:<sender>: the prefix selects that
+    // value and not a neighbour whose id merely starts the same way.
+    const prefix = /^__inputId\.startsWith\('(.*)'\)$/.exec(filter)?.[1] ?? "";
+    expect("syslog:in_syslog:1.2.3.4".startsWith(prefix)).toBe(true);
+    expect("syslog:in_syslog2:1.2.3.4".startsWith(prefix)).toBe(false);
+    // And the app's own route readers draw it as routed, not legacy.
+    const parsed = parseInputIdClause(filter);
+    expect(parsed).toEqual({ kind: "prefix", value: "syslog:in_syslog:" });
+    expect(matchInputIdFilter(parsed!, SYSLOG)).toBe("match");
+    expect(matchInputIdFilter(parsed!, { type: "syslog", id: "in_syslog2" })).toBe("none");
+  });
+
+  it("selects a two-segment source by equality on <type>:<id>, never the bare id", () => {
+    const filter = inputRouteFilter(EH);
+    expect(filter).toBe("__inputId=='eventhub:hub'");
+    const parsed = parseInputIdClause(filter);
+    expect(parsed).toEqual({ kind: "inputs", ids: ["eventhub:hub"] });
+    expect(matchInputIdFilter(parsed!, EH)).toBe("match");
   });
 });
 

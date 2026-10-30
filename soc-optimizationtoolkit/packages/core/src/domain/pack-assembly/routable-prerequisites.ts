@@ -40,6 +40,16 @@
  * elsewhere) is not modelled - an output found under the expected id counts as
  * present, matching what Deploy's reuse scan would find.
  *
+ * A CHOSEN DESTINATION COUNTS ([[GEN-21]]). An offline operator cannot let
+ * Deploy create the destination, so they pick one that already exists in the
+ * group - the UAT's PAN-CSL, whose id no naming convention produces. Without
+ * `chosenByTable` this check would report that table MISSING under the
+ * convention id and tell the operator to run the Deploy they cannot run. A
+ * table with a chosen id is matched against THAT id instead, and the entry
+ * says so (`chosen`), so guidance for a chosen id that has since vanished can
+ * name the picker rather than Deploy. The chosen id still has to be in the
+ * listing to count as found: a choice is not evidence the output exists.
+ *
  * Pure: no IO, no clock. The caller does the listing.
  */
 
@@ -58,6 +68,11 @@ export interface RoutablePrerequisite {
   expectedId: string;
   /** The output found in the group, or null when expectedId did not match. */
   foundId: string | null;
+  /**
+   * True when expectedId is the operator's chosen existing destination
+   * (`chosenByTable`), not the id Deploy would create.
+   */
+  chosen: boolean;
 }
 
 /** The whole report for one routable pack against one worker group. */
@@ -86,11 +101,15 @@ export interface RoutablePrerequisiteReport {
  *
  * `naming` is the operator's destination prefix/suffix - pass the same
  * CriblOptions Deploy is given, or the expected id is the default one.
+ *
+ * `chosenByTable` maps a Sentinel table to the existing destination id the
+ * operator picked for it; a blank id is no choice.
  */
 export function checkRoutablePrerequisites(
   sentinelTables: readonly string[],
   existingOutputIds: readonly string[],
   naming?: DestinationNaming,
+  chosenByTable?: Readonly<Record<string, string>>,
 ): RoutablePrerequisiteReport {
   const have = new Map<string, string>();
   for (const id of existingOutputIds) have.set(id.toLowerCase(), id);
@@ -104,11 +123,13 @@ export function checkRoutablePrerequisites(
     if (seen.has(sentinelTable)) continue;
     seen.add(sentinelTable);
 
-    // The pack plan's own naming function, so the check and the pack cannot
-    // compose the id two ways again.
-    const expectedId = destinationId(sentinelTable, naming);
+    // A chosen existing destination wins; otherwise the pack plan's own naming
+    // function, so the check and the pack cannot compose the id two ways again.
+    const choice = chosenByTable?.[sentinelTable]?.trim() ?? "";
+    const chosen = choice !== "";
+    const expectedId = chosen ? choice : destinationId(sentinelTable, naming);
     const foundId = have.get(expectedId.toLowerCase()) ?? null;
-    entries.push({ sentinelTable, expectedId, foundId });
+    entries.push({ sentinelTable, expectedId, foundId, chosen });
   }
 
   return {

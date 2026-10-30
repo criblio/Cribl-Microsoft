@@ -16,5 +16,6 @@ export {
   LEGACY_INPUT_MATCH_SUFFIX,
   LEGACY_INPUT_MATCH_TIP,
   inputIdValue,
+  inputRouteFilter,
   matchInputIdFilter,
 } from "./input-id";

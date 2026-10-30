@@ -22,6 +22,7 @@ import {
   INTEGRATE_SECTIONS,
   canDeploy,
   canDeployContentPath,
+  deployAzureRequirements,
   deriveReadinessPills,
   deriveSectionStatus,
   deriveSectionStatuses,
@@ -780,5 +781,120 @@ describe("sectionForPill (DBT-127)", () => {
     const pills: IntegratePillId[] = deriveReadinessPills(inputs()).map((p) => p.id);
     expect(pills).toHaveLength(6);
     expect(pills.filter((p) => !ids.has(sectionForPill(p)))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GEN-21: an existing Cribl Sentinel destination is picked
+// ---------------------------------------------------------------------------
+
+describe("existingDestination (GEN-21)", () => {
+  const picked = (overrides: Partial<SectionInputs> = {}) =>
+    inputs({ existingDestination: "PAN-CSL", ...overrides });
+
+  it("resolves Select Azure Resources to not-needed, naming the destination", () => {
+    for (const i of everyInputCombination()) {
+      expect(
+        deriveSectionStatus(integrateSection("azure-resources"), {
+          ...i,
+          existingDestination: "PAN-CSL",
+        }),
+      ).toEqual({ status: "not-needed", reason: "Not needed - using PAN-CSL" });
+    }
+  });
+
+  it("never lets a not-needed section take the single 'current' slot", () => {
+    // Solution, samples and mappings done: without a pick, Azure Resources is
+    // current; with one, Configure Cribl is.
+    const arcDone = {
+      solutionSelected: true,
+      samplesProvided: true,
+      mappingsApproved: true,
+    };
+    expect(statusOf("azure-resources", inputs(arcDone))).toBe("current");
+    expect(statusOf("cribl-config", inputs(arcDone))).toBe("available");
+    expect(statusOf("cribl-config", picked(arcDone))).toBe("current");
+  });
+
+  it("deploys with no committed scope; worker group and pack name still gate it", () => {
+    expect(canDeploy(picked({ workerGroupSelected: true, packNameSet: true })))
+      .toBe(true);
+    expect(canDeploy(picked({ workerGroupSelected: true }))).toBe(false);
+    expect(canDeploy(picked({ packNameSet: true }))).toBe(false);
+    expect(deriveSectionStatus(integrateSection("deploy"), picked())).toEqual({
+      status: "blocked",
+      reason: "Select a Cribl worker group in Cribl Configuration first.",
+    });
+    expect(
+      deriveSectionStatus(
+        integrateSection("deploy"),
+        picked({ workerGroupSelected: true }),
+      ),
+    ).toEqual({
+      status: "blocked",
+      reason: "Set a pack name in Cribl Configuration first.",
+    });
+  });
+
+  it("treats a blank pick as no pick - the native scope gate stands", () => {
+    const blank = inputs({
+      existingDestination: "   ",
+      workerGroupSelected: true,
+      packNameSet: true,
+    });
+    expect(canDeploy(blank)).toBe(false);
+    expect(statusOf("azure-resources", blank)).not.toBe("not-needed");
+    expect(deployAzureRequirements(blank)).toEqual({
+      scope: true,
+      ingestionClientId: true,
+      directoryRead: true,
+      dcrInventory: true,
+    });
+  });
+
+  it("drops scope, client id, directory and DCR inventory from the requirements", () => {
+    expect(deployAzureRequirements(picked())).toEqual({
+      scope: false,
+      ingestionClientId: false,
+      directoryRead: false,
+      dcrInventory: false,
+    });
+    expect(deployAzureRequirements(inputs())).toEqual({
+      scope: true,
+      ingestionClientId: true,
+      directoryRead: true,
+      dcrInventory: true,
+    });
+  });
+
+  it("drops the Workspace pill and keeps the other five in order", () => {
+    expect(deriveReadinessPills(picked()).map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+
+  it("keeps canDeployContentPath a strict superset of canDeploy with a pick", () => {
+    for (const i of everyInputCombination()) {
+      const p = { ...i, existingDestination: "PAN-CSL" };
+      expect(canDeployContentPath(p)).toBe(
+        canDeploy(p) && p.mappingsApproved === true,
+      );
+      if (canDeployContentPath(p)) expect(canDeploy(p)).toBe(true);
+    }
+  });
+
+  it("leaves the native path byte-identical when nothing is picked", () => {
+    // The whole 2^7 matrix with and without an explicit `undefined` pick: no
+    // status, gate or pill may move.
+    for (const i of everyInputCombination()) {
+      const u = { ...i, existingDestination: undefined };
+      expect(deriveSectionStatuses(u)).toEqual(deriveSectionStatuses(i));
+      expect(canDeploy(u)).toBe(i.scopeCommitted && i.workerGroupSelected && i.packNameSet);
+      expect(deriveReadinessPills(u)).toEqual(deriveReadinessPills(i));
+    }
   });
 });

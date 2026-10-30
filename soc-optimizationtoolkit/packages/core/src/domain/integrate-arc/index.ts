@@ -2,6 +2,7 @@ export {
   INTEGRATE_SECTIONS,
   canDeploy,
   canDeployContentPath,
+  deployAzureRequirements,
   deriveReadinessPills,
   sectionForPill,
   deriveSectionStatus,
@@ -9,6 +10,7 @@ export {
   integrateSection,
 } from "./integrate-arc";
 export type {
+  DeployAzureRequirements,
   IntegratePillId,
   IntegrateSection,
   IntegrateSectionId,

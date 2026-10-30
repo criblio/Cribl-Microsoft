@@ -1342,3 +1342,258 @@ describe("IntegrateScreen - removing one log type reaches both sections (DBT-143
     expect(container.textContent).not.toMatch(/re-analyze to refresh/i);
   });
 });
+
+/**
+ * GEN-21: AN EXISTING CRIBL SENTINEL DESTINATION INSTEAD OF AZURE.
+ *
+ * The picker, its listing states and the gate live in this component; what
+ * each state SAYS is pinned in existing-destination-state.test.ts. These pin
+ * the wiring: the offline preselect, that the listing reaches the screen in
+ * every state, that no Azure call is made on the path - with an Azure port
+ * that throws if it is ever touched - and that the gate the operator reads
+ * never asks for a client id.
+ */
+describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
+  const PAN_CSL = {
+    id: "PAN-CSL",
+    type: "sentinel",
+    endpointURLConfiguration: "ID",
+    dcrID: "dcr-0123456789abcdef0123456789abcdef",
+    streamName: "Custom-dev-TMNA-PaloAltoNetworks-Firewall-stream",
+    client_id: "'11111111-2222-3333-4444-555555555555'",
+    secret: "!{pan_csl_secret}",
+  };
+
+  function renderExisting(opts: {
+    outputs: () => Promise<{ status: number; body: unknown }>;
+    offline?: boolean;
+    /** Defaults to a scope AND an identity; the UAT's org had neither. */
+    config?: AzureConfig;
+    scopeCommitted?: boolean;
+  }) {
+    const azure = vi.fn(async () => {
+      throw new Error("Azure must not be called on the existing-destination path");
+    });
+    const request = vi.fn(async (req: { path: string }) => {
+      if (req.path === "/system/outputs") return opts.outputs();
+      throw new Error("offline");
+    });
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      azure: { request: azure },
+      cribl: {
+        request,
+        listGroups: vi
+          .fn()
+          .mockResolvedValue(toListing([{ id: "TMNA_POV", product: "stream" }])),
+      },
+    } as unknown as UiPorts;
+    const view = render(
+      // A scope AND an identity are configured, so every Azure read on the
+      // page has what it needs to fire - only the path may stop it.
+      <PortsProvider ports={ports} config={opts.config ?? SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={opts.scopeCommitted ?? true}
+          offline={opts.offline ?? true}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const listing = () =>
+      view.container.querySelector(
+        '[data-testid="existing-destination-listing"]',
+      ) as HTMLElement | null;
+    const radios = () =>
+      [
+        ...view.container.querySelectorAll(
+          'input[name="integrate-destination-mode"]',
+        ),
+      ] as HTMLInputElement[];
+    return { ...view, azure, request, listing, radios };
+  }
+
+  const read = (items: unknown[], status = 200) => async () => ({
+    status,
+    body: { items },
+  });
+
+  it("opens on the existing destination when offline", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    expect(view.radios().map((r) => r.checked)).toEqual([false, true]);
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+  });
+
+  it("opens on create when connected, and reads nothing for the picker", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]), offline: false });
+    expect(view.radios().map((r) => r.checked)).toEqual([true, false]);
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: TMNA_POV/i)).toBeTruthy();
+    });
+    expect(view.listing()).toBeNull();
+    expect(
+      view.request.mock.calls.filter((c) => c[0].path === "/system/outputs"),
+    ).toHaveLength(0);
+  });
+
+  it("lists the group's Sentinel destinations with stream and DCR, never the secret", async () => {
+    const view = renderExisting({
+      outputs: read([{ id: "S3", type: "s3" }, PAN_CSL]),
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    expect(view.listing()?.textContent).toBe(
+      "1 Microsoft Sentinel destination in TMNA_POV.",
+    );
+    expect(view.container.textContent).toContain(
+      "PAN-CSL - stream Custom-dev-TMNA-PaloAltoNetworks-Firewall-stream, DCR dcr-0123456789abcdef0123456789abcdef",
+    );
+    expect(view.container.textContent).not.toContain("pan_csl_secret");
+    expect(view.container.textContent).not.toContain("11111111-2222");
+  });
+
+  it("states a FAILED read as failed", async () => {
+    const view = renderExisting({ outputs: read([], 403) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("failed"));
+    expect(view.listing()?.textContent).toMatch(
+      /^Could not read TMNA_POV's destinations: The outputs listing returned HTTP 403\./,
+    );
+  });
+
+  it("states an EMPTY read as unverified", async () => {
+    const view = renderExisting({ outputs: read([]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("empty"));
+    expect(view.listing()?.textContent).toMatch(
+      /is not confirmation that TMNA_POV has none\.$/,
+    );
+  });
+
+  it("states outputs with no Sentinel one as a measured none", async () => {
+    const view = renderExisting({ outputs: read([{ id: "S3", type: "s3" }]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("none"));
+    expect(view.listing()?.textContent).toMatch(
+      /^TMNA_POV has 1 destination, and none is a Microsoft Sentinel destination\./,
+    );
+  });
+
+  it("never calls Azure, and reads the outputs once per group", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    // Let any effect that would read Azure after the listing settle first.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(view.azure).not.toHaveBeenCalled();
+    expect(
+      view.request.mock.calls.filter((c) => c[0].path === "/system/outputs"),
+    ).toHaveLength(1);
+  });
+
+  it("asks for the gap analysis, never a client id; Azure Resources is not needed", async () => {
+    const view = renderExisting({ outputs: read([PAN_CSL]) });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const hint = view.container.querySelector(".readiness-footer-hint");
+    expect(hint?.textContent).toBe(
+      "Run the DCR Gap Analysis (section 3) - its tables decide what the existing destination must feed.",
+    );
+    expect(view.container.textContent).not.toMatch(/ingestion client id/i);
+    // Select Azure Resources holds no cascade, no capability rows, no Reload.
+    expect(view.container.textContent).toContain(
+      "Not needed with an existing destination.",
+    );
+    expect(view.container.textContent).not.toMatch(/Always on/);
+    // The shape is not a choice on this path.
+    const shape = [...view.container.querySelectorAll("select")].find((s) =>
+      [...s.options].some((o) => o.value === "routable"),
+    ) as HTMLSelectElement;
+    expect(shape.value).toBe("routable");
+    expect(shape.disabled).toBe(true);
+  });
+
+  it("in the UAT's org - no identity, no scope - still asks only for the gap analysis", async () => {
+    // With no identity the native run's own gate reads "Enter an ingestion
+    // client id"; the scoped config above hides that, because its client id
+    // prefills the field. This is the shape the operator actually had.
+    const view = renderExisting({
+      outputs: read([PAN_CSL]),
+      config: CONFIG,
+      scopeCommitted: false,
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const hint = view.container.querySelector(".readiness-footer-hint");
+    expect(hint?.textContent).toBe(
+      "Run the DCR Gap Analysis (section 3) - its tables decide what the existing destination must feed.",
+    );
+    expect(view.container.textContent).not.toMatch(/client id/i);
+    expect(view.azure).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * DBT-200: the client-id hint promised "Defaults to the active connection"
+ * with no identity connected.
+ */
+describe("IntegrateScreen - the client-id hint (DBT-200)", () => {
+  function renderWith(config: AzureConfig) {
+    return render(
+      <PortsProvider ports={PORTS} config={config}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={false}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+  }
+
+  it("promises no default when no identity is connected", () => {
+    const { container } = renderWith(CONFIG);
+    expect(container.textContent).not.toContain("Defaults to the active connection.");
+    expect(container.textContent).toContain(
+      "No Azure identity is connected, so there is no default - enter the app registration's client id.",
+    );
+  });
+
+  it("names the default when one exists", () => {
+    const { container } = renderWith(SCOPED_CONFIG);
+    expect(container.textContent).toContain("Defaults to the active connection.");
+  });
+});
+
+/**
+ * DBT-201: the pack's worker group follows the group the samples were
+ * captured on, not the saved Options default.
+ */
+describe("IntegrateScreen - the pack group follows the capture (DBT-201)", () => {
+  it("moves Configure Cribl to the capture group", async () => {
+    const ports = discoveryPorts();
+    const view = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={{ ...DEFAULT_CRIBL_OPTIONS, workerGroup: "grp2" }}
+        />
+      </PortsProvider>,
+    );
+    // The saved default preselects first...
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: grp2/i)).toBeTruthy();
+    });
+    // ...then a capture source in "default" moves the pack there.
+    fireEvent.click(screen.getByText("Capture from a live source"));
+    const picker = view.container.querySelector(".sample-source-picker") as HTMLElement;
+    const combos = () =>
+      [...picker.querySelectorAll(".searchable-select-control")] as HTMLElement[];
+    pickOption(combos()[0], "default");
+    await waitFor(() => expect(combos()).toHaveLength(2));
+    pickOption(combos()[1], "in_syslog");
+    await waitFor(() => {
+      expect(screen.getByText(/worker group: default/i)).toBeTruthy();
+    });
+  });
+});

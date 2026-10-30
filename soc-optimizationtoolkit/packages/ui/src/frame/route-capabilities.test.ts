@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { annotateNavItems, emptyCapabilitySet } from "@soc/core";
 import { ROUTE_CAPABILITIES, capabilitiesForRoute } from "./route-capabilities";
 
 describe("ROUTE_CAPABILITIES['azure-onboarding']", () => {
@@ -55,5 +56,38 @@ describe("capabilitiesForRoute", () => {
     // Was [] while no capability covered Resource Graph. Exactly this one: a
     // workspace or DCR read here would misreport what the screen needs.
     expect(capabilitiesForRoute("eventhub-discovery")).toEqual(["resourcegraph.read"]);
+  });
+});
+
+describe("ROUTE_CAPABILITIES.integrate (GEN-21, decision F2-e)", () => {
+  it("needs only destination.manage - the Cribl side every path uses", () => {
+    expect(capabilitiesForRoute("integrate")).toEqual(["destination.manage"]);
+  });
+
+  it("stays attemptable for an operator with no Azure identity", () => {
+    // The offline path: Cribl reachable, no tenant or client id. With
+    // dcr.write listed this item was `unreachable` and not attemptable.
+    const [annotated] = annotateNavItems(
+      [{ id: "integrate", requires: capabilitiesForRoute("integrate") }],
+      emptyCapabilitySet(),
+      { azureIdentityPresent: false, criblReachable: true },
+    );
+    expect(annotated?.availability).toBe("unknown");
+    expect(annotated?.attemptable).toBe(true);
+    expect(annotated?.missing).toEqual(["destination.manage"]);
+  });
+
+  it("no longer carries a dcr.write denial onto the nav item", () => {
+    const [annotated] = annotateNavItems(
+      [{ id: "integrate", requires: capabilitiesForRoute("integrate") }],
+      {
+        verdicts: { "dcr.write": "denied", "destination.manage": "granted" },
+        auditedAt: null,
+        connectionId: null,
+      },
+      { azureIdentityPresent: true, criblReachable: true },
+    );
+    expect(annotated?.availability).toBe("available");
+    expect(annotated?.fallback).toBeNull();
   });
 });

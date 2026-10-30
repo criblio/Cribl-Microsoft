@@ -205,3 +205,27 @@ describe("NumberedSection coming-soon and notBuiltBody (AZR-18)", () => {
     expect(container.querySelector('[data-testid="numbered-section-notbuilt"]')).toBeNull();
   });
 });
+
+describe("NumberedSection not-needed (GEN-21)", () => {
+  it("names what replaced the section in its header, with no completion check", () => {
+    const { container } = render(
+      <NumberedSection
+        number={7}
+        title="Select Azure Resources"
+        status="not-needed"
+        reason="Not needed - using PAN-CSL"
+        infoTip="tip"
+      >
+        <span>body</span>
+      </NumberedSection>,
+    );
+    const head = container.querySelector(".numbered-section-head");
+    expect(head?.querySelector(".numbered-section-info-tag")?.textContent).toBe(
+      "Not needed - using PAN-CSL",
+    );
+    expect(container.querySelector(".numbered-section-check")).toBeNull();
+    expect(
+      container.querySelector(".numbered-section-badge")?.getAttribute("aria-label"),
+    ).toBe("Section 7, not needed");
+  });
+});

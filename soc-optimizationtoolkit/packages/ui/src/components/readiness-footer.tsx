@@ -86,8 +86,13 @@ export function ReadinessFooter({
         {disabled && disabledReason !== null && (
           <span className="readiness-footer-hint">{disabledReason}</span>
         )}
+        {/* DBT-200: a gated Deploy wore the green call-to-action fill at half
+            opacity, which read as the page's primary action. Gated, it is
+            styled as disabled; the positive fill is earned by canDeploy. */}
         <button
-          className="next-action-button next-action-button-positive"
+          className={`next-action-button ${
+            canDeploy ? "next-action-button-positive" : "next-action-button-gated"
+          }`}
           onClick={onDeploy}
           disabled={disabled}
           title={

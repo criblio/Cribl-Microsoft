@@ -19,6 +19,9 @@
  *     check: that made the page claim work the operator had not done (live
  *     review 2026-08-03). Muted, not dashed - the section IS available to
  *     use, unlike coming-soon;
+ *   - not-needed          -> the informational badge, with the reason (what
+ *     replaced the section, "Not needed - using <id>") as the header tag
+ *     (GEN-21). Not the check: nothing was finished there;
  *   - blocked             -> muted number plus an AMBER gating-reason line
  *     naming the single unlock condition (the commit inside the body is
  *     gated; the body still renders - read-ahead);
@@ -136,7 +139,9 @@ export function NumberedSection({
               ? ", complete"
               : status === "informational"
                 ? ", informational"
-                : ""
+                : status === "not-needed"
+                  ? ", not needed"
+                  : ""
           }`}
         >
           {status === "complete" ? (
@@ -148,6 +153,13 @@ export function NumberedSection({
         <h2 className="numbered-section-title">{title}</h2>
         {status === "informational" && (
           <span className="numbered-section-info-tag">Informational</span>
+        )}
+        {/* GEN-21: what replaced the section, in the header, so it reads
+            "Not needed - using <id>" whether or not the body is open. */}
+        {status === "not-needed" && (
+          <span className="numbered-section-info-tag">
+            {reason !== undefined && reason !== "" ? reason : "Not needed"}
+          </span>
         )}
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
