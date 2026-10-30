@@ -774,8 +774,16 @@ export function parseKv(
 const CEF_EXT_PAIR =
   /(?<![^\s=|\\])((?=[^\s=|\\]*\w)[^\s=|\\]+)=(.*?)(?=\s(?=[^\s=|\\]*\w)[^\s=|\\]+=|$)/g;
 
-/** One CEF HEADER FIELD: `\<any>` is one escaped character, `|` ends the field. */
-const CEF_HEADER_FIELD = String.raw`((?:\\[\s\S]|[^|\\])*)`;
+/**
+ * One CEF HEADER FIELD's body, NON-capturing: `\<any>` is one escaped
+ * character, `|` ends the field. Exported (GEN-24) so the PAN-OS CEF route
+ * filter steps over header fields 1-5 by the same escape rule this parser
+ * splits them by - see pipeline-generation/route-panos-cef.ts.
+ */
+export const CEF_HEADER_FIELD_BODY = String.raw`(?:\\[\s\S]|[^|\\])*`;
+
+/** One CEF HEADER FIELD, captured. */
+const CEF_HEADER_FIELD = `(${CEF_HEADER_FIELD_BODY})`;
 
 /**
  * The CEF header, escape-aware, in ONE anchored match (DBT-98).
