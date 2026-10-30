@@ -129,7 +129,10 @@ export type MappingReviewAction =
    */
   | {
       type: "analyzed";
-      /** The reports the edits were made against (before this analysis). */
+      /**
+       * The reports the edits were made against (before this analysis), under
+       * the log-type names the edit store now uses (renames applied).
+       */
       previous: readonly GapReport[];
       /** The reports this analysis produced. */
       reports: readonly GapReport[];
@@ -222,8 +225,8 @@ export type MappingReviewAction =
    */
   | { type: "rename-log-type"; from: string; to: string }
   /**
-   * A log type's sample was removed (DBT-143). Drops its approval and its edit
-   * store and touches nothing else: the other tables' approvals stand, and
+   * A log type's sample was removed (DBT-143). Drops its approval, its edit
+   * store and its dropped-edit entries (DBT-210) and touches nothing else: the other tables' approvals stand, and
    * staleness is unchanged, because the remaining analysis is still about
    * exactly the samples it was run on.
    */
@@ -395,6 +398,9 @@ export function mappingReviewReducer(
         ...state,
         approvals: withoutKey(state.approvals, action.logType),
         mappingEdits: withoutKey(state.mappingEdits, action.logType),
+        // The notice counts what the last analysis dropped for the tables
+        // still here; a removed sample's edits are not "dropped" any more.
+        droppedEdits: state.droppedEdits.filter((d) => d.logType !== action.logType),
       };
 
     default: {
@@ -554,14 +560,16 @@ function isEditedRow(
  * when the pack is built" described rows nobody was looking at. Instead:
  *
  *   - An EDIT is a stored row that differs from the row the edits were made
- *     against (`previous`; after a log-type rename there is none under the new
- *     key, so the new row stands in). Unedited stored rows are not carried:
+ *     against (`previous`, which the caller relabels with any log-type rename
+ *     since that analysis, as the store was re-keyed; with no previous report
+ *     under the key the new row stands in). Unedited stored rows are not carried:
  *     the new analysis's rows replace them.
  *   - Each edit is re-applied to the new row for the same source by the same
  *     rules the reviewer's edit went through: a destination by core
  *     applyRemap, an action subject to actionEditRefusal (DBT-209). Edits that
  *     leave a column run first, so a DBT-208 move replays before the row that
- *     took the column.
+ *     took the column, and an edit that does not fit is retried after the
+ *     others, so a chain of moves replays in any stored order.
  *   - Dropped: an edit whose log type has no new report, whose table changed
  *     (its columns are another schema's), whose source the new rows lack,
  *     whose column the new schema lacks, or whose column the new analysis
@@ -596,11 +604,21 @@ export function rebaseEdits(
     } else {
       const catchAllColumn = getOverflowConfig(after.tableName).fieldName;
       let rows: GapFieldMapping[] = [...after.fieldMappings];
-      for (const edit of edits) {
-        const replayed = replayEdit(rows, edit, after, catchAllColumn);
-        if (replayed === null) lost.add(edit.source);
-        else rows = replayed;
+      // Pass after pass while one lands: an edit onto a column another edit
+      // vacates (b ColY -> ColZ, then a ColX -> ColY) fits only once that
+      // other edit has replayed, whichever row is stored first.
+      let pending = edits;
+      for (let progress = true; progress && pending.length > 0; ) {
+        const failed: GapFieldMapping[] = [];
+        for (const edit of pending) {
+          const replayed = replayEdit(rows, edit, after, catchAllColumn);
+          if (replayed === null) failed.push(edit);
+          else rows = replayed;
+        }
+        progress = failed.length < pending.length;
+        pending = failed;
       }
+      for (const edit of pending) lost.add(edit.source);
       if (lost.size < edits.length) next[logType] = rows;
     }
     // Reported in the store's own row order, not the replay order.

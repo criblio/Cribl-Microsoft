@@ -131,4 +131,74 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     expect(summary(container)).not.toContain("Modified");
     expect(container.querySelector(".gap-modified-line")).toBeNull();
   });
+
+  it("after a log-type rename, re-bases against the rows the edits were made on", async () => {
+    // The edit store re-keys to the new name but the reports do not, so the
+    // rows the edits were made against must be found under the OLD name. Read
+    // against the new analysis instead, every row the new analysis decides
+    // differently looks like an edit: here qqother, overflow in the old
+    // schema, would be forced back into overflow over the new column.
+    let columns = [
+      { name: "TimeGenerated", type: "datetime" },
+      { name: "AdditionalExtensions", type: "string" },
+      { name: "SourceMACAddress", type: "string" },
+    ];
+    const growing: SchemaCatalog = { resolveSchema: async () => columns };
+    let effective: Readonly<Record<string, GapFieldMapping[]>> = {};
+    const props = {
+      solutionName: "",
+      catalog: growing,
+      onEffectiveMappingsChange: (next: Readonly<Record<string, GapFieldMapping[]>>) => {
+        effective = next;
+      },
+    };
+    const view = render(<MappingReviewSection {...props} samples={[sample(BOTH)]} />);
+    const { container } = view;
+    clickAnalyze(container);
+    await waitFor(() => {
+      expect(container.querySelector(".mapping-review-grid")).not.toBeNull();
+    });
+    expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("overflow");
+    fireEvent.change(
+      rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
+      { target: { value: "SourceMACAddress" } },
+    );
+    await waitFor(() => {
+      expect(effective.PanOS?.find((m) => m.source === "qqvendorfield")?.action).toBe(
+        "rename",
+      );
+    });
+
+    columns = [...columns, { name: "qqother", type: "string" }];
+    // Two renames before the re-run: Traffic's rows are still PanOS's.
+    view.rerender(
+      <MappingReviewSection
+        {...props}
+        samples={[{ ...sample(BOTH), logType: "Mid" }]}
+        renameEvent={{ from: "PanOS", to: "Mid", nonce: 1 }}
+      />,
+    );
+    view.rerender(
+      <MappingReviewSection
+        {...props}
+        samples={[{ ...sample(BOTH), logType: "Traffic" }]}
+        renameEvent={{ from: "Mid", to: "Traffic", nonce: 2 }}
+      />,
+    );
+    clickAnalyze(container);
+    await waitFor(() => {
+      expect(effective.Traffic).toBeDefined();
+    });
+
+    const rows = effective.Traffic ?? [];
+    expect(rows.find((m) => m.source === "qqother")).toMatchObject({
+      dest: "qqother",
+      action: "keep",
+    });
+    expect(rows.find((m) => m.source === "qqvendorfield")).toMatchObject({
+      dest: "SourceMACAddress",
+      action: "rename",
+    });
+    expect(notice(container)).toBeNull();
+  });
 });

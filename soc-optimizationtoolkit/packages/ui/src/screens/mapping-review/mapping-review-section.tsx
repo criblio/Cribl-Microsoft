@@ -17,7 +17,7 @@
  *     a column another row fills opens the claim panel (DBT-208) instead of
  *     applying. On a row in the catch-all the actions that need a column
  *     (keep, rename, coerce, decode) are disabled with the reason: Dest Field
- *     is the one way a row comes to land in a column (DBT-209);
+ *     is the one way such a row comes to land in a column (DBT-209);
  *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
  *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
  *     enrichment / forced-input resolution with curated auto-seeding;
@@ -727,6 +727,11 @@ export function MappingReviewSection({
   // run dispatches (DBT-210). Latest render's, not the run's closure.
   const reportsRef = useRef(reports);
   reportsRef.current = reports;
+  // A rename re-keys the edit store but not `reports`, so the re-base must find
+  // a renamed table's old rows under the name it had: new name -> report name,
+  // for every rename since the last analysis. Without it the new analysis's
+  // own rows stand in, and every row it decides differently reads as an edit.
+  const renamedSinceAnalysisRef = useRef(new Map<string, string>());
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
   const runAnalysis = useCallback(async (
@@ -812,7 +817,12 @@ export function MappingReviewSection({
       // list, not this closure's, which still holds it.
       const live = new Set(samplesRef.current.map((s) => s.logType));
       const kept = produced.filter((r) => live.has(r.logType));
-      const previous = reportsRef.current;
+      const renamed = renamedSinceAnalysisRef.current;
+      const previous = reportsRef.current.map((r) => {
+        const to = [...renamed].find(([, from]) => from === r.logType)?.[0];
+        return to === undefined ? r : { ...r, logType: to };
+      });
+      renamed.clear();
       setReports(kept);
       logger?.info("gap-analysis: finished", {
         tables: kept.map((r) => r.tableName).join(","),
@@ -916,6 +926,11 @@ export function MappingReviewSection({
       return;
     }
     lastRenameNonce.current = renameEvent.nonce;
+    // A chain (A -> B -> C) still points at the report name, A.
+    const renamed = renamedSinceAnalysisRef.current;
+    const reportName = renamed.get(renameEvent.from) ?? renameEvent.from;
+    renamed.delete(renameEvent.from);
+    renamed.set(renameEvent.to, reportName);
     dispatch({
       type: "rename-log-type",
       from: renameEvent.from,
@@ -952,6 +967,7 @@ export function MappingReviewSection({
     forgetLogTypeKeys(seededIdentityRef.current, logType);
     forgetLogTypeKeys(seededLabelRef.current, logType);
     forgetLogTypeKeys(autoDroppedRef.current, logType);
+    renamedSinceAnalysisRef.current.delete(logType);
     analyzedSigRef.current = signatureWithout(analyzedSigRef.current, logType);
     logger?.info("gap-analysis: log type removed", { logType });
   }, [removeEvent, forgetLogTypeEnrichments, logger]);

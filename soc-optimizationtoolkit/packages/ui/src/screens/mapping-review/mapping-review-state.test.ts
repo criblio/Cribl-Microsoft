@@ -308,6 +308,45 @@ describe("analyzed - edits re-based onto the new analysis (DBT-210)", () => {
     );
   });
 
+  it("drops a stored column action on a catch-all row rather than replaying it (DBT-209)", () => {
+    // The live reducer refuses mac as `rename` onto the catch-all, so this store
+    // is built by hand: the replay checks the action itself rather than trust
+    // the store. Replayed as it stands it is a Rename onto AdditionalExtensions.
+    const stale = analyzed({
+      mappingEdits: { PanOS: [kept, overflow("mac", { action: "rename" }), overflow("gone")] },
+    });
+    const next = reduce(stale, { type: "analyzed", previous: [old], reports: [old] });
+    expect(next.droppedEdits).toEqual([{ logType: "PanOS", source: "mac" }]);
+    expect(next.mappingEdits.PanOS).toBeUndefined();
+  });
+
+  it("keeps a chain of moves whatever order the rows are stored in", () => {
+    // b moved ColY -> ColZ, then a moved ColX -> the ColY b had vacated. a's
+    // row comes first, so replaying in row order puts a onto ColY while the
+    // new analysis still has b there: neither edit is lost, both replay.
+    const chainSchema = ["ColX", "ColY", "ColZ"].map((name) => ({ name, type: "string" }));
+    const a = mapping({ source: "a", dest: "ColX", action: "rename" });
+    const b = mapping({ source: "b", dest: "ColY", action: "rename" });
+    const base = report("Chain", [a, b], { destSchema: chainSchema });
+    const remap = (sourceField: string, value: string): MappingReviewAction => ({
+      type: "edit-mapping",
+      logType: "Chain",
+      sourceField,
+      field: "dest",
+      value,
+      baseline: base.fieldMappings,
+      destSchema: chainSchema,
+    });
+    const chained = reduce(analyzed(), remap("b", "ColZ"), remap("a", "ColY"));
+    const fresh = report("Chain", [a, b], { destSchema: chainSchema });
+    const next = reduce(chained, { type: "analyzed", previous: [base], reports: [fresh] });
+    expect(next.droppedEdits).toEqual([]);
+    expect(effectiveMappings(next, fresh).map((m) => [m.source, m.dest])).toEqual([
+      ["a", "ColY"],
+      ["b", "ColZ"],
+    ]);
+  });
+
   it("drops an edit onto a column the new analysis already fills from another field", () => {
     const fresh = report(
       "PanOS",
@@ -596,6 +635,17 @@ describe("remove-log-type", () => {
     // The other table's review is untouched, and nothing is marked stale.
     expect(next.stale).toBe(false);
     expect(next.analysisRevision).toBe(start.analysisRevision);
+  });
+
+  it("stops counting the removed log type's dropped edits (DBT-210)", () => {
+    const start = analyzed({
+      droppedEdits: [
+        { logType: "Gone", source: "x" },
+        { logType: "Keep", source: "y" },
+      ],
+    });
+    const next = mappingReviewReducer(start, { type: "remove-log-type", logType: "Gone" });
+    expect(next.droppedEdits).toEqual([{ logType: "Keep", source: "y" }]);
   });
 
   it("leaves the content gate READY when every remaining table is approved", () => {
