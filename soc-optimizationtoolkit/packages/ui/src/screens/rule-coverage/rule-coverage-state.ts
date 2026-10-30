@@ -550,3 +550,23 @@ export const RULE_COVERAGE_IDLE_NOTE =
 export const RULE_COVERAGE_NO_REPORTS_NOTE =
   "Run the DCR Gap Analysis above first - rule coverage checks the analytics " +
   "rules' fields against the destination columns your mappings produce.";
+
+/**
+ * Custom rules uploaded before any gap report exists (DBT-212): accepted and
+ * QUEUED, so the count beside the upload is not mistaken for a result.
+ */
+export function ruleCoverageQueuedNote(customCount: number): string {
+  return customCount === 1
+    ? "1 custom rule is queued - its coverage runs as soon as the DCR Gap Analysis reports arrive."
+    : `${customCount} custom rules are queued - their coverage runs as soon as the DCR Gap Analysis reports arrive.`;
+}
+
+/**
+ * The last coverage run was resolved for other destination tables than the
+ * current gap reports carry (DBT-212), so its result is withheld until the
+ * operator re-runs it. Names the tables now in play so the cause is visible.
+ */
+export function ruleCoverageStaleNote(currentTables: readonly string[]): string {
+  const now = currentTables.length > 0 ? currentTables.join(", ") : "none";
+  return `The DCR Gap Analysis changed the destination tables (now ${now}) since this coverage ran - Re-analyze to refresh.`;
+}

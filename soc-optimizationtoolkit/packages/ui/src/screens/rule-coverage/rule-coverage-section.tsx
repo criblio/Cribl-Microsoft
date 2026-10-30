@@ -41,6 +41,13 @@
  * shouldRerunCoverage() is unconditionally true and analyzeContentCoverage is
  * well-defined on an empty availability set.
  *
+ * QUEUED, NEVER DROPPED (DBT-212): a run that cannot start - an upload or clear
+ * before any gap report exists, or one made mid-run - is queued and starts as
+ * soon as it can, with a note while it waits. And a result resolved for other
+ * destination tables than the current reports carry is STALE: it is withheld
+ * behind a "Re-analyze to refresh" note instead of rendering chips the new
+ * analysis may already have answered.
+ *
  * All decision logic is the pure @soc/core coverage-analysis plus this package's
  * rule-coverage-state; this component only orchestrates IO through the ports.
  */
@@ -95,6 +102,8 @@ import {
   parseCustomRuleUploads,
   reportsWithEffectiveMappings,
   resolveSchemaUnion,
+  ruleCoverageQueuedNote,
+  ruleCoverageStaleNote,
   ruleFieldSet,
 } from "./rule-coverage-state";
 import {
@@ -495,22 +504,27 @@ export function RuleCoverageSection({
   // from it below, so the mapping edits that follow re-classify without a
   // second fetch. Kept with the destination tables it was resolved for: once
   // a new gap analysis changes them, the schema union no longer describes the
-  // reports, and the run's own availability is shown until Re-analyze.
+  // reports, so the result is STALE (DBT-212) - withheld behind a "Re-analyze
+  // to refresh" note rather than rendered. It used to keep showing the run's
+  // own availability, so a field the new analysis maps stayed a chip and read
+  // as a failed apply.
   const [lastRun, setLastRun] = useState<{
     items: ContentItem[];
     schemaUnion: string[];
     parsers: ParsedParserFunction[];
     tablesKey: string;
-    availableAtRun: string[];
   } | null>(null);
+  const liveTables = useMemo(
+    () => destinationTableNamesFromReports(liveReports),
+    [liveReports],
+  );
+  const stale = lastRun !== null && liveTables.join("|") !== lastRun.tablesKey;
   const report = useMemo<CoverageReport | null>(() => {
     if (lastRun === null) return null;
-    const sameTables =
-      destinationTableNamesFromReports(liveReports).join("|") ===
-      lastRun.tablesKey;
-    const availableFields = sameTables
-      ? [...availableFieldsFromReports(liveReports), ...(extraAvailableFields ?? [])]
-      : lastRun.availableAtRun;
+    const availableFields = [
+      ...availableFieldsFromReports(liveReports),
+      ...(extraAvailableFields ?? []),
+    ];
     const synonyms = parserFieldSynonyms(
       lastRun.parsers,
       new Set(availableFields.map((f) => f.toLowerCase())),
@@ -716,7 +730,6 @@ export function RuleCoverageSection({
           schemaUnion,
           parsers,
           tablesKey: destinationTableNamesFromReports(liveReports).join("|"),
-          availableAtRun: availableFields,
         });
         } catch (err) {
         setAnalyzeError(String(err));
@@ -738,8 +751,22 @@ export function RuleCoverageSection({
     ],
   );
 
+  // A run that was asked for but could not start (DBT-212): an upload before
+  // the gap reports exist, or one made while another run is in flight. Either
+  // way runCoverage returns early, and the rule used to sit counted ("1 custom
+  // rule") but never analyzed. The effect below starts the run as soon as it
+  // can; it reads customItems from state, so the queued run sees every upload.
+  const [queued, setQueued] = useState(false);
+  useEffect(() => {
+    if (!queued || analyzing || liveReports.length === 0) {
+      return;
+    }
+    setQueued(false);
+    void runCoverage();
+  }, [queued, analyzing, liveReports.length, runCoverage]);
+
   // Custom-rule upload (YAML detection, portal ARM JSON export, or raw KQL):
-  // parse -> merge (re-upload fix) -> re-run coverage.
+  // parse -> merge (re-upload fix) -> re-run coverage, or queue it.
   const [uploadNote, setUploadNote] = useState("");
   const onUpload = useCallback(
     async (fileList: FileList | null) => {
@@ -763,17 +790,28 @@ export function RuleCoverageSection({
       }
       const merged = mergeCustomContentItems(customItems, parsed);
       setCustomItems(merged);
+      if (liveReports.length === 0 || analyzing) {
+        setQueued(true);
+        return;
+      }
       // NO STALE-SKIP: always re-run, even with an empty availability set.
       await runCoverage(merged);
     },
-    [customItems, runCoverage],
+    [customItems, runCoverage, liveReports.length, analyzing],
   );
 
   const onClearCustom = useCallback(async () => {
     setCustomItems([]);
+    // Mid-run, the clear waits its turn like an upload; with no reports there
+    // is nothing to re-run and nothing left to queue.
+    if (analyzing && liveReports.length > 0) {
+      setQueued(true);
+      return;
+    }
+    setQueued(false);
     // NO STALE-SKIP: re-run without the custom rules regardless of availability.
     await runCoverage([]);
-  }, [runCoverage]);
+  }, [runCoverage, analyzing, liveReports.length]);
 
   const hasReports = reports.length > 0;
   const ruleSection =
@@ -858,6 +896,19 @@ export function RuleCoverageSection({
           <InfoTip text={RULE_COVERAGE_NO_REPORTS_NOTE} />
         </p>
       )}
+      {queued && !hasReports && customCount > 0 && (
+        <p className="field-hint" data-coverage-note="queued" role="status">
+          {ruleCoverageQueuedNote(customCount)}
+        </p>
+      )}
+      {stale && (
+        <div className="status-bar status-bar-warn" data-coverage-note="stale">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">
+            {ruleCoverageStaleNote(liveTables)}
+          </span>
+        </div>
+      )}
       {uploadNote !== "" && (
         <div className="status-bar status-bar-warn">
           <span className="status-bar-dot" />
@@ -881,7 +932,7 @@ export function RuleCoverageSection({
         </div>
       )}
 
-      {report === null ? null : (
+      {report === null || stale ? null : (
         <div className="coverage-sections">
           {showRules && ruleSection !== null && (
             <div className="coverage-section">
