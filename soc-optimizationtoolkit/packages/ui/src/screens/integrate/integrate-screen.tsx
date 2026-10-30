@@ -180,6 +180,7 @@ import {
 import { LogTypeRecommendation } from "../samples/log-type-recommendation";
 import { SampleSourcePicker } from "../samples/sample-source-picker";
 import { findEntry } from "../samples/sample-source-picker-state";
+import type { SampleMethod } from "../samples/sample-source-picker-state";
 import { CapturePanel } from "../samples/capture-panel";
 import { LakePanel } from "../samples/lake-panel";
 import { storedEventShortfalls } from "../samples/planned-samples";
@@ -1379,6 +1380,9 @@ export function IntegrateScreen({
   const criblReachable = capabilityContext?.criblReachable ?? true;
   const sampleSources = useSampleSources({ enabled: criblReachable });
   const [sampleSourceChoice, setSampleSourceChoice] = useState("");
+  // DBT-224: how the operator supplies samples, asked before any method's
+  // controls are shown. Not persisted - a reload asks again.
+  const [sampleMethod, setSampleMethod] = useState<SampleMethod | null>(null);
   // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
   // the entry in its own state gave one question two answers, and only one of
   // them was ever cleared: switching worker group and switching mode both reset
@@ -2449,8 +2453,11 @@ export function IntegrateScreen({
           // dropdown no longer offers, and (because the panels below are
           // derived from it) a capture panel sitting over a Lake inventory.
           setSampleSourceChoice("");
+          setSampleMethod(next);
           sampleSources.selectMode(next);
         }}
+        method={sampleMethod}
+        onSelectMethod={setSampleMethod}
         onSelectGroup={(groupId) => {
           // Same reason, one level down: a source id is only addressable through
           // the group it was listed from, so the pick does not survive the move.
@@ -2462,7 +2469,7 @@ export function IntegrateScreen({
         onChange={setSampleSourceChoice}
         onReload={sampleSources.reload}
       />
-      {captureTarget !== null && (
+      {captureTarget !== null && sampleMethod === "live-capture" && (
         <CapturePanel
           key={captureTarget.id}
           source={captureTarget}
@@ -2483,7 +2490,7 @@ export function IntegrateScreen({
           onCommit={commitAcquiredSamples}
         />
       )}
-      {lakeTarget !== null && (
+      {lakeTarget !== null && sampleMethod === "lake-query" && (
         <LakePanel
           key={lakeTarget.id}
           datasetId={lakeTarget.id}
@@ -2549,6 +2556,11 @@ export function IntegrateScreen({
         onRemoveLogType={handleRemovedLogType}
         removeRequest={removeRequest}
         arrivalEvent={sampleArrival}
+        entry={
+          sampleMethod === "paste" || sampleMethod === "upload"
+            ? sampleMethod
+            : "none"
+        }
       />
       {/* Completeness confirmation (user request 2026-08-04). The app never
         * said that each unique log type becomes its own routes and pipelines,

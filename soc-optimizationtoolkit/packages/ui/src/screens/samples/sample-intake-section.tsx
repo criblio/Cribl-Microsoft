@@ -231,6 +231,14 @@ export interface SampleIntakeSectionProps {
    * dropUnneededEvent), so it is reused rather than reinvented.
    */
   arrivalEvent?: SampleArrivalEvent;
+  /**
+   * DBT-224: which manual input to show. The screen asks how samples are
+   * supplied first, so only the chosen input appears: 'paste' (text, name,
+   * Add Sample), 'upload' (Upload Files), 'none' (neither - a Cribl method or
+   * no choice yet). The sample list always renders. Default 'all' keeps the
+   * original combined block.
+   */
+  entry?: "all" | "paste" | "upload" | "none";
 }
 
 export function SampleIntakeSection({
@@ -242,7 +250,10 @@ export function SampleIntakeSection({
   onRemoveLogType,
   removeRequest,
   arrivalEvent,
+  entry = "all",
 }: SampleIntakeSectionProps) {
+  const showPaste = entry === "all" || entry === "paste";
+  const showUpload = entry === "all" || entry === "upload";
   const [samples, setSamples] = useState<TaggedSample[] | null>(null);
   const [loadError, setLoadError] = useState("");
 
@@ -692,7 +703,10 @@ export function SampleIntakeSection({
           reference's Sample Data layout. The native file input stays in the DOM
           (works in both shells) but is visually hidden and driven by the ghost
           Upload Files button, so both actions read as buttons. */}
+      {(showPaste || showUpload) && (
       <div className="sample-intake-input">
+        {showPaste && (
+        <>
         <span className="field-label">
           Paste a sample{" "}
           <InfoTip text="Representative events for one log type. The format is detected from the content (a Cribl capture is unwrapped to its inner _raw), and the fields found drive the gap analysis and the generated pipelines. Samples are optional for a native-table deploy." />
@@ -718,6 +732,8 @@ export function SampleIntakeSection({
             disabled={busy}
           />
         </label>
+        </>
+        )}
         {/* The native file input is driven by the visible Browse button; the
             .sample-file-input class owns its display:none (no inline styles). */}
         <input
@@ -735,6 +751,7 @@ export function SampleIntakeSection({
           aria-hidden="true"
         />
         <div className="panel-controls">
+          {showPaste && (
           <button
             className="next-action-button"
             onClick={() => void addFromPaste()}
@@ -742,6 +759,9 @@ export function SampleIntakeSection({
           >
             Add Sample
           </button>
+          )}
+          {showUpload && (
+          <>
           <button
             className="run-button"
             onClick={() => fileInputRef.current?.click()}
@@ -750,8 +770,15 @@ export function SampleIntakeSection({
             Upload Files
           </button>
           <InfoTip text="Upload one or more files instead of pasting. Each file's log type is detected from its name and content; rename it on the sample afterwards." />
+          </>
+          )}
           {pasteError !== "" && <span className="field-hint">{pasteError}</span>}
         </div>
+      </div>
+      )}
+      {/* Outside the input block: an upload's error and the store's trim notes
+          (which also explain capture and Lake commits) show whatever method
+          is chosen. */}
         {uploadError !== "" && <pre className="result">{uploadError}</pre>}
         {/* DBT-206: the store's trim, in the capture commit's own words, for
             each log type still on the page (a removed one has nothing to
@@ -767,7 +794,6 @@ export function SampleIntakeSection({
               {storedEventShortfallText([t]).trim()}
             </p>
           ))}
-      </div>
 
       {/* Tagged sample chips */}
       {loadError !== "" && (
@@ -783,7 +809,7 @@ export function SampleIntakeSection({
       )}
       {samples !== null && samples.length === 0 && (
         <p className="field-hint">
-          No samples tagged yet. Upload or paste one above.
+          {entry === "all" ? "No samples tagged yet. Upload or paste one above." : "No samples yet."}
         </p>
       )}
       {/*

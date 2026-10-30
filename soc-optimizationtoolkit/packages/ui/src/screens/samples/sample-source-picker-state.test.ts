@@ -293,3 +293,14 @@ describe("kindLabel", () => {
     expect(kindLabel("cribl-source")).toBe("Cribl source");
   });
 });
+
+describe("sample methods (DBT-224)", () => {
+  it("offers paste and upload as the manual methods, and tells Cribl methods apart", async () => {
+    const { MANUAL_METHOD_CHOICES, isCriblMethod } = await import("./sample-source-picker-state");
+    expect(MANUAL_METHOD_CHOICES.map((c) => c.method)).toEqual(["paste", "upload"]);
+    expect(isCriblMethod("lake-query")).toBe(true);
+    expect(isCriblMethod("live-capture")).toBe(true);
+    expect(isCriblMethod("paste")).toBe(false);
+    expect(isCriblMethod(null)).toBe(false);
+  });
+});

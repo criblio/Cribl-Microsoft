@@ -10,6 +10,8 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**Sample Data asks how you will supply samples (DBT-224).** Sentinel Integration no longer shows Lake, live capture, paste and upload at once: it asks How will you supply samples? and shows only the chosen method. Paste and Upload are offered even without a Cribl connection. Selecting a solution now shows how many log types it expects, with the full list behind Show the expected log types instead of printed in full.
+
 **Rule Coverage counts a column per log type (DBT-223).** With more than one
 log type, a column used to count as covered once any one log type filled it,
 so choosing a close match for TRAFFIC cleared the missing-field chip for

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 38 in progress, 120 done.**
+**92 in the backlog, 37 in progress, 122 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 51 | 64 | 25 |
+| Sentinel Integration | 52 | 66 | 26 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 128.
+Open work totals 129.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 51% (72/140)
+### `DBT` Quality and technical debt _(enabler)_ - 52% (74/143)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 25/34 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 27/37 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (38)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -448,31 +448,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Send-only rule is safer), then an existing hub. Creating a namespace, hub or
   rule renders as visible, disabled controls and is a follow-up card. The
   choice is held in screen state and not persisted.
-
-- **DBT-125** Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)
-  `DBT-F2` `story` `settled`
-  OPERATOR REQUEST 2026-10-05: there are too many words on the Sentinel
-  Integration page, in every section and again whenever a section updates.
-  Streamline it without losing context; important words go inside an (i) icon.
-  MEASURED 2026-10-05 on feature/streamline-integrate-copy (stacked on the bug
-  sweep): about 2,600 words of visible prose across 15 files the page renders,
-  and none of it behind an InfoTip. Largest: integrate-screen 549,
-  azure-targeting 280, content-install 243, solution-browser 231,
-  sample-intake 190, rule-coverage 169, lake-panel 142, mapping-review 138,
-  pipeline-preview 129, capture-panel 122. RULES (claude-kit
-  standards/info-affordances.md): one lead line per section; definitions and
-  how-it-works behind an InfoTip on the heading, control or column they
-  explain; warnings, confirmations, costs and gate reasons STAY visible
-  because they ask the operator to act; no project history (card ids, dates)
-  in visible or tip text; a tip names the real field or computation, never
-  restates the label. PROGRESS 2026-10-05 (5ca5a1c, f011ab2, 723a0e3): visible
-  prose in the page modules down from about 2,650 words to about 1,670, the
-  rest behind (i) icons. Kept visible by rule: warnings, gate reasons, costs,
-  and the routable-pack instruction (a GEN-16 pin). Added the claude-kit
-  copy-rules gate over every module the page renders - no ids, dates or plan
-  units in visible text or tips - mutation-checked with the very date it
-  removed. Seen live section by section. Left IN PROGRESS for the operator to
-  review the result before it closes.
 
 - **DBT-133** Make the package submittable to the Cribl Marketplace
   `DBT-F4` `story` `settled`
@@ -1095,7 +1070,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (11)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1303,6 +1278,33 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
+
+- **DBT-225** Configure Cribl asks new or existing destination first; Azure Resources is one line when it does not apply
+  `DBT-F2` `story` `settled`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Configure
+  Cribl shows the destination radio, its explanation, pack name, wiring,
+  multiple groups, pack check and rebuild together; Select Azure Resources
+  shows a paragraph for a step that does not apply with an existing
+  destination. Build: ask the destination question first and reveal that path;
+  collapse the non-applicable Azure step to one line.
+
+- **DBT-226** Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step
+  `DBT-F2` `story` `settled`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Enable
+  Sentinel Content shows a warning plus three Not loaded yet subsections; Rule
+  Coverage and Workbook Coverage are two steps of the same shape. Build: one
+  line plus Load until loaded; one Coverage step with a Rules / Workbooks
+  switch.
 
 ---
 
@@ -2435,7 +2437,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (120)
+## Done (122)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4212,6 +4214,34 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   renders links in. The warning is still non-fatal. It is pinned with a
   planted fixture, a malformed-decision case and the independent oracle, and
   both pins were mutation-checked.
+
+- **DBT-125** Sentinel Integration reads as a wall of prose - one lead line per section, detail behind the (i)
+  `DBT-F2` `story` `settled` `verified: live`
+  OPERATOR REQUEST 2026-10-05: there are too many words on the Sentinel
+  Integration page, in every section and again whenever a section updates.
+  Streamline it without losing context; important words go inside an (i) icon.
+  MEASURED 2026-10-05 on feature/streamline-integrate-copy (stacked on the bug
+  sweep): about 2,600 words of visible prose across 15 files the page renders,
+  and none of it behind an InfoTip. Largest: integrate-screen 549,
+  azure-targeting 280, content-install 243, solution-browser 231,
+  sample-intake 190, rule-coverage 169, lake-panel 142, mapping-review 138,
+  pipeline-preview 129, capture-panel 122. RULES (claude-kit
+  standards/info-affordances.md): one lead line per section; definitions and
+  how-it-works behind an InfoTip on the heading, control or column they
+  explain; warnings, confirmations, costs and gate reasons STAY visible
+  because they ask the operator to act; no project history (card ids, dates)
+  in visible or tip text; a tip names the real field or computation, never
+  restates the label. PROGRESS 2026-10-05 (5ca5a1c, f011ab2, 723a0e3): visible
+  prose in the page modules down from about 2,650 words to about 1,670, the
+  rest behind (i) icons. Kept visible by rule: warnings, gate reasons, costs,
+  and the routable-pack instruction (a GEN-16 pin). Added the claude-kit
+  copy-rules gate over every module the page renders - no ids, dates or plan
+  units in visible text or tips - mutation-checked with the very date it
+  removed. Seen live section by section. Left IN PROGRESS for the operator to
+  review the result before it closes. REVIEWED BY THE OPERATOR 2026-10-30: the
+  copy cut is live and the page still reads as too wordy - the remaining
+  weight is structure, not wording. Closed as done; the follow-up is DBT-224,
+  DBT-225 and DBT-226.
 
 - **DBT-126** Clicking an (i) closes its own tip, and inside a label it also toggles the field
   `DBT-F2` `bug` `settled` `verified: both`
@@ -6093,3 +6123,36 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   exists. DONE 2026-10-30 (pins, 94ecb87): both now call parseResourceId;
   workspace-inventory-state.test.ts pins the bare resource-group case (fails
   on the hand split by construction) and the workspace-name case.
+
+- **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Selecting a
+  solution lists all 19 log types (13 referenced + 6 documented) with pills
+  and detection notes, and the same list appears again as the capture
+  checklist; Lake, Live capture, Paste and Upload are all on screen at once.
+  Build: the needs list becomes a count with the list behind an (i); Sample
+  Data asks How will you supply samples? (Cribl Lake / Live capture / Paste /
+  Upload) and reveals only that panel; switching keeps samples already added,
+  and the sample list always shows (operator choice: one choice, switchable).
+  DONE 2026-10-30 (both). The sample-source picker became the method question
+  (How will you supply samples?): Lake and Live capture as before, only when
+  Cribl is reachable (the DBT-53 pin still holds), plus Paste events and
+  Upload files always; its group and source controls show only for a Cribl
+  method, and the capture and Lake panels mount only for theirs.
+  SampleIntakeSection gained entry (paste / upload / none / all, default all)
+  so only the chosen input shows; the sample list and the store-trim notes
+  always render. The log-type rows moved into a collapsed Show the N expected
+  log types disclosure under the count headline (rows stay in the DOM, so
+  links and volumes still work). Pins: three integrate-screen DOM tests
+  (nothing before a choice; one method at a time; Paste and Upload offered
+  when Cribl is unreachable, Lake and Live not), the collapsed-disclosure pin
+  and label pins; mutation-checked (forcing the paste input fails two; an open
+  details fails one). LIVE on TMNA (PaloAlto-PAN-OS): Sample Data shrank from
+  two screens to a third of one; Paste events showed only the textarea, name
+  and Add Sample; Capture from a live source showed only the worker-group
+  picker.

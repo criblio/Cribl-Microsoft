@@ -53,6 +53,39 @@ export const MODE_CHOICES: readonly ModeChoice[] = Object.freeze([
   },
 ]);
 
+/**
+ * How the operator supplies samples (DBT-224): the two Cribl modes above, or
+ * one of the two manual paths that need no Cribl access. The operator answers
+ * this first and only that method's controls are shown - Lake, live capture,
+ * paste and upload used to be on screen together.
+ */
+export type SampleMethod = AcquisitionMode | "paste" | "upload";
+
+export interface ManualMethodChoice {
+  method: "paste" | "upload";
+  label: string;
+  detail: string;
+}
+
+/** The manual methods, offered whether or not Cribl is reachable. */
+export const MANUAL_METHOD_CHOICES: readonly ManualMethodChoice[] = Object.freeze([
+  {
+    method: "paste",
+    label: "Paste events",
+    detail: "Paste a few events for one log type.",
+  },
+  {
+    method: "upload",
+    label: "Upload files",
+    detail: "One or more files; each file's log type is detected.",
+  },
+]);
+
+/** Whether a method reads from Cribl (and so uses the picker's group/source controls). */
+export function isCriblMethod(method: SampleMethod | null): method is AcquisitionMode {
+  return method === "lake-query" || method === "live-capture";
+}
+
 /** The stable option id for a discovered entry: kind, group, and id. */
 export function sourceOptionValue(ref: SampleSourceRef): string {
   return `${ref.kind}:${ref.groupId ?? ""}:${ref.id}`;

@@ -58,6 +58,14 @@ function volumeText(volume: Volume): string | null {
   return bytes === "" ? events : `${events}, ~${bytes} estimated`;
 }
 
+/** The disclosure's label: what opening it shows, as counts. */
+export function logTypeDisclosureLabel(expected: number, alsoProvided: number): string {
+  const parts: string[] = [];
+  if (expected > 0) parts.push(`the ${expected} expected log type${expected === 1 ? "" : "s"}`);
+  if (alsoProvided > 0) parts.push(`${alsoProvided} more provided`);
+  return `Show ${parts.join(" and ")}`;
+}
+
 export function LogTypeRecommendation({
   recommendation,
 }: LogTypeRecommendationProps) {
@@ -84,6 +92,14 @@ export function LogTypeRecommendation({
       </span>
       <p className="panel-desc">{headline}</p>
 
+      {/* DBT-224: the headline carries the counts; the rows wait behind a
+          disclosure until asked for. Selecting a solution used to print every
+          log type (19 for PAN-OS) before the operator had chosen anything. The
+          rows stay in the DOM, so the doc links and volumes still work once
+          opened, and the capture and Lake panels keep their own checklist. */}
+      {(entries.length > 0 || unreferenced.length > 0) && (
+        <details className="gap-handles log-type-recommendation-details">
+          <summary>{logTypeDisclosureLabel(entries.length, unreferenced.length)}</summary>
       {entries.length > 0 && (
         <ul className="log-type-recommendation-list">
           {entries.map((entry) => (
@@ -170,6 +186,8 @@ export function LogTypeRecommendation({
             ))}
           </ul>
         </div>
+      )}
+        </details>
       )}
 
       {/* A count without its window is not a fact. Rendered only when a number

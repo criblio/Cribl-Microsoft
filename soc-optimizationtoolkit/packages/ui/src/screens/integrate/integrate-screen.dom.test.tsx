@@ -1701,3 +1701,71 @@ describe("IntegrateScreen - the pack group follows the capture (DBT-201)", () =>
     });
   });
 });
+
+/**
+ * DBT-224: Sample Data asks HOW samples are supplied before showing any
+ * method's controls. Lake, live capture, paste and upload used to be on screen
+ * together; now only the chosen one is.
+ */
+describe("IntegrateScreen - one sample method at a time (DBT-224)", () => {
+  function renderScreen(criblReachable: boolean) {
+    const ports = discoveryPorts();
+    const view = render(
+      <PortsProvider
+        ports={ports}
+        config={CONFIG}
+        capabilityContext={{ azureIdentityPresent: true, criblReachable }}
+      >
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const paste = () => view.container.querySelector("textarea.sample-paste");
+    const upload = () => screen.queryByRole("button", { name: "Upload Files" });
+    return { ...view, paste, upload };
+  }
+
+  it("asks the question and shows no method's controls until one is chosen", async () => {
+    const view = renderScreen(true);
+    await waitFor(() => {
+      expect(screen.getByText("Capture from a live source")).toBeTruthy();
+    });
+    expect(screen.getByText("How will you supply samples?")).toBeTruthy();
+    expect(screen.getByText("Paste events")).toBeTruthy();
+    expect(screen.getByText("Upload files")).toBeTruthy();
+    expect(view.paste()).toBeNull();
+    expect(view.upload()).toBeNull();
+  });
+
+  it("reveals only the chosen method, and switching replaces it", async () => {
+    const view = renderScreen(true);
+    await waitFor(() => {
+      expect(screen.getByText("Paste events")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("Paste events"));
+    expect(view.paste()).not.toBeNull();
+    expect(view.upload()).toBeNull();
+    // The Cribl controls stay away while a manual method is chosen.
+    expect(view.container.querySelector(".sample-source-picker .field")).toBeNull();
+
+    fireEvent.click(screen.getByText("Upload files"));
+    expect(view.paste()).toBeNull();
+    expect(view.upload()).not.toBeNull();
+  });
+
+  it("still offers Paste and Upload when Cribl is unreachable, and not the Cribl methods", async () => {
+    const view = renderScreen(false);
+    await waitFor(() => {
+      expect(screen.getByText("Paste events")).toBeTruthy();
+    });
+    expect(screen.queryByText("Capture from a live source")).toBeNull();
+    expect(screen.queryByText("Query a Cribl Lake dataset")).toBeNull();
+    fireEvent.click(screen.getByText("Paste events"));
+    expect(view.paste()).not.toBeNull();
+  });
+});

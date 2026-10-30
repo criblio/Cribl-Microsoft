@@ -364,3 +364,24 @@ describe("LogTypeRecommendation - measured volume (plan Phase 5)", () => {
     expect(container.querySelectorAll("input")).toHaveLength(0);
   });
 });
+
+describe("the log-type rows wait behind a disclosure (DBT-224)", () => {
+  it("shows the counts and keeps the rows collapsed until asked for", () => {
+    const { container } = renderFor([THREE], ["TRAFFIC"]);
+    const details = container.querySelector("details.log-type-recommendation-details");
+    expect(details).not.toBeNull();
+    expect((details as HTMLDetailsElement).open).toBe(false);
+    expect(details!.querySelector("summary")!.textContent).toBe("Show the 3 expected log types");
+    // The rows are inside it - still in the DOM, so links and volumes work once opened.
+    expect(details!.querySelectorAll(".log-type-recommendation-list li")).toHaveLength(3);
+  });
+});
+
+describe("logTypeDisclosureLabel", () => {
+  it("names what opening it shows", async () => {
+    const { logTypeDisclosureLabel } = await import("./log-type-recommendation");
+    expect(logTypeDisclosureLabel(1, 0)).toBe("Show the 1 expected log type");
+    expect(logTypeDisclosureLabel(13, 2)).toBe("Show the 13 expected log types and 2 more provided");
+    expect(logTypeDisclosureLabel(0, 2)).toBe("Show 2 more provided");
+  });
+});
