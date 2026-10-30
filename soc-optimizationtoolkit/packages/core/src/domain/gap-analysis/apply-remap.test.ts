@@ -152,8 +152,87 @@ describe("applyRemap - what the remap vacates and collides with", () => {
   it("reports another row already landing in the chosen column, and leaves it alone", () => {
     const result = remap("PanSrcMac", "DeviceAction");
     expect(result.claimedBy).toBe("act");
+    expect(result.moved).toBeNull();
     expect(result.rows[3]).toBe(act);
     expect(result.rows[0].dest).toBe("DeviceAction");
+  });
+});
+
+// DBT-208: two rows renamed onto one column write two Renames, and the second
+// overwrites the first - that value reaches neither the column nor overflow.
+// With moveClaimed the claiming row falls back to the catch-all instead.
+describe("applyRemap - moving the row that already fills the column (DBT-208)", () => {
+  const move = (catchAllColumn: string | undefined, schema = SCHEMA) =>
+    applyRemap(ROWS, {
+      sourceField: "PanSrcMac",
+      destColumn: "DeviceAction",
+      destSchema: schema,
+      catchAllColumn,
+      baseline: ROWS,
+      moveClaimed: true,
+    });
+
+  it("sends the claiming row to the catch-all as overflow and names it as moved", () => {
+    const result = move("AdditionalExtensions");
+    expect(result.outcome).toBe("applied");
+    expect(result.moved).toBe("act");
+    expect(result.claimedBy).toBeNull();
+    expect(result.rows[0]).toMatchObject({ dest: "DeviceAction", action: "rename" });
+    expect(result.rows[3]).toEqual({
+      ...act,
+      dest: "AdditionalExtensions",
+      destType: "string",
+      confidence: "unmatched",
+      action: "overflow",
+      needsCoercion: false,
+      description: "Reviewer choice: collected into AdditionalExtensions",
+    });
+    // Exactly one row lands in the column.
+    expect(
+      result.rows.filter((r) => landsInColumn(r) && r.dest === "DeviceAction"),
+    ).toHaveLength(1);
+  });
+
+  it("leaves the claim in place when there is no catch-all to fall back to", () => {
+    for (const result of [
+      move(undefined),
+      move(
+        "AdditionalExtensions",
+        SCHEMA.filter((c) => c.name !== "AdditionalExtensions"),
+      ),
+    ]) {
+      expect(result.moved).toBeNull();
+      expect(result.claimedBy).toBe("act");
+      expect(result.rows[3]).toBe(act);
+    }
+  });
+
+  it("moves every row already in the column, not only the first", () => {
+    const action = row({ source: "action", dest: "DeviceAction", action: "rename" });
+    const rows = [...ROWS, action];
+    const result = applyRemap(rows, {
+      sourceField: "PanSrcMac",
+      destColumn: "DeviceAction",
+      destSchema: SCHEMA,
+      catchAllColumn: "AdditionalExtensions",
+      moveClaimed: true,
+    });
+    expect(result.moved).toBe("act");
+    expect(result.claimedBy).toBeNull();
+    expect(result.rows[3]?.action).toBe("overflow");
+    expect(result.rows[4]?.action).toBe("overflow");
+  });
+
+  it("moves nothing when the column was free", () => {
+    const result = applyRemap(ROWS, {
+      sourceField: "PanSrcMac",
+      destColumn: "SourceMACAddress",
+      destSchema: SCHEMA,
+      catchAllColumn: "AdditionalExtensions",
+      moveClaimed: true,
+    });
+    expect(result.moved).toBeNull();
+    expect(result.rows.slice(1)).toEqual([panDstMac, inBytes, act]);
   });
 });
 

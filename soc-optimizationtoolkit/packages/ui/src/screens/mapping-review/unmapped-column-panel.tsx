@@ -9,11 +9,12 @@
  * arrive render-ready from columnSuggestions (mapping-review-state.ts).
  *
  * Keyboard: the panel takes focus when it opens, Escape or Dismiss closes it,
- * and focus returns to the control that opened it.
+ * and focus returns to the control that opened it (usePanelFocus, shared with
+ * the Dest Field claim panel, DBT-208).
  */
 
-import { useEffect, useRef } from "react";
 import type { ColumnSuggestion } from "./mapping-review-state";
+import { usePanelFocus } from "./use-panel-focus";
 
 export function UnmappedColumnPanel({
   id,
@@ -32,24 +33,7 @@ export function UnmappedColumnPanel({
   onAddConstant: () => void;
   onDismiss: () => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<Element | null>(null);
-
-  useEffect(() => {
-    // Record the opener ONCE. StrictMode runs this effect twice on mount, and
-    // by the second run the first has already focused the panel - recording
-    // again would make Dismiss "return" focus to the panel it removes.
-    if (openerRef.current === null) openerRef.current = document.activeElement;
-    panelRef.current?.focus();
-  }, []);
-
-  const dismiss = () => {
-    const opener = openerRef.current;
-    onDismiss();
-    if (opener instanceof HTMLElement && opener.isConnected) {
-      opener.focus();
-    }
-  };
+  const { panelRef, close: dismiss } = usePanelFocus(onDismiss);
 
   const headingId = `${id}-heading`;
   return (
