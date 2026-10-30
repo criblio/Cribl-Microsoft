@@ -224,6 +224,7 @@ import {
 import {
   captureGroupDefault,
   describeOutputRow,
+  expectedPackId,
   existingDestinationForArc,
   existingDestinationGateReason,
   existingDestinationRoute,
@@ -1016,10 +1017,10 @@ export function IntegrateScreen({
     setConfirmedByTable({});
   }, [groupId]);
   const existingView = useMemo(
-    () => existingPickerView(existingRead, detectedTables),
+    () => existingPickerView(existingRead, detectedTables, groupId),
     // detectedTableKey stands in for detectedTables, as in the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [existingRead, detectedTableKey],
+    [existingRead, detectedTableKey, groupId],
   );
   const existingDestination = existingDestinationForArc(
     destinationMode,
@@ -2705,7 +2706,7 @@ export function IntegrateScreen({
       <label className="field">
         <span className="field-label">
           Cribl worker group{" "}
-          <InfoTip text="The worker group that runs the pipelines. Prefilled from the group your samples were captured on when it is in the live list, otherwise from your saved Options. Your pick is never overwritten." />
+          <InfoTip text="The worker group that runs the pipelines. Prefilled from the group your samples were captured on when it is in the live list, otherwise from the saved default worker group. Your pick is never overwritten." />
         </span>
         <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
           {(groups) => (
@@ -2729,32 +2730,34 @@ export function IntegrateScreen({
       {/* GEN-21. Where the pack's events go. Both are always offered; an
           offline operator starts on the existing destination. */}
       <div className="discovery-result">
-        <span className="field-label">
-          Sentinel destination{" "}
-          <InfoTip text="Create: Deploy creates the Data Collection Rule in Azure and the matching Cribl Sentinel destination, which needs an Azure connection and an app registration. Existing: pick a Sentinel destination already configured in this worker group; the pack is built routable and nothing in Azure is read or written." />
-        </span>
-        <label className="integrate-check">
-          <input
-            type="radio"
-            name="integrate-destination-mode"
-            checked={!existingMode}
-            onChange={() => setDestinationMode("create")}
-          />
-          <span className="integrate-check-text">
-            Create a new destination with Deploy (needs an Azure connection)
+        <div role="radiogroup" aria-labelledby="integrate-destination-mode-label">
+          <span className="field-label" id="integrate-destination-mode-label">
+            Sentinel destination{" "}
+            <InfoTip text="Create: Deploy creates the Data Collection Rule in Azure and the matching Cribl Sentinel destination, which needs an Azure connection and an app registration. Existing: pick a Sentinel destination already configured in this worker group; the pack is built routable and nothing in Azure is read or written." />
           </span>
-        </label>
-        <label className="integrate-check">
-          <input
-            type="radio"
-            name="integrate-destination-mode"
-            checked={existingMode}
-            onChange={() => setDestinationMode("existing")}
-          />
-          <span className="integrate-check-text">
-            Use an existing Cribl Sentinel destination (no Azure connection)
-          </span>
-        </label>
+          <label className="integrate-check">
+            <input
+              type="radio"
+              name="integrate-destination-mode"
+              checked={!existingMode}
+              onChange={() => setDestinationMode("create")}
+            />
+            <span className="integrate-check-text">
+              Create a new destination with Deploy (needs an Azure connection)
+            </span>
+          </label>
+          <label className="integrate-check">
+            <input
+              type="radio"
+              name="integrate-destination-mode"
+              checked={existingMode}
+              onChange={() => setDestinationMode("existing")}
+            />
+            <span className="integrate-check-text">
+              Use an existing Cribl Sentinel destination (no Azure connection)
+            </span>
+          </label>
+        </div>
         {existingMode && (
           <>
             <p className="panel-desc" data-testid="existing-destination-listing" data-status={existingView.kind}>
@@ -3098,9 +3101,16 @@ export function IntegrateScreen({
   // the group with no file scope and filters on the bare input id, which
   // matches no event - so the operator adds this route by hand, and a
   // QuickConnected source is warned about, never rewritten.
+  // The installed id only while it is still THIS pack: a renamed pack is a
+  // different pack, and its route must not name the old one.
   const installedPackId =
-    packOutcome?.installs.find((i) => i.group === groupId && i.ok)?.packId;
-  const routePackId = installedPackId ?? packName.trim();
+    packOutcome !== null && packOutcome.name === packName.trim()
+      ? packOutcome.installs.find((i) => i.group === groupId && i.ok)?.packId
+      : undefined;
+  // Before install, the id the build will install under - not the typed name,
+  // which Cribl's id does not keep verbatim.
+  const routePackId =
+    installedPackId ?? (packName.trim() === "" ? "" : expectedPackId(packName));
   const existingRoute =
     existingMode &&
     existingGateReason === null &&

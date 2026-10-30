@@ -1367,6 +1367,9 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
   function renderExisting(opts: {
     outputs: () => Promise<{ status: number; body: unknown }>;
     offline?: boolean;
+    /** Defaults to a scope AND an identity; the UAT's org had neither. */
+    config?: AzureConfig;
+    scopeCommitted?: boolean;
   }) {
     const azure = vi.fn(async () => {
       throw new Error("Azure must not be called on the existing-destination path");
@@ -1388,10 +1391,10 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
     const view = render(
       // A scope AND an identity are configured, so every Azure read on the
       // page has what it needs to fire - only the path may stop it.
-      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+      <PortsProvider ports={ports} config={opts.config ?? SCOPED_CONFIG}>
         <IntegrateScreen
           toolkitVersion="9.9.9-test"
-          scopeCommitted
+          scopeCommitted={opts.scopeCommitted ?? true}
           offline={opts.offline ?? true}
           onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
           criblDefaults={DEFAULT_CRIBL_OPTIONS}
@@ -1505,6 +1508,24 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
     ) as HTMLSelectElement;
     expect(shape.value).toBe("routable");
     expect(shape.disabled).toBe(true);
+  });
+
+  it("in the UAT's org - no identity, no scope - still asks only for the gap analysis", async () => {
+    // With no identity the native run's own gate reads "Enter an ingestion
+    // client id"; the scoped config above hides that, because its client id
+    // prefills the field. This is the shape the operator actually had.
+    const view = renderExisting({
+      outputs: read([PAN_CSL]),
+      config: CONFIG,
+      scopeCommitted: false,
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const hint = view.container.querySelector(".readiness-footer-hint");
+    expect(hint?.textContent).toBe(
+      "Run the DCR Gap Analysis (section 3) - its tables decide what the existing destination must feed.",
+    );
+    expect(view.container.textContent).not.toMatch(/client id/i);
+    expect(view.azure).not.toHaveBeenCalled();
   });
 });
 

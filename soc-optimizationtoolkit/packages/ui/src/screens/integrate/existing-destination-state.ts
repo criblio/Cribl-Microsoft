@@ -27,9 +27,11 @@
 
 import {
   checkRoutablePrerequisites,
+  crblFileName,
   inputRouteFilter,
   normalizeInput,
   parseOutputListing,
+  packIdFromCrblFileName,
   parseSentinelOutputs,
 } from "@soc/core";
 import type {
@@ -82,18 +84,29 @@ export interface ExistingPickerView {
  * inferredTable (see core existing-outputs.ts); passing the detected tables
  * here, rather than at read time, means a new gap analysis re-infers without
  * reading Cribl again.
+ *
+ * `currentGroupId` is the group selected NOW. A read for any other group is
+ * the previous group's answer, still held for the render between a group
+ * change and the effect that re-reads: it is shown as reading the new group,
+ * never as the new group's destinations (its rows would otherwise satisfy the
+ * gate for one render with ids from the wrong group).
  */
 export function existingPickerView(
   read: ExistingOutputsRead,
   knownTables: readonly string[],
+  currentGroupId: string,
 ): ExistingPickerView {
   const blank = { rows: [], outputIds: [] };
-  if (read.state === "idle") {
-    return {
-      kind: "idle",
-      text: "Not read yet - select a worker group in this section to read its destinations.",
-      ...blank,
-    };
+  const idle: ExistingPickerView = {
+    kind: "idle",
+    text: "Not read yet - select a worker group in this section to read its destinations.",
+    ...blank,
+  };
+  if (read.state === "idle") return idle;
+  if (read.groupId !== currentGroupId) {
+    return currentGroupId === ""
+      ? idle
+      : { kind: "loading", text: `Reading ${currentGroupId}'s destinations...`, ...blank };
   }
   const group = read.groupId;
   if (read.state === "loading") {
@@ -322,6 +335,18 @@ export function existingDestinationRoute(input: {
     final: true,
     description: `Sends ${source.id} through pack ${packId} to the existing Sentinel destination ${destinationId}.`,
   };
+}
+
+/**
+ * The id Cribl installs a pack under, for a pack name: the name as the build
+ * writes it into the .crbl file name (characters outside [A-Za-z0-9_.-]
+ * become "-") with the version stripped, exactly as the install pins it. The
+ * route names `pack:<this>`, so before the pack is installed this - not the
+ * typed name - is what the route has to say ("Palo Alto" installs as
+ * "Palo-Alto"). The version is a stand-in: it is stripped again.
+ */
+export function expectedPackId(packName: string): string {
+  return packIdFromCrblFileName(crblFileName(packName.trim(), "0.0.0"));
 }
 
 /** How the source sends its events, read from GET /system/inputs/:id. */

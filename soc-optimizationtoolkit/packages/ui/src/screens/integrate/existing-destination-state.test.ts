@@ -14,6 +14,7 @@ import {
   existingDestinationGateReason,
   existingDestinationRoute,
   existingPickerView,
+  expectedPackId,
   ingestionClientIdHint,
   initialDestinationMode,
   sourceRouting,
@@ -51,6 +52,7 @@ function done(items: unknown[], status = 200): ExistingPickerView {
   return existingPickerView(
     { state: "done", groupId: GROUP, response: { status, body: { items } } },
     ["CommonSecurityLog"],
+    GROUP,
   );
 }
 
@@ -69,7 +71,7 @@ describe("initialDestinationMode (GEN-21 F2-c)", () => {
 
 describe("existingPickerView - every listing state has its own sentence", () => {
   it("not read yet", () => {
-    const view = existingPickerView({ state: "idle" }, []);
+    const view = existingPickerView({ state: "idle" }, [], GROUP);
     expect(view.kind).toBe("idle");
     expect(view.text).toBe(
       "Not read yet - select a worker group in this section to read its destinations.",
@@ -77,9 +79,26 @@ describe("existingPickerView - every listing state has its own sentence", () => 
   });
 
   it("reading", () => {
-    const view = existingPickerView({ state: "loading", groupId: GROUP }, []);
+    const view = existingPickerView({ state: "loading", groupId: GROUP }, [], GROUP);
     expect(view.kind).toBe("loading");
     expect(view.text).toBe("Reading TMNA_POV's destinations...");
+  });
+
+  it("a read held from the PREVIOUS group is never this group's listing", () => {
+    // The render between a group change and the effect that re-reads still
+    // holds the old group's rows; they must not satisfy this group's picker.
+    const old = {
+      state: "done" as const,
+      groupId: "default",
+      response: { status: 200, body: { items: [PAN_CSL] } },
+    };
+    const view = existingPickerView(old, ["CommonSecurityLog"], GROUP);
+    expect(view.kind).toBe("loading");
+    expect(view.text).toBe("Reading TMNA_POV's destinations...");
+    expect(view.rows).toEqual([]);
+    expect(view.outputIds).toEqual([]);
+    // No group selected now: not read, rather than reading nothing.
+    expect(existingPickerView(old, [], "").kind).toBe("idle");
   });
 
   it("a non-2xx is FAILED, never an empty group", () => {
@@ -96,6 +115,7 @@ describe("existingPickerView - every listing state has its own sentence", () => 
     const view = existingPickerView(
       { state: "error", groupId: GROUP, error: "network down" },
       [],
+      GROUP,
     );
     expect(view.kind).toBe("failed");
     expect(view.text).toMatch(/^Could not read TMNA_POV's destinations: network down /);
@@ -290,6 +310,16 @@ describe("existingDestinationRoute - the route to copy", () => {
       description:
         "Sends in_syslog through pack uat-panos-offline to the existing Sentinel destination PAN-CSL.",
     });
+  });
+});
+
+describe("expectedPackId - the id the route names before install", () => {
+  it("is the id the install pins, not the typed name", () => {
+    expect(expectedPackId("uat-panos-offline")).toBe("uat-panos-offline");
+    // Cribl's id does not keep a space or a slash: the build writes "-".
+    expect(expectedPackId(" Palo Alto/PAN-OS ")).toBe("Palo-Alto-PAN-OS");
+    // A name that itself ends in a version-like suffix keeps it.
+    expect(expectedPackId("pan_2")).toBe("pan_2");
   });
 });
 
