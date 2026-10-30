@@ -134,15 +134,16 @@ describe("existing destination picked (GEN-21)", () => {
     ).toBe(true);
   });
 
-  it("unlocks wiring from an installed pack with a picked destination, with no deploy run", () => {
-    expect(canWireSource(false, "full", true)).toBe(true);
-    expect(canWireSource(false, "cribl-only", true)).toBe(true);
-    // Cribl skipped still means no source to wire.
-    expect(canWireSource(false, "azure-only", true)).toBe(false);
-    expect(canWireSource(false, "air-gapped", true)).toBe(false);
-    // Neither driver: still locked.
-    expect(canWireSource(false, "full", false)).toBe(false);
-    expect(canWireSource(false, "full")).toBe(false);
+  it("keeps the Workspace pill in azure-only when only the existing mode is on (GEN-28)", () => {
+    // The mode alone drops the pill in integrate-arc, before any pick; an
+    // azure-only run must not lose it to the mode either.
+    const ON_PATH: SectionInputs = { ...READY, scopeCommitted: false, existingMode: true };
+    expect(
+      readinessPillsForMode(ON_PATH, "azure-only").find((p) => p.id === "workspace")?.state,
+    ).toBe("missing");
+    expect(readinessPillsForMode(ON_PATH, "full").map((p) => p.id)).not.toContain(
+      "workspace",
+    );
   });
 
   it("keeps the Workspace pill in azure-only, where the pick does not lift the scope", () => {
@@ -163,12 +164,6 @@ describe("existing destination picked (GEN-21)", () => {
       "worker-groups",
       "pack-name",
     ]);
-  });
-
-  it("deriveGuidedWorkflow counts an installed pack only when a destination is picked", () => {
-    expect(deriveGuidedWorkflow(PICKED, "full", true).canWireSource).toBe(true);
-    expect(deriveGuidedWorkflow(PICKED, "full").canWireSource).toBe(false);
-    expect(deriveGuidedWorkflow(READY, "full", true).canWireSource).toBe(false);
   });
 });
 

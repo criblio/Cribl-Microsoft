@@ -366,6 +366,13 @@ describe("sourceRouting - a QuickConnected source never reaches a route", () => 
         "reading the source.) - check that it is not QuickConnected before relying on this route.",
     );
   });
+
+  it("a 200 that holds no source is unknown, not a source that sends to routes (GEN-28)", () => {
+    expect(sourceRouting({ status: 200, body: { items: [] } })).toEqual({
+      kind: "unknown",
+      reason: "The source read did not hold a source.",
+    });
+  });
 });
 
 describe("ingestionClientIdHint (DBT-200)", () => {

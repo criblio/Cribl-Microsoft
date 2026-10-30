@@ -1607,6 +1607,30 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
     expect(view.container.textContent).not.toMatch(/client id/i);
     expect(view.azure).not.toHaveBeenCalled();
   });
+
+  it("points nothing at an Azure scope before the pick is complete (GEN-28)", async () => {
+    // The radio puts the page on the path; the pick waits for a gap analysis.
+    // For that whole stretch the section status, the footer pill and the
+    // Deploy header used to ask for the scope the body said was not needed.
+    const view = renderExisting({
+      outputs: read([PAN_CSL]),
+      config: CONFIG,
+      scopeCommitted: false,
+    });
+    await waitFor(() => expect(view.listing()?.dataset.status).toBe("rows"));
+    const pills = [...view.container.querySelectorAll(".readiness-pill")].map(
+      (p) => p.textContent,
+    );
+    expect(pills).toEqual(["Solution", "Samples", "Mappings", "Worker Groups", "Pack Name"]);
+    const azureSection = view.container.querySelector("#integrate-section-azure-resources");
+    expect(azureSection?.className).toContain("numbered-section-not-needed");
+    expect(
+      azureSection?.querySelector(".numbered-section-info-tag")?.textContent,
+    ).toBe("Not needed with an existing destination");
+    expect(view.container.textContent).not.toContain(
+      "Commit an Azure target (subscription, resource group, and workspace)",
+    );
+  });
 });
 
 /**

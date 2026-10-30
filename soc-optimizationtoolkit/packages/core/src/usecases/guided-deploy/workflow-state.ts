@@ -31,7 +31,6 @@
 import {
   canDeploy as integrateCanDeploy,
   canDeployContentPath as integrateCanDeployContentPath,
-  deployAzureRequirements,
   deriveReadinessPills,
   type ReadinessPill,
   type SectionInputs,
@@ -104,29 +103,22 @@ export function canDeployContentPathInMode(
 }
 
 /**
- * Whether source wiring is unlocked: Cribl is not skipped (there is no source
- * to wire in an Azure-only or air-gapped run) AND one of two things happened:
+ * Whether source wiring is unlocked: a deploy has completed (Deploy created the
+ * group's Sentinel destination the wiring sends to) AND Cribl is not skipped
+ * (there is no source to wire in an Azure-only or air-gapped run). Wiring
+ * completion never re-locks it (each step is re-runnable).
  *
- *   1. a deploy has completed - the native path, where Deploy creates the
- *      group's Sentinel destination the wiring sends to; or
- *   2. the pack is installed with an EXISTING destination picked ([[GEN-21]]).
- *      That path has no Deploy run at all - nothing in Azure to create, and the
- *      destination already exists - so waiting for driver 1 would lock wiring
- *      forever. The shell passes true only when both halves hold: a picked
- *      destination AND an installed pack; an installed pack alone has nowhere
- *      to send to.
- *
- * Wiring completion never re-locks it (each step is re-runnable).
+ * The existing-destination path ([[GEN-21]]) does not go through this gate
+ * ([[GEN-28]]). It has no Deploy run and the app does not write its route: the
+ * Integrate screen SHOWS the group route to add by hand as soon as every table
+ * has a confirmed pick - before the pack is installed, naming the id the pack
+ * will install under - and warns when the source is QuickConnected.
  */
 export function canWireSource(
   deployCompleted: boolean,
   mode: DeployMode,
-  packInstalledWithExistingDestination = false,
 ): boolean {
-  return (
-    (deployCompleted || packInstalledWithExistingDestination) &&
-    !deployModeGating(mode).skipCribl
-  );
+  return deployCompleted && !deployModeGating(mode).skipCribl;
 }
 
 /**
@@ -141,11 +133,12 @@ export function readinessPillsForMode(
   mode: DeployMode,
 ): ReadinessPill[] {
   const gating = deployModeGating(mode);
-  // An azure-only run ignores a pick (see canDeployInMode), so its Workspace
-  // pill must not vanish because one is set: integrate-arc drops that pill on
-  // a pick, which here would hide the one prerequisite still blocking Deploy.
+  // An azure-only run ignores the existing-destination path (see
+  // canDeployInMode), so its Workspace pill must not vanish because that path
+  // is on: integrate-arc drops the pill for the mode or a pick (GEN-28), which
+  // here would hide the one prerequisite still blocking Deploy.
   const pillInputs: SectionInputs = gating.skipCribl
-    ? { ...inputs, existingDestination: "" }
+    ? { ...inputs, existingMode: false, existingDestination: "" }
     : inputs;
   return deriveReadinessPills(pillInputs).filter((pill) => {
     if (pill.id === "workspace") return !gating.skipAzure;
@@ -172,26 +165,17 @@ export interface GuidedWorkflowState {
  * Derive the whole guided-workflow state from the section inputs, the mode, and
  * whether a deploy has completed (the deploy-complete flag is the wiring
  * unlock's driver; SectionInputs.deployCompleted stays the section model's).
- * `packInstalled` is wiring's second driver (GEN-21); it counts only when an
- * existing destination is picked in `inputs`.
  */
 export function deriveGuidedWorkflow(
   inputs: SectionInputs,
   mode: DeployMode,
-  packInstalled = false,
 ): GuidedWorkflowState {
-  // A pick is exactly what drops the scope requirement (integrate-arc).
-  const existingPicked = !deployAzureRequirements(inputs).scope;
   return {
     mode,
     gating: deployModeGating(mode),
     canDeploy: canDeployInMode(inputs, mode),
     canDeployContentPath: canDeployContentPathInMode(inputs, mode),
-    canWireSource: canWireSource(
-      inputs.deployCompleted,
-      mode,
-      packInstalled && existingPicked,
-    ),
+    canWireSource: canWireSource(inputs.deployCompleted, mode),
     readinessPills: readinessPillsForMode(inputs, mode),
   };
 }

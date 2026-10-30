@@ -98,6 +98,7 @@ import {
   mergeLogTypeSources,
   rankUnreferencedByVolume,
   deployedGroups,
+  deployAzureRequirements,
   deriveSectionStatuses,
   sectionForPill,
   destinationIdFromOptions,
@@ -1064,6 +1065,28 @@ export function IntegrateScreen({
   // routable pack can be the pipeline of - so the shape is not a choice there.
   const effectivePackShape: PackShape = existingMode ? "routable" : packShape;
 
+  // The arc's inputs, derived here rather than beside the section statuses
+  // because the Azure reads below are enabled by what the core says they need.
+  // GEN-28: the radio goes in as `existingMode`, so the arc and this screen
+  // read ONE signal for "on the existing-destination path"; the pick only
+  // names the destination in the arc's text.
+  const sectionInputs = deriveSectionInputs({
+    solutionSelected,
+    scopeCommitted,
+    workerGroup: groupId,
+    packName,
+    deployCompleted,
+    sampleCount,
+    mappingsApproved,
+    existingMode,
+    ...(existingDestination !== undefined ? { existingDestination } : {}),
+  });
+  // Which Azure reads and fields this run needs - all of them on the native
+  // path, none on the existing one. The workspace table listing, the Content
+  // Hub cross-reference, the pack build's DCR inventory read and the run's
+  // table-name and client-id gates key off this, not off the radio directly.
+  const azureNeeds = deployAzureRequirements(sectionInputs);
+
   // Any change to the pack name or target groups invalidates a prior
   // conflict check and its overwrite acknowledgment.
   useEffect(() => {
@@ -1215,7 +1238,7 @@ export function IntegrateScreen({
     },
     // GEN-21: the existing-destination path reads nothing from Azure, even
     // with a scope left over from an earlier session.
-    enabled: scopeCommitted && !existingMode,
+    enabled: scopeCommitted && azureNeeds.scope,
   });
   const workspaceTables = workspaceTableListing.names;
   // Marked STALE, not cleared (user decision 2026-08-10): every mapping,
@@ -1677,9 +1700,9 @@ export function IntegrateScreen({
       // GEN-21: null on the existing-destination path, which reads no Azure
       // and bakes no destination values (resolveBuildDestinations says why).
       const resolved = await resolveBuildDestinations({
-        existing: existingMode
-          ? { destination: existingDestination ?? "(not picked)" }
-          : null,
+        existing: azureNeeds.dcrInventory
+          ? null
+          : { destination: existingDestination ?? "(not picked)" },
         planTables,
         sessionDestinations,
         // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
@@ -1908,8 +1931,8 @@ export function IntegrateScreen({
     identityGateReason,
     // GEN-21: the existing path's gate and the destination it builds for.
     existingGateReason,
-    existingMode,
     existingDestination,
+    azureNeeds.dcrInventory,
     outcomes,
     samples,
     config,
@@ -1921,16 +1944,7 @@ export function IntegrateScreen({
   ]);
 
   // ---- Derived section states, readiness pills, deploy gate -------------
-  const sectionInputs = deriveSectionInputs({
-    solutionSelected,
-    scopeCommitted,
-    workerGroup: groupId,
-    packName,
-    deployCompleted,
-    sampleCount,
-    mappingsApproved,
-    ...(existingDestination !== undefined ? { existingDestination } : {}),
-  });
+  // (sectionInputs and azureNeeds are derived above, beside the radio.)
   const resolved = deriveSectionStatuses(sectionInputs);
 
   // DBT-127: the page owns which sections are folded, so "Done - next" and
@@ -1983,12 +1997,14 @@ export function IntegrateScreen({
   // The single unlock condition, in dependency order: the arc's built
   // prerequisites first (scope -> worker group -> pack name, from the pure
   // module), then the concrete native-run fields the arc model does not
-  // track (a table name and an ingestion identity).
+  // track (a table name and an ingestion identity) - each asked for only when
+  // the core says the run needs it (GEN-28), which on the existing path is
+  // never.
   const runDisabledReason =
     deployDisabledReason(sectionInputs) ??
-    (deployTargets.length === 0
+    (azureNeeds.scope && deployTargets.length === 0
       ? "Enter a native table name in the Deploy section."
-      : ingestionClientId.trim() === ""
+      : azureNeeds.ingestionClientId && ingestionClientId.trim() === ""
         ? "Enter an ingestion client id in the Deploy section."
         : null);
 
@@ -2122,13 +2138,11 @@ export function IntegrateScreen({
     ports.packs !== undefined && ports.packInstall !== undefined;
   const contentEngaged = gapReports.length > 0 && packPortsAvailable;
   // GEN-21: on the existing path the run IS the pack - nothing in Azure is
-  // deployed - so its gate is the pick, the arc's Cribl prerequisites (which
-  // drop the scope once a destination is picked), then the pack's own. No
-  // table name and no ingestion client id: neither is used.
+  // deployed - so its gate is the pick, then the run's own prerequisites
+  // (which on this path drop the scope, the table name and the ingestion
+  // client id - GEN-28), then the pack's own.
   const deployEverythingDisabledReason = existingMode
-    ? (existingGateReason ??
-      deployDisabledReason(sectionInputs) ??
-      packBuildDisabledReason)
+    ? (existingGateReason ?? runDisabledReason ?? packBuildDisabledReason)
     : (runDisabledReason ?? (contentEngaged ? packBuildDisabledReason : null));
   const runDeployEverything = useCallback(async () => {
     if (existingMode) {
@@ -2370,7 +2384,7 @@ export function IntegrateScreen({
       onSelect={handleSolutionChange}
       // GEN-21: its Content Hub cross-reference is an Azure read, and the
       // existing-destination path makes none; the repo heuristics still run.
-      scopeCommitted={scopeCommitted && !existingMode}
+      scopeCommitted={scopeCommitted && azureNeeds.scope}
       // Keep this section in agreement with the rest of the page: the solution
       // restored from the content cache above drives every other section and
       // the readiness pill, so the browser must show it as selected too rather

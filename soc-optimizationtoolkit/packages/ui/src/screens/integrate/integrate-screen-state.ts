@@ -76,9 +76,17 @@ export interface IntegrateRawInputs {
    */
   mappingsApproved: boolean;
   /**
+   * The Sentinel destination radio is on "existing" ([[GEN-21]]). Passed
+   * straight through: it is the ONE signal for "on the existing-destination
+   * path" that the screen and the core arc both read ([[GEN-28]]), and the
+   * core decides what that path drops.
+   */
+  existingMode?: boolean;
+  /**
    * The existing Cribl Sentinel destination every table was pointed at
    * ([[GEN-21]], existing-destination-state existingDestinationForArc), or
-   * undefined. Passed straight through: the core decides what a pick drops.
+   * undefined. Passed straight through; it only names the destination in the
+   * arc's text.
    */
   existingDestination?: string;
 }
@@ -98,6 +106,7 @@ export function deriveSectionInputs(raw: IntegrateRawInputs): SectionInputs {
     deployCompleted: raw.deployCompleted,
     samplesProvided: raw.sampleCount > 0,
     mappingsApproved: raw.mappingsApproved,
+    ...(raw.existingMode !== undefined ? { existingMode: raw.existingMode } : {}),
     ...(raw.existingDestination !== undefined
       ? { existingDestination: raw.existingDestination }
       : {}),

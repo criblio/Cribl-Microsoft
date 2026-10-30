@@ -847,22 +847,19 @@ describe("existingDestination (GEN-21)", () => {
     expect(deployAzureRequirements(blank)).toEqual({
       scope: true,
       ingestionClientId: true,
-      directoryRead: true,
       dcrInventory: true,
     });
   });
 
-  it("drops scope, client id, directory and DCR inventory from the requirements", () => {
+  it("drops scope, client id and DCR inventory from the requirements", () => {
     expect(deployAzureRequirements(picked())).toEqual({
       scope: false,
       ingestionClientId: false,
-      directoryRead: false,
       dcrInventory: false,
     });
     expect(deployAzureRequirements(inputs())).toEqual({
       scope: true,
       ingestionClientId: true,
-      directoryRead: true,
       dcrInventory: true,
     });
   });
@@ -895,6 +892,79 @@ describe("existingDestination (GEN-21)", () => {
       expect(deriveSectionStatuses(u)).toEqual(deriveSectionStatuses(i));
       expect(canDeploy(u)).toBe(i.scopeCommitted && i.workerGroupSelected && i.packNameSet);
       expect(deriveReadinessPills(u)).toEqual(deriveReadinessPills(i));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GEN-28: the existing path is on from the radio, before any pick
+// ---------------------------------------------------------------------------
+
+describe("existingMode (GEN-28)", () => {
+  // The screen switches on the radio; the pick only completes once a gap
+  // analysis has produced tables. The arc must say the same thing for that
+  // whole stretch, not ask for a scope the page says it will not use.
+  const onPath = (overrides: Partial<SectionInputs> = {}) =>
+    inputs({ existingMode: true, ...overrides });
+
+  it("resolves Select Azure Resources to not-needed before anything is picked", () => {
+    for (const i of everyInputCombination()) {
+      expect(
+        deriveSectionStatus(integrateSection("azure-resources"), {
+          ...i,
+          existingMode: true,
+        }),
+      ).toEqual({
+        status: "not-needed",
+        reason: "Not needed with an existing destination",
+      });
+    }
+  });
+
+  it("names the destination once one is picked", () => {
+    expect(
+      deriveSectionStatus(
+        integrateSection("azure-resources"),
+        onPath({ existingDestination: "PAN-CSL" }),
+      ),
+    ).toEqual({ status: "not-needed", reason: "Not needed - using PAN-CSL" });
+  });
+
+  it("drops the Workspace pill with no pick", () => {
+    expect(deriveReadinessPills(onPath()).map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+
+  it("takes the scope out of the deploy gate: the reason is the next Cribl prerequisite", () => {
+    expect(deriveSectionStatus(integrateSection("deploy"), onPath())).toEqual({
+      status: "blocked",
+      reason: "Select a Cribl worker group in Cribl Configuration first.",
+    });
+    expect(canDeploy(onPath({ workerGroupSelected: true, packNameSet: true })))
+      .toBe(true);
+    expect(canDeploy(onPath({ workerGroupSelected: true }))).toBe(false);
+  });
+
+  it("drops every Azure requirement with no pick", () => {
+    expect(deployAzureRequirements(onPath())).toEqual({
+      scope: false,
+      ingestionClientId: false,
+      dcrInventory: false,
+    });
+  });
+
+  it("is the native path when false: nothing moves", () => {
+    for (const i of everyInputCombination()) {
+      const off = { ...i, existingMode: false };
+      expect(deriveSectionStatuses(off)).toEqual(deriveSectionStatuses(i));
+      expect(canDeploy(off)).toBe(canDeploy(i));
+      expect(deriveReadinessPills(off)).toEqual(deriveReadinessPills(i));
+      expect(deployAzureRequirements(off)).toEqual(deployAzureRequirements(i));
     }
   });
 });
