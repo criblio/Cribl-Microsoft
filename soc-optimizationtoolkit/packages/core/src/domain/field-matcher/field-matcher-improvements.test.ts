@@ -517,6 +517,21 @@ describe("CEF deviceProcessName reaches ProcessName (DBT-204)", () => {
     // ladder always made is unchanged.
     expect(pick("deviceWidgetName", ["WidgetID"])).toBe("WidgetID");
   });
+
+  it("only two DIFFERENT suffixes demote; a side with no suffix keeps 70", () => {
+    // The guard is "both carry a suffix AND they differ". A bare column is no
+    // evidence of a name/id mismatch, so it keeps the legacy 70 in both
+    // directions - and so beats a column whose suffix contradicts the
+    // source. This is the shape that moved CrowdStrike_Additional_Events_CL
+    // severity_id off SeverityName onto Severity.
+    expect(scoreMatch("deviceWidgetName", "Widget").score).toBe(70);
+    expect(scoreMatch("deviceWidget", "WidgetID").score).toBe(70);
+    const picked = matchFields(
+      [{ name: "widget_id", type: "string" }],
+      ["WidgetName", "Widget"].map((name) => ({ name, type: "string" })),
+    ).matched[0]?.destName;
+    expect(picked).toBe("Widget");
+  });
 });
 
 describe("case-insensitive alias-key fallback (2026-07-08)", () => {
