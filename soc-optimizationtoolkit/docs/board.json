@@ -2285,13 +2285,14 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-183",
       "title": "A Content Hub package with no displayName matches every solution",
-      "detail": "FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless said). findSolutionCatalogEntry's fuzzy match (available-content.ts ~:138-141) is dn.includes(target) || target.includes(dn); a package with an empty or missing displayName gives dn === '', and target.includes('') is true, so it matches whatever is looked up first. FIX: skip empty names; pin."
+      "detail": "FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless said). findSolutionCatalogEntry's fuzzy match (available-content.ts ~:138-141) is dn.includes(target) || target.includes(dn); a package with an empty or missing displayName gives dn === '', and target.includes('') is true, so it matches whatever is looked up first. FIX: skip empty names; pin. DONE 2026-10-30: integrated from the paused fix/dbt-183-empty-displayname-review (fc687d7, b993c5d cherry-picked onto the 1.13.0 head in chore/paused-integration). findSolutionCatalogEntry skips an empty normalised name on either side and ranks exact > longest containment > closest length > catalog order. Mutation: removing the empty-name skip fails 2 pins. Internal matching only - no screen to verify live.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -2339,13 +2340,14 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-187",
       "title": "The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead",
-      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. decideSecretConflict (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts findById each pick the record for an id out of items, with different handling of non-object entries, so the onboarding source planner and ensureTextSecret can read the same answer differently. SECRETS_API_PATH (guided-deploy/secret-provisioning.ts:47) is used only by tests and the barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the constant or use it."
+      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. decideSecretConflict (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts findById each pick the record for an id out of items, with different handling of non-object entries, so the onboarding source planner and ensureTextSecret can read the same answer differently. SECRETS_API_PATH (guided-deploy/secret-provisioning.ts:47) is used only by tests and the barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the constant or use it. DONE 2026-10-30: integrated from the paused fix/dbt-187-secret-get-reader-review (0074116, 7a3abbc cherry-picked in chore/paused-integration). One reader, domain/cribl-secrets/secret-record.ts findSecretRecord, serves decideSecretConflict and classify-existing; SECRETS_API_PATH removed. Mutation: dropping the non-object-entry check fails 5 pins. Internal parsing only - no screen to verify live.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
