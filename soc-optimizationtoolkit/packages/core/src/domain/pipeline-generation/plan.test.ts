@@ -835,9 +835,10 @@ describe("a reviewer's re-pointed row reaches the emitted pipeline (GEN-19, F1-e
       expect(serialize).not.toMatch(/"!?in"/);
       expect(serialize).toContain('- "!SourceMACAddress"');
       expect(serialize).toContain('- "!ReceivedBytes"');
-      // F1-e: the int -> long rename converts, on the TARGET name.
+      // F1-e: the int -> long rename converts, on the TARGET name. The
+      // expression is GEN-23's (was `Number(x) || 0`, a deliberate change).
       expect(conf).toContain(
-        '        - name: ReceivedBytes\n          value: "Number(ReceivedBytes) || 0"',
+        `        - name: ReceivedBytes\n          value: "(ReceivedBytes != null && String(ReceivedBytes).trim() !== '' && isFinite(ReceivedBytes)) ? Number(ReceivedBytes) : undefined"`,
       );
       // A same-typed rename does not.
       expect(conf).not.toContain("- name: SourceMACAddress\n");
@@ -881,7 +882,7 @@ describe("a reviewer's re-pointed row reaches the emitted pipeline (GEN-19, F1-e
     ]);
     const conf = generatePipelineConfForPlan(plan, "Palo Alto Networks");
     expect(conf).toContain(
-      '        - name: ReceivedBytes\n          value: "Number(ReceivedBytes) || 0"',
+      `        - name: ReceivedBytes\n          value: "(ReceivedBytes != null && String(ReceivedBytes).trim() !== '' && isFinite(ReceivedBytes)) ? Number(ReceivedBytes) : undefined"`,
     );
   });
 });
