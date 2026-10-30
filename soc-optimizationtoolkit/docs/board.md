@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 38 in progress, 99 done.**
+**81 in the backlog, 47 in progress, 99 done.**
 
 ## By menu item
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 
 ---
 
-## In progress (38)
+## In progress (47)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1084,9 +1084,94 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **DBT-204** The Mapping Catalog claims deviceProcessName maps to ProcessName; the matcher sends it to ProcessID
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Same class as
+  GEN-20. CEF_CATALOG_PACK says the alias ladder applies deviceProcessName ->
+  ProcessName, but there is no alias and matchFields maps it to ProcessID on
+  the bundled CommonSecurityLog schema. The sweep pin in
+  vendor-mapping-packs.test.ts records it as the single known disagreement;
+  change that list to [] when fixed.
+
+- **DBT-205** Splitting skips short key=value lines silently and can misfile raw text
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
+  splitSamplesByLogType skips a key=value line under the 3-pair minimum in
+  eventObjects but not in rawEvents, so later raw lines can be filed under an
+  earlier event's log type; and any line that parses to nothing is left out of
+  every group with no word, so group counts can sum below the captured count.
+  PAN-OS CEF lines always parse, so the UAT fixture is unaffected. Fix: keep
+  the arrays aligned and report the lines left out.
+
+- **DBT-206** Paste and file upload show the untrimmed event count until a reload
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
+  sample-intake-section.tsx persistUpsert and addFromFiles put the untrimmed
+  sample in the local list after store.upsert, so the chip shows the full
+  count until a reload and then the store's byte-capped count with no
+  explanation. Third intake path of DBT-197's trim; reuse
+  storedEventShortfalls and the headline sentence.
+
+- **DBT-209** Setting an overflow row's Action to rename or keep targets the catch-all column
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). An
+  Action-dropdown edit changes only `action`, so an overflow row (dest
+  AdditionalExtensions) set to rename emits a Rename onto the catch-all's
+  name, or keeps it. Pre-existing; GEN-19 fixed the Dest path only. Fix:
+  refuse rename/keep while dest is the catch-all, or route the Action path
+  through applyRemap.
+
+- **DBT-210** Mapping edits survive a re-analysis and are applied to the new rows
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). The edit store
+  outlives a re-analysis; isModified then reads true and the badge says the
+  edits are applied at build, against rows from an older analysis. Fix: drop
+  or re-key edits whose source rows are gone, and say so.
+
+- **DBT-212** A custom rule uploaded before the gap reports arrive is accepted but never analyzed
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Rule Coverage
+  onUpload calls runCoverage, which returns early while liveReports is empty:
+  the section says '1 custom rule' and shows nothing until Analyze is clicked.
+  Also, after a new gap analysis changes tables, coverage keeps the last run's
+  availability with no 'Re-analyze to refresh' note, so an applied chip does
+  not clear and reads as a failed apply. Fix: queue the run until reports
+  arrive; mark stale availability.
+
+- **GEN-25** Routable packs report placeholder destinations they do not contain, and their README names destinations that do not exist
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). scaffold.ts
+  assemblePack reports placeholderTables for every table without a destination
+  input even when the routable pack writes no outputs.yml, so a native-path
+  routable build logs 'PLACEHOLDER destination values' (the
+  existing-destination UI suppresses it, core does not). readme.ts lists the
+  convention destination ids as required, so on the GEN-21 path the README
+  names destinations that do not exist instead of the one picked. Fix in core:
+  no placeholder report for routable packs; carry the chosen id into the
+  README.
+
+- **DBT-215** Rule Coverage misses fields after `and` in a where clause, so rules under-report missing fields
+  `DBT-F2` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Found by the
+  merge reconciliation. extract-kql-fields.ts (legacy heuristic) takes only
+  the first field after `where`, plus ==~ / !=~ comparisons: `where A > 1 and
+  B == "x"` never reports B as missing, so Rule Coverage reads a rule as
+  satisfied when it is not. Fix: extract every comparison operand in a where
+  predicate (and/or/not, parentheses); pin with exact field lists.
+
+- **GEN-29** String coercion turns 0 and false into an empty string
+  `GEN-F1` `bug` `settled`
+  FOUND 2026-10-29 by the F1/F2 follow-up review (wf_9121dfa7-b23).
+  buildCoercionExpr's string branch emits String(x || ''), so an int 0 or a
+  boolean false going into a string column arrives as ''. Reached through
+  vendorCoercions and, since GEN-19, matcher cross-type renames. Same class as
+  GEN-23: use x == null ? x : String(x), pinned through
+  generatePipelineConfForPlan with evaluated samples. Also check the
+  single-quote escape in field names inside YAML double-quoted values.
+
 ---
 
-## Backlog - now (13)
+## Backlog - now (4)
 
 Next to pick up. Nothing blocks these.
 
@@ -1213,91 +1298,6 @@ Next to pick up. Nothing blocks these.
   replace each wildcard with the literal paths and actions its callers use,
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
-
-- **DBT-204** The Mapping Catalog claims deviceProcessName maps to ProcessName; the matcher sends it to ProcessID
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Same class as
-  GEN-20. CEF_CATALOG_PACK says the alias ladder applies deviceProcessName ->
-  ProcessName, but there is no alias and matchFields maps it to ProcessID on
-  the bundled CommonSecurityLog schema. The sweep pin in
-  vendor-mapping-packs.test.ts records it as the single known disagreement;
-  change that list to [] when fixed.
-
-- **DBT-205** Splitting skips short key=value lines silently and can misfile raw text
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
-  splitSamplesByLogType skips a key=value line under the 3-pair minimum in
-  eventObjects but not in rawEvents, so later raw lines can be filed under an
-  earlier event's log type; and any line that parses to nothing is left out of
-  every group with no word, so group counts can sum below the captured count.
-  PAN-OS CEF lines always parse, so the UAT fixture is unaffected. Fix: keep
-  the arrays aligned and report the lines left out.
-
-- **DBT-206** Paste and file upload show the untrimmed event count until a reload
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc).
-  sample-intake-section.tsx persistUpsert and addFromFiles put the untrimmed
-  sample in the local list after store.upsert, so the chip shows the full
-  count until a reload and then the store's byte-capped count with no
-  explanation. Third intake path of DBT-197's trim; reuse
-  storedEventShortfalls and the headline sentence.
-
-- **DBT-209** Setting an overflow row's Action to rename or keep targets the catch-all column
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). An
-  Action-dropdown edit changes only `action`, so an overflow row (dest
-  AdditionalExtensions) set to rename emits a Rename onto the catch-all's
-  name, or keeps it. Pre-existing; GEN-19 fixed the Dest path only. Fix:
-  refuse rename/keep while dest is the catch-all, or route the Action path
-  through applyRemap.
-
-- **DBT-210** Mapping edits survive a re-analysis and are applied to the new rows
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). The edit store
-  outlives a re-analysis; isModified then reads true and the badge says the
-  edits are applied at build, against rows from an older analysis. Fix: drop
-  or re-key edits whose source rows are gone, and say so.
-
-- **DBT-212** A custom rule uploaded before the gap reports arrive is accepted but never analyzed
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Rule Coverage
-  onUpload calls runCoverage, which returns early while liveReports is empty:
-  the section says '1 custom rule' and shows nothing until Analyze is clicked.
-  Also, after a new gap analysis changes tables, coverage keeps the last run's
-  availability with no 'Re-analyze to refresh' note, so an applied chip does
-  not clear and reads as a failed apply. Fix: queue the run until reports
-  arrive; mark stale availability.
-
-- **GEN-25** Routable packs report placeholder destinations they do not contain, and their README names destinations that do not exist
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). scaffold.ts
-  assemblePack reports placeholderTables for every table without a destination
-  input even when the routable pack writes no outputs.yml, so a native-path
-  routable build logs 'PLACEHOLDER destination values' (the
-  existing-destination UI suppresses it, core does not). readme.ts lists the
-  convention destination ids as required, so on the GEN-21 path the README
-  names destinations that do not exist instead of the one picked. Fix in core:
-  no placeholder report for routable packs; carry the chosen id into the
-  README.
-
-- **DBT-215** Rule Coverage misses fields after `and` in a where clause, so rules under-report missing fields
-  `DBT-F2` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Found by the
-  merge reconciliation. extract-kql-fields.ts (legacy heuristic) takes only
-  the first field after `where`, plus ==~ / !=~ comparisons: `where A > 1 and
-  B == "x"` never reports B as missing, so Rule Coverage reads a rule as
-  satisfied when it is not. Fix: extract every comparison operand in a where
-  predicate (and/or/not, parentheses); pin with exact field lists.
-
-- **GEN-29** String coercion turns 0 and false into an empty string
-  `GEN-F1` `bug` `settled`
-  FOUND 2026-10-29 by the F1/F2 follow-up review (wf_9121dfa7-b23).
-  buildCoercionExpr's string branch emits String(x || ''), so an int 0 or a
-  boolean false going into a string column arrives as ''. Reached through
-  vendorCoercions and, since GEN-19, matcher cross-type renames. Same class as
-  GEN-23: use x == null ? x : String(x), pinned through
-  generatePipelineConfForPlan with evaluated samples. Also check the
-  single-quote escape in field names inside YAML double-quoted values.
 
 ---
 

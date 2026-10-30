@@ -2988,7 +2988,7 @@
       "verified": "pins"
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3000,7 +3000,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Same class as GEN-20. CEF_CATALOG_PACK says the alias ladder applies deviceProcessName -> ProcessName, but there is no alias and matchFields maps it to ProcessID on the bundled CommonSecurityLog schema. The sweep pin in vendor-mapping-packs.test.ts records it as the single known disagreement; change that list to [] when fixed."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3012,7 +3012,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). splitSamplesByLogType skips a key=value line under the 3-pair minimum in eventObjects but not in rawEvents, so later raw lines can be filed under an earlier event's log type; and any line that parses to nothing is left out of every group with no word, so group counts can sum below the captured count. PAN-OS CEF lines always parse, so the UAT fixture is unaffected. Fix: keep the arrays aligned and report the lines left out."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3049,7 +3049,7 @@
       "verified": "pins"
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3061,7 +3061,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). An Action-dropdown edit changes only `action`, so an overflow row (dest AdditionalExtensions) set to rename emits a Rename onto the catch-all's name, or keeps it. Pre-existing; GEN-19 fixed the Dest path only. Fix: refuse rename/keep while dest is the catch-all, or route the Action path through applyRemap."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3086,7 +3086,7 @@
       "priorityWhy": "Keyboard users lose their place but the action itself succeeds and is announced by the role=status note; the data-correctness bugs from the same review (GEN-23, GEN-24, DBT-208) cost more."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3098,7 +3098,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Rule Coverage onUpload calls runCoverage, which returns early while liveReports is empty: the section says '1 custom rule' and shows nothing until Analyze is clicked. Also, after a new gap analysis changes tables, coverage keeps the last run's availability with no 'Re-analyze to refresh' note, so an applied chip does not clear and reads as a failed apply. Fix: queue the run until reports arrive; mark stale availability."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3175,7 +3175,7 @@
       "verified": "pins"
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
@@ -3187,7 +3187,7 @@
       "detail": "FOUND 2026-10-29 by the F1/F2 build review (wf_6ae1fd00-2fc). Found by the merge reconciliation. extract-kql-fields.ts (legacy heuristic) takes only the first field after `where`, plus ==~ / !=~ comparisons: `where A > 1 and B == \"x\"` never reports B as missing, so Rule Coverage reads a rule as satisfied when it is not. Fix: extract every comparison operand in a where predicate (and/or/not, parentheses); pin with exact field lists."
     },
     {
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [],
       "priority": "now",
