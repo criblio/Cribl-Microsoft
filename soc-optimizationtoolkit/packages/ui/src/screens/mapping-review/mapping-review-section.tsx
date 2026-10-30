@@ -42,7 +42,9 @@
  * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis; edits
  * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
  * optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
- * only its own card and review; the other tables keep their approvals.
+ * only its own card and review; the other tables keep their approvals. A
+ * close match chosen in a coverage section (remapEvent, DBT-203) applies
+ * through the same path as this section's own unmapped-column suggestions.
  *
  * All analysis IO flows through @soc/core: resolveSampleRouting then the
  * analyzeSamples usecase (fed the pre-resolved DCR flows - one fetch pass)
@@ -184,6 +186,21 @@ export interface MappingReviewRemoveEvent {
   nonce: number;
 }
 
+/**
+ * A close match chosen OUTSIDE this section (DBT-203: the Rule and Workbook
+ * Coverage missing-field chips), applied exactly as this section's own
+ * unmapped-column suggestion is.
+ */
+export interface MappingReviewRemapEvent {
+  logType: string;
+  /** The sample field to re-point (exact spelling). */
+  sourceField: string;
+  /** The destination column it should fill. */
+  dest: string;
+  /** Bumped on every apply so choosing the same field twice still fires. */
+  nonce: number;
+}
+
 export interface MappingReviewSectionProps {
   /** The selected Sentinel solution name (scopes the DCR lookup); "" when none. */
   solutionName: string;
@@ -298,6 +315,13 @@ export interface MappingReviewSectionProps {
    */
   dropUnneededEvent?: { nonce: number };
   /**
+   * A close match chosen in a coverage section (DBT-203; nonce bumps per
+   * click). Applied through the SAME apply-suggestion path as the Unmapped
+   * Destination Fields panel, so it withdraws the table's approval and forgets
+   * the auto-drop key just as a click here does.
+   */
+  remapEvent?: MappingReviewRemapEvent;
+  /**
    * Per-logType findings comparing the sample's DeviceVendor/DeviceProduct
    * against what the selected solution's rules filter on. Empty when no rules
    * were loaded, or when they never constrain those fields - in which case the
@@ -359,6 +383,7 @@ export function MappingReviewSection({
   learnedCache,
   contentRequirements,
   dropUnneededEvent,
+  remapEvent,
   identityFindings,
   identityOverrides,
   onIdentityOverridesChange,
@@ -961,6 +986,31 @@ export function MappingReviewSection({
     },
     [],
   );
+
+  // DBT-203: a coverage section's "Use this field" arrives here and goes
+  // through applySuggestion, the one apply path. The nonce guard starts at the
+  // event already in hand, so a remount (the content reset key) never replays
+  // an apply the reviewer made before it.
+  const lastRemapNonce = useRef<number>(remapEvent?.nonce ?? -1);
+  useEffect(() => {
+    if (remapEvent === undefined || remapEvent.nonce === lastRemapNonce.current) {
+      return;
+    }
+    lastRemapNonce.current = remapEvent.nonce;
+    const report = reports.find((r) => r.logType === remapEvent.logType);
+    if (report === undefined) {
+      logger?.warn("gap-analysis: close match for a log type with no report", {
+        logType: remapEvent.logType,
+      });
+      return;
+    }
+    applySuggestion(
+      report,
+      remapEvent.sourceField,
+      remapEvent.dest,
+      isApproved(review, report.logType),
+    );
+  }, [remapEvent, reports, review, applySuggestion, logger]);
 
   const provenanceDefault = resolution !== null && resolution.tier === "default";
 

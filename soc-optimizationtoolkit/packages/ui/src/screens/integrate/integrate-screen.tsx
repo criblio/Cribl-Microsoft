@@ -28,6 +28,8 @@
  *   4. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
  *      three-way coverage with clickable missing-field close-match review and
  *      multi-format custom-rule upload. Informational; lights RULE badges.
+ *      Both coverage instances read the EFFECTIVE mappings, and a close match
+ *      applied there reaches the Gap Analysis as a remapEvent (DBT-203).
  *   5. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
  *      the solution's shipped workbooks plus solution-related deployed ones.
  *      Informational.
@@ -179,6 +181,7 @@ import {
   unionRuleFields,
 } from "../rule-coverage/rule-coverage-state";
 import type {
+  MappingReviewRemapEvent,
   MappingReviewRemoveEvent,
   MappingReviewRenameEvent,
 } from "../mapping-review/mapping-review-section";
@@ -678,6 +681,18 @@ export function IntegrateScreen({
         ? "The solution's content parses the catch-all column opaquely - dropping fields could break it, so the action is disabled."
         : undefined;
   const dropUnneededEvent = useMemo(() => ({ nonce: dropNonce }), [dropNonce]);
+  // DBT-203: a coverage section's "Use this field". Same precedent as the drop
+  // action - a nonce the mapping review consumes - so the apply goes through
+  // the review's one apply-suggestion path rather than a second copy here.
+  const [remapEvent, setRemapEvent] = useState<MappingReviewRemapEvent>();
+  const remapNonce = useRef(0);
+  const requestRemap = useCallback(
+    (choice: { logType: string; sourceField: string; dest: string }) => {
+      remapNonce.current += 1;
+      setRemapEvent({ ...choice, nonce: remapNonce.current });
+    },
+    [],
+  );
 
   // One place the Sample Data section reports its list: keep the count (arc
   // completion / Samples pill) and the samples (match preview) in sync.
@@ -2563,6 +2578,7 @@ export function IntegrateScreen({
         onRemoveLogType={requestRemoveLogType}
         contentRequirements={contentRequirements}
         dropUnneededEvent={dropUnneededEvent}
+        remapEvent={remapEvent}
         identityFindings={identityFindings}
         identityOverrides={identityOverrides}
         onIdentityOverridesChange={setIdentityOverrides}
@@ -2602,6 +2618,9 @@ export function IntegrateScreen({
       onContentRequirementsChange={setRuleRequirements}
       onDropUnneededFields={requestDropUnneeded}
       {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
+      effectiveMappings={mappingOverrides}
+      onApplyCloseMatch={requestRemap}
+      ruleFields={ruleFields}
     />
   );
 
@@ -2616,6 +2635,9 @@ export function IntegrateScreen({
       onContentRequirementsChange={setWorkbookRequirements}
       onDropUnneededFields={requestDropUnneeded}
       {...(dropDisabledReason !== undefined ? { dropDisabledReason } : {})}
+      effectiveMappings={mappingOverrides}
+      onApplyCloseMatch={requestRemap}
+      ruleFields={ruleFields}
     />
   );
 

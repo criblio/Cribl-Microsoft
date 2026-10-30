@@ -37,6 +37,7 @@ import type {
   ContentItemType,
   CoverageReport,
   CoverageSummary,
+  GapFieldMapping,
   GapReport,
   ItemCoverage,
   SchemaCatalog,
@@ -108,6 +109,46 @@ export function destinationTableNamesFromReports(
   reports: readonly GapReport[],
 ): string[] {
   return [...new Set(reports.map((report) => report.tableName))].sort();
+}
+
+/**
+ * The reports as the reviewer has EDITED them (DBT-203): each report's
+ * fieldMappings replaced by the mapping review's effective rows for its log
+ * type. Coverage reads availability from these, so a field applied in the Gap
+ * Analysis (or from a missing-field chip here) counts as available at once and
+ * its chip clears. A log type with no entry keeps the analysis baseline, and
+ * an absent map returns the reports unchanged.
+ */
+export function reportsWithEffectiveMappings(
+  reports: readonly GapReport[],
+  effective: Readonly<Record<string, readonly GapFieldMapping[]>> | undefined,
+): GapReport[] {
+  if (effective === undefined) return [...reports];
+  return reports.map((report) => {
+    const rows = effective[report.logType];
+    return rows === undefined ? report : { ...report, fieldMappings: [...rows] };
+  });
+}
+
+/**
+ * Where a close match for a missing field would land in ITS log type's table
+ * (DBT-203): the destination column of that report's schema the field names,
+ * matched case-insensitively and returned in the schema's own spelling. Null
+ * when the log type has no report or its table has no such column - a rule
+ * can reference a sibling table's column, and offering to rename into a
+ * column the table lacks would be a click that silently does nothing.
+ */
+export function closeMatchTargetColumn(
+  field: string,
+  logType: string,
+  reports: readonly GapReport[],
+): string | null {
+  const report = reports.find((r) => r.logType === logType);
+  if (report === undefined) return null;
+  const wanted = field.toLowerCase();
+  return (
+    report.destSchema.find((c) => c.name.toLowerCase() === wanted)?.name ?? null
+  );
 }
 
 /**

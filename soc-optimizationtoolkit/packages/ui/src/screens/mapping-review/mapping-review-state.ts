@@ -688,15 +688,6 @@ export function columnSuggestions(
   return candidates.map((c) => {
     const row = mappings.find((m) => m.source === c.sourceName);
     const moveFrom = c.currentDest ?? null;
-    // The move leaves the column empty only when no other row lands there.
-    const vacates =
-      moveFrom !== null &&
-      !mappings.some(
-        (m) =>
-          m.source !== c.sourceName &&
-          landsInColumn(m) &&
-          m.dest.toLowerCase() === moveFrom.toLowerCase(),
-      );
     return {
       source: c.sourceName,
       example: formatExampleValue(c.sampleValue),
@@ -706,13 +697,41 @@ export function columnSuggestions(
       typeMismatch: c.typeMismatch,
       lowConfidence: c.score < 50,
       moveFrom,
-      moveWarning:
-        vacates && isRuleField(moveFrom, ruleFields)
-          ? `${moveFrom} is used by analytics rules and nothing else fills it: moving ${c.sourceName} leaves it empty.`
-          : null,
-      actionLabel: moveFrom === null ? "Use this field" : `Move from ${moveFrom}`,
+      moveWarning: moveWarningText(c.sourceName, moveFrom, mappings, ruleFields),
+      actionLabel: closeMatchActionLabel(moveFrom),
     };
   });
+}
+
+/** The apply button's text for a candidate (DBT-202, shared with DBT-203). */
+export function closeMatchActionLabel(moveFrom: string | null): string {
+  return moveFrom === null ? "Use this field" : `Move from ${moveFrom}`;
+}
+
+/**
+ * The warning a MOVE carries (decision F1-b: warn, do not refuse): set when
+ * the column the source leaves is referenced by analytics rules AND no other
+ * row of the table lands there, so the move leaves a rule column empty. One
+ * derivation for both entry points - the Unmapped Destination Fields panel
+ * (DBT-202) and the coverage missing-field chips (DBT-203).
+ */
+export function moveWarningText(
+  source: string,
+  moveFrom: string | null,
+  mappings: readonly GapFieldMapping[],
+  ruleFields?: ReadonlySet<string>,
+): string | null {
+  if (moveFrom === null) return null;
+  // The move leaves the column empty only when no other row lands there.
+  const vacates = !mappings.some(
+    (m) =>
+      m.source !== source &&
+      landsInColumn(m) &&
+      m.dest.toLowerCase() === moveFrom.toLowerCase(),
+  );
+  return vacates && isRuleField(moveFrom, ruleFields)
+    ? `${moveFrom} is used by analytics rules and nothing else fills it: moving ${source} leaves it empty.`
+    : null;
 }
 
 // ---------------------------------------------------------------------------
