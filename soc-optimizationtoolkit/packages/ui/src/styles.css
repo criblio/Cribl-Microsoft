@@ -8142,3 +8142,13 @@ details[open] > summary::before {
   border: none;
   background: transparent;
 }
+
+/* DBT-229: a satisfied vendor identity as ONE inline line with its Edit - not
+   the bordered editor box the full block uses. */
+.identity-block-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 4px 0;
+}

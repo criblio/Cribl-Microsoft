@@ -6211,7 +6211,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   empty pane.
 
 - **DBT-228** Sample chips carry one line; the capture checklist is grouped and its filter waits behind Edit filter
-  `DBT-F2` `story` `settled` `verified: pins`
+  `DBT-F2` `story` `settled` `verified: both`
   AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
   TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
   states that appear only after an action. Operator chose to build it. Rule
@@ -6234,10 +6234,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Edit filter, opening by itself once edited; its warning stays outside. The
   earlier filter is visible and the operator's position is annotated beside
   its pin rather than silently contradicted. Mutation-checked: forcing the
-  filter open fails the new pin.
+  filter open fails the new pin. LIVE 2026-10-30 (jpederson org Live Preview,
+  PaloAlto-PAN-OS, TRAFFIC + AUDIT samples, create path, after a Gap Analysis
+  run): chips one line each (TRAFFIC 50 events, 73 fields, time: receive_time,
+  column names from a known order (i)) and the caveat once (TRAFFIC, AUDIT:
+  Column-order log types ... cannot be routed automatically); capture
+  checklist in a two-row grid with Also documented by the vendor (6) and Edit
+  filter collapsed - the panel went from about a screen to under half.
 
 - **DBT-229** Gap Analysis: one status line above the log types; vendor identity is a one-line summary with Edit
-  `DBT-F2` `story` `settled` `verified: pins`
+  `DBT-F2` `story` `settled` `verified: both`
   AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
   TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
   states that appear only after an action. Operator chose to build it. Rule
@@ -6257,9 +6263,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   field shows the full block; Edit keeps the 2026-08-12
   every-value-stays-changeable rule - its five pins now press Edit first. New
   pins for both, mutation-checked (summary removed; enrichment forced open).
+  LIVE 2026-10-30 (jpederson org Live Preview, PaloAlto-PAN-OS, TRAFFIC +
+  AUDIT samples, create path, after a Gap Analysis run): one line Destination:
+  CommonSecurityLog (i) - 2 learned decision(s) ... Clear learned mappings -
+  Unused fields: preserving all (47 droppable) Drop unneeded fields; Add
+  enrichment fields collapsed; Vendor identity: DeviceVendor = Palo Alto
+  Networks - DeviceProduct = PAN-OS (i) Edit. First live look showed the
+  summary inside the full block's bordered box with Edit on its own line;
+  fixed in the same pass with its own inline style.
 
 - **DBT-230** Select Azure Resources: Create what is missing waits; Always-on facts and the early role step fold away
-  `DBT-F2` `story` `settled` `verified: pins`
+  `DBT-F2` `story` `settled` `verified: both`
   AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
   TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
   states that appear only after an action. Operator chose to build it. Rule
@@ -6278,10 +6292,15 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   is a disclosure summarised as granted per DCR after Deploy, opening itself
   when a DCR exists, a principal is set, or a run happened or failed - the
   principal can still be picked early. Pins for both, mutation-checked (forced
-  open).
+  open). LIVE 2026-10-30 (jpederson org Live Preview, PaloAlto-PAN-OS, TRAFFIC
+  + AUDIT samples, create path, after a Gap Analysis run): Create a new
+  resource group or workspace collapsed with Sentinel is enabled on this
+  workspace still visible; no Always on rows; Ingestion role ... granted per
+  DCR after Deploy collapsed - the section went from about two and a half
+  screens to under one.
 
 - **DBT-231** Deploy: prefilled table, client id and secret as one summary line with Change
-  `DBT-F2` `story` `settled` `verified: pins`
+  `DBT-F2` `story` `settled` `verified: both`
   AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with
   TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the
   states that appear only after an action. Operator chose to build it. Rule
@@ -6296,4 +6315,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   it opens by itself while the table or client id is empty - either blocks the
   run - or once the table is edited. Pins: summary text (state) and the
   open-while-missing rule (DOM, the fixture lacks a client id),
-  mutation-checked by dropping the client-id condition.
+  mutation-checked by dropping the client-id condition. LIVE 2026-10-30
+  (jpederson org Live Preview, PaloAlto-PAN-OS, TRAFFIC + AUDIT samples,
+  create path, after a Gap Analysis run): Deploy settings: table
+  CommonSecurityLog - client 2c06...347f - secret: placeholder (change),
+  collapsed.

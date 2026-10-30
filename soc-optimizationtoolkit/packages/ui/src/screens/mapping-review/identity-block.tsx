@@ -35,7 +35,7 @@ export function IdentityBlock({
   const [editing, setEditing] = useState(false);
   if (missing.length === 0 && !editing) {
     return (
-      <div className="identity-block identity-block-summary">
+      <div className="identity-block-summary">
         <span className="field-hint">
           Vendor identity:{" "}
           {statuses
