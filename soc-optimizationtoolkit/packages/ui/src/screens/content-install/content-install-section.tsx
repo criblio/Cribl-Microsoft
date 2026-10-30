@@ -599,6 +599,12 @@ export function ContentInstallSection({
           <p key={i} className="field-hint">{note}</p>
         ))}
 
+      {/* DBT-226: until something has been read there is nothing to show but
+          the Load button - the three subsections used to sit here each saying
+          "Not loaded yet". They appear once content, a catalog answer (even an
+          unreadable one), a load in progress or an install outcome exists. */}
+      {(contentLoaded || catalogLookup !== null || loading || outcomes.length > 0) && (
+      <>
       {/* SOLUTION */}
       <section className="content-install-group">
         <h3 className="content-install-title">
@@ -758,6 +764,8 @@ export function ContentInstallSection({
           {parsers.length} solution parser(s) will be installed automatically
           with any rules or workbooks that depend on them.
         </p>
+      )}
+      </>
       )}
     </div>
   );

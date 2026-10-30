@@ -6,7 +6,7 @@
  * screen is its successor, composing the ALREADY-SHIPPED screens as sections
  * rather than scattering them across sidebar routes.
  *
- * The NINE sections render in page order from @soc/core INTEGRATE_SECTIONS,
+ * The EIGHT sections render in page order from @soc/core INTEGRATE_SECTIONS,
  * all BUILT and operable. The numbers below ARE the array order - it is the
  * map a reader uses before touching this file, so it has to match the data:
  *
@@ -25,30 +25,29 @@
  *      mapping table (with field search), vendor-identity forced inputs,
  *      enrichment editors, and the approval state machine. Gates the content
  *      path only (Unit 18); the native deploy stays independent.
- *   4. Review Analytics Rule Coverage - RuleCoverageSection (rules instance):
+ *   4. Review Coverage - ONE step with a Rules / Workbooks switch (DBT-226)
+ *      over two RuleCoverageSection instances, both kept mounted: rules -
  *      three-way coverage with clickable missing-field close-match review and
- *      multi-format custom-rule upload. Informational; lights RULE badges.
- *      Both coverage instances read the EFFECTIVE mappings, and a close match
- *      applied there reaches the Gap Analysis as a remapEvent (DBT-203).
- *   5. Review Workbook Coverage - RuleCoverageSection (workbooks instance):
- *      the solution's shipped workbooks plus solution-related deployed ones.
- *      Informational.
- *   6. Enable Sentinel Content - ContentInstallSection: loads the selected
+ *      multi-format custom-rule upload, lighting RULE badges; workbooks - the
+ *      solution's shipped workbooks. Informational. Both instances read the
+ *      EFFECTIVE mappings, and a close match applied there reaches the Gap
+ *      Analysis as a remapEvent (DBT-203).
+ *   5. Enable Sentinel Content - ContentInstallSection: loads the selected
  *      solution's content and installs it. Informational; never gates a
  *      deploy.
- *   7. Select Azure Resources - the AzureTargetingScreen cascade, capability
+ *   6. Select Azure Resources - the AzureTargetingScreen cascade, capability
  *      checkboxes, Sentinel-enabled auto-check, and the operable
  *      RoleAssignmentSection (Unit 8). Additive + non-gating. On the
- *      existing-destination path (section 8) none of it renders: the section
+ *      existing-destination path (section 7) none of it renders: the section
  *      is 'not-needed' and nothing in Azure is read ([[GEN-21]]), from the
  *      moment the radio is on, before any pick ([[GEN-28]]).
- *   8. Configure Cribl      - Stream-only worker-group select, pack name,
+ *   7. Configure Cribl      - Stream-only worker-group select, pack name,
  *      multi-group fan-out, the pack overwrite check, and the Sentinel
  *      destination radio ([[GEN-21]]): create a new destination (Deploy does)
  *      or point every detected table at an EXISTING Cribl Sentinel destination
  *      in the group, which forces the routable pack shape. Offline starts on
  *      the existing choice.
- *   9. Deploy               - the operable onboard (native + custom _CL
+ *   8. Deploy               - the operable onboard (native + custom _CL
  *      tables, multi-DCR fan-out) plus "Build and install pack" closing the
  *      content path with real DCR values in outputs.yml, gated by the
  *      vendor-identity check and the overwrite acknowledgment. Alongside it,
@@ -72,7 +71,7 @@
  * said they were "parked in the Development nav section; they stay
  * reachable", and all four are absent from the route table. Three survive
  * COMPOSED rather than routed: Onboard and Batch as tabs of DCR Automation,
- * and AzureTargetingScreen inside section 7 of this page. Review is not
+ * and AzureTargetingScreen inside section 6 of this page. Review is not
  * reachable at all - its screen was deleted 2026-08-24 ([[HON-8]]).
  *
  * Read-ahead contract: every section is visible; gating lives only at the
@@ -1383,6 +1382,7 @@ export function IntegrateScreen({
   // DBT-224: how the operator supplies samples, asked before any method's
   // controls are shown. Not persisted - a reload asks again.
   const [sampleMethod, setSampleMethod] = useState<SampleMethod | null>(null);
+  const [coverageView, setCoverageView] = useState<"rules" | "workbooks">("rules");
   // DERIVED FROM THE CHOICE, never stored beside it (2026-08-20 audit). Holding
   // the entry in its own state gave one question two answers, and only one of
   // them was ever cleared: switching worker group and switching mode both reset
@@ -2663,7 +2663,7 @@ export function IntegrateScreen({
     </>
   );
 
-  const ruleCoverageBody = (
+  const rulePanel = (
     <RuleCoverageSection
       key={contentResetKey}
       solutionName={solution?.name ?? ""}
@@ -2682,7 +2682,7 @@ export function IntegrateScreen({
     />
   );
 
-  const workbookCoverageBody = (
+  const workbookPanel = (
     <RuleCoverageSection
       key={contentResetKey}
       solutionName={solution?.name ?? ""}
@@ -2699,7 +2699,32 @@ export function IntegrateScreen({
     />
   );
 
-  // Enable Sentinel Content (section 6): install the solution, its analytics
+  // DBT-226: ONE coverage step with a Rules / Workbooks switch. Both panels
+  // stay MOUNTED and the hidden one is only hidden: the rules panel feeds the
+  // mapping table's RULE badges and both feed the coverage requirements, which
+  // must keep flowing whichever view is showing.
+  const coverageBody = (
+    <>
+      <div className="arch-view-tabs" role="tablist" aria-label="Coverage view">
+        {(["rules", "workbooks"] as const).map((view) => (
+          <button
+            key={view}
+            type="button"
+            role="tab"
+            aria-selected={coverageView === view}
+            className={"arch-view-tab" + (coverageView === view ? " arch-view-tab-active" : "")}
+            onClick={() => setCoverageView(view)}
+          >
+            {view === "rules" ? "Analytics rules" : "Workbooks"}
+          </button>
+        ))}
+      </div>
+      <div hidden={coverageView !== "rules"}>{rulePanel}</div>
+      <div hidden={coverageView !== "workbooks"}>{workbookPanel}</div>
+    </>
+  );
+
+  // Enable Sentinel Content (section 5): install the solution, its analytics
   // rules, and its workbooks - Sentinel-side, informational, never gates the
   // deploy. Keyed by solution so switching solutions resets its state.
   const enableContentBody = (
@@ -3538,9 +3563,7 @@ export function IntegrateScreen({
       case "gap-analysis":
         return gapAnalysisBody;
       case "rule-coverage":
-        return ruleCoverageBody;
-      case "workbook-coverage":
-        return workbookCoverageBody;
+        return coverageBody;
       case "enable-content":
         return enableContentBody;
       case "deploy":

@@ -88,7 +88,6 @@ const BUILT_IDS: readonly IntegrateSectionId[] = [
   "cribl-config",
   "gap-analysis",
   "rule-coverage",
-  "workbook-coverage",
   "enable-content",
   "deploy",
 ];
@@ -100,7 +99,6 @@ const NOT_BUILT_IDS: readonly IntegrateSectionId[] = [];
 // "is the page finished?" reckoning.
 const INFORMATIONAL_IDS: readonly IntegrateSectionId[] = [
   "rule-coverage",
-  "workbook-coverage",
   "enable-content",
 ];
 // The sections that can actually be finished - the only ones a "fully
@@ -127,9 +125,11 @@ describe("INTEGRATE_SECTIONS metadata", () => {
     expect(tip.match(/Elastic/g)).toBeNull();
   });
 
-  it("has nine sections numbered 1..9 in page order", () => {
+  // DBT-226: eight, not nine - rule and workbook coverage are one step with a
+  // Rules / Workbooks switch, kept under the rule-coverage id.
+  it("has eight sections numbered 1..8 in page order", () => {
     expect(INTEGRATE_SECTIONS.map((s) => s.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
     expect(INTEGRATE_SECTIONS.map((s) => s.id)).toEqual([
       "solution",
@@ -138,7 +138,6 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       // the coverage sections then offer the explicit Drop action.
       "gap-analysis",
       "rule-coverage",
-      "workbook-coverage",
       // Enable Sentinel Content follows the coverage arc (you review what the
       // rules/workbooks need, then install them); Sentinel-side + informational.
       "enable-content",
@@ -205,7 +204,6 @@ describe("INTEGRATE_SECTIONS metadata", () => {
       "gap-analysis": "none",
       // Rules and workbooks both come from the solution repo via ports.content.
       "rule-coverage": "none",
-      "workbook-coverage": "none",
       // Installs into the workspace - a genuine live Azure connection.
       "enable-content": "azure",
       "azure-resources": "azure",
@@ -234,7 +232,9 @@ describe("INTEGRATE_SECTIONS metadata", () => {
   // appear only in a fragment that also says it is not analyzed. The same
   // fragment rule is mirrored on the summary line in rule-coverage-state.test.ts.
   it("never promises workbook coverage reads deployed subscription workbooks", () => {
-    const tip = integrateSection("workbook-coverage").infoTip;
+    // DBT-226: the workbook view lives in the merged coverage step now, so its
+    // tip carries the workbook exclusion - the same rule, same section.
+    const tip = integrateSection("rule-coverage").infoTip;
     expect(tip).toContain("solution repo only");
     // The old promise was "folds in any deployed in your subscription".
     expect(tip).not.toMatch(/folds? in/i);
@@ -316,7 +316,6 @@ describe("rule-coverage is built and informational", () => {
     for (const i of everyInputCombination()) {
       for (const id of [
         "rule-coverage",
-        "workbook-coverage",
         "enable-content",
       ] as const) {
         expect(statusOf(id, i)).toBe("informational");
@@ -565,10 +564,10 @@ describe("read-ahead and single-current invariants", () => {
     }
   });
 
-  it("deriveSectionStatuses preserves page order and covers all nine", () => {
+  it("deriveSectionStatuses preserves page order and covers all eight", () => {
     const resolved = deriveSectionStatuses(inputs());
     expect(resolved.map((r) => r.section.number)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8,
     ]);
   });
 });

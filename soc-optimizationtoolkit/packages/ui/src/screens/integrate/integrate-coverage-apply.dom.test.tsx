@@ -93,7 +93,7 @@ async function renderCovered() {
     expect(gapRow(container, "PanSrcMac")).not.toBeNull();
   });
 
-  // The FIRST coverage panel is the rules instance (section 4).
+  // The FIRST coverage panel is the rules instance (section 4, Rules view).
   const rules = container.querySelector<HTMLElement>(".rule-coverage")!;
   // The reports reach coverage one render after the table appears; an upload
   // before that is queued until they arrive (DBT-212). Waiting keeps this flow

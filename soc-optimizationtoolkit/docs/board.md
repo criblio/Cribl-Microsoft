@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 38 in progress, 123 done.**
+**90 in the backlog, 37 in progress, 124 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 51 | 67 | 25 |
+| Sentinel Integration | 50 | 68 | 24 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 128.
+Open work totals 127.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 52% (75/143)
+### `DBT` Quality and technical debt _(enabler)_ - 53% (76/143)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 28/37 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 29/37 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (38)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1067,19 +1067,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   api-version 2023-04-01 and return full ids. Second, a Send-only rule named
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
-
-- **DBT-226** Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step
-  `DBT-F2` `story` `settled`
-  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
-  are too many words on the screen. I feel like we need more selections for
-  the user to choose before we reveal some information." Audit (2026-10-30,
-  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
-  content shown before the choice that makes it relevant. DECIDED: every
-  section stays open (no accordion); reveal inside sections only. Enable
-  Sentinel Content shows a warning plus three Not loaded yet subsections; Rule
-  Coverage and Workbook Coverage are two steps of the same shape. Build: one
-  line plus Load until loaded; one Coverage step with a Rules / Workbooks
-  switch.
 
 ---
 
@@ -2423,7 +2410,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (123)
+## Done (124)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6172,3 +6159,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   needed with an existing destination. (i); Configure Cribl starts with
   Sentinel destination; Pack wiring: Routable (i); More pack options
   collapsed.
+
+- **DBT-226** Enable Sentinel Content is one line until loaded; Rule and Workbook Coverage become one step
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-10-30 after the DBT-125 copy cut was live: "There
+  are too many words on the screen. I feel like we need more selections for
+  the user to choose before we reveal some information." Audit (2026-10-30,
+  TMNA Live Preview, PaloAlto-PAN-OS): the remaining weight is structural -
+  content shown before the choice that makes it relevant. DECIDED: every
+  section stays open (no accordion); reveal inside sections only. Enable
+  Sentinel Content shows a warning plus three Not loaded yet subsections; Rule
+  Coverage and Workbook Coverage are two steps of the same shape. Build: one
+  line plus Load until loaded; one Coverage step with a Rules / Workbooks
+  switch. DONE 2026-10-30 (both). Enable Sentinel Content shows only its
+  notices and Load until content, a catalog answer, a load or an install
+  outcome exists; the DBT-199 pin (never None found before a load) was
+  rewritten to the stronger form - no group renders before a load - and
+  mutation-checked. Rule and Workbook Coverage are one step, Review Coverage,
+  with an Analytics rules / Workbooks switch (the Dataflow tab style); both
+  RuleCoverageSection instances stay mounted and the hidden one is only
+  hidden, because the rules panel feeds the RULE badges and both feed coverage
+  requirements (pinned; mutation-checked by unmounting the hidden panel).
+  Core: INTEGRATE_SECTIONS is eight sections - workbook-coverage removed from
+  IntegrateSectionId, the merged step keeps the rule-coverage id, later
+  sections renumbered (content 5, Azure 6, Cribl 7, Deploy 8); the merged tip
+  keeps the DBT-58 exclusion clause verbatim and its fragment pin now reads
+  that section. No reason for the original split was recorded anywhere
+  (searched board, backlog, ADRs). Pins updated deliberately for the count,
+  the ids and the numbering. LIVE on TMNA: 4 Review Coverage with the two
+  tabs, Workbooks switching to Analyze workbook coverage; 5 Enable Sentinel
+  Content reduced to its warning and Load.

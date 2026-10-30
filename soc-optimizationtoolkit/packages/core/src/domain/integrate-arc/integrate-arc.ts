@@ -68,7 +68,6 @@ export type IntegrateSectionId =
   | "cribl-config"
   | "gap-analysis"
   | "rule-coverage"
-  | "workbook-coverage"
   | "enable-content"
   | "deploy";
 
@@ -194,12 +193,18 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {
     id: "rule-coverage",
     number: 4,
-    title: "Review Analytics Rule Coverage",
+    // DBT-226: ONE coverage step with a Rules / Workbooks switch. Rule and
+    // workbook coverage were two sections of the same shape; the id stays
+    // rule-coverage so nothing keyed on it moves.
+    title: "Review Coverage",
     infoTip:
-      "Analytics rule coverage: fully, partially, and uncovered counts, " +
-      "per-rule severity and coverage %, and missing fields by frequency. " +
-      "Upload custom YAML rules to extend coverage. Informational - it lights " +
-      "the mapping table's RULE badges but never blocks a deploy.",
+      "Coverage of the solution's analytics rules and workbooks, switched " +
+      "between Rules and Workbooks: fully, partially, and uncovered counts, " +
+      "per-item coverage %, and missing fields by frequency. Workbooks are " +
+      "read from the solution repo only - workbooks already deployed in your " +
+      "subscription are not analyzed. Upload custom YAML rules to extend " +
+      "rule coverage. Informational - it lights the mapping table's RULE " +
+      "badges but never blocks a deploy.",
     // NO live connection (DBT-54; was "azure", which nothing backed). Rule
     // coverage reads the solution's analytics rules through the SentinelContent
     // port - GitHub, not ARM - and scores them against the gap reports already
@@ -216,38 +221,8 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
     informational: true,
   },
   {
-    id: "workbook-coverage",
-    number: 5,
-    title: "Review Workbook Coverage",
-    infoTip:
-      "Workbook coverage: the solution's Sentinel workbooks (read from the " +
-      "solution repo only - workbooks already deployed in your subscription " +
-      "are not analyzed) scored against your sample fields - fully, " +
-      "partially, and uncovered counts, per-workbook coverage %, and missing " +
-      "fields by frequency. Informational - missing " +
-      "fields may leave workbook tiles empty, but it never blocks a deploy.",
-    // DBT-58: the tip NAMES the excluded source, in the same words as the
-    // empty-workbook summary line (coverageSummaryLine in
-    // rule-coverage-state.ts), so both surfaces answer "why isn't my deployed
-    // workbook here?". Naming it is fine; promising it as an input is not.
-    //
-    // NO live connection (DBT-54; was "azure"). The infoTip above used to
-    // promise workbooks "deployed in your subscription" were folded in, which
-    // is what the "azure" requirement was standing on - but the 2026-07-12 user
-    // direction REVERSED that (rule-coverage-section.tsx: a shared subscription
-    // carries everyone's dashboards, and local copies drift from the repo
-    // templates, so coverage should describe the SOLUTION). Deployed workbooks
-    // are deliberately not enumerated, so the repo read through ports.content
-    // is the only IO and no Azure connection is involved.
-    requires: "none",
-    // BUILT: workbook coverage is its own panel, INFORMATIONAL exactly like
-    // rule-coverage (absent from SectionInputs, never gates a deploy).
-    built: true,
-    informational: true,
-  },
-  {
     id: "enable-content",
-    number: 6,
+    number: 5,
     title: "Enable Sentinel Content",
     infoTip:
       "Enable the solution's content in your workspace: install the Content " +
@@ -266,7 +241,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "azure-resources",
-    number: 7,
+    number: 6,
     title: "Select Azure Resources",
     infoTip:
       "Choose the subscription, Log Analytics workspace, resource group, and " +
@@ -277,7 +252,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "cribl-config",
-    number: 8,
+    number: 7,
     title: "Configure Cribl",
     infoTip:
       "Select the Cribl worker group(s) that will run the pipelines and name " +
@@ -288,7 +263,7 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   },
   {
     id: "deploy",
-    number: 9,
+    number: 8,
     title: "Deploy",
     infoTip:
       "Review the readiness pills - Solution, Samples, Mappings, Workspace, " +
@@ -490,8 +465,6 @@ const COMING_SOON_REASONS: Readonly<Record<IntegrateSectionId, string>> = {
   "gap-analysis": "",
   // rule-coverage is BUILT NOW (Unit 23); it is never coming-soon.
   "rule-coverage": "",
-  // workbook-coverage is BUILT; it is never coming-soon.
-  "workbook-coverage": "",
   // enable-content is BUILT; it is never coming-soon.
   "enable-content": "",
   deploy: "",
@@ -521,7 +494,6 @@ function sectionComplete(
       // never blocks canDeploy (only canDeployContentPath).
       return inputs.mappingsApproved === true;
     case "rule-coverage":
-    case "workbook-coverage":
     case "enable-content":
       // INFORMATIONAL: read-only diagnostics with deliberately NO SectionInputs
       // signal, so there is nothing here that can be "finished" and no honest

@@ -171,11 +171,13 @@ describe("ContentInstallSection before and after a load (DBT-199)", () => {
     );
   }
 
-  it("says 'Not loaded yet' for both groups until the content is read", () => {
-    renderUnloaded(CONNECTED);
-    expect(
-      screen.getAllByText("Not loaded yet - use Load solution content above."),
-    ).toHaveLength(2);
+  it("shows only the Load button until the content is read - never 'None found' before a load", () => {
+    // DBT-226: the groups used to render here each saying "Not loaded yet";
+    // now nothing but Load shows until a load. The DBT-199 guarantee is the
+    // same and stronger: no group can claim "None found" before a load.
+    const { container } = renderUnloaded(CONNECTED);
+    expect(screen.getByRole("button", { name: "Load solution content" })).toBeTruthy();
+    expect(container.querySelectorAll(".content-install-group")).toHaveLength(0);
     expect(screen.queryByText("None found for this solution.")).toBeNull();
   });
 

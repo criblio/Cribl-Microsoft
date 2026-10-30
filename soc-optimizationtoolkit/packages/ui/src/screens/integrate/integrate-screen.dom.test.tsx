@@ -1808,3 +1808,36 @@ describe("IntegrateScreen - Configure Cribl asks the destination first (DBT-225)
     expect(options.textContent).toContain("Rebuild pack only");
   });
 });
+
+/**
+ * DBT-226: rule and workbook coverage are ONE step with a Rules / Workbooks
+ * switch. Both panels stay mounted - the rules panel feeds the RULE badges
+ * whichever view shows - and the switch only hides one.
+ */
+describe("IntegrateScreen - one coverage step with a switch (DBT-226)", () => {
+  it("renders one Review Coverage step, both panels mounted, rules shown first", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    expect(screen.getByText("Review Coverage")).toBeTruthy();
+    expect(screen.queryByText("Review Workbook Coverage")).toBeNull();
+    const panels = [...container.querySelectorAll(".rule-coverage")];
+    expect(panels).toHaveLength(2);
+    const visible = () => panels.map((p) => !p.parentElement!.hidden);
+    expect(visible()).toEqual([true, false]);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Workbooks" }));
+    expect(visible()).toEqual([false, true]);
+    // Still both mounted - hidden, not unmounted.
+    expect(container.querySelectorAll(".rule-coverage")).toHaveLength(2);
+  });
+});

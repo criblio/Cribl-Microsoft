@@ -10,6 +10,8 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**One coverage step, and Enable Sentinel Content waits for a load (DBT-226).** Review Analytics Rule Coverage and Review Workbook Coverage are now one step, Review Coverage, with an Analytics rules / Workbooks switch, so Sentinel Integration has eight sections instead of nine. Enable Sentinel Content shows only its Load button until the solution content has been read.
+
 **Configure Cribl asks where events go first (DBT-225).** The Sentinel destination question (new or existing) now opens the section. With an existing destination, Pack wiring is a single line and Select Azure Resources says only that it is not needed, with the detail behind (i). Adding more worker groups, the overwrite check and Rebuild pack only are under More pack options, which opens by itself when one of them needs your attention.
 
 **Sample Data asks how you will supply samples (DBT-224).** Sentinel Integration no longer shows Lake, live capture, paste and upload at once: it asks How will you supply samples? and shows only the chosen method. Paste and Upload are offered even without a Cribl connection. Selecting a solution now shows how many log types it expects, with the full list behind Show the expected log types instead of printed in full.

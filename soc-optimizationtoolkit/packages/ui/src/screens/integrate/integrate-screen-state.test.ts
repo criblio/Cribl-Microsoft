@@ -265,7 +265,6 @@ describe("sectionSummary (DBT-127)", () => {
 
   it("has nothing to summarize for the read-only coverage and content sections", () => {
     expect(sectionSummary("rule-coverage", facts)).toBe("");
-    expect(sectionSummary("workbook-coverage", facts)).toBe("");
     expect(sectionSummary("enable-content", facts)).toBe("");
   });
 });
