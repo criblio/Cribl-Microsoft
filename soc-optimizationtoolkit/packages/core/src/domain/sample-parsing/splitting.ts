@@ -32,6 +32,44 @@ import {
   isPanosFormat,
   convertPanosToJson,
 } from "./panos-dictionary";
+import { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+
+/**
+ * The PAN-OS log TYPE a CEF line names in its header, or undefined when the
+ * line is not PAN-OS CEF (DBT-196).
+ *
+ * PAN-OS writes CEF as `CEF:0|Palo Alto Networks|PAN-OS|ver|SUBTYPE|TYPE|sev|`:
+ * header field 5 (DeviceEventClassID) is the subtype - `url`, `end`, `start` -
+ * and field 6 (Name) is the log type - `THREAT`, `TRAFFIC`. {@link parseKvLine}
+ * reads only `key=value` pairs, so neither field reached the discriminator
+ * selector and a mixed PAN-OS CEF capture fell back to one group ("Captured
+ * 100 events in 1 log type"), while the solution's needs list - TRAFFIC,
+ * THREAT, ... from the PAN-OS catalog - stayed at none provided.
+ *
+ * VENDOR-SCOPED ON PURPOSE (operator decision on DBT-196, 2026-10-29): split by
+ * TYPE, for PAN-OS CEF only. Two rejected alternatives, both silent:
+ *   - reading the header into the record generally would let the shared
+ *     selector rank DeviceEventClassID above everything after `subtype`, so
+ *     PAN-OS would split by SUBTYPE (`URL`, `END`), names the needs list never
+ *     matches; and
+ *   - every other CEF vendor's split would change underneath its stored
+ *     samples - a log type is the tagged-sample store's KEY (see DETERMINISM).
+ *
+ * The header is read with the parser's own {@link CEF_HEADER_PATTERN} and
+ * escape rule, from wherever `CEF:` starts, so a syslog-wrapped line (the
+ * standard transport) reads the same as a bare one.
+ */
+function panosCefLogType(line: string): string | undefined {
+  const cefStart = line.indexOf("CEF:");
+  if (cefStart < 0) return undefined;
+  const header = CEF_HEADER_PATTERN.exec(line.slice(cefStart));
+  if (header === null) return undefined;
+  const field = (i: number) => header[i].replace(CEF_HEADER_ESCAPE, "$1").trim();
+  if (field(2).toLowerCase() !== "palo alto networks") return undefined;
+  if (field(3).toLowerCase() !== "pan-os") return undefined;
+  const type = field(6);
+  return type === "" ? undefined : type;
+}
 
 /**
  * Quick KV parser for discriminator detection (NOT full field parsing). Ported
@@ -150,6 +188,8 @@ function cleanLogTypeValue(value: string): string {
  *   position-3 type field applies.
  * - DeviceEventClassID numeric ids map to PAN-OS names; values are sanitized;
  *   group logType names are UPPERCASED.
+ * - PAN-OS CEF lines (and ONLY those) split by the header's TYPE field -
+ *   see {@link panosCefLogType} (DBT-196).
  * - Group iteration is insertion order (first-seen), so ids are deterministic.
  *
  * A single returned group named `fallbackLogType` means NO discriminator was
@@ -162,11 +202,30 @@ export function splitSamplesByLogType(
   format: SampleFormat,
 ): SplitSample[] {
   const eventObjects: Array<Record<string, unknown>> = [];
+  // The raw line each entry of `eventObjects` was parsed FROM (DBT-196). A line
+  // that parses to nothing (non-KV text, a KV line under the pair gate) adds no
+  // object, so indexing `rawEvents` by the object's position shifted every
+  // later line by one: measured on [sshd line, PAN THREAT, PAN TRAFFIC], the
+  // THREAT group carried the sshd line and the TRAFFIC group the THREAT line,
+  // and the tagged-sample store is keyed by that log type.
+  const sourceLines: string[] = [];
   for (const raw of rawEvents) {
+    const before = eventObjects.length;
     try {
       eventObjects.push(JSON.parse(raw) as Record<string, unknown>);
     } catch {
-      if (/\w+=/.test(raw)) {
+      const panosType = panosCefLogType(raw);
+      if (panosType !== undefined) {
+        // PAN-OS CEF (DBT-196): the header's TYPE is the discriminator, and it
+        // is set on `type` - the high-confidence list entry PAN-OS already
+        // splits on in its KV and CSV forms - over any extension key of that
+        // name, because the header is the device's own statement of the type.
+        // No pair-count gate: the header is the evidence, not the pairs.
+        eventObjects.push({
+          ...withDiscriminatorAliases(parseKvLine(raw)),
+          type: panosType,
+        });
+      } else if (/\w+=/.test(raw)) {
         const kvFields = parseKvLine(raw);
         // The gate counts the line's REAL pairs, before aliasing adds any
         // (DBT-84) - an alias is a second name for a pair, not another pair.
@@ -175,6 +234,7 @@ export function splitSamplesByLogType(
         }
       }
     }
+    if (eventObjects.length > before) sourceLines.push(raw);
   }
 
   // CSV fallback (PAN-OS headerless CSV): nothing parsed, lines look like CSV.
@@ -224,7 +284,7 @@ export function splitSamplesByLogType(
     }
     val = cleanLogTypeValue(val);
     if (!groups.has(val)) groups.set(val, []);
-    groups.get(val)!.push(rawEvents[i] ?? JSON.stringify(eventObjects[i]));
+    groups.get(val)!.push(sourceLines[i]);
   }
 
   return [...groups.entries()].map(([logType, events]) => ({

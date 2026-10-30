@@ -12,6 +12,11 @@ import {
 import { parsePositional } from "./positional";
 import { DISCRIMINATOR_FIELDS } from "./discriminators";
 import type { SampleFormat } from "./models";
+import {
+  documentedLogTypesForSolution,
+  mergeLogTypeSources,
+} from "../log-type-catalog";
+import { compareLogTypeCoverage } from "../coverage-analysis/expected-log-types";
 
 describe("splitSamplesByLogType", () => {
   it("splits JSON events by a discriminator, uppercasing the log type", () => {
@@ -380,5 +385,146 @@ describe("KV splitting on full keys (DBT-84)", () => {
       "src.ip": "1",
       "dst.ip": "2",
     });
+  });
+});
+
+// DBT-196 (UAT 2026-10-29, live capture on in_syslog): a PAN-OS CEF capture
+// ticked for THREAT and TRAFFIC came back "Captured 100 events in 1 log type",
+// because the type lives in the CEF HEADER and the splitter's probe reads only
+// key=value pairs. Operator decision: split PAN-OS CEF by header field 6 (the
+// TYPE), for PAN-OS CEF only; the subtype in field 5 is not the discriminator.
+describe("splitSamplesByLogType - PAN-OS CEF header type (DBT-196)", () => {
+  // Syslog-wrapped, the shape the capture delivered. Field 5 is the subtype
+  // (`url`, `end`), field 6 the type. No extension key names either.
+  const PAN_THREAT =
+    "<14>Oct 29 10:00:00 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|rt=Oct 29 2026 10:00:00 GMT deviceExternalId=0123 src=10.0.0.1 dst=1.2.3.4 act=alert";
+  const PAN_TRAFFIC =
+    "<14>Oct 29 10:00:01 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|end|TRAFFIC|1|rt=Oct 29 2026 10:00:01 GMT deviceExternalId=0123 src=10.0.0.2 dst=5.6.7.8 act=allow";
+
+  const grouped = (raw: string[]) =>
+    splitSamplesByLogType(raw, "captured", "cef").map((s) => [
+      s.logType,
+      s.eventCount,
+      s.rawEvents,
+    ]);
+
+  it("splits syslog-wrapped |url|THREAT| and |end|TRAFFIC| lines by TYPE, not subtype", () => {
+    expect(grouped([PAN_THREAT, PAN_TRAFFIC, PAN_THREAT])).toEqual([
+      ["THREAT", 2, [PAN_THREAT, PAN_THREAT]],
+      ["TRAFFIC", 1, [PAN_TRAFFIC]],
+    ]);
+  });
+
+  it("names a single-type PAN-OS capture rather than falling back", () => {
+    const splits = splitSamplesByLogType([PAN_TRAFFIC, PAN_TRAFFIC], "captured", "cef");
+    expect(splits.map((s) => [s.logType, s.eventCount])).toEqual([["TRAFFIC", 2]]);
+    expect(splitFoundNoDiscriminator(splits, "captured")).toBe(false);
+  });
+
+  it("files each raw line under its OWN log type when another line parses to nothing", () => {
+    // A syslog line with no CEF header and no key=value pairs yields no parsed
+    // object. The groups used to index the raw lines by the parsed object's
+    // position, so every later line shifted by one: THREAT carried the sshd
+    // line, TRAFFIC carried the THREAT line, and the TRAFFIC line was lost.
+    // The unparsed line is still left out of every group (DBT-197 territory);
+    // this pins only that no line lands under another line's log type.
+    const noise = "<14>Oct 29 10:00:02 fw01 sshd: session opened for THREAT review";
+    expect(grouped([noise, PAN_THREAT, PAN_TRAFFIC])).toEqual([
+      ["THREAT", 1, [PAN_THREAT]],
+      ["TRAFFIC", 1, [PAN_TRAFFIC]],
+    ]);
+    // Same shift from a PAN-OS line whose TYPE field is empty: it falls to the
+    // KV path, fails the pair gate, and must not take the next line's slot.
+    const emptyType = "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url||1|src=1";
+    expect(grouped([emptyType, PAN_TRAFFIC])).toEqual([
+      ["TRAFFIC", 1, [PAN_TRAFFIC]],
+    ]);
+  });
+
+  it("reads a bare (unwrapped) PAN-OS CEF line the same way", () => {
+    const bare = PAN_THREAT.slice(PAN_THREAT.indexOf("CEF:"));
+    const bareTraffic = PAN_TRAFFIC.slice(PAN_TRAFFIC.indexOf("CEF:"));
+    expect(grouped([bare, bareTraffic]).map((g) => g.slice(0, 2))).toEqual([
+      ["THREAT", 1],
+      ["TRAFFIC", 1],
+    ]);
+  });
+
+  it("takes the header TYPE over an extension type, and needs no pair count", () => {
+    // The header is the device's own statement of the type: an extension
+    // `type=` / `log-type=` (a custom log format) does not override it, and a
+    // line with fewer than the KV probe's three pairs still splits - the header
+    // is the evidence, not the pairs.
+    const withExtType = [
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|type=end src=1 dst=2",
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|end|TRAFFIC|1|log-type=url src=1 dst=2",
+    ];
+    expect(grouped(withExtType).map((g) => g.slice(0, 2))).toEqual([
+      ["THREAT", 1],
+      ["TRAFFIC", 1],
+    ]);
+    const fewPairs = [
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|start|TRAFFIC|1|src=1",
+      "CEF:0|Palo Alto Networks|PAN-OS|10.1.0|general|SYSTEM|1|",
+    ];
+    expect(grouped(fewPairs).map((g) => g.slice(0, 2))).toEqual([
+      ["TRAFFIC", 1],
+      ["SYSTEM", 1],
+    ]);
+  });
+
+  it("leaves every other CEF vendor and product unchanged", () => {
+    // The same header shape from another vendor - and from another Palo Alto
+    // product - is NOT split by its header: it falls back exactly as before.
+    for (const [vendor, product] of [
+      ["Acme", "FW"],
+      ["Palo Alto Networks", "Traps"],
+    ]) {
+      const lines = [PAN_THREAT, PAN_TRAFFIC].map((l) =>
+        l.replace("Palo Alto Networks|PAN-OS", `${vendor}|${product}`),
+      );
+      expect(grouped(lines)).toEqual([["captured", 2, lines]]);
+    }
+    // A non-PAN CEF line with a discriminator in its extension still splits on
+    // that, not on its header.
+    const acme = [
+      "CEF:0|Acme|FW|1|url|THREAT|5|category=A src=1 dst=2",
+      "CEF:0|Acme|FW|1|end|TRAFFIC|5|category=B src=1 dst=2",
+    ];
+    expect(grouped(acme).map((g) => g.slice(0, 2))).toEqual([
+      ["A", 1],
+      ["B", 1],
+    ]);
+  });
+
+  it("produces names the PAN-OS needs list counts as provided", () => {
+    // "Log types this solution needs" reads mergeLogTypeSources (vendor tier)
+    // and compareLogTypeCoverage (content tier), both through
+    // logTypeNameMatches. Split names that miss those keys - a subtype such as
+    // URL or END - leave it at "None provided yet" with the samples in hand.
+    const provided = splitSamplesByLogType(
+      [PAN_THREAT, PAN_TRAFFIC],
+      "captured",
+      "cef",
+    ).map((s) => s.logType);
+    const merged = mergeLogTypeSources({
+      expected: [],
+      vendorLogTypes: documentedLogTypesForSolution("PaloAlto-PAN-OS"),
+      provided,
+    });
+    expect(merged.filter((m) => m.provided).map((m) => m.value)).toEqual([
+      "THREAT",
+      "TRAFFIC",
+    ]);
+    expect(merged.length).toBe(8);
+    const coverage = compareLogTypeCoverage(
+      [
+        { value: "THREAT", field: "Activity", referencedBy: ["r1"], referencedTypes: ["alert-rule"] },
+        { value: "TRAFFIC", field: "Activity", referencedBy: ["r2"], referencedTypes: ["alert-rule"] },
+      ],
+      provided,
+    );
+    expect(coverage.missing).toEqual([]);
+    expect(coverage.matched).toEqual(["THREAT", "TRAFFIC"]);
   });
 });
