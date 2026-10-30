@@ -1845,6 +1845,12 @@ button.journey-step-main:hover .journey-step-label {
   list-style: none;
 }
 
+/* DBT-228: the chip's column-order provenance, inline on the count line -
+   kept on one line with its (i). */
+.sample-chip-provenance {
+  white-space: nowrap;
+}
+
 /* DBT-228: the capture checklist as a compact grid rather than one long column. */
 .capture-log-types-grid {
   display: grid;
