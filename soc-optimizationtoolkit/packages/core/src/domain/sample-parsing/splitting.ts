@@ -35,6 +35,19 @@ import {
 import { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
 
 /**
+ * Whether a CEF header's DeviceVendor and DeviceProduct name PAN-OS - the ONE
+ * scope rule for DBT-196's split and GEN-24's route by the same header TYPE.
+ * Case-insensitive; the caller trims. Exported so the route filter cannot cover
+ * a different set of devices than the split that named its log types.
+ */
+export function isPanosCefIdentity(vendor: string, product: string): boolean {
+  return (
+    vendor.toLowerCase() === "palo alto networks" &&
+    product.toLowerCase() === "pan-os"
+  );
+}
+
+/**
  * The PAN-OS log TYPE a CEF line names in its header, or undefined when the
  * line is not PAN-OS CEF (DBT-196).
  *
@@ -65,8 +78,7 @@ function panosCefLogType(line: string): string | undefined {
   const header = CEF_HEADER_PATTERN.exec(line.slice(cefStart));
   if (header === null) return undefined;
   const field = (i: number) => header[i].replace(CEF_HEADER_ESCAPE, "$1").trim();
-  if (field(2).toLowerCase() !== "palo alto networks") return undefined;
-  if (field(3).toLowerCase() !== "pan-os") return undefined;
+  if (!isPanosCefIdentity(field(2), field(3))) return undefined;
   const type = field(6);
   return type === "" ? undefined : type;
 }

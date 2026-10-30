@@ -39,6 +39,7 @@ import {
   reductionRouteId,
 } from "./naming";
 import { isPlaceholderFilter } from "./route-placeholder";
+import { escapeYamlFilter } from "./pipeline-conf";
 
 /**
  * The match-all sentinel, and the ONE place that recognises it.
@@ -79,12 +80,22 @@ function emissionOrder(plan: PipelinePlan): TablePlan[] {
   );
 }
 
-/** Build the route filter line: unquoted-match-all vs an escaped condition. */
+/**
+ * Build the route filter line: unquoted-match-all vs an escaped condition.
+ *
+ * BACKSLASHES ARE ESCAPED TOO (GEN-24), with the conf emitter's own
+ * escapeYamlFilter. This escaped only `"` until then, so any backslash in a
+ * filter reached a YAML double-quoted scalar raw: `\|` and `\s` are not YAML
+ * escapes and a conforming loader rejects them, and `\\` collapses to one
+ * backslash, so a filter came out of route.yml different from the one planned.
+ * The PAN-OS header-TYPE regex is full of both; a value filter whose value held
+ * a `'` or `\` (jsString escapes them with a backslash) had the same defect.
+ */
 function filterLine(routeCondition: string): string {
   // YAML `filter: true` (unquoted) means match all; we always quote the value.
   return routeCondition === "true"
     ? '    filter: "true"'
-    : `    filter: "${routeCondition.replace(/"/g, '\\"')}"`;
+    : `    filter: "${escapeYamlFilter(routeCondition)}"`;
 }
 
 /** Emit the route entry pair for one resolved {@link TablePlan}. */

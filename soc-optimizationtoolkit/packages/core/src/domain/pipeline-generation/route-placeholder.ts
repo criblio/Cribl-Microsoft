@@ -340,7 +340,9 @@ export function isMintedHeaderField(field: string, format: string): boolean {
  * WHAT A CEF HEADER-ONLY LOG TYPE ACTUALLY GETS, since the reason for a silence
  * has to be true or the silence is unargued: this function returns null, and the
  * log type lands in `placeholderLogTypes` (route-yml) like every other
- * placeholder. The pipeline preview renders ONE hardcoded banner for that whole
+ * placeholder. (One exception since GEN-24: a PAN-OS CEF log type DBT-196 split
+ * by header TYPE routes on that TYPE in `_raw` instead, whenever the guards in
+ * route-panos-cef hold.) The pipeline preview renders ONE hardcoded banner for that whole
  * list - "Nothing in these samples separates X from the others, so the pack
  * ships them with a placeholder filter that matches nothing" - so the operator
  * is told something, and what they are told is evidence-flavoured.
