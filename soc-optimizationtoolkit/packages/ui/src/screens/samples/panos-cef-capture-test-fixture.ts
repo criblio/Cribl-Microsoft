@@ -145,7 +145,7 @@ function trafficEndLine(i: number): string {
 }
 
 /** The `_raw` of event `i`: even indices THREAT url, odd TRAFFIC end. */
-function panosCefRaw(i: number): string {
+export function panosCefRaw(i: number): string {
   return i % 2 === 0 ? threatUrlLine(i) : trafficEndLine(i);
 }
 
