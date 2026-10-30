@@ -206,7 +206,36 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
     });
     expect(rules.querySelector(".close-match-panel")).toBeNull();
     expect(rules.querySelector(".mapping-suggest-applied")?.textContent).toBe(
-      "in now fills ReceivedBytes (PanOS). Approve PanOS in the DCR Gap Analysis to save it as a learned mapping.",
+      "in now fills ReceivedBytes (PanOS) in the DCR Gap Analysis.",
+    );
+  });
+
+  it("keeps the applied note true after the table is approved again, and focuses it", async () => {
+    const { container, rules } = await renderCovered();
+    fireEvent.click(chip(rules, "ReceivedBytes"));
+    const apply = candidateApply(rules, "in");
+    apply.focus();
+    fireEvent.click(apply);
+    const note = await waitFor(() => {
+      const el = rules.querySelector<HTMLElement>(".mapping-suggest-applied");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    // The apply button left with the panel and the chip cleared, so focus
+    // lands on the announcement instead of falling to the page body.
+    expect(document.activeElement).toBe(note);
+
+    // The operator approves the table; coverage cannot see approvals, so its
+    // note must not keep asking for one (the DBT-202 note rule).
+    const approve = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent === "Approve PanOS",
+    )!;
+    fireEvent.click(approve);
+    await waitFor(() => {
+      expect(fieldsSummary(container)).toContain("Approved");
+    });
+    expect(rules.querySelector(".mapping-suggest-applied")?.textContent).toBe(
+      "in now fills ReceivedBytes (PanOS) in the DCR Gap Analysis.",
     );
   });
 });

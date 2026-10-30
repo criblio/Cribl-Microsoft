@@ -45,7 +45,7 @@
  * rule-coverage-state; this component only orchestrates IO through the ports.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   acquireSolutionWorkbooks,
   analyticRuleToContentItem,
@@ -557,6 +557,8 @@ export function RuleCoverageSection({
     },
     [liveReports, solutionName],
   );
+  const appliedNoteRef = useRef<HTMLParagraphElement>(null);
+  const focusAppliedNote = useRef(false);
   const applyCloseMatch = useCallback(
     (candidate: CloseMatchCandidate, column: string) => {
       onApplyCloseMatch?.({
@@ -570,11 +572,16 @@ export function RuleCoverageSection({
         source: candidate.sourceName,
         column,
       });
+      // The clicked button leaves with the panel (and the chip clears), so
+      // focus moves to the note once it renders instead of falling to body.
+      focusAppliedNote.current = true;
     },
     [onApplyCloseMatch],
   );
   // The note is shown only while its claim holds: the field still lands in
-  // the column (a later edit in the Gap Analysis can undo it).
+  // the column (a later edit in the Gap Analysis can undo it). It states only
+  // that - this section cannot see approvals, so it never asks for one (the
+  // Gap Analysis's own note does, and only while the table is unapproved).
   const appliedHolds =
     applied !== null &&
     (liveReports
@@ -586,6 +593,12 @@ export function RuleCoverageSection({
           m.dest === applied.column,
       ) ??
       false);
+  useEffect(() => {
+    if (appliedHolds && focusAppliedNote.current) {
+      focusAppliedNote.current = false;
+      appliedNoteRef.current?.focus();
+    }
+  }, [appliedHolds]);
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field
   // set, recomputed only when the report changes so the effect is stable.
@@ -912,10 +925,14 @@ export function RuleCoverageSection({
           )}
 
           {appliedHolds && applied !== null && (
-            <p className="field-hint mapping-suggest-applied" role="status">
-              {applied.source} now fills {applied.column} ({applied.logType}).
-              Approve {applied.logType} in the DCR Gap Analysis to save it as a
-              learned mapping.
+            <p
+              ref={appliedNoteRef}
+              className="field-hint mapping-suggest-applied"
+              role="status"
+              tabIndex={-1}
+            >
+              {applied.source} now fills {applied.column} ({applied.logType})
+              in the DCR Gap Analysis.
             </p>
           )}
 
