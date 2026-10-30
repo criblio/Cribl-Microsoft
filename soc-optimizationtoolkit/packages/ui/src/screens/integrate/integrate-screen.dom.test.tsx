@@ -596,7 +596,7 @@ describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
     };
   }
 
-  it("reports 14 of 100 kept in the commit headline and on the chip", async () => {
+  it("reports 14 of 50 kept per log type in the commit headline and on the chips", async () => {
     const view = await selectSourceInDefaultGroup(
       discoveryPorts({
         captureBody: panosCefCaptureBody(100),
@@ -609,7 +609,7 @@ describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
       fireEvent.click(screen.getByText("Run capture"));
     });
     expect(panel().querySelector(".panel-desc")?.textContent).toBe(
-      "Captured 100 events in 1 log type (cef).",
+      "Captured 100 events in 2 log types (cef).",
     );
 
     await act(async () => {
@@ -621,13 +621,18 @@ describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
         panel().querySelector('[data-testid="capture-outcome"] .panel-desc')
           ?.textContent,
       ).toBe(
-        'Added 1 sample from this capture. "captured" kept 14 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+        'Added 2 samples from this capture. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50. "TRAFFIC" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
       );
     });
+    // DBT-196 split the capture by PAN-OS header TYPE: one chip per type,
+    // each byte-capped on its own.
     const chips = [...view.container.querySelectorAll(".sample-chip-counts")].map(
       (c) => c.textContent,
     );
-    expect(chips).toEqual(["14 events, 135 fields, time: PanTimeHighRes"]);
+    expect(chips).toEqual([
+      "14 events, 115 fields, time: PanTimeHighRes",
+      "14 events, 115 fields, time: PanTimeHighRes",
+    ]);
   });
 });
 

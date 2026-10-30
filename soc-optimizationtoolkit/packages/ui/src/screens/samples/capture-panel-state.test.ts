@@ -516,38 +516,57 @@ describe("a verbose PAN-OS CEF capture, captured to committed", () => {
     });
 
     expect(result.rawEvents).toHaveLength(100);
+    // DBT-196 splits PAN-OS CEF by its header TYPE: the fixture alternates the
+    // THREAT and TRAFFIC shapes, so it captures as two log types of 50.
     expect(result.splits.map((s) => [s.logType, s.eventCount])).toEqual([
-      ["captured", 100],
+      ["THREAT", 50],
+      ["TRAFFIC", 50],
     ]);
     expect(deriveCaptureView(result, false, []).headline).toBe(
-      "Captured 100 events in 1 log type (cef).",
+      "Captured 100 events in 2 log types (cef).",
     );
 
     const handed = plannedCaptureSamples(result.splits, "capture:in_syslog");
-    expect(handed).toHaveLength(1);
-    expect(handed[0].format).toBe("cef");
-    expect(handed[0].parsed.records).toHaveLength(100);
-    expect(handed[0].parsed.eventCount).toBe(100);
-    expect(handed[0].parsed.fields).toHaveLength(135);
+    expect(handed.map((s) => [s.logType, s.format])).toEqual([
+      ["THREAT", "cef"],
+      ["TRAFFIC", "cef"],
+    ]);
+    for (const s of handed) {
+      expect(s.parsed.records).toHaveLength(50);
+      expect(s.parsed.eventCount).toBe(50);
+      expect(s.parsed.fields).toHaveLength(115);
+    }
+    // Each shape carries 20 keys the other lacks; together, the 135 the
+    // unsplit capture used to read.
+    const union = new Set(handed.flatMap((s) => s.parsed.fields.map((f) => f.name)));
+    expect(union.size).toBe(135);
 
     // The cloud adapter's first write: the 256 KiB budget. A 413 halves it; one
-    // halving is pinned here, which is the size the UAT's 9 sits beside.
+    // halving is pinned here, which is the size the UAT's 9 sits beside. The
+    // cap is PER LOG TYPE, so each 50-event type keeps what one 128 KiB sample
+    // holds (~8.5 KB an event): 14 apiece, 28 of 100 overall.
     const stored = handed.map(
       (s) => capTaggedSampleBytes(s, TAGGED_SAMPLE_MAX_BYTES / 2).sample,
     );
-    expect(stored[0].parsed.records).toHaveLength(14);
-    // The field list is untouched by the cap - all 135 came from all 100.
-    expect(stored[0].parsed.fields).toHaveLength(135);
+    expect(stored.map((s) => [s.logType, s.parsed.records.length])).toEqual([
+      ["THREAT", 14],
+      ["TRAFFIC", 14],
+    ]);
+    // The field list is untouched by the cap - each type's 115 came from all 50.
+    for (const s of stored) expect(s.parsed.fields).toHaveLength(115);
 
     const trimmed = storedEventShortfalls(handed, stored);
-    expect(trimmed).toEqual([{ logType: "captured", handed: 100, kept: 14 }]);
+    expect(trimmed).toEqual([
+      { logType: "THREAT", handed: 50, kept: 14 },
+      { logType: "TRAFFIC", handed: 50, kept: 14 },
+    ]);
     expect(
       deriveCaptureCommitView(
         { stored: handed.length, returned: result.splits.length, trimmed },
         false,
       ).headline,
     ).toBe(
-      'Added 1 sample from this capture. "captured" kept 14 of its 100 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 100.',
+      'Added 2 samples from this capture. "THREAT" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50. "TRAFFIC" kept 14 of its 50 events: the sample store limits how large one log type\'s sample can be, and these events are large. Its field list was still read from all 50.',
     );
   });
 });
