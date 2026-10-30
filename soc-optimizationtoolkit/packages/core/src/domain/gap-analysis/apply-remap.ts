@@ -46,8 +46,10 @@
  * row into a column (keep, rename, coerce, decode) is only as good as that
  * column, and only this function chooses one. actionEditRefusal says when the
  * Action select would set one on a row with no real column - the catch-all, or
- * none - and the reducer refuses it, so the Dest path stays the one way a row
- * comes to land in a column.
+ * none - and the reducer refuses it, so a row in the catch-all comes to land in
+ * a column only by the Dest path. It does not guard the other way back: a row
+ * the Action select set to overflow or drop keeps its column, and setting it
+ * back is not checked against a row that has filled that column since.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */

@@ -294,6 +294,9 @@ describe("actionEditRefusal - an action that needs a column needs a real one (DB
 
   it("matches the catch-all case-insensitively", () => {
     expect(actionEditRefusal(panSrcMac, "rename", "additionalextensions")).not.toBeNull();
+    // And the other way round: the row's spelling differs, not the argument's.
+    const shouted = { ...panSrcMac, dest: "ADDITIONALEXTENSIONS" };
+    expect(actionEditRefusal(shouted, "rename", "AdditionalExtensions")).not.toBeNull();
   });
 
   it("refuses them on a row with no destination column at all", () => {
