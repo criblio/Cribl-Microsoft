@@ -398,6 +398,30 @@ describe("assemblePack - deterministic .crbl + build record", () => {
     expect(outputs).toContain("dcr-11111111111111111111111111111111");
   });
 
+  it("reports NO placeholders for a ROUTABLE pack, which ships no destination (GEN-25)", () => {
+    // A routable pack writes no outputs.yml, so it has no destination values
+    // to be placeholders. Reporting them anyway logged "PLACEHOLDER destination
+    // values" for every native-path routable build - a warning about a file the
+    // artifact does not contain. No tableInputs, so the old rule named every
+    // table here.
+    const plan = buildPipelinePlan({ ...paloPlanInput(), packShape: "routable" });
+    const built = assemblePack(scaffoldInput({ plan }));
+    expect(built.tree.has("default/outputs.yml")).toBe(false);
+    expect(built.placeholderTables).toEqual([]);
+  });
+
+  it("keeps the ALL-INCLUSIVE placeholder report when an existing id is supplied (GEN-25)", () => {
+    // The guard against over-reach: an existing destination is reached only
+    // through a group route, so only a routable pack reads it. A self-contained
+    // pack still ships its own placeholder destination and must still say so.
+    const plan = buildPipelinePlan(paloPlanInput());
+    const built = assemblePack(scaffoldInput({ plan, existingDestinationId: "PAN-CSL" }));
+    expect(built.placeholderTables).toEqual(plan.tables.map((t) => t.sentinelTable));
+    expect(built.tree.get("default/outputs.yml") as string).toContain(
+      "dcr-00000000000000000000000000000000",
+    );
+  });
+
   it("produces byte-identical .crbl for identical inputs", () => {
     const a = assemblePack(scaffoldInput());
     const b = assemblePack(scaffoldInput());
@@ -681,6 +705,49 @@ describe("every built pack ships its own README.md (GEN-14)", () => {
     expect(listed).toEqual(
       plan.tables.map((t) => `- ${t.destinationId} (stream ${t.streamName})`),
     );
+  });
+
+  it("names the PICKED destination, and no convention id, on the existing-destination path (GEN-25)", () => {
+    // GEN-21: the operator picked an existing Cribl destination (PAN-CSL in the
+    // UAT). The convention ids (MS-Sentinel-...-dest) do not exist there and the
+    // routable pack does not create them, so a README telling the operator they
+    // "must ALREADY EXIST" sent them looking for destinations nobody made.
+    const plan = buildPipelinePlan({ ...twoTablePlanInput(), packShape: "routable" });
+    const text = readme(scaffoldPack(scaffoldInput({ plan, existingDestinationId: "PAN-CSL" })));
+    expect(text).toContain(ROUTABLE_MARK);
+    expect(text).not.toContain(ALL_INCLUSIVE_MARK);
+    const deployment = text.split("## Deployment")[1] ?? "";
+    const listed = deployment.split("\n").filter((line) => line.startsWith("- "));
+    expect(listed).toEqual(["- PAN-CSL"]);
+    for (const table of plan.tables) {
+      expect(text).not.toContain(table.destinationId);
+    }
+    // One row per table plan still, but without the Destination and Stream
+    // columns: the stream belongs to the picked destination, not to the plan.
+    const rows = contentRows(text);
+    expect(rows).toEqual(
+      plan.tables.map(
+        (t) =>
+          `| ${t.logType} | ${t.sentinelTable} | ${t.pipelineName} | ${t.reductionPipelineId} |`,
+      ),
+    );
+  });
+
+  it("leaves the native-path README untouched by an existing id it does not use (GEN-25)", () => {
+    // A self-contained pack carries its own destinations, so a stray existing
+    // id must change nothing - not the wiring, not the listed ids.
+    const plan = buildPipelinePlan(twoTablePlanInput());
+    const without = readme(scaffoldPack(scaffoldInput({ plan })));
+    const withId = readme(scaffoldPack(scaffoldInput({ plan, existingDestinationId: "PAN-CSL" })));
+    expect(withId).toBe(without);
+    expect(withId).not.toContain("PAN-CSL");
+  });
+
+  it("treats a blank existing id as no pick, keeping the native routable README", () => {
+    const plan = buildPipelinePlan({ ...twoTablePlanInput(), packShape: "routable" });
+    const native = readme(scaffoldPack(scaffoldInput({ plan })));
+    const blank = readme(scaffoldPack(scaffoldInput({ plan, existingDestinationId: "  " })));
+    expect(blank).toBe(native);
   });
 
   it("never carries DCR values or identities from a real destination", () => {

@@ -262,7 +262,7 @@ import type {
   SourceRouting,
 } from "./existing-destination-state";
 import { hasAzureIdentity } from "../../capabilities/capability-audit-state";
-import { resolveBuildDestinations } from "./build-destinations";
+import { definitionDestinationFields, resolveBuildDestinations } from "./build-destinations";
 import { WiringSection } from "./wiring-section";
 
 /**
@@ -1719,6 +1719,9 @@ export function IntegrateScreen({
         existing: azureNeeds.dcrInventory
           ? null
           : { destination: existingDestination ?? "(not picked)" },
+        // GEN-25: a native-path routable pack writes no outputs.yml either, so
+        // it reads no inventory and logs no placeholders it will not ship.
+        routable: plan.packShape === "routable",
         planTables,
         sessionDestinations,
         // DBT-43: a THROW is only half of it. An RBAC-filtered listing succeeds
@@ -1821,14 +1824,14 @@ export function IntegrateScreen({
         builtAtMs: Date.now(),
         // GEN-21: the existing destination carries its own tenant and client
         // id, and a routable pack writes no outputs.yml - nothing is stamped.
-        ...(resolved === null
-          ? {}
-          : {
-              outputsDefaults: {
-                tenantId: config.tenantId,
-                ingestionClientId: ingestId,
-              },
-            }),
+        // GEN-25: its id goes in instead, so the README names the destination
+        // the route will send to rather than convention ids that do not exist.
+        ...definitionDestinationFields({
+          resolved,
+          existingDestination,
+          tenantId: config.tenantId,
+          ingestionClientId: ingestId,
+        }),
       };
 
       // 4. Assemble deterministically and persist the build record.
@@ -1846,11 +1849,11 @@ export function IntegrateScreen({
       // build log and the summary cannot disagree about which tables shipped
       // placeholders.
       //
-      // Not on the existing path (resolved null): that pack ships no
-      // destination at all, so it has no destination values to be placeholders.
-      const placeholderTables = resolved === null ? [] : assembled.placeholderTables;
-      const placeholderNotice =
-        resolved === null ? null : placeholderWarning(placeholderTables, resolved);
+      // A routable pack - every existing-path pack (resolved null) and a
+      // native-path routable one - ships no destination, and core reports no
+      // placeholders for it (GEN-25), so no shape is special-cased here.
+      const placeholderTables = assembled.placeholderTables;
+      const placeholderNotice = placeholderWarning(placeholderTables, resolved ?? []);
       if (placeholderNotice !== null) {
         push(placeholderNotice);
       }
