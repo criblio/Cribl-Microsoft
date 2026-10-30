@@ -9,7 +9,7 @@ SentinelNativeTables/
  DataCollectionRules(DCE)/ # Templates requiring Data Collection Endpoints
  [50 table templates] # DCE-based DCRs for advanced routing
  DataCollectionRules(NoDCE)/ # Direct DCR templates
- [50 table templates] # Simple, cost-effective Direct DCRs
+ [50 table templates] # Simple Direct DCRs
 ```
 
 ## Template Types
@@ -17,14 +17,14 @@ SentinelNativeTables/
 ### Direct DCRs (`DataCollectionRules(NoDCE)/`)
 - **Type**: `"kind": "Direct"`
 - **Use Case**: Simple data ingestion directly to Log Analytics
-- **Cost**: Lower (no DCE charges)
+- **Endpoint**: The DCR's own `logsIngestion` endpoint - no separate DCE resource
 - **Complexity**: Simple deployment
 - **Name Limit**: 30 characters
 
 ### DCE-based DCRs (`DataCollectionRules(DCE)/`)
 - **Type**: Requires Data Collection Endpoint
 - **Use Case**: Advanced routing, private endpoints
-- **Cost**: Higher (DCE + DCR charges)
+- **Endpoint**: A shared DCE; one DCE can serve many DCRs
 - **Complexity**: Requires DCE creation first
 - **Name Limit**: 64 characters
 
@@ -189,7 +189,9 @@ Example stream naming:
 2. **Region Matching**: DCR location must match workspace location
 3. **Schema Immutability**: Column definitions cannot be changed after creation
 4. **DCE Requirement**: DCE must exist before deploying DCE-based templates
-5. **Cost Implications**: DCEs incur additional charges
+5. **Cost**: The DCE and DCR resources carry no charge of their own; either
+   way you pay for the data ingested into the workspace. Private Link adds
+   Private Endpoint charges, which is where a DCE-based deployment can cost more.
 
 ## Related Resources
 
