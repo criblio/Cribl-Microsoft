@@ -8,7 +8,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { applyRemap, landsInColumn } from "./apply-remap";
+import {
+  actionEditRefusal,
+  applyRemap,
+  columnActionsRefusal,
+  landsInColumn,
+} from "./apply-remap";
 import type { GapFieldMapping } from "./gap-report";
 import type { FieldRef } from "./models";
 
@@ -268,5 +273,58 @@ describe("landsInColumn", () => {
     expect(landsInColumn(panSrcMac)).toBe(false);
     expect(landsInColumn(row({ action: "drop", dest: "X" }))).toBe(false);
     expect(landsInColumn(row({ action: "rename", dest: "" }))).toBe(false);
+  });
+});
+
+// DBT-209: the Action select used to change only `action`, so an overflow row
+// (dest AdditionalExtensions) set to rename became a Rename onto the catch-all,
+// and set to keep reached the DCR under its raw name. An action that writes the
+// row into its Dest Field column needs a real column, and only the Dest path
+// (applyRemap) chooses one.
+describe("actionEditRefusal - an action that needs a column needs a real one (DBT-209)", () => {
+  it("refuses keep, rename, coerce and decode on a catch-all row, naming the way out", () => {
+    for (const action of ["keep", "rename", "coerce", "decode"] as const) {
+      expect(actionEditRefusal(panSrcMac, action, "AdditionalExtensions")).toBe(
+        `${action} needs a destination column, and AdditionalExtensions is ` +
+          "the catch-all: choose a column in Dest Field first, which sets the " +
+          "action for you.",
+      );
+    }
+  });
+
+  it("matches the catch-all case-insensitively", () => {
+    expect(actionEditRefusal(panSrcMac, "rename", "additionalextensions")).not.toBeNull();
+  });
+
+  it("refuses them on a row with no destination column at all", () => {
+    const noDest = row({ source: "q", dest: "", action: "drop" });
+    expect(actionEditRefusal(noDest, "keep", "AdditionalExtensions")).toBe(
+      "keep needs a destination column, and q has none: choose a column in " +
+        "Dest Field first, which sets the action for you.",
+    );
+  });
+
+  it("allows overflow and drop on a catch-all row", () => {
+    expect(actionEditRefusal(panSrcMac, "drop", "AdditionalExtensions")).toBeNull();
+    expect(actionEditRefusal(panSrcMac, "overflow", "AdditionalExtensions")).toBeNull();
+  });
+
+  it("allows every action on a row that lands in a real column", () => {
+    for (const action of ["keep", "rename", "coerce", "decode", "overflow", "drop"] as const) {
+      expect(actionEditRefusal(act, action, "AdditionalExtensions")).toBeNull();
+    }
+  });
+
+  it("treats no column as the catch-all when the table has none", () => {
+    expect(actionEditRefusal(panSrcMac, "rename", undefined)).toBeNull();
+  });
+
+  it("says it once for every column action, for the Action select", () => {
+    expect(columnActionsRefusal(panSrcMac, "AdditionalExtensions")).toBe(
+      "keep, rename, coerce and decode need a destination column, and " +
+        "AdditionalExtensions is the catch-all: choose a column in Dest Field " +
+        "first, which sets the action for you.",
+    );
+    expect(columnActionsRefusal(act, "AdditionalExtensions")).toBeNull();
   });
 });

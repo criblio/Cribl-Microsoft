@@ -42,9 +42,17 @@
  * the schema there is nowhere to move it: the claim is left and still
  * reported, and the caller must not store that result.
  *
+ * THE ACTION PATH FOLLOWS THE SAME RULE (DBT-209). An action that writes the
+ * row into a column (keep, rename, coerce, decode) is only as good as that
+ * column, and only this function chooses one. actionEditRefusal says when the
+ * Action select would set one on a row with no real column - the catch-all, or
+ * none - and the reducer refuses it, so the Dest path stays the one way a row
+ * comes to land in a column.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
+import type { MatchAction } from "../field-matcher/models";
 import type { GapFieldMapping } from "./gap-report";
 import type { FieldRef } from "./models";
 
@@ -112,6 +120,64 @@ export interface RemapResult {
 /** Whether a row's value reaches a dedicated destination column. */
 export function landsInColumn(row: GapFieldMapping): boolean {
   return row.action !== "overflow" && row.action !== "drop" && row.dest !== "";
+}
+
+/** The actions that write a row into its Dest Field column (DBT-209). */
+export const COLUMN_ACTIONS: readonly MatchAction[] = [
+  "keep",
+  "rename",
+  "coerce",
+  "decode",
+];
+
+/**
+ * Why the Action select may not set `action` on `row`, or null when it may
+ * (DBT-209). keep, rename, coerce and decode each write the row into its Dest
+ * Field column, so they need a real one: on a row whose dest is the catch-all
+ * (or empty) a rename is a Rename onto the catch-all, which overwrites the
+ * serialized overflow, and a keep sends the field to the DCR under its raw
+ * name, where it is discarded. Only the Dest path (applyRemap above) chooses a
+ * column, and it derives the action with it - so the Action path REFUSES
+ * rather than guessing a column, and the reason names the Dest path. overflow
+ * and drop need no column and are always allowed.
+ */
+export function actionEditRefusal(
+  row: GapFieldMapping,
+  action: MatchAction,
+  catchAllColumn?: string,
+): string | null {
+  if (!COLUMN_ACTIONS.includes(action)) return null;
+  return columnlessRefusal(`${action} needs`, row, catchAllColumn);
+}
+
+/**
+ * actionEditRefusal for every column action at once - the one sentence the
+ * Action select shows on a row that has no real column. Null when it has one.
+ */
+export function columnActionsRefusal(
+  row: GapFieldMapping,
+  catchAllColumn?: string,
+): string | null {
+  const names = COLUMN_ACTIONS.join(", ").replace(/, (\w+)$/, " and $1");
+  return columnlessRefusal(`${names} need`, row, catchAllColumn);
+}
+
+function columnlessRefusal(
+  subject: string,
+  row: GapFieldMapping,
+  catchAllColumn: string | undefined,
+): string | null {
+  const way = "choose a column in Dest Field first, which sets the action for you.";
+  if (row.dest === "") {
+    return `${subject} a destination column, and ${row.source} has none: ${way}`;
+  }
+  if (
+    catchAllColumn !== undefined &&
+    row.dest.toLowerCase() === catchAllColumn.toLowerCase()
+  ) {
+    return `${subject} a destination column, and ${row.dest} is the catch-all: ${way}`;
+  }
+  return null;
 }
 
 /** Describe the reviewer's choice in the row's description column. */

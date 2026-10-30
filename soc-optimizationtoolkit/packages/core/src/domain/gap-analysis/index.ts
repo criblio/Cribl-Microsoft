@@ -85,4 +85,10 @@ export { buildGapReport } from "./gap-report";
 // Re-pointing a mapping row at another column (GEN-19): action, destType,
 // coercion and confidence follow from the destination in ONE place.
 export type { RemapRequest, RemapOutcome, RemapResult } from "./apply-remap";
-export { applyRemap, landsInColumn } from "./apply-remap";
+export {
+  COLUMN_ACTIONS,
+  actionEditRefusal,
+  applyRemap,
+  columnActionsRefusal,
+  landsInColumn,
+} from "./apply-remap";

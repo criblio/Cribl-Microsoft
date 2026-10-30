@@ -15,7 +15,9 @@
  *     dest-column dropdown and an action dropdown (incl. base64 decode) per
  *     source field, plus the unmapped destination columns. A dest choice onto
  *     a column another row fills opens the claim panel (DBT-208) instead of
- *     applying;
+ *     applying. On a row in the catch-all the actions that need a column
+ *     (keep, rename, coerce, decode) are disabled with the reason: Dest Field
+ *     is the one way a row comes to land in a column (DBT-209);
  *   - a per-sample DESTINATION-TABLE override (re-analyzes on change);
  *   - the VENDOR IDENTITY block (DeviceVendor/DeviceProduct etc.): sample /
  *     enrichment / forced-input resolution with curated auto-seeding;
@@ -65,7 +67,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import {
   DEFAULT_GAP_PROFILE,
   FIELD_EXAMPLE_MAX_CHARS,
+  actionEditRefusal,
   collectGapReports,
+  columnActionsRefusal,
   createBundledSchemaCatalog,
   createSchemaLadder,
   detectVendorIdentity,
@@ -960,6 +964,9 @@ export function MappingReviewSection({
     onEffectiveMappingsChange(byLogType);
   }, [reports, review, onEffectiveMappingsChange]);
 
+  // DBT-209: the table's catch-all rides along, so the reducer refuses an
+  // action that needs a column on a row that has none (the select also
+  // disables those options and says why).
   const updateAction = useCallback(
     (report: GapReport, sourceField: string, value: string) => {
       dispatch({
@@ -969,6 +976,7 @@ export function MappingReviewSection({
         field: "action",
         value,
         baseline: report.fieldMappings,
+        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
     },
     [],
@@ -1309,6 +1317,7 @@ export function MappingReviewSection({
             : unmapped.filter((d) => d.name.toLowerCase().includes(query));
         const approved = isApproved(review, report.logType);
         const modified = isModified(review, report);
+        const catchAllColumn = getOverflowConfig(report.tableName).fieldName;
         return (
           <div key={report.logType} className="mapping-review-card">
             <div className="mapping-review-card-head">
@@ -1564,7 +1573,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Action
-                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop." />
+                          <InfoTip text="What the Cribl pipeline will do with this field: keep (pass through), rename, coerce (convert type), overflow (collect into the catch-all), or drop. A field in the catch-all has no column of its own, so keep, rename, coerce and decode wait until you choose one in Dest Field, which sets the action for you." />
                         </th>
                       </tr>
                     </thead>
@@ -1581,6 +1590,10 @@ export function MappingReviewSection({
                         // the pure state module (truncation, escaping, and
                         // the empty-vs-missing distinction live there).
                         const example = formatExampleValue(m.sampleValue);
+                        const columnlessReason = columnActionsRefusal(
+                          m,
+                          catchAllColumn,
+                        );
                         const claim =
                           pendingClaim !== null &&
                           pendingClaim.logType === report.logType &&
@@ -1659,15 +1672,22 @@ export function MappingReviewSection({
                               <select
                                 className="mapping-select"
                                 value={m.action}
+                                title={columnlessReason ?? undefined}
                                 onChange={(e) =>
                                   updateAction(report, m.source, e.target.value)
                                 }
                               >
-                                {ACTION_OPTIONS.map((act) => (
-                                  <option key={act} value={act}>
-                                    {act}
-                                  </option>
-                                ))}
+                                {ACTION_OPTIONS.map((act) => {
+                                  // DBT-209: the reducer refuses these here.
+                                  const refused =
+                                    act !== m.action &&
+                                    actionEditRefusal(m, act, catchAllColumn) !== null;
+                                  return (
+                                    <option key={act} value={act} disabled={refused}>
+                                      {refused ? `${act} (choose a Dest Field first)` : act}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </td>
                           </tr>,

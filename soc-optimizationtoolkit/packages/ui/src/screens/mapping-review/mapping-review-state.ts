@@ -50,6 +50,7 @@ import type {
   TaggedSample,
 } from "@soc/core";
 import {
+  actionEditRefusal,
   applyRemap,
   closeMatchRowsFromReports,
   FIELD_EXAMPLE_MAX_CHARS,
@@ -126,7 +127,11 @@ export type MappingReviewAction =
    * Edit one mapping row's action. `baseline` is the report's current mappings
    * for the table, used to seed the edit store on first edit (mirrors the
    * legacy `mappingEdits[logType] || a.fieldMappings`). A no-op when no row
-   * matches `sourceField`.
+   * matches `sourceField`, and REFUSED (a no-op) when core actionEditRefusal
+   * says the action needs a column the row does not have (DBT-209): keep,
+   * rename, coerce or decode on a row in the catch-all would be a Rename onto
+   * the catch-all, or a field the DCR discards. The Dest path chooses the
+   * column, and the action with it.
    */
   | {
       type: "edit-mapping";
@@ -135,6 +140,8 @@ export type MappingReviewAction =
       field: "action";
       value: string;
       baseline: readonly GapFieldMapping[];
+      /** The table's catch-all column, as the Dest path takes it. */
+      catchAllColumn?: string;
     }
   /**
    * Point one mapping row at another destination column (GEN-19). Delegates to
@@ -316,9 +323,13 @@ export function mappingReviewReducer(
       if (index === -1) {
         return state;
       }
+      // The action dropdown offers only MatchAction values (ACTION_OPTIONS).
+      const value = action.value as MatchAction;
+      if (actionEditRefusal(current[index], value, action.catchAllColumn) !== null) {
+        return state;
+      }
       const nextRows = current.map((row, i) =>
-        // The action dropdown offers only MatchAction values (ACTION_OPTIONS).
-        i === index ? { ...row, action: action.value as MatchAction } : row,
+        i === index ? { ...row, action: value } : row,
       );
       return {
         ...state,
