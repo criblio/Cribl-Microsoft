@@ -217,3 +217,26 @@ export function sectionSummary(
       return "";
   }
 }
+
+/**
+ * DBT-231: the one-line summary of the native deploy's prefilled settings -
+ * what Deploy will use, without the three fields open. The client id is
+ * shortened (first and last four) because the line is for recognition, not
+ * for copying; an empty value is named as missing rather than hidden.
+ */
+export function deploySettingsSummary(
+  table: string,
+  clientId: string,
+  secretGiven: boolean,
+): string {
+  const t = table.trim() === "" ? "no table yet" : `table ${table.trim()}`;
+  const id = clientId.trim();
+  const c =
+    id === ""
+      ? "no client id"
+      : id.length > 12
+        ? `client ${id.slice(0, 4)}...${id.slice(-4)}`
+        : `client ${id}`;
+  const secret = secretGiven ? "secret given" : "secret: placeholder";
+  return `Deploy settings: ${t} - ${c} - ${secret} (change)`;
+}

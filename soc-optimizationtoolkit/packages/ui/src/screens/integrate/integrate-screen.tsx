@@ -242,6 +242,7 @@ import {
   deriveSectionInputs,
   sectionSummary,
 } from "./integrate-screen-state";
+import { deploySettingsSummary } from "./integrate-screen-state";
 import {
   captureGroupDefault,
   describeOutputRow,
@@ -3313,7 +3314,22 @@ export function IntegrateScreen({
       )}
       {/* GEN-21: the table, client id and secret are the native run's - the
           existing destination already carries its own credentials. */}
+      {/* DBT-231: the three fields are prefilled with the right defaults, so
+          they wait behind one summary line. It opens by itself when the table
+          or client id is empty (either blocks the run) or once edited. */}
       {!existingMode && (
+      <details
+        className="gap-handles deploy-settings-details"
+        open={
+          table.trim() === "" ||
+          ingestionClientId.trim() === "" ||
+          tableTouchedRef.current ||
+          undefined
+        }
+      >
+        <summary>
+          {deploySettingsSummary(table, ingestionClientId, ingestionClientSecret !== "")}
+        </summary>
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Table name</span>
@@ -3384,6 +3400,7 @@ export function IntegrateScreen({
           </span>
         </label>
       </div>
+      </details>
       )}
       <div className="panel-controls">
         <button

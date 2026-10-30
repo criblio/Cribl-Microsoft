@@ -268,3 +268,15 @@ describe("sectionSummary (DBT-127)", () => {
     expect(sectionSummary("enable-content", facts)).toBe("");
   });
 });
+
+describe("deploySettingsSummary (DBT-231)", () => {
+  it("names what Deploy will use, with the client id shortened and missing values named", async () => {
+    const { deploySettingsSummary } = await import("./integrate-screen-state");
+    expect(
+      deploySettingsSummary("CommonSecurityLog", "2c06cab1-87a5-4153-8970-97d8a22c347f", false),
+    ).toBe("Deploy settings: table CommonSecurityLog - client 2c06...347f - secret: placeholder (change)");
+    expect(deploySettingsSummary("", "", true)).toBe(
+      "Deploy settings: no table yet - no client id - secret given (change)",
+    );
+  });
+});

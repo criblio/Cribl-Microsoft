@@ -3624,13 +3624,14 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-231",
       "type": "story",
       "priority": "now",
       "title": "Deploy: prefilled table, client id and secret as one summary line with Change",
-      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (H) table name, ingestion client id and optional secret are all prefilled with correct defaults yet shown as three fields. Build: one summary line with Change that expands to the fields; a field that is empty or invalid opens it."
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (H) table name, ingestion client id and optional secret are all prefilled with correct defaults yet shown as three fields. Build: one summary line with Change that expands to the fields; a field that is empty or invalid opens it. DONE 2026-10-30 (pins; live check batched with DBT-228..230). The native deploy fields sit in a Deploy settings disclosure whose summary names what Deploy will use (table, client id shortened first-4...last-4, secret given or placeholder); it opens by itself while the table or client id is empty - either blocks the run - or once the table is edited. Pins: summary text (state) and the open-while-missing rule (DOM, the fixture lacks a client id), mutation-checked by dropping the client-id condition.",
+      "verified": "pins"
     }
   ],
   "features": [

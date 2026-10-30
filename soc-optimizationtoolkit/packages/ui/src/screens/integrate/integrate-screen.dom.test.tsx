@@ -1844,3 +1844,32 @@ describe("IntegrateScreen - one coverage step with a switch (DBT-226)", () => {
     expect(container.querySelectorAll(".rule-coverage")).toHaveLength(2);
   });
 });
+
+describe("IntegrateScreen - Deploy settings fold into one line (DBT-231)", () => {
+  it("summarises the settings, and opens them while a value that blocks the run is missing", async () => {
+    const ports = discoveryPorts();
+    const { container } = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    fireEvent.click(screen.getByLabelText(/Create a new destination with Deploy/));
+    const details = await waitFor(() => {
+      const d = container.querySelector("details.deploy-settings-details") as HTMLDetailsElement | null;
+      expect(d).not.toBeNull();
+      return d!;
+    });
+    // The fixture prefills the table but carries no client id - which blocks
+    // the run - so the summary names it and the fields open by themselves.
+    expect(details.querySelector("summary")!.textContent).toBe(
+      "Deploy settings: table SecurityEvent - no client id - secret: placeholder (change)",
+    );
+    expect(details.open).toBe(true);
+  });
+});

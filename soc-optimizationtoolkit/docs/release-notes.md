@@ -10,6 +10,8 @@ is harder to forget to update than a directory that has to be remembered.
 
 ## Unreleased
 
+**Less on screen after each step (DBT-228 to DBT-231).** Sample cards carry one line, and the routing caveat for column-order samples is said once below them. The capture checklist is a compact grid with the vendor-documented log types grouped, and the generated filter is behind Edit filter. Gap Analysis shows destination, learned decisions and unused fields on one line; enrichment fields and a satisfied vendor identity are one line each until you edit them. Select Azure Resources keeps creating a resource group or workspace, and the ingestion role, closed until they are needed. Deploy shows its prefilled table, client id and secret as one summary line. Anything that needs your attention, such as a missing required value, opens by itself.
+
 **Select Sentinel Solution waits for a search (DBT-227).** Before you pick a solution the section shows the search box and how many solutions there are, not the whole list. Type to filter, or press Browse all to see every solution.
 
 **One coverage step, and Enable Sentinel Content waits for a load (DBT-226).** Review Analytics Rule Coverage and Review Workbook Coverage are now one step, Review Coverage, with an Analytics rules / Workbooks switch, so Sentinel Integration has eight sections instead of nine. Enable Sentinel Content shows only its Load button until the solution content has been read.
