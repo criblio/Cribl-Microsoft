@@ -112,8 +112,15 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     expect(notice(container)).toBe(
       "1 mapping edit no longer matches a field in the new analysis and was dropped.",
     );
+    // onEffectiveMappingsChange fires from an effect, which can land after the
+    // notice renders; wait for it rather than reading a stale snapshot.
+    await waitFor(() => {
+      expect((effective().PanOS ?? []).map((m) => m.source).sort()).toEqual([
+        "TimeGenerated",
+        "qqvendorfield",
+      ]);
+    });
     const rows = effective().PanOS ?? [];
-    expect(rows.map((m) => m.source).sort()).toEqual(["TimeGenerated", "qqvendorfield"]);
     expect(rows.find((m) => m.source === "qqvendorfield")?.action).toBe("rename");
     // The surviving edit is still an edit.
     expect(summary(container)).toContain("Modified");
@@ -127,7 +134,9 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     expect(notice(container)).toBe(
       "2 mapping edits no longer match a field in the new analysis and were dropped.",
     );
-    expect(effective().PanOS?.map((m) => m.source)).toEqual(["TimeGenerated"]);
+    await waitFor(() => {
+      expect(effective().PanOS?.map((m) => m.source)).toEqual(["TimeGenerated"]);
+    });
     expect(summary(container)).not.toContain("Modified");
     expect(container.querySelector(".gap-modified-line")).toBeNull();
   });
