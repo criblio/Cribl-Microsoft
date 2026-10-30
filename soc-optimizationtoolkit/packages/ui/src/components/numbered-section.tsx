@@ -87,6 +87,17 @@ export interface NumberedSectionProps {
    * and is not the body: the caller owns keeping it inert.
    */
   notBuiltBody?: ReactNode;
+  /**
+   * DBT-232: pinned sections stay open when the operator moves to another
+   * section. Absent onPinnedChange = no Pin button.
+   */
+  pinned?: boolean;
+  onPinnedChange?: (pinned: boolean) => void;
+  /**
+   * DBT-232: called when the operator acts INSIDE the section (pointer down or
+   * keyboard focus) - the page's cue that this is the section being used.
+   */
+  onActivate?: () => void;
 }
 
 export function NumberedSection({
@@ -102,6 +113,9 @@ export function NumberedSection({
   onDone,
   anchorId,
   notBuiltBody,
+  pinned = false,
+  onPinnedChange,
+  onActivate,
 }: NumberedSectionProps) {
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
@@ -123,6 +137,9 @@ export function NumberedSection({
   return (
     <section
       {...(anchorId !== undefined ? { id: anchorId } : {})}
+      {...(onActivate !== undefined
+        ? { onPointerDownCapture: onActivate, onFocusCapture: onActivate }
+        : {})}
       className={`numbered-section numbered-section-${status}${bodyHidden ? " numbered-section-collapsed" : ""}`}
     >
       <div
@@ -166,6 +183,21 @@ export function NumberedSection({
         <span onClick={(e) => e.stopPropagation()}>
           <InfoTip text={infoTip} />
         </span>
+        {collapsible && onPinnedChange !== undefined && (
+          <button
+            type="button"
+            className={`numbered-section-pin${pinned ? " numbered-section-pin-on" : ""}`}
+            aria-pressed={pinned}
+            aria-label={pinned ? `Unpin ${title}` : `Pin ${title} open`}
+            title={pinned ? "Pinned open - click to let it fold" : "Keep this section open while you work elsewhere"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPinnedChange(!pinned);
+            }}
+          >
+            {pinned ? "Pinned" : "Pin"}
+          </button>
+        )}
         {bodyHidden && summary !== undefined && summary !== "" && (
           <span className="numbered-section-summary">{summary}</span>
         )}

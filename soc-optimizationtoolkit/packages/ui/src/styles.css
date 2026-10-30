@@ -8152,3 +8152,20 @@ details[open] > summary::before {
   gap: 4px 10px;
   margin: 4px 0;
 }
+
+/* DBT-232: the Pin toggle on a section header. */
+.numbered-section-pin {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.numbered-section-pin-on {
+  border-color: var(--accent, #4aa3df);
+  color: var(--accent, #4aa3df);
+}

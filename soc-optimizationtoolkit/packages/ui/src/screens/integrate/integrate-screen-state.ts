@@ -240,3 +240,47 @@ export function deploySettingsSummary(
   const secret = secretGiven ? "secret given" : "secret: placeholder";
   return `Deploy settings: ${t} - ${c} - ${secret} (change)`;
 }
+
+// ---------------------------------------------------------------------------
+// DBT-232: collapse the sections the operator is not using, unless pinned
+// ---------------------------------------------------------------------------
+
+/** The per-user KV key the pinned sections are stored under. */
+export function pinnedSectionsKey(userId: string): string {
+  return `integrate-pinned-sections:${userId}`;
+}
+
+/** Parse a stored pin list, keeping only ids the page still has. */
+export function parsePinnedSections(
+  raw: unknown,
+  validIds: readonly IntegrateSectionId[],
+): IntegrateSectionId[] {
+  if (typeof raw !== "string" || raw === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return validIds.filter((id) => parsed.includes(id));
+}
+
+/**
+ * The sections to fold when the operator moves to `active` (DBT-232): every
+ * other OPEN section, except the pinned ones and those that must stay in view
+ * (`keepOpen`: the arc's current section, a running deploy). Only explicit
+ * moves call this - opening a section, clicking or focusing inside it, Done -
+ * next - never scrolling, so nothing shrinks under the pointer mid-read.
+ */
+export function sectionsToCollapseOnMove(
+  active: IntegrateSectionId,
+  allIds: readonly IntegrateSectionId[],
+  alreadyCollapsed: ReadonlySet<IntegrateSectionId>,
+  pinned: ReadonlySet<IntegrateSectionId>,
+  keepOpen: ReadonlySet<IntegrateSectionId>,
+): IntegrateSectionId[] {
+  return allIds.filter(
+    (id) => id !== active && !alreadyCollapsed.has(id) && !pinned.has(id) && !keepOpen.has(id),
+  );
+}

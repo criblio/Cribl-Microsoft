@@ -1873,3 +1873,66 @@ describe("IntegrateScreen - Deploy settings fold into one line (DBT-231)", () =>
     expect(details.open).toBe(true);
   });
 });
+
+/**
+ * DBT-232: acting inside a section folds the others - except pinned ones and
+ * the arc's current section - and a pin is saved under the user's own key.
+ * pointerDown, not click: the trigger is acting inside a section, and a bare
+ * fireEvent.click never fires it (which is why the older pins here are blind
+ * to this behaviour).
+ */
+describe("IntegrateScreen - folds the sections you are not using (DBT-232)", () => {
+  function mount(stored: string | null = null) {
+    const base = discoveryPorts();
+    const cache = { get: vi.fn(async () => stored), set: vi.fn(async () => {}) };
+    const ports = {
+      ...base,
+      contentCache: cache,
+      user: { current: vi.fn(async () => ({ id: "u-7", username: "op" })) },
+    } as unknown as UiPorts;
+    const view = render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted={true}
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    const section = (id: string) => view.container.querySelector(`#integrate-section-${id}`)!;
+    const folded = (id: string) => section(id).classList.contains("numbered-section-collapsed");
+    return { ...view, cache, section, folded };
+  }
+
+  it("folds the other sections when you act inside one, leaving pinned and current ones open", async () => {
+    const view = mount('["deploy"]');
+    await waitFor(() => {
+      expect(view.section("deploy").querySelector(".numbered-section-pin-on")).not.toBeNull();
+    });
+    fireEvent.pointerDown(view.section("cribl-config"));
+    await waitFor(() => expect(view.folded("gap-analysis")).toBe(true));
+    expect(view.folded("cribl-config")).toBe(false);
+    // Pinned stays open.
+    expect(view.folded("deploy")).toBe(false);
+    // The arc's current section stays open (it is asking for action).
+    const current = view.container.querySelector(".numbered-section-current");
+    if (current !== null) {
+      expect(current.classList.contains("numbered-section-collapsed")).toBe(false);
+    }
+  });
+
+  it("saves a pin under the user's own key", async () => {
+    const view = mount();
+    await waitFor(() => expect(view.cache.get).toHaveBeenCalledWith("integrate-pinned-sections:u-7"));
+    fireEvent.click(screen.getByRole("button", { name: "Pin Configure Cribl open" }));
+    await waitFor(() =>
+      expect(view.cache.set).toHaveBeenCalledWith(
+        "integrate-pinned-sections:u-7",
+        JSON.stringify(["cribl-config"]),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Unpin Configure Cribl" }).getAttribute("aria-pressed")).toBe("true");
+  });
+});

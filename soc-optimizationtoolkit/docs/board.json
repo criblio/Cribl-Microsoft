@@ -3632,6 +3632,18 @@
       "title": "Deploy: prefilled table, client id and secret as one summary line with Change",
       "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (H) table name, ingestion client id and optional secret are all prefilled with correct defaults yet shown as three fields. Build: one summary line with Change that expands to the fields; a field that is empty or invalid opens it. DONE 2026-10-30 (pins; live check batched with DBT-228..230). The native deploy fields sit in a Deploy settings disclosure whose summary names what Deploy will use (table, client id shortened first-4...last-4, secret given or placeholder); it opens by itself while the table or client id is empty - either blocks the run - or once the table is edited. Pins: summary text (state) and the open-while-missing rule (DOM, the fixture lacks a client id), mutation-checked by dropping the client-id condition. LIVE 2026-10-30 (jpederson org Live Preview, PaloAlto-PAN-OS, TRAFFIC + AUDIT samples, create path, after a Gap Analysis run): Deploy settings: table CommonSecurityLog - client 2c06...347f - secret: placeholder (change), collapsed.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "DBT-232",
+      "type": "story",
+      "priority": "now",
+      "title": "Sentinel Integration collapses the sections you are not using, unless pinned",
+      "detail": "RAISED BY THE USER 2026-10-30: \"would it make sense to dynamically collapse all sections that are not currently being interacted with by the user unless the user explicitly clicks a pin button to keep it open?\" This REVERSES the same day's every-section-stays-open choice (DBT-224..226), now that a pin gives the operator control. DECIDED by the operator: (1) only EXPLICIT moves trigger it - opening a section, clicking inside it, or Done - next collapses the others; scrolling and hovering never collapse anything (content moving under the pointer is the MIG-7 lesson); (2) pins persist per user in the app preferences. Rules: a pinned section never auto-collapses; a section that needs action (warning, missing required value, run in progress, unsaved input) never auto-collapses; collapsing must not move the section being used on screen."
     }
   ],
   "features": [

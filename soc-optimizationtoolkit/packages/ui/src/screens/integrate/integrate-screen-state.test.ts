@@ -280,3 +280,27 @@ describe("deploySettingsSummary (DBT-231)", () => {
     );
   });
 });
+
+describe("auto-collapse on move (DBT-232)", () => {
+  it("folds every other open section except pinned, kept-open and already-folded ones", async () => {
+    const { sectionsToCollapseOnMove } = await import("./integrate-screen-state");
+    const all = ["solution", "sample-data", "gap-analysis", "rule-coverage", "deploy"] as const;
+    expect(
+      sectionsToCollapseOnMove(
+        "sample-data",
+        all,
+        new Set(["solution"]),
+        new Set(["rule-coverage"]),
+        new Set(["deploy"]),
+      ),
+    ).toEqual(["gap-analysis"]);
+  });
+
+  it("reads a stored pin list, dropping ids the page no longer has", async () => {
+    const { parsePinnedSections, pinnedSectionsKey } = await import("./integrate-screen-state");
+    expect(pinnedSectionsKey("u-1")).toBe("integrate-pinned-sections:u-1");
+    expect(parsePinnedSections('["deploy","workbook-coverage"]', ["solution", "deploy"])).toEqual(["deploy"]);
+    expect(parsePinnedSections("not json", ["deploy"])).toEqual([]);
+    expect(parsePinnedSections(null, ["deploy"])).toEqual([]);
+  });
+});

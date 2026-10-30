@@ -242,7 +242,12 @@ import {
   deriveSectionInputs,
   sectionSummary,
 } from "./integrate-screen-state";
-import { deploySettingsSummary } from "./integrate-screen-state";
+import {
+  deploySettingsSummary,
+  parsePinnedSections,
+  pinnedSectionsKey,
+  sectionsToCollapseOnMove,
+} from "./integrate-screen-state";
 import {
   captureGroupDefault,
   describeOutputRow,
@@ -1975,6 +1980,12 @@ export function IntegrateScreen({
   // ---- Derived section states, readiness pills, deploy gate -------------
   // (sectionInputs and azureNeeds are derived above, beside the radio.)
   const resolved = deriveSectionStatuses(sectionInputs);
+  // DBT-232: moveToSection reads these through refs so its identity does not
+  // churn every render.
+  const resolvedRef = useRef(resolved);
+  resolvedRef.current = resolved;
+  const deployingRef = useRef(false);
+  deployingRef.current = deploying || packBuilding;
 
   // DBT-127: the page owns which sections are folded, so "Done - next" and
   // the footer pills can fold and open them. Nothing folds on its own - a
@@ -1994,10 +2005,97 @@ export function IntegrateScreen({
     },
     [],
   );
+  // DBT-232: sections the operator pinned open, remembered per user. The key
+  // carries the user's id; with no identity (or a refused read) pins live for
+  // this session only - nothing is written under a shared key.
+  const [pinnedSections, setPinnedSections] = useState<ReadonlySet<IntegrateSectionId>>(
+    () => new Set(),
+  );
+  const pinKeyRef = useRef<string | null>(null);
+  const pinCache = ports.contentCache;
+  const pinUser = ports.user;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const me = await pinUser.current();
+        const key = pinnedSectionsKey(me.id);
+        pinKeyRef.current = key;
+        const raw = await pinCache?.get(key);
+        if (!cancelled) {
+          setPinnedSections(
+            new Set(parsePinnedSections(raw, resolvedIdsRef.current)),
+          );
+        }
+      } catch {
+        // No identity, or the store refused the read: pins stay session-only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinCache, pinUser]);
+  const setSectionPinned = useCallback(
+    (id: IntegrateSectionId, pin: boolean) => {
+      const next = new Set(pinnedSections);
+      if (pin) next.add(id);
+      else next.delete(id);
+      setPinnedSections(next);
+      const key = pinKeyRef.current;
+      if (key !== null) {
+        void pinCache?.set(key, JSON.stringify([...next])).catch(() => {
+          // Best effort: the pin still holds for this session.
+        });
+      }
+    },
+    [pinnedSections, pinCache],
+  );
+
+  // DBT-232: moving to a section folds the others the operator is not using -
+  // except pinned ones, the arc's current section (the one asking for action)
+  // and Deploy while it runs. Only explicit moves get here (acting inside a
+  // section, Done - next, a footer pill), never scrolling. The section moved
+  // to is kept exactly where it was on screen.
+  const activeSectionRef = useRef<IntegrateSectionId | null>(null);
+  const resolvedIdsRef = useRef<IntegrateSectionId[]>([]);
+  resolvedIdsRef.current = resolved.map((r) => r.section.id);
+  const moveToSection = useCallback(
+    (id: IntegrateSectionId) => {
+      if (activeSectionRef.current === id) return;
+      activeSectionRef.current = id;
+      const keepOpen = new Set<IntegrateSectionId>();
+      const current = resolvedRef.current.find((r) => r.status === "current");
+      if (current !== undefined) keepOpen.add(current.section.id);
+      if (deployingRef.current) keepOpen.add("deploy");
+      const toFold = sectionsToCollapseOnMove(
+        id,
+        resolvedIdsRef.current,
+        collapsedSections,
+        pinnedSections,
+        keepOpen,
+      );
+      if (toFold.length === 0) return;
+      const anchor = document.getElementById(sectionAnchor(id));
+      const before = anchor?.getBoundingClientRect().top;
+      setCollapsedSections((prev) => {
+        const next = new Set(prev);
+        for (const f of toFold) next.add(f);
+        return next;
+      });
+      requestAnimationFrame(() => {
+        if (anchor === null || before === undefined) return;
+        const shift = anchor.getBoundingClientRect().top - before;
+        if (shift !== 0) window.scrollBy(0, shift);
+      });
+    },
+    [collapsedSections, pinnedSections],
+  );
+
   // Open a section and bring it into view. The scroll waits a frame so it
   // measures the section after it has expanded.
   const goToSection = useCallback(
     (id: IntegrateSectionId) => {
+      moveToSection(id);
       setSectionCollapsed(id, false);
       requestAnimationFrame(() => {
         document
@@ -2005,7 +2103,7 @@ export function IntegrateScreen({
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     },
-    [setSectionCollapsed],
+    [setSectionCollapsed, moveToSection],
   );
   const summaryFacts = {
     solutionName: solution?.name ?? "",
@@ -3600,6 +3698,9 @@ export function IntegrateScreen({
             anchorId={sectionAnchor(section.id)}
             collapsed={collapsedSections.has(section.id)}
             onCollapsedChange={(c) => setSectionCollapsed(section.id, c)}
+            pinned={pinnedSections.has(section.id)}
+            onPinnedChange={(p) => setSectionPinned(section.id, p)}
+            onActivate={() => moveToSection(section.id)}
             summary={sectionSummary(section.id, summaryFacts)}
             onDone={() => {
               setSectionCollapsed(section.id, true);
