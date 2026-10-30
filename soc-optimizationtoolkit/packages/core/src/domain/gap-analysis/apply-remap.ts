@@ -34,6 +34,14 @@
  * should own a column is the reviewer's call and the caller is the one that
  * can ask.
  *
+ * ONCE THE REVIEWER HAS ANSWERED (DBT-208), `moveClaimed` performs the move:
+ * the claiming row falls back to the catch-all as overflow - the same row the
+ * catch-all rule above writes - and `moved` names it. Two rows left in one
+ * column are two Renames onto one name, and the second overwrites the first,
+ * so that value reached neither the column nor overflow. With no catch-all in
+ * the schema there is nowhere to move it: the claim is left and still
+ * reported, and the caller must not store that result.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
@@ -58,6 +66,12 @@ export interface RemapRequest {
    * baseline row's destination, the baseline row is restored verbatim.
    */
   baseline?: readonly GapFieldMapping[];
+  /**
+   * The reviewer chose to MOVE the column from the row already filling it
+   * (DBT-208): that row is re-pointed at the catch-all as overflow. Omitted,
+   * the claiming row is left alone and reported as `claimedBy`.
+   */
+  moveClaimed?: boolean;
 }
 
 /** How the request was resolved. */
@@ -88,6 +102,11 @@ export interface RemapResult {
    * number of fields).
    */
   claimedBy: string | null;
+  /**
+   * The source of the row `moveClaimed` sent from the chosen column to the
+   * catch-all. Null when nothing was moved.
+   */
+  moved: string | null;
 }
 
 /** Whether a row's value reaches a dedicated destination column. */
@@ -157,6 +176,7 @@ export function applyRemap(
     outcome,
     displaced: null,
     claimedBy: null,
+    moved: null,
   });
   if (index === -1) {
     return unchangedResult("unknown-source");
@@ -189,11 +209,28 @@ export function applyRemap(
 
   const nextRows = rows.map((r, i) => (i === index ? next : r));
 
-  const others = nextRows.filter((_, i) => i !== index);
   const landingIn = (column: string): GapFieldMapping | undefined =>
-    others.find(
-      (r) => landsInColumn(r) && r.dest.toLowerCase() === column.toLowerCase(),
+    nextRows.find(
+      (r, i) =>
+        i !== index &&
+        landsInColumn(r) &&
+        r.dest.toLowerCase() === column.toLowerCase(),
     );
+
+  // DBT-208: the reviewer chose to move the column from the row filling it.
+  // Every claimant moves (an analysis can already leave two in one column),
+  // and `moved` names the first.
+  let moved: string | null = null;
+  const catchAllName = request.catchAllColumn?.toLowerCase();
+  const catchAll = request.destSchema.find(
+    (c) => c.name.toLowerCase() === catchAllName,
+  );
+  if (request.moveClaimed === true && catchAll !== undefined && landsInColumn(next)) {
+    for (let claimant = landingIn(next.dest); claimant !== undefined; claimant = landingIn(next.dest)) {
+      nextRows[nextRows.indexOf(claimant)] = remappedRow(claimant, catchAll, true);
+      moved ??= claimant.source;
+    }
+  }
 
   const vacated =
     landsInColumn(row) && row.dest.toLowerCase() !== next.dest.toLowerCase();
@@ -205,5 +242,5 @@ export function applyRemap(
     ? (landingIn(next.dest)?.source ?? null)
     : null;
 
-  return { rows: nextRows, outcome, displaced, claimedBy };
+  return { rows: nextRows, outcome, displaced, claimedBy, moved };
 }
