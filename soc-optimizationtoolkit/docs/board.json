@@ -3490,13 +3490,13 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-223",
       "type": "bug",
       "priority": "now",
       "title": "Rule Coverage pools every log type: one close-match apply clears the chip for all, and coverage is overstated",
-      "detail": "RAISED BY THE USER 2026-10-30 (TMNA, PaloAlto-PAN-OS, TRAFFIC and THREAT samples): \"when I select 1 field replacement in the analytics rule analysis it applies it for all even if there are multiple log types. There may be scenarios where we want to select a different source field/destination field mapping based on the log type.\" Read in code: the apply IS per log type (mapping-review-section.tsx:1108 applies to the one report), but availableFieldsFromReports (rule-coverage-state.ts:83) unions every log type's columns into one set, so a column filled in TRAFFIC counts as available for every rule and its chip clears - the operator never gets to choose for THREAT, and a THREAT detection reading that column is reported covered while THREAT events never fill it. Second half: investigate() takes the top 5 close matches across ALL log types (rule-coverage-section.tsx:565), so one log type can crowd another out. Design pending (decision block). DECIDED 2026-10-30 by the operator: per log type. Reasoning in backlog.md section 25: it fixes the reported problem exactly (each log type gets its own choice) and claims nothing it cannot see; per-rule scoping would rest on detection-to-log-type attribution, which is a separate accuracy question. Definition used: a field is available only when EVERY log type whose destination schema has that column fills it (a log type whose table lacks the column does not count against it; a field that is no column anywhere must be carried, e.g. in overflow, by every log type).",
+      "detail": "RAISED BY THE USER 2026-10-30 (TMNA, PaloAlto-PAN-OS, TRAFFIC and THREAT samples): \"when I select 1 field replacement in the analytics rule analysis it applies it for all even if there are multiple log types. There may be scenarios where we want to select a different source field/destination field mapping based on the log type.\" Read in code: the apply IS per log type (mapping-review-section.tsx:1108 applies to the one report), but availableFieldsFromReports (rule-coverage-state.ts:83) unions every log type's columns into one set, so a column filled in TRAFFIC counts as available for every rule and its chip clears - the operator never gets to choose for THREAT, and a THREAT detection reading that column is reported covered while THREAT events never fill it. Second half: investigate() takes the top 5 close matches across ALL log types (rule-coverage-section.tsx:565), so one log type can crowd another out. Design pending (decision block). DECIDED 2026-10-30 by the operator: per log type. Reasoning in backlog.md section 25: it fixes the reported problem exactly (each log type gets its own choice) and claims nothing it cannot see; per-rule scoping would rest on detection-to-log-type attribution, which is a separate accuracy question. Definition used: a field is available only when EVERY log type whose destination schema has that column fills it (a log type whose table lacks the column does not count against it; a field that is no column anywhere must be carried, e.g. in overflow, by every log type). DONE 2026-10-30 (both). Pins: rule-coverage-state.test.ts (the reported case, filling the second log type, a table without the column, a non-column field, the single-log-type case) and rule-coverage-log-types.dom.test.tsx (the chip names THREAT; only THREAT candidates are offered and Apply sends logType THREAT). Mutation-checked: restoring the pooled union fails four pins; restoring pooled candidates fails the candidate pin (after the fixture gained a TRAFFIC near-miss - the first version could not fail). LIVE on TMNA (Live Preview at 7d3a468, PaloAlto-PAN-OS, TRAFFIC 10 events + THREAT 8 events, Gap Analysis then Analyze rule coverage): chips SourceUserID, ReceivedBytes - missing in THREAT, SentBytes - missing in THREAT, SimplifiedDeviceAction; under the old union the two bytes chips would have cleared because TRAFFIC fills them. The ReceivedBytes panel read missing in THREAT and offered only a THREAT field (deviceInboundInterface, a weak token match). Observed limit of this model: PAN-OS THREAT events may carry no byte counts at all, so a rule that reads bytes only from TRAFFIC still shows them missing in THREAT - the per-rule refinement in backlog.md section 25.",
       "decision": {
         "question": "How should Rule Coverage scope a column to log types?",
         "options": [
@@ -3512,7 +3512,8 @@
           }
         ],
         "chosen": "per-log-type"
-      }
+      },
+      "verified": "both"
     }
   ],
   "features": [
