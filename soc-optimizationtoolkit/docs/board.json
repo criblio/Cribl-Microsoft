@@ -3645,6 +3645,19 @@
       "title": "Sentinel Integration collapses the sections you are not using, unless pinned",
       "detail": "RAISED BY THE USER 2026-10-30: \"would it make sense to dynamically collapse all sections that are not currently being interacted with by the user unless the user explicitly clicks a pin button to keep it open?\" This REVERSES the same day's every-section-stays-open choice (DBT-224..226), now that a pin gives the operator control. DECIDED by the operator: (1) only EXPLICIT moves trigger it - opening a section, clicking inside it, or Done - next collapses the others; scrolling and hovering never collapse anything (content moving under the pointer is the MIG-7 lesson); (2) pins persist per user in the app preferences. Rules: a pinned section never auto-collapses; a section that needs action (warning, missing required value, run in progress, unsaved input) never auto-collapses; collapsing must not move the section being used on screen. DONE 2026-10-30 (both). moveToSection fires on pointer-down or keyboard focus inside a section (NumberedSection onActivate), on Done - next and on a footer pill; it folds every other open section except pinned ones, the arc current section and Deploy while a run is in progress, then scrolls by the active section's shift so it stays in place. Collapsed bodies stay mounted (the July rule), so nothing is lost. Pins: a Pin toggle per header, stored as JSON under integrate-pinned-sections:<user id> in the content cache; with no identity or a refused read they hold for the session only, never under a shared key. Pins: the pure fold rule, the stored-pin parser, a DOM pin using a real pointerDown (fireEvent.click never fires it, which is why older pins are blind to this) and the per-user key write; mutation-checked by ignoring pins. LIVE on the jpederson org: clicking inside Add Sample Data folded Select Sentinel Solution and sections 4-8 to their summary lines while Run DCR Gap Analysis (the current section) stayed open; pinning Deploy survived a reload (then unpinned again). LIMIT OBSERVED: at the very top of the page the shift cannot be compensated - there is no room to scroll up - so folding the section above moved the active one up by about 100 px; below the first section the compensation holds.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "DBT-233",
+      "type": "enabler",
+      "priority": "now",
+      "verified": "pins",
+      "title": "Audit after DBT-224..232: stale docblocks, dead CSS, and the self-opening disclosure rule written seven times",
+      "detail": "FOUND 2026-10-30 by the architecture audit over DBT-223..232 (14 commits). (1) Stale docs that now said the opposite of the code: integrate-arc still named workbook-coverage and a rule (4) / workbook (5) split; NumberedSection said never auto-collapses; SampleSourcePicker said TWO CHOICES and that upload is not a mode; the Integrate DBT-127 comment said nothing folds on its own. (2) Dead CSS: .integrate-fact, .integrate-fact-badge (the Always-on rows DBT-230 removed, plus their orphan comment) and .gap-provenance-source (DBT-229). (3) A duplicated decision: seven disclosures each hand-wrote open={cond || undefined}; one dropping the || undefined would lock the disclosure under React control and stop the operator opening it - silently. Fixed: the docs rewritten to the current behaviour, the dead rules removed, and components/open-when.ts (openWhen) now owns the rule, used at all seven sites, with a pin that it never returns false. The sites' existing open/closed pins passed unchanged as characterization. Layering clean; every removed test assertion in the range was a deliberate, documented replacement."
     }
   ],
   "features": [

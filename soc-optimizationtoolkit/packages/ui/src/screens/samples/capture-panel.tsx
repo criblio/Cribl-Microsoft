@@ -39,6 +39,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import type { CaptureSamplesResult, SampleSourceRef, TaggedSample } from "@soc/core";
 import {
   DEFAULT_DURATION_SECONDS,
@@ -330,7 +331,7 @@ export function CapturePanel({
           {choices.some((choice) => choice.evidence === "vendor") && (
             <details
               className="gap-handles capture-log-types-documented"
-              open={choices.some((c) => c.evidence === "vendor" && c.selected) || undefined}
+              open={openWhen(choices.some((c) => c.evidence === "vendor" && c.selected))}
             >
               <summary>
                 Also documented by the vendor (
@@ -353,7 +354,7 @@ export function CapturePanel({
           always visible. */}
       <details
         className="gap-handles capture-filter-details"
-        open={filterEditedRef.current || undefined}
+        open={openWhen(filterEditedRef.current)}
       >
         <summary>Edit filter</summary>
       <label className="field">

@@ -86,6 +86,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import {
   DEFAULT_OPERATION_OPTIONS,
   artifactsToOffer,
@@ -1988,8 +1989,10 @@ export function IntegrateScreen({
   deployingRef.current = deploying || packBuilding;
 
   // DBT-127: the page owns which sections are folded, so "Done - next" and
-  // the footer pills can fold and open them. Nothing folds on its own - a
-  // section can turn complete while the operator is still working in it.
+  // the footer pills can fold and open them. Nothing folds because a status
+  // changed - a section can turn complete while the operator is still working
+  // in it. Since DBT-232 sections DO fold when the operator explicitly moves
+  // to another one (see moveToSection), never on a status flip or a scroll.
   const [collapsedSections, setCollapsedSections] = useState<
     ReadonlySet<IntegrateSectionId>
   >(() => new Set());
@@ -3171,13 +3174,10 @@ export function IntegrateScreen({
           is never hidden. */}
       <details
         className="gap-handles integrate-pack-options"
-        open={
-          (packConflicts !== null && packConflicts.length > 0) ||
+        open={openWhen((packConflicts !== null && packConflicts.length > 0) ||
           conflictError !== "" ||
           packBuilding ||
-          packBuildLines.length > 0 ||
-          undefined
-        }
+          packBuildLines.length > 0)}
       >
         <summary>More pack options: more worker groups, overwrite check, rebuild only</summary>
       <div className="discovery-result">
@@ -3418,12 +3418,9 @@ export function IntegrateScreen({
       {!existingMode && (
       <details
         className="gap-handles deploy-settings-details"
-        open={
-          table.trim() === "" ||
+        open={openWhen(table.trim() === "" ||
           ingestionClientId.trim() === "" ||
-          tableTouchedRef.current ||
-          undefined
-        }
+          tableTouchedRef.current)}
       >
         <summary>
           {deploySettingsSummary(table, ingestionClientId, ingestionClientSecret !== "")}

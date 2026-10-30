@@ -22,6 +22,7 @@
  */
 
 import { InfoTip } from "../../components/info-tip";
+import { openWhen } from "../../components/open-when";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   acquireServicePrincipals,
@@ -235,7 +236,7 @@ export function RoleAssignmentSection({
   return (
     <details
       className="gap-handles role-assignment-details"
-      open={needsAttention || undefined}
+      open={openWhen(needsAttention)}
     >
       <summary>
         Ingestion role (Monitoring Metrics Publisher)

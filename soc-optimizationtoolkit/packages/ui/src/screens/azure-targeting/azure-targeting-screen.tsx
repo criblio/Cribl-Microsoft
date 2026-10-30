@@ -41,6 +41,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import { InfoTip } from "../../components/info-tip";
 import {
   DEFAULT_WORKSPACE_POLL_ATTEMPTS,
@@ -885,7 +886,7 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             Sentinel's status and its Enable action stay outside, visible. */}
         <details
           className="gap-handles azure-create-missing"
-          open={!scopeComplete || newRgName !== "" || newWsName !== "" || undefined}
+          open={openWhen(!scopeComplete || newRgName !== "" || newWsName !== "")}
         >
           <summary>Create a new resource group or workspace</summary>
         <div className="form-grid">

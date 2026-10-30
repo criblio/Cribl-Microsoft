@@ -117,16 +117,17 @@ export interface IntegrateSection {
 
 /**
  * The eight sections in page order: the DCR gap analysis (3) INFORMS the
- * rule (4) and workbook (5) coverage (classification needs the mapped
- * availability set), and the coverage sections then offer an explicit
+ * coverage step (4) - rules and workbooks behind one switch since DBT-226 -
+ * (classification needs the mapped availability set), and coverage then
+ * offers an explicit
  * "Drop unneeded fields" action that converts overflow fields required by
  * neither content type into reviewable DROP edits (user direction
  * 2026-07-12: decision at the evidence, not before it). Azure Resources (6)
  * and Cribl Config (7) follow the analysis arc (user direction 2026-07-13:
  * both depend on it - detected tables prefill the deploy, the pack is built
  * from the approved mappings); read-ahead still lets an operator fill them
- * anytime. rule-coverage and workbook-coverage stay INFORMATIONAL (never
- * gate a deploy).
+ * anytime. The coverage step (id rule-coverage) and enable-content stay
+ * INFORMATIONAL (never gate a deploy).
  */
 export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
   {

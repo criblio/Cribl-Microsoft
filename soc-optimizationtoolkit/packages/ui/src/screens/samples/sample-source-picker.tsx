@@ -1,9 +1,13 @@
 /**
- * SampleSourcePicker - "where do my samples come from?" (plan Phase 3).
+ * SampleSourcePicker - "how will you supply samples?" (plan Phase 3; the
+ * question since DBT-224).
  *
- * TWO CHOICES, made explicitly before anything is fetched (user direction
- * 2026-08-19): query an existing Cribl Lake dataset, or capture from a live
- * source. The mode decides what is read and what is shown:
+ * Two CRIBL modes, chosen explicitly before anything is fetched (user
+ * direction 2026-08-19): query an existing Cribl Lake dataset, or capture from
+ * a live source. With `onSelectMethod` (DBT-224) the same question also offers
+ * the two manual methods, Paste and Upload, which need no Cribl access and are
+ * offered whatever Cribl's state; the Cribl controls then show only for a Cribl
+ * method. The mode decides what is read and what is shown:
  *
  *   lake-query    one leader request, NO worker group involved
  *   live-capture  a worker group first, then that group's sources
@@ -15,8 +19,9 @@
  * It DISCOVERS; it does not acquire. Phase 4 runs the query or the capture.
  *
  * ADVISORY: no gate, no blocking. Every dead end ends with "uploading a file
- * works", because manual upload needs no Cribl access - which is also why it is
- * not a mode here, but a permanent option in the intake section below.
+ * works", because manual upload needs no Cribl access - which is why Paste and
+ * Upload are METHODS here, never Cribl modes, and the intake section below
+ * shows whichever one is chosen.
  *
  * All decisions are the pure sample-source-picker-state; this renders and wires.
  */

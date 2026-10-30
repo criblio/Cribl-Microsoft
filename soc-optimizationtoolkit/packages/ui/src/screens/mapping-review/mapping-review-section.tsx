@@ -65,6 +65,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { openWhen } from "../../components/open-when";
 import {
   DEFAULT_GAP_PROFILE,
   FIELD_EXAMPLE_MAX_CHARS,
@@ -1332,7 +1333,7 @@ export function MappingReviewSection({
       {reports.length > 0 && (
         <details
           className="gap-handles gap-enrichment-details"
-          open={globalEnrichments.length > 0 || undefined}
+          open={openWhen(globalEnrichments.length > 0)}
         >
           <summary>Add enrichment fields (constants added to every table)</summary>
         <div className="discovery-result">

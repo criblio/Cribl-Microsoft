@@ -120,9 +120,11 @@ export function NumberedSection({
   const comingSoon = status === "coming-soon";
   const blocked = status === "blocked";
   // COLLAPSIBLE (user request 2026-07-12: shorten the page as sections are
-  // completed). Manual toggle - never auto-collapses, so a section cannot
-  // vanish mid-edit when a gate flips. Header click or the chevron toggles;
-  // coming-soon sections have no body to collapse.
+  // completed). This component never folds itself - a gate flipping cannot
+  // make a section vanish mid-edit. A page that owns `collapsed` may fold it
+  // when the operator explicitly moves to another section (Integrate does,
+  // DBT-232, unless the section is pinned). Header click or the chevron
+  // toggles; coming-soon sections have no body to collapse.
   const [ownCollapsed, setOwnCollapsed] = useState(false);
   const collapsed = collapsedProp ?? ownCollapsed;
   const setCollapsed = (next: boolean | ((c: boolean) => boolean)) => {
