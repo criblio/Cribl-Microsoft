@@ -167,7 +167,11 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     await waitFor(() => {
       expect(container.querySelector(".mapping-review-grid")).not.toBeNull();
     });
-    expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("overflow");
+    // DBT-222: the snapshot arrives through onEffectiveMappingsChange, which can
+    // land a tick after the grid renders - wait for it, as every later read does.
+    await waitFor(() => {
+      expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("overflow");
+    });
     fireEvent.change(
       rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
       { target: { value: "SourceMACAddress" } },

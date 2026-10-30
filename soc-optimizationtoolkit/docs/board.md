@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 38 in progress, 117 done.**
+**90 in the backlog, 38 in progress, 118 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 51 | 62 | 25 |
+| Sentinel Integration | 51 | 63 | 25 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 51% (70/138)
+### `DBT` Quality and technical debt _(enabler)_ - 51% (71/139)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 23/32 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 24/33 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -2435,7 +2435,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (117)
+## Done (118)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5122,7 +5122,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   split and the drop label.
 
 - **DBT-196** Capture never splits PAN-OS CEF by log type: the CEF header is not read
-  `DBT-F1` `bug` `settled` `verified: pins`
+  `DBT-F1` `bug` `settled` `verified: both`
   FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
   on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Tick
   THREAT and TRAFFIC and Run capture: 'Captured 100 events in 1 log type
@@ -5141,10 +5141,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   land under its own log type. Pins cover the split, a non-PAN vendor, the
   existing cat=TRAFFIC case, the capture use case, and a needs-list count of
   THREAT and TRAFFIC as provided. Mutations of the header parse, the vendor or
-  product check, the field index and the line alignment each fail a pin.
+  product check, the field index and the line alignment each fail a pin. LIVE
+  2026-10-30 (TMNA org Live Preview, PR #191 at b5065e7, in_syslog on
+  TMNA_POV, THREAT and TRAFFIC ticked, 100 events / 10 s): split into TRAFFIC
+  49 and THREAT 51 (an earlier run that hour: 92 and 8), each named from CEF
+  header field 6.
 
 - **DBT-197** A 100-event capture becomes a 9-event sample with no explanation
-  `DBT-F1` `bug` `settled` `verified: pins`
+  `DBT-F1` `bug` `settled` `verified: both`
   FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
   on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). Capture
   headline 'Captured 100 events'; after 'Add these as samples' the chip reads
@@ -5161,10 +5165,15 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   count is measured by reading the store back (storedEventShortfalls in
   planned-samples.ts), and a missing listing entry is never reported as kept
   0. Pinned end to end (100 handed, 14 kept at half budget, exact headline) on
-  the real integrate screen and on the Lake panel; mutation-checked;
+  the real integrate screen and on the Lake panel; mutation-checked; LIVE
+  2026-10-30 (TMNA org Live Preview, PR #191 at b5065e7, in_syslog on
+  TMNA_POV, THREAT and TRAFFIC ticked, 100 events / 10 s): after Add these as
+  samples the note read TRAFFIC kept 10 of its 49 events and THREAT kept 8 of
+  its 51, naming the sample store limit and that the field list was read from
+  all events; chips TRAFFIC 10 events 85 fields, THREAT 8 events 92 fields.
 
 - **DBT-198** Capture log-type ticks reset to all after 'Add these as samples'
-  `DBT-F1` `bug` `settled` `verified: pins`
+  `DBT-F1` `bug` `settled` `verified: both`
   FOUND 2026-10-29 by the offline UAT (TMNA_POV, PaloAlto-PAN-OS, live capture
   on in_syslog; installed v1.12.6, re-verified in code at 9ef5dc0). The
   operator unticked all but THREAT and TRAFFIC; after adding the sample all 13
@@ -5181,7 +5190,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   also under StrictMode and across a second capture and commit; an untouched
   panel still follows the seed. Pure pins cover reseedKeepingPicks too.
   Mutation-checked by the implementer (three mutations) and independently by
-  the reviewer: dropping the ref update in toggle fails 2 pins.
+  the reviewer: dropping the ref update in toggle fails 2 pins. LIVE
+  2026-10-30 (TMNA org Live Preview, PR #191 at b5065e7, in_syslog on
+  TMNA_POV, THREAT and TRAFFIC ticked, 100 events / 10 s): after the commit
+  only THREAT and TRAFFIC stayed ticked, each marked already provided -
+  capturing again replaces that sample.
 
 - **DBT-199** Enable Sentinel Content points to a missing Options page and says 'None found' before loading
   `DBT-F2` `bug` `settled` `verified: pins`
@@ -6009,3 +6022,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   /apps/a/__local__: typing quickstart narrowed 80 workspaces to
   law-jpederson-cribl and law-jpederson-eastus (a resource-group match),
   ArrowDown + Enter picked eastus, and the inventory ran as before.
+
+- **DBT-222** The DBT-210 re-analysis pin reads the effective mappings before they arrive, and fails under suite load
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-10-30 running the gates on the #191-into-#192 merge (9f29f0d):
+  mapping-review-reanalysis.dom.test.tsx > "after a log-type rename, re-bases
+  against the rows the edits were made on" failed with expected undefined to
+  be overflow, then passed alone on the merged tree and on #191 (b5065e7).
+  Line 170 asserts on the onEffectiveMappingsChange snapshot synchronously
+  after a waitFor that only waited for the grid to render; the callback can
+  land a tick later. Every other assertion in the test already waits. A flaky
+  gate is a bug: it trains people to re-run red CI. Fix: wait for the
+  snapshot, not the grid. DONE 2026-10-30 (pins): line 170 now waits for the
+  snapshot. Five back-to-back runs of the mapping-review and samples suites
+  together passed 5/5; a value that never becomes overflow still times the
+  waitFor out and fails.
