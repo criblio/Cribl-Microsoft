@@ -934,6 +934,18 @@ export function SampleIntakeSection({
                     {chip.timestampField !== undefined
                       ? `, time: ${chip.timestampField}`
                       : ""}
+                    {/* WHERE THESE COLUMN NAMES CAME FROM (VND-3): a sample named
+                        from a bundled or remembered order is otherwise
+                        indistinguishable from one typed by hand. DBT-228: on the
+                        count line, with the full note in its tip. */}
+                    {!isRenaming && (
+                      <SampleChipColumnOrder
+                        cache={definitionCache}
+                        vendor={vendor}
+                        sample={sample}
+                        onStoreRefused={setChipOrderRefusal}
+                      />
+                    )}
                   </span>
                   {!isRenaming && (
                     <span className="sample-chip-actions">
@@ -979,53 +991,6 @@ export function SampleIntakeSection({
                     destination schema.
                   </p>
                 )}
-                {/* WHERE THESE COLUMN NAMES CAME FROM. Without it, a sample
-                    named from a bundled vendor dictionary, one named from the
-                    operator's own remembered order, and one typed by hand from
-                    real values are indistinguishable afterwards - so a later
-                    reader seeing `receive_time / src / dst` cannot tell whether
-                    anyone ever confirmed those names against values, which is
-                    exactly the off-by-one the preview surface exists to expose.
-                    core describeColumnOrder returns plain text for precisely
-                    this second caller. */}
-                {!isRenaming && (
-                  <SampleChipColumnOrder
-                    cache={definitionCache}
-                    vendor={vendor}
-                    sample={sample}
-                    onStoreRefused={setChipOrderRefusal}
-                  />
-                )}
-                {/*
-                  HON-5: say it HERE, when the sample is tagged, not at the
-                  preview. Both route discriminators early-return on a format
-                  formatCanDiscriminate rejects (csv, positional, syslog) by
-                  construction, so this pack can never route automatically - and
-                  an operator told only "no discriminator found" would go and
-                  collect more samples, which cannot possibly help. The
-                  sibling count is why this is not a bare format check: a
-                  single-log-type pack keeps a working match-all.
-                */}
-                {!isRenaming &&
-                  (() => {
-                    const warning = formatRoutingWarning(
-                      sample.format,
-                      samples.length - 1,
-                    );
-                    if (warning === null) return null;
-                    const { lead, more } = splitNoteLead(warning);
-                    return (
-                      <p className="field-hint sample-chip-routing">
-                        {lead}
-                        {more && (
-                          <>
-                            {" "}
-                            <InfoTip text={warning} />
-                          </>
-                        )}
-                      </p>
-                    );
-                  })()}
                 {isRenaming && renameError !== "" && (
                   <p className="field-hint">{renameError}</p>
                 )}
@@ -1071,6 +1036,17 @@ export function SampleIntakeSection({
           })}
         </div>
       )}
+      {/* HON-5, said ONCE (DBT-228): the routing caveat used to repeat on every
+          chip of the same format. It is a warning - a pack that cannot route
+          automatically - so it stays visible, grouped by message and naming
+          the log types it applies to; the full text is in the tip. */}
+      {samples !== null &&
+        routingWarningGroups(samples).map(({ warning, logTypes }) => (
+          <p key={warning} className="field-hint sample-chip-routing">
+            {logTypes.join(", ")}: {splitNoteLead(warning).lead}{" "}
+            <InfoTip text={warning} />
+          </p>
+        ))}
 
       {/* CSV header-resolution dialog (Unit 12). Keyed by queue index so each
           queued file gets a fresh dialog (transient tab/paste state resets).
@@ -1132,6 +1108,24 @@ export function SampleIntakeSection({
  * provenance would be the same failure as inventing a column name - a confident
  * wrong answer where an honest silence was available.
  */
+/**
+ * DBT-228: the per-format routing warnings, one entry per distinct message with
+ * the log types it applies to, in sample order. A single-log-type pack keeps a
+ * working match-all, which formatRoutingWarning already encodes via the
+ * sibling count.
+ */
+export function routingWarningGroups(
+  samples: readonly TaggedSample[],
+): Array<{ warning: string; logTypes: string[] }> {
+  const groups = new Map<string, string[]>();
+  for (const sample of samples) {
+    const warning = formatRoutingWarning(sample.format, samples.length - 1);
+    if (warning === null) continue;
+    groups.set(warning, [...(groups.get(warning) ?? []), sample.logType]);
+  }
+  return [...groups].map(([warning, logTypes]) => ({ warning, logTypes }));
+}
+
 function SampleChipColumnOrder({
   cache,
   vendor,
@@ -1166,16 +1160,11 @@ function SampleChipColumnOrder({
     return null;
   }
   // The first sentence on the card, the whole note behind the (i) (DBT-125).
-  const { lead, more } = splitNoteLead(notice);
+  // DBT-228: a short phrase on the chip's own count line, the note in its tip.
   return (
-    <p className="field-hint sample-chip-provenance">
-      Column names: {lead}
-      {more && (
-        <>
-          {" "}
-          <InfoTip text={notice} />
-        </>
-      )}
-    </p>
+    <span className="sample-chip-provenance">
+      {", column names from a known order "}
+      <InfoTip text={notice} />
+    </span>
   );
 }

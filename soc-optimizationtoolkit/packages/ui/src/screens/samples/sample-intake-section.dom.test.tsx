@@ -1252,3 +1252,17 @@ describe("SampleIntakeSection - a sample the store trimmed (DBT-206)", () => {
     expect(trimNotes(view.container)).toEqual([]);
   });
 });
+
+describe("routing caveat said once (DBT-228)", () => {
+  it("groups the column-order caveat across chips and names each log type", async () => {
+    const { routingWarningGroups } = await import("./sample-intake-section");
+    const mk = (logType: string, format: string) =>
+      ({ logType, format, parsed: { fields: [], errors: [] } }) as never;
+    const groups = routingWarningGroups([mk("TRAFFIC", "csv"), mk("AUDIT", "csv"), mk("THREAT", "json")]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.logTypes).toEqual(["TRAFFIC", "AUDIT"]);
+    expect(groups[0]!.warning).toMatch(/cannot be routed automatically/);
+    // A single log type keeps a working match-all: no caveat at all.
+    expect(routingWarningGroups([mk("TRAFFIC", "csv")])).toEqual([]);
+  });
+});

@@ -227,13 +227,20 @@ describe("CapturePanel - what it offers before a run", () => {
 
     const rows = container.querySelectorAll(".capture-log-types li");
     expect(rows[2].textContent).toContain("capturing again replaces that sample");
-    expect(rows[3].textContent).toContain("documented by the vendor");
+    // DBT-228: the vendor-documented row sits in its own group, whose summary
+    // says so once - the per-row note is gone, the claim is not.
+    const group = rows[3].closest("details.capture-log-types-documented");
+    expect(group).not.toBeNull();
+    expect(group!.querySelector("summary")!.textContent).toContain("documented by the vendor");
     expect(status(container)).toBe("idle");
   });
 
   it("SHOWS the filter it would send, and captures nothing on its own", () => {
     // The plan's whole position on the filter is that it is visible and the
-    // operator's. A panel that composed a correct filter and never rendered it
+    // operator's. DBT-228 (operator decision 2026-10-30) moved it behind an
+    // Edit filter disclosure: still the operator's and one click away, and it
+    // opens by itself once edited - the generated expression no longer sits
+    // above Run capture by default. A panel that composed a correct filter and never rendered it
     // would pass every state test in the suite.
     const { container, onCapture } = renderPanel();
 
@@ -969,5 +976,17 @@ describe("CapturePanel - changing source", () => {
     expect(recomposed).not.toContain("hand_edited");
     expect(ticked(container)).toBe(2);
     expect(screen.getByText("Capture from in_http")).toBeTruthy();
+  });
+});
+
+describe("CapturePanel - grouped checklist and Edit filter (DBT-228)", () => {
+  it("keeps the vendor group and the filter closed until they are needed", () => {
+    const { container } = renderPanel();
+    const vendor = container.querySelector("details.capture-log-types-documented") as HTMLDetailsElement;
+    expect(vendor).not.toBeNull();
+    expect(vendor.open).toBe(false);
+    const filter = container.querySelector("details.capture-filter-details") as HTMLDetailsElement;
+    expect(filter.open).toBe(false);
+    expect(filter.querySelector("textarea.capture-filter")).not.toBeNull();
   });
 });

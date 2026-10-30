@@ -290,6 +290,25 @@ export function CapturePanel({
     setStoreError(null);
   };
 
+  // One checkbox row. In the vendor group the per-row note is dropped: the
+  // group's summary already says it, once.
+  const renderChoice = (choice: CaptureLogTypeChoice, inVendorGroup = false) => (
+    <li key={choice.value}>
+      <label className="capture-log-type">
+        <input
+          type="checkbox"
+          checked={choice.selected}
+          onChange={() => toggle(choice.value)}
+          disabled={locked}
+        />
+        <span className="capture-log-type-name">{choice.value}</span>
+        {choice.note !== undefined && !(inVendorGroup && choice.evidence === "vendor") && (
+          <span className="field-hint">{choice.note}</span>
+        )}
+      </label>
+    </li>
+  );
+
   return (
     <div className="capture-panel" data-status={view.status}>
       <span className="field-label">Capture from {source.id}</span>
@@ -300,27 +319,43 @@ export function CapturePanel({
             Log types to capture. The ones this solution&apos;s own content needs
             are ticked; the rest are offered, not assumed.
           </span>
-          <ul className="capture-log-types">
-            {choices.map((choice) => (
-              <li key={choice.value}>
-                <label className="capture-log-type">
-                  <input
-                    type="checkbox"
-                    checked={choice.selected}
-                    onChange={() => toggle(choice.value)}
-                    disabled={locked}
-                  />
-                  <span className="capture-log-type-name">{choice.value}</span>
-                  {choice.note !== undefined && (
-                    <span className="field-hint">{choice.note}</span>
-                  )}
-                </label>
-              </li>
-            ))}
+          {/* DBT-228: the needed types as a compact grid; the vendor-documented
+              ones (offered, never required) in a group that stays closed unless
+              one of them is ticked, so the panel is not 19 stacked rows. */}
+          <ul className="capture-log-types capture-log-types-grid">
+            {choices
+              .filter((choice) => choice.evidence !== "vendor")
+              .map((choice) => renderChoice(choice))}
           </ul>
+          {choices.some((choice) => choice.evidence === "vendor") && (
+            <details
+              className="gap-handles capture-log-types-documented"
+              open={choices.some((c) => c.evidence === "vendor" && c.selected) || undefined}
+            >
+              <summary>
+                Also documented by the vendor (
+                {choices.filter((choice) => choice.evidence === "vendor").length}) - not
+                required by this solution
+              </summary>
+              <ul className="capture-log-types capture-log-types-grid">
+                {choices
+                  .filter((choice) => choice.evidence === "vendor")
+                  .map((choice) => renderChoice(choice, true))}
+              </ul>
+            </details>
+          )}
         </>
       )}
 
+      {/* DBT-228: the generated expression is several lines of JavaScript the
+          ticks above already write - it waits behind Edit filter, and opens by
+          itself once the operator has edited it. Its warning stays outside,
+          always visible. */}
+      <details
+        className="gap-handles capture-filter-details"
+        open={filterEditedRef.current || undefined}
+      >
+        <summary>Edit filter</summary>
       <label className="field">
         <span className="field-label">Filter</span>
         <textarea
@@ -335,6 +370,7 @@ export function CapturePanel({
           disabled={locked}
         />
       </label>
+      </details>
       {warning !== null && (
         <p className="field-hint capture-filter-warning">{warning}</p>
       )}

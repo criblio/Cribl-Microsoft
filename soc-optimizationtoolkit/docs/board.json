@@ -3580,6 +3580,55 @@
       "title": "Select Sentinel Solution lists every solution before the operator has typed a filter",
       "detail": "RAISED BY THE USER 2026-10-30: \"I still see a ton of solutions listed in the Select Sentinel Solution section when I have yet to start a filter.\" MISSED BY THE 2026-10-30 UX audit (DBT-224..226): the audit walked the page with a solution already selected, so the unselected browse state was never seen. Same principle as DBT-224: show the filter and a count first; reveal the list once the operator starts filtering (or asks to browse). DONE 2026-10-30 (pins; the live check was cut short when the Chrome extension disconnected - NOT YET SEEN LIVE). Before any input the browser shows the search box, Hide deprecated, the counts line ending Type to filter, or browse them all, and a Browse all button; the list and its badge legend appear once a filter is typed or Browse all is pressed. Three new pins (nothing listed before input; typing lists only matches; Browse all lists everything), mutation-checked by forcing the list on (all three fail). Existing pins that waited on rows now press Browse all first, the way an operator would; the two DBT-28 pins and the DBT-102 integrate pin that asserted the browse LIST as the fallback now assert the browse STATE (search box, nothing selected), same intent - not an empty pane.",
       "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "DBT-228",
+      "type": "story",
+      "priority": "now",
+      "title": "Sample chips carry one line; the capture checklist is grouped and its filter waits behind Edit filter",
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (A) each chip carries two note lines and the column-order routing caveat repeats per CSV chip; (B) capture lists 19 checkboxes, six vendor-documented ones with a repeated note; (C) the generated JavaScript filter is always shown above Run capture. Build: chip notes into the chip (i) and the caveat said once; checklist as Needed by this solution (n) plus a collapsed Also documented (n); filter behind Edit filter. DONE 2026-10-30 (pins; live check batched with DBT-229..231). (A) the column-names provenance moved onto the chip count line as a short phrase with the full note in its (i); the routing caveat is said once below the list, grouped by message and naming its log types (routingWarningGroups, pinned incl. the single-log-type case). (B) the capture checklist renders the needed types as a compact grid and the vendor-documented ones in an Also documented by the vendor (n) group that opens by itself when one is ticked; the per-row vendor note is gone, the claim is in the group summary (the existing pre-tick pin asserts that now). (C) the filter textarea sits behind Edit filter, opening by itself once edited; its warning stays outside. The earlier filter is visible and the operator's position is annotated beside its pin rather than silently contradicted. Mutation-checked: forcing the filter open fails the new pin.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "DBT-229",
+      "type": "story",
+      "priority": "now",
+      "title": "Gap Analysis: one status line above the log types; vendor identity is a one-line summary with Edit",
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (D) four banners then the Enrichment editor open before any log type; (E) a full Vendor identity editor repeated per log type. Build: approval banner stays; destination, learned decisions and unused fields become one status line with (i); Enrichment behind Add enrichment fields; identity as DeviceVendor = X - DeviceProduct = Y - Edit."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-230",
+      "type": "story",
+      "priority": "now",
+      "title": "Select Azure Resources: Create what is missing waits; Always-on facts and the early role step fold away",
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (F) the Create what is missing form shows with everything already selected; (G) Always on rows are facts not choices, and the role-assignment controls show while saying Deploy a DCR first. Build: create form behind Create a new resource group or workspace; Always-on facts into the capabilities (i); role assignment one line until a DCR exists."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-231",
+      "type": "story",
+      "priority": "now",
+      "title": "Deploy: prefilled table, client id and secret as one summary line with Change",
+      "detail": "AUDIT PART 2 (2026-10-30, jpederson org Live Preview, PaloAlto-PAN-OS with TRAFFIC and AUDIT samples, create path, after a Gap Analysis run): the states that appear only after an action. Operator chose to build it. Rule kept from DBT-224..227: warnings and gate reasons stay visible; anything collapsed opens itself when it needs action. (H) table name, ingestion client id and optional secret are all prefilled with correct defaults yet shown as three fields. Build: one summary line with Change that expands to the fields; a field that is empty or invalid opens it."
     }
   ],
   "features": [

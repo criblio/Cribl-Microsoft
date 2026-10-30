@@ -1845,6 +1845,13 @@ button.journey-step-main:hover .journey-step-label {
   list-style: none;
 }
 
+/* DBT-228: the capture checklist as a compact grid rather than one long column. */
+.capture-log-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 16px;
+}
+
 .capture-log-type {
   display: flex;
   align-items: baseline;
