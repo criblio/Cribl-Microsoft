@@ -3,7 +3,7 @@
  *
  * Ports the legacy field-matcher.test.ts "matching strategies" and "overflow
  * config" blocks and adds pins for the substring guards, the actual-sample-
- * casing rule, the 'in' reserved-word overflow-by-design behavior, the exported
+ * casing rule, the CEF 'in' -> ReceivedBytes alias (GEN-20), the exported
  * (still-unused) VALUE_NORMALIZATIONS, and the missing-overflow-field warning.
  */
 
@@ -144,27 +144,30 @@ describe("actual-sample-casing rule (Cribl renames are case-sensitive)", () => {
   });
 });
 
-describe("'in' reserved-word overflow-by-design", () => {
-  it("'out' aliases to SentBytes but 'in' has no alias and overflows", () => {
+describe("CEF 'in' aliases to ReceivedBytes (GEN-20)", () => {
+  it("'out' maps to SentBytes and 'in' maps to ReceivedBytes, neither overflows", () => {
+    // Was pinned the other way round: a legacy note called 'in' a JS reserved
+    // word that could not be an alias key, so it overflowed into
+    // AdditionalExtensions while the Mapping Catalog claimed it reached
+    // ReceivedBytes (UAT, PAN-OS CEF capture).
     const result = matchFields(
       [
         { name: "out", type: "int" },
         { name: "in", type: "int" },
       ],
-      [{ name: "SentBytes", type: "int" }],
+      [
+        { name: "SentBytes", type: "long" },
+        { name: "ReceivedBytes", type: "long" },
+      ],
       undefined,
       "CommonSecurityLog",
     );
-    // 'out' is an alias for SentBytes.
-    expect(result.matched.find((m) => m.sourceName === "out")?.destName).toBe(
-      "SentBytes",
-    );
-    // 'in' is a JS reserved word, deliberately absent from ALIAS_TABLE, so it
-    // is routed to overflow rather than matched or dropped.
-    expect(result.matched.find((m) => m.sourceName === "in")).toBeUndefined();
-    expect(
-      result.overflow.find((o) => o.sourceName === "in"),
-    ).toBeDefined();
+    const byName = new Map(result.matched.map((m) => [m.sourceName, m]));
+    expect(byName.get("out")?.destName).toBe("SentBytes");
+    expect(byName.get("in")?.destName).toBe("ReceivedBytes");
+    expect(byName.get("in")?.action).toBe("rename");
+    expect(byName.get("in")?.confidence).toBe("alias");
+    expect(result.overflow.map((o) => o.sourceName)).toEqual([]);
   });
 });
 

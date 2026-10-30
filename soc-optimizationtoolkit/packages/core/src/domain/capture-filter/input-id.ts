@@ -75,6 +75,31 @@ export function inputIdValue(ref: InputIdRef): string {
 }
 
 /**
+ * Input types whose `__inputId` carries a further segment after `<type>:<id>`
+ * (the sender), so an equality on `<type>:<id>` matches none of their events.
+ * Exactly the two Cribl's own capture dialog writes as
+ * `__inputId.startsWith('<type>:<id>:')` (capture-filter.ts inputPredicate,
+ * verified against the product 2026-08-21); every other type in that list is
+ * written as an equality.
+ */
+const SEGMENTED_INPUT_TYPES: readonly string[] = ["syslog", "http"];
+
+/**
+ * The route filter that selects ONE input, in the form Cribl's own capture
+ * dialog writes for that input type ([[GEN-21]]): `startsWith('<type>:<id>:')`
+ * for a type whose events add a segment (syslog's `syslog:in_syslog:1.2.3.4`),
+ * `=='<type>:<id>'` otherwise. Never the bare id (DBT-162). Both forms are ones
+ * {@link parseInputIdClause} reads back and {@link matchInputIdFilter} answers
+ * `match` for, so a route written from this is drawn as routed, not legacy.
+ */
+export function inputRouteFilter(ref: InputIdRef): string {
+  const value = inputIdValue(ref);
+  return SEGMENTED_INPUT_TYPES.includes(ref.type)
+    ? `__inputId.startsWith('${value}:')`
+    : `__inputId=='${value}'`;
+}
+
+/**
  * Does a parsed filter select the input? `unparsed` is excluded by type: what
  * an unreadable filter means (over-approximate, or cannot-evaluate) is the
  * caller's decision, not this helper's.

@@ -59,7 +59,11 @@ export {
 // the reason the positional export below records: the screen and the installed
 // pipeline must reach the seven header fields the same way, and a second copy of
 // an escape rule drifts. The pack emits `.source` verbatim - see pipeline-conf.ts.
-export { CEF_HEADER_PATTERN, CEF_HEADER_ESCAPE } from "./parsers";
+export {
+  CEF_HEADER_PATTERN,
+  CEF_HEADER_ESCAPE,
+  CEF_HEADER_FIELD_BODY,
+} from "./parsers";
 // DBT-116: the two syslog line patterns, for the same reason - the generated
 // pipeline's syslog extraction emits their `.source`, so the names the parser
 // mints and the names the installed pack mints cannot drift apart.
@@ -126,13 +130,16 @@ export {
 
 // Log-type SPLITTING of a mixed stream (rehomed 2026-08-18 from the deleted
 // sample-acquisition domain; load-bearing for capture and mixed uploads).
+export type { SplitOutcome } from "./splitting";
 export {
   parseKvLine,
   splitSamplesByLogType,
+  splitSamplesWithLeftOut,
   splitFoundNoDiscriminator,
   splitSampleId,
   hasNamedFields,
   convertPanosSplitAtLoad,
+  isPanosCefIdentity,
 } from "./splitting";
 
 // Remembered column orders per VENDOR + LOG TYPE (plan Gap 3 / step 4): the

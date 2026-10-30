@@ -43,6 +43,14 @@ export interface PipelineFieldMapping {
    * fields inside AdditionalExtensions.
    */
   action: "rename" | "keep" | "coerce" | "drop" | "decode" | "overflow";
+  /**
+   * The source's type differs from `type` (the column's), so a RENAME must
+   * also convert the value once it carries the column's name (F1-e). Without
+   * it a reviewer's `in` (int) -> ReceivedBytes (long) rename reached the DCR
+   * unconverted. Optional: absent reads as false, and only `rename` consults
+   * it - a `coerce` row converts by its action alone.
+   */
+  needsCoercion?: boolean;
 }
 
 /** A user override for one field (highest planner priority). */

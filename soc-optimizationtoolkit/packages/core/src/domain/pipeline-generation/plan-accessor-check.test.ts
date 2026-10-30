@@ -16,6 +16,9 @@
  * Every assertion goes through generatePipelineConfForPlan, so a drift
  * between the check's idea of a decode field and the emitter's decodeFields
  * filter shows up as a count here.
+ *
+ * Also pins the self-rename that carries needsCoercion (F1-e), the one fate
+ * the emitter change moved between this check and checkCriblYaml.
  */
 
 import { describe, expect, it } from "vitest";
@@ -99,5 +102,34 @@ describe("checkPlanFieldAccessors - decode (GEN-5)", () => {
         "not exist). It is kept under its own spelling, so no conf line names " +
         "it; map it to a column with an addressable name instead.",
     ]);
+  });
+});
+
+describe("checkPlanFieldAccessors - self-rename with a coercion (F1-e)", () => {
+  // A self-rename that needs an EXPRESSIBLE coercion now writes `- name: a.b`
+  // under the enrich eval, so checkCriblYaml refuses it and this check must
+  // not count the same field a second time. One that cannot be expressed
+  // (a string target, against the emitter's assumed "string" source) writes
+  // nothing and stays here.
+  it("leaves an expressible self-rename coercion to checkCriblYaml", () => {
+    const table = tableWith([
+      { source: "a.b", target: "a.b", type: "long", action: "rename", needsCoercion: true },
+    ]);
+    const conf = generatePipelineConfForPlan(table, "Test Solution");
+    expect(conf).toContain(`- name: a.b\n          value: "(a.b != null && String(a.b).trim() !== '' && isFinite(a.b)) ? Number(a.b) : undefined"`);
+    expect(checkCriblYaml(conf, "conf.yml")).toHaveLength(1);
+    expect(checkPlanFieldAccessors(table)).toEqual([]);
+  });
+
+  it("still refuses a self-rename whose coercion the emitter cannot express", () => {
+    const table = tableWith([
+      { source: "a.b", target: "a.b", type: "string", action: "rename", needsCoercion: true },
+    ]);
+    const conf = generatePipelineConfForPlan(table, "Test Solution");
+    expect(conf).not.toContain("- name: a.b");
+    expect(checkCriblYaml(conf, "conf.yml")).toEqual([]);
+    const issues = checkPlanFieldAccessors(table);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('field name "a.b" (rename)');
   });
 });

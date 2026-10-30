@@ -24,7 +24,9 @@
  *     a whitespace line, which extracted nothing while every screen reported
  *     success. See positionalColumns / positionalExtractFunctions.
  * Timestamp logic (candidate list, CrowdStrike eval-first + backup
- * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map, the
+ * auto_timestamp, CEF `rt` override), buildCoercionExpr's type map (but NOT its
+ * boolean, numeric, dynamic and string expressions, nor its quote escape -
+ * GEN-23 and GEN-29, see buildCoercionExpr), the
  * `Type=<table>` enrichment, the fixed cleanup field list, and escapeYamlFilter
  * ordering are all verbatim - with ONE timestamp exception, added 2026-10-02
  * (GEN-7, operator decision): a RECOGNISED VPC Flow v2 positional source gets
@@ -89,7 +91,40 @@ export interface PipelineVendorMapping {
   description?: string;
 }
 
-/** Build a type coercion expression for the Cribl Eval function (verbatim). */
+/**
+ * Build a type coercion expression for the Cribl Eval function.
+ *
+ * The type map is legacy; FOUR of its expressions are not (GEN-23 and
+ * GEN-29, 2026-10-29), because legacy's corrupted data silently:
+ *   - boolean: legacy `Boolean(x)` made '0', 'no' and 'false' true (every
+ *     non-empty string is truthy). Now value-aware: true/1/yes -> true,
+ *     false/0/no -> false, case-insensitive and trimmed; a real boolean passes
+ *     through; anything else yields undefined.
+ *   - int/long/real: legacy `Number(x) || 0` / `parseFloat(x) || 0.0` turned a
+ *     value that does not convert into a real 0, indistinguishable from a
+ *     measured zero. Now the epochToIso guard (non-null, non-blank, isFinite)
+ *     decides, then Number(); otherwise undefined. real also loses parseFloat's
+ *     partial parse ('12.5ms' -> 12.5).
+ *   - dynamic: legacy `JSON.parse(x)` threw on any non-JSON string. Now the
+ *     parse sits in a try/catch and a string that does not parse is KEPT AS IT
+ *     ARRIVED - not nulled - because a dynamic column holds a string, and the
+ *     text is the only copy of the vendor's value.
+ *   - string (GEN-29): legacy `String(x || '')` turned an int 0 or a boolean
+ *     false into ''. Now null/undefined pass through and every other value is
+ *     String(value).
+ * "Empty" is undefined, the same convention as the VPC Flow stamp: Cribl's Eval
+ * leaves the field unset. The emitter writes these inside a YAML double-quoted
+ * `value:` through escapeYamlFilter, so a field name holding `"` or `\` still
+ * yields a scalar that reads back verbatim. Legacy escaped `'` in the name as
+ * `\'`, which is not a YAML double-quoted escape and did not make the name a
+ * JS identifier either (it is never inside a string literal); that escape is
+ * gone (GEN-29). The expressions themselves use single quotes and no
+ * backslashes, so escaping changes nothing for an addressable name. The dynamic one is
+ * the first emitted expression with a statement body (an arrow IIFE); it is
+ * valid JavaScript and evaluated in the pins, NOT VERIFIED AGAINST A LIVE CRIBL
+ * INSTANCE in this change. Pinned by coercion-expr.test.ts through
+ * generatePipelineConfForPlan, evaluating each expression on sample values.
+ */
 export function buildCoercionExpr(
   fieldName: string,
   sourceType: string,
@@ -97,14 +132,23 @@ export function buildCoercionExpr(
 ): string | null {
   if (sourceType === targetType) return null;
   const t = targetType.toLowerCase();
-  const escaped = fieldName.replace(/'/g, "\\'");
-  if (t === "int" || t === "long") return `Number(${escaped}) || 0`;
-  if (t === "real") return `parseFloat(${escaped}) || 0.0`;
-  if (t === "boolean") return `Boolean(${escaped})`;
-  if (t === "datetime") return `${escaped}`;
-  if (t === "string") return `String(${escaped} || '')`;
+  // The name is read as a bare identifier, never inside a string literal, so
+  // there is nothing to escape for JavaScript; YAML escaping is the emitter's
+  // job (GEN-29). A name that is not a valid accessor is refused by
+  // checkCriblYaml's accessor rule, not repaired here.
+  const ref = fieldName;
+  const toNumber = `(${ref} != null && String(${ref}).trim() !== '' && isFinite(${ref})) ? Number(${ref}) : undefined`;
+  if (t === "int" || t === "long" || t === "real") return toNumber;
+  if (t === "boolean")
+    return (
+      `typeof ${ref} === 'boolean' ? ${ref} : ` +
+      `/^(true|1|yes)$/i.test(String(${ref}).trim()) ? true : ` +
+      `/^(false|0|no)$/i.test(String(${ref}).trim()) ? false : undefined`
+    );
+  if (t === "datetime") return `${ref}`;
+  if (t === "string") return `${ref} == null ? ${ref} : String(${ref})`;
   if (t === "dynamic")
-    return `typeof ${escaped} === 'string' ? JSON.parse(${escaped}) : ${escaped}`;
+    return `typeof ${ref} === 'string' ? (() => { try { return JSON.parse(${ref}); } catch (err) { return ${ref}; } })() : ${ref}`;
   return null;
 }
 
@@ -176,7 +220,9 @@ export function buildCefIdentityOverrideFn(
       continue;
     }
     adds.push(`        - name: ${field}`);
-    adds.push(`          value: "${JSON.stringify(value).slice(1, -1).replace(/"/g, '\\"')}"`);
+    // JSON.stringify makes the JS literal (quotes included); escapeYamlFilter
+    // then makes it a valid YAML double-quoted scalar (GEN-34).
+    adds.push(`          value: "${escapeYamlFilter(JSON.stringify(value))}"`);
   }
   if (adds.length === 0) {
     return null;
@@ -635,9 +681,15 @@ export function generatePipelineConf(
   const vendorCoercionDests = new Set(
     vendorCoercions.map((m) => m.destName.toLowerCase()),
   );
+  // A RENAME whose types differ converts too (F1-e), on the TARGET name: the
+  // coercion eval runs in the enrich group after the rename, so by then the
+  // value lives under the column's name. It used to be dropped here - the gap
+  // report counted it under "Cribl handles: N coercion(s)" and the pipeline
+  // never wrote it.
   const presetCoercions = activeFields.filter(
     (f) =>
-      f.action === "coerce" &&
+      (f.action === "coerce" ||
+        (f.action === "rename" && f.needsCoercion === true)) &&
       !vendorCoercionDests.has((f.target || f.source).toLowerCase()),
   );
   // Base64-decode fields (2026-09 decode action): emitted as an Eval below.
@@ -1147,7 +1199,7 @@ export function generatePipelineConf(
     const expr = buildCoercionExpr(fieldName, m.sourceType, m.destType);
     if (expr) {
       coercionExprs.push(
-        `        - name: ${fieldName}\n          value: "${expr}"`,
+        `        - name: ${fieldName}\n          value: "${escapeYamlFilter(expr)}"`,
       );
     }
   }
@@ -1155,7 +1207,7 @@ export function generatePipelineConf(
     const expr = buildCoercionExpr(f.target || f.source, "string", f.type);
     if (expr) {
       coercionExprs.push(
-        `        - name: ${f.target || f.source}\n          value: "${expr}"`,
+        `        - name: ${f.target || f.source}\n          value: "${escapeYamlFilter(expr)}"`,
       );
     }
   }

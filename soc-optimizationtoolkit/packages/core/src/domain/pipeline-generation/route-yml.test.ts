@@ -196,6 +196,26 @@ describe("filter key contract (regression re-pointed at real code)", () => {
     const yaml = generateRouteYml(plan);
     expect(yaml).toContain('filter: "true"');
   });
+
+  it("escapes backslashes as well as quotes, so the filter survives YAML (GEN-24)", () => {
+    // `\|` is not a YAML escape and `\'` is not one either: written raw into a
+    // double-quoted scalar, a loader rejects the first and the planned filter
+    // and the loaded one differ. Each backslash must be doubled.
+    const plan = buildPipelinePlan({
+      solutionName: "Acme",
+      packName: "acme",
+      tables: [
+        {
+          sentinelTable: "Acme_CL",
+          reductionRules: null,
+          routing: routing(String.raw`/a\|"b"/.test(_raw) || msg === 'it\'s'`),
+        },
+      ],
+    });
+    expect(generateRouteYml(plan)).toContain(
+      String.raw`filter: "/a\\|\"b\"/.test(_raw) || msg === 'it\\'s'"`,
+    );
+  });
 });
 
 describe("route pipeline references match the pipeline names (suffix-mismatch fix)", () => {

@@ -1301,6 +1301,15 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--on-ok);
 }
 
+/* Gated variant (DBT-200): a primary action that cannot run yet. Neutral
+ * surface and muted text, so it does not read as the page's call to action
+ * while its prerequisites are missing; the disabled opacity still applies. */
+.next-action-button-gated {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
 /* Readiness chips (identity / secret / scope): the legacy point-of-commit
  * chip checklist promoted to the overview. 'unknown' is the honest hedge -
  * warning tint, never ok. */
@@ -1524,7 +1533,8 @@ button.journey-step-main:hover .journey-step-label {
  * deliberately not the green complete badge (a read-only diagnostic has
  * nothing to finish, so claiming completion was dishonest) and not the dashed
  * coming-soon badge (the section is built and usable right now). */
-.numbered-section-badge-informational {
+.numbered-section-badge-informational,
+.numbered-section-badge-not-needed {
   border-color: var(--border);
   background: var(--surface-raised);
   color: var(--text-muted);
@@ -2934,8 +2944,12 @@ button.readiness-pill:focus-visible {
   word-break: break-all;
 }
 
+/* Sits on <td> cells (Field Mappings, Mapping Catalog), so it must not set
+   display (nor float, nor position absolute/fixed, which blockify a cell the
+   same way): a block <td> leaves the table, and consecutive block cells merge
+   into one anonymous cell that shifts the rest of the row left (DBT-192).
+   Pinned in mapping-review/mapping-table-cells.dom.test.tsx. */
 .match-field-type {
-  display: block;
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -3656,6 +3670,9 @@ button.readiness-pill:focus-visible {
 }
 .match-conf-unmatched {
   color: var(--error-strong);
+}
+.match-conf-reviewer {
+  color: var(--accent-strong);
 }
 
 .rule-badge {
@@ -5448,6 +5465,28 @@ details[open] > summary::before {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
+}
+/* DBT-202: the same panel, opened from an unmapped column of the Field
+   Mappings table. The row spans the grid; the panel inside it is the flex box
+   (a flex <tr> would leave the table). */
+.mapping-suggest-row > td {
+  padding: 4px 0 8px;
+}
+.mapping-suggest-type {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.mapping-suggest-warn {
+  font-size: 11px;
+  color: var(--warn);
+}
+.mapping-suggest-apply {
+  margin-left: auto;
+}
+.mapping-suggest-empty,
+.mapping-suggest-applied,
+.mapping-suggest-candidate {
+  margin: 0;
 }
 /* The two states of ONE identity row (identity-block.tsx). Both stack a row,
    a hint and the candidate chips in a column; only the framing differs, which

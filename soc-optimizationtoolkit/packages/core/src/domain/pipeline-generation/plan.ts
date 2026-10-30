@@ -59,6 +59,7 @@ import {
   type LogTypeFieldValues,
 } from "./route-value-discriminator";
 import { placeholderRouteFilter } from "./route-placeholder";
+import { derivePanosCefTypeFilter } from "./route-panos-cef";
 import { MATCH_ALL_FILTER } from "./route-yml";
 import {
   destinationId,
@@ -147,6 +148,7 @@ function resolveFields(input: TablePlanInput): {
       target: o.dest,
       type: o.destType,
       action: o.action as PipelineFieldMapping["action"],
+      needsCoercion: o.needsCoercion,
     }));
     return {
       fields,
@@ -199,6 +201,7 @@ function resolveFields(input: TablePlanInput): {
         target: m.destName,
         type: m.destType,
         action: mapMatchedAction(m),
+        needsCoercion: m.needsCoercion,
       })),
       ...mr.overflow.map((o) => ({
         source: o.sourceName,
@@ -324,7 +327,9 @@ export function buildPipelinePlan(
     // share one schema - the common case for CEF vendors, and the reason the
     // Zscaler pack shipped with 7 of 10 routes unreachable. Presence stays the
     // fallback: it needs no sample values, so it still works for callers that
-    // supply none, and for log types whose shapes genuinely differ.
+    // supply none, and for log types whose shapes genuinely differ. Ahead of
+    // both, for PAN-OS CEF only, the header TYPE the split named the log type
+    // by (GEN-24, route-panos-cef).
     const sampleValues = input.tables.map((t) => t.sampleFieldValues);
     tables.forEach((table, i) => {
       if (table.routeCondition !== MATCH_ALL_FILTER) return;
@@ -342,6 +347,20 @@ export function buildPipelinePlan(
         const siblingValues = sampleValues.filter(
           (v, j) => j !== i && v !== undefined,
         ) as LogTypeFieldValues[];
+        // GEN-24: a PAN-OS CEF log type was NAMED by its header TYPE (DBT-196),
+        // so it routes by that TYPE, ahead of the generic ladder - which cannot
+        // see header values, and on the UAT capture settled for a content
+        // version that happened to contain "Threat". Null for every other
+        // vendor, which then takes the ladder exactly as before.
+        const byHeaderType = derivePanosCefTypeFilter(
+          ownValues,
+          siblingValues,
+          table.sourceFormat,
+        );
+        if (byHeaderType !== null) {
+          table.routeCondition = byHeaderType;
+          return;
+        }
         const byValue = deriveValueDiscriminator(
           ownValues,
           siblingValues,

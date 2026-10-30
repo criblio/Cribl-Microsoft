@@ -54,9 +54,11 @@ import {
   deriveCaptureView,
   filterWarning,
   plannedCaptureSamples,
+  reseedKeepingPicks,
   toggleChoice,
 } from "./capture-panel-state";
 import { commitErrorText } from "./planned-samples";
+import type { StoredEventShortfall } from "./planned-samples";
 import { useNumericField } from "./use-numeric-field";
 import type {
   CaptureCommitOutcome,
@@ -72,8 +74,12 @@ export interface CapturePanelProps {
   existingLogTypes: readonly string[];
   /** Run the capture. Resolves with the result; never throws. */
   onCapture: (filter: string, maxEvents: number, durationSeconds: number) => Promise<CaptureSamplesResult>;
-  /** Commit the previewed samples to the store. */
-  onCommit: (samples: TaggedSample[]) => Promise<void>;
+  /**
+   * Commit the previewed samples to the store. Resolves with the log types the
+   * store kept fewer events of than it was handed (DBT-197), or void when the
+   * caller cannot read the store back - which reports no trim, not "none".
+   */
+  onCommit: (samples: TaggedSample[]) => Promise<readonly StoredEventShortfall[] | void>;
 }
 
 export function CapturePanel({
@@ -101,6 +107,15 @@ export function CapturePanel({
   // change from a RECOMMENDATION change - they want opposite things from the
   // latch. Same guard-ref shape as azure-resources-section.tsx:259-262.
   const seededForSourceRef = useRef(source.id);
+  // True once the operator has ticked or unticked a log type (DBT-198). Until
+  // then the picks are the app's suggestion and follow every re-seed - a type
+  // just committed comes back "already provided" and un-ticks itself. After it,
+  // the picks are the operator's, and a re-seed keeps them: committing used to
+  // re-tick everything they had unticked. Cleared on a source change, with the
+  // filter latch, for the same reason.
+  const picksEditedRef = useRef(false);
+  // The picks as last set, for the re-seed to read without depending on them.
+  const choicesRef = useRef<CaptureLogTypeChoice[]>(seeded);
   const maxEvents = useNumericField(DEFAULT_MAX_EVENTS);
   // The one that bites hardest cleared: 0 clamps to a ONE-SECOND capture, which
   // on a quiet source returns nothing and is then reported as an idle source.
@@ -149,15 +164,29 @@ export function CapturePanel({
    * with `key={captureTarget.id}` so a source change remounts and the refs reset
    * anyway - but a component that is only correct because of how its parent keys
    * it is one refactor away from being wrong, and the branch costs a ref.
+   *
+   * THE PICKS SURVIVE TOO, once the operator has made any (DBT-198). This
+   * effect replaced the list with the seed outright, so the commit that fixed
+   * the filter above still re-ticked every log type the operator had unticked:
+   * the UAT narrowed 13 to THREAT and TRAFFIC, pressed "Add these as samples",
+   * and got all 13 back. reseedKeepingPicks keeps their ticks and takes only the
+   * seed's evidence and notes, which are what the commit actually changed.
    */
   useEffect(() => {
-    setChoices(seeded);
     if (seededForSourceRef.current !== source.id) {
       seededForSourceRef.current = source.id;
       filterEditedRef.current = false;
+      picksEditedRef.current = false;
     }
+    // Read through the ref rather than the `choices` state, for the reason the
+    // filter latch is a ref: listing `choices` would re-run this on every tick.
+    const next = picksEditedRef.current
+      ? reseedKeepingPicks(seeded, choicesRef.current)
+      : seeded;
+    choicesRef.current = next;
+    setChoices(next);
     if (!filterEditedRef.current) {
-      setFilter(composeFilter(source.id, seeded));
+      setFilter(composeFilter(source.id, next));
     }
   }, [seeded, source.id]);
 
@@ -196,6 +225,8 @@ export function CapturePanel({
 
   const toggle = (value: string) => {
     const next = toggleChoice(choices, value);
+    picksEditedRef.current = true;
+    choicesRef.current = next;
     setChoices(next);
     if (!filterEditedRef.current) {
       setFilter(composeFilter(source.id, next));
@@ -234,8 +265,12 @@ export function CapturePanel({
     setCommitting(true);
     setStoreError(null);
     try {
-      await onCommit(samples);
-      setOutcome({ stored: samples.length, returned: result.splits.length });
+      const trimmed = await onCommit(samples);
+      setOutcome({
+        stored: samples.length,
+        returned: result.splits.length,
+        trimmed: trimmed ?? [],
+      });
       // Cleared only once the store has it, AND only when it took something: a
       // commit that stored nothing leaves the preview up, because the only way
       // back to it is another capture.

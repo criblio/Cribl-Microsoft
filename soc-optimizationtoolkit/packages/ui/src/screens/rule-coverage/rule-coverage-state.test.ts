@@ -22,6 +22,7 @@ import type {
 import {
   ANALYTIC_RULE_DIR_VARIANTS,
   availableFieldsFromReports,
+  closeMatchTargetColumn,
   contentTypeNoun,
   coverageCountChips,
   coveragePercent,
@@ -35,6 +36,7 @@ import {
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  reportsWithEffectiveMappings,
   resolveSchemaUnion,
   ruleFieldSet,
   ruleFieldsFromGapReports,
@@ -619,5 +621,79 @@ describe("resolveSchemaUnion", () => {
     const union = await resolveSchemaUnion(catalog, reports);
     expect(union).toContain("ColA");
     expect(union).toContain("ColB");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-203: coverage reads the EFFECTIVE mappings; a close match lands in its
+// own log type's table
+// ---------------------------------------------------------------------------
+
+describe("reportsWithEffectiveMappings (DBT-203)", () => {
+  const baseline = [
+    mapping({ source: "in", dest: "AdditionalExtensions", action: "overflow" }),
+  ];
+  const edited = [
+    mapping({ source: "in", dest: "ReceivedBytes", action: "rename" }),
+  ];
+  const panos = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "PanOS",
+    fieldMappings: baseline,
+  });
+  const asa = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "ASA",
+    fieldMappings: [mapping({ source: "src", dest: "SourceIP", action: "rename" })],
+  });
+
+  it("swaps in the edited rows, so the applied column becomes available", () => {
+    const live = reportsWithEffectiveMappings([panos, asa], { PanOS: edited });
+    expect(live[0]!.fieldMappings).toEqual(edited);
+    expect(availableFieldsFromReports(live)).toEqual([
+      "ReceivedBytes",
+      "SourceIP",
+    ]);
+    // The baseline is what the analysis said; coverage must not read it.
+    expect(availableFieldsFromReports([panos, asa])).toEqual([
+      "AdditionalExtensions",
+      "SourceIP",
+      "in",
+    ]);
+  });
+
+  it("keeps the baseline for a log type with no entry, and leaves the input alone", () => {
+    const live = reportsWithEffectiveMappings([panos, asa], { PanOS: edited });
+    expect(live[1]).toBe(asa);
+    expect(panos.fieldMappings).toBe(baseline);
+    expect(reportsWithEffectiveMappings([panos], undefined)).toEqual([panos]);
+  });
+});
+
+describe("closeMatchTargetColumn (DBT-203)", () => {
+  const reports = [
+    gapReport({
+      tableName: "CommonSecurityLog",
+      logType: "PanOS",
+      fieldMappings: [],
+      destSchema: [{ name: "ReceivedBytes", type: "long" }],
+    }),
+    gapReport({
+      tableName: "Syslog",
+      logType: "Linux",
+      fieldMappings: [],
+      destSchema: [{ name: "SyslogMessage", type: "string" }],
+    }),
+  ];
+
+  it("returns the column in the schema's own spelling", () => {
+    expect(closeMatchTargetColumn("receivedbytes", "PanOS", reports)).toBe(
+      "ReceivedBytes",
+    );
+  });
+
+  it("is null when the candidate's table lacks the column, or the log type has no report", () => {
+    expect(closeMatchTargetColumn("ReceivedBytes", "Linux", reports)).toBeNull();
+    expect(closeMatchTargetColumn("ReceivedBytes", "Gone", reports)).toBeNull();
   });
 });

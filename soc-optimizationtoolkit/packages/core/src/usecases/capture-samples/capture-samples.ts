@@ -29,7 +29,7 @@ import type { Logger } from "../../ports/logger";
 import { criblEnvelopeItems, readString } from "../../domain/cribl-api/envelope";
 import {
   splitFoundNoDiscriminator,
-  splitSamplesByLogType,
+  splitSamplesWithLeftOut,
 } from "../../domain/sample-parsing/splitting";
 import { detectCaptureInnerFormat } from "../../domain/sample-parsing/format-detection";
 import type { SampleFormat, SplitSample } from "../../domain/sample-parsing/models";
@@ -115,6 +115,13 @@ export interface CaptureSamplesResult {
    * captured.
    */
   noDiscriminator: boolean;
+  /**
+   * Captured lines the split filed under NO log type (DBT-205): a line that
+   * parses to no record, beside lines that did name a type. The split events
+   * plus this equal `rawEvents.length`, so the panel can say where the rest
+   * went instead of letting its groups sum below the count it headlines.
+   */
+  leftOutEvents: number;
   /** Operator-facing notes: an empty capture, a clamped bound, an HTTP error. */
   notes: string[];
   /** False when the request itself failed - `notes` says why. */
@@ -243,8 +250,9 @@ function clampMaxEvents(requested: number | undefined): {
 /**
  * Run one capture and split the result by log type.
  *
- * The split reuses {@link splitSamplesByLogType} - the same discriminator logic
- * a mixed upload goes through - so a capture and an upload of the same events
+ * The split reuses {@link splitSamplesWithLeftOut} - the same discriminator
+ * logic a mixed upload goes through, plus a count of the lines it filed under
+ * no log type (DBT-205) - so a capture and an upload of the same events
  * produce the same log types. That equivalence is why the splitter survived the
  * browser's removal.
  */
@@ -281,6 +289,7 @@ export async function captureSamples(
     rawEvents: [],
     format: "unknown",
     noDiscriminator: false,
+    leftOutEvents: 0,
     notes,
     ok,
   });
@@ -348,7 +357,7 @@ export async function captureSamples(
   // Format from the CONTENT, never declared - the same rule the intake path
   // follows. A capture wraps vendor bytes, so this reads the inner form.
   const format = detectCaptureInnerFormat(rawEvents);
-  const splits = splitSamplesByLogType(rawEvents, "captured", format);
+  const { splits, leftOut } = splitSamplesWithLeftOut(rawEvents, "captured", format);
   const noDiscriminator = splitFoundNoDiscriminator(splits, "captured");
   if (noDiscriminator) {
     notes.push(
@@ -361,6 +370,15 @@ export async function captureSamples(
     format,
     splits: splits.length,
     noDiscriminator,
+    leftOutEvents: leftOut,
   });
-  return { splits, rawEvents, format, noDiscriminator, notes, ok: true };
+  return {
+    splits,
+    rawEvents,
+    format,
+    noDiscriminator,
+    leftOutEvents: leftOut,
+    notes,
+    ok: true,
+  };
 }

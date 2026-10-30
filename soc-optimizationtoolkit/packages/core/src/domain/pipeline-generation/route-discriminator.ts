@@ -22,6 +22,9 @@
  * LEEF header fields, whose names sit nowhere but the parsed record while their
  * extension pairs really are in the text. Those yield no discriminator (null);
  * see route-placeholder, which owns both the format rule and the per-field one.
+ * (A header VALUE is in the text even though its name is not; plan.ts routes
+ * PAN-OS CEF on its header TYPE that way before reaching this - GEN-24,
+ * route-panos-cef.)
  * The caller then emits a PLACEHOLDER filter, not the match-all this
  * header claimed until 2026-09-03: a match-all is what made routes unreachable
  * in the first place, and plan.ts has emitted `placeholderRouteFilter` here

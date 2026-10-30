@@ -21,7 +21,8 @@
  *     tables, and friendly-name renames fold into the availability set, with
  *     a note naming each resolved function (and any unparseable files);
  *   - missing-field INVESTIGATE buttons (close-match suggestions against the
- *     sample fields);
+ *     sample fields), each with "Use this field" (DBT-203) applied in the Gap
+ *     Analysis through the same path as its own unmapped-column suggestions;
  *   - schemas resolve through the Wave E solution-aware catalog tier.
  *
  * INFORMATIONAL, NOT A GATE: this section never blocks a deploy (the integrate
@@ -30,23 +31,38 @@
  * 18 contract - it reports the schema-resolvable referenced-field set via
  * onRuleFieldsChange so the mapping table lights its RULE badges.
  *
+ * LIVE AVAILABILITY (DBT-203): an analyze run fetches the content and resolves
+ * the schema once; the classification is then re-derived from the reviewer's
+ * EFFECTIVE mappings on every edit, so a field applied in the Gap Analysis (or
+ * from a chip here) clears its chip without another fetch.
+ *
  * NO STALE-SKIP (Unit 23 pin): coverage re-runs on every analyze / custom
  * upload / clear regardless of whether the availability set is empty - the core
  * shouldRerunCoverage() is unconditionally true and analyzeContentCoverage is
  * well-defined on an empty availability set.
  *
+ * QUEUED, NEVER DROPPED (DBT-212): an upload that cannot start yet (no gap
+ * report exists, or a run is in flight), or a clear made mid-run while reports
+ * exist, is queued and starts as soon as it can, with a note while it waits. A
+ * clear with no reports drops the queue: there is nothing to re-run. And a result resolved for other
+ * destination tables than the current reports carry is STALE: it is withheld
+ * behind a "Re-analyze to refresh" note instead of rendering chips the new
+ * analysis may already have answered.
+ *
  * All decision logic is the pure @soc/core coverage-analysis plus this package's
  * rule-coverage-state; this component only orchestrates IO through the ports.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   acquireSolutionWorkbooks,
   analyticRuleToContentItem,
   analyzeContentCoverage,
+  closeMatchRowsFromReports,
   createBundledSchemaCatalog,
   createSchemaLadder,
   deriveContentRequirements,
+  landsInColumn,
   mergeCustomContentItems,
   parseAnalyticRuleYaml,
   parseParserYaml,
@@ -58,6 +74,7 @@ import type {
   ContentItem,
   ContentRequirements,
   CoverageReport,
+  GapFieldMapping,
   GapReport,
   ParsedParserFunction,
   SchemaCatalog,
@@ -77,15 +94,23 @@ import {
   RULE_COVERAGE_NO_REPORTS_NOTE,
   VIEW_KQL_LABEL,
   availableFieldsFromReports,
+  closeMatchTargetColumn,
   customRuleCount,
   deriveCoverageSection,
   destinationTableNamesFromReports,
   isRuleYamlFileName,
   missingFieldChips,
   parseCustomRuleUploads,
+  reportsWithEffectiveMappings,
   resolveSchemaUnion,
+  ruleCoverageQueuedNote,
+  ruleCoverageStaleNote,
   ruleFieldSet,
 } from "./rule-coverage-state";
+import {
+  closeMatchActionLabel,
+  moveWarningText,
+} from "../mapping-review/mapping-review-state";
 import type { CoverageSectionView } from "./rule-coverage-state";
 
 export interface RuleCoverageSectionProps {
@@ -147,6 +172,28 @@ export interface RuleCoverageSectionProps {
   onDropUnneededFields?: () => void;
   /** Why the drop action is unavailable (button disabled with this title). */
   dropDisabledReason?: string;
+  /**
+   * The mapping review's EFFECTIVE rows per log type (DBT-203). Availability
+   * and the close-match candidates read these instead of the analysis
+   * baseline, so an applied field counts at once and its chip clears. Absent =
+   * the baseline reports alone.
+   */
+  effectiveMappings?: Readonly<Record<string, readonly GapFieldMapping[]>>;
+  /**
+   * Apply a close match in the Gap Analysis (DBT-203): the page forwards it to
+   * the mapping review, which applies it exactly as its own unmapped-column
+   * suggestion. Absent = the panel lists candidates without an apply button.
+   */
+  onApplyCloseMatch?: (choice: {
+    logType: string;
+    sourceField: string;
+    dest: string;
+  }) => void;
+  /**
+   * The RULE-badge field set the Gap Analysis lights (lowercased), so a MOVE
+   * that empties a rule column is warned about here exactly as it is there.
+   */
+  ruleFields?: ReadonlySet<string>;
 }
 
 
@@ -363,8 +410,16 @@ export function RuleCoverageSection({
   onContentItemsChange,
   onDropUnneededFields,
   dropDisabledReason,
+  effectiveMappings,
+  onApplyCloseMatch,
+  ruleFields: gapRuleFields,
 }: RuleCoverageSectionProps) {
   const { ports } = usePorts();
+  // What the pipeline produces NOW: the reviewer's edits over the baseline.
+  const liveReports = useMemo(
+    () => reportsWithEffectiveMappings(reports, effectiveMappings),
+    [reports, effectiveMappings],
+  );
   const activeContent = content ?? ports.content;
   // The same @soc/core ladder the mapping review resolves with, so both panels
   // see identical columns for a solution's custom tables. Without a content
@@ -446,7 +501,41 @@ export function RuleCoverageSection({
   ]);
   const showWorkbooks = contentFilter !== "rules";
 
-  const [report, setReport] = useState<CoverageReport | null>(null);
+  // The fetched half of the last analyze run. The report itself is DERIVED
+  // from it below, so the mapping edits that follow re-classify without a
+  // second fetch. Kept with the destination tables it was resolved for: once
+  // a new gap analysis changes them, the schema union no longer describes the
+  // reports, so the result is STALE (DBT-212) - withheld behind a "Re-analyze
+  // to refresh" note rather than rendered. It used to keep showing the run's
+  // own availability, so a field the new analysis maps stayed a chip and read
+  // as a failed apply.
+  const [lastRun, setLastRun] = useState<{
+    items: ContentItem[];
+    schemaUnion: string[];
+    parsers: ParsedParserFunction[];
+    tablesKey: string;
+  } | null>(null);
+  const liveTables = useMemo(
+    () => destinationTableNamesFromReports(liveReports),
+    [liveReports],
+  );
+  const stale = lastRun !== null && liveTables.join("|") !== lastRun.tablesKey;
+  const report = useMemo<CoverageReport | null>(() => {
+    if (lastRun === null) return null;
+    const availableFields = [
+      ...availableFieldsFromReports(liveReports),
+      ...(extraAvailableFields ?? []),
+    ];
+    const synonyms = parserFieldSynonyms(
+      lastRun.parsers,
+      new Set(availableFields.map((f) => f.toLowerCase())),
+    );
+    return analyzeContentCoverage({
+      items: lastRun.items,
+      availableFields: [...availableFields, ...synonyms],
+      schemaUnion: lastRun.schemaUnion,
+    });
+  }, [lastRun, liveReports, extraAvailableFields]);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
   const [parserNote, setParserNote] = useState("");
@@ -460,25 +549,71 @@ export function RuleCoverageSection({
     field: string;
     candidates: CloseMatchCandidate[];
   } | null>(null);
+  // The last close match applied from here, announced until the Gap Analysis
+  // no longer shows it (see appliedHolds).
+  const [applied, setApplied] = useState<{
+    logType: string;
+    source: string;
+    column: string;
+  } | null>(null);
   const investigate = useCallback(
     (field: string) => {
-      const rows = reports.flatMap((r) =>
-        r.fieldMappings.map((m) => ({
-          sourceName: m.source,
-          logType: r.logType,
-          disposition:
-            m.action === "overflow"
-              ? "overflow -> " + m.dest
-              : m.action + " -> " + m.dest,
-          ...(m.sampleValue !== undefined
-            ? { sampleValue: m.sampleValue }
-            : {}),
-        })),
-      );
-      setInvestigation({ field, candidates: suggestCloseMatches(field, rows) });
+      setApplied(null);
+      setInvestigation({
+        field,
+        // The solution scopes which vendor packs count as documented.
+        candidates: suggestCloseMatches(
+          field,
+          closeMatchRowsFromReports(liveReports),
+          5,
+          { solutionName },
+        ),
+      });
     },
-    [reports],
+    [liveReports, solutionName],
   );
+  const appliedNoteRef = useRef<HTMLParagraphElement>(null);
+  const focusAppliedNote = useRef(false);
+  const applyCloseMatch = useCallback(
+    (candidate: CloseMatchCandidate, column: string) => {
+      onApplyCloseMatch?.({
+        logType: candidate.logType,
+        sourceField: candidate.sourceName,
+        dest: column,
+      });
+      setInvestigation(null);
+      setApplied({
+        logType: candidate.logType,
+        source: candidate.sourceName,
+        column,
+      });
+      // The clicked button leaves with the panel (and the chip clears), so
+      // focus moves to the note once it renders instead of falling to body.
+      focusAppliedNote.current = true;
+    },
+    [onApplyCloseMatch],
+  );
+  // The note is shown only while its claim holds: the field still lands in
+  // the column (a later edit in the Gap Analysis can undo it). It states only
+  // that - this section cannot see approvals, so it never asks for one (the
+  // Gap Analysis's own note does, and only while the table is unapproved).
+  const appliedHolds =
+    applied !== null &&
+    (liveReports
+      .find((r) => r.logType === applied.logType)
+      ?.fieldMappings.some(
+        (m) =>
+          m.source === applied.source &&
+          landsInColumn(m) &&
+          m.dest === applied.column,
+      ) ??
+      false);
+  useEffect(() => {
+    if (appliedHolds && focusAppliedNote.current) {
+      focusAppliedNote.current = false;
+      appliedNoteRef.current?.focus();
+    }
+  }, [appliedHolds]);
 
   // The kept Unit 18 contract: the lowercased schema-resolvable referenced-field
   // set, recomputed only when the report changes so the effect is stable.
@@ -500,7 +635,7 @@ export function RuleCoverageSection({
       // three-way classifier would put EVERY field in "unknown" and report a
       // 100% built on an empty denominator (live report 2026-07-09) - block
       // instead of lying green.
-      if (analyzing || reports.length === 0) {
+      if (analyzing || liveReports.length === 0) {
         return;
       }
       setAnalyzing(true);
@@ -531,7 +666,7 @@ export function RuleCoverageSection({
         // The union includes each report's OWN destSchema, so DERIVED
         // schemas (unresolvable _CL destinations defined by the sample +
         // content references) classify fields here too.
-        const schemaUnion = await resolveSchemaUnion(activeCatalog, reports);
+        const schemaUnion = await resolveSchemaUnion(activeCatalog, liveReports);
         if (schemaUnion.length === 0) {
           // Without a resolvable destination schema every field classifies
           // "unknown" and the percentages are meaningless - say so instead
@@ -539,12 +674,12 @@ export function RuleCoverageSection({
           // report of this message self-diagnosing: reports carrying 0
           // destination columns = the gap analysis predates schema
           // derivation (or never ran against this table) - Re-Analyze first.
-          const reportColumns = reports.reduce(
+          const reportColumns = liveReports.reduce(
             (n, r) => n + r.destSchema.length,
             0,
           );
           setSchemaNote(
-            `No schema could be resolved for destination table(s) ${destinationTableNamesFromReports(reports).join(", ")} - fields cannot be classified and coverage percentages would be meaningless. Re-run the DCR Gap Analysis (section 3) first - its report supplies the schema (including derived custom-table schemas) - then re-run this analysis. Diagnostic: ${reports.length} gap report(s) carried ${reportColumns} destination column(s); the schema catalog resolved none.`,
+            `No schema could be resolved for destination table(s) ${destinationTableNamesFromReports(liveReports).join(", ")} - fields cannot be classified and coverage percentages would be meaningless. Re-run the DCR Gap Analysis (section 3) first - its report supplies the schema (including derived custom-table schemas) - then re-run this analysis. Diagnostic: ${liveReports.length} gap report(s) carried ${reportColumns} destination column(s); the schema catalog resolved none.`,
           );
           return;
         }
@@ -554,7 +689,7 @@ export function RuleCoverageSection({
         // names rename underlying columns - an output name counts as
         // available when its source column is.
         const availableFields = [
-          ...availableFieldsFromReports(reports),
+          ...availableFieldsFromReports(liveReports),
           ...(extraAvailableFields ?? []),
         ];
         const { parsers, unparsed } = await fetchParserFunctions(
@@ -591,12 +726,12 @@ export function RuleCoverageSection({
             : "",
         );
 
-        const produced = analyzeContentCoverage({
+        setLastRun({
           items,
-          availableFields: [...availableFields, ...synonyms],
           schemaUnion,
+          parsers,
+          tablesKey: destinationTableNamesFromReports(liveReports).join("|"),
         });
-        setReport(produced);
         } catch (err) {
         setAnalyzeError(String(err));
       } finally {
@@ -609,7 +744,7 @@ export function RuleCoverageSection({
       activeContent,
       activeCatalog,
       solutionName,
-      reports,
+      liveReports,
       showRules,
       showWorkbooks,
       extraAvailableFields,
@@ -617,8 +752,22 @@ export function RuleCoverageSection({
     ],
   );
 
+  // A run that was asked for but could not start (DBT-212): an upload before
+  // the gap reports exist, or one made while another run is in flight. Either
+  // way runCoverage returns early, and the rule used to sit counted ("1 custom
+  // rule") but never analyzed. The effect below starts the run as soon as it
+  // can; it reads customItems from state, so the queued run sees every upload.
+  const [queued, setQueued] = useState(false);
+  useEffect(() => {
+    if (!queued || analyzing || liveReports.length === 0) {
+      return;
+    }
+    setQueued(false);
+    void runCoverage();
+  }, [queued, analyzing, liveReports.length, runCoverage]);
+
   // Custom-rule upload (YAML detection, portal ARM JSON export, or raw KQL):
-  // parse -> merge (re-upload fix) -> re-run coverage.
+  // parse -> merge (re-upload fix) -> re-run coverage, or queue it.
   const [uploadNote, setUploadNote] = useState("");
   const onUpload = useCallback(
     async (fileList: FileList | null) => {
@@ -642,17 +791,28 @@ export function RuleCoverageSection({
       }
       const merged = mergeCustomContentItems(customItems, parsed);
       setCustomItems(merged);
+      if (liveReports.length === 0 || analyzing) {
+        setQueued(true);
+        return;
+      }
       // NO STALE-SKIP: always re-run, even with an empty availability set.
       await runCoverage(merged);
     },
-    [customItems, runCoverage],
+    [customItems, runCoverage, liveReports.length, analyzing],
   );
 
   const onClearCustom = useCallback(async () => {
     setCustomItems([]);
+    // Mid-run, the clear waits its turn like an upload; with no reports there
+    // is nothing to re-run and nothing left to queue.
+    if (analyzing && liveReports.length > 0) {
+      setQueued(true);
+      return;
+    }
+    setQueued(false);
     // NO STALE-SKIP: re-run without the custom rules regardless of availability.
     await runCoverage([]);
-  }, [runCoverage]);
+  }, [runCoverage, analyzing, liveReports.length]);
 
   const hasReports = reports.length > 0;
   const ruleSection =
@@ -737,6 +897,21 @@ export function RuleCoverageSection({
           <InfoTip text={RULE_COVERAGE_NO_REPORTS_NOTE} />
         </p>
       )}
+      {queued && !hasReports && customCount > 0 && (
+        <p className="field-hint" data-coverage-note="queued" role="status">
+          {ruleCoverageQueuedNote(customCount)}
+        </p>
+      )}
+      {/* Only while a Re-analyze can run: with no reports the note above
+          already says what to do, and the result stays withheld either way. */}
+      {stale && hasReports && (
+        <div className="status-bar status-bar-warn" data-coverage-note="stale">
+          <span className="status-bar-dot" />
+          <span className="status-bar-text">
+            {ruleCoverageStaleNote(liveTables)}
+          </span>
+        </div>
+      )}
       {uploadNote !== "" && (
         <div className="status-bar status-bar-warn">
           <span className="status-bar-dot" />
@@ -760,7 +935,7 @@ export function RuleCoverageSection({
         </div>
       )}
 
-      {report === null ? null : (
+      {report === null || stale ? null : (
         <div className="coverage-sections">
           {showRules && ruleSection !== null && (
             <div className="coverage-section">
@@ -803,6 +978,18 @@ export function RuleCoverageSection({
             </div>
           )}
 
+          {appliedHolds && applied !== null && (
+            <p
+              ref={appliedNoteRef}
+              className="field-hint mapping-suggest-applied"
+              role="status"
+              tabIndex={-1}
+            >
+              {applied.source} now fills {applied.column} ({applied.logType})
+              in the DCR Gap Analysis.
+            </p>
+          )}
+
           {investigation !== null && (
             <div className="close-match-panel">
               <div className="close-match-head">
@@ -826,29 +1013,74 @@ export function RuleCoverageSection({
                 </p>
               ) : (
                 <>
-                  {investigation.candidates.map((c) => (
-                    <div
-                      className="close-match-row"
-                      key={c.sourceName + "|" + c.logType}
-                    >
-                      <code className="code-chip">{c.sourceName}</code>
-                      <span className="field-hint">({c.logType})</span>
-                      <span className="close-match-disposition">
-                        {c.disposition}
-                      </span>
-                      <span className="field-hint">{c.reason}</span>
-                      {c.sampleValue !== undefined && (
-                        <span className="close-match-sample">
-                          e.g. {c.sampleValue.slice(0, 48)}
+                  {investigation.candidates.map((c) => {
+                    // The column in THIS candidate's table; a rule can name a
+                    // sibling table's column, which a rename here cannot fill.
+                    const column = closeMatchTargetColumn(
+                      investigation.field,
+                      c.logType,
+                      liveReports,
+                    );
+                    const moveFrom = c.currentDest ?? null;
+                    const label = closeMatchActionLabel(moveFrom);
+                    const warning =
+                      column === null
+                        ? null
+                        : moveWarningText(
+                            c.sourceName,
+                            moveFrom,
+                            liveReports.find((r) => r.logType === c.logType)
+                              ?.fieldMappings ?? [],
+                            gapRuleFields,
+                          );
+                    return (
+                      <div
+                        className="close-match-row"
+                        key={c.sourceName + "|" + c.logType}
+                        data-source={c.sourceName}
+                      >
+                        <code className="code-chip">{c.sourceName}</code>
+                        <span className="field-hint">({c.logType})</span>
+                        <span className="close-match-disposition">
+                          {c.disposition}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                        <span className="field-hint">{c.reason}</span>
+                        {c.sampleValue !== undefined && (
+                          <span className="close-match-sample">
+                            e.g. {c.sampleValue.slice(0, 48)}
+                          </span>
+                        )}
+                        {warning !== null && (
+                          <span className="mapping-suggest-warn" role="note">
+                            {warning}
+                          </span>
+                        )}
+                        {onApplyCloseMatch !== undefined &&
+                          (column === null ? (
+                            <span className="field-hint">
+                              {investigation.field} is not a column of this
+                              log type&apos;s table
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="run-button mapping-suggest-apply"
+                              aria-label={`${label}: ${c.sourceName} into ${column} (${c.logType})`}
+                              onClick={() => applyCloseMatch(c, column)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                      </div>
+                    );
+                  })}
                   <p className="field-hint">
-                    To remap one, open the Gap Analysis section and search for
-                    the field in its mapping table. A close match with encoded
-                    or derived content (for example a base64 URL) needs a
-                    pipeline transform, not just a rename.
+                    {onApplyCloseMatch !== undefined
+                      ? "Applying one re-points that field in the DCR Gap Analysis and withdraws its table's approval - approve the table there to save the choice as a learned mapping."
+                      : "To remap one, open the Gap Analysis section and search for the field in its mapping table."}{" "}
+                    A close match with encoded or derived content (for example
+                    a base64 URL) needs a pipeline transform, not just a
+                    rename.
                   </p>
                 </>
               )}

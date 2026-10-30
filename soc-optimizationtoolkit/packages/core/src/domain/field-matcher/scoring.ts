@@ -3,7 +3,9 @@
  *
  * The 6-strategy score ladder (scoreMatch), the type-aware sample-value boost
  * (typeValueBoost), and the two substring guards, ported VERBATIM from legacy
- * field-matcher.ts (lines 526-617). These scores ARE the contract.
+ * field-matcher.ts (lines 526-617). These scores ARE the contract. Deliberate,
+ * pinned departures are marked where they sit: the rank-aware alias rung
+ * (2026-07-09) and the stripped-affix suffix tie-break (DBT-204).
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
@@ -32,16 +34,28 @@ export function normalize(name: string): string {
     .toLowerCase();
 }
 
+const AFFIX_PREFIX =
+  /^(source|src|dest|destination|dst|device|event|client|origin|edge|network)/i;
+const AFFIX_SUFFIX = /(name|value|address|field|string|number|label|id)$/i;
+
 /** Strip common prefixes/suffixes for fuzzy matching. */
 export function stripAffixes(name: string): string {
   return name
-    .replace(
-      /^(source|src|dest|destination|dst|device|event|client|origin|edge|network)/i,
-      "",
-    )
-    .replace(/(name|value|address|field|string|number|label|id)$/i, "")
+    .replace(AFFIX_PREFIX, "")
+    .replace(AFFIX_SUFFIX, "")
     .toLowerCase()
     .replace(/[_-]/g, "");
+}
+
+/**
+ * The suffix stripAffixes removes ("name", "id", ...), lowercased, or "" when
+ * none. Rung 5 compares it so a stripped-core tie does not treat a name and an
+ * id as the same thing (DBT-204).
+ */
+function strippedSuffix(name: string): string {
+  return (
+    name.replace(AFFIX_PREFIX, "").match(AFFIX_SUFFIX)?.[1]?.toLowerCase() ?? ""
+  );
 }
 
 /**
@@ -151,6 +165,13 @@ export function scoreMatch(
   }
 
   // 5. Stripped affixes match
+  // SUFFIX TIE-BREAK (DBT-204, pinned): the strip removes "name" and "id"
+  // alike, so deviceProcessName reduced to the same "process" as ProcessID,
+  // ProcessName and SourceProcessName; all four scored 70 and the SCHEMA
+  // order gave the name to ProcessID. When both sides carried a suffix and
+  // the suffixes differ, the match scores 68: it still wins wherever it is
+  // the only candidate (and stays above the 55/50 substring rungs), but a
+  // same-suffix column now outranks it whatever the column order.
   const strippedSrc = stripAffixes(sourceName);
   const strippedDst = stripAffixes(destName);
   if (
@@ -158,8 +179,13 @@ export function scoreMatch(
     strippedDst.length > 2 &&
     strippedSrc === strippedDst
   ) {
+    const srcSuffix = strippedSuffix(sourceName);
+    const dstSuffix = strippedSuffix(destName);
     return {
-      score: 70,
+      score:
+        srcSuffix !== "" && dstSuffix !== "" && srcSuffix !== dstSuffix
+          ? 68
+          : 70,
       confidence: "fuzzy",
       reason: "Core name match after stripping prefixes/suffixes",
     };

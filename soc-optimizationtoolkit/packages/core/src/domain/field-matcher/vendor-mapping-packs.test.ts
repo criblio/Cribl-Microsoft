@@ -13,6 +13,7 @@ import {
   vendorPacksForSolution,
 } from "./vendor-mapping-packs";
 import { matchFields } from "./match-fields";
+import { createBundledSchemaCatalog } from "./bundled-schema-catalog";
 import { documentedLogTypePacksForSolution } from "../log-type-catalog/vendor-log-types";
 
 describe("vendorPacksForSolution", () => {
@@ -233,6 +234,38 @@ describe("CEF catalog-only pack", () => {
         vendorPacksForSolution(name).some((p) => p.id === "cef-standard"),
       ).toBe(false);
     }
+  });
+
+  it("every claim is what the alias ladder actually does at runtime (GEN-20)", async () => {
+    // The pack's header says the alias ladder "already applies" each of these
+    // mappings. GEN-20 found `in` -> ReceivedBytes claimed but never made, so
+    // read the claim against the matcher for every entry, not one: CEF kvp
+    // extraction yields strings, and the columns are the bundled
+    // CommonSecurityLog schema the gap analysis resolves.
+    const columns = await createBundledSchemaCatalog().resolveSchema(
+      "CommonSecurityLog",
+    );
+    expect(columns).not.toBeNull();
+    const disagreements: string[] = [];
+    for (const claim of CEF_CATALOG_PACK.mappings) {
+      const result = matchFields(
+        [{ name: claim.sourceName, type: "string" }],
+        columns ?? [],
+        undefined,
+        "CommonSecurityLog",
+      );
+      const got = result.matched.find((m) => m.sourceName === claim.sourceName);
+      if (got?.destName !== claim.destName) {
+        disagreements.push(
+          `${claim.sourceName}: claims ${claim.destName}, matcher ${got?.destName ?? "overflow"}`,
+        );
+      }
+    }
+    // Empty since DBT-204: deviceProcessName, the one disagreement GEN-20's
+    // review measured, had no alias and tied ProcessID on the stripped-affix
+    // rung, which the schema order then handed to ProcessID. It is aliased
+    // now. This list grows only by a deliberate edit, never silently.
+    expect(disagreements).toEqual([]);
   });
 });
 

@@ -15,7 +15,7 @@
  *
  * Two things this module makes HONEST during the MVP transition:
  *
- *   1. All seven sections are BUILT NOW. Azure Resources / Cribl Config / Deploy
+ *   1. All nine sections are BUILT NOW. Azure Resources / Cribl Config / Deploy
  *      are the native-table onboard the user validated live end to end; Sample
  *      Data joined when Unit 11 shipped, Solution when Unit 14 shipped, Gap
  *      Analysis when Unit 18 shipped, and Rule Coverage when Unit 23 shipped.
@@ -60,7 +60,7 @@
  * Pure: no IO, no fetch, no React, no Date, no crypto.
  */
 
-/** The seven numbered sections of the single-page Integrate arc, by id. */
+/** The nine numbered sections of the single-page Integrate arc, by id. */
 export type IntegrateSectionId =
   | "solution"
   | "sample-data"
@@ -172,7 +172,8 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "overflow fields required by neither rules nor workbooks. " +
       "Approval is required before the pack is built; Auto-Approve " +
       "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
-      "but your edits survive; the native-table deploy never waits on approval.",
+      "but your edits survive while the fields they edit are still in the " +
+      "sample; the native-table deploy never waits on approval.",
     // NEITHER connection (DBT-54; was "both", true of no version of this
     // screen). Cribl appears in this section only as DOMAIN VOCABULARY - the
     // "Cribl handles" tile names what the GENERATED pipeline will do with a
@@ -361,6 +362,49 @@ export interface SectionInputs {
    * 'missing'.
    */
   mappingsApproved?: boolean;
+  /**
+   * The operator chose the EXISTING-destination path - an existing Cribl
+   * Sentinel destination instead of one Deploy creates ([[GEN-21]]). This,
+   * not the pick, is what puts the page on that path ([[GEN-28]]): the shell
+   * switches on the same radio, and the pick cannot complete until a gap
+   * analysis has produced tables, so keying the arc off the pick left it
+   * asking for an Azure scope the rest of the page said it would not use. The
+   * existing path is the offline path: the pack is built routable and hands
+   * its events to that destination, so nothing in Azure is read or written by
+   * this app. It therefore:
+   *   - resolves Select Azure Resources to 'not-needed' instead of asking for
+   *     a scope nobody will use,
+   *   - drops the committed scope from the deploy gate (worker group and pack
+   *     name still gate it), and drops the Workspace pill,
+   *   - turns off the Azure requirements ({@link deployAzureRequirements}):
+   *     scope, ingestion client id, and the DCR inventory read.
+   * The shell's own gate still holds the run until every table has a
+   * confirmed pick. Absent or false is the native path, unchanged - pinned.
+   */
+  existingMode?: boolean;
+  /**
+   * The id of the existing destination the operator picked, once every table
+   * has one; absent or blank means no complete pick. It only NAMES what
+   * replaced Select Azure Resources ("Not needed - using <id>"); being on the
+   * path is {@link existingMode}. A pick with the mode unset still counts as
+   * the path, so no caller can name a destination and be asked for a scope.
+   */
+  existingDestination?: string;
+}
+
+/** The chosen existing destination id, or null when none is picked. */
+function chosenDestination(inputs: SectionInputs): string | null {
+  const id = inputs.existingDestination?.trim() ?? "";
+  return id === "" ? null : id;
+}
+
+/**
+ * Whether the operator is on the existing-destination path ([[GEN-28]]): the
+ * one signal every rule below keys off - the not-needed section, the
+ * Workspace pill, the scope in the deploy gate and the Azure requirements.
+ */
+function onExistingPath(inputs: SectionInputs): boolean {
+  return inputs.existingMode === true || chosenDestination(inputs) !== null;
 }
 
 /**
@@ -375,6 +419,10 @@ export interface SectionInputs {
  *                 prerequisite; reason names the single unlock condition.
  *   coming-soon - the section's surface has not shipped yet (built === false);
  *                 reason is the honest not-shipped note.
+ *   informational - a read-only diagnostic with nothing to finish.
+ *   not-needed  - the operator's choices made the section unnecessary;
+ *                 reason names what replaced it.
+ * (The last two are documented in full on their members below.)
  */
 export type SectionStatus =
   | "complete"
@@ -396,12 +444,27 @@ export type SectionStatus =
    * deploy-gate partition (canDeploy / canDeployContentPath) is unchanged:
    * informational sections were never in it and still are not.
    */
-  | "informational";
+  | "informational"
+  /**
+   * The section's job is done some other way, so there is nothing to fill in
+   * and nothing to finish: Select Azure Resources on the existing Cribl
+   * Sentinel destination path ([[GEN-21]]), from the moment that path is
+   * chosen, before any pick ([[GEN-28]]). Not 'complete' - no
+   * scope was committed - and not 'informational' - the section is not a
+   * diagnostic. Reason names what replaced it.
+   */
+  | "not-needed";
 
-/** A section's resolved status plus a reason for 'blocked' / 'coming-soon'. */
+/**
+ * A section's resolved status plus a reason for 'blocked' / 'coming-soon' /
+ * 'not-needed'.
+ */
 export interface SectionState {
   status: SectionStatus;
-  /** Single unlock condition (blocked) or honest not-shipped note (coming-soon). */
+  /**
+   * Single unlock condition (blocked), honest not-shipped note (coming-soon),
+   * or what made the section unnecessary (not-needed).
+   */
   reason?: string;
 }
 
@@ -482,7 +545,9 @@ function sectionComplete(
  * and Cribl Config have no upstream prerequisite (they can be filled anytime).
  */
 function deployBlockedReason(inputs: SectionInputs): string | null {
-  if (!inputs.scopeCommitted) {
+  // An existing destination replaces everything the scope was for (GEN-21),
+  // from the moment the path is chosen (GEN-28).
+  if (!inputs.scopeCommitted && !onExistingPath(inputs)) {
     return DEPLOY_NEEDS_SCOPE_REASON;
   }
   if (!inputs.workerGroupSelected) {
@@ -495,9 +560,29 @@ function deployBlockedReason(inputs: SectionInputs): string | null {
 }
 
 /**
+ * The 'not-needed' reason for a section the operator's choices made
+ * unnecessary, or null. Today exactly one: Select Azure Resources on the
+ * existing-destination path (GEN-21), naming the destination once every table
+ * has one picked and saying only that it is not needed before then (GEN-28).
+ */
+function sectionNotNeeded(
+  section: IntegrateSection,
+  inputs: SectionInputs,
+): string | null {
+  if (section.id !== "azure-resources" || !onExistingPath(inputs)) {
+    return null;
+  }
+  const chosen = chosenDestination(inputs);
+  return chosen !== null
+    ? `Not needed - using ${chosen}`
+    : "Not needed with an existing destination";
+}
+
+/**
  * Whether a built, incomplete section is ACTIONABLE right now (its commit is
  * not gated). Azure Resources and Cribl Config are always actionable
- * (read-ahead); Deploy is actionable only when its prerequisites are met.
+ * (read-ahead) unless 'not-needed' (Azure Resources on the existing-destination
+ * path, GEN-21); Deploy is actionable only when its prerequisites are met.
  */
 function sectionActionable(
   section: IntegrateSection,
@@ -508,6 +593,7 @@ function sectionActionable(
   if (
     !section.built ||
     section.informational === true ||
+    sectionNotNeeded(section, inputs) !== null ||
     sectionComplete(section, inputs)
   ) {
     return false;
@@ -542,6 +628,9 @@ function currentSectionId(inputs: SectionInputs): IntegrateSectionId | null {
  *     regardless of inputs (a coming-soon section is never a working teaser).
  *   - informational      -> 'informational', ALWAYS: a read-only diagnostic
  *     has nothing to finish, so it reports no completion either way.
+ *   - not-needed         -> 'not-needed' with what replaced it, ahead of
+ *     completion and gating (Select Azure Resources on the
+ *     existing-destination path; see sectionNotNeeded).
  *   - built + complete   -> 'complete'.
  *   - built + incomplete + gated commit (Deploy only) -> 'blocked' with the
  *     single missing prerequisite.
@@ -559,6 +648,10 @@ export function deriveSectionStatus(
   // finished nor unfinished, and they never gate a deploy.
   if (section.informational === true) {
     return { status: "informational" };
+  }
+  const notNeeded = sectionNotNeeded(section, inputs);
+  if (notNeeded !== null) {
+    return { status: "not-needed", reason: notNeeded };
   }
   if (sectionComplete(section, inputs)) {
     return { status: "complete" };
@@ -582,9 +675,9 @@ export interface ResolvedSection extends SectionState {
 
 /**
  * Resolve every section in page order - the whole-page projection the shell
- * renders. Guarantees (pinned by tests): at most one 'current' across all
- * seven; exactly the not-built sections are 'coming-soon'; the built sections
- * are always navigable (never 'coming-soon').
+ * renders. Guarantees (pinned by tests): at most one 'current' across the
+ * page; exactly the not-built sections are 'coming-soon'; the built sections
+ * are always navigable (never 'coming-soon'), 'not-needed' ones included.
  */
 export function deriveSectionStatuses(
   inputs: SectionInputs,
@@ -656,7 +749,7 @@ export function sectionForPill(id: IntegratePillId): IntegrateSectionId {
 }
 
 export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
-  return [
+  const pills: ReadinessPill[] = [
     {
       id: "solution",
       label: "Solution",
@@ -727,6 +820,13 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
         : "Set a pack name in Cribl Configuration.",
     },
   ];
+  // On the existing-destination path there is no workspace to commit, so its
+  // pill would be a permanent 'missing' for a prerequisite that is not one
+  // (GEN-21) - the same reason readinessPillsForMode hides it when Azure is
+  // skipped.
+  return onExistingPath(inputs)
+    ? pills.filter((pill) => pill.id !== "workspace")
+    : pills;
 }
 
 /**
@@ -746,10 +846,15 @@ export function deriveReadinessPills(inputs: SectionInputs): ReadinessPill[] {
  *
  * Note: deployCompleted is intentionally NOT a factor - a finished run does
  * not disable deploying again (each step is independently re-runnable).
+ *
+ * GEN-21: the existing-destination path stands in for the committed scope -
+ * that run writes nothing to Azure. Off that path the rule is unchanged. The
+ * path counts from the radio (GEN-28), so a page waiting on its pick reads the
+ * shell's pick gate, never "commit a scope"; that gate is what holds the run.
  */
 export function canDeploy(inputs: SectionInputs): boolean {
   return (
-    inputs.scopeCommitted &&
+    (inputs.scopeCommitted || onExistingPath(inputs)) &&
     inputs.workerGroupSelected &&
     inputs.packNameSet
   );
@@ -773,4 +878,42 @@ export function canDeploy(inputs: SectionInputs): boolean {
  */
 export function canDeployContentPath(inputs: SectionInputs): boolean {
   return canDeploy(inputs) && inputs.mappingsApproved === true;
+}
+
+/**
+ * The Azure-side things a deploy run needs from the operator ([[GEN-21]]).
+ * Each is true on the native path, where Deploy creates the DCR and the Cribl
+ * Sentinel destination, and false on the existing-destination path, because
+ * that run is Cribl-only - it builds and installs a routable pack - and never
+ * reads or writes Azure:
+ *   scope             - a committed subscription, resource group and workspace,
+ *                       and what is read or named through it: the workspace
+ *                       table listing, the solution's Content Hub
+ *                       cross-reference, and the native table the run creates
+ *                       a DCR for.
+ *   ingestionClientId - the app-registration client id stamped on a NEW
+ *                       destination; the existing one already carries its own.
+ *   dcrInventory      - the Azure DCR inventory read the pack build makes to
+ *                       find the deployed DCRs its destinations point at.
+ * The Integrate screen enables those reads and asks for those fields by these
+ * values ([[GEN-28]]), so the core says once which of them the
+ * existing-destination path drops. (The Entra directory read for the role
+ * grant has no entry: it happens inside the native run, which the existing
+ * path never starts.)
+ */
+export interface DeployAzureRequirements {
+  scope: boolean;
+  ingestionClientId: boolean;
+  dcrInventory: boolean;
+}
+
+export function deployAzureRequirements(
+  inputs: SectionInputs,
+): DeployAzureRequirements {
+  const native = !onExistingPath(inputs);
+  return {
+    scope: native,
+    ingestionClientId: native,
+    dcrInventory: native,
+  };
 }

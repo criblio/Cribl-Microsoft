@@ -103,6 +103,70 @@ describe("canWireSource", () => {
   });
 });
 
+describe("existing destination picked (GEN-21)", () => {
+  const PICKED: SectionInputs = {
+    ...READY,
+    scopeCommitted: false,
+    existingDestination: "PAN-CSL",
+  };
+
+  it("deploys without a committed scope in every mode that keeps Cribl", () => {
+    expect(canDeployInMode(PICKED, "full")).toBe(true);
+    expect(canDeployInMode(PICKED, "cribl-only")).toBe(true);
+    // The pick does not stand in for a worker group or a pack name.
+    expect(canDeployInMode({ ...PICKED, workerGroupSelected: false }, "full")).toBe(false);
+    expect(canDeployInMode({ ...PICKED, packNameSet: false }, "cribl-only")).toBe(false);
+  });
+
+  it("keeps the scope requirement in azure-only: a Cribl destination is not a scope", () => {
+    // azure-only skips Cribl, so the run is nothing but the Azure writes the
+    // scope addresses; a stale pick must not unlock them without one.
+    expect(canDeployInMode(PICKED, "azure-only")).toBe(false);
+    expect(
+      canDeployInMode({ ...PICKED, scopeCommitted: true }, "azure-only"),
+    ).toBe(true);
+  });
+
+  it("keeps the content path a superset: approval still gates it", () => {
+    expect(canDeployContentPathInMode(PICKED, "full")).toBe(false);
+    expect(
+      canDeployContentPathInMode({ ...PICKED, mappingsApproved: true }, "full"),
+    ).toBe(true);
+  });
+
+  it("keeps the Workspace pill in azure-only when only the existing mode is on (GEN-28)", () => {
+    // The mode alone drops the pill in integrate-arc, before any pick; an
+    // azure-only run must not lose it to the mode either.
+    const ON_PATH: SectionInputs = { ...READY, scopeCommitted: false, existingMode: true };
+    expect(
+      readinessPillsForMode(ON_PATH, "azure-only").find((p) => p.id === "workspace")?.state,
+    ).toBe("missing");
+    expect(readinessPillsForMode(ON_PATH, "full").map((p) => p.id)).not.toContain(
+      "workspace",
+    );
+  });
+
+  it("keeps the Workspace pill in azure-only, where the pick does not lift the scope", () => {
+    // Without this the footer showed no missing prerequisite while Deploy
+    // stayed disabled for the scope.
+    expect(readinessPillsForMode(PICKED, "azure-only").map((p) => [p.id, p.state])).toEqual([
+      ["solution", readinessPillsForMode(READY, "azure-only")[0]?.state],
+      ["samples", readinessPillsForMode(READY, "azure-only")[1]?.state],
+      ["mappings", readinessPillsForMode(READY, "azure-only")[2]?.state],
+      ["workspace", "missing"],
+      ["pack-name", "ok"],
+    ]);
+    // Where Cribl is in the run the pick does replace the scope: no pill.
+    expect(readinessPillsForMode(PICKED, "full").map((p) => p.id)).toEqual([
+      "solution",
+      "samples",
+      "mappings",
+      "worker-groups",
+      "pack-name",
+    ]);
+  });
+});
+
 describe("readinessPillsForMode", () => {
   it("hides the Workspace pill when Azure is skipped and Worker Groups when Cribl is skipped", () => {
     const airgap = readinessPillsForMode(READY, "air-gapped").map((p) => p.id);

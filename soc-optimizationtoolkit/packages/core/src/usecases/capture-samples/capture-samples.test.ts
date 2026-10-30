@@ -258,6 +258,54 @@ describe("the result", () => {
     expect(result.noDiscriminator).toBe(false);
   });
 
+  it("splits a syslog-wrapped PAN-OS CEF capture by the header TYPE (DBT-196)", async () => {
+    // The UAT shape end to end: Cribl capture envelopes whose _raw is a syslog
+    // header in front of PAN-OS CEF, subtype in field 5 and type in field 6.
+    // Before DBT-196 this came back as one "captured" group with the "No field
+    // in these events distinguishes" note, and the needs list stayed at none.
+    const threat =
+      "<14>Oct 29 10:00:00 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|url|THREAT|1|rt=Oct 29 2026 10:00:00 GMT deviceExternalId=0123 src=10.0.0.1 dst=1.2.3.4 cs1Label=Rule cs1=allow-web act=alert cat=(9999) PanOSThreatCategory=url";
+    const traffic =
+      "<14>Oct 29 10:00:01 fw01 CEF:0|Palo Alto Networks|PAN-OS|10.1.0|end|TRAFFIC|1|rt=Oct 29 2026 10:00:01 GMT deviceExternalId=0123 src=10.0.0.2 dst=5.6.7.8 cs1Label=Rule cs1=allow-web act=allow";
+    const cribl = client({ status: 200, body: ndjson([threat, traffic, threat]) });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.ok).toBe(true);
+    expect(result.format).toBe("cef");
+    expect(result.splits.map((s) => [s.logType, s.eventCount, s.rawEvents])).toEqual([
+      ["THREAT", 2, [threat, threat]],
+      ["TRAFFIC", 1, [traffic]],
+    ]);
+    expect(result.noDiscriminator).toBe(false);
+    expect(result.notes).toEqual([]);
+    expect(result.leftOutEvents).toBe(0);
+  });
+
+  it("COUNTS the captured lines the split filed under no log type (DBT-205)", async () => {
+    // A key=value line under the splitter's three-pair gate and a line with no
+    // pairs at all reach no group. The panel's headline says "Captured N events
+    // in K log types", so without this count the groups sum below N in silence.
+    const lines = [
+      "log-type=TRAFFIC src=1 dst=2 action=allow",
+      "a=1 b=2",
+      "log-type=THREAT src=3 dst=4 action=alert",
+      "free text with no pairs",
+      "log-type=TRAFFIC src=5 dst=6 action=deny",
+    ];
+    const cribl = client({ status: 200, body: ndjson(lines) });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["TRAFFIC", [lines[0], lines[4]]],
+      ["THREAT", [lines[2]]],
+    ]);
+    expect(result.leftOutEvents).toBe(2);
+    const grouped = result.splits.reduce((n, s) => n + s.eventCount, 0);
+    expect(grouped + result.leftOutEvents).toBe(result.rawEvents.length);
+  });
+
   it("FLAGS a capture with no discriminator instead of inventing one log type", async () => {
     const cribl = client({
       status: 200,

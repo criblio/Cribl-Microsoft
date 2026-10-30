@@ -37,6 +37,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import {
   FakeContentCache,
   buildVendorFieldDefinition,
+  capTaggedSampleBytes,
   vendorFieldDefinitionKey,
 } from "@soc/core";
 import type { ContentCache, TaggedSample, TaggedSampleStore } from "@soc/core";
@@ -1018,5 +1019,236 @@ describe("SampleIntakeSection - a refused column-order store (DBT-175)", () => {
     expect(
       view.container.querySelectorAll(".sample-intake-column-order-refused"),
     ).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-206: what the store KEPT, said on paste and upload the way capture says it
+// ---------------------------------------------------------------------------
+
+/**
+ * DBT-206, the third intake path of DBT-197's trim. The cloud store byte-caps
+ * each sample and keeps the first events that fit (core capTaggedSampleBytes);
+ * paste and upload put the sample they HANDED the store into the list, so the
+ * chip read the full count until a reload and then the smaller stored count
+ * with no word about why. The store here caps the way the adapter does, at a
+ * budget small enough that a few dozen short events cross it.
+ */
+describe("SampleIntakeSection - a sample the store trimmed (DBT-206)", () => {
+  const BUDGET = 4096;
+  const EVENTS = 60;
+
+  /** NDJSON of `n` events, each long enough that 60 cross BUDGET and 3 do not. */
+  const ndjson = (n: number): string =>
+    Array.from({ length: n }, (_, i) =>
+      JSON.stringify({
+        user: `user${i}`,
+        action: "login",
+        detail: `event ${i} carrying enough text to make sixty of them large`,
+      }),
+    ).join("\n");
+
+  /** Replace-by-logType like makeStore, byte-capped like the KV adapter. */
+  function cappedStore() {
+    const byType = new Map<string, TaggedSample>();
+    const store: TaggedSampleStore = {
+      upsert: vi.fn(async (sample: TaggedSample) => {
+        byType.set(sample.logType, capTaggedSampleBytes(sample, BUDGET).sample);
+      }),
+      get: vi.fn(async (logType: string) => byType.get(logType) ?? null),
+      list: vi.fn(async () => [...byType.values()]),
+      remove: vi.fn(async (logType: string) => {
+        byType.delete(logType);
+      }),
+    };
+    return { store, byType };
+  }
+
+  const chipCounts = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll(".sample-chip-counts")).map(
+      (n) => n.textContent ?? "",
+    );
+
+  const trimNotes = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll(".sample-intake-trimmed")).map(
+      (n) => n.textContent ?? "",
+    );
+
+  /** The DBT-197 sentence, word for word, for one trimmed log type. */
+  const sentence = (logType: string, kept: number, handed: number) =>
+    `"${logType}" kept ${kept} of its ${handed} events: the sample store limits how large one log type's sample can be, and these events are large. Its field list was still read from all ${handed}.`;
+
+  /** Upload `files` through the section's (hidden) native file input. */
+  async function upload(container: HTMLElement, files: File[]): Promise<void> {
+    const input = container.querySelector(
+      "input.sample-file-input",
+    ) as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    await act(async () => {
+      fireEvent.change(input);
+    });
+  }
+
+  it("a paste over the cap shows the STORED count and says why at once", async () => {
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await paste(view.container, "Logins", ndjson(EVENTS));
+
+    const kept = byType.get("Logins")?.parsed.records.length ?? -1;
+    // The fixture must really cross the cap, or this pin proves nothing.
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([sentence("Logins", kept, EVENTS)]);
+    // Reported upward as stored, so the rest of the page counts the same.
+    const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(reported.map((s) => s.parsed.records.length)).toEqual([kept]);
+  });
+
+  it("an upload over the cap shows the STORED count and says why at once", async () => {
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await upload(view.container, [
+      new File([ndjson(EVENTS)], "logins.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(1);
+    });
+    const logTypes = [...byType.keys()];
+    expect(logTypes).toHaveLength(1);
+    const kept = byType.get(logTypes[0])?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([
+      sentence(logTypes[0], kept, EVENTS),
+    ]);
+  });
+
+  it("says nothing for a paste or an upload under the cap", async () => {
+    const { store } = cappedStore();
+    const view = await mount(store);
+
+    await paste(view.container, "Few", ndjson(3));
+    // Asked after EACH way in: an upload replaces the paste's note, so one
+    // check at the end would never see a note the paste wrongly wrote.
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(trimNotes(view.container)).toEqual([]);
+
+    await upload(view.container, [
+      new File([ndjson(2)], "two.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(2);
+    });
+    expect(chipCounts(view.container).map((t) => t.split(",")[0])).toEqual([
+      "3 events",
+      "2 events",
+    ]);
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+
+  it("naming a trimmed headerless CSV's columns still shows the STORED count", async () => {
+    // The paste path's second write. The dialog re-parses the FULL pasted text
+    // (so the field list still comes from every event) and writes it again;
+    // that write is capped too, so what it lists has to be read back as well,
+    // or the chip returns to the full count under a note saying otherwise.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+    const rows = Array.from(
+      { length: EVENTS },
+      (_, i) =>
+        `1,2026/08/13 10:49:02,013201031064,AUTH,0,${2817 + i},2026/08/13 10:48:54,vsys1,user${i}-with-a-longer-name`,
+    ).join("\n");
+
+    await paste(view.container, "PanAuth", rows);
+    expect(dialogs(view.container)).toHaveLength(1);
+    fireEvent.change(
+      view.container.querySelector(".csv-dialog textarea.sample-paste") as HTMLTextAreaElement,
+      { target: { value: "a,b,c,d,e,f,g,h,i" } },
+    );
+    await act(async () => {
+      clickButton(view.container, "Apply headers");
+    });
+
+    const stored = byType.get("PanAuth");
+    expect(stored?.parsed.fields.map((f) => f.name)).toContain("a");
+    const kept = stored?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([sentence("PanAuth", kept, EVENTS)]);
+    const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(reported.map((s) => s.parsed.records.length)).toEqual([kept]);
+  });
+
+  it("names only the LATER file's trim when two uploaded files share a log type", async () => {
+    // The store replaces by log type, so the first file's entry is gone by the
+    // time the batch ends: a note for it would describe nothing on the page.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await upload(view.container, [
+      new File([ndjson(EVENTS)], "logins.json", { type: "application/json" }),
+      new File([ndjson(40)], "logins.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(1);
+    });
+    const logTypes = [...byType.keys()];
+    expect(logTypes).toHaveLength(1);
+    const kept = byType.get(logTypes[0])?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(40);
+    expect(trimNotes(view.container)).toEqual([sentence(logTypes[0], kept, 40)]);
+  });
+
+  it("drops the note with the chip it explains", async () => {
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    const remove = Array.from(
+      view.container.querySelectorAll(".sample-chip button"),
+    ).find((b) => b.textContent === "Remove");
+    expect(remove).toBeDefined();
+    await act(async () => {
+      fireEvent.click(remove!);
+    });
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(0);
+    });
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+
+  it("drops the note when a sibling panel replaces the trimmed log type", async () => {
+    // The note describes the paste's write. A capture or Lake commit of the
+    // same log type replaces that entry, and a note still saying "kept 10 of
+    // 60" above a chip reading 2 events would contradict the chip.
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    await siblingCommits(
+      view,
+      store,
+      [tagSampleFromContent("Logins", ndjson(2), "lake:Logins")],
+      1,
+    );
+
+    expect(chipCounts(view.container).map((t) => t.split(",")[0])).toEqual([
+      "2 events",
+    ]);
+    expect(trimNotes(view.container)).toEqual([]);
   });
 });

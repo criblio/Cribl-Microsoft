@@ -14,12 +14,17 @@
  *   1. APPROVALS - the consent moment. A table's mappings must be approved
  *      before the content/mapping-driven flagship path builds and deploys it.
  *      Approvals RESET on re-analysis (a fresh analysis invalidates a prior
- *      approval - the operator must re-consent to the new mapping).
+ *      approval - the operator must re-consent to the new mapping), and a
+ *      table's approval is withdrawn when the reviewer re-points one of its
+ *      rows, by Dest Field or by suggestion alike (F1-c, DBT-213).
  *   2. MAPPING EDITS - the reviewer's dest/action overrides, keyed by logType.
- *      They SURVIVE re-analysis (a re-run must not discard hand edits) and
- *      RE-KEY on a log-type rename via the Unit 11 reKeyByLogType primitive -
- *      the SAME re-key seam sample intake built for exactly this (never orphan
- *      an edit under the old key, the legacy renderer bug).
+ *      They SURVIVE re-analysis (a re-run must not discard hand edits) by being
+ *      RE-APPLIED to the new rows, and an edit whose source field, table or
+ *      column is gone is dropped and counted rather than built against rows
+ *      from an older analysis (DBT-210, rebaseEdits). They RE-KEY on a
+ *      log-type rename via the Unit 11 reKeyByLogType primitive - the SAME
+ *      re-key seam sample intake built for exactly this (never orphan an edit
+ *      under the old key, the legacy renderer bug).
  *   3. STALENESS - a flag raised when the underlying samples / solution / schema
  *      changed AFTER the last analysis. Stale approvals cannot gate a deploy
  *      (the mapping they approved no longer reflects the inputs); the UI prompts
@@ -39,12 +44,24 @@
  */
 
 import type {
+  FieldRef,
   GapFieldMapping,
   GapReport,
   GapReportStat,
+  MatchAction,
+  RemapRequest,
+  RemapResult,
   TaggedSample,
 } from "@soc/core";
-import { FIELD_EXAMPLE_MAX_CHARS } from "@soc/core";
+import {
+  actionEditRefusal,
+  applyRemap,
+  closeMatchRowsFromReports,
+  FIELD_EXAMPLE_MAX_CHARS,
+  getOverflowConfig,
+  landsInColumn,
+  suggestForDestColumn,
+} from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +83,7 @@ export interface MappingReviewState {
   /**
    * Per-logType edited mapping rows. Present only for tables the operator
    * hand-edited; a table with no entry uses its report's mappings verbatim.
-   * SURVIVES re-analysis and RE-KEYS on rename.
+   * RE-BASED onto a re-analysis (DBT-210) and RE-KEYS on rename.
    */
   mappingEdits: Readonly<Record<string, GapFieldMapping[]>>;
   /**
@@ -76,6 +93,18 @@ export interface MappingReviewState {
   stale: boolean;
   /** Monotonic count of completed analyses (provenance / debug; never a key). */
   analysisRevision: number;
+  /**
+   * The edits the LAST analysis could not carry over (DBT-210): their source
+   * field, table or column is gone. Empty until a re-analysis drops one.
+   */
+  droppedEdits: readonly DroppedEdit[];
+}
+
+/** One reviewer edit a re-analysis dropped (DBT-210). */
+export interface DroppedEdit {
+  logType: string;
+  /** The source field of the edited row. */
+  source: string;
 }
 
 /** The pristine review state, before any analysis or approval. */
@@ -84,6 +113,7 @@ export const INITIAL_MAPPING_REVIEW_STATE: MappingReviewState = {
   mappingEdits: {},
   stale: false,
   analysisRevision: 0,
+  droppedEdits: [],
 };
 
 /** Which column of a mapping row an edit targets. */
@@ -93,10 +123,21 @@ export type MappingEditField = "dest" | "action";
 export type MappingReviewAction =
   /**
    * A fresh analysis completed. Approvals RESET (the operator must re-consent to
-   * the new mapping); edits SURVIVE (hand edits are not discarded); staleness
-   * clears; the revision advances.
+   * the new mapping); staleness clears; the revision advances. Edits SURVIVE
+   * only as far as the new rows allow (DBT-210, {@link rebaseEdits}): each is
+   * re-applied to the new analysis's row for the same source, and an edit whose
+   * source, table or column is gone is dropped into `droppedEdits`.
    */
-  | { type: "analyzed" }
+  | {
+      type: "analyzed";
+      /**
+       * The reports the edits were made against (before this analysis), under
+       * the log-type names the edit store now uses (renames applied).
+       */
+      previous: readonly GapReport[];
+      /** The reports this analysis produced. */
+      reports: readonly GapReport[];
+    }
   /**
    * The underlying samples / solution / schema changed after the last analysis.
    * Raises the staleness flag (approvals and edits are kept but can no longer
@@ -112,18 +153,71 @@ export type MappingReviewAction =
   /** Reset All - clear every approval (edits and staleness untouched). */
   | { type: "reset-approvals" }
   /**
-   * Edit one mapping row's dest column or action. `baseline` is the report's
-   * current mappings for the table, used to seed the edit store on first edit
-   * (mirrors the legacy `mappingEdits[logType] || a.fieldMappings`). A no-op
-   * when no row matches `sourceField`.
+   * Edit one mapping row's action. `baseline` is the report's current mappings
+   * for the table, used to seed the edit store on first edit (mirrors the
+   * legacy `mappingEdits[logType] || a.fieldMappings`). A no-op when no row
+   * matches `sourceField`, and REFUSED (a no-op) when core actionEditRefusal
+   * says the action needs a column the row does not have (DBT-209): keep,
+   * rename, coerce or decode on a row in the catch-all would be a Rename onto
+   * the catch-all, or a field the DCR discards. The Dest path chooses the
+   * column, and the action with it.
    */
   | {
       type: "edit-mapping";
       logType: string;
       sourceField: string;
-      field: MappingEditField;
+      field: "action";
       value: string;
       baseline: readonly GapFieldMapping[];
+      /** The table's catch-all column, as the Dest path takes it. */
+      catchAllColumn?: string;
+    }
+  /**
+   * Point one mapping row at another destination column (GEN-19). Delegates to
+   * @soc/core applyRemap, so the row's action, destType, coercion flag and
+   * confidence follow the column instead of staying what the matcher left: an
+   * overflow row pointed at SourceMACAddress becomes a rename the pipeline
+   * emits. Choosing the baseline column restores the baseline row. A no-op
+   * when no row matches or the column is not in `destSchema`. The same
+   * reviewer re-point as `apply-suggestion` (DBT-213): an applied or reverted
+   * edit WITHDRAWS the table's approval (decision F1-c). A column another row
+   * already fills is refused unless `moveClaimed` (DBT-208).
+   */
+  | {
+      type: "edit-mapping";
+      logType: string;
+      sourceField: string;
+      field: "dest";
+      value: string;
+      baseline: readonly GapFieldMapping[];
+      /** The report's resolved schema: the chosen column's type comes from it. */
+      destSchema: readonly FieldRef[];
+      /** The table's catch-all column; choosing it makes the row overflow. */
+      catchAllColumn?: string;
+      /**
+       * The reviewer answered the claim (destClaim): the row already filling
+       * the column falls back to the catch-all as overflow.
+       */
+      moveClaimed?: boolean;
+    }
+  /**
+   * The reviewer chose a suggested sample field for an unmapped destination
+   * column (DBT-202). The SAME reviewer re-point as a Dest Field edit
+   * (reviewerRemap), so a suggestion and a hand edit cannot disagree about the
+   * row or the approval: it is WITHDRAWN (decision F1-c, 2026-10-29) - an
+   * applied suggestion is a review decision, and approving again is what saves
+   * it as a learned mapping. A no-op (approval kept) when nothing changed, and
+   * when another row already fills the column (DBT-208: never two Renames onto
+   * one name).
+   */
+  | {
+      type: "apply-suggestion";
+      logType: string;
+      sourceField: string;
+      destColumn: string;
+      baseline: readonly GapFieldMapping[];
+      destSchema: readonly FieldRef[];
+      catchAllColumn?: string;
     }
   /**
    * A log type was renamed (the Unit 11 onRenameLogType seam). Re-keys the
@@ -132,8 +226,8 @@ export type MappingReviewAction =
    */
   | { type: "rename-log-type"; from: string; to: string }
   /**
-   * A log type's sample was removed (DBT-143). Drops its approval and its edit
-   * store and touches nothing else: the other tables' approvals stand, and
+   * A log type's sample was removed (DBT-143). Drops its approval, its edit
+   * store and its dropped-edit entries (DBT-210) and touches nothing else: the other tables' approvals stand, and
    * staleness is unchanged, because the remaining analysis is still about
    * exactly the samples it was run on.
    */
@@ -155,20 +249,73 @@ export function withoutKey<T>(
   return next;
 }
 
+/**
+ * The ONE reviewer re-point, shared by a Dest Field edit and an applied
+ * suggestion (DBT-213): both go through core applyRemap, and both WITHDRAW the
+ * table's approval when the row changed - applied or reverted, since either
+ * changes what deploys (decision F1-c: approving again is what saves it as a
+ * learned mapping). A remap that changed nothing keeps the approval.
+ *
+ * A result that leaves another row in the chosen column is REFUSED (DBT-208):
+ * two Renames onto one name lose the first value, reaching neither the column
+ * nor overflow. The caller asks the reviewer first (destClaim) and sends
+ * `moveClaimed`, which moves the other row to the catch-all.
+ */
+/** The remap changed the rows (applied, or reverted to the analysis). */
+function remapChanged(remap: RemapResult): boolean {
+  return remap.outcome === "applied" || remap.outcome === "reverted";
+}
+
+/**
+ * The ONE acceptance rule for a reviewer re-point, shared by the live edit and
+ * the DBT-210 replay: it changed the rows and claimed no other row's column.
+ */
+function remapAccepted(remap: RemapResult): boolean {
+  return remapChanged(remap) && remap.claimedBy === null;
+}
+
+function reviewerRemap(
+  state: MappingReviewState,
+  logType: string,
+  baseline: readonly GapFieldMapping[],
+  request: Omit<RemapRequest, "baseline">,
+): MappingReviewState {
+  const remap = applyRemap(state.mappingEdits[logType] ?? [...baseline], {
+    ...request,
+    baseline,
+  });
+  if (!remapAccepted(remap)) {
+    return state;
+  }
+  return {
+    ...state,
+    approvals: withoutKey(state.approvals, logType),
+    mappingEdits: { ...state.mappingEdits, [logType]: remap.rows },
+  };
+}
+
 /** Apply one review action, returning the next state (pure; never mutates). */
 export function mappingReviewReducer(
   state: MappingReviewState,
   action: MappingReviewAction,
 ): MappingReviewState {
   switch (action.type) {
-    case "analyzed":
-      // Approvals reset on re-analysis; edits survive; staleness clears.
+    case "analyzed": {
+      // Approvals reset on re-analysis; staleness clears; edits are re-based
+      // onto the new rows, and the ones that no longer fit are counted.
+      const rebased = rebaseEdits(
+        state.mappingEdits,
+        action.previous,
+        action.reports,
+      );
       return {
         approvals: {},
-        mappingEdits: state.mappingEdits,
+        mappingEdits: rebased.mappingEdits,
         stale: false,
         analysisRevision: state.analysisRevision + 1,
+        droppedEdits: rebased.dropped,
       };
+    }
 
     case "inputs-changed":
       // Only meaningful once something has been analyzed; idempotent otherwise.
@@ -207,6 +354,15 @@ export function mappingReviewReducer(
       return { ...state, approvals: {} };
 
     case "edit-mapping": {
+      if (action.field === "dest") {
+        return reviewerRemap(state, action.logType, action.baseline, {
+          sourceField: action.sourceField,
+          destColumn: action.value,
+          destSchema: action.destSchema,
+          catchAllColumn: action.catchAllColumn,
+          moveClaimed: action.moveClaimed,
+        });
+      }
       const current = state.mappingEdits[action.logType] ?? [
         ...action.baseline,
       ];
@@ -214,14 +370,27 @@ export function mappingReviewReducer(
       if (index === -1) {
         return state;
       }
+      // The action dropdown offers only MatchAction values (ACTION_OPTIONS).
+      const value = action.value as MatchAction;
+      if (actionEditRefusal(current[index], value, action.catchAllColumn) !== null) {
+        return state;
+      }
       const nextRows = current.map((row, i) =>
-        i === index ? { ...row, [action.field]: action.value } : row,
+        i === index ? { ...row, action: value } : row,
       );
       return {
         ...state,
         mappingEdits: { ...state.mappingEdits, [action.logType]: nextRows },
       };
     }
+
+    case "apply-suggestion":
+      return reviewerRemap(state, action.logType, action.baseline, {
+        sourceField: action.sourceField,
+        destColumn: action.destColumn,
+        destSchema: action.destSchema,
+        catchAllColumn: action.catchAllColumn,
+      });
 
     case "rename-log-type":
       // The Unit 11 re-key primitive, reused verbatim for BOTH stores.
@@ -240,6 +409,9 @@ export function mappingReviewReducer(
         ...state,
         approvals: withoutKey(state.approvals, action.logType),
         mappingEdits: withoutKey(state.mappingEdits, action.logType),
+        // The notice counts what the last analysis dropped for the tables
+        // still here; a removed sample's edits are not "dropped" any more.
+        droppedEdits: state.droppedEdits.filter((d) => d.logType !== action.logType),
       };
 
     default: {
@@ -347,12 +519,164 @@ export function isApproved(
   return state.approvals[logType] === true;
 }
 
-/** Whether the operator has hand-edited this table's mappings. */
+/** The row fields that carry a mapping DECISION, compared by isModified. */
+const DECISION_FIELDS = [
+  "dest",
+  "destType",
+  "action",
+  "needsCoercion",
+  "confidence",
+] as const;
+
+/**
+ * Whether the operator's edits for this table differ from the analysis
+ * (DBT-194). Compared row by row, field by field: the edit store exists from
+ * the first edit on, so asking only whether it exists kept "Modified" up after
+ * every edit had been set back. Rows are matched by source. The description
+ * and the example value are display, not decision, and a re-analysis may
+ * legitimately refresh them.
+ */
 export function isModified(
   state: MappingReviewState,
-  logType: string,
+  report: GapReport,
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(state.mappingEdits, logType);
+  const edits = state.mappingEdits[report.logType];
+  if (edits === undefined) {
+    return false;
+  }
+  if (edits.length !== report.fieldMappings.length) {
+    return true;
+  }
+  const baseline = new Map(report.fieldMappings.map((m) => [m.source, m]));
+  return edits.some((edit) => isEditedRow(edit, baseline.get(edit.source)));
+}
+
+/** Whether a stored row differs from the analysis's row in any decision. */
+function isEditedRow(
+  edit: GapFieldMapping,
+  original: GapFieldMapping | undefined,
+): boolean {
+  return (
+    original === undefined ||
+    DECISION_FIELDS.some((field) => edit[field] !== original[field])
+  );
+}
+
+/**
+ * Carry the edit store across a re-analysis (DBT-210).
+ *
+ * The store holds a full copy of each edited table's rows, so carrying it over
+ * unchanged applied rows from the OLD analysis to the new one: a field the new
+ * sample no longer has was still built, and "Modified - your edits are applied
+ * when the pack is built" described rows nobody was looking at. Instead:
+ *
+ *   - An EDIT is a stored row that differs from the row the edits were made
+ *     against (`previous`, which the caller relabels with any log-type rename
+ *     since that analysis, as the store was re-keyed; with no previous report
+ *     under the key the new row stands in). Unedited stored rows are not carried:
+ *     the new analysis's rows replace them.
+ *   - Each edit is re-applied to the new row for the same source by the same
+ *     rules the reviewer's edit went through: a destination by core
+ *     applyRemap, an action subject to actionEditRefusal (DBT-209). Edits that
+ *     leave a column run first, so a DBT-208 move replays before the row that
+ *     took the column, and an edit that does not fit is retried after the
+ *     others, so a chain of moves replays in any stored order.
+ *   - Dropped: an edit whose log type has no new report, whose table changed
+ *     (its columns are another schema's), whose source the new rows lack,
+ *     whose column the new schema lacks, or whose column the new analysis
+ *     already fills from another field (two Renames onto one name).
+ *
+ * A table with no surviving edit loses its store entry, so it reads unmodified.
+ */
+function rebaseEdits(
+  mappingEdits: Readonly<Record<string, GapFieldMapping[]>>,
+  previous: readonly GapReport[],
+  reports: readonly GapReport[],
+): { mappingEdits: Record<string, GapFieldMapping[]>; dropped: DroppedEdit[] } {
+  const next: Record<string, GapFieldMapping[]> = {};
+  const dropped: DroppedEdit[] = [];
+  for (const [logType, stored] of Object.entries(mappingEdits)) {
+    const before = previous.find((r) => r.logType === logType);
+    const after = reports.find((r) => r.logType === logType);
+    const reference = new Map(
+      (before ?? after)?.fieldMappings.map((m) => [m.source, m]) ?? [],
+    );
+    const edits = stored
+      .filter((row) => isEditedRow(row, reference.get(row.source)))
+      // Stable: edits that leave a column replay first (DBT-208 moves).
+      .sort((a, b) => Number(landsInColumn(a)) - Number(landsInColumn(b)));
+    if (edits.length === 0) continue;
+    const lost = new Set<string>();
+    if (
+      after === undefined ||
+      (before !== undefined && before.tableName !== after.tableName)
+    ) {
+      for (const edit of edits) lost.add(edit.source);
+    } else {
+      const catchAllColumn = getOverflowConfig(after.tableName).fieldName;
+      let rows: GapFieldMapping[] = [...after.fieldMappings];
+      // Pass after pass while one lands: an edit onto a column another edit
+      // vacates (b ColY -> ColZ, then a ColX -> ColY) fits only once that
+      // other edit has replayed, whichever row is stored first.
+      let pending = edits;
+      for (let progress = true; progress && pending.length > 0; ) {
+        const failed: GapFieldMapping[] = [];
+        for (const edit of pending) {
+          const replayed = replayEdit(rows, edit, after, catchAllColumn);
+          if (replayed === null) failed.push(edit);
+          else rows = replayed;
+        }
+        progress = failed.length < pending.length;
+        pending = failed;
+      }
+      for (const edit of pending) lost.add(edit.source);
+      if (lost.size < edits.length) next[logType] = rows;
+    }
+    // Reported in the store's own row order, not the replay order.
+    for (const row of stored) {
+      if (lost.has(row.source)) dropped.push({ logType, source: row.source });
+    }
+  }
+  return { mappingEdits: next, dropped };
+}
+
+/** Re-apply one edited row to a new analysis's rows, or null when it no longer fits. */
+function replayEdit(
+  rows: GapFieldMapping[],
+  edit: GapFieldMapping,
+  report: GapReport,
+  catchAllColumn: string,
+): GapFieldMapping[] | null {
+  const at = rows.findIndex((m) => m.source === edit.source);
+  if (at === -1) return null;
+  let next = rows;
+  if (rows[at].dest.toLowerCase() !== edit.dest.toLowerCase()) {
+    const remap = applyRemap(rows, {
+      sourceField: edit.source,
+      destColumn: edit.dest,
+      destSchema: report.destSchema,
+      catchAllColumn,
+      baseline: report.fieldMappings,
+    });
+    if (!remapAccepted(remap)) return null;
+    next = remap.rows;
+  }
+  const row = next[at];
+  if (row.action === edit.action) return next;
+  if (actionEditRefusal(row, edit.action, catchAllColumn) !== null) return null;
+  return next.map((m, i) => (i === at ? { ...m, action: edit.action } : m));
+}
+
+/**
+ * The one sentence a re-analysis that dropped edits shows (DBT-210). Empty
+ * when it dropped none.
+ */
+export function droppedEditsNotice(dropped: readonly DroppedEdit[]): string {
+  const n = dropped.length;
+  if (n === 0) return "";
+  return n === 1
+    ? "1 mapping edit no longer matches a field in the new analysis and was dropped."
+    : `${n} mapping edits no longer match a field in the new analysis and were dropped.`;
 }
 
 /**
@@ -377,24 +701,42 @@ export function sortedMappings(
 /**
  * Destination columns of the report's schema that no source field maps to (the
  * legacy "Unmapped Destination Fields" section). Compared case-insensitively.
+ * A dropped row fills nothing, so its column stays unmapped (DBT-193: the
+ * header's mapped and unmapped counts must agree); an overflow row's column
+ * is the catch-all, which the serialize does fill.
  */
 export function unmappedDestColumns(
   report: GapReport,
   mappings: readonly GapFieldMapping[],
 ): Array<{ name: string; type: string }> {
-  const mapped = new Set(mappings.map((m) => m.dest.toLowerCase()));
+  const mapped = new Set(
+    mappings.filter((m) => m.action !== "drop").map((m) => m.dest.toLowerCase()),
+  );
   return report.destSchema
     .filter((d) => !mapped.has(d.name.toLowerCase()))
     .map((d) => ({ name: d.name, type: d.type }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** The verbatim "Field Mappings (X mapped, Y unmapped)" expander label. */
+/**
+ * The "Field Mappings (...)" expander label (DBT-193). "Mapped" counts only the
+ * rows that land in a dedicated column; overflow and dropped rows are named
+ * separately, each only when there are any. It used to print every row as
+ * mapped, so the PAN-OS UAT read "115 mapped" while 56 of those went to
+ * AdditionalExtensions and only 59 reached a column.
+ */
 export function fieldMappingsLabel(
-  mappedCount: number,
+  mappings: readonly GapFieldMapping[],
   unmappedCount: number,
 ): string {
-  return `Field Mappings (${mappedCount} mapped, ${unmappedCount} unmapped)`;
+  const mapped = mappings.filter(landsInColumn).length;
+  const overflow = mappings.filter((m) => m.action === "overflow").length;
+  const dropped = mappings.filter((m) => m.action === "drop").length;
+  const parts = [`${mapped} mapped`];
+  if (overflow > 0) parts.push(`${overflow} to overflow`);
+  if (dropped > 0) parts.push(`${dropped} dropped`);
+  parts.push(`${unmappedCount} unmapped`);
+  return `Field Mappings (${parts.join(", ")})`;
 }
 
 /**
@@ -472,6 +814,215 @@ export function isRuleField(
     return false;
   }
   return ruleFields.has(name.toLowerCase());
+}
+
+// ---------------------------------------------------------------------------
+// Sample fields that could fill an unmapped destination column (DBT-202)
+// ---------------------------------------------------------------------------
+
+/** How many candidates the unmapped-column panel lists. */
+const COLUMN_SUGGESTION_LIMIT = 5;
+
+/** One candidate in the unmapped-column panel, ready to render. */
+export interface ColumnSuggestion {
+  /** The sample field (exact spelling - the apply key). */
+  source: string;
+  /** Its example value, formatted exactly as the Example Value column does. */
+  example: ExampleValueCell;
+  /** Why it was suggested (documented mapping, name ladder, or token overlap). */
+  reason: string;
+  /** Where the field goes today. */
+  disposition: string;
+  /** The source and column types, and whether they disagree. */
+  typeNote: string;
+  /** Both types are known and the column cannot take the value unchanged. */
+  typeMismatch: boolean;
+  /** Token overlap only (score below 50): a resemblance, not a match. */
+  lowConfidence: boolean;
+  /** The column the field fills today, which applying it moves it out of. */
+  moveFrom: string | null;
+  /**
+   * Set when that column is referenced by analytics rules AND no other row
+   * fills it, so the move leaves a rule column empty (decision F1-b: warn,
+   * do not refuse).
+   */
+  moveWarning: string | null;
+  /** The apply button's text: "Use this field" or "Move from <column>". */
+  actionLabel: string;
+}
+
+function dispositionText(row: GapFieldMapping | undefined): string {
+  if (row === undefined) return "";
+  if (row.action === "drop") return "now: dropped";
+  if (row.action === "overflow") return `now: overflow into ${row.dest}`;
+  return `now: fills ${row.dest} (${row.action})`;
+}
+
+function typeNoteText(
+  sourceType: string,
+  destType: string,
+  mismatch: boolean,
+): string {
+  if (sourceType === "" || destType === "" || sourceType === destType) {
+    return destType !== "" ? destType : sourceType;
+  }
+  return mismatch
+    ? `${sourceType} to ${destType}: the types differ - check the example value fits the column`
+    : `${sourceType} to ${destType}`;
+}
+
+/**
+ * The ranked sample fields that could fill one unmapped destination column of
+ * one log type, as render-ready rows. Candidates come from THIS log type's
+ * EFFECTIVE mappings (the reviewer's edits included), ranked by the core
+ * suggester (documented first, unmapped before already-mapped). Low-confidence
+ * and type-mismatched candidates are marked, never hidden (decision F1-d).
+ *
+ * Not offered: syslog transport fields (`host`, `port`) - the gap analysis
+ * strips them as Cribl internals before a mapping row exists, so there is no
+ * row to re-point. That is plan question F1-g, which no card has decided.
+ */
+export function columnSuggestions(
+  column: { name: string; type: string },
+  logType: string,
+  mappings: readonly GapFieldMapping[],
+  ruleFields?: ReadonlySet<string>,
+  solutionName?: string,
+): ColumnSuggestion[] {
+  const rows = closeMatchRowsFromReports([{ logType, fieldMappings: mappings }]);
+  const candidates = suggestForDestColumn(
+    column,
+    rows,
+    COLUMN_SUGGESTION_LIMIT,
+    solutionName === undefined ? {} : { solutionName },
+  );
+  return candidates.map((c) => {
+    const row = mappings.find((m) => m.source === c.sourceName);
+    const moveFrom = c.currentDest ?? null;
+    return {
+      source: c.sourceName,
+      example: formatExampleValue(c.sampleValue),
+      reason: c.reason,
+      disposition: dispositionText(row),
+      typeNote: typeNoteText(c.sourceType ?? "", column.type, c.typeMismatch),
+      typeMismatch: c.typeMismatch,
+      lowConfidence: c.score < 50,
+      moveFrom,
+      moveWarning: moveWarningText(c.sourceName, moveFrom, mappings, ruleFields),
+      actionLabel: closeMatchActionLabel(moveFrom),
+    };
+  });
+}
+
+/** The apply button's text for a candidate (DBT-202, shared with DBT-203). */
+export function closeMatchActionLabel(moveFrom: string | null): string {
+  return moveFrom === null ? "Use this field" : `Move from ${moveFrom}`;
+}
+
+/**
+ * The warning a MOVE carries (decision F1-b: warn, do not refuse): set when
+ * the column the source leaves is referenced by analytics rules AND no other
+ * row of the table lands there, so the move leaves a rule column empty. One
+ * derivation for both entry points - the Unmapped Destination Fields panel
+ * (DBT-202) and the coverage missing-field chips (DBT-203).
+ */
+export function moveWarningText(
+  source: string,
+  moveFrom: string | null,
+  mappings: readonly GapFieldMapping[],
+  ruleFields?: ReadonlySet<string>,
+): string | null {
+  if (moveFrom === null) return null;
+  // The move leaves the column empty only when no other row lands there.
+  const vacates = !mappings.some(
+    (m) =>
+      m.source !== source &&
+      landsInColumn(m) &&
+      m.dest.toLowerCase() === moveFrom.toLowerCase(),
+  );
+  return vacates && isRuleField(moveFrom, ruleFields)
+    ? `${moveFrom} is used by analytics rules and nothing else fills it: moving ${source} leaves it empty.`
+    : null;
+}
+
+// ---------------------------------------------------------------------------
+// A Dest Field re-point onto a column another row fills (DBT-208)
+// ---------------------------------------------------------------------------
+
+/** The question a claimed Dest Field re-point puts to the reviewer. */
+export interface DestClaim {
+  /** The chosen column, as the schema spells it. */
+  column: string;
+  /** The source of the row that already fills it. */
+  claimedBy: string;
+  /**
+   * Where that row goes if the reviewer moves the column: the table's
+   * catch-all. Null when the schema has none, so the move cannot be offered.
+   */
+  fallback: string | null;
+  /** The confirm button's text: "Move <column> from <claimedBy>". */
+  actionLabel: string;
+  /**
+   * The DBT-202 move warning (moveWarningText) for the column the re-pointed
+   * row leaves, when it is a rule column nothing else fills.
+   */
+  moveWarning: string | null;
+  /**
+   * Every source Move sends to the catch-all - `claimedBy` first, then any
+   * other row the analysis already left in the column. Empty when there is no
+   * catch-all. The screen keeps these from the drop policy (autoDropPlan's
+   * `reviewerKept`), since the panel promises their value is kept.
+   */
+  moves: string[];
+}
+
+/**
+ * Whether re-pointing `request.sourceField` at `request.destColumn` would put
+ * it beside another row in that column, and if so what to ask. Null when the
+ * column is free, is the catch-all, or the remap changes nothing - the edit
+ * then applies directly. The reducer refuses the claimed edit until it arrives
+ * with `moveClaimed`, so this is what the screen asks before sending it.
+ */
+export function destClaim(
+  rows: readonly GapFieldMapping[],
+  request: Omit<RemapRequest, "moveClaimed">,
+  ruleFields?: ReadonlySet<string>,
+): DestClaim | null {
+  const remap = applyRemap(rows, { ...request, moveClaimed: true });
+  if (!remapChanged(remap)) return null;
+  const claimedBy = remap.moved ?? remap.claimedBy;
+  if (claimedBy === null) return null;
+  const row = remap.rows.find((m) => m.source === request.sourceField);
+  const column = row?.dest ?? request.destColumn;
+  const before = rows.find((m) => m.source === request.sourceField);
+  const moveFrom =
+    before !== undefined && landsInColumn(before) ? before.dest : null;
+  return {
+    column,
+    claimedBy,
+    fallback:
+      remap.moved === null
+        ? null
+        : (remap.rows.find((m) => m.source === claimedBy)?.dest ?? null),
+    actionLabel: `Move ${column} from ${claimedBy}`,
+    moveWarning: moveWarningText(
+      request.sourceField,
+      moveFrom,
+      rows,
+      ruleFields,
+    ),
+    moves:
+      remap.moved === null
+        ? []
+        : rows
+            .filter(
+              (m) =>
+                m.source !== request.sourceField &&
+                landsInColumn(m) &&
+                m.dest.toLowerCase() === column.toLowerCase(),
+            )
+            .map((m) => m.source),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -717,6 +1268,12 @@ export interface RequirementsForAssessment {
  * `alreadyDropped` is the memory that makes this idempotent: drop acts once per
  * field, and only a switch to preserve (which forgets the field) lets it act
  * again. Keys are `logType|source`.
+ *
+ * `reviewerKept` (DBT-208) holds fields the reviewer MOVED into the catch-all
+ * from a column (the Dest Field claim's Move). The policy never dropped them,
+ * so `alreadyDropped` cannot tell them from a fresh overflow field, but the
+ * claim panel promised their value is kept: drop skips them, and preserve has
+ * nothing of theirs to restore.
  */
 export function autoDropPlan(
   policy: "drop" | "preserve",
@@ -724,6 +1281,7 @@ export function autoDropPlan(
   assessment: UnusedFieldAssessment,
   effective: readonly GapFieldMapping[],
   alreadyDropped: ReadonlySet<string>,
+  reviewerKept: ReadonlySet<string> = new Set(),
 ): { drop: string[]; restore: string[] } {
   const drop: string[] = [];
   const restore: string[] = [];
@@ -731,6 +1289,7 @@ export function autoDropPlan(
   if (policy === "drop" && assessment.blocked === null) {
     for (const source of assessment.droppable) {
       if (alreadyDropped.has(`${logType}|${source}`)) continue;
+      if (reviewerKept.has(`${logType}|${source}`)) continue;
       const row = effective.find((m) => m.source === source);
       if (row === undefined || row.action !== "overflow") continue;
       drop.push(source);

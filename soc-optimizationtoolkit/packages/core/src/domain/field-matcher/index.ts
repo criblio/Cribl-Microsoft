@@ -44,8 +44,17 @@ export type { VendorMapping, SampleFieldInput } from "./match-fields";
 export { matchFields, matchSampleToSchema } from "./match-fields";
 
 // Close-match suggester (missing-field buttons in the coverage sections)
-export type { CloseMatchCandidate, CloseMatchRow } from "./close-matches";
-export { nameTokens, suggestCloseMatches } from "./close-matches";
+export type {
+  CloseMatchCandidate,
+  CloseMatchOptions,
+  CloseMatchRow,
+} from "./close-matches";
+export {
+  closeMatchRowsFromReports,
+  nameTokens,
+  suggestCloseMatches,
+  suggestForDestColumn,
+} from "./close-matches";
 
 // Learned reviewer decisions (highest-priority Phase 0 tier)
 export type { LearnedDiffRow, LearnedMapping } from "./learned-mappings";

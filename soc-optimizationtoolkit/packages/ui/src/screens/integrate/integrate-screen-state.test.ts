@@ -76,6 +76,24 @@ describe("deriveSectionInputs", () => {
     expect(canDeploy(deriveSectionInputs({ ...base, workerGroup: "" }))).toBe(false);
     expect(canDeploy(deriveSectionInputs({ ...base, packName: "  " }))).toBe(false);
   });
+
+  it("passes the existing-destination mode through, so the arc reads the radio the screen reads (GEN-28)", () => {
+    const raw = {
+      solutionSelected: false,
+      scopeCommitted: false,
+      workerGroup: "",
+      packName: "",
+      deployCompleted: false,
+      sampleCount: 0,
+      mappingsApproved: false,
+    };
+    expect(deriveSectionInputs({ ...raw, existingMode: true }).existingMode).toBe(true);
+    expect(deriveSectionInputs({ ...raw, existingMode: false }).existingMode).toBe(false);
+    // With the mode and no pick, the footer hint is never the Azure scope.
+    expect(deployDisabledReason(deriveSectionInputs({ ...raw, existingMode: true }))).toBe(
+      "Select a Cribl worker group in Cribl Configuration first.",
+    );
+  });
 });
 
 describe("defaultPackName", () => {

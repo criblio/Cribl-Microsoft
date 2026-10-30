@@ -158,6 +158,48 @@ describe("ContentInstallSection install gate (DBT-47)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DBT-199: before a load nothing is "none found", and Setup is where Azure is
+// connected
+// ---------------------------------------------------------------------------
+
+describe("ContentInstallSection before and after a load (DBT-199)", () => {
+  function renderUnloaded(config: AzureConfig) {
+    return render(
+      <PortsProvider ports={makePorts()} config={config}>
+        <ContentInstallSection solutionName={SOLUTION} scopeCommitted={true} />
+      </PortsProvider>,
+    );
+  }
+
+  it("says 'Not loaded yet' for both groups until the content is read", () => {
+    renderUnloaded(CONNECTED);
+    expect(
+      screen.getAllByText("Not loaded yet - use Load solution content above."),
+    ).toHaveLength(2);
+    expect(screen.queryByText("None found for this solution.")).toBeNull();
+  });
+
+  it("says 'None found' only for the group the load found empty", async () => {
+    renderUnloaded(CONNECTED);
+    fireEvent.click(screen.getByRole("button", { name: "Load solution content" }));
+    await waitFor(() => {
+      expect(screen.getByText(WORKBOOK)).toBeTruthy();
+    });
+    // The fixture ships one workbook and no rules.
+    expect(screen.getAllByText("None found for this solution.")).toHaveLength(1);
+    expect(
+      screen.queryByText("Not loaded yet - use Load solution content above."),
+    ).toBeNull();
+  });
+
+  it("points an operator with no identity at Setup, not a missing Options page", () => {
+    renderUnloaded(NO_IDENTITY);
+    expect(screen.getByText(/connect Azure on the Setup page\./)).toBeTruthy();
+    expect(screen.queryByText(/in Options/)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DBT-44: an empty installed-content listing is an unknown, not a zero
 // ---------------------------------------------------------------------------
 

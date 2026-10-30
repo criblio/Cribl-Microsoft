@@ -78,6 +78,10 @@ export function canDeployInMode(
     // Full mode defers entirely to the canonical native rule (no drift).
     return integrateCanDeploy(inputs);
   }
+  // A picked existing destination (GEN-21) is NOT consulted here. The only
+  // gated mode that keeps Cribl, cribl-only, already skips the scope; and an
+  // existing CRIBL destination cannot stand in for the scope of an azure-only
+  // run, whose whole job is the Azure writes that scope addresses.
   const scopeOk = gating.skipAzure || inputs.scopeCommitted;
   const workerGroupOk = gating.skipCribl || inputs.workerGroupSelected;
   return scopeOk && workerGroupOk && inputs.packNameSet;
@@ -99,9 +103,16 @@ export function canDeployContentPathInMode(
 }
 
 /**
- * Whether source wiring is unlocked: a deploy has completed AND Cribl is not
- * skipped (there is no source to wire in an Azure-only or air-gapped run). Wiring
+ * Whether source wiring is unlocked: a deploy has completed (Deploy created the
+ * group's Sentinel destination the wiring sends to) AND Cribl is not skipped
+ * (there is no source to wire in an Azure-only or air-gapped run). Wiring
  * completion never re-locks it (each step is re-runnable).
+ *
+ * The existing-destination path ([[GEN-21]]) does not go through this gate
+ * ([[GEN-28]]). It has no Deploy run and the app does not write its route: the
+ * Integrate screen SHOWS the group route to add by hand as soon as every table
+ * has a confirmed pick - before the pack is installed, naming the id the pack
+ * will install under - and warns when the source is QuickConnected.
  */
 export function canWireSource(
   deployCompleted: boolean,
@@ -122,7 +133,14 @@ export function readinessPillsForMode(
   mode: DeployMode,
 ): ReadinessPill[] {
   const gating = deployModeGating(mode);
-  return deriveReadinessPills(inputs).filter((pill) => {
+  // An azure-only run ignores the existing-destination path (see
+  // canDeployInMode), so its Workspace pill must not vanish because that path
+  // is on: integrate-arc drops the pill for the mode or a pick (GEN-28), which
+  // here would hide the one prerequisite still blocking Deploy.
+  const pillInputs: SectionInputs = gating.skipCribl
+    ? { ...inputs, existingMode: false, existingDestination: "" }
+    : inputs;
+  return deriveReadinessPills(pillInputs).filter((pill) => {
     if (pill.id === "workspace") return !gating.skipAzure;
     if (pill.id === "worker-groups") return !gating.skipCribl;
     return true;
