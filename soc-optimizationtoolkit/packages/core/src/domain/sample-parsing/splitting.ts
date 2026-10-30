@@ -207,19 +207,54 @@ function cleanLogTypeValue(value: string): string {
  * A single returned group named `fallbackLogType` means NO discriminator was
  * found. Callers must say so rather than presenting it as one real log type -
  * see {@link splitFoundNoDiscriminator}.
+ *
+ * The groups can hold FEWER lines than `rawEvents` when a discriminator was
+ * found: a line that parses to no record cannot be classified and is in no
+ * group. A caller that shows a count of what it split should use
+ * {@link splitSamplesWithLeftOut}, which reports that shortfall (DBT-205).
  */
 export function splitSamplesByLogType(
   rawEvents: readonly string[],
   fallbackLogType: string,
   format: SampleFormat,
 ): SplitSample[] {
+  return splitSamplesWithLeftOut(rawEvents, fallbackLogType, format).splits;
+}
+
+/** What {@link splitSamplesWithLeftOut} returns: the groups, and the gap. */
+export interface SplitOutcome {
+  /** The per-log-type groups, exactly what {@link splitSamplesByLogType} returns. */
+  splits: SplitSample[];
+  /**
+   * Input lines filed under NO group (DBT-205): a key=value line under the
+   * three-pair gate, or a line that parses to nothing, when the other lines
+   * did yield a discriminator. Group event counts plus this equal
+   * `rawEvents.length`. Always 0 on the fallback paths, which carry every line.
+   */
+  leftOut: number;
+}
+
+/**
+ * {@link splitSamplesByLogType}, plus the count of input lines it left out of
+ * every group, so a caller that says "N events in K log types" can also say how
+ * many of the N are in none of them (DBT-205). Before this the shortfall was
+ * silent: the group counts simply summed below the captured count.
+ */
+export function splitSamplesWithLeftOut(
+  rawEvents: readonly string[],
+  fallbackLogType: string,
+  format: SampleFormat,
+): SplitOutcome {
+  const all = (splits: SplitSample[]): SplitOutcome => ({ splits, leftOut: 0 });
   const eventObjects: Array<Record<string, unknown>> = [];
   // The raw line each entry of `eventObjects` was parsed FROM (DBT-196). A line
   // that parses to nothing (non-KV text, a KV line under the pair gate) adds no
   // object, so indexing `rawEvents` by the object's position shifted every
   // later line by one: measured on [sshd line, PAN THREAT, PAN TRAFFIC], the
   // THREAT group carried the sshd line and the TRAFFIC group the THREAT line,
-  // and the tagged-sample store is keyed by that log type.
+  // and the tagged-sample store is keyed by that log type. The two arrays grow
+  // together, one entry per PARSED line; a line that adds no object is in
+  // neither, and is what `leftOut` counts (DBT-205).
   const sourceLines: string[] = [];
   for (const raw of rawEvents) {
     const before = eventObjects.length;
@@ -262,30 +297,32 @@ export function splitSamplesByLogType(
         groups.get(logType)!.push(line);
       }
       if (groups.size > 1 || (groups.size === 1 && !groups.has(fallbackLogType))) {
-        return [...groups.entries()].map(([logType, events]) => ({
-          logType,
-          rawEvents: events,
-          format,
-          eventCount: events.length,
-        }));
+        return all(
+          [...groups.entries()].map(([logType, events]) => ({
+            logType,
+            rawEvents: events,
+            format,
+            eventCount: events.length,
+          })),
+        );
       }
     }
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   if (eventObjects.length === 0) {
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   const discriminator = selectDiscriminatorField(eventObjects);
   if (!discriminator) {
-    return [
+    return all([
       { logType: fallbackLogType, rawEvents: [...rawEvents], format, eventCount: rawEvents.length },
-    ];
+    ]);
   }
 
   const groups = new Map<string, string[]>();
@@ -299,12 +336,15 @@ export function splitSamplesByLogType(
     groups.get(val)!.push(sourceLines[i]);
   }
 
-  return [...groups.entries()].map(([logType, events]) => ({
-    logType: logType.toUpperCase(),
-    rawEvents: events,
-    format,
-    eventCount: events.length,
-  }));
+  return {
+    splits: [...groups.entries()].map(([logType, events]) => ({
+      logType: logType.toUpperCase(),
+      rawEvents: events,
+      format,
+      eventCount: events.length,
+    })),
+    leftOut: rawEvents.length - sourceLines.length,
+  };
 }
 
 /**

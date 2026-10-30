@@ -279,6 +279,31 @@ describe("the result", () => {
     ]);
     expect(result.noDiscriminator).toBe(false);
     expect(result.notes).toEqual([]);
+    expect(result.leftOutEvents).toBe(0);
+  });
+
+  it("COUNTS the captured lines the split filed under no log type (DBT-205)", async () => {
+    // A key=value line under the splitter's three-pair gate and a line with no
+    // pairs at all reach no group. The panel's headline says "Captured N events
+    // in K log types", so without this count the groups sum below N in silence.
+    const lines = [
+      "log-type=TRAFFIC src=1 dst=2 action=allow",
+      "a=1 b=2",
+      "log-type=THREAT src=3 dst=4 action=alert",
+      "free text with no pairs",
+      "log-type=TRAFFIC src=5 dst=6 action=deny",
+    ];
+    const cribl = client({ status: 200, body: ndjson(lines) });
+
+    const result = await captureSamples(cribl, { groupId: "g", filter: "true" });
+
+    expect(result.splits.map((s) => [s.logType, s.rawEvents])).toEqual([
+      ["TRAFFIC", [lines[0], lines[4]]],
+      ["THREAT", [lines[2]]],
+    ]);
+    expect(result.leftOutEvents).toBe(2);
+    const grouped = result.splits.reduce((n, s) => n + s.eventCount, 0);
+    expect(grouped + result.leftOutEvents).toBe(result.rawEvents.length);
   });
 
   it("FLAGS a capture with no discriminator instead of inventing one log type", async () => {

@@ -234,9 +234,17 @@ export function deriveCaptureView(
 
   const total = result.rawEvents.length;
   const kinds = logTypes.length;
+  // THE SPLIT'S SHORTFALL IS SAID HERE (DBT-205). A line that parses to no
+  // record is in no group, so "Captured 5 events in 2 log types" sat above
+  // groups holding 3 with nothing to say where the other 2 went.
+  const leftOut = result.leftOutEvents;
+  const leftOutText =
+    leftOut > 0
+      ? ` ${leftOut} of them parsed into no log type and ${leftOut === 1 ? "is" : "are"} in none of the samples below.`
+      : "";
   return {
     status: "ready",
-    headline: `Captured ${total} event${total === 1 ? "" : "s"} in ${kinds} log type${kinds === 1 ? "" : "s"} (${result.format}).`,
+    headline: `Captured ${total} event${total === 1 ? "" : "s"} in ${kinds} log type${kinds === 1 ? "" : "s"} (${result.format}).${leftOutText}`,
     logTypes,
     notes: result.notes,
     noDiscriminator: result.noDiscriminator,

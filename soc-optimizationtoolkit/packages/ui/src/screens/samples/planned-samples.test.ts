@@ -125,6 +125,7 @@ describe("the capture and Lake paths share ONE conversion", () => {
         rawEvents,
         format: "cef",
         noDiscriminator: false,
+        leftOutEvents: 0,
         notes: [],
         ok: true,
       },

@@ -44,6 +44,7 @@ const result = (over: Partial<CaptureSamplesResult> = {}): CaptureSamplesResult 
   rawEvents: [],
   format: "csv",
   noDiscriminator: false,
+  leftOutEvents: 0,
   notes: [],
   ok: true,
   ...over,
@@ -236,6 +237,31 @@ describe("deriveCaptureView", () => {
     expect(view.headline).toBe("Captured 3 events in 2 log types (csv).");
     expect(view.logTypes.map((l) => l.eventCount)).toEqual([2, 1]);
     expect(view.logTypes[0].preview).toEqual(["a", "b"]);
+  });
+
+  it("SAYS how many captured events are in no log type (DBT-205)", () => {
+    // Five captured, three grouped: without the second sentence the headline
+    // promises five events and the groups below hold three.
+    const splits = [
+      { logType: "TRAFFIC", rawEvents: ["a", "b"], format: "kv" as const, eventCount: 2 },
+      { logType: "THREAT", rawEvents: ["c"], format: "kv" as const, eventCount: 1 },
+    ];
+    const view = deriveCaptureView(
+      result({ rawEvents: ["a", "x", "b", "y", "c"], format: "kv", splits, leftOutEvents: 2 }),
+      false,
+      [],
+    );
+    expect(view.headline).toBe(
+      "Captured 5 events in 2 log types (kv). 2 of them parsed into no log type and are in none of the samples below.",
+    );
+    const one = deriveCaptureView(
+      result({ rawEvents: ["a", "x", "b", "c"], format: "kv", splits, leftOutEvents: 1 }),
+      false,
+      [],
+    );
+    expect(one.headline).toBe(
+      "Captured 4 events in 2 log types (kv). 1 of them parsed into no log type and is in none of the samples below.",
+    );
   });
 
   it("WARNS which log types a commit would replace", () => {
@@ -522,6 +548,8 @@ describe("a verbose PAN-OS CEF capture, captured to committed", () => {
       ["THREAT", 50],
       ["TRAFFIC", 50],
     ]);
+    // DBT-205: every PAN-OS CEF line parses, so the headline gains no sentence.
+    expect(result.leftOutEvents).toBe(0);
     expect(deriveCaptureView(result, false, []).headline).toBe(
       "Captured 100 events in 2 log types (cef).",
     );
