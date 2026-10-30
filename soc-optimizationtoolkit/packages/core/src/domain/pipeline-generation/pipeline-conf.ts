@@ -220,7 +220,9 @@ export function buildCefIdentityOverrideFn(
       continue;
     }
     adds.push(`        - name: ${field}`);
-    adds.push(`          value: "${JSON.stringify(value).slice(1, -1).replace(/"/g, '\\"')}"`);
+    // JSON.stringify makes the JS literal (quotes included); escapeYamlFilter
+    // then makes it a valid YAML double-quoted scalar (GEN-34).
+    adds.push(`          value: "${escapeYamlFilter(JSON.stringify(value))}"`);
   }
   if (adds.length === 0) {
     return null;

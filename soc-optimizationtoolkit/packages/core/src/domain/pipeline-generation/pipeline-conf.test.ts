@@ -34,6 +34,7 @@ import { parsePositional } from "../sample-parsing/positional";
 import { matchSampleToSchema } from "../field-matcher/match-fields";
 import { buildPipelinePlan } from "./plan";
 import { resolveSchemaFromCatalog } from "../field-matcher/bundled-schema-catalog";
+import { readYamlDoubleQuoted } from "./yaml-double-quoted.test-util";
 
 const fdrFields: PipelineFieldMapping[] = [
   { source: "event_simpleName", target: "event_simpleName", type: "string", action: "keep" },
@@ -659,16 +660,29 @@ describe("CEF identity override", () => {
       DeviceProduct: "PAN-OS",
     })!;
     expect(fn).toContain("- name: DeviceVendor");
-    expect(fn).toContain('"Palo Alto Networks"');
     expect(fn).toContain("- name: DeviceProduct");
   });
 
-  it("escapes a quote rather than emitting a broken expression", () => {
-    // An unescaped quote would produce a Cribl expression that fails to parse,
-    // breaking the whole pipeline over a punctuation mark.
-    const fn = buildCefIdentityOverrideFn({ DeviceVendor: 'A"B' })!;
-    expect(fn).toContain('\\"');
-  });
+  /**
+   * GEN-34: the value line must be a YAML double-quoted scalar whose content is
+   * a JS STRING LITERAL. The old emitter stripped JSON.stringify's quotes, so
+   * "Palo Alto Networks" reached Cribl as the expression Palo Alto Networks
+   * (which does not parse) and a value holding a quote broke the YAML. Each
+   * value is read back strictly and EVALUATED, so only the original string
+   * passes.
+   */
+  for (const value of ["Palo Alto Networks", 'A"B', "it's", "back\\slash", "PAN-OS"]) {
+    it(`emits ${JSON.stringify(value)} as a quoted JS literal that evaluates back to itself (GEN-34)`, () => {
+      const lines = buildCefIdentityOverrideFn({ DeviceVendor: value })!.split("\n");
+      const at = lines.indexOf("        - name: DeviceVendor");
+      expect(at).toBeGreaterThan(-1);
+      const m = /^ {10}value: "(.*)"$/.exec(lines[at + 1] ?? "");
+      expect(m).not.toBeNull();
+      const expr = readYamlDoubleQuoted(m?.[1] ?? "");
+      expect(expr).toBe(JSON.stringify(value));
+      expect(new Function(`return (${expr});`)()).toBe(value);
+    });
+  }
 
   it("runs AFTER CEF extraction, so it is not overwritten by it", () => {
     // The load-bearing pin. The CEF branch sets DeviceVendor FROM the raw

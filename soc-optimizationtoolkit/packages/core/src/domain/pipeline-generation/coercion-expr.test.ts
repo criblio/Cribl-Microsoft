@@ -29,6 +29,7 @@ import type { PipelineFieldMapping, TablePlan } from "./models";
 import { generatePipelineConfForPlan } from "./pipeline-conf";
 import { buildPipelinePlan } from "./plan";
 import { checkPlanFieldAccessors } from "./plan-accessor-check";
+import { readYamlDoubleQuoted } from "./yaml-double-quoted.test-util";
 
 /** A real planned table, its fields replaced by `fields`. */
 function tableWith(fields: PipelineFieldMapping[]): TablePlan {
@@ -239,30 +240,6 @@ function vendorValueOf(
   const m = /^ {10}value: "(.*)"$/.exec(lines[lines.indexOf(nameLine) + 1] ?? "");
   expect(m, `value line for ${field}`).not.toBeNull();
   return { conf, table, body: m?.[1] ?? "" };
-}
-
-/**
- * YAML 1.2 double-quoted scalar body -> its value, refusing any escape the
- * spec does not define (so `\'`, which a JS author reaches for, is an ERROR
- * here as it is in a YAML parser) and any bare `"`, which would end the scalar
- * early. Only the escapes this emitter could plausibly write are decoded.
- */
-function readYamlDoubleQuoted(body: string): string {
-  let out = "";
-  for (let i = 0; i < body.length; i++) {
-    const c = body[i];
-    if (c === '"') throw new Error(`unescaped " at ${i}: ${body}`);
-    if (c !== "\\") {
-      out += c;
-      continue;
-    }
-    const next = body[++i];
-    if (next === "\\" || next === '"' || next === "/") out += next;
-    else if (next === "t") out += "\t";
-    else if (next === "n") out += "\n";
-    else throw new Error(`invalid YAML escape \\${String(next)} at ${i - 1}: ${body}`);
-  }
-  return out;
 }
 
 /**
