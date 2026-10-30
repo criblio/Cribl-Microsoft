@@ -284,3 +284,27 @@ export function sectionsToCollapseOnMove(
     (id) => id !== active && !alreadyCollapsed.has(id) && !pinned.has(id) && !keepOpen.has(id),
   );
 }
+
+/**
+ * DBT-234: drop the sections ABOVE the active one from a fold when the page
+ * cannot absorb their shift. Folding a section above moves the active one up
+ * by at most that section's height, and moveToSection compensates by
+ * scrolling - which is impossible when the page is scrolled less than that
+ * (at the top, there is no room). Sections below never move the active one,
+ * so they always fold. `heights` are the CURRENT heights of the sections to
+ * fold, in px; the sum is an upper bound on the shift (a folded section keeps
+ * its header).
+ */
+export function foldableWithoutShift(
+  toFold: readonly IntegrateSectionId[],
+  order: readonly IntegrateSectionId[],
+  active: IntegrateSectionId,
+  heights: Readonly<Partial<Record<IntegrateSectionId, number>>>,
+  scrollTop: number,
+): IntegrateSectionId[] {
+  const activeIndex = order.indexOf(active);
+  const above = toFold.filter((id) => order.indexOf(id) < activeIndex);
+  const shift = above.reduce((sum, id) => sum + (heights[id] ?? 0), 0);
+  if (shift <= scrollTop) return [...toFold];
+  return toFold.filter((id) => order.indexOf(id) > activeIndex);
+}

@@ -245,6 +245,7 @@ import {
 } from "./integrate-screen-state";
 import {
   deploySettingsSummary,
+  foldableWithoutShift,
   parsePinnedSections,
   pinnedSectionsKey,
   sectionsToCollapseOnMove,
@@ -2070,12 +2071,26 @@ export function IntegrateScreen({
       const current = resolvedRef.current.find((r) => r.status === "current");
       if (current !== undefined) keepOpen.add(current.section.id);
       if (deployingRef.current) keepOpen.add("deploy");
-      const toFold = sectionsToCollapseOnMove(
+      const candidates = sectionsToCollapseOnMove(
         id,
         resolvedIdsRef.current,
         collapsedSections,
         pinnedSections,
         keepOpen,
+      );
+      // DBT-234: near the top of the page there is no room to scroll back by
+      // the height of a folded section above, so those stay open.
+      const heights: Partial<Record<IntegrateSectionId, number>> = {};
+      for (const c of candidates) {
+        const el = document.getElementById(sectionAnchor(c));
+        if (el !== null) heights[c] = el.getBoundingClientRect().height;
+      }
+      const toFold = foldableWithoutShift(
+        candidates,
+        resolvedIdsRef.current,
+        id,
+        heights,
+        window.scrollY,
       );
       if (toFold.length === 0) return;
       const anchor = document.getElementById(sectionAnchor(id));

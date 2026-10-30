@@ -3658,6 +3658,19 @@
       "verified": "pins",
       "title": "Audit after DBT-224..232: stale docblocks, dead CSS, and the self-opening disclosure rule written seven times",
       "detail": "FOUND 2026-10-30 by the architecture audit over DBT-223..232 (14 commits). (1) Stale docs that now said the opposite of the code: integrate-arc still named workbook-coverage and a rule (4) / workbook (5) split; NumberedSection said never auto-collapses; SampleSourcePicker said TWO CHOICES and that upload is not a mode; the Integrate DBT-127 comment said nothing folds on its own. (2) Dead CSS: .integrate-fact, .integrate-fact-badge (the Always-on rows DBT-230 removed, plus their orphan comment) and .gap-provenance-source (DBT-229). (3) A duplicated decision: seven disclosures each hand-wrote open={cond || undefined}; one dropping the || undefined would lock the disclosure under React control and stop the operator opening it - silently. Fixed: the docs rewritten to the current behaviour, the dead rules removed, and components/open-when.ts (openWhen) now owns the rule, used at all seven sites, with a pin that it never returns false. The sites' existing open/closed pins passed unchanged as characterization. Layering clean; every removed test assertion in the range was a deliberate, documented replacement."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "DBT-234",
+      "type": "bug",
+      "priority": "now",
+      "title": "Folding a section above the one in use moves it under the pointer at the top of the page",
+      "detail": "FOUND 2026-10-30 in the DBT-232 live check (jpederson org): with the page scrolled to the top, clicking inside Add Sample Data folded Select Sentinel Solution above it, and there was no room to scroll up by the shift, so Add Sample Data moved up about 100 px under the pointer - the MIG-7 failure the scroll compensation exists to prevent. Operator chose to fix it before 1.13.0. Fix: fold a section ABOVE the active one only when the current scroll position can absorb the combined height of those sections; otherwise leave them open (sections below always fold - they never move the active one). DONE: foldableWithoutShift (integrate-screen-state.ts) drops the above-active candidates when their summed height exceeds window.scrollY; pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson org: at scroll top, clicking inside Add Sample Data left Select Sentinel Solution open and Add Sample Data in place, and sections 3-8 folded.",
+      "verified": "both"
     }
   ],
   "features": [

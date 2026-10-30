@@ -13,8 +13,13 @@ import {
   INTEGRATE_DEFAULT_TABLE,
   defaultPackName,
   deployDisabledReason,
+  deploySettingsSummary,
   deriveSectionInputs,
+  foldableWithoutShift,
+  parsePinnedSections,
+  pinnedSectionsKey,
   sectionSummary,
+  sectionsToCollapseOnMove,
 } from "./integrate-screen-state";
 import type { SectionSummaryFacts } from "./integrate-screen-state";
 
@@ -270,8 +275,7 @@ describe("sectionSummary (DBT-127)", () => {
 });
 
 describe("deploySettingsSummary (DBT-231)", () => {
-  it("names what Deploy will use, with the client id shortened and missing values named", async () => {
-    const { deploySettingsSummary } = await import("./integrate-screen-state");
+  it("names what Deploy will use, with the client id shortened and missing values named", () => {
     expect(
       deploySettingsSummary("CommonSecurityLog", "2c06cab1-87a5-4153-8970-97d8a22c347f", false),
     ).toBe("Deploy settings: table CommonSecurityLog - client 2c06...347f - secret: placeholder (change)");
@@ -282,8 +286,7 @@ describe("deploySettingsSummary (DBT-231)", () => {
 });
 
 describe("auto-collapse on move (DBT-232)", () => {
-  it("folds every other open section except pinned, kept-open and already-folded ones", async () => {
-    const { sectionsToCollapseOnMove } = await import("./integrate-screen-state");
+  it("folds every other open section except pinned, kept-open and already-folded ones", () => {
     const all = ["solution", "sample-data", "gap-analysis", "rule-coverage", "deploy"] as const;
     expect(
       sectionsToCollapseOnMove(
@@ -296,11 +299,24 @@ describe("auto-collapse on move (DBT-232)", () => {
     ).toEqual(["gap-analysis"]);
   });
 
-  it("reads a stored pin list, dropping ids the page no longer has", async () => {
-    const { parsePinnedSections, pinnedSectionsKey } = await import("./integrate-screen-state");
+  it("reads a stored pin list, dropping ids the page no longer has", () => {
     expect(pinnedSectionsKey("u-1")).toBe("integrate-pinned-sections:u-1");
     expect(parsePinnedSections('["deploy","workbook-coverage"]', ["solution", "deploy"])).toEqual(["deploy"]);
     expect(parsePinnedSections("not json", ["deploy"])).toEqual([]);
     expect(parsePinnedSections(null, ["deploy"])).toEqual([]);
+  });
+});
+
+describe("folds above the active section only when the shift can be absorbed (DBT-234)", () => {
+  const order = ["solution", "sample-data", "gap-analysis", "deploy"] as const;
+  it("keeps the sections above open at the top of the page, still folding those below", () => {
+    expect(
+      foldableWithoutShift(["solution", "gap-analysis", "deploy"], order, "sample-data", { solution: 180 }, 0),
+    ).toEqual(["gap-analysis", "deploy"]);
+  });
+  it("folds them once the page is scrolled far enough to compensate", () => {
+    expect(
+      foldableWithoutShift(["solution", "gap-analysis"], order, "sample-data", { solution: 180 }, 400),
+    ).toEqual(["solution", "gap-analysis"]);
   });
 });
