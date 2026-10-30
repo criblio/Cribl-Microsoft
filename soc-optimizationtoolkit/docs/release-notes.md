@@ -8,6 +8,12 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.13.1
+
+**Sentinel content no longer attaches to the wrong solution (DBT-183).** A Content Hub package with no display name used to match whichever solution was looked up first, because every name contains the empty string. Nameless packages now match nothing, and when several names overlap the closest one wins: an exact match, then the longest shared name, then the closest length, and catalog order only to break a tie. "Microsoft Defender" and "Microsoft Defender for Cloud" each find their own package.
+
+**One reading of an existing Cribl secret (DBT-187).** Deploy's secret-conflict check and the onboarding source planner each read the same Cribl secret answer with their own rules, so one could accept an answer the other refused. Both now use one strict reader: a malformed answer is reported as malformed by both. The unused secrets-path constant is removed.
+
 ## 1.13.0
 
 **Sentinel Integration folds what you are not using (DBT-232).** When you work in a section - click or tab into it, press Done - next, or use a footer pill - the other open sections fold to their one-line summary. Pinned sections stay open (the Pin button on each header, remembered for you), as do the section waiting for your action and Deploy while it runs. Scrolling never folds anything. Near the top of the page, sections above the one you are in stay open, so it never jumps under the pointer (DBT-234).
