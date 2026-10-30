@@ -3485,6 +3485,34 @@
       "title": "The DBT-210 re-analysis pin reads the effective mappings before they arrive, and fails under suite load",
       "detail": "FOUND 2026-10-30 running the gates on the #191-into-#192 merge (9f29f0d): mapping-review-reanalysis.dom.test.tsx > \"after a log-type rename, re-bases against the rows the edits were made on\" failed with expected undefined to be overflow, then passed alone on the merged tree and on #191 (b5065e7). Line 170 asserts on the onEffectiveMappingsChange snapshot synchronously after a waitFor that only waited for the grid to render; the callback can land a tick later. Every other assertion in the test already waits. A flaky gate is a bug: it trains people to re-run red CI. Fix: wait for the snapshot, not the grid. DONE 2026-10-30 (pins): line 170 now waits for the snapshot. Five back-to-back runs of the mapping-review and samples suites together passed 5/5; a value that never becomes overflow still times the waitFor out and fails.",
       "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "DBT-223",
+      "type": "bug",
+      "priority": "now",
+      "title": "Rule Coverage pools every log type: one close-match apply clears the chip for all, and coverage is overstated",
+      "detail": "RAISED BY THE USER 2026-10-30 (TMNA, PaloAlto-PAN-OS, TRAFFIC and THREAT samples): \"when I select 1 field replacement in the analytics rule analysis it applies it for all even if there are multiple log types. There may be scenarios where we want to select a different source field/destination field mapping based on the log type.\" Read in code: the apply IS per log type (mapping-review-section.tsx:1108 applies to the one report), but availableFieldsFromReports (rule-coverage-state.ts:83) unions every log type's columns into one set, so a column filled in TRAFFIC counts as available for every rule and its chip clears - the operator never gets to choose for THREAT, and a THREAT detection reading that column is reported covered while THREAT events never fill it. Second half: investigate() takes the top 5 close matches across ALL log types (rule-coverage-section.tsx:565), so one log type can crowd another out. Design pending (decision block). DECIDED 2026-10-30 by the operator: per log type. Reasoning in backlog.md section 25: it fixes the reported problem exactly (each log type gets its own choice) and claims nothing it cannot see; per-rule scoping would rest on detection-to-log-type attribution, which is a separate accuracy question. Definition used: a field is available only when EVERY log type whose destination schema has that column fills it (a log type whose table lacks the column does not count against it; a field that is no column anywhere must be carried, e.g. in overflow, by every log type).",
+      "decision": {
+        "question": "How should Rule Coverage scope a column to log types?",
+        "options": [
+          {
+            "key": "per-log-type",
+            "label": "Per log type",
+            "detail": "A column is covered only in the log types whose mappings fill it. The missing-field chip names the log types still missing it (SourceUserID - missing in THREAT), and the close-match panel lists candidates per log type, each with its own Apply. Simple and exact about mappings, but a column a rule never needs from THREAT still shows as missing there."
+          },
+          {
+            "key": "per-rule",
+            "label": "Per rule",
+            "detail": "Each rule only needs the column from the log types its detections target (the needs list already attributes detections: THREAT - Activity - 3). Most accurate coverage figure, but depends on that attribution being right for every rule, and rules that do not filter by log type fall back to needing all."
+          }
+        ],
+        "chosen": "per-log-type"
+      }
     }
   ],
   "features": [

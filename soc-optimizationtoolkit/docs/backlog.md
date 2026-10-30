@@ -3159,3 +3159,24 @@ whether the `/products/stream/groups` routes answer through the app proxy, the
 metrics label form for the new input, and whether Cribl accepts the
 `queueName` expression. ADR 0007's live-verification list is the full set;
 AZR-30 to AZR-34 close only after it.
+
+## 25. DBT-223: Rule Coverage scopes a column to log types, not to the whole solution - 2026-10-30
+
+Raised by the operator during the TMNA PaloAlto-PAN-OS test with TRAFFIC and
+THREAT samples: choosing one close match in the analytics-rule analysis looked
+as if it applied to every log type. It did not - the apply writes to one log
+type's mappings - but Rule Coverage pooled every log type's columns into one
+availability set, so the chip cleared everywhere and a THREAT detection reading
+that column was counted covered while THREAT events never carry it.
+
+**Chosen: per log type.** A field is available only when every log type whose
+destination schema has that column fills it; a log type whose table lacks the
+column does not count against it, and a field that is no column anywhere must
+be carried (in overflow, say) by every log type. Chips name the log types still
+missing a field, and close-match candidates are offered per log type.
+
+**Rejected: per rule** - require the column only from the log types each
+rule's detections target. It would give the most accurate coverage figure, but
+it rests on attributing every detection to log types, which is its own
+accuracy question; rules that do not filter by log type would need all of them
+anyway. It stays available as a refinement once that attribution is trusted.

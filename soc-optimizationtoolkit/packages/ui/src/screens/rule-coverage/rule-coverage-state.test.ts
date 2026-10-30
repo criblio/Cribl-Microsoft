@@ -22,6 +22,7 @@ import type {
 import {
   ANALYTIC_RULE_DIR_VARIANTS,
   availableFieldsFromReports,
+  fieldMissingLogTypes,
   closeMatchTargetColumn,
   contentTypeNoun,
   coverageCountChips,
@@ -650,16 +651,15 @@ describe("reportsWithEffectiveMappings (DBT-203)", () => {
   it("swaps in the edited rows, so the applied column becomes available", () => {
     const live = reportsWithEffectiveMappings([panos, asa], { PanOS: edited });
     expect(live[0]!.fieldMappings).toEqual(edited);
-    expect(availableFieldsFromReports(live)).toEqual([
-      "ReceivedBytes",
-      "SourceIP",
-    ]);
+    // DBT-223: availability is per log type, so the swap is read on PanOS's
+    // own report - with ASA beside it, ReceivedBytes is still missing in ASA.
+    expect(availableFieldsFromReports([live[0]!])).toEqual(["ReceivedBytes"]);
     // The baseline is what the analysis said; coverage must not read it.
-    expect(availableFieldsFromReports([panos, asa])).toEqual([
+    expect(availableFieldsFromReports([panos])).toEqual([
       "AdditionalExtensions",
-      "SourceIP",
       "in",
     ]);
+    expect(fieldMissingLogTypes("ReceivedBytes", live)).toEqual(["ASA"]);
   });
 
   it("keeps the baseline for a log type with no entry, and leaves the input alone", () => {
@@ -695,5 +695,74 @@ describe("closeMatchTargetColumn (DBT-203)", () => {
   it("is null when the candidate's table lacks the column, or the log type has no report", () => {
     expect(closeMatchTargetColumn("ReceivedBytes", "Linux", reports)).toBeNull();
     expect(closeMatchTargetColumn("ReceivedBytes", "Gone", reports)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-223: a field is available only where every log type it applies to
+// provides it (backlog.md section 25)
+// ---------------------------------------------------------------------------
+
+describe("availability per log type (DBT-223)", () => {
+  const cols = (...names: string[]) => names.map((name) => ({ name, type: "string" }));
+  const traffic = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "TRAFFIC",
+    destSchema: cols("SourceUserID", "DestinationIP"),
+    fieldMappings: [
+      mapping({ source: "suser", dest: "SourceUserID", action: "rename" }),
+      mapping({ source: "dst", dest: "DestinationIP", action: "rename" }),
+    ],
+  });
+  const threat = gapReport({
+    tableName: "CommonSecurityLog",
+    logType: "THREAT",
+    destSchema: cols("SourceUserID", "DestinationIP"),
+    fieldMappings: [mapping({ source: "dst", dest: "DestinationIP", action: "rename" })],
+  });
+
+  it("does not count a column one log type fills as available for all (the reported case)", () => {
+    expect(availableFieldsFromReports([traffic, threat])).toEqual(["DestinationIP"]);
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, threat])).toEqual(["THREAT"]);
+    expect(fieldMissingLogTypes("sourceuserid", [traffic, threat])).toEqual(["THREAT"]);
+  });
+
+  it("becomes available once the second log type fills it too", () => {
+    const threatFilled = {
+      ...threat,
+      fieldMappings: [
+        ...threat.fieldMappings,
+        mapping({ source: "duser", dest: "SourceUserID", action: "rename" }),
+      ],
+    };
+    expect(availableFieldsFromReports([traffic, threatFilled])).toContain("SourceUserID");
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, threatFilled])).toEqual([]);
+  });
+
+  it("does not hold a log type whose table lacks the column against it", () => {
+    const syslog = gapReport({
+      tableName: "Syslog",
+      logType: "SYSTEM",
+      destSchema: cols("SyslogMessage"),
+      fieldMappings: [mapping({ source: "msg", dest: "SyslogMessage", action: "rename" })],
+    });
+    expect(availableFieldsFromReports([traffic, syslog])).toContain("SourceUserID");
+    expect(fieldMissingLogTypes("SourceUserID", [traffic, syslog])).toEqual([]);
+  });
+
+  it("requires a field that is no column anywhere from every log type", () => {
+    const withOverflow = {
+      ...traffic,
+      fieldMappings: [
+        ...traffic.fieldMappings,
+        mapping({ source: "PanOSRuleUUID", dest: "AdditionalExtensions", action: "overflow" }),
+      ],
+    };
+    expect(availableFieldsFromReports([withOverflow, threat])).not.toContain("PanOSRuleUUID");
+    expect(fieldMissingLogTypes("PanOSRuleUUID", [withOverflow, threat])).toEqual(["THREAT"]);
+  });
+
+  it("is unchanged for a single log type", () => {
+    expect(availableFieldsFromReports([traffic])).toEqual(["DestinationIP", "SourceUserID"]);
   });
 });

@@ -79,23 +79,85 @@ export {
  *   - every other mapping contributes its destination column.
  * De-duplicated and sorted (the analyzer matches case-insensitively, so order
  * is irrelevant; sorted for deterministic tests).
+ *
+ * PER LOG TYPE (DBT-223, backlog.md section 25). The set used to be a plain
+ * union of every log type's fields, so a column filled from TRAFFIC counted as
+ * available for every rule, its missing chip cleared, and a THREAT detection
+ * reading it was reported covered while THREAT events never carry it. A field
+ * is now available only when EVERY log type it applies to provides it - see
+ * {@link fieldMissingLogTypes} for which log types it applies to.
  */
 export function availableFieldsFromReports(
   reports: readonly GapReport[],
 ): string[] {
-  const set = new Set<string>();
+  const provided = reports.map(providedFields);
+  const names = new Map<string, string>();
   for (const report of reports) {
-    for (const mapping of report.fieldMappings) {
-      if (mapping.action === "drop") continue;
-      if (mapping.action === "overflow") {
-        set.add(mapping.dest);
-        set.add(mapping.source);
-        continue;
-      }
-      set.add(mapping.dest);
+    for (const name of fieldNames(report)) {
+      if (!names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
     }
   }
-  return [...set].sort();
+  const available: string[] = [];
+  for (const [lower, name] of names) {
+    if (missingIn(lower, reports, provided).length === 0) available.push(name);
+  }
+  return available.sort();
+}
+
+/**
+ * The log types a field is still missing from (DBT-223), in report order.
+ *
+ * The log types a field APPLIES to are those whose destination schema has a
+ * column of that name: a log type routed to a table without the column cannot
+ * fill it, so it does not count against it. A field that is no column of any
+ * report's table (a source name carried in overflow, a parser synonym) applies
+ * to every log type. Empty = available everywhere it applies.
+ */
+export function fieldMissingLogTypes(
+  field: string,
+  reports: readonly GapReport[],
+): string[] {
+  return missingIn(field.toLowerCase(), reports, reports.map(providedFields));
+}
+
+/** Close matches offered per log type still missing a field (DBT-223). */
+export const CLOSE_MATCHES_PER_LOG_TYPE = 3;
+
+/**
+ * " - missing in THREAT" when SOME log types still lack a field, null when
+ * none or all do: then the bare field name already says everything, and
+ * listing every log type would only add noise to a chip.
+ */
+export function partialMissingNote(missing: readonly string[], logTypeCount: number): string | null {
+  if (missing.length === 0 || missing.length >= logTypeCount) return null;
+  return ` - missing in ${missing.join(", ")}`;
+}
+
+function missingIn(
+  lower: string,
+  reports: readonly GapReport[],
+  provided: readonly ReadonlySet<string>[],
+): string[] {
+  const hasColumn = reports.map((r) => r.destSchema.some((c) => c.name.toLowerCase() === lower));
+  const appliesTo = hasColumn.some(Boolean) ? hasColumn : reports.map(() => true);
+  return reports
+    .filter((_, i) => appliesTo[i] && !provided[i]!.has(lower))
+    .map((r) => r.logType);
+}
+
+/** The fields one log type's pipeline produces (the rules in the docblock above). */
+function fieldNames(report: GapReport): string[] {
+  const out: string[] = [];
+  for (const mapping of report.fieldMappings) {
+    if (mapping.action === "drop") continue;
+    out.push(mapping.dest);
+    if (mapping.action === "overflow") out.push(mapping.source);
+  }
+  return out;
+}
+
+function providedFields(report: GapReport): Set<string> {
+  return new Set(fieldNames(report).map((f) => f.toLowerCase()));
 }
 
 /**

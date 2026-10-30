@@ -93,7 +93,10 @@ import {
   RULE_COVERAGE_IDLE_NOTE,
   RULE_COVERAGE_NO_REPORTS_NOTE,
   VIEW_KQL_LABEL,
+  CLOSE_MATCHES_PER_LOG_TYPE,
   availableFieldsFromReports,
+  fieldMissingLogTypes,
+  partialMissingNote,
   closeMatchTargetColumn,
   customRuleCount,
   deriveCoverageSection,
@@ -547,6 +550,8 @@ export function RuleCoverageSection({
   // matched AND overflow - via the core suggester.
   const [investigation, setInvestigation] = useState<{
     field: string;
+    /** The log types still missing the field (DBT-223); candidates are per each. */
+    missingIn: string[];
     candidates: CloseMatchCandidate[];
   } | null>(null);
   // The last close match applied from here, announced until the Gap Analysis
@@ -559,14 +564,22 @@ export function RuleCoverageSection({
   const investigate = useCallback(
     (field: string) => {
       setApplied(null);
+      // DBT-223: candidates PER log type still missing the field, so each log
+      // type gets its own choice - one pooled top-5 let a log type crowd the
+      // others out, and an apply for one never stood in for another.
+      const missing = fieldMissingLogTypes(field, liveReports);
+      const logTypes = missing.length > 0 ? missing : liveReports.map((r) => r.logType);
       setInvestigation({
         field,
-        // The solution scopes which vendor packs count as documented.
-        candidates: suggestCloseMatches(
-          field,
-          closeMatchRowsFromReports(liveReports),
-          5,
-          { solutionName },
+        missingIn: missing,
+        candidates: logTypes.flatMap((logType) =>
+          // The solution scopes which vendor packs count as documented.
+          suggestCloseMatches(
+            field,
+            closeMatchRowsFromReports(liveReports.filter((r) => r.logType === logType)),
+            CLOSE_MATCHES_PER_LOG_TYPE,
+            { solutionName },
+          ),
         ),
       });
     },
@@ -972,6 +985,7 @@ export function RuleCoverageSection({
                     onClick={() => investigate(field)}
                   >
                     {field}
+                    {partialMissingNote(fieldMissingLogTypes(field, liveReports), liveReports.length)}
                   </button>
                 ))}
               </div>
@@ -995,6 +1009,7 @@ export function RuleCoverageSection({
               <div className="close-match-head">
                 <span className="field-label">
                   Close matches for {investigation.field} in your sample fields
+                  {partialMissingNote(investigation.missingIn, liveReports.length)}
                 </span>
                 <button
                   type="button"
