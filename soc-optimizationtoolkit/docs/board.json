@@ -2999,7 +2999,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F1",
-      "status": "backlog",
+      "status": "done",
       "dependsOn": [
         "MIG-3"
       ],
@@ -3007,7 +3007,22 @@
       "type": "enabler",
       "priority": "now",
       "title": "Chrome UAT of the workspace inventory in Live Preview",
-      "detail": "FILED 2026-10-29. Drive /apps/a/__local__ on the leader in Chrome with live credentials: run discovery, pick a workspace, run the inventory, and compare the totals with the Usage blade or a hand-run KQL query in the portal. Record what was observed here and set verified accordingly. ALSO OWNS MIG-1 question (2): with an identity lacking workspaces/query/read, record what the Usage query answers (expect 403, so the panel says it could not read) - if it is 200 with no rows, the measured-zero copy is wrong and becomes a bug card."
+      "detail": "FILED 2026-10-29. Drive /apps/a/__local__ on the leader in Chrome with live credentials: run discovery, pick a workspace, run the inventory, and compare the totals with the Usage blade or a hand-run KQL query in the portal. Record what was observed here and set verified accordingly. ALSO OWNS MIG-1 question (2): with an identity lacking workspaces/query/read, record what the Usage query answers (expect 403, so the panel says it could not read) - if it is 200 with no rows, the measured-zero copy is wrong and becomes a bug card. DONE 2026-10-30 (live, Chrome on /apps/a/__local__ with the green Live Preview badge, working tree at 09c3f0f + board edits): Discover workspaces reported 80 workspace(s) across 1 subscription(s), 61 with Sentinel - the 80 equals an independent Azure Resource Graph count of the tenant's workspaces taken the day before. law-jpederson-eastus inventoried in under 10s: 6 tables, 77.6 MB/day all tables, 76.7 MB/day billable, 2.33 GB over 30 days. Every row agreed with the hand-run Usage KQL through az rest: AWSVPCFlow 1.93 GB billable (64.3 MB/day), its one source Unattributed at 64.3 MB/day; Heartbeat 0 MB billable with sources lab-wks-01 and ti-cef-collector, the two machines a hand-run _BilledSize query named; ThreatIntelIndicators 3 of 30 days. No console errors. NOT covered here: the reader-less identity, moved to MIG-5. The portal Usage blade was not opened; the comparison is against the same Usage table queried by hand, which is what that blade reads.",
+      "verified": "live"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F1",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-4"
+      ],
+      "id": "MIG-5",
+      "type": "spike",
+      "priority": "now",
+      "title": "What does the Usage query answer for an identity without workspaces/query/read?",
+      "detail": "FILED 2026-10-30 from MIG-1 question (2), which MIG-4 could not answer: no reader-less identity was at hand. The panel treats any non-2xx from POST {workspace}/query as a refusal (Could not read this workspace's Usage table) and a 200 with no rows as a measured zero (The Usage table answered and reports no ingested data). That second rule rests on the belief that a workspace-context query is refused rather than RBAC-filtered into an empty 200. Measure with an app registration holding Reader but not Log Analytics Reader on one workspace (and, if possible, a table-level RBAC custom role excluding Usage). If either answers 200 with no rows, the measured-zero copy is a confident wrong answer and becomes a bug card."
     }
   ],
   "features": [
