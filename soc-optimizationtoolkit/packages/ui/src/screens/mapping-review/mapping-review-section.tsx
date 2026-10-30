@@ -103,6 +103,7 @@ import { IdentityBlock } from "./identity-block";
 import { IdentityMismatchBlock } from "./identity-mismatch-block";
 import { OverflowTriageBlock } from "./overflow-triage-block";
 import { UnmappedColumnPanel } from "./unmapped-column-panel";
+import { DestClaimPanel } from "./dest-claim-panel";
 import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
@@ -112,6 +113,7 @@ import {
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
 import type {
   AnalysisSignature,
+  DestClaim,
   RequirementsForAssessment,
 } from "./mapping-review-state";
 import {
@@ -132,6 +134,7 @@ import {
   columnSuggestions,
   deriveLiveStats,
   deriveMappingReviewGate,
+  destClaim,
   effectiveMappings,
   fieldMappingsLabel,
   formatExampleValue,
@@ -447,11 +450,12 @@ export function MappingReviewSection({
   );
   // DBT-202: the unmapped column whose suggestion panel is open (one at a
   // time), the "Add a constant" hand-off to a table's enrichment editor, and
-  // the last suggestion applied per table (announced, since applying
-  // withdraws the table's approval). The note is rendered only while its
-  // claim holds - the table unapproved AND the field still filling the column
-  // - so Approve All, a later edit or another suggestion cannot leave it
-  // saying something the table no longer shows.
+  // the last re-point applied per table, by suggestion or Dest Field
+  // (announced, since applying withdraws the table's approval - DBT-213). The
+  // note is rendered only while its claim holds - the table unapproved AND
+  // the field still filling the column - so Approve All, a later edit or
+  // another suggestion cannot leave it saying something the table no longer
+  // shows.
   const [suggestFor, setSuggestFor] = useState<{
     logType: string;
     column: string;
@@ -462,6 +466,13 @@ export function MappingReviewSection({
   const [appliedNotes, setAppliedNotes] = useState<
     Record<string, { source: string; column: string; withdrew: boolean }>
   >({});
+  // DBT-208: a Dest Field choice onto a column another row fills, waiting on
+  // the reviewer's answer (one at a time).
+  const [pendingClaim, setPendingClaim] = useState<{
+    logType: string;
+    source: string;
+    claim: DestClaim;
+  } | null>(null);
 
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
@@ -883,6 +894,7 @@ export function MappingReviewSection({
     setAppliedNotes((prev) => withoutKey(prev, logType));
     setEnrichSeeds((prev) => withoutKey(prev, logType));
     setSuggestFor((prev) => (prev?.logType === logType ? null : prev));
+    setPendingClaim((prev) => (prev?.logType === logType ? null : prev));
     forgetLogTypeEnrichments(logType);
     forgetLogTypeKeys(seededIdentityRef.current, logType);
     forgetLogTypeKeys(seededLabelRef.current, logType);
@@ -918,63 +930,51 @@ export function MappingReviewSection({
     onEffectiveMappingsChange(byLogType);
   }, [reports, review, onEffectiveMappingsChange]);
 
-  const updateMapping = useCallback(
-    (
-      report: GapReport,
-      sourceField: string,
-      field: "dest" | "action",
-      value: string,
-    ) => {
-      if (field === "action") {
-        dispatch({
-          type: "edit-mapping",
-          logType: report.logType,
-          sourceField,
-          field,
-          value,
-          baseline: report.fieldMappings,
-        });
-        return;
-      }
-      // GEN-19: a Dest Field change re-derives the whole row (action, type,
-      // coercion) through core applyRemap; the catch-all is the matcher's own
-      // overflow column for this table, so choosing it means overflow.
+  const updateAction = useCallback(
+    (report: GapReport, sourceField: string, value: string) => {
       dispatch({
         type: "edit-mapping",
         logType: report.logType,
         sourceField,
-        field,
+        field: "action",
         value,
         baseline: report.fieldMappings,
-        destSchema: report.destSchema,
-        catchAllColumn: getOverflowConfig(report.tableName).fieldName,
       });
     },
     [],
   );
 
-  // DBT-202: apply a suggested sample field to an unmapped column. The
-  // auto-drop key is forgotten FIRST: a field the drop-unneeded policy
-  // dropped is otherwise still "its" drop, and switching the policy back to
-  // preserve would restore it to overflow on top of the reviewer's choice.
-  const applySuggestion = useCallback(
+  // DBT-213: the ONE reviewer re-point, behind the Dest Field select and
+  // "Use this field" alike. GEN-19: the reducer re-derives the whole row
+  // (action, type, coercion) through core applyRemap; the catch-all is the
+  // matcher's own overflow column for this table, so choosing it means
+  // overflow. The reducer withdraws the table's approval (F1-c), and the
+  // note says so. The auto-drop key is forgotten FIRST: a field the
+  // drop-unneeded policy dropped is otherwise still "its" drop, and
+  // switching the policy back to preserve would restore it to overflow on
+  // top of the reviewer's choice.
+  const repoint = useCallback(
     (
       report: GapReport,
       sourceField: string,
       column: string,
       wasApproved: boolean,
+      via: "dest" | "suggestion",
+      moveClaimed = false,
     ) => {
       autoDroppedRef.current.delete(`${report.logType}|${sourceField}`);
-      dispatch({
-        type: "apply-suggestion",
+      const target = {
         logType: report.logType,
         sourceField,
-        destColumn: column,
         baseline: report.fieldMappings,
         destSchema: report.destSchema,
         catchAllColumn: getOverflowConfig(report.tableName).fieldName,
-      });
-      setSuggestFor(null);
+      };
+      dispatch(
+        via === "dest"
+          ? { type: "edit-mapping", field: "dest", value: column, moveClaimed, ...target }
+          : { type: "apply-suggestion", destColumn: column, ...target },
+      );
       setAppliedNotes((prev) => ({
         ...prev,
         [report.logType]: {
@@ -985,6 +985,52 @@ export function MappingReviewSection({
       }));
     },
     [],
+  );
+
+  // DBT-208: a Dest Field choice onto a column another row fills is ASKED,
+  // not applied - the reducer refuses it without `moveClaimed`, because two
+  // Renames onto one name lose the first value.
+  const chooseDest = useCallback(
+    (
+      report: GapReport,
+      rows: readonly GapFieldMapping[],
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+    ) => {
+      const claim = destClaim(
+        rows,
+        {
+          sourceField,
+          destColumn: column,
+          destSchema: report.destSchema,
+          catchAllColumn: getOverflowConfig(report.tableName).fieldName,
+          baseline: report.fieldMappings,
+        },
+        ruleFields,
+      );
+      if (claim !== null) {
+        setPendingClaim({ logType: report.logType, source: sourceField, claim });
+        return;
+      }
+      setPendingClaim(null);
+      repoint(report, sourceField, column, wasApproved, "dest");
+    },
+    [repoint, ruleFields],
+  );
+
+  // DBT-202: apply a suggested sample field to an unmapped column.
+  const applySuggestion = useCallback(
+    (
+      report: GapReport,
+      sourceField: string,
+      column: string,
+      wasApproved: boolean,
+    ) => {
+      repoint(report, sourceField, column, wasApproved, "suggestion");
+      setSuggestFor(null);
+    },
+    [repoint],
   );
 
   // DBT-203: a coverage section's "Use this field" arrives here and goes
@@ -1487,7 +1533,7 @@ export function MappingReviewSection({
                         </th>
                         <th>
                           Dest Field
-                          <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to." />
+                          <InfoTip text="The destination column in the Sentinel table schema. Change this dropdown to reassign where a source field maps to. Choosing a column another field already fills asks first: moving it sends that field to the catch-all as overflow. A change withdraws this table's approval; approve again to save it as a learned mapping." />
                         </th>
                         <th>
                           Type
@@ -1516,7 +1562,11 @@ export function MappingReviewSection({
                         // the pure state module (truncation, escaping, and
                         // the empty-vs-missing distinction live there).
                         const example = formatExampleValue(m.sampleValue);
-                        return (
+                        const claimOpen =
+                          pendingClaim !== null &&
+                          pendingClaim.logType === report.logType &&
+                          pendingClaim.source === m.source;
+                        return [
                           <tr
                             key={m.source}
                             data-source={m.source}
@@ -1553,11 +1603,12 @@ export function MappingReviewSection({
                                 className="mapping-select"
                                 value={m.dest}
                                 onChange={(e) =>
-                                  updateMapping(
+                                  chooseDest(
                                     report,
+                                    effective,
                                     m.source,
-                                    "dest",
                                     e.target.value,
+                                    approved,
                                   )
                                 }
                               >
@@ -1584,12 +1635,7 @@ export function MappingReviewSection({
                                 className="mapping-select"
                                 value={m.action}
                                 onChange={(e) =>
-                                  updateMapping(
-                                    report,
-                                    m.source,
-                                    "action",
-                                    e.target.value,
-                                  )
+                                  updateAction(report, m.source, e.target.value)
                                 }
                               >
                                 {ACTION_OPTIONS.map((act) => (
@@ -1599,8 +1645,31 @@ export function MappingReviewSection({
                                 ))}
                               </select>
                             </td>
-                          </tr>
-                        );
+                          </tr>,
+                          claimOpen && (
+                            <DestClaimPanel
+                              key={`claim-${m.source}`}
+                              id={`mapping-claim-${report.logType}-${m.source}`.replace(
+                                /[^A-Za-z0-9_-]/g,
+                                "_",
+                              )}
+                              source={m.source}
+                              claim={pendingClaim.claim}
+                              onMove={() => {
+                                setPendingClaim(null);
+                                repoint(
+                                  report,
+                                  m.source,
+                                  pendingClaim.claim.column,
+                                  approved,
+                                  "dest",
+                                  true,
+                                );
+                              }}
+                              onKeep={() => setPendingClaim(null)}
+                            />
+                          ),
+                        ];
                       })}
                       {shownUnmapped.length > 0 && (
                         <tr className="mapping-unmapped-head">

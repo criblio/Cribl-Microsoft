@@ -26,6 +26,7 @@ import {
   autoDropPlan,
   columnSuggestions,
   deriveMappingReviewGate,
+  destClaim,
   effectiveMappings,
   fieldMappingsLabel,
   isApproved,
@@ -1241,6 +1242,170 @@ describe("apply-suggestion (DBT-202)", () => {
     const before = analyzed({ approvals: { PanOS: true } });
     expect(apply(before, "NoSuchColumn")).toBe(before);
     expect(apply(before, "ReceivedBytes", "nosuchfield")).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DBT-213 / DBT-208: a Dest Field re-point and an applied suggestion are one
+// path - same approval effect, and neither leaves two rows in one column
+// ---------------------------------------------------------------------------
+
+describe("Dest Field re-point and apply-suggestion agree (DBT-213, DBT-208)", () => {
+  const SCHEMA = [
+    { name: "AdditionalExtensions", type: "string" },
+    { name: "ReceivedBytes", type: "long" },
+    { name: "SourceMACAddress", type: "string" },
+  ];
+  // `in` already fills ReceivedBytes (GEN-20's alias); qqbytes sits in overflow.
+  const inBytes = mapping({
+    source: "in",
+    sourceType: "int",
+    dest: "ReceivedBytes",
+    destType: "long",
+    confidence: "alias",
+    action: "rename",
+    needsCoercion: true,
+  });
+  const qqbytes = mapping({
+    source: "qqbytes",
+    sourceType: "int",
+    dest: "AdditionalExtensions",
+    confidence: "unmatched",
+    action: "overflow",
+  });
+  const baseline = [inBytes, qqbytes];
+  const editDest = (
+    sourceField: string,
+    value: string,
+    moveClaimed?: boolean,
+  ): MappingReviewAction => ({
+    type: "edit-mapping",
+    logType: "PanOS",
+    sourceField,
+    field: "dest",
+    value,
+    baseline,
+    destSchema: SCHEMA,
+    catchAllColumn: "AdditionalExtensions",
+    ...(moveClaimed === undefined ? {} : { moveClaimed }),
+  });
+  const suggest = (sourceField: string, destColumn: string): MappingReviewAction => ({
+    type: "apply-suggestion",
+    logType: "PanOS",
+    sourceField,
+    destColumn,
+    baseline,
+    destSchema: SCHEMA,
+    catchAllColumn: "AdditionalExtensions",
+  });
+
+  it("withdraws only that table's approval on an applied Dest edit, as apply-suggestion does (F1-c)", () => {
+    const before = analyzed({ approvals: { PanOS: true, Other: true } });
+    const viaDest = reduce(before, editDest("qqbytes", "SourceMACAddress"));
+    const viaSuggestion = reduce(before, suggest("qqbytes", "SourceMACAddress"));
+    expect(viaDest.approvals).toEqual({ Other: true });
+    expect(viaDest).toEqual(viaSuggestion);
+  });
+
+  it("withdraws approval on a reverted Dest edit too - the deployed row changes", () => {
+    const edited = reduce(analyzed(), editDest("qqbytes", "SourceMACAddress"));
+    const approved = reduce(edited, { type: "approve", logType: "PanOS" });
+    const reverted = reduce(approved, editDest("qqbytes", "AdditionalExtensions"));
+    expect(reverted.mappingEdits.PanOS?.[1]).toEqual(qqbytes);
+    expect(reverted.approvals).toEqual({});
+  });
+
+  it("keeps approval when the Dest edit changes nothing", () => {
+    const before = analyzed({ approvals: { PanOS: true } });
+    expect(reduce(before, editDest("in", "ReceivedBytes"))).toBe(before);
+    expect(reduce(before, editDest("qqbytes", "NoSuchColumn"))).toBe(before);
+  });
+
+  it("refuses a Dest edit onto a column another row fills until the reviewer moves it", () => {
+    const before = analyzed({ approvals: { PanOS: true } });
+    expect(reduce(before, editDest("qqbytes", "ReceivedBytes"))).toBe(before);
+    expect(reduce(before, suggest("qqbytes", "ReceivedBytes"))).toBe(before);
+  });
+
+  it("moves the column on the reviewer's answer: one row lands there, the other falls back to overflow", () => {
+    const before = analyzed({ approvals: { PanOS: true } });
+    const next = reduce(before, editDest("qqbytes", "ReceivedBytes", true));
+    const rows = next.mappingEdits.PanOS!;
+    expect(rows.find((m) => m.source === "qqbytes")).toMatchObject({
+      dest: "ReceivedBytes",
+      action: "rename",
+    });
+    expect(rows.find((m) => m.source === "in")).toMatchObject({
+      dest: "AdditionalExtensions",
+      action: "overflow",
+    });
+    expect(
+      rows.filter((m) => m.action === "rename" && m.dest === "ReceivedBytes"),
+    ).toHaveLength(1);
+    expect(next.approvals).toEqual({});
+  });
+});
+
+describe("destClaim (DBT-208)", () => {
+  const SCHEMA = [
+    { name: "AdditionalExtensions", type: "string" },
+    { name: "ReceivedBytes", type: "long" },
+    { name: "SourceMACAddress", type: "string" },
+    { name: "DestinationMACAddress", type: "string" },
+  ];
+  const rows = [
+    mapping({ source: "in", dest: "ReceivedBytes", action: "rename" }),
+    mapping({ source: "mac", dest: "SourceMACAddress", action: "keep" }),
+    mapping({ source: "qq", dest: "AdditionalExtensions", action: "overflow" }),
+  ];
+  const claim = (
+    sourceField: string,
+    destColumn: string,
+    opts: { schema?: typeof SCHEMA; ruleFields?: ReadonlySet<string> } = {},
+  ) =>
+    destClaim(
+      rows,
+      {
+        sourceField,
+        destColumn,
+        destSchema: opts.schema ?? SCHEMA,
+        catchAllColumn: "AdditionalExtensions",
+      },
+      opts.ruleFields,
+    );
+
+  it("is null when the chosen column is free or is the catch-all", () => {
+    expect(claim("qq", "DestinationMACAddress")).toBeNull();
+    expect(claim("in", "AdditionalExtensions")).toBeNull();
+    expect(claim("in", "NoSuchColumn")).toBeNull();
+  });
+
+  it("names the row that fills the column, where it would go, and the move label", () => {
+    expect(claim("qq", "ReceivedBytes")).toEqual({
+      column: "ReceivedBytes",
+      claimedBy: "in",
+      fallback: "AdditionalExtensions",
+      actionLabel: "Move ReceivedBytes from in",
+      moveWarning: null,
+    });
+  });
+
+  it("carries the DBT-202 move warning when the moving row leaves a rule column empty", () => {
+    expect(
+      claim("mac", "ReceivedBytes", {
+        ruleFields: new Set(["sourcemacaddress"]),
+      })?.moveWarning,
+    ).toBe(
+      "SourceMACAddress is used by analytics rules and nothing else fills it: moving mac leaves it empty.",
+    );
+  });
+
+  it("has no fallback when the schema has no catch-all to move into", () => {
+    const out = claim("qq", "ReceivedBytes", {
+      schema: SCHEMA.filter((c) => c.name !== "AdditionalExtensions"),
+    });
+    expect(out?.claimedBy).toBe("in");
+    expect(out?.fallback).toBeNull();
   });
 });
 
