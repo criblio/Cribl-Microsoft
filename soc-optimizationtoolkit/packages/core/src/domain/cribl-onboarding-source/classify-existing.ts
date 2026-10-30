@@ -30,6 +30,7 @@
  */
 
 import { proveOwnership } from "../../kit/config-writes/ownership";
+import { findSecretRecord } from "../cribl-secrets/secret-record";
 import type { CriblInputType, OnboardingSource } from "../onboarding-howto/sources";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 import type { CriblSourceRecord } from "../onboarding-howto/progress-document";
@@ -70,6 +71,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** The input with `id` in a GET /system/inputs read. Secret reads use findSecretRecord. */
 function findById(read: ExistingRead & { state: "read" }, id: string): Record<string, unknown> | null | "malformed" {
   for (const item of read.items) {
     if (!isRecord(item)) return "malformed";
@@ -139,6 +141,9 @@ export function classifyExistingInput(args: {
 /**
  * Classify the secret `secretId` against a GET /system/secrets/:id read (a 404
  * is a `read` with no items). `recorded` is this app's KV record for the lane.
+ * The record is picked out by findSecretRecord, the same strict reader
+ * decideSecretConflict uses (DBT-187): a non-object entry anywhere, or two
+ * entries with the id, is `unknown`, never the first match.
  */
 export function classifyExistingSecret(args: {
   readonly read: ExistingRead;
@@ -147,12 +152,12 @@ export function classifyExistingSecret(args: {
 }): ExistingSecretVerdict {
   const { read, secretId, recorded } = args;
   if (read.state === "refused") return { kind: "unknown", detail: read.detail };
-  const found = findById(read, secretId);
-  if (found === "malformed") return { kind: "unknown", detail: "the secret read has an entry that is not an object" };
-  if (found === null) return { kind: "absent" };
+  const lookup = findSecretRecord(read.items, secretId);
+  if (lookup.kind === "malformed") return { kind: "unknown", detail: `the secret read ${lookup.detail}` };
+  if (lookup.kind === "missing") return { kind: "absent" };
   const ownership = proveOwnership(APP_ID, {
     manifestIds: isOnboardingSecretId(secretId) ? new Set([secretId]) : new Set<string>(),
-    object: { id: secretId, description: found["description"] },
+    object: { id: secretId, description: lookup.record["description"] },
     recordedWrite: recorded !== null && recorded.secretId === secretId,
   });
   return ownership.mine ? { kind: "ours" } : { kind: "foreign", missing: ownership.missing };

@@ -6,7 +6,11 @@
  * (domain/live-architecture buildLiveDiagram) both ask here. Before this file
  * the two disagreed - one matched only `<type>:<id>`, the other only the bare
  * id - so the same route read "routed" on one screen and "not routed" on the
- * other.
+ * other. Since DBT-169 the capture warning (capture-filter.ts
+ * captureFilterWarning) asks here too, and this file owns the `__inputId`
+ * clause grammar all three read with: parseInputIdClause for a whole route
+ * filter (live-architecture parseRouteFilterInputs wraps it) and
+ * findInputIdClauses for clauses inside a larger capture filter.
  *
  * THE VALUE IS `<type>:<id>`, optionally followed by further `:` segments
  * (syslog adds the sender). capture-filter.ts inputPredicate records that as
@@ -51,7 +55,8 @@ export interface InputIdRef {
 
 /**
  * A route filter's input selection, parsed from the cheap known forms
- * (live-architecture.ts parseRouteFilterInputs produces it).
+ * (live-architecture.ts parseRouteFilterInputs produces it: `all` and
+ * `unparsed` itself, the clause kinds through parseInputIdClause below).
  */
 export type InputIdFilter =
   | { kind: "inputs"; ids: readonly string[] }

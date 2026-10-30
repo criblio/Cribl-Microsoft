@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**90 in the backlog, 37 in progress, 132 done.**
+**92 in the backlog, 35 in progress, 134 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 50 | 76 | 24 |
+| Sentinel Integration | 50 | 78 | 22 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 56% (84/151)
+### `DBT` Quality and technical debt _(enabler)_ - 56% (86/153)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 36/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 37/45 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 37/47 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -983,26 +983,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin
   each.
 
-- **DBT-183** A Content Hub package with no displayName matches every solution
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless
-  said). findSolutionCatalogEntry's fuzzy match (available-content.ts
-  ~:138-141) is dn.includes(target) || target.includes(dn); a package with an
-  empty or missing displayName gives dn === '', and target.includes('') is
-  true, so it matches whatever is looked up first. FIX: skip empty names; pin.
-
-- **DBT-187** The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
-  adversarially verified. decideSecretConflict
-  (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts
-  findById each pick the record for an id out of items, with different
-  handling of non-object entries, so the onboarding source planner and
-  ensureTextSecret can read the same answer differently. SECRETS_API_PATH
-  (guided-deploy/secret-provisioning.ts:47) is used only by tests and the
-  barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the
-  constant or use it.
-
 - **DBT-188** DBT-158's shell wiring has no pin
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
@@ -1281,7 +1261,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (43)
+## Backlog - next (45)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1919,6 +1899,28 @@ Settled and unblocked, sequenced behind now.
   *UserName (were *UserID); the ASim tables' username/app_name/processName now
   map to *Name columns.
 
+- **DBT-235** Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor
+  `DBT-F2` `story` `settled`
+  PARKED 2026-10-29 on local branch wip/dbt-195-review-uncommitted-wt15
+  (uncommitted review edits preserved during branch cleanup; DBT-195 itself is
+  done). Adds documentedSources and tokensOverlap in core
+  field-matcher/close-matches.ts so a PAN-OS field never cites another
+  vendor's pack, a direction qualifier does not match inside another word, and
+  the CEF catalog stays documented with no solution named; 4 pins. Does NOT
+  apply cleanly to the 1.13.0 head (rule-coverage-section.tsx moved under
+  DBT-223) - rebase, re-run the pins, mutation-check, confirm in Rule Coverage
+  live.
+
+- **DBT-236** Finish the DBT-197 review follow-up: name what the sample store kept after a trim
+  `DBT-F2` `story` `settled`
+  PARKED 2026-10-29 on local branch wip/dbt-197-review-leftover (DBT-197
+  itself is done, verified both). Adds storedTrimSentences
+  (planned-samples.ts) so the Lake and capture headlines say what the STORE
+  trimmed, not only what the panel fetched; 2 pins plus a DOM test. Does NOT
+  apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
+  DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
+  live.
+
 ---
 
 ## Backlog - later (36)
@@ -2410,7 +2412,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (132)
+## Done (134)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4618,6 +4620,38 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   4d9c44f): verdictView takes the check kind; each of the four
   present-other-name kinds says only what its classifier matched on, plus how
   many others were found. Leftovers: DBT-189.
+
+- **DBT-183** A Content Hub package with no displayName matches every solution
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless
+  said). findSolutionCatalogEntry's fuzzy match (available-content.ts
+  ~:138-141) is dn.includes(target) || target.includes(dn); a package with an
+  empty or missing displayName gives dn === '', and target.includes('') is
+  true, so it matches whatever is looked up first. FIX: skip empty names; pin.
+  DONE 2026-10-30: integrated from the paused
+  fix/dbt-183-empty-displayname-review (fc687d7, b993c5d cherry-picked onto
+  the 1.13.0 head in chore/paused-integration). findSolutionCatalogEntry skips
+  an empty normalised name on either side and ranks exact > longest
+  containment > closest length > catalog order. Mutation: removing the
+  empty-name skip fails 2 pins. Internal matching only - no screen to verify
+  live.
+
+- **DBT-187** The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
+  adversarially verified. decideSecretConflict
+  (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts
+  findById each pick the record for an id out of items, with different
+  handling of non-object entries, so the onboarding source planner and
+  ensureTextSecret can read the same answer differently. SECRETS_API_PATH
+  (guided-deploy/secret-provisioning.ts:47) is used only by tests and the
+  barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the
+  constant or use it. DONE 2026-10-30: integrated from the paused
+  fix/dbt-187-secret-get-reader-review (0074116, 7a3abbc cherry-picked in
+  chore/paused-integration). One reader, domain/cribl-secrets/secret-record.ts
+  findSecretRecord, serves decideSecretConflict and classify-existing;
+  SECRETS_API_PATH removed. Mutation: dropping the non-object-entry check
+  fails 5 pins. Internal parsing only - no screen to verify live.
 
 - **DBT-189** How-to step word and dataflow lane ignore the 'others also found' count
   `DBT-F1` `bug` `settled` `verified: pins`

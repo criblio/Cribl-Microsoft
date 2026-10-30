@@ -125,8 +125,12 @@ What does NOT work, all of which return HTTP 200 and look successful:
   back. But no sample FILE is produced: the entry has no `size` or `numEvents`,
   `GET /system/samples/{id}/content` answers **500 "Unable to find sample"**,
   the Cribl UI's Sample Files list does not show it, and a datagen bound to it
-  emits **nothing** while reporting `health: Green`. That research note should be
-  corrected.
+  emits **nothing** while reporting `health: Green`. A correction to that
+  research note was drafted on 2026-10-20 (DBT-8) but is NOT yet committed in
+  jphltech, so until a commit there records it the note may still give the
+  `lines` call. The draft makes its handoff brief give the `context.events`
+  create, and puts a banner on its two phase runbooks rather than rewritten
+  commands, because those were never re-run against the corrected call.
 - `POST` with any of `lines`, `events`, `sampleData`, `data`, `content` at the
   top level, with or without `id` - all 500 "Unable to find sample with
   id=undefined". POST is wired to the update handler unless the body carries

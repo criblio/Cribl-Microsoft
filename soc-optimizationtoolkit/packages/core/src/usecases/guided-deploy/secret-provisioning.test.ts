@@ -6,7 +6,6 @@ import { SENTINEL_SECRET_PLACEHOLDER } from "../../domain/sentinel-destination";
 import { APP_ID } from "../../domain/cribl-secrets";
 import { stampFor } from "../../kit/config-writes/ownership";
 import {
-  SECRETS_API_PATH,
   SENTINEL_CLIENT_SECRET_DESCRIPTION,
   SENTINEL_CLIENT_SECRET_NAME,
   SENTINEL_CLIENT_SECRET_REFERENCE,
@@ -54,7 +53,7 @@ describe("the Sentinel client secret through ensureTextSecret (connected path)",
     expect(cribl.calls).toEqual([
       {
         method: "POST",
-        path: SECRETS_API_PATH,
+        path: "/system/secrets",
         groupId: "wg-1",
         body: {
           id: SENTINEL_CLIENT_SECRET_NAME,
@@ -76,7 +75,7 @@ describe("the Sentinel client secret through ensureTextSecret (connected path)",
     expect(await ensureTextSecret(cribl, SENTINEL)).toEqual({ kind: "updated", secretId: SENTINEL_CLIENT_SECRET_NAME });
     expect(cribl.calls[2]).toEqual({
       method: "PATCH",
-      path: `${SECRETS_API_PATH}/${SENTINEL_CLIENT_SECRET_NAME}`,
+      path: "/system/secrets/sentinel_client_secret",
       groupId: "wg-1",
       body: {
         id: SENTINEL_CLIENT_SECRET_NAME,

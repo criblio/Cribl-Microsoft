@@ -7,11 +7,13 @@
  *
  *   1. `secretType` appears in code ONLY in secret-body.ts. An inline secret
  *      body has to name its kind, so a hand-built one fails here.
- *   2. Every file whose code names the secrets API (`/system/secrets` or
- *      SECRETS_API_PATH) is on the reviewed ROLES table, and the table holds
- *      nothing stale. A new caller fails until someone reviews it.
+ *   2. Every file whose code names the secrets API (`/system/secrets`) is on
+ *      the reviewed ROLES table, and the table holds nothing stale. A new
+ *      caller fails until someone reviews it. (The SECRETS_API_PATH constant
+ *      and its barrel export, the old `constant` rows, were removed by DBT-187:
+ *      nothing but tests had used them since DBT-152.)
  *   3. A `writer` calls buildSecretBody and carries no `type: "text"` body; a
- *      `reader` names the path only on GET lines; the remaining roles send no
+ *      `reader` names the path only on GET lines; a `policy` row sends no
  *      request at all.
  *
  * What it cannot see: a body built by a helper in another file and passed in
@@ -41,8 +43,6 @@ type Role =
   | "writer"
   /** Reads a secret; names the path only on GET lines. */
   | "reader"
-  /** Declares or re-exports the path constant; sends nothing. */
-  | "constant"
   /** The policy coverage table (policies.yml); a description, not a request. */
   | "policy";
 
@@ -51,9 +51,7 @@ const ROLES: Readonly<Record<string, Role>> = {
   "packages/core/src/usecases/create-cribl-source/apply-cribl-source.ts": "writer",
   "packages/core/src/usecases/onboard-table/onboard-table.ts": "writer",
   "packages/core/src/usecases/ensure-secret/ensure-text-secret.ts": "writer",
-  "packages/core/src/usecases/guided-deploy/secret-provisioning.ts": "constant",
   "packages/core/src/usecases/create-cribl-source/plan-cribl-source.ts": "reader",
-  "packages/core/src/usecases/guided-deploy/index.ts": "constant",
   "apps/cribl-app/src/platform/policies/paths.ts": "policy",
 };
 
@@ -91,8 +89,7 @@ function scan(): Scanned[] {
   );
 }
 
-const SECRETS_API = /\/system\/secrets|\bSECRETS_API_PATH\b/;
-const REQUEST_VERB = /["'`](?:POST|PATCH|PUT|DELETE)["'`]/;
+const SECRETS_API = /\/system\/secrets/;
 
 describe("every Cribl secret body comes from buildSecretBody (DBT-163)", () => {
   const files = scan();
@@ -126,10 +123,6 @@ describe("every Cribl secret body comes from buildSecretBody (DBT-163)", () => {
       const lines = code.split("\n").filter((l) => SECRETS_API.test(l));
       expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) expect(line).toMatch(/["'`]GET["'`]/);
-      return;
-    }
-    if (role === "constant") {
-      expect(code).not.toMatch(REQUEST_VERB);
       return;
     }
     // policy: a table row naming a caller, not a request; it sends nothing.

@@ -2285,13 +2285,14 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-183",
       "title": "A Content Hub package with no displayName matches every solution",
-      "detail": "FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless said). findSolutionCatalogEntry's fuzzy match (available-content.ts ~:138-141) is dn.includes(target) || target.includes(dn); a package with an empty or missing displayName gives dn === '', and target.includes('') is true, so it matches whatever is looked up first. FIX: skip empty names; pin."
+      "detail": "FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless said). findSolutionCatalogEntry's fuzzy match (available-content.ts ~:138-141) is dn.includes(target) || target.includes(dn); a package with an empty or missing displayName gives dn === '', and target.includes('') is true, so it matches whatever is looked up first. FIX: skip empty names; pin. DONE 2026-10-30: integrated from the paused fix/dbt-183-empty-displayname-review (fc687d7, b993c5d cherry-picked onto the 1.13.0 head in chore/paused-integration). findSolutionCatalogEntry skips an empty normalised name on either side and ranks exact > longest containment > closest length > catalog order. Mutation: removing the empty-name skip fails 2 pins. Internal matching only - no screen to verify live.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -2339,13 +2340,14 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-187",
       "title": "The GET /system/secrets/:id answer is parsed twice with different rules; SECRETS_API_PATH is dead",
-      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. decideSecretConflict (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts findById each pick the record for an id out of items, with different handling of non-object entries, so the onboarding source planner and ensureTextSecret can read the same answer differently. SECRETS_API_PATH (guided-deploy/secret-provisioning.ts:47) is used only by tests and the barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the constant or use it."
+      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. decideSecretConflict (domain/cribl-secrets/secret-conflict.ts ~:67-73) and classify-existing.ts findById each pick the record for an id out of items, with different handling of non-object entries, so the onboarding source planner and ensureTextSecret can read the same answer differently. SECRETS_API_PATH (guided-deploy/secret-provisioning.ts:47) is used only by tests and the barrel since DBT-152. FIX: one reader in domain/cribl-secrets; remove the constant or use it. DONE 2026-10-30: integrated from the paused fix/dbt-187-secret-get-reader-review (0074116, 7a3abbc cherry-picked in chore/paused-integration). One reader, domain/cribl-secrets/secret-record.ts findSecretRecord, serves decideSecretConflict and classify-existing; SECRETS_API_PATH removed. Mutation: dropping the non-object-entry check fails 5 pins. Internal parsing only - no screen to verify live.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -3671,6 +3673,30 @@
       "title": "Folding a section above the one in use moves it under the pointer at the top of the page",
       "detail": "FOUND 2026-10-30 in the DBT-232 live check (jpederson org): with the page scrolled to the top, clicking inside Add Sample Data folded Select Sentinel Solution above it, and there was no room to scroll up by the shift, so Add Sample Data moved up about 100 px under the pointer - the MIG-7 failure the scroll compensation exists to prevent. Operator chose to fix it before 1.13.0. Fix: fold a section ABOVE the active one only when the current scroll position can absorb the combined height of those sections; otherwise leave them open (sections below always fold - they never move the active one). DONE: foldableWithoutShift (integrate-screen-state.ts) drops the above-active candidates when their summed height exceeds window.scrollY; pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson org: at scroll top, clicking inside Add Sample Data left Select Sentinel Solution open and Add Sample Data in place, and sections 3-8 folded.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-235",
+      "type": "story",
+      "priority": "next",
+      "title": "Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor",
+      "detail": "PARKED 2026-10-29 on local branch wip/dbt-195-review-uncommitted-wt15 (uncommitted review edits preserved during branch cleanup; DBT-195 itself is done). Adds documentedSources and tokensOverlap in core field-matcher/close-matches.ts so a PAN-OS field never cites another vendor's pack, a direction qualifier does not match inside another word, and the CEF catalog stays documented with no solution named; 4 pins. Does NOT apply cleanly to the 1.13.0 head (rule-coverage-section.tsx moved under DBT-223) - rebase, re-run the pins, mutation-check, confirm in Rule Coverage live."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "DBT-236",
+      "type": "story",
+      "priority": "next",
+      "title": "Finish the DBT-197 review follow-up: name what the sample store kept after a trim",
+      "detail": "PARKED 2026-10-29 on local branch wip/dbt-197-review-leftover (DBT-197 itself is done, verified both). Adds storedTrimSentences (planned-samples.ts) so the Lake and capture headlines say what the STORE trimmed, not only what the panel fetched; 2 pins plus a DOM test. Does NOT apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture live."
     }
   ],
   "features": [

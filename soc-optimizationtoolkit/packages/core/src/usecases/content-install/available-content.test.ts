@@ -150,3 +150,100 @@ describe("findSolutionCatalogEntry (DBT-176)", () => {
     expect(lookup.reason).toMatch(/^the Content Hub catalog listed no packages/);
   });
 });
+
+/**
+ * DBT-183: the fuzzy match was `dn.includes(target) || target.includes(dn)`
+ * taken from the FIRST package that satisfied it. An empty normalised name on
+ * either side made `includes('')` true, so a nameless package matched every
+ * lookup (and an empty lookup matched every package); and two names that
+ * contain each other resolved by catalog order, not by which is closer.
+ */
+describe("findSolutionCatalogEntry name matching (DBT-183)", () => {
+  function pkg(name: string, displayName?: unknown) {
+    return {
+      name,
+      properties:
+        displayName === undefined
+          ? { contentId: `${name}-id`, version: "1.0.0" }
+          : { displayName, contentId: `${name}-id`, version: "1.0.0" },
+    };
+  }
+
+  /** The matched packageId, or the lookup kind when nothing was found. */
+  async function lookupId(packages: unknown[], solutionName: string): Promise<string> {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: packages } });
+    const lookup = await findSolutionCatalogEntry(azure, WS, solutionName);
+    return lookup.kind === "found" ? lookup.entry.packageId : lookup.kind;
+  }
+
+  it("never matches a package whose displayName is empty, missing or not a string", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: { value: [pkg("empty", ""), pkg("missing"), pkg("numeric", 42)] },
+    });
+    expect(await findSolutionCatalogEntry(azure, WS, "Cloudflare")).toEqual({
+      kind: "not-found",
+      packagesSeen: 3,
+    });
+  });
+
+  it("never matches a package whose displayName is whitespace or punctuation only", async () => {
+    expect(await lookupId([pkg("ws", "   "), pkg("punct", " () - ")], "Cloudflare")).toBe(
+      "not-found",
+    );
+  });
+
+  it("skips a nameless package listed BEFORE the real one", async () => {
+    expect(await lookupId([pkg("empty", ""), pkg("cf", "Cloudflare")], "Cloudflare")).toBe("cf");
+  });
+
+  it("matches nothing for an empty or whitespace-only lookup name", async () => {
+    const packages = [pkg("cf", "Cloudflare"), pkg("z", "Zscaler")];
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 200, body: { value: packages } });
+    expect(await findSolutionCatalogEntry(azure, WS, "")).toEqual({
+      kind: "not-found",
+      packagesSeen: 2,
+    });
+    expect(await lookupId(packages, "  \t ")).toBe("not-found");
+  });
+
+  it("prefers the exact (case/space-normalised) name over an earlier containing one", async () => {
+    const packages = [
+      pkg("mdc", "Microsoft Defender for Cloud"),
+      pkg("md", "Microsoft Defender"),
+    ];
+    expect(await lookupId(packages, "microsoft  DEFENDER")).toBe("md");
+  });
+
+  it("prefers the exact name over an earlier contained one", async () => {
+    const packages = [
+      pkg("md", "Microsoft Defender"),
+      pkg("mdc", "Microsoft Defender for Cloud"),
+    ];
+    expect(await lookupId(packages, "Microsoft Defender for Cloud")).toBe("mdc");
+  });
+
+  it("with no exact name, picks the longest contained name, whatever the catalog order", async () => {
+    const short = pkg("ms", "Microsoft");
+    const long = pkg("md", "Microsoft Defender");
+    expect(await lookupId([short, long], "Microsoft Defender XDR")).toBe("md");
+    expect(await lookupId([long, short], "Microsoft Defender XDR")).toBe("md");
+  });
+
+  it("with no exact name, picks the closest containing name, whatever the catalog order", async () => {
+    const near = pkg("cfz", "Cloudflare ZT");
+    const far = pkg("cfzt", "Cloudflare Zero Trust Logs");
+    expect(await lookupId([far, near], "Cloud flare")).toBe("cfz");
+    expect(await lookupId([near, far], "Cloud flare")).toBe("cfz");
+  });
+
+  it("breaks a full tie (same shared length, same difference) by catalog order", async () => {
+    const a = pkg("cfa", "Cloudflare A");
+    const b = pkg("cfb", "Cloudflare B");
+    expect(await lookupId([a, b], "Cloudflare")).toBe("cfa");
+    expect(await lookupId([b, a], "Cloudflare")).toBe("cfb");
+  });
+});

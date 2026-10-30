@@ -142,10 +142,11 @@ type Status = 'idle' | 'running' | 'ok' | 'failed';
 const AUA_ACCEPTANCE_KEY = 'auaAcceptance';
 const SETUP_KEY = 'setupComplete';
 // Deployment/naming options (porting-plan Unit 4): ONE plain KV entry,
-// persisted through the same SecretsStore adapter as appMode. An inline save
-// is planned by @soc/ui planOptionsSave, which applies the edit with @soc/core
-// applyOptionsPatch to the RAW record the read returned (the defaults when it
-// was never written), so unmanaged keys in the blob survive (DBT-172).
+// persisted through the same SecretsStore adapter as the acceptance and setup
+// records above. An inline save is planned by @soc/ui planOptionsSave, which
+// applies the edit with @soc/core applyOptionsPatch to the RAW record the read
+// returned (the defaults when it was never written), so unmanaged keys in the
+// blob survive (DBT-172).
 const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
@@ -648,7 +649,7 @@ function App() {
   const [setupDone, setSetupDone] = useState<LoadableSetup>('loading');
 
   // The parsed deployment/naming options (porting-plan Unit 4). Hydrated
-  // from the plain appOptions KV entry alongside acceptance and mode;
+  // from the plain appOptions KV entry alongside acceptance and setup;
   // refreshed by persistOperation's save (the Integrate page's DCE toggle).
   // The read is held WITH what it said - loaded, absent, unreadable or
   // retrying - because the tolerant codec turns a failed read into the

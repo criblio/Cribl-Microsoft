@@ -724,8 +724,8 @@ did not understand". The map needs that distinction to mint a verified zero, so
 and refuses the whole list on a bad one. DBT-148 later made `listAllPages`
 throw on such a page, naming its URL, so its other callers no longer read it
 as zero. The pagers stay separate: the map needs a classified verdict rather
-than a throw, and `arm-pager` refuses a nextLink it cannot follow where
-`listAllPages` returns the first page alone.
+than a throw. Both refuse a nextLink they cannot follow; `listAllPages`
+returned the first page alone until DBT-160 made it throw.
 
 **What a verified zero rests on.** A per-scope ARM read (policyAssignments with
 `atScope()`, policyExemptions, roleAssignments) answers 403 when the caller
