@@ -86,7 +86,10 @@
  * the full count until a reload and then the smaller one with no reason given.
  * Both now read the entry back after writing it, list THAT, and say what was
  * trimmed in the same sentence the capture and Lake commits use
- * (storedEventShortfalls / storedEventShortfallText, DBT-197).
+ * (storedEventShortfalls / storedEventShortfallText, DBT-197). Applying CSV
+ * headers is a second write of the same sample and is read back the same way;
+ * an arrival from a sibling panel replaces the entry, so it drops that log
+ * type's note rather than leave it contradicting the new chip.
  *
  * The store is keyed by log type with replace-by-logType semantics, so tagging
  * the same log type twice overwrites it (one chip per log type). The pure
@@ -250,7 +253,9 @@ export function SampleIntakeSection({
   const [uploadError, setUploadError] = useState("");
   const [busy, setBusy] = useState(false);
   // Log types the LAST paste or upload handed the store more events of than it
-  // kept (DBT-206). Replaced by each paste or upload, so it describes that one.
+  // kept (DBT-206). Replaced by each paste or upload, so it describes that one;
+  // naming a CSV's columns re-measures its log type, and an arrival of the
+  // same log type drops its note.
   const [trimmed, setTrimmed] = useState<StoredEventShortfall[]>([]);
 
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(
@@ -427,6 +432,11 @@ export function SampleIntakeSection({
     // rebuilds the reported list from this copy, so it would report the
     // arrivals away again while they sat in the store.
     void load();
+    // A trim note from this section's own last write describes an entry an
+    // arrival of the same log type just replaced; the sibling panel says what
+    // ITS write kept (DBT-206).
+    const arrived = new Set(arrivalEvent.samples.map((s) => s.logType));
+    setTrimmed((current) => current.filter((t) => !arrived.has(t.logType)));
     // Then offer resolution for the headerless arrivals, ONE TURN EACH, which
     // is the batch behaviour a multi-file upload has had since Unit 12. A batch
     // with nothing headerless in it builds a queue that is already done, and
@@ -648,8 +658,16 @@ export function SampleIntakeSection({
       setBusy(true);
       try {
         const resolved = resolveHeaders(item, headers);
-        await store.upsert(resolved);
-        commit(upsertSample(samples ?? [], resolved));
+        // The queue holds the sample as HANDED (every event, so the re-parse
+        // still reads them all), and this write is capped like the first one:
+        // list what the store kept, and re-measure this log type's note.
+        const kept = await writeAndReadBack(resolved);
+        commit(upsertSample(samples ?? [], kept));
+        const trim = storedEventShortfalls([resolved], [kept]);
+        setTrimmed((current) => [
+          ...current.filter((t) => t.logType !== resolved.logType),
+          ...trim,
+        ]);
         // REMEMBER the order for this vendor + log type, so the same feed
         // acquired next week is not asked again. A bundled order the operator
         // merely confirmed stores nothing - remember() refuses it, because the
@@ -663,7 +681,7 @@ export function SampleIntakeSection({
       }
       advanceCsvQueue();
     },
-    [csvQueue, store, samples, commit, advanceCsvQueue, rememberColumnOrder],
+    [csvQueue, writeAndReadBack, samples, commit, advanceCsvQueue, rememberColumnOrder],
   );
 
   return (

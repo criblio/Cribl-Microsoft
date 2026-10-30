@@ -1152,4 +1152,103 @@ describe("SampleIntakeSection - a sample the store trimmed (DBT-206)", () => {
     ]);
     expect(trimNotes(view.container)).toEqual([]);
   });
+
+  it("naming a trimmed headerless CSV's columns still shows the STORED count", async () => {
+    // The paste path's second write. The dialog re-parses the FULL pasted text
+    // (so the field list still comes from every event) and writes it again;
+    // that write is capped too, so what it lists has to be read back as well,
+    // or the chip returns to the full count under a note saying otherwise.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+    const rows = Array.from(
+      { length: EVENTS },
+      (_, i) =>
+        `1,2026/08/13 10:49:02,013201031064,AUTH,0,${2817 + i},2026/08/13 10:48:54,vsys1,user${i}-with-a-longer-name`,
+    ).join("\n");
+
+    await paste(view.container, "PanAuth", rows);
+    expect(dialogs(view.container)).toHaveLength(1);
+    fireEvent.change(
+      view.container.querySelector(".csv-dialog textarea.sample-paste") as HTMLTextAreaElement,
+      { target: { value: "a,b,c,d,e,f,g,h,i" } },
+    );
+    await act(async () => {
+      clickButton(view.container, "Apply headers");
+    });
+
+    const stored = byType.get("PanAuth");
+    expect(stored?.parsed.fields.map((f) => f.name)).toContain("a");
+    const kept = stored?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(EVENTS);
+    expect(chipCounts(view.container)).toHaveLength(1);
+    expect(chipCounts(view.container)[0]).toMatch(new RegExp(`^${kept} events, `));
+    expect(trimNotes(view.container)).toEqual([sentence("PanAuth", kept, EVENTS)]);
+    const reported = view.onSamplesChange.mock.calls.at(-1)?.[0] as TaggedSample[];
+    expect(reported.map((s) => s.parsed.records.length)).toEqual([kept]);
+  });
+
+  it("names only the LATER file's trim when two uploaded files share a log type", async () => {
+    // The store replaces by log type, so the first file's entry is gone by the
+    // time the batch ends: a note for it would describe nothing on the page.
+    const { store, byType } = cappedStore();
+    const view = await mount(store);
+
+    await upload(view.container, [
+      new File([ndjson(EVENTS)], "logins.json", { type: "application/json" }),
+      new File([ndjson(40)], "logins.json", { type: "application/json" }),
+    ]);
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(1);
+    });
+    const logTypes = [...byType.keys()];
+    expect(logTypes).toHaveLength(1);
+    const kept = byType.get(logTypes[0])?.parsed.records.length ?? -1;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(40);
+    expect(trimNotes(view.container)).toEqual([sentence(logTypes[0], kept, 40)]);
+  });
+
+  it("drops the note with the chip it explains", async () => {
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    const remove = Array.from(
+      view.container.querySelectorAll(".sample-chip button"),
+    ).find((b) => b.textContent === "Remove");
+    expect(remove).toBeDefined();
+    await act(async () => {
+      fireEvent.click(remove!);
+    });
+
+    await waitFor(() => {
+      expect(chipCounts(view.container)).toHaveLength(0);
+    });
+    expect(trimNotes(view.container)).toEqual([]);
+  });
+
+  it("drops the note when a sibling panel replaces the trimmed log type", async () => {
+    // The note describes the paste's write. A capture or Lake commit of the
+    // same log type replaces that entry, and a note still saying "kept 10 of
+    // 60" above a chip reading 2 events would contradict the chip.
+    const { store } = cappedStore();
+    const view = await mount(store);
+    await paste(view.container, "Logins", ndjson(EVENTS));
+    expect(trimNotes(view.container)).toHaveLength(1);
+
+    await siblingCommits(
+      view,
+      store,
+      [tagSampleFromContent("Logins", ndjson(2), "lake:Logins")],
+      1,
+    );
+
+    expect(chipCounts(view.container).map((t) => t.split(",")[0])).toEqual([
+      "2 events",
+    ]);
+    expect(trimNotes(view.container)).toEqual([]);
+  });
 });
