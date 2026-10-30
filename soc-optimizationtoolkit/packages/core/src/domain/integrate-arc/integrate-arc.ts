@@ -172,7 +172,8 @@ export const INTEGRATE_SECTIONS: readonly IntegrateSection[] = [
       "overflow fields required by neither rules nor workbooks. " +
       "Approval is required before the pack is built; Auto-Approve " +
       "All is the one-click escape hatch. Approvals reset when you re-analyze, " +
-      "but your edits survive; the native-table deploy never waits on approval.",
+      "but your edits survive while the fields they edit are still in the " +
+      "sample; the native-table deploy never waits on approval.",
     // NEITHER connection (DBT-54; was "both", true of no version of this
     // screen). Cribl appears in this section only as DOMAIN VOCABULARY - the
     // "Cribl handles" tile names what the GENERATED pipeline will do with a

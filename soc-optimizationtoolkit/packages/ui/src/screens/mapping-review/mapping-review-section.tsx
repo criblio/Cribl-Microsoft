@@ -45,8 +45,9 @@
  * the "Approval Required" / "Approved" badges, the staleness prompt, and the
  * "X mapped, Y unmapped" expander label. Approvals reset on re-analysis, and
  * a table's on any re-point of its rows (Dest Field or suggestion, DBT-213); edits
- * survive and re-key on a log-type rename (the Unit 11 seam, threaded via the
- * optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
+ * survive a re-analysis re-applied to the new rows - one whose field is gone is
+ * dropped, and a notice says how many (DBT-210) - and re-key on a log-type
+ * rename (the Unit 11 seam, threaded via the optional renameEvent prop). A removed sample (removeEvent, DBT-143) prunes
  * only its own card and review; the other tables keep their approvals. A
  * close match chosen in a coverage section (remapEvent, DBT-203) applies
  * through the same path as this section's own unmapped-column suggestions.
@@ -142,6 +143,7 @@ import {
   deriveLiveStats,
   deriveMappingReviewGate,
   destClaim,
+  droppedEditsNotice,
   effectiveMappings,
   fieldMappingsLabel,
   formatExampleValue,
@@ -665,6 +667,16 @@ export function MappingReviewSection({
   // (Move). The claim panel promises their value is kept, so the policy's
   // drop must not take them (autoDropPlan's `reviewerKept`).
   const reviewerKeptRef = useRef(new Set<string>());
+  // DBT-210: an edit a re-analysis dropped is no longer the policy's drop or
+  // the reviewer's move, so forget its keys - declared BEFORE the auto-drop
+  // effect, which must not see them on the same commit (a table change would
+  // otherwise never re-drop a field the old table's policy had dropped).
+  useEffect(() => {
+    for (const { logType, source } of review.droppedEdits) {
+      autoDroppedRef.current.delete(`${logType}|${source}`);
+      reviewerKeptRef.current.delete(`${logType}|${source}`);
+    }
+  }, [review.droppedEdits]);
   useEffect(() => {
     for (const report of reports) {
       const assessment = assessments.get(report.logType);
@@ -711,6 +723,10 @@ export function MappingReviewSection({
   // removal landed: its results must not resurrect the removed log type.
   const samplesRef = useRef(samples);
   samplesRef.current = samples;
+  // The reports the edit store was made against, for the re-base a completed
+  // run dispatches (DBT-210). Latest render's, not the run's closure.
+  const reportsRef = useRef(reports);
+  reportsRef.current = reports;
 
   // ---- Analyze / Re-Analyze ---------------------------------------------
   const runAnalysis = useCallback(async (
@@ -796,6 +812,7 @@ export function MappingReviewSection({
       // list, not this closure's, which still holds it.
       const live = new Set(samplesRef.current.map((s) => s.logType));
       const kept = produced.filter((r) => live.has(r.logType));
+      const previous = reportsRef.current;
       setReports(kept);
       logger?.info("gap-analysis: finished", {
         tables: kept.map((r) => r.tableName).join(","),
@@ -805,7 +822,9 @@ export function MappingReviewSection({
         solutionName,
         samples.filter((s) => live.has(s.logType)),
       );
-      dispatch({ type: "analyzed" });
+      // DBT-210: the edits are re-based onto `kept`; the ones that no longer
+      // fit are dropped and counted (the notice under the approval bar).
+      dispatch({ type: "analyzed", previous, reports: kept });
       // A fresh analysis resets every approval, so a note asking to approve
       // again after a suggestion is no longer about anything.
       setAppliedNotes({});
@@ -1224,6 +1243,18 @@ export function MappingReviewSection({
 
       {gate.stale && reports.length > 0 && (
         <p className="mapping-review-stale">{MAPPING_REVIEW_STALE_NOTICE}</p>
+      )}
+
+      {review.droppedEdits.length > 0 && (
+        <p
+          className="field-hint mapping-review-dropped-edits"
+          role="status"
+          title={review.droppedEdits
+            .map((d) => `${d.logType}: ${d.source}`)
+            .join("\n")}
+        >
+          {droppedEditsNotice(review.droppedEdits)}
+        </p>
       )}
 
       {hasMappings && (

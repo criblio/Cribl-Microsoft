@@ -272,7 +272,8 @@ export type {
 // stat tiles, the DCR/Cribl handles split, an editable dest/action mapping
 // table, and the data-loss warnings. The pure approval STATE MACHINE
 // (mapping-review-state) owns the consent semantics: approvals reset on
-// re-analysis, edits survive and re-key on rename (the Unit 11 seam), the
+// re-analysis, edits are re-applied to the new rows (dropped and counted when
+// their field is gone, DBT-210) and re-key on rename (the Unit 11 seam), the
 // staleness flag, and the CONTENT-path deploy gate that is strictly partitioned
 // from the native quick-onboard gate.
 export { MappingReviewSection } from "./screens/mapping-review/mapping-review-section";

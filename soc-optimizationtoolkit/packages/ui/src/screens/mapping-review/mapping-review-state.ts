@@ -18,10 +18,13 @@
  *      table's approval is withdrawn when the reviewer re-points one of its
  *      rows, by Dest Field or by suggestion alike (F1-c, DBT-213).
  *   2. MAPPING EDITS - the reviewer's dest/action overrides, keyed by logType.
- *      They SURVIVE re-analysis (a re-run must not discard hand edits) and
- *      RE-KEY on a log-type rename via the Unit 11 reKeyByLogType primitive -
- *      the SAME re-key seam sample intake built for exactly this (never orphan
- *      an edit under the old key, the legacy renderer bug).
+ *      They SURVIVE re-analysis (a re-run must not discard hand edits) by being
+ *      RE-APPLIED to the new rows, and an edit whose source field, table or
+ *      column is gone is dropped and counted rather than built against rows
+ *      from an older analysis (DBT-210, rebaseEdits). They RE-KEY on a
+ *      log-type rename via the Unit 11 reKeyByLogType primitive - the SAME
+ *      re-key seam sample intake built for exactly this (never orphan an edit
+ *      under the old key, the legacy renderer bug).
  *   3. STALENESS - a flag raised when the underlying samples / solution / schema
  *      changed AFTER the last analysis. Stale approvals cannot gate a deploy
  *      (the mapping they approved no longer reflects the inputs); the UI prompts
@@ -54,6 +57,7 @@ import {
   applyRemap,
   closeMatchRowsFromReports,
   FIELD_EXAMPLE_MAX_CHARS,
+  getOverflowConfig,
   landsInColumn,
   suggestForDestColumn,
 } from "@soc/core";
@@ -78,7 +82,7 @@ export interface MappingReviewState {
   /**
    * Per-logType edited mapping rows. Present only for tables the operator
    * hand-edited; a table with no entry uses its report's mappings verbatim.
-   * SURVIVES re-analysis and RE-KEYS on rename.
+   * RE-BASED onto a re-analysis (DBT-210) and RE-KEYS on rename.
    */
   mappingEdits: Readonly<Record<string, GapFieldMapping[]>>;
   /**
@@ -88,6 +92,18 @@ export interface MappingReviewState {
   stale: boolean;
   /** Monotonic count of completed analyses (provenance / debug; never a key). */
   analysisRevision: number;
+  /**
+   * The edits the LAST analysis could not carry over (DBT-210): their source
+   * field, table or column is gone. Empty until a re-analysis drops one.
+   */
+  droppedEdits: readonly DroppedEdit[];
+}
+
+/** One reviewer edit a re-analysis dropped (DBT-210). */
+export interface DroppedEdit {
+  logType: string;
+  /** The source field of the edited row. */
+  source: string;
 }
 
 /** The pristine review state, before any analysis or approval. */
@@ -96,6 +112,7 @@ export const INITIAL_MAPPING_REVIEW_STATE: MappingReviewState = {
   mappingEdits: {},
   stale: false,
   analysisRevision: 0,
+  droppedEdits: [],
 };
 
 /** Which column of a mapping row an edit targets. */
@@ -105,10 +122,18 @@ export type MappingEditField = "dest" | "action";
 export type MappingReviewAction =
   /**
    * A fresh analysis completed. Approvals RESET (the operator must re-consent to
-   * the new mapping); edits SURVIVE (hand edits are not discarded); staleness
-   * clears; the revision advances.
+   * the new mapping); staleness clears; the revision advances. Edits SURVIVE
+   * only as far as the new rows allow (DBT-210, {@link rebaseEdits}): each is
+   * re-applied to the new analysis's row for the same source, and an edit whose
+   * source, table or column is gone is dropped into `droppedEdits`.
    */
-  | { type: "analyzed" }
+  | {
+      type: "analyzed";
+      /** The reports the edits were made against (before this analysis). */
+      previous: readonly GapReport[];
+      /** The reports this analysis produced. */
+      reports: readonly GapReport[];
+    }
   /**
    * The underlying samples / solution / schema changed after the last analysis.
    * Raises the staleness flag (approvals and edits are kept but can no longer
@@ -261,14 +286,22 @@ export function mappingReviewReducer(
   action: MappingReviewAction,
 ): MappingReviewState {
   switch (action.type) {
-    case "analyzed":
-      // Approvals reset on re-analysis; edits survive; staleness clears.
+    case "analyzed": {
+      // Approvals reset on re-analysis; staleness clears; edits are re-based
+      // onto the new rows, and the ones that no longer fit are counted.
+      const rebased = rebaseEdits(
+        state.mappingEdits,
+        action.previous,
+        action.reports,
+      );
       return {
         approvals: {},
-        mappingEdits: state.mappingEdits,
+        mappingEdits: rebased.mappingEdits,
         stale: false,
         analysisRevision: state.analysisRevision + 1,
+        droppedEdits: rebased.dropped,
       };
+    }
 
     case "inputs-changed":
       // Only meaningful once something has been analyzed; idempotent otherwise.
@@ -498,13 +531,124 @@ export function isModified(
     return true;
   }
   const baseline = new Map(report.fieldMappings.map((m) => [m.source, m]));
-  return edits.some((edit) => {
-    const original = baseline.get(edit.source);
-    return (
-      original === undefined ||
-      DECISION_FIELDS.some((field) => edit[field] !== original[field])
+  return edits.some((edit) => isEditedRow(edit, baseline.get(edit.source)));
+}
+
+/** Whether a stored row differs from the analysis's row in any decision. */
+function isEditedRow(
+  edit: GapFieldMapping,
+  original: GapFieldMapping | undefined,
+): boolean {
+  return (
+    original === undefined ||
+    DECISION_FIELDS.some((field) => edit[field] !== original[field])
+  );
+}
+
+/**
+ * Carry the edit store across a re-analysis (DBT-210).
+ *
+ * The store holds a full copy of each edited table's rows, so carrying it over
+ * unchanged applied rows from the OLD analysis to the new one: a field the new
+ * sample no longer has was still built, and "Modified - your edits are applied
+ * when the pack is built" described rows nobody was looking at. Instead:
+ *
+ *   - An EDIT is a stored row that differs from the row the edits were made
+ *     against (`previous`; after a log-type rename there is none under the new
+ *     key, so the new row stands in). Unedited stored rows are not carried:
+ *     the new analysis's rows replace them.
+ *   - Each edit is re-applied to the new row for the same source by the same
+ *     rules the reviewer's edit went through: a destination by core
+ *     applyRemap, an action subject to actionEditRefusal (DBT-209). Edits that
+ *     leave a column run first, so a DBT-208 move replays before the row that
+ *     took the column.
+ *   - Dropped: an edit whose log type has no new report, whose table changed
+ *     (its columns are another schema's), whose source the new rows lack,
+ *     whose column the new schema lacks, or whose column the new analysis
+ *     already fills from another field (two Renames onto one name).
+ *
+ * A table with no surviving edit loses its store entry, so it reads unmodified.
+ */
+export function rebaseEdits(
+  mappingEdits: Readonly<Record<string, GapFieldMapping[]>>,
+  previous: readonly GapReport[],
+  reports: readonly GapReport[],
+): { mappingEdits: Record<string, GapFieldMapping[]>; dropped: DroppedEdit[] } {
+  const next: Record<string, GapFieldMapping[]> = {};
+  const dropped: DroppedEdit[] = [];
+  for (const [logType, stored] of Object.entries(mappingEdits)) {
+    const before = previous.find((r) => r.logType === logType);
+    const after = reports.find((r) => r.logType === logType);
+    const reference = new Map(
+      (before ?? after)?.fieldMappings.map((m) => [m.source, m]) ?? [],
     );
-  });
+    const edits = stored
+      .filter((row) => isEditedRow(row, reference.get(row.source)))
+      // Stable: edits that leave a column replay first (DBT-208 moves).
+      .sort((a, b) => Number(landsInColumn(a)) - Number(landsInColumn(b)));
+    if (edits.length === 0) continue;
+    const lost = new Set<string>();
+    if (
+      after === undefined ||
+      (before !== undefined && before.tableName !== after.tableName)
+    ) {
+      for (const edit of edits) lost.add(edit.source);
+    } else {
+      const catchAllColumn = getOverflowConfig(after.tableName).fieldName;
+      let rows: GapFieldMapping[] = [...after.fieldMappings];
+      for (const edit of edits) {
+        const replayed = replayEdit(rows, edit, after, catchAllColumn);
+        if (replayed === null) lost.add(edit.source);
+        else rows = replayed;
+      }
+      if (lost.size < edits.length) next[logType] = rows;
+    }
+    // Reported in the store's own row order, not the replay order.
+    for (const row of stored) {
+      if (lost.has(row.source)) dropped.push({ logType, source: row.source });
+    }
+  }
+  return { mappingEdits: next, dropped };
+}
+
+/** Re-apply one edited row to a new analysis's rows, or null when it no longer fits. */
+function replayEdit(
+  rows: GapFieldMapping[],
+  edit: GapFieldMapping,
+  report: GapReport,
+  catchAllColumn: string,
+): GapFieldMapping[] | null {
+  const at = rows.findIndex((m) => m.source === edit.source);
+  if (at === -1) return null;
+  let next = rows;
+  if (rows[at].dest.toLowerCase() !== edit.dest.toLowerCase()) {
+    const remap = applyRemap(rows, {
+      sourceField: edit.source,
+      destColumn: edit.dest,
+      destSchema: report.destSchema,
+      catchAllColumn,
+      baseline: report.fieldMappings,
+    });
+    if (remap.outcome !== "applied" && remap.outcome !== "reverted") return null;
+    if (remap.claimedBy !== null) return null;
+    next = remap.rows;
+  }
+  const row = next[at];
+  if (row.action === edit.action) return next;
+  if (actionEditRefusal(row, edit.action, catchAllColumn) !== null) return null;
+  return next.map((m, i) => (i === at ? { ...m, action: edit.action } : m));
+}
+
+/**
+ * The one sentence a re-analysis that dropped edits shows (DBT-210). Empty
+ * when it dropped none.
+ */
+export function droppedEditsNotice(dropped: readonly DroppedEdit[]): string {
+  const n = dropped.length;
+  if (n === 0) return "";
+  return n === 1
+    ? "1 mapping edit no longer matches a field in the new analysis and was dropped."
+    : `${n} mapping edits no longer match a field in the new analysis and were dropped.`;
 }
 
 /**
