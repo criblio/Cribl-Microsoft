@@ -406,9 +406,9 @@ export function AzureResourcesSection({
     <section className="panel">
       <h2 className="panel-title">Select resources and grant permissions</h2>
       <p className="panel-desc">
-        Discover the subscriptions this app registration can see, select the subscription and (for the
-        existing and bring-your-own-RG paths) the target resource, then generate and run the role
-        assignment script and validate the effective permissions.
+        Discover the subscriptions this app registration can see, select the subscription and the
+        target workspace and resource group, then generate and run the role assignment script and
+        validate the effective permissions.
         <InfoTip
           label="About discovery"
           text={
@@ -558,11 +558,7 @@ export function AzureResourcesSection({
       {dependentStatus !== "" && (
         <div className="discovery-result">
           <span className="field-label">
-            {setupPath === "existing"
-              ? "Workspace discovery"
-              : setupPath === "lab-byo-rg"
-                ? "Resource group discovery"
-                : "Setup path"}
+            Workspace and resource group discovery
           </span>
           <pre className="result">{dependentStatus}</pre>
         </div>

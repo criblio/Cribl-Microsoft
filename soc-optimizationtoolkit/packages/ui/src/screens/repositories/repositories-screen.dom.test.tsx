@@ -270,3 +270,26 @@ describe("Repositories screen - onTokenStatusChange (DBT-246)", () => {
     expect(cb).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * ONE TOKEN-SCOPE STATEMENT (DBT-245). The screen used to say a classic token
+ * needs only public_repo while pat-policy said it needs no scopes at all.
+ */
+describe("Repositories screen - token scope (DBT-245)", () => {
+  it("never names public_repo as a requirement", async () => {
+    const container = await mount(makePorts().ports);
+    fireEvent.click(
+      screen.getByRole("button", { name: /instructions for creating a token/i }),
+    );
+    expect(container.textContent ?? "").not.toContain("public_repo");
+  });
+
+  it("states the shared scope guidance exactly once", async () => {
+    const container = await mount(makePorts().ports);
+    fireEvent.click(
+      screen.getByRole("button", { name: /instructions for creating a token/i }),
+    );
+    const text = container.textContent ?? "";
+    expect(countOccurrences(text, "no scopes are required")).toBe(1);
+  });
+});

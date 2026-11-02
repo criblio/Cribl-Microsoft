@@ -357,8 +357,7 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
               ))}
             </ol>
             <p className="panel-desc">
-              Paste it into the field above and click {view.submitLabel}. Classic
-              tokens (ghp_...) also work - only public_repo scope is needed. The
+              Paste it into the field above and click {view.submitLabel}. The
               token is never written to disk in plaintext.
             </p>
           </div>

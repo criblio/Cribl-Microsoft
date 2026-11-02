@@ -24,7 +24,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { AzureConfig, AzureSetupPath, ChangeRequestContext } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -157,5 +157,68 @@ describe("connectivity gates the section", () => {
       </PortsProvider>,
     );
     expect(list).not.toHaveBeenCalled();
+  });
+});
+
+describe("the resource intro does not tie the pickers to setup paths (DBT-241)", () => {
+  it.each(ALL_PATHS)("the intro on %s names no setup path", (path) => {
+    const { container } = renderAt(path);
+    const intro = container.querySelector(".panel-desc")?.textContent ?? "";
+    expect(intro).toMatch(/select the subscription/i);
+    expect(intro).not.toMatch(/existing and bring-your-own/i);
+    expect(intro).not.toMatch(/setup path/i);
+  });
+
+  it("the discovery label does not switch on the setup path", async () => {
+    const labels: string[] = [];
+    for (const path of ALL_PATHS) {
+      const { container, unmount } = render(
+        <PortsProvider
+          ports={
+            {
+              azure: {
+                request: async (req: { path: string }) => ({
+                  status: 200,
+                  body: {
+                    value:
+                      req.path === "/subscriptions"
+                        ? [{ subscriptionId: CONFIG.subscriptionId, displayName: "sub", state: "Enabled" }]
+                        : [],
+                  },
+                }),
+              },
+            } as unknown as UiPorts
+          }
+          config={{ ...CONFIG, setupPath: path }}
+        >
+          <AzureResourcesSection
+            clientId={CONFIG.clientId}
+            tenantId={CONFIG.tenantId}
+            setupPath={path}
+            subscriptionId={CONFIG.subscriptionId}
+            onSubscriptionIdChange={vi.fn()}
+            rgName=""
+            onRgNameChange={vi.fn()}
+            workspaceName=""
+            onWorkspaceNameChange={vi.fn()}
+            connectNonce={0}
+            ctx={CTX}
+            storageContextLabel="test"
+          />
+        </PortsProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /discover \/ refresh from azure/i }));
+      const discoveryLabel = () =>
+        Array.from(container.querySelectorAll(".discovery-result .field-label"))
+          .map((el) => el.textContent ?? "")
+          .find((t) => t !== "Role assignment script");
+      await waitFor(() => {
+        expect(discoveryLabel()).toBeDefined();
+      });
+      labels.push(discoveryLabel() ?? "");
+      unmount();
+    }
+    expect(new Set(labels).size).toBe(1);
+    expect(labels[0]).not.toMatch(/^Setup path$/);
   });
 });
