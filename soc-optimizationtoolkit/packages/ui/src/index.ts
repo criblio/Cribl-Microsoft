@@ -763,6 +763,8 @@ export type {
   AzureConnectResult,
   AzureConnectSectionProps,
 } from "./screens/setup-wizard/azure-connect-section";
+export { AzureConnectivitySection } from "./screens/setup-wizard/azure-connectivity-section";
+export type { AzureConnectivitySectionProps } from "./screens/setup-wizard/azure-connectivity-section";
 export { AzureResourcesSection } from "./screens/setup-wizard/azure-resources-section";
 export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-resources-section";
 export { ChangeRequestBlock } from "./screens/setup-wizard/change-request-block";

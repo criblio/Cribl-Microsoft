@@ -9,6 +9,7 @@ import {
   AzureLoggingMapScreen,
   MappingCatalogScreen,
   AzureConnectSection,
+  AzureConnectivitySection,
   AzureResourcesSection,
   BatchDeployScreen,
   DcrAutomationScreen,
@@ -1512,9 +1513,27 @@ function App() {
         "connection's secret is live at a time: switching connections clears it and you re-enter " +
         'and reconnect here. If a secret is already stored the field stays blank - enter a new ' +
         'value only to replace it. The client ID, tenant ID, and setup path are non-secret ' +
-        'configuration remembered per connection in the plain azureProfiles KV entry. The ' +
-        "connection bar above shows whether this connection's secret is live this session."
+        'configuration remembered per connection in the plain azureProfiles KV entry.'
       }
+    />
+  );
+
+  // The "How will this app work with Azure?" choice, at the TOP of the Azure
+  // area in BOTH places (the wizard's Connect Azure step and the Setup page).
+  // It writes the whole next config through updateField, the same persistence
+  // path the sections below use for non-secret config (no new store key).
+  // Clearing the identity also clears the secret and token, so a Disconnected
+  // choice never leaves a live credential behind.
+  const azureConnectivityElement = (
+    <AzureConnectivitySection
+      key={`connectivity-${store.activeProfileId ?? 'none'}`}
+      config={activeConfig}
+      onChange={updateField}
+      storedIdentity={activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== ''}
+      onClearIdentity={() => {
+        updateField({ tenantId: '', clientId: '' });
+        handleClearSecret();
+      }}
     />
   );
 
@@ -1565,17 +1584,10 @@ function App() {
           // The cloud first run is Connect GitHub -> Connect Azure -> Check
           // permissions -> Mode: only steps that can still be acted on.
           installedInLeader
-          criblShellMode="cloud"
           contentPlatform="cloud"
-          defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
-          azureChangeRequestContext={changeRequestCtx}
+          azureConnectivitySection={azureConnectivityElement}
           azureConnectSection={azureConnectElement}
           azureResourcesSection={azureResourcesElement}
-          azureConnectGuidance={
-            'Already have the credentials? Enter the tenant id, client id, and secret in the ' +
-            'App registration and connect section on Setup. The secret is stored encrypted in ' +
-            'the app key-value store and is write-only - it can be replaced but never read back.'
-          }
           onTokenStatusChange={handleTokenStatusChange}
           accepted={phase.phase !== 'aua'}
           onAccept={handleAccept}
@@ -1795,6 +1807,7 @@ function App() {
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
       <div id="setup-connect-section" />
+      {azureConnectivityElement}
       {azureConnectElement}
       {azureResourcesElement}
       <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />

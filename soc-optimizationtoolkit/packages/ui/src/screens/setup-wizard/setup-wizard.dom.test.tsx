@@ -62,7 +62,6 @@ function renderOnAzureStep(section?: ReactNode, resources?: ReactNode) {
     <PortsProvider ports={PORTS} config={CONFIG}>
       <SetupWizard
         capabilities={CAPABILITIES}
-        criblShellMode="cloud"
         contentPlatform="cloud"
         initialTarget="cribl-hosted"
         lockTarget
@@ -116,15 +115,15 @@ describe("SetupWizard - Connect Azure step", () => {
     expect(screen.getByText("connect form")).toBeTruthy();
   });
 
-  it("keeps the step's own guidance BESIDE the form, not replaced by it", () => {
+  it("keeps the step's own one-line guidance BESIDE the form, not replaced by it", () => {
     // The change-request path was not a workaround to retire - most operators
-    // genuinely have to ask another team for credentials. The form was added
-    // alongside it, and a future edit that swaps one for the other would be a
-    // regression for whichever half it dropped.
+    // genuinely have to ask another team for credentials. The generator now
+    // lives in the connect section alone (DBT-240: one per screen), so the step
+    // keeps only its guidance line beside the form.
     renderOnAzureStep(<div data-testid="azure-connect-slot">connect form</div>);
     advanceToAzureStep();
     expect(screen.getByText("connect form")).toBeTruthy();
-    expect(screen.getByText(/change request/i)).toBeTruthy();
+    expect(screen.getByText(/needed only to deploy to azure/i)).toBeTruthy();
   });
 
   it("RENDERS the resources section too, because the step's own copy promises it", () => {
@@ -168,7 +167,7 @@ describe("SetupWizard - Connect Azure step", () => {
     advanceToAzureStep();
     expect(screen.queryByTestId("azure-connect-slot")).toBeNull();
     // Reached the step and it still has its content - not a blank panel.
-    expect(screen.getByText(/change request/i)).toBeTruthy();
+    expect(screen.getByText(/needed only to deploy to azure/i)).toBeTruthy();
   });
 });
 
@@ -188,8 +187,7 @@ describe("SetupWizard - GitHub step token status (DBT-246)", () => {
         <PortsProvider ports={ports} config={CONFIG}>
           <SetupWizard
             capabilities={CAPABILITIES}
-            criblShellMode="cloud"
-            contentPlatform="cloud"
+                contentPlatform="cloud"
             initialTarget="cribl-hosted"
             lockTarget
             installedInLeader

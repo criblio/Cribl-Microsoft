@@ -19,9 +19,8 @@
  *     -> Target chooser (Cribl-hosted vs local; core tradeoff DATA)
  *     -> Connect: the .tgz upload walkthrough (cribl-hosted) OR the
  *        leader-connect form (local, core base-URL + dual-profile rules)
- *     -> Connect Azure (service-principal identity guidance)
- *     -> Permission preflight (Unit 9 RbacPreflightPanel)
  *     -> Repositories / GitHub PAT (Unit 14 RepositoriesScreen)
+ *     -> Connect Azure (connectivity choice, then the identity form)
  *     -> Mode (availability-gated cards with a Recommended badge; core matrix)
  *     -> Get Started (persists the chosen mode and enters the app).
  *
@@ -37,22 +36,18 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { appRegistrationRequest } from "@soc/core";
+import { patPolicyFor } from "@soc/core";
 import type {
-  ChangeRequestContext,
   ContentPlatform,
-  CriblShellMode,
   LeaderProfileStore,
-  SetupPath,
   WizardCapabilities,
   WizardPhase,
   WizardShape,
   WizardTarget,
 } from "@soc/core";
 import { AuaGate } from "../../frame/aua-gate";
-import { RbacPreflightPanel } from "../preflight/rbac-preflight-panel";
 import { RepositoriesScreen } from "../repositories/repositories-screen";
-import { ChangeRequestBlock } from "./change-request-block";
+import { InfoTip } from "../../components/info-tip";
 import { LeaderConnectStep } from "./leader-connect-step";
 import type { AppliedReconnect } from "./leader-connect-step";
 import { TargetChooser } from "./target-chooser";
@@ -84,22 +79,20 @@ export interface SetupWizardProps {
    * the local host does not (it genuinely has a leader to connect to).
    */
   installedInLeader?: boolean;
-  /** Cribl shell mode for the composed preflight panel. */
-  criblShellMode: CriblShellMode;
   /** Content platform for the composed repositories step. */
   contentPlatform: ContentPlatform;
-  /** The preflight panel's initial setup path. */
-  defaultSetupPath?: SetupPath;
-  /** Switch-account handler for the preflight panel. */
-  onSwitchAccount?: () => void;
   /** Saved dual-profile store for the local leader-connect reconnect. */
   leaderProfiles?: LeaderProfileStore;
   /** Apply a validated reconnect plan (local). */
   onReconnect?: (plan: AppliedReconnect) => void | Promise<void>;
   /** Guidance for where the local shell reads leader credentials. */
   connectGuidance?: string;
-  /** Guidance for where the Azure service-principal identity is configured. */
-  azureConnectGuidance?: string;
+  /**
+   * The "How will this app work with Azure?" choice, rendered at the TOP of the
+   * Connect Azure step, above the connect form. A node for the same reason as
+   * the two sections below: the shell already builds it for the Setup page.
+   */
+  azureConnectivitySection?: ReactNode;
   /**
    * The shell's App-registration-and-connect form, rendered INSIDE the Connect
    * Azure step.
@@ -134,17 +127,6 @@ export interface SetupWizardProps {
    * it did before.
    */
   azureResourcesSection?: ReactNode;
-  /**
-   * The active connection's change-request context (app name + non-secret
-   * config). When present, the Azure step renders the app-registration ticket
-   * generator INLINE.
-   *
-   * Azure credentials usually come from another team via a change request, so
-   * for many operators the real action on this step is "ask for them", not
-   * "enter them". Sending them to Setup to find the generator made the one
-   * thing they CAN do here the one thing the step did not offer.
-   */
-  azureChangeRequestContext?: ChangeRequestContext;
   /** The packaged .tgz name for the cribl-hosted upload walkthrough. */
   uploadArtifactName?: string;
   /** Footer signal: GitHub content reachable + PAT valid (defaults false/pending). */
@@ -176,17 +158,13 @@ export function SetupWizard(props: SetupWizardProps) {
     initialTarget = "local",
     lockTarget = false,
     installedInLeader = false,
-    criblShellMode,
     contentPlatform,
-    defaultSetupPath,
-    onSwitchAccount,
     leaderProfiles,
     onReconnect,
     connectGuidance,
-    azureConnectGuidance,
+    azureConnectivitySection,
     azureConnectSection,
     azureResourcesSection,
-    azureChangeRequestContext,
     uploadArtifactName,
     repositoriesReachable = false,
     onTokenStatusChange,
@@ -205,7 +183,11 @@ export function SetupWizard(props: SetupWizardProps) {
   // flow, not an input to step visibility, so first-run always walks the full
   // connect path regardless of what will be picked at the end.
   const shape: WizardShape = { target, installedInLeader };
-  const views = wizardViews(shape);
+  // A required token (Cribl.Cloud) makes the GitHub step not skippable, so the
+  // footer never calls it optional (DBT-238).
+  const views = wizardViews(shape, {
+    repositoriesRequired: patPolicyFor(contentPlatform).required,
+  });
   // Clamp the cursor so a target switch that drops the current view never
   // strands it (e.g. leaving leader-connect when the target becomes cribl-hosted).
   const currentViewId = resolveCurrentViewId(shape, desiredViewId);
@@ -315,28 +297,11 @@ export function SetupWizard(props: SetupWizardProps) {
           )}
           {currentViewId === "connect-azure" && (
             <>
-              <AzureConnectStep
-                guidance={azureConnectGuidance}
-                changeRequestContext={azureChangeRequestContext}
-              />
+              <AzureConnectStep />
+              {azureConnectivitySection}
               {azureConnectSection}
               {azureResourcesSection}
             </>
-          )}
-          {currentViewId === "preflight" && (
-            <div className="wizard-step">
-              <h2 className="wizard-step-title">Check permissions</h2>
-              <p className="panel-desc">
-                What the configured identity can and cannot do on both Azure and
-                Cribl, before any deploy. This is informational - it reports
-                access, it does not gate anything here.
-              </p>
-              <RbacPreflightPanel
-                criblShellMode={criblShellMode}
-                {...(defaultSetupPath !== undefined ? { defaultSetupPath } : {})}
-                {...(onSwitchAccount !== undefined ? { onSwitchAccount } : {})}
-              />
-            </div>
           )}
           {currentViewId === "repositories" && (
             <div className="wizard-step">
@@ -426,61 +391,27 @@ export function SetupWizard(props: SetupWizardProps) {
 }
 
 /**
- * The Connect Azure step: guidance for the service-principal identity model.
- * The actual Azure connection is a service-principal (app registration) whose
- * secret the hosting shell stores; this step explains it and points forward to
- * the permission preflight, which VERIFIES access. Shell-specific specifics
- * (e.g. a config-file path) arrive as guidance text, never hard-coded here.
+ * The Connect Azure step's heading and one-line summary. The longer explanation
+ * of the identity model sits behind an InfoTip. The app-registration change
+ * request is NOT generated here: the connect section below owns the one
+ * generator on the screen (DBT-240), and the sections that follow are the
+ * place to enter credentials, so no copy here points at "a section on Setup"
+ * (DBT-242).
  */
-function AzureConnectStep({
-  guidance,
-  changeRequestContext,
-}: {
-  guidance?: string;
-  changeRequestContext?: ChangeRequestContext;
-}) {
+function AzureConnectStep() {
   return (
     <div className="wizard-step">
       <h2 className="wizard-step-title">Connect Azure</h2>
       <p className="panel-desc">
-        Azure access uses a service principal (an app registration) with a
-        client id and secret - not an interactive sign-in. The secret is stored
-        write-only by the hosting shell and never returned to this page. The
-        next step verifies exactly what the identity can do.
-      </p>
-      <p className="panel-desc">
-        Skip this if you are waiting on someone else to create the app
-        registration - it commonly takes a change request. Everything on the
-        content path stays available without it, and you can come back through
-        Setup once the credentials arrive. Only deploying to Azure - data
-        collection rules, custom tables, and the Sentinel destination - needs
-        this step.
-      </p>
-      {changeRequestContext !== undefined && (
-        // The actionable half of this step for anyone who does not own Entra:
-        // generate the ticket now, send it, and keep going. Same generator and
-        // wording as the Setup page's App registration section, so the request
-        // does not differ depending on where it was produced.
-        <ChangeRequestBlock
-          title="Someone else owns Entra ID? Generate a change request"
-          description={
-            "Produce a paste-ready ticket for the team that manages Entra ID. It asks them to " +
-            "create a single-tenant daemon confidential client (no redirect URI), create a client " +
-            "secret, and securely share the tenant id, client id, and secret. Send it now and " +
-            "finish this wizard without Azure - the content path does not need it."
+        Needed only to deploy to Azure; everything else works without it.
+        <InfoTip
+          label="About connecting Azure"
+          text={
+            "Azure access uses a service principal (an app registration) with a client id and secret - not an interactive sign-in. The secret is stored write-only by the hosting shell and never returned to this page.\n" +
+            "Skip this if you are waiting on someone else to create the app registration - it commonly takes a change request. Everything on the content path stays available without it, and you can come back through Setup once the credentials arrive. Only deploying to Azure - data collection rules, custom tables, and the Sentinel destination - needs this step."
           }
-          filename="app-registration-request.txt"
-          generate={() => appRegistrationRequest(changeRequestContext)}
         />
-      )}
-      {guidance !== undefined && guidance !== "" ? (
-        <p className="field-hint">{guidance}</p>
-      ) : (
-        <p className="field-hint">
-          Configure the tenant, client id, and client secret in the hosting
-          shell, then continue to the permission check.
-        </p>
-      )}
+      </p>
     </div>
   );
 }

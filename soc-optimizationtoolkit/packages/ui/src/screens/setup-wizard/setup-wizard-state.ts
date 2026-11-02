@@ -11,11 +11,10 @@
  *
  *   - {@link wizardViews}: the concrete ordered screen list, GROWN from the core
  *     step list (target -> cribl-side connect -> azure connect -> mode) by
- *     injecting the two connect-phase panels the wizard reuses - the
- *     Repositories/PAT step (Unit 14) at the HEAD of the Connect phase, and the
- *     RBAC preflight (Unit 9) right before Mode. GitHub leads because it is the
- *     connection a customer can make without waiting on a change request; the
- *     preflight trails Azure because it verifies what that step configures.
+ *     injecting the connect-phase panel the wizard reuses - the
+ *     Repositories/PAT step (Unit 14) at the HEAD of the Connect phase. GitHub
+ *     leads because it is the connection a customer can make without waiting
+ *     on a change request.
  *     Target-specific visibility (the
  *     cribl-side step is the .tgz upload walkthrough for cribl-hosted, the
  *     leader-connect form for local) and mode-gated visibility both come from
@@ -62,16 +61,19 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The two connect-phase panels the wizard REUSES that the core step model does
- * not enumerate (it models the abstract connect steps; these are concrete
- * shipped screens folded into the Connect phase):
+ * The one connect-phase panel the wizard REUSES that the core step model does
+ * not enumerate (it models the abstract connect steps; this is a concrete
+ * shipped screen folded into the Connect phase):
  *
- *   preflight    - the Unit 9 RBAC preflight panel (reports Azure + Cribl access).
  *   repositories - the Unit 14 Repositories / GitHub-PAT step.
+ *
+ * The RBAC preflight panel used to be a second one, trailing Azure. It went
+ * (setup-pages plan): it said it gated nothing, and the Permission
+ * Verification page and the permissions chip already report the same thing.
  */
-export type WizardExtraViewId = "preflight" | "repositories";
+export type WizardExtraViewId = "repositories";
 
-/** A concrete wizard screen id: a core abstract step or one of the reused panels. */
+/** A concrete wizard screen id: a core abstract step or the reused panel. */
 export type WizardViewId = WizardStepId | WizardExtraViewId;
 
 /** One concrete wizard screen: its id, label, progress phase, and skippability. */
@@ -85,31 +87,36 @@ export interface WizardView {
   skippable: boolean;
 }
 
-/** Labels for the two reused panels (core owns the abstract-step labels). */
-const EXTRA_VIEW_LABELS: Readonly<Record<WizardExtraViewId, string>> = {
-  preflight: "Check permissions",
-  repositories: "Connect GitHub",
-};
+/** Label for the reused panel (core owns the abstract-step labels). */
+const REPOSITORIES_LABEL = "Connect GitHub";
+
+/** What the concrete screen list depends on beyond the shape. */
+export interface WizardViewOptions {
+  /**
+   * The GitHub token is required on this platform (patPolicyFor(...).required;
+   * true on Cribl.Cloud). A required step is not skippable, so the footer never
+   * calls it optional (DBT-238). Defaults to false: optional, as on a local host.
+   */
+  repositoriesRequired?: boolean;
+}
 
 /**
  * The concrete ordered screen list for a target.
  *
  * Grown from the core {@link wizardSteps} list: every core step is kept in
  * order (so target-specific visibility comes straight from the core rules), and
- * the two reused connect-phase panels are injected around them - repositories
- * leads the connect phase, the permission check trails it. The assembled order
- * is target -> repositories -> cribl-side connect -> azure connect -> preflight.
+ * the reused repositories panel is injected at the head of the connect phase.
+ * The assembled order is target -> repositories -> cribl-side connect -> azure
+ * connect.
  *
- * Both panels always show (capability-model-plan step 5). Mode used to suppress
- * them for a decided air-gapped re-run; there is no decided mode to suppress
- * with any more, and the panels are skippable, so an operator who needs neither
- * connection passes straight through.
+ * The panel always shows (capability-model-plan step 5). Mode used to suppress
+ * it for a decided air-gapped re-run; there is no decided mode to suppress
+ * with any more.
  */
-export function wizardViews(shape: WizardShape): WizardView[] {
-  // Connect panels ALWAYS show (capability-model-plan step 5). Mode used to drop
-  // them - a reconfigure straight to air-gapped skipped the connect phase - the
-  // same hiding step 3 removed from the nav.
-  const showConnectPanels = true;
+export function wizardViews(
+  shape: WizardShape,
+  options: WizardViewOptions = {},
+): WizardView[] {
   const views: WizardView[] = [];
   // GitHub content leads the Connect phase (user direction 2026-08-03).
   // Azure credentials usually require a change request to another team, so a
@@ -118,12 +125,16 @@ export function wizardViews(shape: WizardShape): WizardView[] {
   // - solution browsing, samples, gap analysis, rule and workbook coverage,
   // and pack build/install - none of which touch Azure. Leading with the
   // connection they can actually make means the first run ends somewhere
-  // useful instead of blocked. Permissions still trail Azure: the preflight
-  // verifies the identity the Azure step configures, so it can only follow it.
+  // useful instead of blocked.
   let repositoriesPlaced = false;
   for (const step of wizardSteps(shape)) {
-    if (step.id !== "target" && !repositoriesPlaced && showConnectPanels) {
-      views.push(makeExtraView("repositories"));
+    if (step.id !== "target" && !repositoriesPlaced) {
+      views.push({
+        id: "repositories",
+        label: REPOSITORIES_LABEL,
+        phase: "connect",
+        skippable: options.repositoriesRequired !== true,
+      });
       repositoriesPlaced = true;
     }
     views.push({
@@ -133,20 +144,7 @@ export function wizardViews(shape: WizardShape): WizardView[] {
       skippable: step.skippable,
     });
   }
-  // The permission check TRAILS the connect steps. It used to be anchored just
-  // before the mode step; with mode gone it becomes the wizard's last view,
-  // which also reads better - verify what the identity can do, then Get
-  // Started. It can only follow the Azure step, since it verifies the identity
-  // that step configures.
-  if (showConnectPanels) {
-    views.push(makeExtraView("preflight"));
-  }
   return views;
-}
-
-function makeExtraView(id: WizardExtraViewId): WizardView {
-  // The reused panels are connect-phase and skippable (they inform, never gate).
-  return { id, label: EXTRA_VIEW_LABELS[id], phase: "connect", skippable: true };
 }
 
 /** The concrete view ids for a shape, in order. */
@@ -215,8 +213,8 @@ export function isFirstView(shape: WizardShape, viewId: WizardViewId): boolean {
 
 /**
  * The 3-segment progress bar for a concrete view. Delegates to the core
- * phase->segment derivation; the two injected connect-phase panels map to a
- * connect step so they light the Connect segment exactly like the core connect
+ * phase->segment derivation; the injected connect-phase panel maps to a
+ * connect step so it lights the Connect segment exactly like the core connect
  * steps do.
  */
 export function wizardViewProgress(
@@ -224,9 +222,7 @@ export function wizardViewProgress(
   viewId: WizardViewId,
 ): WizardSegment[] {
   const stepId: WizardStepId =
-    viewId === "preflight" || viewId === "repositories"
-      ? "connect-azure"
-      : viewId;
+    viewId === "repositories" ? "connect-azure" : viewId;
   return wizardProgress(shape, stepId);
 }
 

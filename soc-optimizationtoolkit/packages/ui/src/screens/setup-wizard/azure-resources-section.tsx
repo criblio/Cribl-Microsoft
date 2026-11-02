@@ -32,6 +32,7 @@ import {
   roleAssignmentRequest,
 } from "@soc/core";
 import type { AzureSetupPath, ChangeRequestContext } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { usePorts } from "../../ports-context";
 import { ChangeRequestBlock } from "./change-request-block";
@@ -407,9 +408,13 @@ export function AzureResourcesSection({
       <p className="panel-desc">
         Discover the subscriptions this app registration can see, select the subscription and (for the
         existing and bring-your-own-RG paths) the target resource, then generate and run the role
-        assignment script and validate the effective permissions. Discovery runs automatically once
-        after you Save and connect above; use Discover / refresh from Azure to re-run it after
-        granting roles.
+        assignment script and validate the effective permissions.
+        <InfoTip
+          label="About discovery"
+          text={
+            "Discovery runs automatically once after you Save and connect above; use Discover / refresh from Azure to re-run it after granting roles."
+          }
+        />
       </p>
       <ChangeRequestBlock
         title="Cannot assign roles yourself? Generate a change request"
@@ -575,12 +580,14 @@ export function AzureResourcesSection({
         </button>
       </div>
       {scriptFeedback !== "" && <p className="panel-desc">{scriptFeedback}</p>}
-      <p className="panel-desc">
-        The script is generated from the selected (or bootstrap) subscription and the derived resource
-        group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you
-        review it first. If you paste, choose Paste (not Paste as one line, which would join the
-        commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from
-        Azure again afterward.
+      <p className="field-hint">
+        About the role script
+        <InfoTip
+          label="About the role script"
+          text={
+            "The script is generated from the selected (or bootstrap) subscription and the derived resource group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you review it first. If you paste, choose Paste (not Paste as one line, which would join the commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from Azure again afterward."
+          }
+        />
       </p>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
@@ -592,11 +599,14 @@ export function AzureResourcesSection({
           Re-check and validate permissions
         </button>
       </div>
-      <p className="panel-desc">
-        Re-check and validate permissions reports the stored credential state and then, if the
-        connection is made, checks the caller&apos;s EFFECTIVE Azure permissions for the selected
-        setup path and resources - it evaluates the actions actually allowed (via the RBAC
-        permissions API), not role names, so custom or lookalike roles are handled correctly.
+      <p className="field-hint">
+        About re-checking permissions
+        <InfoTip
+          label="About re-checking permissions"
+          text={
+            "Re-check and validate permissions reports the stored credential state and then, if the connection is made, checks the caller's EFFECTIVE Azure permissions for the selected setup path and resources - it evaluates the actions actually allowed (via the RBAC permissions API), not role names, so custom or lookalike roles are handled correctly."
+          }
+        />
       </p>
     </section>
   );

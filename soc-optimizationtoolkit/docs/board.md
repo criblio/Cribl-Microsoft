@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**97 in the backlog, 37 in progress, 136 done.**
+**94 in the backlog, 36 in progress, 140 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 57 | 80 | 29 |
+| Sentinel Integration | 53 | 84 | 25 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 134.
+Open work totals 130.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 54% (88/162)
+### `DBT` Quality and technical debt _(enabler)_ - 57% (92/162)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 39/56 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 43/56 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1061,18 +1061,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md;
   plan: docs/setup-pages-implementation-plan.md.
 
-- **DBT-240** The two descriptions of the same app-registration change request disagree
-  `DBT-F2` `bug` `settled`
-  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md). Both
-  call appRegistrationRequest; setup-wizard.tsx:461-464 says it asks for the
-  client, secret and ids only, azure-connect-section.tsx:108-113 says it
-  covers EVERYTHING including Graph and every RBAC role. Two generators render
-  on the same wizard step (setup-wizard.tsx:458,
-  azure-connect-section.tsx:105).
-
 ---
 
-## Backlog - now (16)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1281,13 +1272,6 @@ Next to pick up. Nothing blocks these.
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
 
-- **DBT-238** The GitHub setup step says "This step is optional." while the cloud token is required
-  `DBT-F2` `bug` `settled`
-  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
-  setup-wizard.tsx:382-384 renders it for every skippable non-final view;
-  patPolicyFor('cloud').required is true (pat-policy.ts:118-124) and
-  repositories-screen.tsx:267-271 says a token is required.
-
 - **DBT-241** The resource-picker intro says the pickers depend on the setup path; both always render
   `DBT-F2` `bug` `settled`
   FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
@@ -1295,19 +1279,6 @@ Next to pick up. Nothing blocks these.
   and bring-your-own-RG paths, but both render unconditionally (486-545) and
   both lists load (157-169); the discovery label still switches on setup path
   (550-554).
-
-- **DBT-242** Wizard guidance points to a section on Setup that sits directly below it
-  `DBT-F2` `bug` `settled`
-  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
-  App.tsx:1536-1540 (fallback setup-wizard.tsx:473-476) says to enter
-  credentials in the App registration and connect section on Setup; in the
-  wizard that section renders just below (setup-wizard.tsx:319).
-
-- **DBT-243** The storage note says "The connection bar above shows..." where the wizard has no connection bar
-  `DBT-F2` `bug` `settled`
-  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
-  App.tsx:1486-1487; the wizard renders before the frame, so there is no
-  connection bar.
 
 - **DBT-245** The GitHub token scope is stated two contradictory ways
   `DBT-F2` `bug` `settled`
@@ -2468,7 +2439,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (136)
+## Done (140)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6479,12 +6450,41 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   org: at scroll top, clicking inside Add Sample Data left Select Sentinel
   Solution open and Add Sample Data in place, and sections 3-8 folded.
 
+- **DBT-238** The GitHub setup step says "This step is optional." while the cloud token is required
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  setup-wizard.tsx:382-384 renders it for every skippable non-final view;
+  patPolicyFor('cloud').required is true (pat-policy.ts:118-124) and
+  repositories-screen.tsx:267-271 says a token is required.
+
 - **DBT-239** Setup's next action asks an operator who will not connect Azure for an Azure identity
   `DBT-F2` `bug` `settled` `verified: pins`
   FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
   journey-state.ts:275-279 connectSatisfied and nextAction (430-457) require
   identity + live secret before every later stage, while the wizard says to
   skip Azure (setup-wizard.tsx:446-451).
+
+- **DBT-240** The two descriptions of the same app-registration change request disagree
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md). Both
+  call appRegistrationRequest; setup-wizard.tsx:461-464 says it asks for the
+  client, secret and ids only, azure-connect-section.tsx:108-113 says it
+  covers EVERYTHING including Graph and every RBAC role. Two generators render
+  on the same wizard step (setup-wizard.tsx:458,
+  azure-connect-section.tsx:105).
+
+- **DBT-242** Wizard guidance points to a section on Setup that sits directly below it
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  App.tsx:1536-1540 (fallback setup-wizard.tsx:473-476) says to enter
+  credentials in the App registration and connect section on Setup; in the
+  wizard that section renders just below (setup-wizard.tsx:319).
+
+- **DBT-243** The storage note says "The connection bar above shows..." where the wizard has no connection bar
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  App.tsx:1486-1487; the wizard renders before the frame, so there is no
+  connection bar.
 
 - **DBT-244** Next action and the scope chip name the removed Azure Targeting route
   `DBT-F2` `bug` `settled` `verified: pins`

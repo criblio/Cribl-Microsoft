@@ -13,11 +13,15 @@
  */
 
 import { useState } from "react";
+import { InfoTip } from "../../components/info-tip";
 import { usePorts } from "../../ports-context";
 
 export interface ChangeRequestBlockProps {
   title: string;
+  /** One line, always visible. */
   description: string;
+  /** The longer explanation, shown only behind an InfoTip beside the description. */
+  detail?: string;
   /** Downloaded filename. */
   filename: string;
   generate: () => string;
@@ -26,6 +30,7 @@ export interface ChangeRequestBlockProps {
 export function ChangeRequestBlock({
   title,
   description,
+  detail,
   filename,
   generate,
 }: ChangeRequestBlockProps) {
@@ -56,7 +61,10 @@ export function ChangeRequestBlock({
   return (
     <div className="change-request">
       <span className="field-label">{title}</span>
-      <p className="panel-desc">{description}</p>
+      <p className="panel-desc">
+        {description}
+        {detail !== undefined && <InfoTip label={`About ${title}`} text={detail} />}
+      </p>
       <div className="panel-controls">
         <button
           className="run-button"
