@@ -3744,6 +3744,21 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
+      "status": "in-progress",
+      "dependsOn": [
+        "DBT-237",
+        "DBT-246"
+      ],
+      "id": "DBT-248",
+      "type": "story",
+      "priority": "now",
+      "title": "Setup page and wizard fold like Sentinel Integration: open collapsed, refold on move, hide what the choices make irrelevant",
+      "detail": "RAISED BY THE USER 2026-11-02: \"There are still a ton of words on the setup pages, lets collapse them and only reveal what is needed once the user inputs what they need to focus on. Just like we did with the Sentinel integration pages. default to collapsed and re collapse once the user moves on to the next section. If there is something the user never needs to see because of the options they choose don't reveal it.\" DECIDED 2026-11-02: applies to the Setup page AND inside each first-run wizard step; branch stacked on PR #196 with PR #195 merged in. Same rules as DBT-232/DBT-237: open with only the section that needs the operator plus pinned ones; a move into a section folds every other unpinned one; folded sections keep a one-line summary; pins per user; collapsed bodies stay mounted; gate reasons never hidden. The fold logic is shared, not copied."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
       "status": "done",
       "verified": "pins",
       "dependsOn": [],
