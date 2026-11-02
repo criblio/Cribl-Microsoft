@@ -26,6 +26,8 @@ import {
 } from "@soc/core";
 import type { ContentPlatform } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold } from "../../components/section-folding/section-fold-context";
 import { usePorts } from "../../ports-context";
 import {
   derivePatFormView,
@@ -66,6 +68,11 @@ const PAT_WALKTHROUGH_STEPS: readonly string[] = [
   "Click Generate token, then copy the token (it starts with github_pat_...).",
 ];
 
+/** Fold-scope ids of this screen's three sections (Setup page and wizard). */
+export const GITHUB_TOKEN_SECTION_ID = "github-token";
+export const SENTINEL_CONTENT_SECTION_ID = "sentinel-content";
+export const SCHEMA_TABLES_SECTION_ID = "schema-tables";
+
 export function RepositoriesScreen({ platform, onTokenStatusChange }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
@@ -74,6 +81,9 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
   const policy = patPolicyFor(platform);
   const [form, dispatch] = useReducer(patFormReducer, undefined, initialPatFormState);
   const view = derivePatFormView(form);
+  const tokenFold = useSectionFold(GITHUB_TOKEN_SECTION_ID);
+  const contentFold = useSectionFold(SENTINEL_CONTENT_SECTION_ID);
+  const schemaFold = useSectionFold(SCHEMA_TABLES_SECTION_ID);
 
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [solutionCount, setSolutionCount] = useState<number | null>(null);
@@ -235,17 +245,24 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
     error: reachError,
   });
 
-  const patBadgeClass = view.hasPat
-    ? "numbered-section-badge-complete"
-    : "numbered-section-badge-current";
-  const connBadgeClass =
-    solutionCount !== null
-      ? "numbered-section-badge-complete"
-      : "numbered-section-badge-current";
-  const schemaBadgeClass =
-    schemaTables !== null
-      ? "numbered-section-badge-complete"
-      : "numbered-section-badge-current";
+  // A scope above this screen (Setup page, wizard) numbers and folds the
+  // sections; alone (the Repositories route) they number 1..3 and keep their
+  // own open state.
+  const foldOf = (
+    fold: ReturnType<typeof useSectionFold>,
+    fallbackNumber: number,
+  ) => {
+    if (fold === undefined) return { number: fallbackNumber };
+    const { number, ...rest } = fold;
+    return { ...rest, number: number ?? fallbackNumber };
+  };
+  const tokenSummary = view.hasPat
+    ? `Token saved${view.login !== "" ? ` (${view.login})` : ""}`
+    : view.statusUnknown !== ""
+      ? "Token status unknown"
+      : policy.required
+        ? "No token saved - required on this hosted app"
+        : "No token saved";
   const schemaStatus =
     schemaError !== ""
       ? {
@@ -271,13 +288,13 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
 
   return (
     <div className="repositories-screen">
-      <section className="numbered-section">
-        <div className="numbered-section-head">
-          <span className={`numbered-section-badge ${patBadgeClass}`}>1</span>
-          <h2 className="numbered-section-title">
-            GitHub personal access token
-          </h2>
-        </div>
+      <NumberedSection
+        {...foldOf(tokenFold, 1)}
+        title="GitHub personal access token"
+        status={view.hasPat ? "complete" : "available"}
+        infoTip="The token that lets this app read Microsoft Sentinel content from GitHub. Fine-grained and read-only on public repositories is enough."
+        summary={tokenSummary}
+      >
         {/* One requirement line on screen; the WHY (rationale and scope
             guidance) moves verbatim behind the (i) - live check 2026-11-02. */}
         <p className="panel-desc">
@@ -387,13 +404,15 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
             </p>
           </div>
         )}
-      </section>
+      </NumberedSection>
 
-      <section className="numbered-section">
-        <div className="numbered-section-head">
-          <span className={`numbered-section-badge ${connBadgeClass}`}>2</span>
-          <h2 className="numbered-section-title">Sentinel content</h2>
-        </div>
+      <NumberedSection
+        {...foldOf(contentFold, 2)}
+        title="Sentinel content"
+        status={solutionCount !== null ? "complete" : "available"}
+        infoTip="Checks that the Sentinel content repository is reachable with your token."
+        summary={reachability.label}
+      >
         <p className="panel-desc">
           Fetches Solution definitions and analytic content from GitHub over the
           REST API - no git install or clone. The count is a live reachability +
@@ -415,18 +434,16 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
             {checking ? "Checking..." : "Refresh"}
           </button>
         </div>
-      </section>
+      </NumberedSection>
 
       {content !== undefined && (
-        <section className="numbered-section">
-          <div className="numbered-section-head">
-            <span className={`numbered-section-badge ${schemaBadgeClass}`}>
-              3
-            </span>
-            <h2 className="numbered-section-title">
-              Schema tables (KQL validation)
-            </h2>
-          </div>
+        <NumberedSection
+          {...foldOf(schemaFold, 3)}
+          title="Schema tables (KQL validation)"
+          status={schemaTables !== null ? "complete" : "available"}
+          infoTip="The table schemas Microsoft validates every solution's KQL against; the gap analysis resolves a destination table's schema from here first."
+          summary={schemaStatus.label}
+        >
           <p className="panel-desc">
             The table schemas Microsoft&apos;s own CI validates every solution&apos;s
             KQL against ({KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). When a
@@ -452,7 +469,7 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
               {schemaChecking ? "Checking..." : "Refresh"}
             </button>
           </div>
-        </section>
+        </NumberedSection>
       )}
     </div>
   );

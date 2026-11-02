@@ -52,6 +52,7 @@ import {
   parseWorkspaceOptions,
   permissionScopeChecks,
   resourceGroupSelectOptions,
+  resourcesSummary,
   scriptCopyFeedback,
   scriptDownloadFeedback,
   storedCredentialReport,
@@ -65,6 +66,11 @@ import type {
   WorkspaceOption,
 } from "./azure-setup-state";
 import { useRunner } from "./use-runner";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold } from "../../components/section-folding/section-fold-context";
+
+/** The id the Setup page and the wizard give this section in their fold scope. */
+export const RESOURCES_SECTION_ID = "azure-resources";
 
 export interface AzureResourcesSectionProps {
   clientId: string;
@@ -109,6 +115,7 @@ export function AzureResourcesSection({
   storageContextLabel = "Stored credentials:",
 }: AzureResourcesSectionProps) {
   const { ports } = usePorts();
+  const fold = useSectionFold(RESOURCES_SECTION_ID);
   // Everything below reads the EFFECTIVE path: a Partially Connected install is
   // always "existing", so a saved lab path never reaches the script, the
   // discovery note or the permission checks (C1).
@@ -411,9 +418,8 @@ export function AzureResourcesSection({
   // Disconnected requests nothing, so there is nothing to select or grant.
   if (disconnected) return null;
 
-  return (
-    <section className="panel">
-      <h2 className="panel-title">Select resources and grant permissions</h2>
+  const body = (
+    <>
       <p className="panel-desc">
         Discover the subscriptions this app registration can see, select the subscription and the
         target workspace and resource group, then generate and run the role assignment script and
@@ -613,6 +619,29 @@ export function AzureResourcesSection({
           }
         />
       </p>
+    </>
+  );
+
+  if (fold !== undefined) {
+    const { number, ...foldRest } = fold;
+    const hasTarget = workspaceName.trim() !== "" && rgName.trim() !== "";
+    return (
+      <NumberedSection
+        {...foldRest}
+        number={number ?? 2}
+        title="Select resources and grant permissions"
+        status={hasTarget ? "complete" : "available"}
+        infoTip="Discover the subscriptions this app registration can see, choose the target workspace and resource group, and grant the roles."
+        summary={resourcesSummary(workspaceName, rgName)}
+      >
+        {body}
+      </NumberedSection>
+    );
+  }
+  return (
+    <section className="panel">
+      <h2 className="panel-title">Select resources and grant permissions</h2>
+      {body}
     </section>
   );
 }

@@ -11,7 +11,7 @@
  * direct IO.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ONBOARD_TABLE_JOB_KIND } from "@soc/core";
 import type { JobRecord, OnboardTableOutcome } from "@soc/core";
 import { usePorts } from "../ports-context";
@@ -50,6 +50,8 @@ export interface RecentRunsProps {
   label?: (job: JobRecord) => string;
   /** Expanded detail per record; defaults to the onboard-table detail. */
   detail?: (job: JobRecord) => string;
+  /** Told how many runs each successful load found (a host's folded summary). */
+  onLoaded?: (count: number) => void;
 }
 
 export function RecentRuns({
@@ -58,17 +60,23 @@ export function RecentRuns({
   title = "Recent runs",
   label = runLabel,
   detail = runDetail,
+  onLoaded,
 }: RecentRunsProps) {
   const { ports } = usePorts();
   const [jobs, setJobs] = useState<JobRecord[] | null>(null);
   const [error, setError] = useState("");
+  // A ref so a host passing an inline callback does not reload the list.
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
   // The run whose detail is shown; null means the latest.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setJobs(await ports.jobs.list(kind));
+      const list = await ports.jobs.list(kind);
+      setJobs(list);
       setError("");
+      onLoadedRef.current?.(list.length);
     } catch (err) {
       setError(String(err));
     }

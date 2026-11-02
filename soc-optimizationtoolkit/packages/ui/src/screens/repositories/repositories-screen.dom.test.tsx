@@ -87,13 +87,15 @@ describe("Repositories screen sections (DBT-118)", () => {
     const heads = Array.from(
       container.querySelectorAll(".numbered-section-head"),
     ).map((head) => [
-      head.querySelector(".numbered-section-badge")?.textContent?.trim() ?? "",
+      // A complete section wears the check (its number is in the label), so
+      // read the accessible label rather than the glyph.
+      head.querySelector(".numbered-section-badge")?.getAttribute("aria-label") ?? "",
       head.querySelector(".numbered-section-title")?.textContent?.trim() ?? "",
     ]);
     expect(heads).toEqual([
-      ["1", "GitHub personal access token"],
-      ["2", "Sentinel content"],
-      ["3", "Schema tables (KQL validation)"],
+      ["Section 1, complete", "GitHub personal access token"],
+      ["Section 2", "Sentinel content"],
+      ["Section 3", "Schema tables (KQL validation)"],
     ]);
   });
 

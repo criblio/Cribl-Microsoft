@@ -18,6 +18,11 @@ import {
 } from "@soc/core";
 import type { AppPermission, AzureConfig, AzureConnectivity } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold } from "../../components/section-folding/section-fold-context";
+
+/** The id the Setup page and the wizard give the Partially Connected checklist. */
+export const CONNECTIVITY_SECTION_ID = "azure-connectivity";
 
 /**
  * An entry's (i) text: the role or Graph permission it grants first - what an
@@ -43,6 +48,12 @@ const CHOICES: ReadonlyArray<{ value: AzureConnectivity; label: string }> = [
   { value: "disconnected", label: "Disconnected" },
 ];
 
+/** The fold props NumberedSection takes (everything but the number). */
+function foldRest(fold: NonNullable<ReturnType<typeof useSectionFold>>) {
+  const { number: _number, ...rest } = fold;
+  return rest;
+}
+
 export function AzureConnectivitySection({
   config,
   onChange,
@@ -52,6 +63,7 @@ export function AzureConnectivitySection({
   const [notice, setNotice] = useState("");
   const { readOnly, others } = checklistEntries();
   const connectivity = config.connectivity ?? "full";
+  const fold = useSectionFold(CONNECTIVITY_SECTION_ID);
 
   const choose = (value: AzureConnectivity) => {
     if (value === "partial") {
@@ -84,34 +96,9 @@ export function AzureConnectivitySection({
 
   const has = (name: string) => config.allowedPermissions.includes(name);
 
-  return (
-    <div className="connectivity-section">
-      <div
-        className="connectivity-choice"
-        role="radiogroup"
-        aria-label="How will this app work with Azure?"
-      >
-        {CHOICES.map((c) => (
-          <label key={c.value}>
-            <input
-              type="radio"
-              name="azure-connectivity"
-              checked={connectivity === c.value}
-              onChange={() => choose(c.value)}
-            />
-            <span>{c.label}</span>
-          </label>
-        ))}
-      </div>
-      {notice !== "" && (
-        <p className="field-hint" role="status">
-          {notice}
-        </p>
-      )}
-
-      {connectivity === "partial" && (
-        <div className="connectivity-partial">
-          <div className="connectivity-featured">
+  const partialBody = (
+    <div className="connectivity-partial">
+<div className="connectivity-featured">
             <label className="connectivity-check">
               <input
                 type="checkbox"
@@ -150,8 +137,51 @@ export function AzureConnectivitySection({
             ))}
           </div>
           <p className="field-hint">{`Requesting: ${requestSummary(config)}`}</p>
-        </div>
+    </div>
+  );
+
+  return (
+    <div className="connectivity-section">
+      <div
+        className="connectivity-choice"
+        role="radiogroup"
+        aria-label="How will this app work with Azure?"
+      >
+        {CHOICES.map((c) => (
+          <label key={c.value}>
+            <input
+              type="radio"
+              name="azure-connectivity"
+              checked={connectivity === c.value}
+              onChange={() => choose(c.value)}
+            />
+            <span>{c.label}</span>
+          </label>
+        ))}
+      </div>
+      {notice !== "" && (
+        <p className="field-hint" role="status">
+          {notice}
+        </p>
       )}
+
+      {connectivity === "partial" &&
+        (fold !== undefined ? (
+          // The radios above stay on screen; the checklist is the foldable
+          // body, its one-line summary the request it adds up to (DBT-248).
+          <NumberedSection
+            {...foldRest(fold)}
+            number={fold.number ?? 1}
+            title="What this app may do in Azure"
+            status="available"
+            infoTip="The permissions this app will ask for. The same plan renders the change-request ticket, so the checklist and the ticket cannot disagree."
+            summary={`Requesting: ${requestSummary(config)}`}
+          >
+            {partialBody}
+          </NumberedSection>
+        ) : (
+          partialBody
+        ))}
 
       {connectivity === "disconnected" &&
         (storedIdentity ? (
