@@ -76,6 +76,8 @@ export function AzureConnectSection({
 }: AzureConnectSectionProps) {
   const [clientSecret, setClientSecret] = useState("");
   const [status, output, run] = useRunner();
+  // Disconnected asks for no identity at all; read the same config the ticket reads.
+  if (ctx.config.connectivity === "disconnected") return null;
 
   const saveAndConnect = () =>
     run(async () => {
@@ -132,6 +134,7 @@ export function AzureConnectSection({
           then Save and connect.
         </li>
       </ol>
+      {(ctx.config.connectivity ?? "full") === "full" && (
       <div className="path-options">
         <label className="path-option">
           <input
@@ -161,6 +164,7 @@ export function AzureConnectSection({
           <span>No workspace yet - deploy a lab into a pre-created resource group</span>
         </label>
       </div>
+      )}
       {setupPath === "existing" && (
         <p className="panel-desc">
           Least privilege for an existing environment: Monitoring Contributor and Log Analytics

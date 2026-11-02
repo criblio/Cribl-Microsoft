@@ -395,6 +395,9 @@ export function AzureResourcesSection({
     }
   };
 
+  // Disconnected requests nothing, so there is nothing to select or grant.
+  if (ctx.config.connectivity === "disconnected") return null;
+
   return (
     <section className="panel">
       <h2 className="panel-title">Select resources and grant permissions</h2>

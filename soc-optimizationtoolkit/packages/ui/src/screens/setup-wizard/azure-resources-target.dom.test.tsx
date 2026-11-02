@@ -113,3 +113,26 @@ describe("the deployment target is reachable from every setup path", () => {
     ).toBeTruthy();
   });
 });
+
+describe("connectivity gates the section", () => {
+  it("renders nothing when disconnected", () => {
+    const { container } = render(
+      <PortsProvider ports={PENDING_PORTS} config={CONFIG}>
+        <AzureResourcesSection
+          clientId=""
+          tenantId=""
+          setupPath="existing"
+          subscriptionId=""
+          onSubscriptionIdChange={vi.fn()}
+          rgName=""
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config: { ...CONFIG, connectivity: "disconnected" } }}
+        />
+      </PortsProvider>,
+    );
+    expect(container.textContent).toBe("");
+  });
+});
