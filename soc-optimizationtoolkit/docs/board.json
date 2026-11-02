@@ -3653,6 +3653,21 @@
       "epic": "DBT",
       "feature": "DBT-F2",
       "status": "done",
+      "dependsOn": [
+        "DBT-232"
+      ],
+      "id": "DBT-237",
+      "type": "story",
+      "priority": "now",
+      "title": "Sentinel Integration opens collapsed, keeping only pinned, current and needs-action sections open",
+      "detail": "RAISED BY THE USER 2026-11-02: \"I thought we set the default behavior for the sentinel integration page to be collapsed and only keep sections open if the user clicks the pin button for that section?\" DBT-232 folds only on an explicit move, so on load every section is open (collapsedSections starts as an empty Set, integrate-screen.tsx). DECIDED by the operator 2026-11-02: on load, apply the same fold a move to the current section would - every section collapses except pinned ones, the arc's current section, and Deploy while a run is in progress. Pins load asynchronously from the content cache, so a pinned section that arrives after the first fold must be reopened, and the load fold must run once, never again on a status flip (the DBT-127 rule). FIX: seed the fold once statuses and pins are known; pin with a DOM test on first render; confirm in Live Preview. ALSO DECIDED 2026-11-02: \"if the user clicks into a new section the other open sections that are not pinned should collapse\" - a move now folds every unpinned section except the one moved to and a running Deploy; the arc current section and DBT-234 near-the-top exceptions are DROPPED (foldableWithoutShift deleted; scroll compensation still holds the active section wherever the page can scroll back). DONE 2026-11-02 (both). initialCollapsedSections seeds the fold; until the first move the fold re-derives as restored state moves the current section, and stored pins reopen when they load. Because sections now start folded, a blocked section shows its gate reason in the collapsed header (NumberedSection). Pins: the pure load rule, the DOM load fold with and without a stored pin (waits for the settled page - an early version sampled the frame between the render and the effect), the click fold now folding the current section, the blocked reason in a folded header; eight older pins open the section they read via expandSection. Mutation-checked: no load fold fails 5, keeping current open on a move fails 1. LIVE on the jpederson org (PaloAlto-PAN-OS, 2 samples): the page opened with only Run DCR Gap Analysis (current) open and the other seven on summary lines; expanding Select Sentinel Solution folded Gap Analysis to \"not analyzed\". KNOWN GAP: a status of complete can still carry a warning in its body (the DBT-102 unresolved-restore notice in Select Sentinel Solution) that is now folded on load.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
       "dependsOn": [],
       "id": "DBT-233",
       "type": "enabler",

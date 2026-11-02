@@ -269,7 +269,8 @@ export function parsePinnedSections(
 /**
  * The sections to fold when the operator moves to `active` (DBT-232): every
  * other OPEN section, except the pinned ones and those that must stay in view
- * (`keepOpen`: the arc's current section, a running deploy). Only explicit
+ * (`keepOpen`: a running deploy). Since DBT-237 the arc's current section
+ * folds like any other - the operator chose to work elsewhere. Only explicit
  * moves call this - opening a section, clicking or focusing inside it, Done -
  * next - never scrolling, so nothing shrinks under the pointer mid-read.
  */
@@ -286,25 +287,17 @@ export function sectionsToCollapseOnMove(
 }
 
 /**
- * DBT-234: drop the sections ABOVE the active one from a fold when the page
- * cannot absorb their shift. Folding a section above moves the active one up
- * by at most that section's height, and moveToSection compensates by
- * scrolling - which is impossible when the page is scrolled less than that
- * (at the top, there is no room). Sections below never move the active one,
- * so they always fold. `heights` are the CURRENT heights of the sections to
- * fold, in px; the sum is an upper bound on the shift (a folded section keeps
- * its header).
+ * DBT-237: the page opens collapsed. Every section starts folded except the
+ * arc's current one (where the operator starts); pinned sections are reopened
+ * once the stored pins load. A folded section keeps its header, status and
+ * one-line summary in view. DBT-234's rule - keep sections above the active one
+ * open near the top of the page - was dropped by the same decision: the
+ * operator wants every unpinned section folded on a move, and moveToSection's
+ * scroll compensation still holds the active one in place wherever the page
+ * has room to scroll.
  */
-export function foldableWithoutShift(
-  toFold: readonly IntegrateSectionId[],
-  order: readonly IntegrateSectionId[],
-  active: IntegrateSectionId,
-  heights: Readonly<Partial<Record<IntegrateSectionId, number>>>,
-  scrollTop: number,
-): IntegrateSectionId[] {
-  const activeIndex = order.indexOf(active);
-  const above = toFold.filter((id) => order.indexOf(id) < activeIndex);
-  const shift = above.reduce((sum, id) => sum + (heights[id] ?? 0), 0);
-  if (shift <= scrollTop) return [...toFold];
-  return toFold.filter((id) => order.indexOf(id) > activeIndex);
+export function initialCollapsedSections(
+  resolved: readonly { readonly section: { readonly id: IntegrateSectionId }; readonly status: string }[],
+): Set<IntegrateSectionId> {
+  return new Set(resolved.filter((r) => r.status !== "current").map((r) => r.section.id));
 }
