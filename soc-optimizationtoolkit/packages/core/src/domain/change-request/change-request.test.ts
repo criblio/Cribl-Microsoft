@@ -31,6 +31,8 @@ function ctxFor(
       resourceGroup: "rg-soc-lab",
       workspaceName: "law-soc-lab",
       setupPath,
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
       ...overrides,
     },
   };
@@ -46,6 +48,8 @@ function emptyCtx(setupPath: AzureSetupPath): ChangeRequestContext {
       resourceGroup: "",
       workspaceName: "",
       setupPath,
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
     },
   };
 }

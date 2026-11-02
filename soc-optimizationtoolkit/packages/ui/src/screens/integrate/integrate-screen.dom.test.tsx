@@ -96,6 +96,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 function renderScreen(props: Record<string, unknown> = {}) {
@@ -730,6 +732,8 @@ const SCOPED_CONFIG: AzureConfig = {
   resourceGroup: "rg-soc-prod",
   workspaceName: "law-soc",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () => {

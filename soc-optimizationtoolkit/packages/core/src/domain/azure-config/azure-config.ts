@@ -21,6 +21,9 @@
  * Pure: no IO, no fetch, no React.
  */
 
+import { READ_ONLY_PERMISSION } from "../azure-connectivity";
+import type { AzureConnectivity } from "../azure-connectivity";
+
 /**
  * The setup paths the config codec records. Distinct from the more granular
  * `SetupPath` in azure-permissions: this is the coarse choice persisted with
@@ -37,6 +40,13 @@ const VALID_SETUP_PATHS: readonly AzureSetupPath[] = [
   "existing",
   "lab-new-rg",
   "lab-byo-rg",
+];
+
+/** The three valid {@link AzureConnectivity} values, for runtime validation. */
+const VALID_CONNECTIVITY: readonly AzureConnectivity[] = [
+  "full",
+  "partial",
+  "disconnected",
 ];
 
 /**
@@ -62,6 +72,13 @@ export interface AzureConfig {
   workspaceName: string;
   /** The coarse setup path the user selected. */
   setupPath: AzureSetupPath;
+  /** How much of Azure the app may reach. Defaults to `full`. */
+  connectivity: AzureConnectivity;
+  /**
+   * Azure permissions the operator allows the app to request. Defaults to
+   * read-only (`Reader`). Meaningful for `partial` connectivity.
+   */
+  allowedPermissions: string[];
 }
 
 /**
@@ -76,10 +93,12 @@ export const EMPTY_AZURE_CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: [READ_ONLY_PERMISSION],
 };
 
 /**
- * Serialize exactly the six non-secret {@link AzureConfig} fields to JSON.
+ * Serialize exactly the eight non-secret {@link AzureConfig} fields to JSON.
  *
  * Only the known fields are emitted - even if the caller's object carries extra
  * properties (a leaked secret, say), they are not written out.
@@ -92,8 +111,18 @@ export function serializeAzureConfig(config: AzureConfig): string {
     resourceGroup: config.resourceGroup,
     workspaceName: config.workspaceName,
     setupPath: config.setupPath,
+    connectivity: config.connectivity,
+    allowedPermissions: [...config.allowedPermissions],
   };
   return JSON.stringify(canonical);
+}
+
+/** A fresh copy of the empty config, so callers never share its array. */
+function emptyConfig(): AzureConfig {
+  return {
+    ...EMPTY_AZURE_CONFIG,
+    allowedPermissions: [...EMPTY_AZURE_CONFIG.allowedPermissions],
+  };
 }
 
 /** True when `value` is a plain (non-null, non-array) object. */
@@ -113,6 +142,24 @@ function asSetupPath(value: unknown): AzureSetupPath {
     : "existing";
 }
 
+/** Narrow an unknown to a valid {@link AzureConnectivity}, else `full`. */
+function asConnectivity(value: unknown): AzureConnectivity {
+  return VALID_CONNECTIVITY.includes(value as AzureConnectivity)
+    ? (value as AzureConnectivity)
+    : "full";
+}
+
+/**
+ * Narrow an unknown to a string list, dropping non-string entries. Anything
+ * that is not an array yields the read-only default.
+ */
+function asPermissions(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [READ_ONLY_PERMISSION];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
 /**
  * Parse an untrusted config blob into a well-formed {@link AzureConfig}.
  *
@@ -124,28 +171,30 @@ function asSetupPath(value: unknown): AzureSetupPath {
  *
  * For a valid plain object, each string field is copied only if it is actually
  * a string (otherwise ''), and setupPath is copied only if it is one of the
- * three valid values (otherwise 'existing'). A stored config missing
+ * three valid values (otherwise 'existing'). connectivity is copied only if valid (otherwise
+ * 'full'); allowedPermissions keeps only string entries and defaults to
+ * ['Reader'] when absent or not an array. A stored config missing
  * `workspaceName` (e.g. one written before this field existed) parses to ''.
  * Any unexpected extra keys - a stray `clientSecret`, `accessToken`, or
  * anything else - are ignored and never appear on the returned config.
  */
 export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
   if (typeof raw !== "string" || raw.trim() === "") {
-    return { ...EMPTY_AZURE_CONFIG };
+    return emptyConfig();
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { ...EMPTY_AZURE_CONFIG };
+    return emptyConfig();
   }
 
   if (!isPlainObject(parsed)) {
-    return { ...EMPTY_AZURE_CONFIG };
+    return emptyConfig();
   }
 
-  // Only the six known fields are read; every other key is dropped, so a
+  // Only the eight known fields are read; every other key is dropped, so a
   // planted clientSecret/accessToken can never leak onto the result.
   return {
     clientId: asString(parsed.clientId),
@@ -154,6 +203,8 @@ export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
     resourceGroup: asString(parsed.resourceGroup),
     workspaceName: asString(parsed.workspaceName),
     setupPath: asSetupPath(parsed.setupPath),
+    connectivity: asConnectivity(parsed.connectivity),
+    allowedPermissions: asPermissions(parsed.allowedPermissions),
   };
 }
 
