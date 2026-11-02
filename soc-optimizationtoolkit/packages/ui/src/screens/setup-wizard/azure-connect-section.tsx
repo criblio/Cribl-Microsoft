@@ -65,22 +65,22 @@ export interface AzureConnectSectionProps {
 
 /** The setup-path notes, shown behind an InfoTip (moved verbatim from inline prose). */
 const SETUP_PATH_NOTES: Readonly<Record<AzureSetupPath, string>> = {
-    existing:
-      "Least privilege for an existing environment: Monitoring Contributor and Log Analytics " +
-      "Contributor scoped to the workspace resource group, plus Reader on the subscription. " +
-      "Nothing is granted subscription-wide beyond read.",
-    "lab-new-rg":
-      "Requires Contributor at the subscription scope (resource group creation is a " +
-      "subscription-level action, and it covers all workspace and DCR operations inside the lab, " +
-      "so no workspace resource group is needed) and RBAC Administrator at the subscription scope " +
-      "for the lab TTL self-destruct. Assign RBAC Administrator in the portal with the condition " +
-      '"Constrain roles and principal types": only Contributor and Monitoring Metrics Publisher, ' +
-      "only to service principals.",
-    "lab-byo-rg":
-      "Least privilege for labs: an admin pre-creates an empty lab resource group and grants " +
-      "Contributor on it - the lab deploys its workspace there with no subscription-scope rights. " +
-      "The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.",
-  };
+  existing:
+    "Least privilege for an existing environment: Monitoring Contributor and Log Analytics " +
+    "Contributor scoped to the workspace resource group, plus Reader on the subscription. " +
+    "Nothing is granted subscription-wide beyond read.",
+  "lab-new-rg":
+    "Requires Contributor at the subscription scope (resource group creation is a " +
+    "subscription-level action, and it covers all workspace and DCR operations inside the lab, " +
+    "so no workspace resource group is needed) and RBAC Administrator at the subscription scope " +
+    "for the lab TTL self-destruct. Assign RBAC Administrator in the portal with the condition " +
+    '"Constrain roles and principal types": only Contributor and Monitoring Metrics Publisher, ' +
+    "only to service principals.",
+  "lab-byo-rg":
+    "Least privilege for labs: an admin pre-creates an empty lab resource group and grants " +
+    "Contributor on it - the lab deploys its workspace there with no subscription-scope rights. " +
+    "The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.",
+};
 
 /** The manual app-registration steps, shown behind an InfoTip (moved verbatim). */
 const REGISTRATION_STEPS =
@@ -119,6 +119,8 @@ export function AzureConnectSection({
   const [status, output, run] = useRunner();
   // Disconnected asks for no identity at all; read the same config the ticket reads.
   if (ctx.config.connectivity === "disconnected") return null;
+  // The setup-path radios and their notes belong to Fully Connected only.
+  const full = (ctx.config.connectivity ?? "full") === "full";
 
   const saveAndConnect = () =>
     run(async () => {
@@ -162,7 +164,7 @@ export function AzureConnectSection({
         How to create the app registration
         <InfoTip label="How to create the app registration" text={REGISTRATION_STEPS} />
       </p>
-      {(ctx.config.connectivity ?? "full") === "full" && (
+      {full && (
       <div className="path-options">
         <label className="path-option">
           <input
@@ -193,10 +195,12 @@ export function AzureConnectSection({
         </label>
       </div>
       )}
-      <p className="field-hint">
-        About this setup path
-        <InfoTip label="About this setup path" text={SETUP_PATH_NOTES[setupPath]} />
-      </p>
+      {full && (
+        <p className="field-hint">
+          About this setup path
+          <InfoTip label="About this setup path" text={SETUP_PATH_NOTES[setupPath]} />
+        </p>
+      )}
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Directory (tenant) ID</span>

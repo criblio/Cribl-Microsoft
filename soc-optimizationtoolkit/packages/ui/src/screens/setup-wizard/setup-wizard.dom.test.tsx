@@ -123,7 +123,7 @@ describe("SetupWizard - Connect Azure step", () => {
     renderOnAzureStep(<div data-testid="azure-connect-slot">connect form</div>);
     advanceToAzureStep();
     expect(screen.getByText("connect form")).toBeTruthy();
-    expect(screen.getByText(/needed only to deploy to azure/i)).toBeTruthy();
+    expect(screen.getByText(/choose below how much this app may do in azure/i)).toBeTruthy();
   });
 
   it("RENDERS the resources section too, because the step's own copy promises it", () => {
@@ -167,7 +167,7 @@ describe("SetupWizard - Connect Azure step", () => {
     advanceToAzureStep();
     expect(screen.queryByTestId("azure-connect-slot")).toBeNull();
     // Reached the step and it still has its content - not a blank panel.
-    expect(screen.getByText(/needed only to deploy to azure/i)).toBeTruthy();
+    expect(screen.getByText(/choose below how much this app may do in azure/i)).toBeTruthy();
   });
 });
 
@@ -187,7 +187,7 @@ describe("SetupWizard - GitHub step token status (DBT-246)", () => {
         <PortsProvider ports={ports} config={CONFIG}>
           <SetupWizard
             capabilities={CAPABILITIES}
-                contentPlatform="cloud"
+            contentPlatform="cloud"
             initialTarget="cribl-hosted"
             lockTarget
             installedInLeader

@@ -182,3 +182,44 @@ describe("wizard Connect Azure step (DBT-240, DBT-242, DBT-243)", () => {
     }
   });
 });
+
+describe("connect section under other connectivity choices (review fixes)", () => {
+  function renderConnect(connectivity: string, allowedPermissions: string[] = []) {
+    const config = { ...CONFIG, connectivity, allowedPermissions } as unknown as AzureConfig;
+    return render(
+      <PortsProvider ports={ports(false)} config={config}>
+        <AzureConnectSection
+          tenantId=""
+          onTenantIdChange={() => {}}
+          clientId=""
+          onClientIdChange={() => {}}
+          setupPath="existing"
+          onSetupPathChange={() => {}}
+          secretLive={false}
+          ctx={{ appName: "test", config }}
+          onConnect={async () => ({ ok: true, secretStored: false, message: "" })}
+          storageNote="note"
+        />
+      </PortsProvider>,
+    );
+  }
+
+  it("ticket line says nothing selected for Partial with nothing ticked", () => {
+    renderConnect("partial");
+    expect(screen.getByText(/asking for the app registration and a client secret\./)).toBeTruthy();
+  });
+
+  it("ticket line names the requested role for Partial with Reader", () => {
+    renderConnect("partial", ["Reader"]);
+    expect(screen.getByText(/plus .*Reader/)).toBeTruthy();
+  });
+
+  it("shows the setup-path notes under Full only", () => {
+    const { unmount } = renderConnect("full");
+    expect(screen.queryByLabelText("About this setup path")).not.toBeNull();
+    unmount();
+    renderConnect("partial");
+    expect(screen.queryByLabelText("About this setup path")).toBeNull();
+    expect(document.querySelector(".path-options")).toBeNull();
+  });
+});

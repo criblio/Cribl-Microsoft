@@ -11,7 +11,7 @@
  * Apps ever run off Cloud. Do not read their presence as a live choice.
  * It does NOT rebuild any of them; it composes them in order behind one wizard
  * chrome (the legacy-flow-analysis.md wizard bar): a 3-segment progress bar
- * (Target -> Connect -> Mode), the current step's screen, a persistent
+ * (Target -> Connect), the current step's screen, a persistent
  * Connections + Repositories status footer, and Back / Next / Get Started.
  *
  * Assembly order (target-specific where the two hosting targets differ):
@@ -21,16 +21,13 @@
  *        leader-connect form (local, core base-URL + dual-profile rules)
  *     -> Repositories / GitHub PAT (Unit 14 RepositoriesScreen)
  *     -> Connect Azure (connectivity choice, then the identity form)
- *     -> Mode (availability-gated cards with a Recommended badge; core matrix)
- *     -> Get Started (persists the chosen mode and enters the app).
+ *     -> Get Started (enters the app; there is no mode step any more).
  *
  * The step LIST, its target-specific + mode-gated visibility, and the 3-segment
  * progress all come from the pure setup-wizard-state module over @soc/core - no
- * step logic is duplicated here. Mode is the OUTPUT of the flow, so the step
- * list is always derived with mode undecided (the full connect path); the
- * chosen mode only drives the final card selection and Get Started.
+ * step logic is duplicated here.
  *
- * The composed preflight + repositories panels read their IO through
+ * The composed repositories panel and the shell-supplied Azure sections read their IO through
  * PortsContext, so the SHELL must mount this wizard inside a PortsProvider.
  */
 
@@ -403,7 +400,7 @@ function AzureConnectStep() {
     <div className="wizard-step">
       <h2 className="wizard-step-title">Connect Azure</h2>
       <p className="panel-desc">
-        Needed only to deploy to Azure; everything else works without it.
+        Optional - choose below how much this app may do in Azure.
         <InfoTip
           label="About connecting Azure"
           text={

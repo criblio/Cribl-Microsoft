@@ -1,3 +1,4 @@
+import { clearNotice } from './clear-notice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -1113,14 +1114,17 @@ function App() {
 
   // Clear stored secret: the explicit way to force re-auth without switching
   // connections (e.g. after editing the active connection's tenant/client id).
-  const handleClearSecret = () => {
+  const clearStoredSecretState = () => {
     // Independent fire-and-forget clears (DELETE responses are lost by the
     // bridge; sequenced awaits would strand the second delete).
     void kvDelete('azureBasic');
     void kvDelete('azureArmToken');
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
-    setSwitchNotice('Stored secret cleared - re-enter the client secret in the App registration and connect section on Setup and Save and connect to re-authenticate.');
+  };
+  const handleClearSecret = () => {
+    clearStoredSecretState();
+    setSwitchNotice(clearNotice('secret'));
   };
 
   const startRename = () => {
@@ -1532,7 +1536,10 @@ function App() {
       storedIdentity={activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== ''}
       onClearIdentity={() => {
         updateField({ tenantId: '', clientId: '' });
-        handleClearSecret();
+        // No re-authenticate notice: under Disconnected the connect section the
+        // secret notice points at is hidden.
+        clearStoredSecretState();
+        setSwitchNotice(clearNotice('identity'));
       }}
     />
   );
@@ -1581,8 +1588,8 @@ function App() {
           // This page only renders because the app is already installed in the
           // leader, so "where should the toolkit run?" and the .tgz upload
           // walkthrough are both answered already (user report 2026-08-03).
-          // The cloud first run is Connect GitHub -> Connect Azure -> Check
-          // permissions -> Mode: only steps that can still be acted on.
+          // The cloud first run is Connect GitHub -> Connect Azure, then Get
+          // Started: only steps that can still be acted on.
           installedInLeader
           contentPlatform="cloud"
           azureConnectivitySection={azureConnectivityElement}
