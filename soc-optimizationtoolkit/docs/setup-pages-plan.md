@@ -1,8 +1,8 @@
 # Setup pages: say what is needed, hide the rest
 
-Status: Proposed - design agreed with the operator 2026-11-02 (brainstorm); not
-yet built.
-Last-confirmed: 2026-11-02
+Status: Record - IMPLEMENTED on feature/setup-connectivity (DBT-246, defects
+DBT-238..245), verified by pins and live in Live Preview 2026-11-02. Follow-ups
+are on DBT-247.
 
 ## Why
 

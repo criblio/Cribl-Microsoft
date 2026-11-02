@@ -1,8 +1,8 @@
 # Setup pages Implementation Plan
 
-Status: Proposed - implementation plan for `setup-pages-plan.md` (design
-approved by the operator 2026-11-02). Not started.
-Last-confirmed: 2026-11-02
+Status: Record - executed 2026-11-02 task by task with per-task review and a
+whole-branch review plus one fix wave; see DBT-246. The release-notes entry is
+written when the next release is cut, not here.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -3702,13 +3702,28 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "priority": "now",
       "id": "DBT-246",
       "type": "story",
       "title": "Setup: Azure connectivity choice shapes the change request and the next action",
-      "detail": "RAISED BY THE USER 2026-11-02: review the setup pages for wordiness; \"the Azure page is really optional, we should start that page with a selection on how the user wants to run it from an Azure perspective (Fully Connected, partially connected, or disconnected).\" Partially connected: \"a checkbox experience that will shape the Generate Change Request text\", each with an (i), \"not wordy on the screen by default\", and encourage \"at least Read-only\". Disconnected: \"no app registration at all so the app only creates exportable items\". Save the choice and have the next action follow it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md; plan: docs/setup-pages-implementation-plan.md."
+      "detail": "RAISED BY THE USER 2026-11-02: review the setup pages for wordiness; \"the Azure page is really optional, we should start that page with a selection on how the user wants to run it from an Azure perspective (Fully Connected, partially connected, or disconnected).\" Partially connected: \"a checkbox experience that will shape the Generate Change Request text\", each with an (i), \"not wordy on the screen by default\", and encourage \"at least Read-only\". Disconnected: \"no app registration at all so the app only creates exportable items\". Save the choice and have the next action follow it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md; plan: docs/setup-pages-implementation-plan.md. DONE 2026-11-02 (both). Built task by task (docs/setup-pages-implementation-plan.md) with a review per task, a whole-branch review and one fix wave. Saved per connection in AzureConfig (connectivity, allowedPermissions; unset parses as full with Reader; partial normalises to the existing path). The app-registration ticket, the role-assignment ticket, the az role script and the request summary all derive from requestedPermissions, so under Partially Connected nothing asks for an unticked role. The journey gains a GitHub token stage (required per patPolicyFor), not-needed stages, not-used chips and a subscription-only target under partial; the deploy gate still needs the full committed scope. The wizard is Agreement, GitHub, Azure. LIVE on the jpederson org Live Preview: Full shows the 5-role + Graph ticket line; Partial shows Option A with Requesting: 1 role - Reader and a single-Reader role script; Disconnected hides the Azure sections, chips read not used, Connect/Target read Not needed for the saved Azure connectivity choice, Deploy says export instead, next action is Choose content. Restored to Full afterwards. NOT verified live: the token-rollback re-read after a failed replacement (pins only; forcing it would delete the real token).",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "DBT-246"
+      ],
+      "id": "DBT-247",
+      "type": "bug",
+      "priority": "now",
+      "title": "Three older notices still point a Disconnected operator at hidden or unreachable Azure fields",
+      "detail": "FOUND by the DBT-246 final re-review 2026-11-02, in code that predates that branch: (1) the switch-connection notice (App.tsx ~1023) tells the operator to enter the client secret in the App registration and connect section on Setup, which is hidden under Disconnected; (2) ROLE_GUIDANCE (App.tsx ~190, passed to Onboard and Batch) still renders under Disconnected when an older profile has all five fields; (3) the Disconnected Connection incomplete text (connection-notices.ts) ends 'The Run action unlocks once all five fields are set.', which a Disconnected operator cannot do on screen. FIX: route each through the connectivity-aware notice helpers in connection-notices.ts and pin them. Also follow-ups from the same review, not defects: a config-json warning when an imported connectivity value is coerced to full; Batch's template-only export is gated on the identity fields, so Disconnected cannot reach it from Batch (fallback routing)."
     },
     {
       "settled": "settled",
