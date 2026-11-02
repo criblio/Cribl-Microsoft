@@ -62,12 +62,18 @@ interface Setup {
   config?: AzureConfig;
   hasPat?: boolean;
   userId?: string | null;
-  jobs?: unknown[];
+  jobs?: unknown[] | "fail";
+  onConnect?: () => Promise<{ ok: boolean; secretStored: boolean; message: string }>;
 }
 
 function ports(s: Setup): UiPorts {
   return {
-    jobs: { list: vi.fn(async () => s.jobs ?? []) },
+    jobs: {
+      list: vi.fn(async () => {
+        if (s.jobs === "fail") throw new Error("store down");
+        return s.jobs ?? [];
+      }),
+    },
     azure: { request: () => new Promise(() => undefined) },
     githubPat: {
       status: vi.fn(async () => ({ hasPat: s.hasPat ?? true, login: "octo" })),
@@ -115,7 +121,7 @@ function mount(s: Setup, facts: JourneyFacts) {
         onSetupPathChange={() => {}}
         secretLive={facts.secretLive === "live"}
         ctx={ctx}
-        onConnect={async () => ({ ok: true, secretStored: true, message: "" })}
+        onConnect={s.onConnect ?? (async () => ({ ok: true, secretStored: true, message: "" }))}
         storageNote="note"
       />
       <AzureResourcesSection
@@ -299,12 +305,15 @@ describe("Setup page folding (DBT-248)", () => {
     await settle();
     expect(isFolded("App registration and connect")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Expand Journey" }));
-    const connect = screen
-      .getAllByRole("button")
-      .find(
-        (b) => b.classList.contains("journey-step-main") && /^\d+Connect$/.test(b.textContent ?? ""),
-      );
-    expect(connect).toBeTruthy();
+    let connect: HTMLElement | undefined;
+    await waitFor(() => {
+      connect = screen
+        .getAllByRole("button")
+        .find(
+          (b) => b.classList.contains("journey-step-main") && /^\d+Connect$/.test(b.textContent ?? ""),
+        );
+      expect(connect).toBeTruthy();
+    });
     fireEvent.click(connect as HTMLElement);
     await waitFor(() => expect(isFolded("App registration and connect")).toBe(false));
     expect(isFolded("GitHub personal access token")).toBe(true);
@@ -346,5 +355,64 @@ describe("Setup page folding (DBT-248)", () => {
     ).toBeTruthy();
     expect(isFolded("What this app may do in Azure")).toBe(true);
     expect(summaryOf("What this app may do in Azure")).toMatch(/^Requesting: /);
+  });
+
+  it("a move during an in-flight Save and connect does not fold the connect section", async () => {
+    mount(
+      { store: new Map(), onConnect: () => new Promise(() => undefined) },
+      factsWith({ secretLive: "missing" }),
+    );
+    await settle();
+    fireEvent.change(screen.getByLabelText("Client secret"), { target: { value: "s3cret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save and connect" }));
+    await waitFor(() => expect(screen.getByText("running")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
+    fireEvent.pointerDown(
+      within(sectionOf("Sentinel content")).getByRole("button", { name: "Refresh" }),
+    );
+    await waitFor(() =>
+      expect(openTitles()).toEqual(["App registration and connect", "Sentinel content"]),
+    );
+  });
+
+  it("a failure after the section was folded reopens it", async () => {
+    let fail!: () => void;
+    mount(
+      {
+        store: new Map(),
+        onConnect: () =>
+          new Promise((resolve) => {
+            fail = () => resolve({ ok: false, secretStored: false, message: "bad secret" });
+          }),
+      },
+      factsWith({ secretLive: "missing" }),
+    );
+    await settle();
+    fireEvent.change(screen.getByLabelText("Client secret"), { target: { value: "s3cret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save and connect" }));
+    await waitFor(() => expect(screen.getByText("running")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Collapse App registration and connect" }));
+    expect(isFolded("App registration and connect")).toBe(true);
+    fail();
+    await waitFor(() => expect(isFolded("App registration and connect")).toBe(false));
+    expect(screen.getByText(/bad secret/)).toBeTruthy();
+  });
+
+  it("says so when the run list could not be loaded", async () => {
+    mount({ store: new Map(), jobs: "fail" }, factsWith({}));
+    await waitFor(() => expect(summaryOf("Recent runs")).toBe("Could not load runs"));
+  });
+
+  it("lists the runs directly inside the fold, with no second dropdown", async () => {
+    mount({ store: new Map(), jobs: [JOB("a")] }, factsWith({}));
+    await waitFor(() => expect(summaryOf("Recent runs")).toBe("1 run"));
+    expect(sectionOf("Recent runs").querySelector("details")).toBeNull();
+  });
+
+  it("only the section the journey points at wears the current badge", async () => {
+    mount({ store: new Map(), hasPat: false }, factsWith({ tokenPresent: false }));
+    await settle();
+    expect(sectionOf("GitHub personal access token").className).toContain("numbered-section-current");
+    expect(sectionOf("Sentinel content").className).toContain("numbered-section-available");
   });
 });

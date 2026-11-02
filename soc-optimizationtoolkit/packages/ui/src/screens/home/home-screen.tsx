@@ -30,7 +30,7 @@
  * ports context.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 import { deriveJourney, readinessChips } from "@soc/core";
 import type { JourneyFacts } from "@soc/core";
@@ -94,9 +94,23 @@ export function HomeScreen({
   // folding instance owns every section on the page - the panels below and the
   // shell-composed setupSections, which reach it through the scope. Next action
   // is not in the list: it is the page's focus and never folds.
+  // Sections report a long operation in flight (Save and connect, discovery,
+  // a Refresh check); those stay open when the operator moves elsewhere.
+  const [busy, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const setBusy = useCallback((id: string, isBusy: boolean) => {
+    setBusyIds((prev) => {
+      if (prev.has(id) === isBusy) return prev;
+      const next = new Set(prev);
+      if (isBusy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const currentId = currentSetupSection(action);
   const folding = useSectionFolding({
     ids: SETUP_SECTION_IDS,
-    currentId: currentSetupSection(action),
+    currentId,
+    keepOpen: busy,
     pinPrefix: SETUP_PIN_PREFIX,
     anchorFor: setupAnchorFor,
   });
@@ -106,8 +120,9 @@ export function HomeScreen({
     return at < 0 ? undefined : at + 1;
   };
   const [runCount, setRunCount] = useState<number | null>(null);
+  const [runsFailed, setRunsFailed] = useState(false);
   const foldOf = (id: string, fallback: number) => {
-    const { number, ...rest } = sectionFoldProps(folding, id, numberFor);
+    const { number, ...rest } = sectionFoldProps(folding, id, numberFor, currentId);
     return { ...rest, number: number ?? fallback };
   };
   const journeyFold = foldOf("journey", 1);
@@ -119,7 +134,7 @@ export function HomeScreen({
   };
 
   return (
-    <SectionFoldScope folding={folding} numberFor={numberFor}>
+    <SectionFoldScope folding={folding} numberFor={numberFor} currentId={currentId} setBusy={setBusy}>
       <section className="panel">
         <h2 className="panel-title">Next action</h2>
         {chips.length > 0 && (
@@ -209,9 +224,17 @@ export function HomeScreen({
         title="Recent runs"
         status="available"
         infoTip="The app's own run log - every recorded run, newest first, kept in this app's storage."
-        summary={runsSummary(runCount)}
+        summary={runsSummary(runCount, runsFailed)}
       >
-        <RecentRuns refreshToken={runsRefreshToken} onLoaded={setRunCount} />
+        <RecentRuns
+          refreshToken={runsRefreshToken}
+          inline
+          onLoaded={(count) => {
+            setRunCount(count);
+            setRunsFailed(false);
+          }}
+          onLoadError={() => setRunsFailed(true)}
+        />
       </NumberedSection>
     </SectionFoldScope>
   );

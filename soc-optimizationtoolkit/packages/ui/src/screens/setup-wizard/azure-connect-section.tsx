@@ -19,7 +19,7 @@ import { appRegistrationRequest, requestSummary } from "@soc/core";
 import type { AzureSetupPath, ChangeRequestContext } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { NumberedSection } from "../../components/numbered-section";
-import { useSectionFold } from "../../components/section-folding/section-fold-context";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
 import { ChangeRequestBlock } from "./change-request-block";
 import { connectInputIssue, connectSummary } from "./azure-setup-state";
 import type { AzureConnectInput } from "./azure-setup-state";
@@ -108,6 +108,12 @@ function ticketLine(ctx: ChangeRequestContext): string {
 /** The id the Setup page and the wizard give this section in their fold scope. */
 export const CONNECT_SECTION_ID = "azure-connect";
 
+/** The section's description: on the Setup page it sits behind the (i), alone it is the intro line. */
+const CONNECT_DESCRIPTION =
+  "Create the Entra app registration, then connect this app to it with the tenant ID, client ID, " +
+  "and a client secret. Azure roles are granted in the Select resources and grant permissions " +
+  "section below, after you discover your subscription.";
+
 export function AzureConnectSection({
   tenantId,
   onTenantIdChange,
@@ -123,6 +129,7 @@ export function AzureConnectSection({
   const [clientSecret, setClientSecret] = useState("");
   const [status, output, run] = useRunner();
   const fold = useSectionFold(CONNECT_SECTION_ID);
+  useSectionRunState(CONNECT_SECTION_ID, { busy: status === "running", failed: status === "failed" });
   // Disconnected asks for no identity at all; read the same config the ticket reads.
   if (ctx.config.connectivity === "disconnected") return null;
   // The setup-path radios and their notes belong to Fully Connected only.
@@ -147,11 +154,6 @@ export function AzureConnectSection({
 
   const body = (
     <>
-      <p className="panel-desc">
-        Create the Entra app registration, then connect this app to it with the tenant ID, client ID,
-        and a client secret. Azure roles are granted in the Select resources and grant permissions
-        section below, after you discover your subscription.
-      </p>
       <ChangeRequestBlock
         title="Cannot create the app registration yourself? Generate a change request"
         description={ticketLine(ctx)}
@@ -263,8 +265,8 @@ export function AzureConnectSection({
         {...foldRest}
         number={number ?? 1}
         title="App registration and connect"
-        status={secretLive && clientId.trim() !== "" ? "complete" : "available"}
-        infoTip="Create the Entra app registration, then connect this app to it with the tenant ID, client ID and a client secret."
+        status={secretLive && clientId.trim() !== "" ? "complete" : fold.current ? "current" : "available"}
+        infoTip={CONNECT_DESCRIPTION}
         summary={connectSummary(clientId, secretLive)}
       >
         {body}
@@ -274,6 +276,7 @@ export function AzureConnectSection({
   return (
     <section className="panel">
       <h2 className="panel-title">App registration and connect</h2>
+      <p className="panel-desc">{CONNECT_DESCRIPTION}</p>
       {body}
     </section>
   );

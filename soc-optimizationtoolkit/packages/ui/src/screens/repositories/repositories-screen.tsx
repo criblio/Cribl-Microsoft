@@ -27,7 +27,7 @@ import {
 import type { ContentPlatform } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { NumberedSection } from "../../components/numbered-section";
-import { useSectionFold } from "../../components/section-folding/section-fold-context";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
 import { usePorts } from "../../ports-context";
 import {
   derivePatFormView,
@@ -73,6 +73,12 @@ export const GITHUB_TOKEN_SECTION_ID = "github-token";
 export const SENTINEL_CONTENT_SECTION_ID = "sentinel-content";
 export const SCHEMA_TABLES_SECTION_ID = "schema-tables";
 
+const SCHEMA_TABLES_DESCRIPTION =
+  `The table schemas Microsoft's own CI validates every solution's KQL against (${KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). ` +
+  "When a destination table is defined there, the DCR Gap Analysis and the coverage sections resolve its schema from here FIRST - ahead of the " +
+  "solution's connector definitions, the bundled snapshot, and sample-derived schemas. The check lists the directory and reads one " +
+  "definition end to end.";
+
 export function RepositoriesScreen({ platform, onTokenStatusChange }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
@@ -96,6 +102,11 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
   const [schemaProbe, setSchemaProbe] = useState("");
   const [schemaError, setSchemaError] = useState("");
   const [schemaChecking, setSchemaChecking] = useState(false);
+
+  // DBT-248: a running check keeps its section open; a failure reopens it.
+  useSectionRunState(GITHUB_TOKEN_SECTION_ID, { busy: view.busy, failed: view.error !== "" });
+  useSectionRunState(SENTINEL_CONTENT_SECTION_ID, { busy: checking, failed: reachError !== "" });
+  useSectionRunState(SCHEMA_TABLES_SECTION_ID, { busy: schemaChecking, failed: schemaError !== "" });
 
   // Load the stored status once on mount (hasPat + login; never the token).
   useEffect(() => {
@@ -248,6 +259,10 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
   // A scope above this screen (Setup page, wizard) numbers and folds the
   // sections; alone (the Repositories route) they number 1..3 and keep their
   // own open state.
+  // An unfinished section wears the "current" tone: alone on the Repositories
+  // route every one does; on Setup only the one the journey points at.
+  const incomplete = (fold: ReturnType<typeof useSectionFold>) =>
+    fold === undefined || fold.current ? ("current" as const) : ("available" as const);
   const foldOf = (
     fold: ReturnType<typeof useSectionFold>,
     fallbackNumber: number,
@@ -291,7 +306,7 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
       <NumberedSection
         {...foldOf(tokenFold, 1)}
         title="GitHub personal access token"
-        status={view.hasPat ? "complete" : "available"}
+        status={view.hasPat ? "complete" : incomplete(tokenFold)}
         infoTip="The token that lets this app read Microsoft Sentinel content from GitHub. Fine-grained and read-only on public repositories is enough."
         summary={tokenSummary}
       >
@@ -409,7 +424,7 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
       <NumberedSection
         {...foldOf(contentFold, 2)}
         title="Sentinel content"
-        status={solutionCount !== null ? "complete" : "available"}
+        status={solutionCount !== null ? "complete" : incomplete(contentFold)}
         infoTip="Checks that the Sentinel content repository is reachable with your token."
         summary={reachability.label}
       >
@@ -440,19 +455,10 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
         <NumberedSection
           {...foldOf(schemaFold, 3)}
           title="Schema tables (KQL validation)"
-          status={schemaTables !== null ? "complete" : "available"}
-          infoTip="The table schemas Microsoft validates every solution's KQL against; the gap analysis resolves a destination table's schema from here first."
+          status={schemaTables !== null ? "complete" : incomplete(schemaFold)}
+          infoTip={SCHEMA_TABLES_DESCRIPTION}
           summary={schemaStatus.label}
         >
-          <p className="panel-desc">
-            The table schemas Microsoft&apos;s own CI validates every solution&apos;s
-            KQL against ({KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). When a
-            destination table is defined there, the DCR Gap Analysis and the
-            coverage sections resolve its schema from here FIRST - ahead of the
-            solution&apos;s connector definitions, the bundled snapshot, and
-            sample-derived schemas. The check lists the directory and reads one
-            definition end to end.
-          </p>
           <div className={`reachability reachability-${schemaStatus.tone}`}>
             <span className="reachability-dot" aria-hidden="true" />
             <div>

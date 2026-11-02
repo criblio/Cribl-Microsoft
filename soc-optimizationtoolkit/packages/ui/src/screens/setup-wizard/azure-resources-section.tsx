@@ -67,7 +67,15 @@ import type {
 } from "./azure-setup-state";
 import { useRunner } from "./use-runner";
 import { NumberedSection } from "../../components/numbered-section";
-import { useSectionFold } from "../../components/section-folding/section-fold-context";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
+
+/** The section's description: behind the (i) on the Setup page, the intro line alone. */
+const RESOURCES_DESCRIPTION =
+  "Discover the subscriptions this app registration can see, select the subscription and the " +
+  "target workspace and resource group, then generate and run the role assignment script and " +
+  "validate the effective permissions.";
+const DISCOVERY_NOTE =
+  "Discovery runs automatically once after you Save and connect above; use Discover / refresh from Azure to re-run it after granting roles.";
 
 /** The id the Setup page and the wizard give this section in their fold scope. */
 export const RESOURCES_SECTION_ID = "azure-resources";
@@ -125,6 +133,10 @@ export function AzureResourcesSection({
   const [validating, setValidating] = useState(false);
   const [scriptFeedback, setScriptFeedback] = useState("");
   const [discoverStatus, discoverOutput, runDiscover] = useRunner();
+  useSectionRunState(RESOURCES_SECTION_ID, {
+    busy: discoverStatus === "running" || validating,
+    failed: discoverStatus === "failed",
+  });
 
   // Resource discovery state. Each list is null until its query has run; an
   // empty array means the query succeeded but returned nothing. For
@@ -420,17 +432,6 @@ export function AzureResourcesSection({
 
   const body = (
     <>
-      <p className="panel-desc">
-        Discover the subscriptions this app registration can see, select the subscription and the
-        target workspace and resource group, then generate and run the role assignment script and
-        validate the effective permissions.
-        <InfoTip
-          label="About discovery"
-          text={
-            "Discovery runs automatically once after you Save and connect above; use Discover / refresh from Azure to re-run it after granting roles."
-          }
-        />
-      </p>
       <ChangeRequestBlock
         title="Cannot assign roles yourself? Generate a change request"
         description={
@@ -630,8 +631,9 @@ export function AzureResourcesSection({
         {...foldRest}
         number={number ?? 2}
         title="Select resources and grant permissions"
-        status={hasTarget ? "complete" : "available"}
-        infoTip="Discover the subscriptions this app registration can see, choose the target workspace and resource group, and grant the roles."
+        status={hasTarget ? "complete" : fold.current ? "current" : "available"}
+        infoTip={`${RESOURCES_DESCRIPTION}
+${DISCOVERY_NOTE}`}
         summary={resourcesSummary(workspaceName, rgName)}
       >
         {body}
@@ -641,6 +643,10 @@ export function AzureResourcesSection({
   return (
     <section className="panel">
       <h2 className="panel-title">Select resources and grant permissions</h2>
+      <p className="panel-desc">
+        {RESOURCES_DESCRIPTION}
+        <InfoTip label="About discovery" text={DISCOVERY_NOTE} />
+      </p>
       {body}
     </section>
   );

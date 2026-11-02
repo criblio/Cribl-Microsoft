@@ -135,8 +135,9 @@ export function journeySummary(facts: JourneyFacts): string {
     : `Step ${at + 1} of ${stages.length}: ${current.label}`;
 }
 
-/** The Recent runs one-liner; null while the first load is pending. */
-export function runsSummary(count: number | null): string | undefined {
+/** The Recent runs one-liner; undefined while the first load is pending. */
+export function runsSummary(count: number | null, failed = false): string | undefined {
+  if (failed) return "Could not load runs";
   if (count === null) return undefined;
   return count === 0 ? "No runs yet" : count === 1 ? "1 run" : `${count} runs`;
 }

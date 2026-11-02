@@ -18,9 +18,9 @@ export interface SectionFoldScopeProps extends FoldScopeValue {
   children: ReactNode;
 }
 
-export function SectionFoldScope({ folding, numberFor, children }: SectionFoldScopeProps) {
+export function SectionFoldScope({ folding, numberFor, currentId, setBusy, children }: SectionFoldScopeProps) {
   return (
-    <FoldScopeContext.Provider value={{ folding, ...(numberFor !== undefined ? { numberFor } : {}) }}>
+    <FoldScopeContext.Provider value={{ folding, numberFor, currentId, setBusy }}>
       {children}
     </FoldScopeContext.Provider>
   );
