@@ -245,7 +245,7 @@ import {
 } from "./integrate-screen-state";
 import {
   deploySettingsSummary,
-  foldableWithoutShift,
+  initialCollapsedSections,
   parsePinnedSections,
   pinnedSectionsKey,
   sectionsToCollapseOnMove,
@@ -1994,9 +1994,11 @@ export function IntegrateScreen({
   // changed - a section can turn complete while the operator is still working
   // in it. Since DBT-232 sections DO fold when the operator explicitly moves
   // to another one (see moveToSection), never on a status flip or a scroll.
+  // Since DBT-237 the page OPENS collapsed: only the arc's current section
+  // starts open, and pinned ones reopen when the stored pins arrive.
   const [collapsedSections, setCollapsedSections] = useState<
     ReadonlySet<IntegrateSectionId>
-  >(() => new Set());
+  >(() => initialCollapsedSections(resolved));
   const setSectionCollapsed = useCallback(
     (id: IntegrateSectionId, collapsed: boolean) => {
       setCollapsedSections((prev) => {
@@ -2027,9 +2029,15 @@ export function IntegrateScreen({
         pinKeyRef.current = key;
         const raw = await pinCache?.get(key);
         if (!cancelled) {
-          setPinnedSections(
-            new Set(parsePinnedSections(raw, resolvedIdsRef.current)),
-          );
+          const pins = parsePinnedSections(raw, resolvedIdsRef.current);
+          setPinnedSections(new Set(pins));
+          // DBT-237: a pinned section is open, including on load.
+          setCollapsedSections((prev) => {
+            if (!pins.some((id) => prev.has(id))) return prev;
+            const next = new Set(prev);
+            for (const id of pins) next.delete(id);
+            return next;
+          });
         }
       } catch {
         // No identity, or the store refused the read: pins stay session-only.
@@ -2056,10 +2064,11 @@ export function IntegrateScreen({
   );
 
   // DBT-232: moving to a section folds the others the operator is not using -
-  // except pinned ones, the arc's current section (the one asking for action)
-  // and Deploy while it runs. Only explicit moves get here (acting inside a
-  // section, Done - next, a footer pill), never scrolling. The section moved
-  // to is kept exactly where it was on screen.
+  // every unpinned one except Deploy while it runs (DBT-237 dropped the arc's
+  // current section and DBT-234's near-the-top sections from the exceptions).
+  // Only explicit moves get here (acting inside a section, Done - next, a
+  // footer pill), never scrolling. The section moved to is kept where it was
+  // on screen wherever the page has room to scroll back.
   const activeSectionRef = useRef<IntegrateSectionId | null>(null);
   const resolvedIdsRef = useRef<IntegrateSectionId[]>([]);
   resolvedIdsRef.current = resolved.map((r) => r.section.id);
@@ -2068,29 +2077,13 @@ export function IntegrateScreen({
       if (activeSectionRef.current === id) return;
       activeSectionRef.current = id;
       const keepOpen = new Set<IntegrateSectionId>();
-      const current = resolvedRef.current.find((r) => r.status === "current");
-      if (current !== undefined) keepOpen.add(current.section.id);
       if (deployingRef.current) keepOpen.add("deploy");
-      const candidates = sectionsToCollapseOnMove(
+      const toFold = sectionsToCollapseOnMove(
         id,
         resolvedIdsRef.current,
         collapsedSections,
         pinnedSections,
         keepOpen,
-      );
-      // DBT-234: near the top of the page there is no room to scroll back by
-      // the height of a folded section above, so those stay open.
-      const heights: Partial<Record<IntegrateSectionId, number>> = {};
-      for (const c of candidates) {
-        const el = document.getElementById(sectionAnchor(c));
-        if (el !== null) heights[c] = el.getBoundingClientRect().height;
-      }
-      const toFold = foldableWithoutShift(
-        candidates,
-        resolvedIdsRef.current,
-        id,
-        heights,
-        window.scrollY,
       );
       if (toFold.length === 0) return;
       const anchor = document.getElementById(sectionAnchor(id));
@@ -2108,6 +2101,21 @@ export function IntegrateScreen({
     },
     [collapsedSections, pinnedSections],
   );
+
+  // DBT-237: until the operator's first move, the load fold follows the arc.
+  // The first render can run before restored state (a chosen solution, saved
+  // samples) arrives, so "current" may advance during load; re-derive the fold
+  // then. Once the operator has acted (onActivate fires on pointer-down or
+  // focus inside a section) nothing folds on a status change again - DBT-127.
+  const currentSectionId = resolved.find((r) => r.status === "current")?.section.id;
+  useEffect(() => {
+    if (activeSectionRef.current !== null) return;
+    const next = initialCollapsedSections(resolvedRef.current);
+    for (const id of pinnedSections) next.delete(id);
+    setCollapsedSections((prev) =>
+      prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next,
+    );
+  }, [currentSectionId, pinnedSections]);
 
   // Open a section and bring it into view. The scroll waits a frame so it
   // measures the section after it has expanded.

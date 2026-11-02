@@ -15,7 +15,7 @@ import {
   deployDisabledReason,
   deploySettingsSummary,
   deriveSectionInputs,
-  foldableWithoutShift,
+  initialCollapsedSections,
   parsePinnedSections,
   pinnedSectionsKey,
   sectionSummary,
@@ -307,16 +307,21 @@ describe("auto-collapse on move (DBT-232)", () => {
   });
 });
 
-describe("folds above the active section only when the shift can be absorbed (DBT-234)", () => {
-  const order = ["solution", "sample-data", "gap-analysis", "deploy"] as const;
-  it("keeps the sections above open at the top of the page, still folding those below", () => {
-    expect(
-      foldableWithoutShift(["solution", "gap-analysis", "deploy"], order, "sample-data", { solution: 180 }, 0),
-    ).toEqual(["gap-analysis", "deploy"]);
+describe("the page opens collapsed (DBT-237)", () => {
+  it("folds every section except the arc's current one", () => {
+    const resolved = [
+      { section: { id: "solution" as const }, status: "complete" },
+      { section: { id: "sample-data" as const }, status: "current" },
+      { section: { id: "gap-analysis" as const }, status: "blocked" },
+      { section: { id: "deploy" as const }, status: "blocked" },
+    ];
+    expect([...initialCollapsedSections(resolved)]).toEqual(["solution", "gap-analysis", "deploy"]);
   });
-  it("folds them once the page is scrolled far enough to compensate", () => {
-    expect(
-      foldableWithoutShift(["solution", "gap-analysis"], order, "sample-data", { solution: 180 }, 400),
-    ).toEqual(["solution", "gap-analysis"]);
+  it("folds everything when no section is current", () => {
+    const resolved = [
+      { section: { id: "solution" as const }, status: "complete" },
+      { section: { id: "deploy" as const }, status: "complete" },
+    ];
+    expect([...initialCollapsedSections(resolved)]).toEqual(["solution", "deploy"]);
   });
 });
