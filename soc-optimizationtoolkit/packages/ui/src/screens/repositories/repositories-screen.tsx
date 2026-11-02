@@ -36,6 +36,12 @@ import {
 export interface RepositoriesScreenProps {
   /** Which shell is asking - governs whether a PAT is required (cloud) or advised (local). */
   platform: ContentPlatform;
+  /**
+   * DBT-246: told after a SUCCESSFUL save (true) or clear (false) so the shell's
+   * journey sees the change without a reload. Not called on a rejected or
+   * invalid save, a failed clear, or a failed status read.
+   */
+  onTokenStatusChange?: (present: boolean) => void;
 }
 
 // The 13-step PAT creation walkthrough, kept from the legacy RepoSetup page
@@ -57,7 +63,7 @@ const PAT_WALKTHROUGH_STEPS: readonly string[] = [
   "Click Generate token, then copy the token (it starts with github_pat_...).",
 ];
 
-export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
+export function RepositoriesScreen({ platform, onTokenStatusChange }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
   const content = ports.content;
@@ -113,10 +119,13 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     try {
       const status = await githubPat.validateAndStore(form.value);
       dispatch({ type: "submit-result", status });
+      if (status.hasPat) {
+        onTokenStatusChange?.(true);
+      }
     } catch (err) {
       dispatch({ type: "submit-error", message: String(err) });
     }
-  }, [githubPat, form.value]);
+  }, [githubPat, form.value, onTokenStatusChange]);
 
   const clear = useCallback(async () => {
     if (githubPat === undefined) {
@@ -127,10 +136,11 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
       await githubPat.clear();
       dispatch({ type: "clear-result" });
       setSolutionCount(null);
+      onTokenStatusChange?.(false);
     } catch (err) {
       dispatch({ type: "clear-error", message: String(err) });
     }
-  }, [githubPat]);
+  }, [githubPat, onTokenStatusChange]);
 
   // Reachability + PAT-valid check: read the lightweight index count on demand
   // (NEVER a bulk mirror). One commit-resolve + one contents call.

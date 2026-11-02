@@ -1789,7 +1789,7 @@ function App() {
       <div id="setup-connect-section" />
       {azureConnectElement}
       {azureResourcesElement}
-      <RepositoriesScreen platform="cloud" />
+      <RepositoriesScreen platform="cloud" onTokenStatusChange={setTokenPresent} />
     </>
   );
 
@@ -2308,7 +2308,7 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <RepositoriesScreen platform="cloud" />
+        <RepositoriesScreen platform="cloud" onTokenStatusChange={setTokenPresent} />
       </PortsProvider>
     </>
   );

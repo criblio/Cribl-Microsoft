@@ -168,3 +168,105 @@ describe("Repositories screen - a refused PAT status read (DBT-159)", () => {
     expect(githubPat.clear).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Repositories screen - onTokenStatusChange (DBT-246)", () => {
+  async function mountWith(
+    githubPat: {
+      status: ReturnType<typeof vi.fn>;
+      validateAndStore: ReturnType<typeof vi.fn>;
+      clear: ReturnType<typeof vi.fn>;
+    },
+    cb: (present: boolean) => void,
+  ) {
+    const ports = {
+      githubPat,
+      content: { getCommitSha: vi.fn(), listSolutions: vi.fn(async () => []) },
+    } as unknown as UiPorts;
+    await act(async () => {
+      render(
+        <PortsProvider ports={ports} config={CONFIG}>
+          <RepositoriesScreen platform="cloud" onTokenStatusChange={cb} />
+        </PortsProvider>,
+      );
+    });
+  }
+
+  async function typeAndSave() {
+    const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "github_pat_abcdefghijklmnop" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Save|Validate|Store|Connect/i }));
+    });
+  }
+
+  it("fires true after a save and false after a clear", async () => {
+    const cb = vi.fn();
+    await mountWith(
+      {
+        status: vi.fn(async () => ({ hasPat: false })),
+        validateAndStore: vi.fn(async () => ({ hasPat: true, login: "octo" })),
+        clear: vi.fn(async () => undefined),
+      },
+      cb,
+    );
+    expect(cb).not.toHaveBeenCalled();
+    await typeAndSave();
+    expect(cb.mock.calls).toEqual([[true]]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Clear token" }));
+    });
+    expect(cb.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("does not fire when the port rejects (status, save, clear) or the token is invalid", async () => {
+    const cb = vi.fn();
+    await mountWith(
+      {
+        status: vi.fn(async () => {
+          throw new Error("refused");
+        }),
+        validateAndStore: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+        clear: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      },
+      cb,
+    );
+    await typeAndSave();
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when GitHub rejects the token (hasPat false)", async () => {
+    const cb = vi.fn();
+    await mountWith(
+      {
+        status: vi.fn(async () => ({ hasPat: false })),
+        validateAndStore: vi.fn(async () => ({ hasPat: false, error: "bad" })),
+        clear: vi.fn(),
+      },
+      cb,
+    );
+    await typeAndSave();
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when clear rejects", async () => {
+    const cb = vi.fn();
+    await mountWith(
+      {
+        status: vi.fn(async () => ({ hasPat: true, login: "octo" })),
+        validateAndStore: vi.fn(),
+        clear: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      },
+      cb,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Clear token" }));
+    });
+    expect(cb).not.toHaveBeenCalled();
+  });
+});
