@@ -1979,12 +1979,6 @@ export function IntegrateScreen({
   // ---- Derived section states, readiness pills, deploy gate -------------
   // (sectionInputs and azureNeeds are derived above, beside the radio.)
   const resolved = deriveSectionStatuses(sectionInputs);
-  // DBT-232: moveToSection reads these through refs so its identity does not
-  // churn every render.
-  const resolvedRef = useRef(resolved);
-  resolvedRef.current = resolved;
-  const deployingRef = useRef(false);
-  deployingRef.current = deploying || packBuilding;
 
   // DBT-127 / DBT-232 / DBT-237: the page owns which sections are folded, so
   // "Done - next" and the footer pills can fold and open them. The rules (open

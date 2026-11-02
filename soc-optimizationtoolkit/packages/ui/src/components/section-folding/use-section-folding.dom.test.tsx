@@ -137,4 +137,27 @@ describe("useSectionFolding", () => {
     fireEvent.click(screen.getByTestId("move-one"));
     expect(state("two")).toBe("open");
   });
+
+  it("keeps moveTo's identity across a re-render with an inline anchorFor", () => {
+    const seen: Array<(id: string) => void> = [];
+    function Probe(): ReactElement {
+      const f = useSectionFolding({
+        ids: IDS,
+        currentId: "one",
+        pinPrefix: "fixture-pinned",
+        anchorFor: (id) => `a-${id}`,
+      });
+      seen.push(f.moveTo);
+      return <span />;
+    }
+    const ports = makePorts({ store: new Map() });
+    const { rerender } = mount(ports, <Probe />);
+    rerender(
+      <PortsProvider ports={ports} config={EMPTY_AZURE_CONFIG}>
+        <Probe />
+      </PortsProvider>,
+    );
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen[seen.length - 1]).toBe(seen[seen.length - 2]);
+  });
 });

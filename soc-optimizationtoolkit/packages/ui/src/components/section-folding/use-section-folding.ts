@@ -66,10 +66,13 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
   idsRef.current = ids;
   const keepOpenRef = useRef<ReadonlySet<string> | readonly string[] | undefined>(keepOpen);
   keepOpenRef.current = keepOpen;
-  const anchorOption = options.anchorFor;
+  // Held in a ref so moveTo/goTo keep their identity however the caller
+  // passes anchorFor (an inline arrow is a new function every render).
+  const anchorOptionRef = useRef(options.anchorFor);
+  anchorOptionRef.current = options.anchorFor;
   const anchorFor = useCallback(
-    (id: string): string => (anchorOption !== undefined ? anchorOption(id) : id),
-    [anchorOption],
+    (id: string): string => anchorOptionRef.current?.(id) ?? id,
+    [],
   );
 
   const [collapsed, setCollapsedSet] = useState<ReadonlySet<string>>(() =>
