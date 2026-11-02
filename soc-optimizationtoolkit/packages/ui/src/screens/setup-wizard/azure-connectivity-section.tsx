@@ -16,8 +16,18 @@ import {
   checklistEntries,
   requestSummary,
 } from "@soc/core";
-import type { AzureConfig, AzureConnectivity } from "@soc/core";
+import type { AppPermission, AzureConfig, AzureConnectivity } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
+
+/**
+ * An entry's (i) text: the role or Graph permission it grants first - what an
+ * approver is actually asked for - then the existing justification and
+ * withoutIt strings, reused verbatim.
+ */
+function tipText(entry: AppPermission): string {
+  const kind = entry.kind === "graph-api" ? "Graph permission" : "Role";
+  return `${kind}: ${entry.name}\n${entry.justification}\n${entry.withoutIt}`;
+}
 
 export interface AzureConnectivitySectionProps {
   config: AzureConfig;
@@ -112,7 +122,7 @@ export function AzureConnectivitySection({
             </label>
             <InfoTip
               label={`About ${readOnly.feature}`}
-              text={`${readOnly.justification}\n${readOnly.withoutIt}`}
+              text={tipText(readOnly)}
             />
             <span className="connectivity-badge">Recommended</span>
             <p className="field-hint">
@@ -134,7 +144,7 @@ export function AzureConnectivitySection({
                 </label>
                 <InfoTip
                   label={`About ${entry.feature}`}
-                  text={`${entry.justification}\n${entry.withoutIt}`}
+                  text={tipText(entry)}
                 />
               </div>
             ))}
@@ -147,10 +157,14 @@ export function AzureConnectivitySection({
         (storedIdentity ? (
           <div className="connectivity-disconnected">
             <span>An app identity is still stored.</span>
-            <button type="button" onClick={onClearIdentity}>
+            <button type="button" className="run-button" onClick={onClearIdentity}>
               Clear stored identity
             </button>
-            <button type="button" onClick={() => choose("partial")}>
+            <button
+              type="button"
+              className="run-button"
+              onClick={() => choose("partial")}
+            >
               Use Partially Connected
             </button>
           </div>

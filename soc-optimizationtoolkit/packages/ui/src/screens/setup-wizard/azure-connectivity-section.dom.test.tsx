@@ -322,3 +322,41 @@ describe("AzureConnectSection by connectivity", () => {
     ).toBe(0);
   });
 });
+
+describe("checklist tips name the permission first (I6)", () => {
+  it("every tip starts with the role or Graph permission name, then justification, then withoutIt", () => {
+    const { container } = render(<Host initial={PARTIAL} />);
+    const { readOnly, others } = checklistEntries();
+    const tips = Array.from(container.querySelectorAll(".info-tip-pop")).map(
+      (n) => n.textContent ?? "",
+    );
+    const entries = [readOnly, ...others];
+    expect(tips).toHaveLength(entries.length);
+    entries.forEach((entry, i) => {
+      const prefix =
+        entry.kind === "graph-api" ? "Graph permission: " : "Role: ";
+      const tip = tips[i] ?? "";
+      expect(tip.startsWith(prefix + entry.name)).toBe(true);
+      expect(tip.indexOf(entry.justification)).toBeGreaterThan(
+        tip.indexOf(entry.name),
+      );
+      expect(tip.indexOf(entry.withoutIt)).toBeGreaterThan(
+        tip.indexOf(entry.justification),
+      );
+    });
+  });
+});
+
+describe("the Disconnected stored-identity actions are buttons (L3)", () => {
+  it("renders both actions with the secondary button class", () => {
+    render(
+      <Host
+        initial={{ ...EMPTY_AZURE_CONFIG, connectivity: "disconnected" }}
+        storedIdentity
+      />,
+    );
+    for (const name of ["Clear stored identity", "Use Partially Connected"]) {
+      expect(screen.getByRole("button", { name }).className).toBe("run-button");
+    }
+  });
+});
