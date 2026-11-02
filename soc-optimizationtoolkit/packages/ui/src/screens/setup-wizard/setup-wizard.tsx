@@ -149,6 +149,8 @@ export interface SetupWizardProps {
   uploadArtifactName?: string;
   /** Footer signal: GitHub content reachable + PAT valid (defaults false/pending). */
   repositoriesReachable?: boolean;
+  /** DBT-246: forwarded to the GitHub step's RepositoriesScreen (token saved or cleared). */
+  onTokenStatusChange?: (present: boolean) => void;
   /** Fully-explicit footer signals; overrides the capability-derived defaults. */
   footerOverride?: WizardFooterInput;
   /** Finish the wizard and enter the app. */
@@ -187,6 +189,7 @@ export function SetupWizard(props: SetupWizardProps) {
     azureChangeRequestContext,
     uploadArtifactName,
     repositoriesReachable = false,
+    onTokenStatusChange,
     footerOverride,
     onGetStarted,
     accepted,
@@ -346,7 +349,10 @@ export function SetupWizard(props: SetupWizardProps) {
                 and installing a Cribl pack. None of that touches Azure. You can
                 add or replace the token later from Repositories.
               </p>
-              <RepositoriesScreen platform={contentPlatform} />
+              <RepositoriesScreen
+                platform={contentPlatform}
+                {...(onTokenStatusChange !== undefined ? { onTokenStatusChange } : {})}
+              />
             </div>
           )}
         </div>

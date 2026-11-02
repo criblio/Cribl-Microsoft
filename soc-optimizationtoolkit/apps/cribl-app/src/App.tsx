@@ -936,12 +936,19 @@ function App() {
   // failed read leaves it undefined (unknown), never false and never true
   // (DBT-175 / DBT-159).
   const [tokenPresent, setTokenPresent] = useState<boolean | undefined>(undefined);
+  // Set once a save/clear has reported: the mount-time read below may resolve
+  // AFTER that and must not overwrite the newer fact with a stale one.
+  const tokenReportedRef = useRef(false);
+  const handleTokenStatusChange = useCallback((present: boolean) => {
+    tokenReportedRef.current = true;
+    setTokenPresent(present);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const status = await cloudPorts.githubPat.status();
-        if (!cancelled) {
+        if (!cancelled && !tokenReportedRef.current) {
           setTokenPresent(status.hasPat);
         }
       } catch {
@@ -1569,6 +1576,7 @@ function App() {
             'App registration and connect section on Setup. The secret is stored encrypted in ' +
             'the app key-value store and is write-only - it can be replaced but never read back.'
           }
+          onTokenStatusChange={handleTokenStatusChange}
           accepted={phase.phase !== 'aua'}
           onAccept={handleAccept}
           // The wizard no longer produces a mode (capability-model-plan step
@@ -1789,7 +1797,7 @@ function App() {
       <div id="setup-connect-section" />
       {azureConnectElement}
       {azureResourcesElement}
-      <RepositoriesScreen platform="cloud" onTokenStatusChange={setTokenPresent} />
+      <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />
     </>
   );
 
@@ -2308,7 +2316,7 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <RepositoriesScreen platform="cloud" onTokenStatusChange={setTokenPresent} />
+        <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />
       </PortsProvider>
     </>
   );
