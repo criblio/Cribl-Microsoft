@@ -1,4 +1,7 @@
 import { clearNotice } from './clear-notice';
+import { connectionIncompleteText, secretNotice as secretNoticeFor } from './connection-notices';
+import type { SecretProbe } from './connection-notices';
+import { JOURNEY_LINKS, SETUP_CONNECT_ANCHOR, SETUP_GITHUB_ANCHOR } from './journey-links';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -34,7 +37,6 @@ import {
   commitNoticeText,
   formatScopeChip,
   loadableSetupFromRead,
-  mergeJourneyLinks,
   OPTIONS_LOADING,
   OPTIONS_UNREADABLE_NOTICE,
   beginOptionsRetry,
@@ -52,7 +54,6 @@ import type {
   AppRoute,
   AzureConnectResult,
   CommitScopeOutcome,
-  JourneyLinks,
   LoadableAcceptance,
   LoadableSetup,
   OptionsRead,
@@ -177,43 +178,7 @@ const ONBOARD_REQUIRED_FIELDS = [
   'workspaceName',
 ] as const;
 
-// This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
-// shared bindings plus the CLOUD-specific connect cross-link - identity
-// entry lives in the App registration and connect section of the Setup page.
-// Cross-links are DATA passed to the shared screens; shared prose never
-// names shell-specific UI.
-const SHELL_LINK_OVERRIDES: JourneyLinks = {
-  connect: {
-    routeId: 'home',
-    // Same-route action: the anchor scrolls Setup down to the section so the
-    // button visibly lands somewhere (user report 2026-07-28).
-    anchorId: 'setup-connect-section',
-    hint:
-      'Identity entry lives in the App registration and connect section of the Setup ' +
-      'page: Save and connect stores the secret and verifies it by acquiring an ARM token.',
-  },
-};
-// Full mode: the integrate-arc stages the single-page Integrate flagship
-// serves (choose-content / configure / deploy) cross-link to the 'integrate'
-// route - Setup's Integrate rail opens the one page (legacy-flow-analysis.md).
-// In cribl-only / air-gapped these stages render 'not-yet-available'
-// (non-navigable), so the binding is inert where the 'both'-gated route is
-// hidden.
-const JOURNEY_LINKS = mergeJourneyLinks({
-  ...SHELL_LINK_OVERRIDES,
-  'choose-content': {
-    routeId: 'integrate',
-    hint: 'Start on the Sentinel Integration page - the single-page flow from Azure resources through deploy.',
-  },
-  configure: {
-    routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Sentinel Integration page.',
-  },
-  deploy: {
-    routeId: 'integrate',
-    hint: 'Deploy the native table on the Sentinel Integration page.',
-  },
-});
+// This shell's journey stage bindings live in journey-links.ts (pinned there).
 
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to DCR Automation - the surface the relaxed
@@ -801,10 +766,7 @@ function App() {
   // azureBasic slot is the definitive probe. Success marks the secret live
   // (and stores a fresh azureArmToken, same as a connect); only a VERIFIED
   // failure surfaces a notice. 'idle' = nothing to probe yet (no identity).
-  const [secretProbe, setSecretProbe] = useState<
-    | { state: 'idle' | 'checking' | 'live' | 'missing' }
-    | { state: 'failed'; detail: string }
-  >({ state: 'idle' });
+  const [secretProbe, setSecretProbe] = useState<SecretProbe>({ state: 'idle' });
   const probedProfileRef = useRef<string | null>(null);
 
   // A transient message surfaced after a switch / clear (e.g. "enter the secret
@@ -1124,7 +1086,7 @@ function App() {
   };
   const handleClearSecret = () => {
     clearStoredSecretState();
-    setSwitchNotice(clearNotice('secret'));
+    setSwitchNotice(clearNotice('secret', activeConfig.connectivity));
   };
 
   const startRename = () => {
@@ -1652,17 +1614,9 @@ function App() {
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
   // speculative "not entered this session" warning): null while the secret
   // is live, the probe is still running, or there is nothing to probe yet.
-  // Only a VERIFIED absence/failure warns.
-  const secretNotice = secretLive
-    ? null
-    : secretProbe.state === 'missing'
-      ? 'No client secret is stored for this connection (verified just now). Enter it ' +
-        'in the App registration and connect section on Setup and Save and connect.'
-      : secretProbe.state === 'failed'
-        ? 'The stored client secret FAILED verification just now - token acquisition ' +
-          'was refused. Re-enter the secret in the App registration and connect ' +
-          `section on Setup. Detail: ${secretProbe.detail}`
-        : null;
+  // Only a VERIFIED absence/failure warns, and under Disconnected it points at
+  // the connectivity choice rather than the hidden connect section.
+  const secretNotice = secretNoticeFor(activeConfig.connectivity, secretLive, secretProbe);
 
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
@@ -1813,10 +1767,11 @@ function App() {
   const setupSections = (
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
-      <div id="setup-connect-section" />
+      <div id={SETUP_CONNECT_ANCHOR} />
       {azureConnectivityElement}
       {azureConnectElement}
       {azureResourcesElement}
+      <div id={SETUP_GITHUB_ANCHOR} />
       <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />
     </>
   );
@@ -1972,13 +1927,7 @@ function App() {
         <section className="panel">
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
-            The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
-            single next step. Connect first in the App registration and connect section on
-            Setup - that fills the tenant and client ids. Then choose WHERE to deploy in the
-            Select resources and grant permissions section (or commit a scope from the
-            Sentinel Integration page&apos;s Azure Resources section). The Run action unlocks once all
-            five fields are set.
+            {connectionIncompleteText(activeConfig.connectivity, missingOnboardFields, 'onboard')}
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>
@@ -2034,11 +1983,7 @@ function App() {
         <section className="panel">
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
-            The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
-            single next step: connect first in the App registration and connect section on
-            Setup, then choose the target in the Select resources and grant permissions
-            section. The Run action unlocks once all five fields are set.
+            {connectionIncompleteText(activeConfig.connectivity, missingOnboardFields, 'batch')}
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>

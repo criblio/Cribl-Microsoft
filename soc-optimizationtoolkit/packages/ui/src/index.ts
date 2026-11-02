@@ -143,6 +143,7 @@ export {
 export { JourneyStepper } from "./frame/journey-stepper";
 export type { JourneyStepperProps } from "./frame/journey-stepper";
 export {
+  NOT_NEEDED_HINT,
   SHARED_JOURNEY_LINKS,
   buildStepperItems,
   mergeJourneyLinks,
