@@ -89,7 +89,7 @@ export function HomeScreen({
                 className={`readiness-chip readiness-chip-${chip.state}`}
                 title={chip.hint}
               >
-                {chip.label}: {chip.state}
+                {chip.label}: {chip.state === "not-used" ? "not used" : chip.state}
               </span>
             ))}
           </div>

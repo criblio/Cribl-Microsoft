@@ -61,6 +61,9 @@ import {
   computeInvalidation,
   DEFAULT_THEME_CHOICE,
   mustProduceArtifacts,
+  patPolicyFor,
+  requestedPermissions,
+  scopeNeed,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   getActiveConfig,
@@ -928,6 +931,28 @@ function App() {
     [activeConfig.tenantId]
   );
 
+  // DBT-246: whether a GitHub token is stored, read ONCE through the same port
+  // RepositoriesScreen uses (githubPat.status(): hasPat, never the token). A
+  // failed read leaves it undefined (unknown), never false and never true
+  // (DBT-175 / DBT-159).
+  const [tokenPresent, setTokenPresent] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await cloudPorts.githubPat.status();
+        if (!cancelled) {
+          setTokenPresent(status.hasPat);
+        }
+      } catch {
+        // Unknown stays unknown.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudPorts]);
+
   // Which top-level surface to show (loading / AUA gate / mode select /
   // frame). Computed every render from the two loadable states.
   const phase = resolveFramePhase(acceptance, setupDone);
@@ -1583,6 +1608,18 @@ function App() {
       activeConfig.resourceGroup.trim() !== '' &&
       activeConfig.workspaceName.trim() !== '',
     criblReachable: criblReachability(platformLink),
+    connectivity: activeConfig.connectivity,
+    scopeNeed: scopeNeed(
+      activeConfig.connectivity,
+      requestedPermissions(
+        activeConfig.connectivity,
+        activeConfig.allowedPermissions,
+        activeConfig.setupPath,
+      ),
+    ),
+    subscriptionChosen: activeConfig.subscriptionId.trim() !== '',
+    tokenRequired: patPolicyFor('cloud').required,
+    tokenPresent,
   };
 
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the

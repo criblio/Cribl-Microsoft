@@ -34,6 +34,10 @@ function StepBody({ item }: { item: StepperItem }) {
     <>
       <span className="journey-step-circle">{item.index}</span>
       <span className="journey-step-label">{item.label}</span>
+      {/* DBT-246: the same tag a not-needed section header carries. */}
+      {item.status === "not-needed" && (
+        <span className="numbered-section-info-tag">Not needed</span>
+      )}
     </>
   );
 }
