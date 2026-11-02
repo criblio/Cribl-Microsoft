@@ -175,7 +175,11 @@ describe("firstRunStageIds", () => {
   });
 });
 
-describe("deriveJourney invariants (full fact matrix)", () => {
+// The matrix is 31104 fact records (DBT-246 crossed the connectivity facts
+// into it). Each test walks all of them, which takes ~8-15 s on a slow Windows
+// dev machine against vitest's 5 s default, so the timeout is stated here
+// rather than letting a CPU-bound pin fail as if it had found something.
+describe("deriveJourney invariants (full fact matrix)", { timeout: 60_000 }, () => {
   it("emits CONSTANT stage lists - facts change statuses, never which stages exist", () => {
     for (const f of everyFactCombination()) {
       const journey = deriveJourney(f);
