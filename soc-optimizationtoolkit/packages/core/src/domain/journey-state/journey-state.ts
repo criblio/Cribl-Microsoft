@@ -102,11 +102,11 @@ export interface JourneyFacts {
   criblReachable?: boolean;
   /** The saved Azure connectivity choice; absent means "full". */
   connectivity?: AzureConnectivity;
-  /** How much Azure scope the choice needs; absent means "full". */
+  /** How much Azure scope a partial choice needs; read only under "partial" (full always needs the whole target). */
   scopeNeed?: ScopeNeed;
   /** A subscription has been chosen (enough when scopeNeed is "subscription"). */
   subscriptionChosen?: boolean;
-  /** A GitHub token is saved. Absent, with tokenRequired absent, is satisfied. */
+  /** A GitHub token is saved. Absent while a token is required means not yet known: pending, never the next action. */
   tokenPresent?: boolean;
   /** The operator's setup path needs a GitHub token. Absent means not required. */
   tokenRequired?: boolean;
@@ -260,6 +260,7 @@ const DEPLOY_DISCONNECTED_REASON =
   "Disconnected: export the ARM templates instead.";
 const PICK_TARGET_COPY =
   "Pick a subscription, resource group and workspace on Setup.";
+const PICK_SUBSCRIPTION_COPY = "Pick a subscription on Setup.";
 
 function isDisconnected(facts: JourneyFacts): boolean {
   return facts.connectivity === "disconnected";
@@ -270,22 +271,48 @@ function connectNotNeeded(facts: JourneyFacts): boolean {
   return isDisconnected(facts);
 }
 
-/** Target is not needed when disconnected or when the choice needs no scope. */
+/**
+ * The scope need that shapes the journey. Only Partially Connected narrows the
+ * target: under full the operator installs the whole plan, so a plan that
+ * happens to hold no resource-group entry (lab-new-rg) must not relax the
+ * target stage or the scope chip.
+ */
+function journeyScopeNeed(facts: JourneyFacts): ScopeNeed | undefined {
+  return facts.connectivity === "partial" ? facts.scopeNeed : undefined;
+}
+
+/** Target is not needed when disconnected or when a partial choice needs no scope. */
 function targetNotNeeded(facts: JourneyFacts): boolean {
-  return isDisconnected(facts) || facts.scopeNeed === "none";
+  return isDisconnected(facts) || journeyScopeNeed(facts) === "none";
 }
 
 /** The target outcome is satisfied by the facts (ignoring not-needed). */
 function targetSatisfied(facts: JourneyFacts): boolean {
-  if (facts.scopeNeed === "subscription" && facts.subscriptionChosen === true) {
+  if (
+    journeyScopeNeed(facts) === "subscription" &&
+    facts.subscriptionChosen === true
+  ) {
     return true;
   }
   return facts.scopeCommitted;
 }
 
-/** The GitHub stage is satisfied unless a token is required and absent. */
-function githubSatisfied(facts: JourneyFacts): boolean {
-  return facts.tokenRequired !== true || facts.tokenPresent === true;
+/** What the target stage asks the operator to pick, for its need. */
+function pickTargetCopy(facts: JourneyFacts): string {
+  return journeyScopeNeed(facts) === "subscription"
+    ? PICK_SUBSCRIPTION_COPY
+    : PICK_TARGET_COPY;
+}
+
+/**
+ * The GitHub stage outcome. A required token whose presence is not yet known
+ * (tokenPresent undefined: still loading, or the read failed) is "pending" -
+ * neither done nor the thing to act on, so it never headlines "Save a GitHub
+ * token" to an operator who may already have one.
+ */
+function githubOutcome(facts: JourneyFacts): "done" | "pending" | "open" {
+  if (facts.tokenRequired !== true || facts.tokenPresent === true) return "done";
+  return facts.tokenPresent === undefined ? "pending" : "open";
 }
 
 /**
@@ -324,8 +351,12 @@ function connectSatisfied(facts: JourneyFacts): boolean {
   return azureOk && criblOk;
 }
 
-/** done = satisfied by the facts; not-needed = the choice skips it; open = to do. */
-type StageOutcome = "done" | "not-needed" | "open";
+/**
+ * done = satisfied by the facts; not-needed = the choice skips it; open = to
+ * do; pending = not yet known (never current, never complete, and it does not
+ * hold the rest of the arc back).
+ */
+type StageOutcome = "done" | "not-needed" | "open" | "pending";
 
 /** Stage-by-stage completion for the first-run arc, in arc order. */
 function firstRunCompletion(
@@ -334,15 +365,23 @@ function firstRunCompletion(
 ): Map<FirstRunStageId, StageOutcome> {
   const completion = new Map<FirstRunStageId, StageOutcome>();
   let allPriorDone = true;
+  let anyPriorPending = false;
   for (const id of ids) {
     let done: boolean;
     switch (id) {
       case "accept":
         done = facts.accepted;
         break;
-      case "github":
-        done = githubSatisfied(facts);
+      case "github": {
+        const outcome = githubOutcome(facts);
+        if (outcome === "pending") {
+          completion.set(id, "pending");
+          anyPriorPending = true;
+          continue;
+        }
+        done = outcome === "done";
         break;
+      }
       case "connect":
         done = connectNotNeeded(facts) || connectSatisfied(facts);
         break;
@@ -352,6 +391,11 @@ function firstRunCompletion(
       case "ready":
         // Derived cap of the arc: complete exactly when everything before it
         // is. Never 'current' - its surface (Home's chips) only summarizes.
+        // A pending stage before it leaves it pending too.
+        if (allPriorDone && anyPriorPending) {
+          completion.set(id, "pending");
+          continue;
+        }
         done = allPriorDone;
         break;
     }
@@ -395,6 +439,12 @@ export function deriveJourney(facts: JourneyFacts): Journey {
     }
     if (outcome === "done") {
       return { id, label, status: "complete" as const };
+    }
+    if (outcome === "pending") {
+      // Not yet known: navigable (or behind the wall), never current.
+      return wall !== null
+        ? { id, label, status: "blocked" as const, blockedReason: wall }
+        : { id, label, status: "available" as const };
     }
     // The FIRST incomplete stage is the current one - even when it is itself
     // the wall (accept): the wall stage is the thing to act on.
@@ -461,7 +511,11 @@ export function deriveJourney(facts: JourneyFacts): Journey {
         blockedReason: DEPLOY_NEEDS_IDENTITY_REASON,
       };
     }
-    if (!targetNotNeeded(facts) && !targetSatisfied(facts)) {
+    // Deploy always writes into a subscription, resource group and
+    // workspace, so it gates on the COMMITTED scope whatever the target stage
+    // needs: a subscription-only (or no-scope) partial target lets the
+    // journey move on, never the deploy.
+    if (!facts.scopeCommitted) {
       return {
         id,
         label,
@@ -494,7 +548,7 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
         "Review and accept the agreement; nothing else unlocks until acceptance is recorded.",
     };
   }
-  if (!githubSatisfied(facts)) {
+  if (githubOutcome(facts) === "open") {
     return {
       stageId: "github",
       label: "Save a GitHub token",
@@ -544,7 +598,7 @@ export function nextAction(facts: JourneyFacts): NextAction | null {
     return {
       stageId: "target",
       label: "Commit an Azure target",
-      description: PICK_TARGET_COPY,
+      description: pickTargetCopy(facts),
     };
   }
   return {
@@ -639,7 +693,7 @@ export function readinessChips(facts: JourneyFacts): ReadinessChip[] {
           id: "scope",
           label: "Scope",
           state: "missing",
-          hint: PICK_TARGET_COPY,
+          hint: pickTargetCopy(facts),
         };
   return [identity, secret, scope];
 }

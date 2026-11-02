@@ -75,13 +75,16 @@ const SCOPE_NEEDS: readonly (ScopeNeed | undefined)[] = [
   "subscription",
   "full",
 ];
-const OPTIONAL_BOOLS: readonly boolean[] = [true, false];
+// The optional facts include undefined: absent is a real input (an older
+// caller, or a token status still loading) and has its own meaning.
+const OPTIONAL_BOOLS: readonly (boolean | undefined)[] = [true, false, undefined];
 
 /**
- * Every fact combination: the 72 original records crossed with the FULL
- * product of the new facts (4 connectivity x 4 scopeNeed x 2 subscriptionChosen
- * x 2 tokenRequired x 2 tokenPresent = 64) = 4608 records. The product is cheap
- * (pure derivation), so no pairwise subset is taken.
+ * Every fact combination: the base facts (2 accepted x 2 identity x 3 secret x
+ * 2 scopeCommitted x 3 Cribl = 72) crossed with the FULL product of the
+ * connectivity facts (4 connectivity x 4 scopeNeed x 3 subscriptionChosen x
+ * 3 tokenRequired x 3 tokenPresent = 432) = 31104 records. The product is
+ * cheap (pure derivation), so no pairwise subset is taken.
  */
 function everyFactCombination(): JourneyFacts[] {
   const combos: JourneyFacts[] = [];
@@ -172,7 +175,7 @@ describe("firstRunStageIds", () => {
   });
 });
 
-describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
+describe("deriveJourney invariants (full fact matrix)", () => {
   it("emits CONSTANT stage lists - facts change statuses, never which stages exist", () => {
     for (const f of everyFactCombination()) {
       const journey = deriveJourney(f);
@@ -231,7 +234,15 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
         continue;
       }
       for (const earlier of journey.firstRun.slice(0, currentIndex)) {
-        expect(["complete", "not-needed"]).toContain(earlier.status);
+        // A required token whose status is not yet known is the one stage
+        // that may sit open before current: it is pending, not missing (M1).
+        const pendingGithub =
+          earlier.id === "github" &&
+          f.tokenRequired === true &&
+          f.tokenPresent === undefined;
+        expect(
+          pendingGithub ? ["available"] : ["complete", "not-needed"],
+        ).toContain(earlier.status);
       }
     }
   });
@@ -736,5 +747,127 @@ describe("scope chip follows the target stage", () => {
     expect(scope?.state).toBe("ok");
     expect(scope?.hint).toContain("subscription is chosen");
     expect(scope?.hint).not.toContain("committed");
+  });
+});
+
+describe("scopeNeed shapes the journey only under partial (I2)", () => {
+  // lab-new-rg's full plan has no resource-group entry, so scopeNeed is
+  // "subscription" there - that must not relax a Fully Connected install.
+  const fullLab = facts({
+    connectivity: "full",
+    scopeNeed: "subscription",
+    subscriptionChosen: true,
+    scopeCommitted: false,
+  });
+
+  it("full + subscription-only need + subscription chosen: target is not complete", () => {
+    const j = deriveJourney(fullLab);
+    expect(statusOf(j, "target")).toBe("current");
+    expect(nextAction(fullLab)?.stageId).toBe("target");
+  });
+
+  it("full + subscription-only need: deploy is still scope-gated", () => {
+    expect(stageOf(deriveJourney(fullLab), "deploy").blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("full + a none need: target is still needed", () => {
+    const f = facts({ connectivity: "full", scopeNeed: "none", scopeCommitted: false });
+    expect(statusOf(deriveJourney(f), "target")).toBe("current");
+    expect(readinessChips(f).find((c) => c.id === "scope")?.state).toBe("missing");
+  });
+
+  it("full: the scope chip asks for the whole target", () => {
+    const scope = readinessChips(fullLab).find((c) => c.id === "scope");
+    expect(scope?.state).toBe("missing");
+    expect(scope?.hint).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
+  });
+});
+
+describe("Deploy always needs the committed scope (I3)", () => {
+  it("partial Reader + subscription only: deploy blocked with the scope reason", () => {
+    const f = facts({
+      connectivity: "partial",
+      scopeNeed: "subscription",
+      subscriptionChosen: true,
+      scopeCommitted: false,
+    });
+    const deploy = stageOf(deriveJourney(f), "deploy");
+    expect(deploy.status).toBe("blocked");
+    expect(deploy.blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("partial with no scope need: deploy still blocked until scope is committed", () => {
+    const f = facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false });
+    expect(stageOf(deriveJourney(f), "deploy").blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("disconnected keeps its export reason", () => {
+    const f = facts({ connectivity: "disconnected", scopeCommitted: false });
+    expect(stageOf(deriveJourney(f), "deploy").blockedReason).toBe(
+      "Disconnected: export the ARM templates instead.",
+    );
+  });
+});
+
+describe("the subscription-only target asks only for a subscription (I5)", () => {
+  const f = facts({
+    connectivity: "partial",
+    scopeNeed: "subscription",
+    subscriptionChosen: false,
+    scopeCommitted: false,
+  });
+
+  it("next action says pick a subscription", () => {
+    expect(nextAction(f)?.description).toBe("Pick a subscription on Setup.");
+  });
+
+  it("the scope chip hint says pick a subscription", () => {
+    expect(readinessChips(f).find((c) => c.id === "scope")?.hint).toBe(
+      "Pick a subscription on Setup.",
+    );
+  });
+
+  it("a full need keeps the whole-target copy", () => {
+    const g = facts({ connectivity: "partial", scopeNeed: "full", scopeCommitted: false });
+    expect(nextAction(g)?.description).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
+  });
+});
+
+describe("an unknown token status is not-yet-known, not missing (M1)", () => {
+  const pending = facts({ tokenRequired: true, tokenPresent: undefined });
+
+  it("does not make github the next action", () => {
+    expect(nextAction(pending)?.stageId).not.toBe("github");
+    expect(nextAction(pending)?.stageId).toBe("choose-content");
+  });
+
+  it("shows the github stage available, not complete and not current", () => {
+    expect(statusOf(deriveJourney(pending), "github")).toBe("available");
+  });
+
+  it("lets the next stage proceed", () => {
+    const f = facts({
+      tokenRequired: true,
+      tokenPresent: undefined,
+      secretLive: "missing",
+    });
+    expect(nextAction(f)?.stageId).toBe("connect");
+    expect(statusOf(deriveJourney(f), "connect")).toBe("current");
+  });
+
+  it("a known-missing token still asks for one", () => {
+    expect(
+      nextAction(facts({ tokenRequired: true, tokenPresent: false }))?.stageId,
+    ).toBe("github");
   });
 });

@@ -4,6 +4,7 @@ import {
   checklistEntries,
   effectiveSetupPath,
   requestedPermissions,
+  requestedRoleNames,
   scopeNeed,
 } from "./azure-connectivity";
 
@@ -30,6 +31,19 @@ describe("azure connectivity (setup-pages-plan)", () => {
     expect(requestedPermissions("disconnected", ["Reader"], "existing")).toEqual(
       [],
     );
+  });
+
+  it("scopeNeed is none for a tenant-only (Graph) partial request", () => {
+    const req = requestedPermissions("partial", ["Application.Read.All"], "existing");
+    expect(names(req)).toEqual(["Application.Read.All"]);
+    expect(scopeNeed("partial", req)).toBe("none");
+  });
+
+  it("requestedRoleNames is the RBAC half of the request", () => {
+    expect(
+      requestedRoleNames("partial", ["Reader", "Application.Read.All"], "lab-new-rg"),
+    ).toEqual(["Reader"]);
+    expect(requestedRoleNames("disconnected", ["Reader"], "existing")).toEqual([]);
   });
 
   it("scopeNeed is none for disconnected and for an empty partial", () => {
