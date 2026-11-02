@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 36 in progress, 134 done.**
+**99 in the backlog, 37 in progress, 134 done.**
 
 ## By menu item
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1061,9 +1061,18 @@ Started. Anything here with an unfinished dependency is called out on its card.
   it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md;
   plan: docs/setup-pages-implementation-plan.md.
 
+- **DBT-240** The two descriptions of the same app-registration change request disagree
+  `DBT-F2` `bug` `settled`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md). Both
+  call appRegistrationRequest; setup-wizard.tsx:461-464 says it asks for the
+  client, secret and ids only, azure-connect-section.tsx:108-113 says it
+  covers EVERYTHING including Graph and every RBAC role. Two generators render
+  on the same wizard step (setup-wizard.tsx:458,
+  azure-connect-section.tsx:105).
+
 ---
 
-## Backlog - now (19)
+## Backlog - now (18)
 
 Next to pick up. Nothing blocks these.
 
@@ -1285,15 +1294,6 @@ Next to pick up. Nothing blocks these.
   journey-state.ts:275-279 connectSatisfied and nextAction (430-457) require
   identity + live secret before every later stage, while the wizard says to
   skip Azure (setup-wizard.tsx:446-451).
-
-- **DBT-240** The two descriptions of the same app-registration change request disagree
-  `DBT-F2` `bug` `settled`
-  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md). Both
-  call appRegistrationRequest; setup-wizard.tsx:461-464 says it asks for the
-  client, secret and ids only, azure-connect-section.tsx:108-113 says it
-  covers EVERYTHING including Graph and every RBAC role. Two generators render
-  on the same wizard step (setup-wizard.tsx:458,
-  azure-connect-section.tsx:105).
 
 - **DBT-241** The resource-picker intro says the pickers depend on the setup path; both always render
   `DBT-F2` `bug` `settled`

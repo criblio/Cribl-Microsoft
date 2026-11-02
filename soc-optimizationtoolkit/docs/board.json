@@ -3738,7 +3738,7 @@
       "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "priority": "now",
       "id": "DBT-240",
