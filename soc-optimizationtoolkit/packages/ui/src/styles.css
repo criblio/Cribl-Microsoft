@@ -1244,6 +1244,15 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
 }
 
+.journey-step-not-needed .journey-step-circle {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.journey-step-not-needed .journey-step-label {
+  color: var(--text-faint);
+}
+
 .journey-step-hint {
   font-size: 11px;
   line-height: 16px;
@@ -1342,6 +1351,11 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--error-strong);
   border-color: var(--error-border);
   background: var(--error-bg);
+}
+
+.readiness-chip-not-used {
+  color: var(--text-faint);
+  border-color: var(--border-subtle);
 }
 
 .readiness-chip-unknown {

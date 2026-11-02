@@ -91,6 +91,7 @@ describe("arc constants", () => {
   it("fixes the first-run arc order", () => {
     expect(FIRST_RUN_ARC).toEqual([
       "accept",
+      "github",
       "connect",
       "target",
       "ready",
@@ -128,7 +129,13 @@ describe("firstRunStageIds", () => {
 
   it("no longer carries a mode-selection stage", () => {
     expect(FIRST_RUN_ARC).not.toContain("choose-mode");
-    expect(firstRunStageIds()).toEqual(["accept", "connect", "target", "ready"]);
+    expect(firstRunStageIds()).toEqual([
+      "accept",
+      "github",
+      "connect",
+      "target",
+      "ready",
+    ]);
   });
 });
 
@@ -230,6 +237,12 @@ describe("acceptance wall", () => {
     expect(statusOf(journey, "accept")).toBe("current");
     for (const s of allStages(journey)) {
       if (s.id === "accept") {
+        continue;
+      }
+      if (s.id === "github") {
+        // No token is required in these facts, so the stage is satisfied
+        // independently of the wall (completion is never undone by it).
+        expect(s.status).toBe("complete");
         continue;
       }
       if (s.status === "blocked") {
@@ -523,7 +536,7 @@ describe("readinessChips", () => {
       "missing",
     ]);
     expect(chips[0]?.hint).toContain("Connect");
-    expect(chips[2]?.hint).toContain("Azure Targeting");
+    expect(chips[2]?.hint).toContain("Setup");
   });
 
   it("ALWAYS renders the three chips, whatever the connection state", () => {
@@ -557,7 +570,9 @@ describe("nextAction hint cascade", () => {
     const action = nextAction(facts({ scopeCommitted: false }));
     expect(action?.stageId).toBe("target");
     expect(action?.label).toBe("Commit an Azure target");
-    expect(action?.description).toContain("Use this target");
+    expect(action?.description).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
   });
 
   it("hands over to the integrate arc when the first-run arc is green", () => {
@@ -570,5 +585,96 @@ describe("nextAction hint cascade", () => {
     const action = nextAction(facts({ secretLive: "unknown" }));
     expect(action?.description).toContain("may exist");
     expect(action?.description).toContain("session");
+  });
+});
+
+describe("the journey follows the saved connectivity choice", () => {
+  const disconnected = (o: Partial<JourneyFacts> = {}) =>
+    facts({
+      connectivity: "disconnected",
+      identityPresent: false,
+      secretLive: "missing",
+      scopeCommitted: false,
+      tokenPresent: true,
+      ...o,
+    });
+
+  it("disconnected: skips connect and target and goes straight to content", () => {
+    const f = disconnected();
+    expect(nextAction(f)?.stageId).toBe("choose-content");
+    const j = deriveJourney(f);
+    expect(statusOf(j, "connect")).toBe("not-needed");
+    expect(statusOf(j, "target")).toBe("not-needed");
+    expect(statusOf(j, "ready")).toBe("complete");
+    const current = allStages(j).filter((s) => s.status === "current");
+    expect(current.map((s) => s.id)).toEqual(["choose-content"]);
+    for (const s of allStages(j)) {
+      expect(s.blockedReason !== undefined).toBe(
+        s.status === "blocked" || s.status === "not-yet-available",
+      );
+    }
+  });
+
+  it("disconnected: identity, secret and scope chips are not-used", () => {
+    expect(readinessChips(disconnected()).map((c) => c.state)).toEqual([
+      "not-used",
+      "not-used",
+      "not-used",
+    ]);
+  });
+
+  it("disconnected: Deploy points at the export, not the tenant", () => {
+    const reason = stageOf(deriveJourney(disconnected()), "deploy").blockedReason;
+    expect(reason).toContain("export");
+    expect(reason).not.toContain("tenant");
+  });
+
+  it("partial with a subscription-level need: a chosen subscription completes target", () => {
+    const j = deriveJourney(
+      facts({
+        connectivity: "partial",
+        scopeNeed: "subscription",
+        subscriptionChosen: true,
+        scopeCommitted: false,
+      }),
+    );
+    expect(statusOf(j, "target")).toBe("complete");
+  });
+
+  it("partial with no scope need: target is not-needed", () => {
+    const j = deriveJourney(
+      facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false }),
+    );
+    expect(statusOf(j, "target")).toBe("not-needed");
+  });
+
+  it("asks for a GitHub token when one is required and missing", () => {
+    expect(
+      nextAction(facts({ tokenRequired: true, tokenPresent: false })),
+    ).toEqual({
+      stageId: "github",
+      label: "Save a GitHub token",
+      description: expect.any(String),
+    });
+  });
+
+  it("never names the retired Azure Targeting route", () => {
+    const all: JourneyFacts[] = [
+      facts({ scopeCommitted: false }),
+      facts({ identityPresent: false }),
+      disconnected(),
+      facts({ tokenRequired: true, tokenPresent: false }),
+    ];
+    for (const f of all) {
+      const texts = [
+        nextAction(f)?.description ?? "",
+        ...readinessChips(f).map((c) => c.hint),
+        ...allStages(deriveJourney(f)).map((s) => s.blockedReason ?? ""),
+      ];
+      for (const t of texts) {
+        expect(t).not.toContain("Azure Targeting");
+        expect(t).not.toContain("Use this target");
+      }
+    }
   });
 });
