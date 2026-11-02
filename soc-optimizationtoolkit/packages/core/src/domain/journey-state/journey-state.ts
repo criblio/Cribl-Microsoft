@@ -65,7 +65,6 @@
 
 import type { AzureConnectivity, ScopeNeed } from "../azure-connectivity";
 
-
 /**
  * Client-secret liveness. Liveness is SESSION-ONLY knowledge:
  *
@@ -115,20 +114,11 @@ export interface JourneyFacts {
 
 /** First-run arc stage ids, in dependency order. */
 export type FirstRunStageId =
-  | "accept"
-  | "github"
-  | "connect"
-  | "target"
-  | "ready";
+  "accept" | "github" | "connect" | "target" | "ready";
 
 /** Integrate arc stage ids, in dependency order. */
 export type IntegrateStageId =
-  | "choose-content"
-  | "configure"
-  | "review"
-  | "deploy"
-  | "validate"
-  | "monitor";
+  "choose-content" | "configure" | "review" | "deploy" | "validate" | "monitor";
 
 /** Any journey stage id. */
 export type JourneyStageId = FirstRunStageId | IntegrateStageId;
@@ -629,18 +619,27 @@ export function readinessChips(facts: JourneyFacts): ReadinessChip[] {
             state: "missing",
             hint: "Enter and connect the client secret.",
           };
-  const scope: ReadinessChip = targetSatisfied(facts)
+  const scope: ReadinessChip = targetNotNeeded(facts)
     ? {
         id: "scope",
         label: "Scope",
-        state: "ok",
-        hint: "Target scope committed.",
+        state: "not-used",
+        hint: "No Azure scope is needed for this setup.",
       }
-    : {
-        id: "scope",
-        label: "Scope",
-        state: "missing",
-        hint: PICK_TARGET_COPY,
-      };
+    : targetSatisfied(facts)
+      ? {
+          id: "scope",
+          label: "Scope",
+          state: "ok",
+          hint: facts.scopeCommitted
+            ? "Target scope committed."
+            : "A subscription is chosen.",
+        }
+      : {
+          id: "scope",
+          label: "Scope",
+          state: "missing",
+          hint: PICK_TARGET_COPY,
+        };
   return [identity, secret, scope];
 }

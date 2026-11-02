@@ -12,6 +12,7 @@
  *   - next-action derivation follows the single-next-action hint cascade
  */
 import { describe, expect, it } from "vitest";
+import type { AzureConnectivity, ScopeNeed } from "../azure-connectivity";
 import {
   FIRST_RUN_ARC,
   INTEGRATE_ARC,
@@ -62,22 +63,54 @@ const SECRET_STATES: readonly SecretLiveness[] = ["live", "unknown", "missing"];
 const CRIBL_STATES: readonly (boolean | undefined)[] = [true, false, undefined];
 const BOOLS: readonly boolean[] = [true, false];
 
-/** Every fact combination: 2 x 2 x 3 x 2 x 3 = 72 records. */
+const CONNECTIVITIES: readonly (AzureConnectivity | undefined)[] = [
+  undefined,
+  "full",
+  "partial",
+  "disconnected",
+];
+const SCOPE_NEEDS: readonly (ScopeNeed | undefined)[] = [
+  undefined,
+  "none",
+  "subscription",
+  "full",
+];
+const OPTIONAL_BOOLS: readonly boolean[] = [true, false];
+
+/**
+ * Every fact combination: the 72 original records crossed with the FULL
+ * product of the new facts (4 connectivity x 4 scopeNeed x 2 subscriptionChosen
+ * x 2 tokenRequired x 2 tokenPresent = 64) = 4608 records. The product is cheap
+ * (pure derivation), so no pairwise subset is taken.
+ */
 function everyFactCombination(): JourneyFacts[] {
   const combos: JourneyFacts[] = [];
-  {
-    for (const accepted of BOOLS) {
-      for (const identityPresent of BOOLS) {
-        for (const secretLive of SECRET_STATES) {
-          for (const scopeCommitted of BOOLS) {
-            for (const criblReachable of CRIBL_STATES) {
-              combos.push({
-                accepted,
-                identityPresent,
-                secretLive,
-                scopeCommitted,
-                criblReachable,
-              });
+  for (const accepted of BOOLS) {
+    for (const identityPresent of BOOLS) {
+      for (const secretLive of SECRET_STATES) {
+        for (const scopeCommitted of BOOLS) {
+          for (const criblReachable of CRIBL_STATES) {
+            for (const connectivity of CONNECTIVITIES) {
+              for (const scopeNeed of SCOPE_NEEDS) {
+                for (const subscriptionChosen of OPTIONAL_BOOLS) {
+                  for (const tokenRequired of OPTIONAL_BOOLS) {
+                    for (const tokenPresent of OPTIONAL_BOOLS) {
+                      combos.push({
+                        accepted,
+                        identityPresent,
+                        secretLive,
+                        scopeCommitted,
+                        criblReachable,
+                        connectivity,
+                        scopeNeed,
+                        subscriptionChosen,
+                        tokenRequired,
+                        tokenPresent,
+                      });
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -198,7 +231,7 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
         continue;
       }
       for (const earlier of journey.firstRun.slice(0, currentIndex)) {
-        expect(earlier.status).toBe("complete");
+        expect(["complete", "not-needed"]).toContain(earlier.status);
       }
     }
   });
@@ -676,5 +709,32 @@ describe("the journey follows the saved connectivity choice", () => {
         expect(t).not.toContain("Use this target");
       }
     }
+  });
+});
+
+describe("scope chip follows the target stage", () => {
+  it("is not-used whenever the target stage is not needed", () => {
+    for (const f of [
+      facts({ connectivity: "disconnected", scopeCommitted: false }),
+      facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false }),
+    ]) {
+      expect(statusOf(deriveJourney(f), "target")).toBe("not-needed");
+      const scope = readinessChips(f).find((c) => c.id === "scope");
+      expect(scope?.state).toBe("not-used");
+    }
+  });
+
+  it("says a subscription is chosen, not that a scope is committed", () => {
+    const scope = readinessChips(
+      facts({
+        connectivity: "partial",
+        scopeNeed: "subscription",
+        subscriptionChosen: true,
+        scopeCommitted: false,
+      }),
+    ).find((c) => c.id === "scope");
+    expect(scope?.state).toBe("ok");
+    expect(scope?.hint).toContain("subscription is chosen");
+    expect(scope?.hint).not.toContain("committed");
   });
 });
