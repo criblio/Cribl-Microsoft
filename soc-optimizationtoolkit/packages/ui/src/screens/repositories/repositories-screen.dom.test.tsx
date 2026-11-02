@@ -18,6 +18,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { patPolicyFor } from "@soc/core";
 import type { AzureConfig } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -195,7 +196,7 @@ describe("Repositories screen - onTokenStatusChange (DBT-246)", () => {
     const input = document.querySelector('input[type="password"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: "github_pat_abcdefghijklmnop" } });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Save|Validate|Store|Connect/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Save|Validate|Store|Connect|Replace token/i }));
     });
   }
 
@@ -238,18 +239,80 @@ describe("Repositories screen - onTokenStatusChange (DBT-246)", () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
-  it("does not fire when GitHub rejects the token (hasPat false)", async () => {
+  // Re-pinned for I7: a rejected save now re-reads the stored status and
+  // reports it, because the adapter stores before validating and rolls back on
+  // rejection. With no token before or after, that report is false.
+  it("reports the re-read status when GitHub rejects the token (hasPat false)", async () => {
     const cb = vi.fn();
+    const status = vi.fn(async () => ({ hasPat: false }));
     await mountWith(
       {
-        status: vi.fn(async () => ({ hasPat: false })),
+        status,
         validateAndStore: vi.fn(async () => ({ hasPat: false, error: "bad" })),
         clear: vi.fn(),
       },
       cb,
     );
     await typeAndSave();
-    expect(cb).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledTimes(2);
+    expect(cb.mock.calls).toEqual([[false]]);
+  });
+
+  it("reports false when a rejected REPLACEMENT rolled the previous token back (I7)", async () => {
+    const cb = vi.fn();
+    const status = vi
+      .fn()
+      .mockResolvedValueOnce({ hasPat: true, login: "octo" })
+      .mockResolvedValue({ hasPat: false });
+    await mountWith(
+      {
+        status,
+        validateAndStore: vi.fn(async () => ({ hasPat: false, error: "HTTP 401" })),
+        clear: vi.fn(),
+      },
+      cb,
+    );
+    await typeAndSave();
+    expect(cb.mock.calls).toEqual([[false]]);
+    // The badge follows the re-read status too, not the stale "saved".
+    expect(screen.queryByText(/GitHub token saved/)).toBeNull();
+  });
+
+  it("reports false when the validation call failed in transport and rolled back (I7)", async () => {
+    const cb = vi.fn();
+    const status = vi
+      .fn()
+      .mockResolvedValueOnce({ hasPat: true, login: "octo" })
+      .mockResolvedValue({ hasPat: false });
+    await mountWith(
+      {
+        status,
+        validateAndStore: vi.fn(async () => {
+          throw new Error("network down");
+        }),
+        clear: vi.fn(),
+      },
+      cb,
+    );
+    await typeAndSave();
+    expect(cb.mock.calls).toEqual([[false]]);
+  });
+
+  it("never reports false for a rejection that returned before storing (I7)", async () => {
+    const cb = vi.fn();
+    // A format rejection stores nothing, so the previous token is still there.
+    const status = vi.fn(async () => ({ hasPat: true, login: "octo" }));
+    await mountWith(
+      {
+        status,
+        validateAndStore: vi.fn(async () => ({ hasPat: false, error: "format" })),
+        clear: vi.fn(),
+      },
+      cb,
+    );
+    await typeAndSave();
+    expect(cb.mock.calls).not.toContainEqual([false]);
+    expect(screen.getByText(/GitHub token saved/)).toBeTruthy();
   });
 
   it("does not fire when clear rejects", async () => {
@@ -291,5 +354,32 @@ describe("Repositories screen - token scope (DBT-245)", () => {
     );
     const text = container.textContent ?? "";
     expect(countOccurrences(text, "no scopes are required")).toBe(1);
+  });
+});
+
+/**
+ * L2 (live check 2026-11-02): the rationale and scope paragraphs rendered on
+ * screen. They move VERBATIM behind one InfoTip; one requirement line stays.
+ */
+describe("Repositories screen - the why sits behind one InfoTip (L2)", () => {
+  it("keeps one requirement line on screen and moves rationale and scope guidance into the tip verbatim", async () => {
+    const container = await mount(makePorts().ports);
+    const policy = patPolicyFor("cloud");
+    const section = container.querySelector(".numbered-section") as HTMLElement;
+    const tips = Array.from(section.querySelectorAll(".info-tip-pop")).map(
+      (n) => n.textContent ?? "",
+    );
+    const whyTip = tips.find((t) => t.includes(policy.rationale));
+    expect(whyTip).toBeDefined();
+    expect(whyTip).toContain(policy.scopeGuidance);
+
+    const onScreen = section.cloneNode(true) as HTMLElement;
+    onScreen.querySelectorAll(".info-tip").forEach((n) => n.remove());
+    const visible = onScreen.textContent ?? "";
+    expect(visible).not.toContain(policy.rationale);
+    expect(visible).not.toContain(policy.scopeGuidance);
+    expect(visible).toContain(
+      "A GitHub token is required to browse solutions and fetch content.",
+    );
   });
 });

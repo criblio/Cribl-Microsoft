@@ -25,6 +25,7 @@ import {
   patPolicyFor,
 } from "@soc/core";
 import type { ContentPlatform } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
 import { usePorts } from "../../ports-context";
 import {
   derivePatFormView,
@@ -38,8 +39,10 @@ export interface RepositoriesScreenProps {
   platform: ContentPlatform;
   /**
    * DBT-246: told after a SUCCESSFUL save (true) or clear (false) so the shell's
-   * journey sees the change without a reload. Not called on a rejected or
-   * invalid save, a failed clear, or a failed status read.
+   * journey sees the change without a reload. After a FAILED save the stored
+   * status is re-read and reported, because a rejected replacement rolls the
+   * previous token back. Not called on a failed clear or when a status read
+   * fails.
    */
   onTokenStatusChange?: (present: boolean) => void;
 }
@@ -121,9 +124,22 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
       dispatch({ type: "submit-result", status });
       if (status.hasPat) {
         onTokenStatusChange?.(true);
+        return;
       }
     } catch (err) {
       dispatch({ type: "submit-error", message: String(err) });
+    }
+    // A failed attempt may still have changed what is stored: the adapter
+    // stores BEFORE validating and rolls back on a rejection or a transport
+    // failure, which deletes a previously valid token too. So re-read the
+    // stored status and report THAT - a rejection that returned before storing
+    // (a bad format) leaves the old token, and the re-read says so (I7).
+    try {
+      const after = await githubPat.status();
+      dispatch({ type: "hydrate", status: after });
+      onTokenStatusChange?.(after.hasPat);
+    } catch {
+      // Unknown: report nothing rather than a guess.
     }
   }, [githubPat, form.value, onTokenStatusChange]);
 
@@ -262,8 +278,17 @@ export function RepositoriesScreen({ platform, onTokenStatusChange }: Repositori
             GitHub personal access token
           </h2>
         </div>
-        <p className="panel-desc">{policy.rationale}</p>
-        <p className="panel-desc">{policy.scopeGuidance}</p>
+        {/* One requirement line on screen; the WHY (rationale and scope
+            guidance) moves verbatim behind the (i) - live check 2026-11-02. */}
+        <p className="panel-desc">
+          {policy.required
+            ? "A GitHub token is required to browse solutions and fetch content."
+            : "A GitHub token is recommended to avoid GitHub's anonymous rate limit."}
+          <InfoTip
+            label="About the GitHub token"
+            text={`${policy.rationale}\n${policy.scopeGuidance}`}
+          />
+        </p>
         {view.statusUnknown !== "" && (
           <div className="status-bar status-bar-error repositories-pat-unknown">
             <span className="status-bar-dot" aria-hidden="true" />
