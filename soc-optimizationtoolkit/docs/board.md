@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**101 in the backlog, 35 in progress, 134 done.**
+**100 in the backlog, 36 in progress, 134 done.**
 
 ## By menu item
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1048,9 +1048,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **DBT-246** Setup: Azure connectivity choice shapes the change request and the next action
+  `DBT-F2` `story` `settled`
+  RAISED BY THE USER 2026-11-02: review the setup pages for wordiness; "the
+  Azure page is really optional, we should start that page with a selection on
+  how the user wants to run it from an Azure perspective (Fully Connected,
+  partially connected, or disconnected)." Partially connected: "a checkbox
+  experience that will shape the Generate Change Request text", each with an
+  (i), "not wordy on the screen by default", and encourage "at least
+  Read-only". Disconnected: "no app registration at all so the app only
+  creates exportable items". Save the choice and have the next action follow
+  it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md;
+  plan: docs/setup-pages-implementation-plan.md.
+
 ---
 
-## Backlog - now (20)
+## Backlog - now (19)
 
 Next to pick up. Nothing blocks these.
 
@@ -1258,19 +1271,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **DBT-246** Setup: Azure connectivity choice shapes the change request and the next action
-  `DBT-F2` `story` `settled`
-  RAISED BY THE USER 2026-11-02: review the setup pages for wordiness; "the
-  Azure page is really optional, we should start that page with a selection on
-  how the user wants to run it from an Azure perspective (Fully Connected,
-  partially connected, or disconnected)." Partially connected: "a checkbox
-  experience that will shape the Generate Change Request text", each with an
-  (i), "not wordy on the screen by default", and encourage "at least
-  Read-only". Disconnected: "no app registration at all so the app only
-  creates exportable items". Save the choice and have the next action follow
-  it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md;
-  plan: docs/setup-pages-implementation-plan.md.
 
 - **DBT-238** The GitHub setup step says "This step is optional." while the cloud token is required
   `DBT-F2` `bug` `settled`
