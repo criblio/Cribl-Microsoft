@@ -15,11 +15,7 @@ import {
   deployDisabledReason,
   deploySettingsSummary,
   deriveSectionInputs,
-  initialCollapsedSections,
-  parsePinnedSections,
-  pinnedSectionsKey,
   sectionSummary,
-  sectionsToCollapseOnMove,
 } from "./integrate-screen-state";
 import type { SectionSummaryFacts } from "./integrate-screen-state";
 
@@ -282,46 +278,5 @@ describe("deploySettingsSummary (DBT-231)", () => {
     expect(deploySettingsSummary("", "", true)).toBe(
       "Deploy settings: no table yet - no client id - secret given (change)",
     );
-  });
-});
-
-describe("auto-collapse on move (DBT-232)", () => {
-  it("folds every other open section except pinned, kept-open and already-folded ones", () => {
-    const all = ["solution", "sample-data", "gap-analysis", "rule-coverage", "deploy"] as const;
-    expect(
-      sectionsToCollapseOnMove(
-        "sample-data",
-        all,
-        new Set(["solution"]),
-        new Set(["rule-coverage"]),
-        new Set(["deploy"]),
-      ),
-    ).toEqual(["gap-analysis"]);
-  });
-
-  it("reads a stored pin list, dropping ids the page no longer has", () => {
-    expect(pinnedSectionsKey("u-1")).toBe("integrate-pinned-sections:u-1");
-    expect(parsePinnedSections('["deploy","workbook-coverage"]', ["solution", "deploy"])).toEqual(["deploy"]);
-    expect(parsePinnedSections("not json", ["deploy"])).toEqual([]);
-    expect(parsePinnedSections(null, ["deploy"])).toEqual([]);
-  });
-});
-
-describe("the page opens collapsed (DBT-237)", () => {
-  it("folds every section except the arc's current one", () => {
-    const resolved = [
-      { section: { id: "solution" as const }, status: "complete" },
-      { section: { id: "sample-data" as const }, status: "current" },
-      { section: { id: "gap-analysis" as const }, status: "blocked" },
-      { section: { id: "deploy" as const }, status: "blocked" },
-    ];
-    expect([...initialCollapsedSections(resolved)]).toEqual(["solution", "gap-analysis", "deploy"]);
-  });
-  it("folds everything when no section is current", () => {
-    const resolved = [
-      { section: { id: "solution" as const }, status: "complete" },
-      { section: { id: "deploy" as const }, status: "complete" },
-    ];
-    expect([...initialCollapsedSections(resolved)]).toEqual(["solution", "deploy"]);
   });
 });
