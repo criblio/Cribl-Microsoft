@@ -23,6 +23,10 @@ import { AzureConnectSection } from "./azure-connect-section";
 
 afterEach(cleanup);
 
+function callArg(fn: { mock: { calls: unknown[][] } }, i: number): AzureConfig {
+  return fn.mock.calls[i]?.[0] as AzureConfig;
+}
+
 const PARTIAL: AzureConfig = {
   ...EMPTY_AZURE_CONFIG,
   connectivity: "partial",
@@ -116,9 +120,10 @@ describe("AzureConnectivitySection", () => {
       />,
     );
     fireEvent.click(screen.getByLabelText("Read-only access"));
-    expect(
-      (onChange.mock.calls[0]?.[0] as AzureConfig).allowedPermissions,
-    ).toEqual(["Reader", "Monitoring Contributor"]);
+    expect(callArg(onChange, 0).allowedPermissions).toEqual([
+      "Reader",
+      "Monitoring Contributor",
+    ]);
   });
 
   it("Full and Disconnected keep allowedPermissions so Partial round-trips", () => {
@@ -136,9 +141,7 @@ describe("AzureConnectivitySection", () => {
         keep.allowedPermissions,
       );
     }
-    expect((onChange.mock.calls[0]?.[0] as AzureConfig).connectivity).toBe(
-      "full",
-    );
+    expect(callArg(onChange, 0).connectivity).toBe("full");
   });
 
   it("choosing Partial from a lab path switches to existing and says so", () => {
