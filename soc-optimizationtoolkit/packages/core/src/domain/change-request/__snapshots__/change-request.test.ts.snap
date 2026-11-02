@@ -245,3 +245,151 @@ Setup path:              lab-new-rg
 Subscription:            33333333-3333-3333-3333-333333333333
 Resource group:          rg-soc-lab"
 `;
+
+exports[`roleAssignmentRequest follows the connectivity choice (C1) > is unchanged for full connectivity (existing) 1`] = `
+"Change request: assign Azure RBAC roles for Cribl SOC Toolkit (setup path: existing)
+
+Requesting application: Cribl SOC Toolkit
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id: 22222222-2222-2222-2222-222222222222
+
+What is requested
+-----------------
+Assign the following roles to the service principal for Cribl SOC Toolkit (client id: 11111111-1111-1111-1111-111111111111):
+- Reader at /subscriptions/33333333-3333-3333-3333-333333333333
+- Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+
+Justification
+-------------
+- Reader (/subscriptions/33333333-3333-3333-3333-333333333333): Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.
+- Monitoring Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create and update Data Collection Rules in the workspace resource group.
+- Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create custom Log Analytics tables and configure the workspace for ingestion.
+
+Specifics
+---------
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id:                     22222222-2222-2222-2222-222222222222
+Setup path:                    existing
+Subscription:                  33333333-3333-3333-3333-333333333333
+Resource group:                rg-soc-lab
+
+Why (deploy and ingestion flows)
+--------------------------------
+\`\`\`mermaid
+flowchart LR
+app["Cribl SOC Toolkit (Cribl app)"]
+arm["Azure Resource Manager - subscription 33333333-3333-3333-3333-333333333333"]
+dcr["DCR + custom table - resource group rg-soc-lab - workspace law-soc-lab"]
+app -->|deploy ARM template| arm
+arm -->|create DCR + table| dcr
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+diag["Azure diagnostic settings - subscription 33333333-3333-3333-3333-333333333333"]
+eh["Event Hub"]
+cribl["Cribl Stream - reduce / normalize"]
+sentinel["Microsoft Sentinel - workspace law-soc-lab - resource group rg-soc-lab"]
+diag -->|stream events| eh
+eh -->|pull events| cribl
+cribl -->|Logs Ingestion API via DCR| sentinel
+\`\`\`"
+`;
+
+exports[`roleAssignmentRequest follows the connectivity choice (C1) > is unchanged for full connectivity (lab-byo-rg) 1`] = `
+"Change request: assign Azure RBAC roles for Cribl SOC Toolkit (setup path: lab-byo-rg)
+
+Requesting application: Cribl SOC Toolkit
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id: 22222222-2222-2222-2222-222222222222
+
+What is requested
+-----------------
+Assign the following roles to the service principal for Cribl SOC Toolkit (client id: 11111111-1111-1111-1111-111111111111):
+- Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+
+Justification
+-------------
+- Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.
+
+Specifics
+---------
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id:                     22222222-2222-2222-2222-222222222222
+Setup path:                    lab-byo-rg
+Subscription:                  33333333-3333-3333-3333-333333333333
+Resource group:                rg-soc-lab
+
+Why (deploy and ingestion flows)
+--------------------------------
+\`\`\`mermaid
+flowchart LR
+app["Cribl SOC Toolkit (Cribl app)"]
+arm["Azure Resource Manager - subscription 33333333-3333-3333-3333-333333333333"]
+dcr["DCR + custom table - resource group rg-soc-lab - workspace law-soc-lab"]
+app -->|deploy ARM template| arm
+arm -->|create DCR + table| dcr
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+diag["Azure diagnostic settings - subscription 33333333-3333-3333-3333-333333333333"]
+eh["Event Hub"]
+cribl["Cribl Stream - reduce / normalize"]
+sentinel["Microsoft Sentinel - workspace law-soc-lab - resource group rg-soc-lab"]
+diag -->|stream events| eh
+eh -->|pull events| cribl
+cribl -->|Logs Ingestion API via DCR| sentinel
+\`\`\`"
+`;
+
+exports[`roleAssignmentRequest follows the connectivity choice (C1) > is unchanged for full connectivity (lab-new-rg) 1`] = `
+"Change request: assign Azure RBAC roles for Cribl SOC Toolkit (setup path: lab-new-rg)
+
+Requesting application: Cribl SOC Toolkit
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id: 22222222-2222-2222-2222-222222222222
+
+What is requested
+-----------------
+Assign the following roles to the service principal for Cribl SOC Toolkit (client id: 11111111-1111-1111-1111-111111111111):
+- Contributor at /subscriptions/33333333-3333-3333-3333-333333333333
+- RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333
+    Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.
+
+Justification
+-------------
+- Contributor (/subscriptions/33333333-3333-3333-3333-333333333333): Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).
+- RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333): Assign the lab TTL self-destruct identity its delete role at deploy time.
+
+Specifics
+---------
+Service principal (client id): 11111111-1111-1111-1111-111111111111
+Tenant id:                     22222222-2222-2222-2222-222222222222
+Setup path:                    lab-new-rg
+Subscription:                  33333333-3333-3333-3333-333333333333
+Resource group:                rg-soc-lab
+
+Why (deploy and ingestion flows)
+--------------------------------
+\`\`\`mermaid
+flowchart LR
+app["Cribl SOC Toolkit (Cribl app)"]
+arm["Azure Resource Manager - subscription 33333333-3333-3333-3333-333333333333"]
+dcr["DCR + custom table - resource group rg-soc-lab - workspace law-soc-lab"]
+app -->|deploy ARM template| arm
+arm -->|create DCR + table| dcr
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+diag["Azure diagnostic settings - subscription 33333333-3333-3333-3333-333333333333"]
+eh["Event Hub"]
+cribl["Cribl Stream - reduce / normalize"]
+sentinel["Microsoft Sentinel - workspace law-soc-lab - resource group rg-soc-lab"]
+diag -->|stream events| eh
+eh -->|pull events| cribl
+cribl -->|Logs Ingestion API via DCR| sentinel
+\`\`\`"
+`;

@@ -419,3 +419,96 @@ describe("byte-safety and determinism", () => {
     }
   });
 });
+
+describe("roleAssignmentRequest follows the connectivity choice (C1)", () => {
+  // Captured from the output BEFORE the role ticket read connectivity, so a
+  // full config keeps rendering byte-for-byte what it always did.
+  it.each(["existing", "lab-new-rg", "lab-byo-rg"] as const)(
+    "is unchanged for full connectivity (%s)",
+    (path) => {
+      expect(roleAssignmentRequest(ctxFor(path))).toMatchSnapshot();
+    },
+  );
+
+  it("partial with Reader only asks for Reader only", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain(
+      "- Reader at /subscriptions/33333333-3333-3333-3333-333333333333",
+    );
+    expect(out).not.toContain("Monitoring Contributor");
+    expect(out).not.toContain("Log Analytics Contributor");
+  });
+
+  it("partial with a saved lab path never asks for lab roles", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("lab-new-rg", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain("(setup path: existing)");
+    expect(out).toContain("- Reader at");
+    expect(out).not.toContain("RBAC Administrator");
+    expect(out).not.toContain("- Contributor at");
+    expect(out).not.toContain("lab-new-rg");
+  });
+
+  it("partial with no role ticked asks for no role", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Application.Read.All"],
+      }),
+    );
+    expect(out).not.toMatch(/^- .* at \/subscriptions/m);
+    expect(out).toContain("No roles are requested");
+  });
+});
+
+describe("resourceCreationRequest follows the connectivity choice (C1)", () => {
+  it("partial with a saved lab-new-rg path asks for no lab resource group", () => {
+    const out = resourceCreationRequest(
+      ctxFor("lab-new-rg", { connectivity: "partial" }),
+    );
+    expect(out).not.toContain("Create a lab resource group");
+    expect(out).toContain("Setup path:     existing");
+  });
+});
+
+describe("appRegistrationRequest justification follows the request (C1)", () => {
+  const FULL_JUSTIFICATION =
+    "using the OAuth2 client_credentials grant to deploy Data Collection Rules";
+
+  it("full keeps the deploy-and-read justification", () => {
+    expect(appRegistrationRequest(ctxFor("existing"))).toContain(
+      FULL_JUSTIFICATION,
+    );
+  });
+
+  it("partial Reader-only does not claim it deploys DCRs", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    const justification = out.split("Justification\n-------------\n")[1]!.split("\n\n")[0]!;
+    expect(justification).not.toMatch(/deploy Data Collection Rules/);
+    expect(justification).toContain("Discovery and gap analysis");
+    expect(justification).toContain("headless");
+  });
+
+  it("partial with nothing allowed says it reads nothing", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: [] }),
+    );
+    const justification = out.split("Justification\n-------------\n")[1]!.split("\n\n")[0]!;
+    expect(justification).not.toMatch(/deploy Data Collection Rules/);
+    expect(justification).toMatch(/no Azure permissions/);
+  });
+});

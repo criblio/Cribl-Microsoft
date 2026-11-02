@@ -296,10 +296,26 @@ describe("connectivity and allowedPermissions", () => {
   it("round-trips partial connectivity with its permissions exactly", () => {
     const config: AzureConfig = {
       ...FULL_CONFIG,
+      setupPath: "existing",
       connectivity: "partial",
       allowedPermissions: ["Reader", "Log Analytics Contributor"],
     };
     expect(parseAzureConfig(serializeAzureConfig(config))).toEqual(config);
+  });
+
+  it.each(["lab-new-rg", "lab-byo-rg"] as const)(
+    "normalises partial connectivity with a saved %s path to existing (C1)",
+    (setupPath) => {
+      const parsed = parseAzureConfig(
+        JSON.stringify({ ...FULL_CONFIG, setupPath, connectivity: "partial" }),
+      );
+      expect(parsed.setupPath).toBe("existing");
+    },
+  );
+
+  it("keeps a lab path under full connectivity", () => {
+    const parsed = parseAzureConfig(serializeAzureConfig(FULL_CONFIG));
+    expect(parsed.setupPath).toBe("lab-byo-rg");
   });
 
   it("round-trips disconnected connectivity", () => {

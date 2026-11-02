@@ -14,7 +14,7 @@
  */
 
 import type { AzureSetupPath } from "../azure-config";
-import { appPermissionPlan } from "../app-permissions";
+import { appPermissionPlan, rbacPermissions } from "../app-permissions";
 import type { AppPermission } from "../app-permissions";
 
 export type AzureConnectivity = "full" | "partial" | "disconnected";
@@ -40,6 +40,21 @@ export function requestedPermissions(
   const plan = appPermissionPlan(effectiveSetupPath(connectivity, saved));
   if (connectivity === "full") return plan;
   return plan.filter((p) => allowed.includes(p.name));
+}
+
+/**
+ * The Azure RBAC role names a connectivity choice asks for - the filter the
+ * role-assignment ticket and the az CLI script apply, so neither names a role
+ * the operator did not tick.
+ */
+export function requestedRoleNames(
+  connectivity: AzureConnectivity,
+  allowed: readonly string[],
+  saved: AzureSetupPath,
+): string[] {
+  return rbacPermissions(requestedPermissions(connectivity, allowed, saved)).map(
+    (p) => p.name,
+  );
 }
 
 /** What scope of Azure access a request implies. */

@@ -43,14 +43,16 @@ const PENDING_PORTS = {
   azure: { request: () => new Promise(() => undefined) },
 } as unknown as UiPorts;
 
-const CONFIG = {
+const CONFIG: AzureConfig = {
   clientId: "00000000-0000-0000-0000-000000000000",
   tenantId: "11111111-1111-1111-1111-111111111111",
   subscriptionId: "22222222-2222-2222-2222-222222222222",
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
-} as AzureConfig;
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
+};
 
 const CTX: ChangeRequestContext = { appName: "test", config: CONFIG };
 
@@ -220,5 +222,59 @@ describe("the resource intro does not tie the pickers to setup paths (DBT-241)",
     }
     expect(new Set(labels).size).toBe(1);
     expect(labels[0]).not.toMatch(/^Setup path$/);
+  });
+});
+
+describe("the role script follows the connectivity choice (C1)", () => {
+  function scriptFor(setupPath: AzureSetupPath, config: AzureConfig): string {
+    const { container } = render(
+      <PortsProvider ports={PENDING_PORTS} config={config}>
+        <AzureResourcesSection
+          clientId={CONFIG.clientId}
+          tenantId={CONFIG.tenantId}
+          setupPath={setupPath}
+          subscriptionId={CONFIG.subscriptionId}
+          onSubscriptionIdChange={vi.fn()}
+          rgName="rg"
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config }}
+          storageContextLabel="test"
+        />
+      </PortsProvider>,
+    );
+    const pres = [...container.querySelectorAll("pre.result")].map((p) => p.textContent ?? "");
+    const script = pres.find((t) => t.includes("az role assignment") || t.includes("No roles are requested"));
+    if (script === undefined) throw new Error("role script not rendered");
+    return script;
+  }
+  const commands = (script: string) =>
+    script.split("\n").filter((l) => l.startsWith("az "));
+
+  it("partial + Reader only -> the script assigns only Reader", () => {
+    const config: AzureConfig = { ...CONFIG, connectivity: "partial", allowedPermissions: ["Reader"] };
+    const out = commands(scriptFor("existing", config));
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('--role "Reader"');
+  });
+
+  it("partial + a saved lab path -> no lab roles in the script", () => {
+    const config: AzureConfig = {
+      ...CONFIG,
+      setupPath: "lab-new-rg",
+      connectivity: "partial",
+      allowedPermissions: ["Reader"],
+    };
+    const script = scriptFor("lab-new-rg", config);
+    expect(script).not.toMatch(/--role "Contributor"/);
+    expect(script).not.toMatch(/RBAC Administrator/);
+    expect(commands(script)).toHaveLength(1);
+  });
+
+  it("full keeps the whole setup-path script", () => {
+    const out = commands(scriptFor("existing", CONFIG));
+    expect(out).toHaveLength(3);
   });
 });

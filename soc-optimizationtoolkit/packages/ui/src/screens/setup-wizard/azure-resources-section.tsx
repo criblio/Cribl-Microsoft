@@ -27,7 +27,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RBAC_PERMISSIONS_API_VERSION,
   deriveResourceGroup,
+  effectiveSetupPath,
   renderRoleAssignmentCli,
+  requestedRoleNames,
   resourceCreationRequest,
   roleAssignmentRequest,
 } from "@soc/core";
@@ -95,7 +97,7 @@ function is2xx(status: number): boolean {
 export function AzureResourcesSection({
   clientId,
   tenantId,
-  setupPath,
+  setupPath: savedSetupPath,
   subscriptionId,
   onSubscriptionIdChange,
   rgName,
@@ -107,6 +109,11 @@ export function AzureResourcesSection({
   storageContextLabel = "Stored credentials:",
 }: AzureResourcesSectionProps) {
   const { ports } = usePorts();
+  // Everything below reads the EFFECTIVE path: a Partially Connected install is
+  // always "existing", so a saved lab path never reaches the script, the
+  // discovery note or the permission checks (C1).
+  const { connectivity, allowedPermissions } = ctx.config;
+  const setupPath = effectiveSetupPath(connectivity, savedSetupPath);
   const [stored, setStored] = useState("checking stored credentials...");
   const [validating, setValidating] = useState(false);
   const [scriptFeedback, setScriptFeedback] = useState("");
@@ -299,7 +306,7 @@ export function AzureResourcesSection({
   );
 
   // Auto-run on mount and after a save: report stored state only (no ARM calls).
-  const disconnected = ctx.config.connectivity === "disconnected";
+  const disconnected = connectivity === "disconnected";
   const checkStored = useCallback(async () => {
     // Disconnected renders nothing, so it must not read the secret store either.
     if (disconnected) return;
@@ -375,11 +382,13 @@ export function AzureResourcesSection({
   // SELECTED (or bootstrap-typed) subscription and the derived/selected resource
   // group. Blank fields stay as <placeholders> so a partial copy is visibly
   // incomplete. Copy/download report via a small feedback line (no runner).
-  const script = renderRoleAssignmentCli(setupPath, {
-    clientId,
-    subscriptionId,
-    resourceGroup: rgName,
-  });
+  // Only the roles the connectivity choice requests: a Partially Connected
+  // script never assigns a role the operator did not tick.
+  const script = renderRoleAssignmentCli(
+    setupPath,
+    { clientId, subscriptionId, resourceGroup: rgName },
+    requestedRoleNames(connectivity, allowedPermissions, savedSetupPath),
+  );
   const copyScript = async () => {
     try {
       await navigator.clipboard.writeText(script);

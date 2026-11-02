@@ -36,6 +36,7 @@ import { graphPermissions, rbacPermissions } from "../app-permissions";
 import {
   effectiveSetupPath,
   requestedPermissions,
+  requestedRoleNames,
 } from "../azure-connectivity";
 import type { AppPermission } from "../app-permissions";
 import { rolePlanForSetupPath } from "../role-plan";
@@ -122,21 +123,24 @@ function resourceGroupScope(n: ResolvedNames): string {
 function rolesForSetupPath(
   path: AzureSetupPath,
   n: ResolvedNames,
+  onlyRoles: readonly string[],
 ): RoleRequest[] {
-  return rolePlanForSetupPath(path).map((req) => {
-    const request: RoleRequest = {
-      role: req.role,
-      scope:
-        req.scopeLevel === "subscription"
-          ? subscriptionScope(n)
-          : resourceGroupScope(n),
-      justification: req.justification,
-    };
-    if (req.condition !== undefined) {
-      request.condition = req.condition;
-    }
-    return request;
-  });
+  return rolePlanForSetupPath(path)
+    .filter((req) => onlyRoles.includes(req.role))
+    .map((req) => {
+      const request: RoleRequest = {
+        role: req.role,
+        scope:
+          req.scopeLevel === "subscription"
+            ? subscriptionScope(n)
+            : resourceGroupScope(n),
+        justification: req.justification,
+      };
+      if (req.condition !== undefined) {
+        request.condition = req.condition;
+      }
+      return request;
+    });
 }
 
 /**
@@ -243,6 +247,52 @@ function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
 }
 
 /**
+ * The app-registration Justification, describing only what the requested
+ * entries enable. Full connectivity keeps its original wording byte-for-byte;
+ * a narrower request names the features its entries unlock, so a Reader-only
+ * ticket never claims the app deploys Data Collection Rules.
+ */
+function registrationJustification(
+  n: ResolvedNames,
+  connectivity: AzureConfig["connectivity"],
+  plan: readonly AppPermission[],
+): string {
+  if (connectivity === "full") {
+    return [
+      n.appName +
+        " authenticates to Azure Resource Manager as a confidential client",
+      "using the OAuth2 client_credentials grant to deploy Data Collection Rules",
+      "and read Microsoft Sentinel content. It runs headless (no interactive user",
+      "sign-in), so it needs its own app registration and client secret rather",
+      "than delegated user permissions.",
+    ].join("\n");
+  }
+  const intro = [
+    n.appName + " authenticates to Azure Resource Manager as a confidential",
+    "client using the OAuth2 client_credentials grant.",
+  ];
+  const headless = [
+    "It runs headless (no interactive user sign-in), so it needs its own app",
+    "registration and client secret rather than delegated user permissions.",
+  ];
+  if (plan.length === 0) {
+    return [
+      ...intro,
+      "It is requested with no Azure permissions, so it can authenticate but",
+      "reads nothing from Azure until some are granted.",
+      ...headless,
+    ].join("\n");
+  }
+  const features = [...new Set(plan.map((p) => p.feature))];
+  return [
+    ...intro,
+    "The permissions requested below are used only for:",
+    ...features.map((f) => "- " + f),
+    ...headless,
+  ].join("\n");
+}
+
+/**
  * Request that another team create an Entra app registration (single-tenant,
  * daemon confidential client - no redirect URI, no interactive sign-in), create
  * a client secret, securely share the credentials, AND grant every permission
@@ -328,17 +378,7 @@ export function appRegistrationRequest(
     "Change request: create Entra app registration for " + n.appName,
     requestHeader(n),
     section("What is requested", [...requestedLines, ...closing].join("\n")),
-    section(
-      "Justification",
-      [
-        n.appName +
-          " authenticates to Azure Resource Manager as a confidential client",
-        "using the OAuth2 client_credentials grant to deploy Data Collection Rules",
-        "and read Microsoft Sentinel content. It runs headless (no interactive user",
-        "sign-in), so it needs its own app registration and client secret rather",
-        "than delegated user permissions.",
-      ].join("\n"),
-    ),
+    section("Justification", registrationJustification(n, connectivity, plan)),
   ];
 
   if (graph.length > 0) {
@@ -409,7 +449,16 @@ export function roleAssignmentRequest(
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
-  const roles = rolesForSetupPath(ctx.config.setupPath, n);
+  const { connectivity, allowedPermissions } = ctx.config;
+  // Only the roles the connectivity choice requests: full is the whole
+  // setup-path plan (unchanged), partial is the ticked subset of the "existing"
+  // plan, so neither a saved lab path nor an unticked role reaches the ticket.
+  const setupPath = effectiveSetupPath(connectivity, ctx.config.setupPath);
+  const roles = rolesForSetupPath(
+    setupPath,
+    n,
+    requestedRoleNames(connectivity, allowedPermissions, ctx.config.setupPath),
+  );
 
   const requested: string[] = [
     "Assign the following roles to the service principal for " +
@@ -424,16 +473,22 @@ export function roleAssignmentRequest(
       requested.push("    Condition: " + r.condition);
     }
   }
+  if (roles.length === 0) {
+    requested.push("- No roles are requested under the saved connectivity choice.");
+  }
 
-  const justifications = roles.map(
-    (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
-  );
+  const justifications =
+    roles.length === 0
+      ? ["No roles are requested, so there is nothing to justify."]
+      : roles.map(
+          (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
+        );
 
   const parts: string[] = [
     "Change request: assign Azure RBAC roles for " +
       n.appName +
       " (setup path: " +
-      ctx.config.setupPath +
+      setupPath +
       ")",
     requestHeader(n),
     section("What is requested", requested.join("\n")),
@@ -443,7 +498,7 @@ export function roleAssignmentRequest(
       [
         "Service principal (client id): " + n.clientId,
         "Tenant id:                     " + n.tenantId,
-        "Setup path:                    " + ctx.config.setupPath,
+        "Setup path:                    " + setupPath,
         "Subscription:                  " + n.subscriptionId,
         "Resource group:                " + n.resourceGroup,
       ].join("\n"),
@@ -471,9 +526,13 @@ export function resourceCreationRequest(
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
+  const setupPath = effectiveSetupPath(
+    ctx.config.connectivity,
+    ctx.config.setupPath,
+  );
 
   const requested: string[] = [];
-  if (ctx.config.setupPath === "lab-new-rg") {
+  if (setupPath === "lab-new-rg") {
     requested.push(
       "- Create a lab resource group named " +
         n.resourceGroup +
@@ -509,7 +568,7 @@ export function resourceCreationRequest(
       [
         "Subscription:   " + n.subscriptionId,
         "Resource group: " + n.resourceGroup,
-        "Setup path:     " + ctx.config.setupPath,
+        "Setup path:     " + setupPath,
       ].join("\n"),
     ),
   ];

@@ -21,7 +21,7 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import { READ_ONLY_PERMISSION } from "../azure-connectivity";
+import { READ_ONLY_PERMISSION, effectiveSetupPath } from "../azure-connectivity";
 import type { AzureConnectivity } from "../azure-connectivity";
 
 /**
@@ -171,8 +171,9 @@ function asPermissions(value: unknown): string[] {
  *
  * For a valid plain object, each string field is copied only if it is actually
  * a string (otherwise ''), and setupPath is copied only if it is one of the
- * three valid values (otherwise 'existing'). connectivity is copied only if valid (otherwise
- * 'full'); allowedPermissions keeps only string entries and defaults to
+ * three valid values (otherwise 'existing'); a 'partial' connectivity always
+ * parses with setupPath 'existing', because lab paths are Fully Connected only.
+ * connectivity is copied only if valid (otherwise 'full'); allowedPermissions keeps only string entries and defaults to
  * ['Reader'] when absent or not an array. A stored config missing
  * `workspaceName` (e.g. one written before this field existed) parses to ''.
  * Any unexpected extra keys - a stray `clientSecret`, `accessToken`, or
@@ -196,14 +197,17 @@ export function parseAzureConfig(raw: string | null | undefined): AzureConfig {
 
   // Only the eight known fields are read; every other key is dropped, so a
   // planted clientSecret/accessToken can never leak onto the result.
+  const connectivity = asConnectivity(parsed.connectivity);
   return {
     clientId: asString(parsed.clientId),
     tenantId: asString(parsed.tenantId),
     subscriptionId: asString(parsed.subscriptionId),
     resourceGroup: asString(parsed.resourceGroup),
     workspaceName: asString(parsed.workspaceName),
-    setupPath: asSetupPath(parsed.setupPath),
-    connectivity: asConnectivity(parsed.connectivity),
+    // Lab paths are Fully Connected only: a partial config always reads as
+    // "existing", so no consumer can be handed a lab path under partial.
+    setupPath: effectiveSetupPath(connectivity, asSetupPath(parsed.setupPath)),
+    connectivity,
     allowedPermissions: asPermissions(parsed.allowedPermissions),
   };
 }
