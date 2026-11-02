@@ -298,14 +298,17 @@ export function AzureResourcesSection({
   );
 
   // Auto-run on mount and after a save: report stored state only (no ARM calls).
+  const disconnected = ctx.config.connectivity === "disconnected";
   const checkStored = useCallback(async () => {
+    // Disconnected renders nothing, so it must not read the secret store either.
+    if (disconnected) return;
     try {
       const { lines } = await buildKvReport();
       setStored(lines.join("\n"));
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
     }
-  }, [buildKvReport]);
+  }, [buildKvReport, disconnected]);
 
   useEffect(() => {
     void checkStored();
@@ -396,7 +399,7 @@ export function AzureResourcesSection({
   };
 
   // Disconnected requests nothing, so there is nothing to select or grant.
-  if (ctx.config.connectivity === "disconnected") return null;
+  if (disconnected) return null;
 
   return (
     <section className="panel">

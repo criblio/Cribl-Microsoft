@@ -135,4 +135,27 @@ describe("connectivity gates the section", () => {
     );
     expect(container.textContent).toBe("");
   });
+
+  it("does not read the stored-credentials port when disconnected", () => {
+    const list = vi.fn(() => Promise.resolve([]));
+    const ports = { ...PENDING_PORTS, secrets: { list } } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <AzureResourcesSection
+          clientId=""
+          tenantId=""
+          setupPath="existing"
+          subscriptionId=""
+          onSubscriptionIdChange={vi.fn()}
+          rgName=""
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config: { ...CONFIG, connectivity: "disconnected" } }}
+        />
+      </PortsProvider>,
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
 });

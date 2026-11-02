@@ -203,13 +203,85 @@ describe("AzureConnectivitySection", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("the partial view has at most three sentences outside InfoTips", () => {
+  describe("copy gate: exact sentence count outside InfoTips", () => {
+    /** Sentences end in . ! or ? before whitespace, the end or a capital (adjacent blocks); decimals do not count. */
+    function sentenceCount(container: HTMLElement): number {
+      const copy = container.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll(".info-tip").forEach((n) => n.remove());
+      const text = copy.textContent ?? "";
+      return (text.match(/[.!?](?=\s|$|[A-Z])/g) ?? []).length;
+    }
+
+    it("partial default has 1", () => {
+      const { container } = render(<Host initial={PARTIAL} />);
+      expect(sentenceCount(container)).toBe(1);
+    });
+
+    it("full has 0", () => {
+      const { container } = render(
+        <Host initial={{ ...EMPTY_AZURE_CONFIG, connectivity: "full" }} />,
+      );
+      expect(sentenceCount(container)).toBe(0);
+    });
+
+    it("disconnected without a stored identity has 1", () => {
+      const { container } = render(
+        <Host
+          initial={{ ...EMPTY_AZURE_CONFIG, connectivity: "disconnected" }}
+        />,
+      );
+      expect(sentenceCount(container)).toBe(1);
+    });
+
+    it("disconnected with a stored identity has 1", () => {
+      const { container } = render(
+        <Host
+          initial={{ ...EMPTY_AZURE_CONFIG, connectivity: "disconnected" }}
+          storedIdentity
+        />,
+      );
+      expect(sentenceCount(container)).toBe(1);
+    });
+
+    it("partial with the lab-switch notice has 2", () => {
+      const { container } = render(
+        <Host
+          initial={{
+            ...EMPTY_AZURE_CONFIG,
+            connectivity: "full",
+            setupPath: "lab-new-rg",
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByLabelText("Partially Connected"));
+      expect(sentenceCount(container)).toBe(2);
+    });
+  });
+
+  it("gives every checklist InfoTip a distinct accessible name", () => {
     const { container } = render(<Host initial={PARTIAL} />);
-    const copy = container.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll(".info-tip").forEach((n) => n.remove());
-    const sentences = (copy.textContent?.match(/\./g) ?? []).length;
-    expect(sentences).toBeLessThanOrEqual(3);
-    expect(sentences).toBeGreaterThan(0);
+    const names = Array.from(container.querySelectorAll(".info-tip-icon")).map(
+      (n) => n.getAttribute("aria-label"),
+    );
+    expect(names.length).toBe(checklistEntries().others.length + 1);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).not.toContain("More information");
+  });
+
+  it("marks the lab-switch notice as a status", () => {
+    render(
+      <Host
+        initial={{
+          ...EMPTY_AZURE_CONFIG,
+          connectivity: "full",
+          setupPath: "lab-new-rg",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Partially Connected"));
+    expect(screen.getByRole("status").textContent).toBe(
+      "Lab setups need Fully Connected; switched to existing resources.",
+    );
   });
 });
 

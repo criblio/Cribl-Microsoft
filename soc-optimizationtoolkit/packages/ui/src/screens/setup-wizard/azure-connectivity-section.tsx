@@ -93,7 +93,11 @@ export function AzureConnectivitySection({
           </label>
         ))}
       </div>
-      {notice !== "" && <p className="field-hint">{notice}</p>}
+      {notice !== "" && (
+        <p className="field-hint" role="status">
+          {notice}
+        </p>
+      )}
 
       {connectivity === "partial" && (
         <div className="connectivity-partial">
@@ -107,6 +111,7 @@ export function AzureConnectivitySection({
               <span>Read-only access</span>
             </label>
             <InfoTip
+              label={`About ${readOnly.feature}`}
               text={`${readOnly.justification}\n${readOnly.withoutIt}`}
             />
             <span className="connectivity-badge">Recommended</span>
@@ -127,7 +132,10 @@ export function AzureConnectivitySection({
                   />
                   <span>{entry.feature}</span>
                 </label>
-                <InfoTip text={`${entry.justification}\n${entry.withoutIt}`} />
+                <InfoTip
+                  label={`About ${entry.feature}`}
+                  text={`${entry.justification}\n${entry.withoutIt}`}
+                />
               </div>
             ))}
           </div>
