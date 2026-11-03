@@ -1140,7 +1140,28 @@ Started. Anything here with an unfinished dependency is called out on its card.
   https://<ns>.servicebus.windows.net/.default), and whether the identity is
   the app's own Azure principal or a separate Cribl principal (the plan values
   already carry 'Cribl service principal object ID'). Live check in Live
-  Preview before done. Reasoning in backlog.md section 6h-i.
+  Preview before done. Reasoning in backlog.md section 6h-i. BUILT 2026-11-03
+  (pins; stays in progress until the ADR 0008 Unverified list is measured
+  live): Entra ID is the default credential for every Event Hub lane. The
+  input body uses sasl oauthbearer with login.microsoftonline.com, the tenant,
+  the client, clientTextSecret and the scope
+  https://<ns>.servicebus.windows.net/.default; it carries no SAS fields. Two
+  new plan values hold ids, criblTenantId and criblClientId. The plan reads
+  the consumer group and then the role assignments for criblPrincipalObjectId
+  (assignedTo, namespace then hub). Only Azure Event Hubs Data Receiver
+  qualifies. It refuses receiver-role-missing or receiver-role-unreadable,
+  receiver-role-overprivileged when the grant is Data Owner, app-principal
+  when the principal is the app's own client id or object id, and
+  principal-mismatch when Graph ties the client id to a different object id.
+  When Graph cannot check, the confirm says the principal was not
+  cross-checked. The apply stores only the client secret, never calls
+  listKeys, and refuses a pasted connection string. Validate gains
+  eh-role-receiver; How-to gains a receive-role step per Event Hub source (hub
+  or namespace scope). Built by one implementer; a correctness reviewer and a
+  security reviewer raised 8 findings, all confirmed and fixed with
+  mutation-checked pins; the gates were re-run by the orchestrator (7878 tests
+  green, build green). ADR 0008 corrected: the Blob lane signs in as the app's
+  own registration today, which is AZR-66.
   DECISION: How should the Cribl Event Hub source authenticate?
     [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.

@@ -27,9 +27,13 @@
  */
 
 import {
+  EVENT_HUB_RECEIVER_ROLES,
+  eventHubResourceId,
   namespaceSupportsKafka,
   parseNamespaceAuthRules,
   eventHubNamespacePath,
+  overprivilegedRoleCovering,
+  receiverRoleCovering,
   ruleCanListen,
   ruleCanManage,
   ruleCanSend,
@@ -658,6 +662,43 @@ function classifyStorageRbac(rows: readonly unknown[]): StepVerdict {
   };
 }
 
+/**
+ * AZR-59 (ADR 0008): the Cribl principal can receive from the plan's hub, or,
+ * when the plan names none (Azure creates the hubs), from the whole namespace.
+ * Reached only when every read was complete, so "absent" is a real absence.
+ * Data Owner covering the target differs on the role: it can read every
+ * rule's keys, so it is never as expected.
+ * A qualifying grant that sits only on another hub of the namespace is a
+ * difference naming its scope, not absent: something was granted, just not
+ * where every hub of this lane is covered.
+ */
+function classifyReceiverRole(values: PlanValues, rows: readonly unknown[]): StepVerdict {
+  const ns = planNamespace(values);
+  const nsPath = eventHubNamespacePath(ns);
+  const hub = value(values, "hubName");
+  const target = hub === "" ? nsPath : eventHubResourceId(ns, hub);
+  // Data Owner includes listKeys on every rule (Manage-equivalent): never as
+  // expected, even alongside a Data Receiver grant (ADR 0008 section 4).
+  const owner = overprivilegedRoleCovering(rows, target);
+  if (owner !== null) {
+    return {
+      kind: "present-differs",
+      diffs: [{ field: "role", expected: EVENT_HUB_RECEIVER_ROLES.map((r) => r.roleName).join(", "), actual: owner.roleName }],
+    };
+  }
+  if (receiverRoleCovering(rows, target) !== null) return { kind: "as-expected" };
+  const prefix = `${nsPath.toLowerCase()}/eventhubs/`;
+  for (const row of rows) {
+    const props = rec(row, "properties");
+    const scope = str(props, "scope");
+    const roleId = str(props, "roleDefinitionId").toLowerCase();
+    if (scope.toLowerCase().startsWith(prefix) && EVENT_HUB_RECEIVER_ROLES.some((r) => roleId.endsWith(r.guid))) {
+      return { kind: "present-differs", diffs: [{ field: "scope", expected: target, actual: scope }] };
+    }
+  }
+  return { kind: "absent" };
+}
+
 // ---------------------------------------------------------------------------
 // The entry points
 // ---------------------------------------------------------------------------
@@ -723,6 +764,8 @@ export function classifyCheck(
       return classifyRule(read, value(values, "sendRule"), ruleCanManage, "Manage");
     case "eh-consumer-group":
       return classifyConsumerGroup(values);
+    case "eh-role-receiver":
+      return classifyReceiverRole(values, reads.flatMap((r) => (r.state === "read" ? r.rows : [])));
     case "eh-consumer-group-auto": {
       // Only the listing reaches here; the per-hub group reads are the
       // usecase's second phase. A listing that names no target is final.

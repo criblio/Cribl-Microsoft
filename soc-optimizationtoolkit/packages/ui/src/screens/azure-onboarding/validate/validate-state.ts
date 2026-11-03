@@ -254,6 +254,7 @@ export const CHECK_SUBJECT: Readonly<Record<CheckKind, string>> = {
   "eh-rule-manage": "the Manage rule",
   "eh-consumer-group": "the consumer group on the hub",
   "eh-consumer-group-auto": "the consumer group on each hub Azure created",
+  "eh-role-receiver": "the Cribl principal's Event Hubs receive role",
   "defender-plans": "the Defender plans",
   "defender-provider": "the Microsoft.Security provider",
   "defender-export": "the continuous export",

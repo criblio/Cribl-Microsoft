@@ -28,7 +28,11 @@ Two facts shaped the options, both read on 2026-11-03:
   `clientSecretAuthType` (`manual`, `secret`, `certificate`) with
   `clientTextSecret` or `certificateName`. **Measured** (schema read).
 - The Blob lane already authenticates as a service principal (tenant, client,
-  `clientTextSecret`). **Measured** (input-bodies.ts).
+  `clientTextSecret`). **Measured** (input-bodies.ts). That principal is
+  currently this app's OWN registration (Setup's tenant and client id), so the
+  app registration's secret goes into a Cribl secret: a pre-existing defect,
+  carded as AZR-66 and not changed by AZR-59. The Blob lane is the precedent
+  for the input SHAPE only, not for the identity.
 
 The operator chose "offer both" (backlog.md section 6h-i records the options
 and why each single path was rejected).
@@ -54,11 +58,26 @@ A Manage-capable key is refused in every mode (AZR-58, `ruleSafeForCriblSource`)
 The app's own app registration holds ARM write rights (DCRs, role assignments,
 Defender export). Putting ITS secret in a Cribl secret would hand those rights
 to anyone who can read the worker group's secrets - the same class of mistake
-as the Manage key. The Event Hub lane uses the same operator-supplied Cribl
-principal as the Blob lane: its tenant id, client id and object id come from
-the plan values (`criblPrincipalObjectId` already exists for Blob RBAC), and
-its client secret is pasted, held in a ref, and stored only as a Cribl text
-secret.
+as the Manage key. The Event Hub lane uses a dedicated Cribl principal: its
+tenant id, client id and object id come from the plan values
+`criblTenantId`, `criblClientId` and `criblPrincipalObjectId` (editable in the
+panel), and its client secret is pasted, held in a ref, and stored only as a
+Cribl text secret. A client id equal to this app's own is refused, and so is a
+pasted value that is a connection string (`SharedAccessKey=`, `AccountKey=`,
+`Endpoint=sb://`): it is never stored.
+
+The Blob lane does NOT do this today: it signs in as this app's own
+registration (defect AZR-66). Until AZR-66 lands, the Blob lane carries the
+exact exposure this section rejects for Event Hub.
+
+The role is read for the OBJECT id; the input signs in as the CLIENT id. When
+the shell binds the `GraphDirectory` port, the plan lists service principals
+and refuses `principal-mismatch` when the client id belongs to another object
+id, and `app-principal` when the object id is this app's own service
+principal. When the directory read is refused, unavailable, or does not list
+the client id, the plan does not guess: the confirm says the role was checked
+for object id X, the input signs in as client id Y, and that the two were not
+confirmed to be the same principal.
 
 ### 3. The input body for Entra ID
 
@@ -85,11 +104,19 @@ hand-edited OAuth input still refuses by name.
   assignment create` command.
 - **Validate** gains a check that reads the role assignments at the hub and
   namespace scopes for the principal's object id: present with Data Receiver
-  (or Data Owner) is as expected; absent only from a complete listing; a
-  refused read is unknown.
+  is as expected; absent only from a complete listing; a refused read is
+  unknown. **Only Data Receiver qualifies.** Azure Event Hubs Data Owner
+  carries `Microsoft.EventHub/*`, which includes `listKeys` on every
+  authorization rule, so a principal holding it can read
+  `RootManageSharedAccessKey`: its covering grant is present-but-different in
+  Validate, never as expected, even beside a Data Receiver grant.
 - **The plan** refuses an Entra ID create when the role read is refused or
   shows no qualifying assignment, the same way AZR-56 gates on the consumer
-  group.
+  group, and refuses `receiver-role-overprivileged` (least privilege) when
+  Data Owner covers any hub it reads.
+- A grant counts only at the hub, or at an ARM ancestor of it on a
+  path-segment boundary: a grant on hub `h1` never covers `h10`, nor one on
+  namespace `ns1` a hub of `ns10`.
 
 ## Unverified (must be measured before AZR-59 closes)
 
@@ -105,6 +132,10 @@ hand-edited OAuth input still refuses by name.
 - **Inferred:** role-assignment reads at hub scope work with the app's own
   principal's current rights (Microsoft.Authorization/roleAssignments/read is
   in Reader).
+- **Inferred:** the app registration has Application.Read.All (or
+  Directory.Read.All) consented, so the client-id-to-object-id cross-check
+  runs; without it every Entra ID confirm reads "not cross-checked". Measure:
+  the confirm in Live Preview says the directory confirms the pair.
 
 ## What this breaks or constrains
 

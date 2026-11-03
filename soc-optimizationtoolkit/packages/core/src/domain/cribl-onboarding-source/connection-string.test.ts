@@ -3,6 +3,7 @@ import { readRefused, readRows } from "../logging-map/list-read";
 import type { NamespaceAuthRule } from "../eventhub-arm";
 import {
   checkPastedCredential,
+  looksLikeConnectionString,
   parseEventHubConnectionString,
   sameDescriptor,
   type ConnectionDescriptor,
@@ -121,5 +122,21 @@ describe("checkPastedCredential", () => {
 
   it("ignores an attestation when the rules WERE read", () => {
     expect(checkPastedCredential(d("sender"), { ...ctx, attested: true })).toMatchObject({ ok: false, reason: "rule-cannot-listen" });
+  });
+});
+
+// Review finding 8 (AZR-59): a client-secret field must never take a key.
+describe("looksLikeConnectionString", () => {
+  it("is true for Event Hub, storage and SAS strings, the Manage key included", () => {
+    expect(looksLikeConnectionString(SAMPLE)).toBe(true);
+    expect(looksLikeConnectionString("Endpoint=sb://ns1.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=k")).toBe(true);
+    expect(looksLikeConnectionString("  sharedaccesskey = k")).toBe(true);
+    expect(looksLikeConnectionString("DefaultEndpointsProtocol=https;AccountName=sa;AccountKey=k;EndpointSuffix=core.windows.net")).toBe(true);
+    expect(looksLikeConnectionString("BlobEndpoint=https://sa.blob.core.windows.net/;SharedAccessSignature=sv=2022&sig=x")).toBe(true);
+  });
+
+  it("is false for an Entra client secret and for empty input", () => {
+    expect(looksLikeConnectionString("abc8Q~Zx.yz-0123456789_ABCDEFGHIJKLmnop")).toBe(false);
+    expect(looksLikeConnectionString("")).toBe(false);
   });
 });

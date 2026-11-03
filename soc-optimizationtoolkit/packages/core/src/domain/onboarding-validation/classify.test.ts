@@ -990,3 +990,46 @@ describe("barrels reach the C3 additions", () => {
     }
   });
 });
+
+// AZR-59, ADR 0008 section 4: the Cribl principal's receive role on the hub.
+describe("eh-role-receiver", () => {
+  const HUB_PATH = `${NS_PATH}/eventhubs/defender-alerts`;
+  const RECEIVER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/a638d3c7-ab3a-418d-83e6-5f17a39d4fde";
+  const OWNER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/f526a384-b230-433a-b45c-95f59c4a2dec";
+  const SENDER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/2b629674-e913-4c01-ae53-ef4638d8f975";
+  const ra = (roleDefinitionId: string, scope: string) => ({ properties: { roleDefinitionId, scope } });
+
+  it("as-expected with Data Receiver on the namespace or the plan's hub", () => {
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([ra(RECEIVER, NS_PATH)]), readRows([])])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([]), readRows([ra(RECEIVER, HUB_PATH)])])).toEqual({ kind: "as-expected" });
+  });
+
+  // Data Owner includes listKeys on every rule: Manage-equivalent, never as expected.
+  it("Data Owner covering the hub differs on the role, even alongside Data Receiver", () => {
+    const owner = { kind: "present-differs", diffs: [{ field: "role", expected: "Azure Event Hubs Data Receiver", actual: "Azure Event Hubs Data Owner" }] };
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([ra(OWNER, "/subscriptions/sub-1")]), readRows([])])).toEqual(owner);
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([ra(RECEIVER, NS_PATH), ra(OWNER, HUB_PATH)]), readRows([])])).toEqual(owner);
+  });
+
+  it("absent only from complete reads with no qualifying grant; a send role or another hub does not count", () => {
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([]), readRows([])])).toEqual({ kind: "absent" });
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([ra(SENDER, NS_PATH)]), readRows([])])).toEqual({ kind: "absent" });
+  });
+
+  it("a grant only on a hub, when the plan names none, differs and names the scope", () => {
+    const other = `${NS_PATH}/eventhubs/insights-logs-signinlogs`;
+    const v = classifyCheck("eh-role-receiver", { ...FULL, hubName: "" }, [readRows([ra(RECEIVER, other)])]);
+    expect(v).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "scope", expected: NS_PATH, actual: other }],
+    });
+  });
+
+  it("a 403 on either read is unknown denied, never absent", () => {
+    expect(classifyCheck("eh-role-receiver", FULL, [readRows([]), denied])).toEqual({
+      kind: "unknown",
+      reason: "denied",
+      detail: "denied at /x",
+    });
+  });
+});

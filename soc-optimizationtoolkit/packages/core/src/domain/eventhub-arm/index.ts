@@ -33,4 +33,8 @@ export {
   parseListKeys,
   parseNamespaceResourceId,
   parseEventHubResourceId,
+  EVENT_HUB_OVERPRIVILEGED_ROLES,
+  EVENT_HUB_RECEIVER_ROLES,
+  overprivilegedRoleCovering,
+  receiverRoleCovering,
 } from "./eventhub-arm";

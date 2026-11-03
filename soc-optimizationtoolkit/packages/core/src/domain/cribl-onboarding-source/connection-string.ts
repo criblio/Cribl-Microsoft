@@ -77,6 +77,21 @@ export function parseEventHubConnectionString(s: string): ParsedConnection {
   return entityPath === "" ? { host, keyName } : { host, keyName, entityPath };
 }
 
+/**
+ * Whether a value pasted as a CLIENT SECRET (Entra ID or Blob) is really a
+ * key-bearing connection string: an Event Hub or Service Bus string (the
+ * RootManageSharedAccessKey one included), a storage account string, or a
+ * SAS. Such a value is never stored as a client secret (AZR-59 review): the
+ * source could not sign in with it, and the key would sit in the worker
+ * group's secrets. Never returns or echoes any part of the value.
+ */
+export function looksLikeConnectionString(value: string): boolean {
+  const text = value.trim();
+  if (text === "") return false;
+  if (!isInvalidConnection(parseEventHubConnectionString(text))) return true;
+  return /(?:^|;)\s*(?:sharedaccesskey|accountkey|sharedaccesssignature)\s*=|endpoint\s*=\s*sb:\/\//i.test(text);
+}
+
 /** Whether two descriptors name the same credential target. */
 export function sameDescriptor(a: ConnectionDescriptor, b: ConnectionDescriptor): boolean {
   return (

@@ -15,7 +15,9 @@
  *   - a blob lane's confirm staying armed after its client secret changed or
  *     was cleared (it has no descriptor to change the arm key);
  *   - the attestation, the blob principal gate or the listKeys credential
- *     implemented in state but not wired into the panel.
+ *     implemented in state but not wired into the panel;
+ *   - an Event Hub lane defaulting to a SAS key instead of Entra ID, or the
+ *     Entra ID client secret reaching state or the DOM (AZR-59, ADR 0008).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -61,6 +63,7 @@ const READY: ReadyCriblSource = {
   kvRecord: null,
   secretDescription: "",
   readsFrom: { hubs: ["h1"], consumerGroup: "cribl" },
+  entraPrincipal: null,
 };
 
 const OUTCOME: ApplyCriblSourceOutcome = {
@@ -103,7 +106,17 @@ function props(over: Partial<CriblSourcePanelProps> = {}): CriblSourcePanelProps
   };
 }
 
+/** Picks a credential radio by its label. */
+function chooseCredential(label: RegExp): void {
+  fireEvent.click(screen.getByLabelText(label));
+}
+
+/**
+ * The connection-string field. Entra ID is the Event Hub default (ADR 0008),
+ * so the paste fallback is chosen first when its field is not showing.
+ */
 function pasteField(): HTMLInputElement {
+  if (screen.queryByLabelText(/Connection string for/) === null) chooseCredential(/^Paste a connection string/);
   return screen.getByLabelText(/Connection string for/) as HTMLInputElement;
 }
 
@@ -227,6 +240,7 @@ describe("CriblSourcePanel", () => {
   it("offers only Listen rules without Manage for listKeys, none preselected", () => {
     const p = props({ modes: { defenderExport: "automate" } });
     render(<CriblSourcePanel {...p} />);
+    chooseCredential(/^Let the app read the key/);
     const picker = screen.getByRole("button", { name: /Listen rule for/ });
     expect(picker.textContent).toBe("Choose a rule with Listen rights");
     fireEvent.click(picker);
@@ -387,13 +401,14 @@ describe("CriblSourcePanel - attestation and listKeys wiring", () => {
     expect(screen.queryByLabelText("This key has Listen rights")).toBeNull();
   });
 
-  it("in automate mode plans with the chosen rule and applies with the listKeys credential", async () => {
+  it("with the listKeys fallback chosen, plans with the chosen rule and applies with the listKeys credential", async () => {
     const readyListKeys = { ...READY, credentialKind: "listKeys", descriptor: null } as ReadyCriblSource;
     const p = props({
       modes: { defenderExport: "automate" },
       onPlan: vi.fn(async (): Promise<PlanCriblSourceResult> => ({ kind: "ready", ready: readyListKeys })),
     });
     render(<CriblSourcePanel {...p} />);
+    chooseCredential(/^Let the app read the key/);
     fireEvent.click(screen.getByRole("button", { name: /Listen rule for/ }));
     const reader = Array.from(document.querySelectorAll(".searchable-select-option")).find(
       (o) => o.querySelector(".searchable-select-option-label")?.textContent === "reader (Listen)",
@@ -439,5 +454,169 @@ describe("CriblSourcePanel - Cribl side line", () => {
     cleanup();
     render(<CriblSourcePanel {...props({ rows, criblSide: side(false) })} />);
     expect(screen.getByText(/routed by wired to sentinel_out\.$/)).toBeTruthy();
+  });
+});
+
+// AZR-59, ADR 0008: Entra ID is the Event Hub lane's default credential.
+describe("CriblSourcePanel - Entra ID", () => {
+  const CLIENT_SECRET = "entraClientSecretValue-4242";
+  const READY_ENTRA = {
+    ...READY,
+    credentialKind: "entra-id",
+    keyNameOrPrincipal: "cribl-client",
+    descriptor: null,
+    namespace: null,
+    entraPrincipal: {
+      tenantId: "cribl-tenant",
+      clientId: "cribl-client",
+      objectId: "obj-1",
+      role: "Azure Event Hubs Data Receiver",
+      roleScope: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1",
+      principalCheck: "not-cross-checked",
+    },
+  } as ReadyCriblSource;
+
+  function entraProps(over: Partial<CriblSourcePanelProps> = {}): CriblSourcePanelProps {
+    return props({
+      values: {
+        ...defaultPlanValues(null),
+        namespace: "ns1",
+        hubName: "h1",
+        criblPrincipalObjectId: "obj-1",
+        criblTenantId: "cribl-tenant",
+        criblClientId: "cribl-client",
+      },
+      onPlan: vi.fn(async (): Promise<PlanCriblSourceResult> => ({ kind: "ready", ready: READY_ENTRA })),
+      ...over,
+    });
+  }
+
+  const secretField = () => screen.getByLabelText(/Cribl principal client secret for/) as HTMLInputElement;
+  const clientField = () => screen.getByLabelText(/Cribl principal client ID for/) as HTMLInputElement;
+  const tenantField = () => screen.getByLabelText(/Cribl principal tenant ID for/) as HTMLInputElement;
+
+  async function armEntra(p: CriblSourcePanelProps): Promise<void> {
+    fireEvent.change(secretField(), { target: { value: CLIENT_SECRET } });
+    fireEvent.click(createButton());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm: create the source" })).toBeTruthy());
+    expect(p.onPlan).toHaveBeenCalledTimes(1);
+  }
+
+  it("is offered first and chosen by default in both modes, before the SAS fallbacks", () => {
+    for (const mode of ["manual", "automate"] as const) {
+      render(<CriblSourcePanel {...entraProps({ modes: { defenderExport: mode } })} />);
+      const radios = Array.from(document.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+      const labels = radios.map((r) => r.closest("label")?.textContent);
+      expect(labels, mode).toEqual([
+        "Entra ID - a Cribl service principal (recommended)",
+        "Let the app read the key of the chosen Listen rule when you confirm",
+        "Paste a connection string for a Listen rule",
+      ]);
+      expect(radios[0]!.checked, mode).toBe(true);
+      expect(screen.queryByLabelText(/Connection string for/), mode).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("prefills the tenant and client id from the plan values, each control with an (i)", () => {
+    render(<CriblSourcePanel {...entraProps()} />);
+    expect(tenantField().value).toBe("cribl-tenant");
+    expect(clientField().value).toBe("cribl-client");
+    expect(secretField().type).toBe("password");
+    for (const field of [tenantField(), clientField(), secretField()]) {
+      expect(field.closest("label")?.querySelector(".info-tip-icon"), field.getAttribute("aria-label") ?? "").not.toBeNull();
+    }
+  });
+
+  it("plans as the Cribl principal and applies with the client secret through a closure emptied afterwards", async () => {
+    let captured: ApplyCredential | null = null;
+    let valueAtApply = "";
+    const p = entraProps({
+      onApply: vi.fn(async (_ready: ReadyCriblSource, credential: ApplyCredential) => {
+        captured = credential;
+        valueAtApply = credential.kind === "paste" ? credential.value() : "";
+        return OUTCOME;
+      }),
+    });
+    const { container } = render(<CriblSourcePanel {...p} />);
+    await armEntra(p);
+    expect(vi.mocked(p.onPlan).mock.calls[0]![1]).toEqual({ kind: "entra-id", tenantId: "cribl-tenant", clientId: "cribl-client" });
+    const confirm = screen.getByRole("alert").textContent ?? "";
+    expect(confirm).toContain("cribl-client");
+    expect(confirm).toContain("No SAS key is used.");
+    fireEvent.click(createButton());
+    await waitFor(() => expect(p.onApply).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(valueAtApply).toBe(CLIENT_SECRET);
+    const c = captured as unknown as ApplyCredential;
+    expect(c.kind === "paste" ? c.value() : "x").toBe("");
+    expect(secretField().value).toBe("");
+    expect(container.innerHTML).not.toContain(CLIENT_SECRET);
+  });
+
+  it("keeps Create disabled without the client secret, and without the principal's object id", () => {
+    render(<CriblSourcePanel {...entraProps()} />);
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText("Paste the Cribl service principal's client secret.")).toBeTruthy();
+    cleanup();
+    const p = entraProps({ values: { ...defaultPlanValues(null), namespace: "ns1", hubName: "h1", criblTenantId: "t", criblClientId: "c" } });
+    render(<CriblSourcePanel {...p} />);
+    fireEvent.change(secretField(), { target: { value: CLIENT_SECRET } });
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText("Enter the Cribl service principal's object ID.")).toBeTruthy();
+    fireEvent.click(createButton());
+    expect(p.onPlan).not.toHaveBeenCalled();
+  });
+
+  it("refuses this app's own registration as the Cribl principal before any call", () => {
+    const p = entraProps({ principal: { tenantId: "cribl-tenant", clientId: "CRIBL-CLIENT" } });
+    render(<CriblSourcePanel {...p} />);
+    fireEvent.change(secretField(), { target: { value: CLIENT_SECRET } });
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText(/^That client ID is this app's own registration/)).toBeTruthy();
+    fireEvent.click(createButton());
+    expect(p.onPlan).not.toHaveBeenCalled();
+  });
+
+  // Review finding 4: the ids follow the plan values until the operator edits
+  // them, and never fall back to this app's own tenant.
+  it("syncs untouched tenant and client fields from later plan values, keeps an edited one, and never borrows the app's tenant", () => {
+    const blank = { ...defaultPlanValues(null), namespace: "ns1", hubName: "h1", criblPrincipalObjectId: "obj-1" };
+    const p = entraProps({ values: blank, principal: { tenantId: "app-tenant", clientId: "app-client" } });
+    const { rerender } = render(<CriblSourcePanel {...p} />);
+    expect(tenantField().value).toBe("");
+    expect(clientField().value).toBe("");
+    rerender(<CriblSourcePanel {...p} values={{ ...blank, criblTenantId: "cribl-tenant", criblClientId: "cribl-client" }} />);
+    expect(tenantField().value).toBe("cribl-tenant");
+    expect(clientField().value).toBe("cribl-client");
+    fireEvent.change(clientField(), { target: { value: "typed-client" } });
+    rerender(<CriblSourcePanel {...p} values={{ ...blank, criblTenantId: "tenant-2", criblClientId: "client-2" }} />);
+    expect(tenantField().value).toBe("tenant-2");
+    expect(clientField().value).toBe("typed-client");
+  });
+
+  // Review finding 8: a key never goes into the client secret's Cribl secret.
+  it("keeps Create disabled when a connection string is pasted as the client secret, and never shows it", () => {
+    const p = entraProps();
+    const { container } = render(<CriblSourcePanel {...p} />);
+    fireEvent.change(secretField(), { target: { value: PASTE } });
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText(/^That is a connection string, not a client secret/)).toBeTruthy();
+    fireEvent.click(createButton());
+    expect(p.onPlan).not.toHaveBeenCalled();
+    expect(container.innerHTML).not.toContain(KEY);
+  });
+
+  it("disarms when the client id or the client secret changes after arming", async () => {
+    for (const change of ["client", "secret"] as const) {
+      const p = entraProps();
+      render(<CriblSourcePanel {...p} />);
+      await armEntra(p);
+      if (change === "client") fireEvent.change(clientField(), { target: { value: "other-client" } });
+      else fireEvent.change(secretField(), { target: { value: "different" } });
+      expect(screen.queryByRole("button", { name: "Confirm: create the source" }), change).toBeNull();
+      expect(p.onApply).not.toHaveBeenCalled();
+      cleanup();
+    }
   });
 });

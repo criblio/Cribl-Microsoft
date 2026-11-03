@@ -19,6 +19,7 @@ import type {
 import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
   CONFIRM_IDLE,
+  CLIENT_SECRET_IS_CONNECTION_STRING,
   PLAN_REFUSAL_COPY,
   armKey,
   confirmReducer,
@@ -61,6 +62,7 @@ const READY: ReadyCriblSource = {
   kvRecord: null,
   secretDescription: "",
   readsFrom: { hubs: ["h1"], consumerGroup: "cribl" },
+  entraPrincipal: null,
 };
 
 const RECORD = { groupId: "g1", inputId: READY.inputId, inputType: "eventhub" as const, secretId: READY.secretId };
@@ -193,9 +195,15 @@ describe("listenRules", () => {
 });
 
 describe("credentialChoices", () => {
-  it("defaults an Automated source to listKeys and a How-to source to paste", () => {
-    expect(credentialChoices("automate", "eventhub").find((c) => c.isDefault)?.kind).toBe("listKeys");
-    expect(credentialChoices("manual", "eventhub").find((c) => c.isDefault)?.kind).toBe("paste");
+  // AZR-59, ADR 0008 section 1: Entra ID first and the default in every mode;
+  // listKeys then paste are the fallbacks.
+  it("offers Entra ID first and as the default for every Event Hub lane, then listKeys and paste", () => {
+    for (const mode of ["automate", "manual"] as const) {
+      const choices = credentialChoices(mode, "eventhub");
+      expect(choices.map((c) => c.kind), mode).toEqual(["entra-id", "listKeys", "paste"]);
+      expect(choices.filter((c) => c.isDefault).map((c) => c.kind), mode).toEqual(["entra-id"]);
+      expect(choices[0]!.label).toBe("Entra ID - a Cribl service principal (recommended)");
+    }
     expect(credentialChoices("manual", "blob").map((c) => c.kind)).toEqual(["client-secret"]);
   });
 });
@@ -367,6 +375,7 @@ const REFUSED: readonly ApplyRefusalReason[] = [
   "inputs-unreadable",
   "secret-unreadable",
   "paste-invalid",
+  "paste-is-connection-string",
   "pasted-changed",
   "secret-exists",
 ];
@@ -451,5 +460,93 @@ describe("copy", () => {
       ...credentialChoices("automate", "eventhub").map((c) => c.label),
     ];
     expect(findHistoryInCopy(texts.map((text, i) => ({ where: `cribl-source#${i}`, text })))).toEqual([]);
+  });
+});
+
+// AZR-59, ADR 0008: the Entra ID mode's gate, arm key and confirm.
+describe("Entra ID mode", () => {
+  const ENTRA_GATE: CreateGateInput = {
+    ...GATE,
+    credentialKind: "entra-id",
+    paste: null,
+    pasteCheck: null,
+    entra: { tenantId: "t1", clientId: "c1", objectId: "obj-1" },
+    hasClientSecret: true,
+  };
+  const ENTRA_READY: ReadyCriblSource = {
+    ...READY,
+    credentialKind: "entra-id",
+    keyNameOrPrincipal: "c1",
+    descriptor: null,
+    namespace: null,
+    entraPrincipal: {
+      tenantId: "t1",
+      clientId: "c1",
+      objectId: "obj-1",
+      role: "Azure Event Hubs Data Receiver",
+      roleScope: "/subscriptions/s/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1",
+      principalCheck: "matched",
+    },
+  };
+
+  it("enables Create with the three ids and a client secret, and says what is missing otherwise", () => {
+    expect(createDisabledReason(ENTRA_GATE)).toBeNull();
+    expect(createDisabledReason({ ...ENTRA_GATE, hasClientSecret: false })).toBe("Paste the Cribl service principal's client secret.");
+    expect(createDisabledReason({ ...ENTRA_GATE, entra: { tenantId: "t1", clientId: " ", objectId: "obj-1" } })).toContain("client ID");
+    expect(createDisabledReason({ ...ENTRA_GATE, entra: { tenantId: "t1", clientId: "c1", objectId: "" } })).toContain("object ID");
+    expect(createDisabledReason({ ...ENTRA_GATE, entra: undefined })).not.toBeNull();
+    expect(createDisabledReason({ ...ENTRA_GATE, topics: { kind: "refused", reason: "no-hub-named", detail: "" } })).toBe(
+      PLAN_REFUSAL_COPY["no-hub-named"],
+    );
+  });
+
+  it("refuses the app's own registration as the Cribl principal", () => {
+    expect(createDisabledReason({ ...ENTRA_GATE, appClientId: "C1" })).toBe(PLAN_REFUSAL_COPY["app-principal"]);
+  });
+
+  it("disarms when the tenant or client id changes", () => {
+    const base = armKey({ ...BASE_ARM, credentialKind: "entra-id", descriptor: null, entra: ["t1", "c1"] });
+    expect(armKey({ ...BASE_ARM, credentialKind: "entra-id", descriptor: null, entra: ["t1", "c2"] })).not.toBe(base);
+    expect(armKey({ ...BASE_ARM, credentialKind: "entra-id", descriptor: null, entra: ["t2", "c1"] })).not.toBe(base);
+  });
+
+  it("the confirm names the principal, its role, the role's scope and that no SAS key is used", () => {
+    const text = confirmText(ENTRA_READY).join("\n");
+    expect(text).toContain(
+      "Authenticates with Entra ID as the Cribl service principal c1 (object ID obj-1, tenant t1). " +
+        "Object ID obj-1 holds Azure Event Hubs Data Receiver at /subscriptions/s/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1. " +
+        "No SAS key is used.",
+    );
+    expect(text).toContain("The directory confirms client ID c1 is object ID obj-1.");
+    expect(text).toContain(`Store the principal's client secret in a new Cribl secret ${READY.secretId}`);
+    expect(text).not.toMatch(/rule|Listen/);
+  });
+
+  // Review findings 1 and 7: never present an unchecked client id as verified.
+  it("the confirm says when the client id was NOT cross-checked against the object id", () => {
+    const unchecked = { ...ENTRA_READY, entraPrincipal: { ...ENTRA_READY.entraPrincipal!, principalCheck: "not-cross-checked" as const } };
+    const text = confirmText(unchecked).join("\n");
+    expect(text).toContain(
+      "The role was read for object ID obj-1 as entered; the app could not confirm that client ID c1 is that principal. Check they belong together before you confirm.",
+    );
+    expect(text).not.toContain("The directory confirms");
+  });
+
+  // Review finding 8: a key-bearing string in the client secret field never arms.
+  it("refuses a connection string pasted as the client secret, on Entra ID and on blob", () => {
+    expect(createDisabledReason({ ...ENTRA_GATE, secretIsConnectionString: true })).toBe(CLIENT_SECRET_IS_CONNECTION_STRING);
+    expect(
+      createDisabledReason({ ...GATE, transport: "blob", credentialKind: "client-secret", paste: null, pasteCheck: null, hasClientSecret: true, secretIsConnectionString: true }),
+    ).toBe(CLIENT_SECRET_IS_CONNECTION_STRING);
+    expect(CLIENT_SECRET_IS_CONNECTION_STRING).toContain("connection string");
+  });
+
+  it("has words for the three new refusals", () => {
+    expect(PLAN_REFUSAL_COPY["receiver-role-missing"]).toContain("Azure Event Hubs Data Receiver");
+    expect(PLAN_REFUSAL_COPY["receiver-role-unreadable"]).toContain("could not be read");
+    expect(PLAN_REFUSAL_COPY["app-principal"]).toContain("this app's own");
+    expect(PLAN_REFUSAL_COPY["principal-mismatch"]).toContain("object ID");
+    expect(PLAN_REFUSAL_COPY["receiver-role-overprivileged"]).toContain("Data Owner");
+    expect(PLAN_REFUSAL_COPY["receiver-role-overprivileged"]).toContain("listKeys");
   });
 });

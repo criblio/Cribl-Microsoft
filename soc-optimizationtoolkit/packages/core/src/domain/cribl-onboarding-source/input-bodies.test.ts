@@ -152,3 +152,64 @@ describe("IDENTITY_FIELDS", () => {
     expect(IDENTITY_FIELDS.azure_blob).toEqual(expect.arrayContaining(["queueName", "storageAccountName", "clientTextSecret"]));
   });
 });
+
+// AZR-59, ADR 0008 section 3: the Entra ID (OAUTHBEARER) variant.
+describe("buildEventHubInputBody with Entra ID", () => {
+  const SECRET_VALUE = "CLIENT-SECRET-VALUE";
+  const body = buildEventHubInputBody({
+    ...EH_SPEC,
+    auth: { kind: "entra-id", tenantId: "tenant-1", clientId: "client-1" },
+  });
+
+  it("authenticates with oauthbearer as the Cribl principal, naming the secret, scoped to the namespace", () => {
+    expect(body["sasl"]).toEqual({
+      disabled: false,
+      mechanism: "oauthbearer",
+      oauthEndpoint: "https://login.microsoftonline.com",
+      tenantId: "tenant-1",
+      clientId: "client-1",
+      clientSecretAuthType: "secret",
+      clientTextSecret: "azure_onb_eh_ns1_hub1_secret",
+      scope: "https://ns1.servicebus.windows.net/.default",
+    });
+  });
+
+  it("keeps everything outside sasl identical to the SAS body", () => {
+    const sas = buildEventHubInputBody(EH_SPEC);
+    const { sasl: _a, ...restOauth } = body;
+    const { sasl: _b, ...restSas } = sas;
+    expect(restOauth).toEqual(restSas);
+  });
+
+  it("carries no username, password, textSecret or secret value anywhere", () => {
+    const sasl = body["sasl"] as Record<string, unknown>;
+    expect(sasl).not.toHaveProperty("username");
+    expect(sasl).not.toHaveProperty("password");
+    expect(sasl).not.toHaveProperty("textSecret");
+    expect(sasl).not.toHaveProperty("authType");
+    const all = deepStrings(body);
+    expect(all).not.toContain("password");
+    expect(all).not.toContain(SECRET_VALUE);
+    expect(all).not.toContain("$ConnectionString");
+  });
+
+  it("trims the namespace in the scope as in the broker", () => {
+    const spaced = buildEventHubInputBody({ ...EH_SPEC, namespace: " ns1 ", auth: { kind: "entra-id", tenantId: "t", clientId: "c" } });
+    expect((spaced["sasl"] as Record<string, unknown>)["scope"]).toBe("https://ns1.servicebus.windows.net/.default");
+  });
+});
+
+describe("IDENTITY_FIELDS for the Entra ID body", () => {
+  it("names every OAuth field the builder sets, so a hand edit to any reads as differs", () => {
+    expect(IDENTITY_FIELDS.eventhub).toEqual(
+      expect.arrayContaining([
+        "sasl.oauthEndpoint",
+        "sasl.tenantId",
+        "sasl.clientId",
+        "sasl.clientSecretAuthType",
+        "sasl.clientTextSecret",
+        "sasl.scope",
+      ]),
+    );
+  });
+});

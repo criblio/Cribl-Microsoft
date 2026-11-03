@@ -591,7 +591,14 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     }
   }
 
-  const criblPorts = { cribl: ports.cribl, azure: ports.azure, ...(logger === undefined ? {} : { logger }) };
+  // ports.graph lets an Entra ID plan tie the client id to the object id whose
+  // role it reads (AZR-59 review); without it the confirm says "not cross-checked".
+  const criblPorts = {
+    cribl: ports.cribl,
+    azure: ports.azure,
+    ...(logger === undefined ? {} : { logger }),
+    ...(ports.graph === undefined ? {} : { graph: ports.graph }),
+  };
 
   async function onPlan(sourceId: OnboardingSourceId, credential: PlanCredential): Promise<PlanCriblSourceResult> {
     const source = onboardingSource(sourceId);
@@ -606,6 +613,8 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
       measuredHubs,
       kvRecord: p.criblSources[sourceId] ?? null,
       credential,
+      // ADR 0008 section 2: the app's own registration is never the Cribl principal.
+      ...(clientId === "" ? {} : { appClientId: clientId }),
     });
     if (result.kind === "already-applied" && p.criblSources[sourceId] === undefined) {
       commitProgress(withCriblSource(p, sourceId, result.record), "cribl source found");
