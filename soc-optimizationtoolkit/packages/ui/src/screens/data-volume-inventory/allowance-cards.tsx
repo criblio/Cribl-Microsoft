@@ -87,6 +87,9 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
 function PooledSummary({ a }: { a: DataAllowances }) {
   const p = a.pooled;
   const floors = a.sumsAreFloors ? "at least " : "";
+  // Core's own flag, not a fold over grants: a failed eligible read can leave
+  // grants empty, and every() over [] would claim the eligible sum is known.
+  const eligibleKnown = a.eligibleKnown;
   const reason = a.grants.find((g) => g.crossCheck.kind === "skipped")?.crossCheck;
   return (
     <div className="allowance-card">
@@ -97,13 +100,14 @@ function PooledSummary({ a }: { a: DataAllowances }) {
         <>
           <div className="allowance-card-line">
             eligible{" "}
-            {a.grants.every((g) => g.eligibleKnown) ? `${floors}${gbPerDay(p.eligibleDailyMB)}` : "not read"},
+            {eligibleKnown ? `${floors}${gbPerDay(p.eligibleDailyMB)}` : "not read"},
             applied {floors}
             {gbPerDay(p.usedDailyMB)} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
           </div>
           <div className="allowance-card-status">
-            {floors}
-            {gbPerDay(p.overDailyMB)} over, all grants together
+            {eligibleKnown
+              ? `${floors}${gbPerDay(p.overDailyMB)} over, all grants together`
+              : "over: not read (eligible volume not read)"}
           </div>
         </>
       )}
@@ -113,7 +117,7 @@ function PooledSummary({ a }: { a: DataAllowances }) {
       </p>
       {reason !== undefined && <p className="field-hint">{crossCheckLine(reason)}</p>}
       {p !== null && (
-        <EligibleAppliedChart eligibleByDay={p.eligibleByDay} usedByDay={p.usedByDay} eligibleKnown={a.grants.every((g) => g.eligibleKnown)} />
+        <EligibleAppliedChart eligibleByDay={p.eligibleByDay} usedByDay={p.usedByDay} eligibleKnown={eligibleKnown} />
       )}
       {a.grants.map((g) => (
         <details key={g.grant} className="gap-handles">

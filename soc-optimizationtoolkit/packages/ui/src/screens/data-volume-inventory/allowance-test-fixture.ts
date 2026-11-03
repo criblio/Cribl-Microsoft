@@ -36,6 +36,7 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     attribution: "per-grant",
     grants: [],
     pooled: null,
+    eligibleKnown: true,
     afterAllowancesDailyMB: 0,
     sumsAreFloors: false,
     licences: { kind: "not-bound" },

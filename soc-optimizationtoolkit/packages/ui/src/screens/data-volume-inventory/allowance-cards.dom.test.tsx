@@ -134,6 +134,35 @@ describe("AllowanceCards", () => {
     expect(text()).toContain("Cribl cannot write this table (Microsoft connector only)");
   });
 
+  it("pooled with a partial eligible read: eligible and over read not read, never an exact figure", () => {
+    renderCards(
+      allowances({
+        attribution: "pooled",
+        eligibleKnown: false,
+        pooled: usage({ eligibleDailyMB: 4000, usedDailyMB: 15000, overDailyMB: 0 }),
+        grants: [grantView({ eligibleKnown: false })],
+      }),
+    );
+    expect(text()).toContain("eligible not read");
+    expect(text()).toContain("over: not read");
+    expect(text()).not.toContain("GB/day over");
+    expect(text()).not.toContain("eligible 4.0 GB/day");
+  });
+
+  it("pooled with grants [] after a failed eligible read: no eligible 0.0 and no 0.0 over", () => {
+    renderCards(
+      allowances({
+        attribution: "pooled",
+        eligibleKnown: false,
+        pooled: usage({ eligibleDailyMB: 0, usedDailyMB: 15000, overDailyMB: 0 }),
+        grants: [],
+      }),
+    );
+    expect(text()).toContain("eligible not read");
+    expect(text()).toContain("over: not read");
+    expect(text()).not.toContain("0.0 GB/day");
+  });
+
   it("renders an unread Defender plan as not read and an unknown machine count as not known", () => {
     renderCards(
       allowances({

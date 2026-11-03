@@ -473,6 +473,22 @@ describe("readDataAllowances - pooled attribution", () => {
     expect(r.pooled!.usedDailyMB).toBeCloseTo(6000 / 30);
     expect(r.pooled!.usedByDay.get(DAY)).toBe(3000);
     expect(r.afterAllowancesDailyMB).toBeCloseTo(900 - 6000 / 30);
+    expect(r.eligibleKnown).toBe(true);
+  });
+
+  it("a failed eligible read leaves no grant view and says eligible is not known, never zero", async () => {
+    const r = await readDataAllowances(
+      routedAzure({ benefit: script.benefit, eligible: DENIED }).azure,
+      undefined,
+      WS,
+      inventory(900),
+      OPTS,
+    );
+    expect(r.attribution).toBe("pooled");
+    // Pooled: no per-grant used volume, and no eligible volume seen -> no views.
+    expect(r.grants).toEqual([]);
+    expect(r.eligibleKnown).toBe(false);
+    expect(r.pooled).not.toBeNull();
   });
 });
 

@@ -106,6 +106,12 @@ export interface DataAllowances {
   grants: GrantView[];
   /** Total eligible vs total applied; set only when attribution is "pooled". */
   pooled: GrantUsage | null;
+  /**
+   * False when the eligible-volume read failed or was partial in any workspace
+   * read. Eligible sums (`pooled` and every grant's) are then unknown, not
+   * zero - and `grants` may be empty because nothing eligible was seen.
+   */
+  eligibleKnown: boolean;
   afterAllowancesDailyMB: number;
   /**
    * True when eligible, used and after-allowances sums are lower bounds: a
@@ -366,7 +372,7 @@ function add(map: Map<string, number>, key: string, value: number): void {
 
 function assemble(
   input: Assembly,
-): Pick<DataAllowances, "attribution" | "grants" | "pooled" | "afterAllowancesDailyMB"> {
+): Pick<DataAllowances, "attribution" | "grants" | "pooled" | "eligibleKnown" | "afterAllowancesDailyMB"> {
   const benefit = parseBenefitRows(input.reads.flatMap((r) => r.benefitRows));
   const eligibleByDay = new Map<GrantId, Map<string, number>>([
     ["e5", dayMap()],
@@ -501,6 +507,7 @@ function assemble(
     attribution: benefit.attribution,
     grants,
     pooled,
+    eligibleKnown,
     afterAllowancesDailyMB: Math.max(0, input.billableDailyAverageMB - usedDailyMB),
   };
 }

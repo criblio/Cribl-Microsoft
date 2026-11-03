@@ -98,6 +98,14 @@ describe("overCell", () => {
     expect(overCell({ table: "SecurityEvent", billableMB: 300 }, a, 30)).toBe("not read");
   });
 
+  it("pooled: a share of the total when eligible was read, not read when it was not", () => {
+    const pooled = usage({ eligibleDailyMB: 14100, overDailyMB: 2100 });
+    const read = allowances({ attribution: "pooled", pooled });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, read, 30)).toBe("share of 2.10 GB (all grants)");
+    const unread = allowances({ attribution: "pooled", pooled: usage(), eligibleKnown: false, grants: [] });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, unread, 30)).toBe("not read");
+  });
+
   it("is empty for a grant table before allowances are read", () => {
     expect(overCell({ table: "SigninLogs", billableMB: 300 }, null, 30)).toBe("");
   });

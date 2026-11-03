@@ -135,6 +135,8 @@ export function overCell(row: OverRow, a: DataAllowances | null, windowDays: num
   if (a === null) return "";
   if (a.attribution === "pooled") {
     if (a.pooled === null) return "not known";
+    // The pooled overage is worked out from the eligible sum; unread, it is not a figure.
+    if (!a.eligibleKnown) return "not read";
     return `share of ${a.sumsAreFloors ? "at least " : ""}${formatMB(a.pooled.overDailyMB)} (all grants)`;
   }
   const view = a.grants.find((g) => g.grant === tag.grant);
