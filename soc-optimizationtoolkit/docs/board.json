@@ -3561,7 +3561,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-11"
       ],
@@ -3569,13 +3569,14 @@
       "type": "enabler",
       "priority": "next",
       "title": "Core: benefit used (Operation table) and eligible volume per grant, folded per day",
-      "detail": "Used and Over come from Microsoft's own Operation record, so they are exact without licence data. Unknown benefit types degrade to one pooled figure. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-12)."
+      "detail": "Used and Over come from Microsoft's own Operation record, so they are exact without licence data. Unknown benefit types degrade to one pooled figure. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-12).\n\nDONE 2026-11-03 (pins, d5adfd6): benefit-usage.ts - BENEFIT_QUERY over Operation, eligibleDailyQuery over Usage (billable only), parseBenefitRows (unknown type -> whole read pooled), foldGrantUsage (per-day over clamped at 0, capped day = used > 0 and eligible > used x 1.01). Benefit-type patterns are placeholders until MIG-17 records the literal strings.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-11"
       ],
