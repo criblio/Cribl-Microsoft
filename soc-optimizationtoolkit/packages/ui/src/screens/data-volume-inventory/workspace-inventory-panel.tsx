@@ -13,11 +13,19 @@
  */
 
 import { useMemo, useState } from "react";
-import { discoverWorkspaces, inventoryWorkspace, listingCount, listingRows } from "@soc/core";
-import type { WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
+import {
+  discoverWorkspaces,
+  inventoryWorkspace,
+  listingCount,
+  listingRows,
+  readDataAllowances,
+} from "@soc/core";
+import type { DataAllowances, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
+import { AllowanceCards, AllowanceQueries, AllowanceTagCell } from "./allowance-cards";
+import { ALLOWANCE_TIPS, afterAllowancesText, overCell, sentinelWorkspaceCount } from "./allowance-state";
 import {
   discoveryHeadline,
   formatMB,
@@ -51,7 +59,11 @@ export function WorkspaceInventoryPanel() {
   const [selectedId, setSelectedId] = useState("");
   const [inventory, setInventory] = useState<WorkspaceInventory | null>(null);
   const [inventoryError, setInventoryError] = useState("");
-  const [busy, setBusy] = useState<"discover" | "inventory" | null>(null);
+  const [busy, setBusy] = useState<"discover" | "inventory" | "allowances" | null>(null);
+  // MIG-15: the allowances belong to the shown inventory - cleared when a new
+  // inventory replaces it, read after it, and never shown beside another one.
+  const [allowances, setAllowances] = useState<{ result: DataAllowances; readAt: string } | null>(null);
+  const [allowanceError, setAllowanceError] = useState("");
   const [progress, setProgress] = useState("");
   const [saveNote, setSaveNote] = useState("");
 
@@ -87,18 +99,40 @@ export function WorkspaceInventoryPanel() {
     setBusy("inventory");
     setInventoryError("");
     setSaveNote("");
+    let read: WorkspaceInventory;
     try {
-      setInventory(
-        await inventoryWorkspace(ports.azure, target, {
-          logger: ports.logger,
-          onProgress: setProgress,
-        }),
-      );
+      read = await inventoryWorkspace(ports.azure, target, {
+        logger: ports.logger,
+        onProgress: setProgress,
+      });
     } catch (err) {
       setInventory(null);
+      setAllowances(null);
+      setAllowanceError("");
       setInventoryError(
         `${workspaceNameOf(target)}: ${err instanceof Error ? err.message : String(err)}`,
       );
+      setBusy(null);
+      setProgress("");
+      return;
+    }
+    setInventory(read);
+    setAllowances(null);
+    setAllowanceError("");
+    // The inventory is on screen from here on; the allowance read only adds to it.
+    setBusy("allowances");
+    setProgress("Reading data allowances");
+    const readAt = new Date().toISOString();
+    try {
+      const result = await readDataAllowances(ports.azure, ports.graph, target, read, {
+        logger: ports.logger,
+        onProgress: setProgress,
+        readAt,
+        sentinelWorkspaces: sentinelWorkspaceCount(discovery),
+      });
+      setAllowances({ result, readAt });
+    } catch (err) {
+      setAllowanceError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
       setProgress("");
@@ -109,7 +143,7 @@ export function WorkspaceInventoryPanel() {
     if (inventory === null) return;
     const file = `${workspaceNameOf(inventory.workspaceId)}-inventory.csv`;
     try {
-      await ports.artifacts.save(file, "text/csv", inventoryCsv(inventory));
+      await ports.artifacts.save(file, "text/csv", inventoryCsv(inventory, allowances?.result ?? null));
       setSaveNote(`Saved ${file}.`);
     } catch (err) {
       setSaveNote(`Could not save ${file}: ${err instanceof Error ? err.message : String(err)}`);
@@ -231,6 +265,18 @@ export function WorkspaceInventoryPanel() {
               <span className="match-stat-label">daily average, billable</span>
             </div>
             <div className="match-stat match-stat-info">
+              <span className="match-stat-value">
+                {allowances !== null
+                  ? afterAllowancesText(allowances.result)
+                  : busy === "allowances"
+                    ? "reading"
+                    : "not read"}
+              </span>
+              <span className="match-stat-label">
+                daily billable after allowances <InfoTip text={ALLOWANCE_TIPS.afterAllowances} />
+              </span>
+            </div>
+            <div className="match-stat match-stat-info">
               <span className="match-stat-value">{formatMB(inventory.totals.totalMB)}</span>
               <span className="match-stat-label">
                 total over {inventory.windowDays} days
@@ -251,6 +297,16 @@ export function WorkspaceInventoryPanel() {
             </p>
           )}
           {emptyText !== null && <p className="panel-desc">{emptyText}</p>}
+
+          {busy === "allowances" && <p className="field-hint">{progress}</p>}
+          {allowanceError !== "" && (
+            <p className="match-warning">
+              Could not read the data allowance benefit, so no allowance is shown - {allowanceError}
+            </p>
+          )}
+          {allowances !== null && (
+            <AllowanceCards allowances={allowances.result} readAt={allowances.readAt} />
+          )}
           {gaps !== null && gaps.failed + gaps.partial > 0 && (
             <p className="match-warning">
               {gaps.failed > 0 &&
@@ -269,6 +325,12 @@ export function WorkspaceInventoryPanel() {
                     <th>Daily avg</th>
                     <th>Billable (30d)</th>
                     <th>Days with data</th>
+                    <th>
+                      Allowance <InfoTip text={ALLOWANCE_TIPS.allowanceColumn} />
+                    </th>
+                    <th>
+                      Over allowance / day <InfoTip text={ALLOWANCE_TIPS.overColumn} />
+                    </th>
                     <th className="siem-inventory-sources">
                       Sources <InfoTip text={SOURCES_TIP} />
                     </th>
@@ -287,6 +349,13 @@ export function WorkspaceInventoryPanel() {
                       <td>{formatMB(t.billableMB)}</td>
                       <td>
                         {t.daysWithData} of {inventory.windowDays}
+                      </td>
+                      <td>
+                        <AllowanceTagCell table={t.table} a={allowances?.result ?? null} />
+                      </td>
+                      <td>
+                        {overCell(t, allowances?.result ?? null, inventory.windowDays) ||
+                          (busy === "allowances" ? "reading" : "not read")}
                       </td>
                       <td>
                         {t.sources.kind === "failed" ? (
@@ -330,6 +399,7 @@ export function WorkspaceInventoryPanel() {
               {inventory.queries.sourcesExample !== null && (
                 <pre className="siem-inventory-query">{inventory.queries.sourcesExample}</pre>
               )}
+              {allowances !== null && <AllowanceQueries a={allowances.result} />}
             </div>
           </details>
 

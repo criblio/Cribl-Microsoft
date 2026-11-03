@@ -19,7 +19,9 @@ export {
   ALLOWANCE_CATALOG_AS_OF,
   ALLOWANCE_SOURCES,
   criblWritable,
+  E5_MB_PER_SEAT_PER_DAY,
   eligibleTables,
+  SERVERS_MB_PER_MACHINE_PER_DAY,
 } from "../../domain/data-allowances/allowance-catalog";
 export type { AllowanceTag, GrantId } from "../../domain/data-allowances/allowance-catalog";
 export type { GrantUsage } from "../../domain/data-allowances/benefit-usage";

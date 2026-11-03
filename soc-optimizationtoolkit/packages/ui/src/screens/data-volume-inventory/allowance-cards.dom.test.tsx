@@ -1,0 +1,179 @@
+// @vitest-environment happy-dom
+/**
+ * MIG-15: the allowance cards rendered from a DataAllowances result. The pins
+ * are the honesty states: a refused licence read, no benefit, an unread
+ * eligible volume, a pooled benefit, and every stated gap.
+ */
+
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import type { DataAllowances } from "@soc/core";
+import { AllowanceCards, AllowanceTagCell } from "./allowance-cards";
+import { allowances, grantView, usage } from "./allowance-test-fixture";
+
+afterEach(cleanup);
+
+function renderCards(a: DataAllowances) {
+  return render(<AllowanceCards allowances={a} readAt="2026-11-03T10:00:00.000Z" />);
+}
+
+const text = () => document.body.textContent ?? "";
+
+describe("AllowanceCards", () => {
+  it("names LicenseAssignment.Read.All and shows no headroom when the licence read is refused", () => {
+    renderCards(
+      allowances({
+        licences: { kind: "denied", detail: "Graph subscribedSkus: HTTP 403 - consent needed" },
+        grants: [
+          grantView({
+            grantedMB: 9000,
+            grantedIsFloor: true,
+            usage: usage({ eligibleDailyMB: 8000, usedDailyMB: 8000, overDailyMB: 0 }),
+            crossCheck: { kind: "skipped", reason: "Cross-check skipped: seat counts not read (LicenseAssignment.Read.All)." },
+          }),
+        ],
+      }),
+    );
+    expect(document.querySelectorAll(".allowance-card")).toHaveLength(1);
+    expect(screen.getByText(/Licence counts were not read: .*LicenseAssignment\.Read\.All/)).toBeTruthy();
+    expect(text()).toContain("granted at least 9.0 GB/day");
+    expect(text()).not.toContain("GB/day headroom");
+    expect(text()).toContain("Headroom is not shown");
+  });
+
+  it("does not name the permission for a refusal that is not a permission refusal", () => {
+    renderCards(
+      allowances({
+        licences: { kind: "denied", detail: "Graph subscribedSkus: HTTP 502" },
+        grants: [grantView({ grantedMB: null })],
+      }),
+    );
+    expect(screen.getByText("Licence counts could not be read: Graph subscribedSkus: HTTP 502")).toBeTruthy();
+    expect(text()).not.toContain("LicenseAssignment.Read.All");
+  });
+
+  it("renders no card and says no benefit was applied when there are no grants", () => {
+    renderCards(allowances({ grants: [] }));
+    expect(document.querySelectorAll(".allowance-card")).toHaveLength(0);
+    expect(text()).toMatch(/no data allowance benefit applied to this workspace in\s+the last 30 complete days/);
+  });
+
+  it("shows every gap as a warning line", () => {
+    renderCards(allowances({ gaps: ["Table plans were not read: HTTP 403", "Reporting machines were not read: x"] }));
+    const warnings = [...document.querySelectorAll(".match-warning")].map((e) => e.textContent);
+    expect(warnings).toEqual(["Table plans were not read: HTTP 403", "Reporting machines were not read: x"]);
+  });
+
+  it("draws no meter and says not read when eligible volume is unknown", () => {
+    renderCards(allowances({ grants: [grantView({ eligibleKnown: false, usage: usage({ usedDailyMB: 500 }) })] }));
+    expect(document.querySelector(".allowance-meter")).toBeNull();
+    expect(text()).toContain("eligible not read");
+    expect(text()).toContain("over and headroom not read");
+  });
+
+  it("draws the meter when eligible and granted are both known", () => {
+    renderCards(allowances({ grants: [grantView({ usage: usage({ eligibleDailyMB: 6000 }) })] }));
+    expect(document.querySelector(".allowance-meter")).not.toBeNull();
+    expect(text()).toContain("6.0 GB/day headroom");
+  });
+
+  it("lists every SKU with its reason, warns of possibly missing seats, and names the matched other basis", () => {
+    renderCards(
+      allowances({
+        licences: {
+          kind: "read",
+          readAt: "2026-11-03T10:00:00.000Z",
+          e5: {
+            rows: [
+              { skuId: "a", skuPartNumber: "SPE_E5", capabilityStatus: "Enabled", enabled: 2600, warning: 0, suspended: 0, lockedOut: 0, consumed: 2400, appliesTo: "User", qualifies: true, family: "E5", reason: "Qualifies: Microsoft 365 E5 family" },
+              { skuId: "b", skuPartNumber: "ODD_E5_X", capabilityStatus: "Enabled", enabled: 50, warning: 0, suspended: 0, lockedOut: 0, consumed: 40, appliesTo: "User", qualifies: false, family: null, reason: "may qualify - not in the matched SKU list" },
+              { skuId: "c", skuPartNumber: "SPE_E3", capabilityStatus: "Enabled", enabled: 900, warning: 0, suspended: 0, lockedOut: 0, consumed: 800, appliesTo: "User", qualifies: false, family: null, reason: "not in the Microsoft 365 E5/A5/F5/G5/E7 offer" },
+            ],
+            purchased: 2600,
+            assigned: 2400,
+            inGrace: 0,
+            suspended: 0,
+            possiblyMissing: 40,
+            grantedMB: { assigned: 12000, purchased: 13000 },
+          },
+        },
+        grants: [
+          grantView({
+            grantedIsFloor: true,
+            crossCheck: { kind: "matched", basis: "purchased", medianMB: 13000 },
+          }),
+        ],
+      }),
+    );
+    expect(screen.getByText("SPE_E5")).toBeTruthy();
+    expect(screen.getByText("may qualify - not in the matched SKU list")).toBeTruthy();
+    expect(document.querySelectorAll(".allowance-row-dim")).toHaveLength(2);
+    expect(text()).toContain("40 assigned seat(s) are on SKUs that may qualify");
+    expect(text()).toContain("assigned seats: 2,400 x 5 MB = 12.0 GB/day");
+    expect(text()).toContain("purchased seats: 2,600 x 5 MB = 13.0 GB/day");
+    expect(text()).toContain("matched the purchased seats basis (13.0 GB/day)");
+  });
+
+  it("shows a pooled benefit as one combined line with no per-grant meter", () => {
+    renderCards(
+      allowances({
+        attribution: "pooled",
+        pooled: usage({ eligibleDailyMB: 20000, usedDailyMB: 15000, overDailyMB: 5000 }),
+        grants: [
+          grantView({
+            crossCheck: { kind: "skipped", reason: "Cross-check skipped: the benefit type(s) X could not be attributed." },
+            eligibleTables: [{ table: "SigninLogs", eligibleDailyMB: 300, plan: "Basic", criblWritable: "no" }],
+          }),
+        ],
+      }),
+    );
+    expect(document.querySelector(".allowance-meter")).toBeNull();
+    expect(text()).toContain("5.0 GB/day over, all grants together");
+    expect(text()).toContain("could not be attributed");
+    expect(text()).toContain("Basic plan - grant may not apply on this plan");
+    expect(text()).toContain("Cribl cannot write this table (Microsoft connector only)");
+  });
+
+  it("renders an unread Defender plan as not read and an unknown machine count as not known", () => {
+    renderCards(
+      allowances({
+        servers: {
+          rows: [{ subscriptionId: "sub-x", plan: "not-read", machinesInSubscription: null, machinesReportingHere: 3 }],
+          unattributedMachines: 0,
+        },
+        grants: [grantView({ grant: "servers-p2", grantedMB: null })],
+      }),
+    );
+    const row = screen.getByText("sub-x").closest("tr")!;
+    expect(row.textContent).toContain("not read");
+    expect(row.textContent).not.toContain("off");
+    expect(row.textContent).toContain("not known");
+  });
+
+  it("omits the tables call in a tenant comparison", () => {
+    renderCards(
+      allowances({
+        grants: [grantView()],
+        queries: { ...allowances().queries, tables: null },
+      }),
+    );
+    expect(text()).not.toContain("GET /w/tables");
+  });
+});
+
+describe("AllowanceTagCell", () => {
+  it("warns that rerouting a grant table to _CL forfeits its eligible volume", () => {
+    render(
+      <AllowanceTagCell
+        table="SigninLogs"
+        a={allowances({
+          grants: [grantView({ eligibleTables: [{ table: "SigninLogs", eligibleDailyMB: 300, plan: null, criblWritable: "no" }] })],
+        })}
+      />,
+    );
+    expect(text()).toContain("E5 5 MB/user");
+    expect(text()).toContain(
+      "keeps its grant only if it still lands in SigninLogs; routing it to a _CL table forfeits up to 300.0 MB/day of coverage",
+    );
+  });
+});

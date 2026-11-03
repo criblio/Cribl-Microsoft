@@ -116,8 +116,13 @@ describe("WorkspaceInventoryPanel", () => {
     await discoverAndInventory();
     // (90 + 30) / 30 days = 4 MB a day; billable 90 / 30 = 3.
     await screen.findByText("4.0 MB");
-    const tiles = [...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent);
-    expect(tiles).toEqual(["4.0 MB", "3.0 MB", "120.0 MB", "2"]);
+    // MIG-15: the after-allowances tile waits for the allowance read; no benefit
+    // was applied in this stub, so it equals billable.
+    await waitFor(() =>
+      expect([...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent)).toEqual([
+        "4.0 MB", "3.0 MB", "3.0 MB", "120.0 MB", "2",
+      ]),
+    );
     expect(screen.getByText("Syslog")).toBeTruthy();
     expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day, 1,200 events/)).toBeTruthy();
     // Heartbeat billed but its breakdown returned no rows: volume stays, failure is said.
@@ -231,5 +236,35 @@ describe("WorkspaceInventoryPanel - the workspace filter (MIG-8)", () => {
     fireEvent.change(filter, { target: { value: "no-such-workspace" } });
     expect(shown()).toEqual([]);
     expect(screen.getByText("No matches")).toBeTruthy();
+  });
+});
+
+describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
+  it("keeps the inventory table on screen and shows the error line when the allowance read fails", async () => {
+    const base = armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) });
+    const request = vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.startsWith("Operation")) return { status: 403, body: { error: { code: "Forbidden" } } };
+      return base(req);
+    });
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    await discoverAndInventory();
+    await screen.findByText(/Could not read the data allowance benefit, so no allowance is shown/);
+    expect(screen.getByText("Syslog")).toBeTruthy();
+    expect(screen.getByText("Download inventory CSV")).toBeTruthy();
+    expect(document.querySelector(".allowance-card")).toBeNull();
+    const tiles = [...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent);
+    expect(tiles[2]).toBe("not read");
+  });
+
+  it("adds the Allowance and Over columns once the allowances are read", async () => {
+    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) }));
+    await discoverAndInventory();
+    await waitFor(() => expect(document.body.textContent).toContain("Over allowance / day"));
+    const row = screen.getByText("Syslog").closest("tr")!;
+    await waitFor(() => expect(row.textContent).toContain("Billable"));
+    // A billable table's overage is its own billable daily average: 90 / 30.
+    expect(row.textContent).toContain("3.0 MB");
+    await waitFor(() => expect(document.body.textContent).toContain("Operation"));
   });
 });
