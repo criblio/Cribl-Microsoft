@@ -3533,6 +3533,114 @@
     },
     {
       "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-10",
+      "type": "story",
+      "priority": "next",
+      "title": "Move the workspace inventory out of SIEM Migration into its own Data Volume Inventory page (tools)",
+      "detail": "USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data Volume Inventory, tools section; SIEM Migration keeps no link. Removes data-volume-inventory from PLANNED_MENUS. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-10)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-11",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids",
+      "detail": "One data module with each row sourced to a Microsoft page and dated; a table not in it is Billable, never a guess. SKU ids copied from the licensing CSV, never from memory. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-11)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-11"
+      ],
+      "id": "MIG-12",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: benefit used (Operation table) and eligible volume per grant, folded per day",
+      "detail": "Used and Over come from Microsoft's own Operation record, so they are exact without licence data. Unknown benefit types degrade to one pooled figure. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-12)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-11"
+      ],
+      "id": "MIG-13",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: granted from E5 seats and Servers P2 machines, and the cross-check against applied benefit",
+      "detail": "The cross-check settles assigned vs purchased seats and subscription vs workspace machines from the customer's own data; 2% tolerance, marked only when exactly one basis matches. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-13)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-12",
+        "MIG-13"
+      ],
+      "id": "MIG-14",
+      "type": "story",
+      "priority": "next",
+      "title": "Read licence counts (Graph subscribedSkus, new LicenseAssignment.Read.All) and Defender plans for the allowances",
+      "detail": "New feature-level Graph permission; without consent Granted reads \"at least\" the largest applied day. Pricings reuse defender-plans (subPlan added). Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-14)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-10",
+        "MIG-14"
+      ],
+      "id": "MIG-15",
+      "type": "story",
+      "priority": "next",
+      "title": "Data Volume Inventory: allowance cards with drill-downs, tag and over-allowance columns, CSV columns",
+      "detail": "Mockup option A with drill-down (agreed 2026-11-03): licence and machine count tables, the arithmetic, the query behind every number, the reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-15"
+      ],
+      "id": "MIG-16",
+      "type": "story",
+      "priority": "next",
+      "title": "Compare data allowances against the whole tenant (all Sentinel workspaces), on demand",
+      "detail": "USER DECISION 2026-11-03: the operator chooses; default is this workspace with Granted labelled tenant-wide and the cross-check skipped. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-16)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-17",
+      "type": "spike",
+      "priority": "next",
+      "title": "Live: Operation benefit type strings, GB units, pricings and machine-count reads, and which seat/machine basis Microsoft applies",
+      "detail": "The spec's three open items plus the unit question, measured on a workspace that receives a benefit. Can start any time; its findings may change MIG-12 patterns and MIG-13 defaults. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-17)."
+    },
+    {
+      "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
       "status": "done",
@@ -3863,6 +3971,12 @@
       "epic": "MIG",
       "menu": "siem-migration",
       "title": "Sentinel workspace data-source inventory"
+    },
+    {
+      "id": "MIG-F2",
+      "epic": "MIG",
+      "menu": "data-volume-inventory",
+      "title": "Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine)"
     }
   ]
 }

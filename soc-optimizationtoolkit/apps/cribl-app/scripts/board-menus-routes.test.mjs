@@ -146,7 +146,8 @@ describe('the rollup sentence about PLANNED menus', () => {
   // azure-onboarding, because check-board only compares board.md with a
   // render of the same stale string.
   it('counts PLANNED_MENUS rather than restating a number', () => {
-    expect(plannedMenusSentence()).toBe('One menu is PLANNED and has no route yet.');
+    // Two while data-volume-inventory waits for MIG-10's route; back to One then.
+    expect(plannedMenusSentence()).toBe('Two menus are PLANNED and have no route yet.');
     expect(plannedMenusSentence(['a', 'b'])).toBe('Two menus are PLANNED and have no route yet.');
     expect(plannedMenusSentence([])).toBe('No menus are PLANNED and have no route yet.');
   });
@@ -154,6 +155,6 @@ describe('the rollup sentence about PLANNED menus', () => {
   it('is the sentence the rendered board carries', () => {
     const md = renderBoard({ epics: [], features: [], stories: [] }, '2026-10-21');
     expect(md).toContain(`operator sees on any screen. ${plannedMenusSentence()}`);
-    expect(md).not.toContain('Two menus are PLANNED');
+    expect(md).not.toContain('One menu is PLANNED');
   });
 });
