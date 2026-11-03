@@ -296,3 +296,41 @@ screen and changes four things this ADR stated:
 
 Persisting the Event Hub picker's choice is still not done (AZR-24): the How-to
 plan values are persisted, but they do not seed the picker.
+
+## Addendum 2026-11-03: section 7 superseded for the subscription actions (AZR-60)
+
+Appended; nothing above is edited. Section 7 ("Permissions are shown, not yet
+measured") was written before CAP-7a measured the three Defender subscription
+actions. It now holds only for the namespace `listKeys` (CAP-7b):
+
+- **The declaration lives in core.** `domain/onboarding-sections/automation-permissions.ts`
+  holds `AUTOMATION_PERMISSIONS`, one entry per item `ITEM_AVAILABILITY` marks
+  available, with the capabilities its automation needs. A pin fails when an
+  item becomes available without one. Defender: `defender-plans.read`
+  (informational), `defender-automation.read` and `defender-automation.write`
+  (core; the write is grant-only, as in capability-mapping). listKeys stays
+  listed as not measured.
+- **The section reads the cached audit, never Azure.** `automationPermissionView`
+  maps the declaration and the `CapabilitySet` in the ports context to a
+  banner. Mount still makes the two KV loads and no Azure call (ADR 0007).
+- **Only a measured core denial blocks deploy**, with the button aria-disabled
+  and the reason beside it, pointing at the source's How-to row. Unknown,
+  never-checked and a grant-only miss are a soft note with Re-check
+  permissions, never worded as denied. A denied informational capability warns
+  and does not block.
+- **This departs from capabilities.ts rule 3** ("the audit informs, never
+  forbids") for this one control, at the operator's request on the card. The
+  verdict is Azure's own effective-action evaluation at the subscription the
+  export is written to, and the How-to path is the fallback. No off-scope
+  verdict can block it: the Defender export targets only the
+  configured subscription the audit measured.
+- **It also departs from claude-kit `standards/cribl-app-permissions.md`**,
+  which since 2026-10 latches a control only on a refusal actually received
+  and annotates an audit's prediction. The block here is on a cached
+  prediction, so three things bound it: only a set measured for the CURRENT
+  audit key can block (a set held over from another connection while a new
+  audit runs reads as not checked); the blocked banner and the Deploy reason
+  say how old the check is ("the permission check 3 days ago found ...") and
+  offer Re-check permissions first; and the reason is the button's
+  `aria-describedby`. There is no "deploy anyway" path: a stale denial is
+  cleared by Re-check, not by attempting the write.

@@ -668,3 +668,22 @@ export function withSavedProgress(
   if (state.status === "absent") return { status: "ready", progress, dropped: [] };
   return state;
 }
+
+/**
+ * The DOM id of one source's row, so a section that automates the source can
+ * send the operator here (AZR-60: "follow the How-to steps for it"). The row
+ * takes focus (tabIndex -1) so the jump is announced, not only scrolled.
+ */
+export function howtoRowAnchorId(id: OnboardingSourceId): string {
+  return `azo-howto-source-${id}`;
+}
+
+/**
+ * The DOM id of one source's How-to radio. The section that automates a source
+ * renders only while the row is in Automate mode, and the How-to section lists
+ * steps only for How-to rows, so "follow the How-to steps" means switching
+ * this radio first: the jump lands focus on it.
+ */
+export function howtoModeRadioId(id: OnboardingSourceId): string {
+  return `azo-howto-mode-${id}`;
+}

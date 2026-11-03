@@ -2110,7 +2110,17 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <AzureOnboardingScreen pacing={BATCH_PACING} />
+        {/* AZR-60: the Defender section's permission banner offers the
+            connection bar's own re-check rather than a second audit. The key
+            keeps the previous connection's set (held until the new audit
+            lands) from blocking Deploy; the clock dates a blocking denial. */}
+        <AzureOnboardingScreen
+          pacing={BATCH_PACING}
+          onRecheckPermissions={capabilityAudit.refresh}
+          recheckingPermissions={capabilityAudit.running}
+          permissionsAuditKey={capabilityAudit.key}
+          permissionsNow={nowIso}
+        />
       </PortsProvider>
     </>
   );

@@ -1293,6 +1293,15 @@ button.journey-step-main:hover .journey-step-label {
   cursor: default;
 }
 
+/* Blocked but still focusable, so the reason beside it stays reachable by
+ * keyboard (AZR-60: a measured permission denial; claude-kit
+ * standards/cribl-app-permissions.md). Looks like :disabled, never hovers. */
+.next-action-button[aria-disabled='true'],
+.next-action-button[aria-disabled='true']:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Positive / CTA variant = ok (green) fill with dark text (Deploy All / Get
  * Started) - the reference's affirmative commit color. */
 .next-action-button-positive {

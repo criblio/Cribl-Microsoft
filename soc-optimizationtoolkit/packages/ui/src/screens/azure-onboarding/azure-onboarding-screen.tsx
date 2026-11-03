@@ -37,6 +37,16 @@
  *     applyCriblSource. A pasted credential never reaches React state or the
  *     progress document: the panel holds it and hands the apply a closure.
  *
+ * PERMISSIONS TO AUTOMATE (AZR-60). The Defender section reads the CACHED
+ * capability audit from the ports context and renders a banner over it; that
+ * adds no load and no Azure call on mount. Its How-to button focuses the
+ * source's How-to radio in the How-to section (the row is in Automate mode
+ * while the section renders, and steps appear only once it is switched), and
+ * its Re-check permissions is the shell's (the `onRecheckPermissions` prop) -
+ * this screen never re-audits. The shell also passes its audit key, so a set
+ * measured for another connection never blocks Deploy, and its clock, so a
+ * blocking denial says how old it is.
+ *
  * Logging goes through ports.logger with the `azure-onboarding:` prefix and
  * never carries a secret.
  */
@@ -118,6 +128,8 @@ import {
   canWriteProgress,
   chosenSourceIds,
   effectiveMode,
+  howtoModeRadioId,
+  howtoRowAnchorId,
   loadedProgress,
   progressLoadStateFrom,
   setChosen,
@@ -208,9 +220,50 @@ export interface AzureOnboardingScreenProps {
    * disabled: it never runs unpaced.
    */
   readonly pacing?: BatchPacing;
+  /**
+   * The shell's Re-check permissions (the connection bar's audit refresh).
+   * Absent = the permission banner points at the connection bar instead.
+   */
+  readonly onRecheckPermissions?: () => void;
+  /** True while that re-check is in flight. */
+  readonly recheckingPermissions?: boolean;
+  /**
+   * The shell's CURRENT audit key. The audit hook keeps the previous
+   * connection's set until a new audit lands; with the key, that set is read
+   * as not checked rather than as this connection's verdict.
+   */
+  readonly permissionsAuditKey?: string;
+  /** The shell's clock, so a blocking denial says how old the check is. */
+  readonly permissionsNow?: () => string;
 }
 
-export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {}) {
+/** The How-to section's wrapper, focused when the source's own row is not rendered. */
+const HOWTO_ANCHOR_ID = "azo-howto-section";
+
+/**
+ * Bring a source's How-to switch into view and focus it - the control the
+ * banner tells the operator to use. Falls back to the row when the radio is
+ * disabled (progress cannot be written), and to the How-to section itself when
+ * the row is not rendered (the progress document has not loaded or could not
+ * be read). DOM only - no state, no IO.
+ */
+function showHowto(id: OnboardingSourceId): void {
+  const radio = document.getElementById(howtoModeRadioId(id));
+  const usableRadio = radio instanceof HTMLInputElement && !radio.disabled ? radio : null;
+  const el =
+    usableRadio ?? document.getElementById(howtoRowAnchorId(id)) ?? document.getElementById(HOWTO_ANCHOR_ID);
+  if (el === null) return;
+  if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.focus({ preventScroll: true });
+}
+
+export function AzureOnboardingScreen({
+  pacing,
+  onRecheckPermissions,
+  recheckingPermissions,
+  permissionsAuditKey,
+  permissionsNow,
+}: AzureOnboardingScreenProps = {}) {
   const { ports, config } = usePorts();
   const store = ports.kvDocuments;
   const logger = ports.logger;
@@ -751,6 +804,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
                   target={target}
                   state={defenderState}
                   onState={setDefenderState}
+                  howtoSection={firstExtra + 1}
+                  onShowHowto={() => showHowto(DEFENDER_EXPORT_ITEM_ID)}
+                  onRecheckPermissions={onRecheckPermissions}
+                  recheckingPermissions={recheckingPermissions}
+                  permissionsAuditKey={permissionsAuditKey}
+                  permissionsNow={permissionsNow}
                 />
               ))}
           </NumberedSection>
@@ -773,6 +832,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
       <NumberedSection number={firstExtra + 1} title={HOWTO_SECTION_TITLES.howto} status="available" infoTip={HOWTO_TIP}>
         {progressMessage !== null && <PickerLine message={progressMessage} />}
+        <div id={HOWTO_ANCHOR_ID} tabIndex={-1}>
         <HowToPanel
           load={progressLoad}
           selection={selection}
@@ -783,6 +843,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
           onSetChosen={onSetChosen}
           onApplyPlanValues={onApplyPlanValues}
         />
+        </div>
       </NumberedSection>
 
       <NumberedSection number={firstExtra + 2} title={HOWTO_SECTION_TITLES.validate} status="available" infoTip={VALIDATE_TIP}>
