@@ -227,10 +227,26 @@ describe("planCriblSource", () => {
     expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
   });
 
-  it("accepts a Manage rule for listKeys", async () => {
+  // AZR-58: listKeys on a Manage rule would put namespace control in a Cribl secret.
+  it("refuses a Manage-capable rule for listKeys before any Cribl call, naming the rule", async () => {
     const h = harness();
-    const ready = await readyListKeys(h, "admin");
-    expect(ready.keyNameOrPrincipal).toBe("admin");
+    scriptAzurePlan(h);
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "admin" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+    expect(JSON.stringify(plan)).toContain("admin");
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+    expect(h.writes()).toEqual([]);
+  });
+
+  it("refuses a pasted Manage-capable key name before any write", async () => {
+    const h = harness();
+    scriptAzurePlan(h);
+    const plan = await planCriblSource(
+      h.ports,
+      planInput({ kind: "paste", descriptor: { host: "ns1.servicebus.windows.net", keyName: "admin" }, attested: false }),
+    );
+    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
   });
 
   it("refuses when the rules list is denied (listKeys)", async () => {

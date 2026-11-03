@@ -150,14 +150,32 @@ describe("the confirm machine", () => {
 });
 
 describe("listenRules", () => {
-  it("excludes Send-only rules and includes Manage", () => {
+  // AZR-58: Manage-capable rules are never offered for a Cribl source.
+  it("offers rules that can Listen without Manage, and nothing else", () => {
     const rules = [
       { name: "send", id: "", rights: ["Send"] },
       { name: "listen", id: "", rights: ["Listen"] },
+      { name: "listensend", id: "", rights: ["Listen", "Send"] },
       { name: "root", id: "", rights: ["Listen", "Send", "Manage"] },
       { name: "manage", id: "", rights: ["Manage"] },
     ];
-    expect(listenRules(rules).map((r) => r.name)).toEqual(["listen", "root", "manage"]);
+    expect(listenRules(rules).map((r) => r.name)).toEqual(["listen", "listensend"]);
+  });
+
+  it("names the Manage rules it left out and says to create a Listen-only rule", () => {
+    const msg = listenRuleMessage({
+      state: "read",
+      rows: [{ name: "RootManageSharedAccessKey", id: "", rights: ["Listen", "Manage", "Send"] }],
+    });
+    expect(msg).toContain("RootManageSharedAccessKey");
+    expect(msg).toContain("Manage");
+    expect(msg).toContain("Listen-only");
+  });
+
+  it("says why a Manage-capable key is refused", () => {
+    expect(createDisabledReason({ ...GATE, pasteCheck: { ok: false, reason: "rule-can-manage", detail: "" } })).toContain(
+      "Manage",
+    );
   });
 
   it("says a refused rules read is unknown, never none", () => {

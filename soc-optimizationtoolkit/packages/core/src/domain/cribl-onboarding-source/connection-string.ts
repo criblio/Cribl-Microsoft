@@ -18,7 +18,12 @@
  * Pure: no IO, no Date, no randomness, no crypto.
  */
 
-import { ruleCanListen, type NamespaceAuthRule } from "../eventhub-arm";
+import {
+  ROOT_MANAGE_RULE_NAME,
+  ruleCanListen,
+  ruleCanManage,
+  type NamespaceAuthRule,
+} from "../eventhub-arm";
 import type { ListRead } from "../logging-map/list-read";
 
 /** What a connection string says, minus its key. */
@@ -85,6 +90,7 @@ export type PastedCredentialRefusal =
   | "wrong-namespace"
   | "unknown-rule"
   | "rule-cannot-listen"
+  | "rule-can-manage"
   | "entity-mismatch"
   | "rule-rights-unknown";
 
@@ -129,6 +135,11 @@ export function checkPastedCredential(
       };
     }
   }
+  // AZR-58: Azure's own Manage rule is refused by NAME, so an attestation made
+  // while the rules could not be read never lets it through.
+  if (descriptor.keyName.toLowerCase() === ROOT_MANAGE_RULE_NAME.toLowerCase()) {
+    return { ok: false, reason: "rule-can-manage", detail: manageRefusalDetail(descriptor.keyName) };
+  }
   if (ctx.rules.state === "refused") {
     if (ctx.attested) return { ok: true, attested: true };
     return {
@@ -149,8 +160,24 @@ export function checkPastedCredential(
     return {
       ok: false,
       reason: "rule-cannot-listen",
-      detail: `Rule ${rule.name} has ${rule.rights.join(", ") || "no"} rights; a Cribl source needs Listen or Manage.`,
+      detail: `Rule ${rule.name} has ${rule.rights.join(", ") || "no"} rights; a Cribl source needs Listen.`,
     };
   }
+  if (ruleCanManage(rule.rights)) {
+    return { ok: false, reason: "rule-can-manage", detail: manageRefusalDetail(rule.name) };
+  }
   return { ok: true, attested: false };
+}
+
+/**
+ * Why a Manage-capable key is refused for a Cribl source (AZR-58), naming the
+ * rule and the safer one to create. Shared by the paste check and the listKeys
+ * plan so both say the same thing.
+ */
+export function manageRefusalDetail(ruleName: string): string {
+  return (
+    `Rule ${ruleName} can Manage the namespace. Its key in a Cribl secret would let anyone who can read ` +
+    "the worker group's secrets reconfigure or delete the namespace. Create a rule with Listen only " +
+    "(on the hub or the namespace) and use that one."
+  );
 }

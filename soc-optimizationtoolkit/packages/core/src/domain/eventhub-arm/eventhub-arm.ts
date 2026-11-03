@@ -262,6 +262,23 @@ export function ruleCanManage(rights: readonly string[]): boolean {
 }
 
 /**
+ * True when a rule's key may be handed to a Cribl Event Hub SOURCE (AZR-58):
+ * it can Listen and it can NOT Manage. A Manage key stored as a Cribl secret
+ * is control of the whole namespace - reconfigure, delete, mint keys - for
+ * anyone who can read secrets in the worker group, where the source only ever
+ * needs to read. Listen-and-Send is allowed. Reasoning: backlog.md 6h-i.
+ */
+export function ruleSafeForCriblSource(rights: readonly string[]): boolean {
+  return ruleCanListen(rights) && !ruleCanManage(rights);
+}
+
+/**
+ * The name Azure gives the Manage rule it creates on every namespace. Used to
+ * refuse a pasted key by NAME when the rules themselves could not be read.
+ */
+export const ROOT_MANAGE_RULE_NAME = "RootManageSharedAccessKey";
+
+/**
  * Whether a namespace of this SKU speaks the Kafka protocol Cribl's Event Hub
  * source reads with. Basic does not; Standard and Premium do (and Dedicated,
  * which is Premium-class). `null` when the SKU is empty or not one of those:

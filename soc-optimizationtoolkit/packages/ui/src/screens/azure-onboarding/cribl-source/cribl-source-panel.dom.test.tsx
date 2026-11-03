@@ -222,12 +222,13 @@ describe("CriblSourcePanel", () => {
     expect(p.onPlan).not.toHaveBeenCalled();
   });
 
-  it("offers only Listen-capable rules for listKeys, none preselected", () => {
+  // AZR-58: the Manage rule is never offered; Send-only never was.
+  it("offers only Listen rules without Manage for listKeys, none preselected", () => {
     const p = props({ modes: { defenderExport: "automate" } });
     render(<CriblSourcePanel {...p} />);
     const select = screen.getByLabelText(/Listen rule for/) as HTMLSelectElement;
     const names = Array.from(select.options).map((o) => o.value);
-    expect(names).toEqual(["", "reader", "reader2", "manager"]);
+    expect(names).toEqual(["", "reader", "reader2"]);
     expect(select.value).toBe("");
     expect(createButton().disabled).toBe(true);
   });

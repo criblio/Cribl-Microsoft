@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**97 in the backlog, 36 in progress, 134 done.**
+**97 in the backlog, 35 in progress, 135 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 33 | 23 | 12 |
+| Azure Native Source Onboarding | 32 | 24 | 11 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 133.
+Open work totals 132.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 36% (20/55)
+### `AZR` Azure native source onboarding - 38% (21/55)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 18/37 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 19/37 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1114,26 +1114,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
-
-- **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. The Listen rule picker offers every
-  rule that can Listen, including RootManageSharedAccessKey (Listen, Manage,
-  Send), with no warning; on a namespace whose only rule is Root it is the
-  only choice. listKeys then stores that key as a Cribl text secret, so anyone
-  who can read secrets in the worker group holds MANAGE on the whole namespace
-  (reconfigure, delete, mint keys), not read on one hub. The Send picker for
-  the Defender export already warns that a dedicated rule is safer; the Listen
-  side does not. OPERATOR DECISION 2026-11-03: offer both Entra ID OAuth
-  (default, [[AZR-59]]) and a Listen-only SAS rule (fallback); a
-  Manage-capable rule is REFUSED for the Cribl source in both modes. FIX (this
-  card, the quick half): the Listen picker lists only rules that can Listen
-  without Manage (Send-and-Listen allowed but warned), and the plan refuses a
-  Manage-capable rule or pasted connection string by key name, naming the
-  safer rule to create. Pin with ruleCanManage. Nothing was written: the armed
-  confirm was cancelled. Reasoning in backlog.md section 6h-i.
 
 ---
 
@@ -2591,7 +2571,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (134)
+## Done (135)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6607,3 +6587,40 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson
   org: at scroll top, clicking inside Add Sample Data left Select Sentinel
   Solution open and Add Sample Data in place, and sections 3-8 folded.
+
+- **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The Listen rule picker offers every
+  rule that can Listen, including RootManageSharedAccessKey (Listen, Manage,
+  Send), with no warning; on a namespace whose only rule is Root it is the
+  only choice. listKeys then stores that key as a Cribl text secret, so anyone
+  who can read secrets in the worker group holds MANAGE on the whole namespace
+  (reconfigure, delete, mint keys), not read on one hub. The Send picker for
+  the Defender export already warns that a dedicated rule is safer; the Listen
+  side does not. OPERATOR DECISION 2026-11-03: offer both Entra ID OAuth
+  (default, [[AZR-59]]) and a Listen-only SAS rule (fallback); a
+  Manage-capable rule is REFUSED for the Cribl source in both modes. FIX (this
+  card, the quick half): the Listen picker lists only rules that can Listen
+  without Manage (Send-and-Listen allowed but warned), and the plan refuses a
+  Manage-capable rule or pasted connection string by key name, naming the
+  safer rule to create. Pin with ruleCanManage. Nothing was written: the armed
+  confirm was cancelled. Reasoning in backlog.md section 6h-i. DONE 2026-11-03
+  (pins): one core predicate, ruleSafeForCriblSource (Listen and not Manage,
+  eventhub-arm.ts), now decides all three ways a key reaches the Cribl source.
+  The Listen picker offers only those rules, and when none qualifies it names
+  the Manage rules it left out and says to create a Listen-only rule. The
+  listKeys plan refuses a Manage rule (reason rule-can-manage) before any
+  Cribl call. The paste check refuses a Manage rule it can read, and refuses
+  RootManageSharedAccessKey BY NAME even when the rules could not be read and
+  the operator attested. All three share one sentence (manageRefusalDetail).
+  Two old pins that asserted Manage was accepted (connection-string.test.ts,
+  create-cribl-source.test.ts) and the DOM picker pin were changed
+  deliberately. Mutation-checked: dropping the plan refusal fails 1 pin;
+  dropping the by-name check fails 1 pin. Gap noticed, not fixed here: a
+  pasted HUB-scoped rule reads unknown-rule because hub-level rules are not
+  read, so the safest SAS rule cannot be pasted yet; that belongs with
+  [[AZR-36]] and [[AZR-59]]. Live check outstanding: in Live Preview against
+  ehnsjpedersoneastus (Root only), the picker should be empty with the Manage
+  message.

@@ -16,10 +16,11 @@
  * Even one this app provably owns is refused here, where ensureTextSecret
  * (usecases/ensure-secret, DBT-152) PATCHes its own stamped secret on a 409.
  *
- * LISTEN, NOT SEND. A Cribl Event Hub SOURCE reads, so the rule behind its
- * credential needs Listen or Manage. The AZR-18 picker chooses a Send rule for
+ * LISTEN, NOT SEND, NEVER MANAGE. A Cribl Event Hub SOURCE reads, so the rule
+ * behind its credential needs Listen. The AZR-18 picker chooses a Send rule for
  * the Defender export to WRITE with; that rule is not reused here unless it
- * also listens (ruleCanListen).
+ * also listens (ruleCanListen). A Manage-capable rule is refused (AZR-58,
+ * backlog.md 6h-i): its key in a Cribl secret is control of the namespace.
  *
  * NO SECRET IN THE PLAN. The plan sees a pasted connection string only as its
  * non-secret descriptor (host, key name, entity path). The key itself is read
@@ -37,6 +38,7 @@ import {
   namespaceSupportsKafka,
   parseNamespaceAuthRules,
   ruleCanListen,
+  ruleCanManage,
   type NamespaceAuthRule,
   type NamespaceRef,
 } from "../../domain/eventhub-arm";
@@ -54,6 +56,7 @@ import {
   classifyExistingInput,
   classifyExistingSecret,
   laneTopics,
+  manageRefusalDetail,
   onboardingInputId,
   onboardingSecretId,
   type ConnectionDescriptor,
@@ -383,9 +386,11 @@ export async function planCriblSource(
       if (!ruleCanListen(rule.rights)) {
         return refused(
           "rule-cannot-listen",
-          `Rule ${rule.name} has ${rule.rights.join(", ") || "no"} rights; a Cribl source needs Listen or Manage.`,
+          `Rule ${rule.name} has ${rule.rights.join(", ") || "no"} rights; a Cribl source needs Listen.`,
         );
       }
+      // AZR-58: never listKeys a Manage rule into a Cribl secret.
+      if (ruleCanManage(rule.rights)) return refused("rule-can-manage", manageRefusalDetail(rule.name));
       keyNameOrPrincipal = rule.name;
     } else {
       const check = checkPastedCredential(credential.descriptor, {

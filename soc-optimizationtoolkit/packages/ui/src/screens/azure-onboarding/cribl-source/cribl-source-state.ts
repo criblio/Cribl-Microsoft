@@ -23,7 +23,7 @@
  * No React, no IO, no clock.
  */
 
-import { PLAN_VALUE_KEYS, isInvalidConnection, onboardingSource, ruleCanListen } from "@soc/core";
+import { PLAN_VALUE_KEYS, isInvalidConnection, onboardingSource, ruleCanManage, ruleSafeForCriblSource } from "@soc/core";
 import type {
   ApplyCriblSourceOutcome,
   ApplyFailureStage,
@@ -103,13 +103,14 @@ export function sourceRows(
 // ---------------------------------------------------------------------------
 
 /**
- * The rules a Cribl Event Hub SOURCE can read with: Listen or Manage. This is
- * deliberately separate from the Defender picker's sendableRules
- * (azure-onboarding-state.ts:631) - a Send-only rule lets the export write but
+ * The rules a Cribl Event Hub SOURCE may read with: Listen, and NOT Manage
+ * (AZR-58 - a Manage key in a Cribl secret is control of the namespace). This
+ * is deliberately separate from the Defender picker's sendableRules
+ * (azure-onboarding-state.ts) - a Send-only rule lets the export write but
  * cannot be read from. Nothing is preselected.
  */
 export function listenRules<T extends { readonly rights: readonly string[] }>(rules: readonly T[]): T[] {
-  return rules.filter((r) => ruleCanListen(r.rights));
+  return rules.filter((r) => ruleSafeForCriblSource(r.rights));
 }
 
 /** The rule picker's message, or null when there are Listen rules to pick. */
@@ -121,7 +122,15 @@ export function listenRuleMessage(read: ListRead<NamespaceAuthRule> | null): str
   if (read.rows.length === 0) return "This namespace has no authorization rules.";
   if (listenRules(read.rows).length === 0) {
     const names = read.rows.map((r) => `${r.name} (${r.rights.join(", ") || "no rights"})`);
-    return `None of this namespace's authorization rules can listen: ${names.join("; ")}. Create a rule with Listen rights in the portal.`;
+    const manage = read.rows.filter((r) => ruleCanManage(r.rights)).map((r) => r.name);
+    if (manage.length > 0) {
+      return (
+        `None of this namespace's authorization rules can be used: ${names.join("; ")}. ` +
+        `${manage.join(", ")} can Manage the namespace, so its key is not put in a Cribl secret. ` +
+        "Create a Listen-only rule in the portal and read the rules again."
+      );
+    }
+    return `None of this namespace's authorization rules can listen: ${names.join("; ")}. Create a Listen-only rule in the portal.`;
   }
   return null;
 }
@@ -205,7 +214,8 @@ export const PLAN_REFUSAL_COPY: Readonly<Record<PlanRefusalReason, string>> = {
   "sku-unknown": "The namespace's tier could not be determined, so Kafka support is unknown.",
   "rules-unreadable": "The namespace's authorization rules could not be read.",
   "unknown-rule": "That key name is not one of the namespace's authorization rules.",
-  "rule-cannot-listen": "This key cannot listen: its rule has neither Listen nor Manage rights.",
+  "rule-cannot-listen": "This key cannot listen: its rule has no Listen rights.",
+  "rule-can-manage": "This key can Manage the namespace, so it is not stored in Cribl. Use a Listen-only rule.",
   "wrong-namespace": "Wrong namespace: the connection string is for another Event Hub namespace.",
   "entity-mismatch": "The connection string is scoped to a different hub than this source reads.",
   "rule-rights-unknown": "The rules could not be read, so whether this key can listen is unknown.",

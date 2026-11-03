@@ -26,6 +26,8 @@ export {
   ruleCanSend,
   ruleCanListen,
   ruleCanManage,
+  ruleSafeForCriblSource,
+  ROOT_MANAGE_RULE_NAME,
   namespaceSupportsKafka,
   buildNamespaceListKeysRequest,
   parseListKeys,

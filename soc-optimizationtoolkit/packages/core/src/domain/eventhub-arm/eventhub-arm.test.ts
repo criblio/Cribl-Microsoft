@@ -270,6 +270,15 @@ describe("eventhub-arm: Listen and Kafka checks (AZR-32, AZR-34)", () => {
     expect(arm.ruleCanManage(["Send", "Listen"])).toBe(false);
   });
 
+  it("ruleSafeForCriblSource (AZR-58): Listen without Manage only", () => {
+    expect(arm.ruleSafeForCriblSource(["Listen"])).toBe(true);
+    expect(arm.ruleSafeForCriblSource(["listen", "send"])).toBe(true);
+    expect(arm.ruleSafeForCriblSource(["Manage"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource(["Manage", "Listen", "Send"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource(["Send"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource([])).toBe(false);
+  });
+
   it("namespaceSupportsKafka: Basic false, Standard/Premium true, unknown null", () => {
     expect(arm.namespaceSupportsKafka("Basic")).toBe(false);
     expect(arm.namespaceSupportsKafka("Standard")).toBe(true);

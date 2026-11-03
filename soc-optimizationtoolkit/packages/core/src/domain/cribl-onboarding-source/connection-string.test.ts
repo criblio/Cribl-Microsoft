@@ -70,10 +70,28 @@ describe("checkPastedCredential", () => {
     expect(checkPastedCredential(d("sender"), ctx)).toMatchObject({ ok: false, reason: "rule-cannot-listen" });
   });
 
-  it("accepts a Listen rule and a Manage-only rule", () => {
+  it("accepts a Listen rule, and a Listen-and-Send rule", () => {
     expect(checkPastedCredential(d("reader"), ctx)).toEqual({ ok: true, attested: false });
+    const listenSend = readRows<NamespaceAuthRule>([{ name: "ls", id: "x", rights: ["Listen", "Send"] }]);
+    expect(checkPastedCredential(d("ls"), { ...ctx, rules: listenSend })).toEqual({ ok: true, attested: false });
+  });
+
+  // AZR-58: a Manage key in a Cribl secret is control of the whole namespace.
+  it("refuses a Manage-capable rule, alone or with Listen and Send, naming the rule", () => {
     const manageOnly = readRows<NamespaceAuthRule>([{ name: "m", id: "x", rights: ["Manage"] }]);
-    expect(checkPastedCredential(d("m"), { ...ctx, rules: manageOnly })).toEqual({ ok: true, attested: false });
+    const refusal = checkPastedCredential(d("m"), { ...ctx, rules: manageOnly });
+    expect(refusal).toMatchObject({ ok: false, reason: "rule-can-manage" });
+    expect(refusal.ok === false && refusal.detail).toContain("m");
+    expect(checkPastedCredential(d("admin"), ctx)).toMatchObject({ ok: false, reason: "rule-can-manage" });
+  });
+
+  it("refuses RootManageSharedAccessKey by name even when the rules could not be read and the operator attested", () => {
+    for (const name of ["RootManageSharedAccessKey", "rootmanagesharedaccesskey"]) {
+      expect(checkPastedCredential(d(name), { ...ctx, rules: denied, attested: true })).toMatchObject({
+        ok: false,
+        reason: "rule-can-manage",
+      });
+    }
   });
 
   it("refuses another namespace", () => {

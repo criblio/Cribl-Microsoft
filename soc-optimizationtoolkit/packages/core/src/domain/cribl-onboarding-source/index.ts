@@ -26,6 +26,7 @@ export type { BlobInputSpec, EventHubInputSpec } from "./input-bodies";
 export {
   checkPastedCredential,
   isInvalidConnection,
+  manageRefusalDetail,
   parseEventHubConnectionString,
   sameDescriptor,
 } from "./connection-string";
