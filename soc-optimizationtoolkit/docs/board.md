@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 36 in progress, 139 done.**
+**93 in the backlog, 37 in progress, 139 done.**
 
 ## By menu item
 
@@ -147,7 +147,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1057,6 +1057,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md.
   Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15).
 
+- **MIG-16** Compare data allowances against the whole tenant (all Sentinel workspaces), on demand
+  `MIG-F2` `story` `settled` `blocked by MIG-15`
+  USER DECISION 2026-11-03: the operator chooses; default is this workspace
+  with Granted labelled tenant-wide and the cross-check skipped. Design:
+  docs/features/inventory-data-allowances.md. Plan:
+  docs/data-volume-inventory-implementation-plan.md (task MIG-16).
+
 ---
 
 ## Backlog - now (11)
@@ -1270,7 +1277,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (47)
+## Backlog - next (46)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1907,13 +1914,6 @@ Settled and unblocked, sequenced behind now.
   SeverityName); CommonSecurityLog user_name/src_user_name now map to
   *UserName (were *UserID); the ASim tables' username/app_name/processName now
   map to *Name columns.
-
-- **MIG-16** Compare data allowances against the whole tenant (all Sentinel workspaces), on demand
-  `MIG-F2` `story` `settled` `blocked by MIG-15`
-  USER DECISION 2026-11-03: the operator chooses; default is this workspace
-  with Granted labelled tenant-wide and the cross-check skipped. Design:
-  docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-16).
 
 - **MIG-17** Live: Operation benefit type strings, GB units, pricings and machine-count reads, and which seat/machine basis Microsoft applies
   `MIG-F2` `spike` `settled`
