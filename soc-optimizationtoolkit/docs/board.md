@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**95 in the backlog, 36 in progress, 137 done.**
+**96 in the backlog, 36 in progress, 137 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 30 | 26 | 10 |
+| Azure Native Source Onboarding | 31 | 26 | 11 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 131.
+Open work totals 132.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 42% (23/55)
+### `AZR` Azure native source onboarding - 41% (23/56)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 21/37 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 21/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -1143,7 +1143,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (14)
+## Backlog - now (15)
 
 Next to pick up. Nothing blocks these.
 
@@ -1413,6 +1413,39 @@ Next to pick up. Nothing blocks these.
     [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
+
+- **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
+  `AZR-F9` `story` `settled`
+  OPERATOR REQUEST 2026-11-03, during the ADR 0007 live pass: "We should also
+  detect if the user has granted the correct permissions for each Native
+  logging source configuration in Azure and if not put a banner on the section
+  that would automate it and tell the users to reference the How To section."
+  WHAT EXISTS: CAP-7a (merged) measures defender-plans.read,
+  defender-automation.read and defender-automation.write through the app-wide
+  permission check, whose results are cached (the connection bar's
+  "permissions: checked N days ago"). The Defender section ignores them and
+  still lists DEFENDER_SUBSCRIPTION_ACTIONS and DEFENDER_NAMESPACE_ACTIONS as
+  "needed, not yet measured" (ADR 0005 section 7, written before CAP-7a). The
+  How-to steps already carry per-step rbac lists. SCOPE: (1) one declaration
+  per automatable source of the capabilities its automation needs (Defender
+  today: plans.read, automation.read, automation.write; namespace listKeys is
+  CAP-7b, still unmeasured, and stays shown as unmeasured), kept beside
+  ITEM_AVAILABILITY so a source that becomes automatable must declare them;
+  (2) the section reads the CACHED capability results - no new ARM call on
+  mount, preserving ADR 0007 item 1 - and renders a banner: denied -> "Your
+  Azure identity cannot <action>, so this section cannot set <source> up.
+  Follow the How-to steps for it in section 8, or ask an administrator for
+  <role>." with a link to the source's How-to; unknown or never checked -> a
+  softer note saying it was not measured, with Re-check permissions, never
+  worded as denied (inventory-honesty: unknown is not denied); a grant-only
+  check (automations/write at subscription scope reads unknown on a miss, per
+  CAP-7a review) is never shown as denied; (3) a denied core capability
+  disables the section's deploy with that reason (cribl-app-permissions:
+  aria-disabled plus visible reason); (4) sources that are How-to only today
+  get no banner (nothing to automate) - their How-to rbac lists already say
+  what is needed. Pins: denied, granted, unknown, never-checked and grant-only
+  rows for the Defender section; no Azure call on mount. Live check in Live
+  Preview with an identity that lacks Microsoft.Security/automations/write.
 
 ---
 
