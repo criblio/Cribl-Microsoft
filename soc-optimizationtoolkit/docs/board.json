@@ -3794,6 +3794,18 @@
         "chosen": "both"
       },
       "detail": "OPERATOR DECISION 2026-11-03, asked during the ADR 0007 live pass when the create was about to store RootManageSharedAccessKey: 'Offer both'. The vendored Cribl OpenAPI InputEventhub sasl block supports mechanism oauthbearer with clientId, tenantId, clientSecretAuthType (secret or certificate), clientTextSecret / certificateName, oauthEndpoint and scope, so the input can authenticate as an Entra service principal with RBAC 'Azure Event Hubs Data Receiver' scoped to the hub, and no SAS key leaves Azure. The Blob lane already uses tenant + client + secret. SCOPE: the credential choice gains 'Entra ID (recommended)' as the default for Event Hub lanes; the body builder emits the oauthbearer sasl block referencing a Cribl text secret for the client secret; Validate gains a read of the principal's role assignment on the hub (Data Receiver, or Data Owner), a refused read unknown; the How-to gains the role-assignment step; Listen-only SAS stays as the fallback per [[AZR-58]]. ADR 0007 (credential section) is amended BEFORE code, and the amendment names what it falsifies. OPEN: which Cribl version first ships eventhub oauthbearer (this leader's spec has it), the exact oauthEndpoint and scope for Event Hubs (expected https://<ns>.servicebus.windows.net/.default), and whether the identity is the app's own Azure principal or a separate Cribl principal (the plan values already carry 'Cribl service principal object ID'). Live check in Live Preview before done. Reasoning in backlog.md section 6h-i."
+    },
+    {
+      "id": "DBT-249",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard",
+      "detail": "REPORTED 2026-11-03 by the operator during the ADR 0007 live pass: \"The eventhub namespace drop down still doesn't have a filter box, this is the standard for dropdowns. makes sure they all have it and update the claude kit if needed or determine why we didn't follow the standard.\" The Event Hub namespace picker listed dozens of shared-lab namespaces with no way to type to find one.\n\nWHY THE STANDARD WAS NOT FOLLOWED: SearchableSelect (components/searchable-select.tsx) arrived on 2026-07-07 (831f1a6, \"adopt it for long lists\") and its rule - the default control for any list that can grow - was written ONLY in that file's header comment. It never reached packages/ui/CONTEXT.md, an ADR, CLAUDE.md, claude-kit or a check, and it was scoped to lists that can grow, which left short lists native on purpose. Every screen built since (the whole Azure onboarding screen among them) used a native <select> because nothing an author reads said otherwise. Count on 2026-11-03: 36 native <select> in 22 non-test files under packages/ui/src and apps/cribl-app/src.\n\nOPERATOR DIRECTION: every dropdown has the filter box, not only long ones. SCOPE: (1) write the standard into claude-kit standards/capra-ui.md and point packages/ui/CONTEXT.md at it; (2) a gate test that fails on any native <select> in non-test .tsx outside components/searchable-select.tsx, so the rule stops depending on memory; (3) convert all 36, keeping each control's accessible name, its disabled reasons and any disabled options (SelectOption gains disabled if needed), and update the DOM tests that drove the native element. Live check in Live Preview on the onboarding namespace picker."
     }
   ],
   "features": [

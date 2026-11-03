@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**95 in the backlog, 35 in progress, 137 done.**
+**95 in the backlog, 36 in progress, 137 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 50 | 78 | 22 |
+| Sentinel Integration | 51 | 78 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -40,7 +40,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 131.
 
 ## Epics and features
 
@@ -114,14 +114,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 56% (86/153)
+### `DBT` Quality and technical debt _(enabler)_ - 56% (86/154)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 37/47 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 37/48 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1114,6 +1114,32 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
+
+- **DBT-249** 36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard
+  `DBT-F2` `bug` `settled`
+  REPORTED 2026-11-03 by the operator during the ADR 0007 live pass: "The
+  eventhub namespace drop down still doesn't have a filter box, this is the
+  standard for dropdowns. makes sure they all have it and update the claude
+  kit if needed or determine why we didn't follow the standard." The Event Hub
+  namespace picker listed dozens of shared-lab namespaces with no way to type
+  to find one. WHY THE STANDARD WAS NOT FOLLOWED: SearchableSelect
+  (components/searchable-select.tsx) arrived on 2026-07-07 (831f1a6, "adopt it
+  for long lists") and its rule - the default control for any list that can
+  grow - was written ONLY in that file's header comment. It never reached
+  packages/ui/CONTEXT.md, an ADR, CLAUDE.md, claude-kit or a check, and it was
+  scoped to lists that can grow, which left short lists native on purpose.
+  Every screen built since (the whole Azure onboarding screen among them) used
+  a native <select> because nothing an author reads said otherwise. Count on
+  2026-11-03: 36 native <select> in 22 non-test files under packages/ui/src
+  and apps/cribl-app/src. OPERATOR DIRECTION: every dropdown has the filter
+  box, not only long ones. SCOPE: (1) write the standard into claude-kit
+  standards/capra-ui.md and point packages/ui/CONTEXT.md at it; (2) a gate
+  test that fails on any native <select> in non-test .tsx outside
+  components/searchable-select.tsx, so the rule stops depending on memory; (3)
+  convert all 36, keeping each control's accessible name, its disabled reasons
+  and any disabled options (SelectOption gains disabled if needed), and update
+  the DOM tests that drove the native element. Live check in Live Preview on
+  the onboarding namespace picker.
 
 ---
 
