@@ -31,13 +31,13 @@ import {
 import { CONTRIBUTOR_ROLE_DEFINITION_ID } from "./lab-foundation";
 import type { LabComponentFlags } from "./lab-profiles";
 import { isLabPhaseRequired } from "./lab-profiles";
+import { operationAction } from "../least-privilege";
 
 /** The RBAC permissions API version (same pin as permission-preflight). */
 export const LAB_PERMISSIONS_API_VERSION = "2022-04-01";
 
 /** The action the TTL grant needs (checked separately for ABAC conditions). */
-export const ROLE_ASSIGNMENTS_WRITE_ACTION =
-  "Microsoft.Authorization/roleAssignments/write";
+export const ROLE_ASSIGNMENTS_WRITE_ACTION = operationAction("lab.roleAssignment.write");
 
 /** GET the caller's effective permissions at an ARM scope. */
 export function buildLabPermissionsGetRequest(
@@ -53,8 +53,11 @@ export function buildLabPermissionsGetRequest(
 /**
  * The control-plane actions the SELECTED profile exercises, derived from the
  * same component flags and phase gating the deploy uses (so the preflight
- * cannot drift from the deployment). Foundation actions are always present;
- * resource-group creation only in create-new mode.
+ * cannot drift from the deployment). Foundation actions are always present.
+ * Both resource-group modes write the group - create-new creates it, and
+ * bring-your-own PATCHes its TTL tags (AZR-61 audit) - so both check
+ * resourceGroups/write, under the label that says which. Every action string
+ * is read from the least-privilege registry, never restated (AZR-61 review).
  */
 export function labRequiredActions(
   flags: LabComponentFlags,
@@ -63,13 +66,18 @@ export function labRequiredActions(
   const actions: RequiredAction[] = [];
   if (rgMode === "create-new") {
     actions.push({
-      action: "Microsoft.Resources/subscriptions/resourceGroups/write",
+      action: operationAction("resourceGroup.create"),
       label: "Create the lab resource group",
+    });
+  } else {
+    actions.push({
+      action: operationAction("resourceGroup.tag"),
+      label: "Tag the lab resource group with its TTL",
     });
   }
   actions.push(
     {
-      action: "Microsoft.Logic/workflows/write",
+      action: operationAction("logicApp.write"),
       label: "Deploy the TTL self-destruct watchdog",
     },
     {
@@ -79,12 +87,12 @@ export function labRequiredActions(
   );
   if (isLabPhaseRequired(2, flags)) {
     actions.push({
-      action: "Microsoft.Storage/storageAccounts/write",
+      action: operationAction("storageAccount.write"),
       label: "Create the storage account",
     });
     if (flags.storage.deployEventGrid) {
       actions.push({
-        action: "Microsoft.EventGrid/systemTopics/write",
+        action: operationAction("eventGrid.systemTopic.write"),
         label: "Wire Event Grid blob notifications",
       });
     }
@@ -92,87 +100,87 @@ export function labRequiredActions(
   if (isLabPhaseRequired(3, flags)) {
     actions.push(
       {
-        action: "Microsoft.Network/virtualNetworks/write",
+        action: operationAction("vnet.write"),
         label: "Create the virtual network",
       },
       {
-        action: "Microsoft.Network/networkSecurityGroups/write",
+        action: operationAction("nsg.write"),
         label: "Create network security groups",
       },
     );
   }
   if (flags.monitoring.deployLogAnalytics || flags.monitoring.deploySentinel) {
     actions.push({
-      action: "Microsoft.OperationalInsights/workspaces/write",
+      action: operationAction("workspace.write"),
       label: "Create the Log Analytics workspace",
     });
   }
   if (flags.monitoring.deploySentinel) {
     actions.push({
-      action: "Microsoft.OperationsManagement/solutions/write",
+      action: operationAction("sentinel.solution.write"),
       label: "Enable Microsoft Sentinel",
     });
   }
   if (flags.monitoring.deployPrivateLink) {
     actions.push(
       {
-        action: "Microsoft.Insights/privateLinkScopes/write",
+        action: operationAction("ampls.write"),
         label: "Create the Azure Monitor Private Link Scope",
       },
       {
-        action: "Microsoft.Network/privateEndpoints/write",
+        action: operationAction("privateEndpoint.write"),
         label: "Create the private endpoint",
       },
       {
-        action: "Microsoft.Network/privateDnsZones/write",
+        action: operationAction("privateDnsZone.write"),
         label: "Create the private DNS zone",
       },
     );
   }
   if (flags.analytics.deployEventHub) {
     actions.push({
-      action: "Microsoft.EventHub/namespaces/write",
+      action: operationAction("eventhub.namespace.write"),
       label: "Create the Event Hub namespace",
     });
   }
   if (flags.analytics.deployADX) {
     actions.push({
-      action: "Microsoft.Kusto/clusters/write",
+      action: operationAction("adx.cluster.write"),
       label: "Create the ADX cluster",
     });
   }
   if (flags.monitoring.deployFlowLogs) {
     actions.push({
-      action: "Microsoft.Network/networkWatchers/write",
+      action: operationAction("networkWatcher.write"),
       label: "Configure vNet flow logs",
     });
   }
   if (flags.virtualMachines.deployVMs) {
     actions.push(
       {
-        action: "Microsoft.Compute/virtualMachines/write",
+        action: operationAction("vm.write"),
         label: "Create the test VMs",
       },
       {
-        action: "microsoft.devtestlab/schedules/write",
+        action: operationAction("vm.schedule.write"),
         label: "Configure VM auto-shutdown",
       },
     );
   }
   if (flags.monitoring.deployDCRs) {
     actions.push({
-      action: "Microsoft.Insights/dataCollectionRules/write",
+      action: operationAction("dcr.write"),
       label: "Deploy the Sentinel-table DCRs",
     });
   }
   if (flags.infrastructure.deployVPN) {
     actions.push(
       {
-        action: "Microsoft.Network/publicIPAddresses/write",
+        action: operationAction("publicIp.write"),
         label: "Create the gateway public IP",
       },
       {
-        action: "Microsoft.Network/virtualNetworkGateways/write",
+        action: operationAction("vpnGateway.write"),
         label: "Create the VPN gateway",
       },
     );

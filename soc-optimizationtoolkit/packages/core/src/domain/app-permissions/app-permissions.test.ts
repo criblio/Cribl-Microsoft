@@ -30,6 +30,7 @@ import {
 import { rolePlanForSetupPath } from "../role-plan";
 import { REQUIRED_ACTIONS, preflightPathForSetupPath } from "../azure-permissions";
 import type { AzureSetupPath } from "../azure-config";
+import { leastRoleFor, privilegeOperation } from "../least-privilege";
 
 const PATHS: AzureSetupPath[] = ["existing", "lab-new-rg", "lab-byo-rg"];
 
@@ -91,10 +92,18 @@ describe("what the ticket ASKS FOR is what the preflight MEASURES", () => {
   // holding neither passed the preflight clean and failed later, one request at
   // a time. The two lists are built independently and always will be - this is
   // the only thing that notices when they drift apart again.
-  it("checks a feature action on every path whose plan asks for a feature role", () => {
+  it("checks a feature action on every path whose plan asks for a MEASURABLE feature role", () => {
+    // Feature roles the path's preflight cannot measure (listKeys, granted on
+    // the namespace alone; the Defender export, measured only by the
+    // subscription evaluation) say so in FEATURE_ROLES.unmeasured and are left
+    // out - asking for them is the AZR-61 fix, and pretending to measure them
+    // would be the dishonest kind of green.
+    const unmeasured = new Set(
+      FEATURE_ROLES.filter((r) => r.unmeasured !== undefined).map((r) => r.name),
+    );
     for (const path of PATHS) {
       const asksForFeatureRole = appPermissionPlan(path).some(
-        (p) => p.kind === "azure-rbac" && p.necessity === "feature",
+        (p) => p.kind === "azure-rbac" && p.necessity === "feature" && !unmeasured.has(p.name),
       );
       const checksFeatureAction = REQUIRED_ACTIONS[
         preflightPathForSetupPath(path)
@@ -159,11 +168,17 @@ describe("appPermissionPlan - suppression (over-asking)", () => {
   it("lab-byo-rg: Contributor covers Sentinel content but NOT role assignment", () => {
     // The distinction the suppression rule has to get right: Contributor is
     // broad enough to write SecurityInsights resources and deliberately
-    // excludes Microsoft.Authorization writes, which is exactly why that path's
-    // own comment says the app cannot assign roles.
+    // excludes Microsoft.Authorization writes. RBAC Administrator is now the
+    // path's own CORE role (the lab assigns its TTL identity Contributor in
+    // both resource-group modes - AZR-61 audit), and its condition also allows
+    // Monitoring Metrics Publisher, so the DCR-grant feature role is covered
+    // and asked once, not twice.
     const found = names("lab-byo-rg");
     expect(found).not.toContain("Microsoft Sentinel Contributor");
-    expect(found).toContain("RBAC Administrator");
+    expect(found.filter((n) => n === "RBAC Administrator")).toHaveLength(1);
+    expect(
+      appPermissionPlan("lab-byo-rg").find((p) => p.name === "RBAC Administrator")?.necessity,
+    ).toBe("core");
   });
 
   it("suppresses on a BROADER scope, not just an equal one", () => {
@@ -189,6 +204,9 @@ describe("appPermissionPlan - shape", () => {
     for (const path of PATHS) {
       for (const permission of appPermissionPlan(path)) {
         expect(permission).not.toHaveProperty("coveredBy");
+        expect(permission).not.toHaveProperty("operationId");
+        expect(permission).not.toHaveProperty("unmeasured");
+        expect(permission).not.toHaveProperty("broaderScopeWhy");
       }
     }
   });
@@ -222,5 +240,95 @@ describe("appPermissionPlan - shape", () => {
     expect(appPermissionPlan("existing")[0]?.name).toBe(
       GRAPH_PERMISSIONS[0]?.name,
     );
+  });
+});
+
+describe("AZR-61 - roles come from the least-privilege registry", () => {
+  it("names the Graph permission the registry names for the identity picker", () => {
+    expect(GRAPH_PERMISSIONS.map((p) => p.name)).toEqual([
+      leastRoleFor("graph.servicePrincipals.read"),
+    ]);
+  });
+
+  it("names every feature role after the registry's least role for the call it unlocks", () => {
+    for (const role of FEATURE_ROLES) {
+      expect(role.name, role.feature).toBe(leastRoleFor(role.operationId));
+    }
+  });
+
+  it("suppresses a feature role only on a role the registry says also grants it", () => {
+    for (const role of FEATURE_ROLES) {
+      const op = privilegeOperation(role.operationId);
+      for (const holder of role.coveredBy) {
+        expect(
+          holder === op.leastRole || op.alsoGrantedBy.includes(holder),
+          `${role.name} coveredBy ${holder}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("takes each feature role's scope from the registry, unless it says why it asks broader", () => {
+    // Found by review: the name came from the registry but the scope was a
+    // literal, and two already disagreed with no pin (Sentinel content and
+    // the DCR grant are registry 'resource' scope, asked at the RG). A
+    // registry scope correction must reach the ticket, or be argued against.
+    const breadth = { resource: 0, resourceGroup: 1, subscription: 2 } as const;
+    for (const role of FEATURE_ROLES) {
+      const registry = privilegeOperation(role.operationId).scope;
+      if (role.broaderScopeWhy === undefined) {
+        expect(role.scopeLevel, role.name).toBe(registry);
+      } else {
+        expect(role.broaderScopeWhy.length, role.name).toBeGreaterThan(40);
+        expect(breadth[role.scopeLevel], role.name).toBeGreaterThan(breadth[registry as keyof typeof breadth]);
+      }
+    }
+  });
+
+  it("never claims, on any path, that no subscription-scope rights are needed while asking for one", () => {
+    // AZR-61 audit discrepancy 7: the byo lab's own plan said so, beside a
+    // subscription-scope feature role in the same ticket.
+    for (const path of PATHS) {
+      const plan = appPermissionPlan(path);
+      if (plan.some((p) => p.scopeLevel === "subscription")) {
+        for (const p of plan) {
+          expect(p.justification, `${path} ${p.name}`).not.toMatch(/no subscription-scope/i);
+        }
+      }
+    }
+  });
+
+  it("asks for Event Hub listKeys on the namespace (audit discrepancy 1, high)", () => {
+    // Create Cribl source with the listKeys credential and the Defender export
+    // both POST listKeys, and no plan asked for any role that grants it.
+    const role = leastRoleFor("eventhub.rule.listKeys");
+    const entry = appPermissionPlan("existing").find((p) => p.name === role);
+    expect(entry?.necessity).toBe("feature");
+    expect(entry?.scopeLevel).toBe("resource");
+    expect(entry?.resource).toBe(privilegeOperation("eventhub.rule.listKeys").scopeNote);
+    expect(entry?.justification).toContain("listKeys");
+    // The ticket must warn that Validate's rule checks pass under Reader while
+    // listKeys still fails - otherwise a green Validate reads as permission.
+    expect(entry?.justification).toContain("Reader");
+    // Subscription Contributor already holds it; the byo lab's resource-group
+    // Contributor does not reach a namespace in another resource group.
+    expect(names("lab-new-rg")).not.toContain(role);
+    expect(names("lab-byo-rg")).toContain(role);
+  });
+
+  it("asks for the Defender export's automation write and list (audit discrepancy 2, high)", () => {
+    // The preflight measured these as feature checks; no ticket asked for a
+    // role that grants automations/write.
+    const writer = leastRoleFor("defender.automation.write");
+    const reader = leastRoleFor("defender.automations.list");
+    const existing = appPermissionPlan("existing");
+    expect(existing.find((p) => p.name === writer)?.scopeLevel).toBe("resourceGroup");
+    expect(existing.find((p) => p.name === writer)?.necessity).toBe("feature");
+    // Reader at the subscription already covers the list and the plans read.
+    expect(names("existing")).not.toContain(reader);
+    expect(names("lab-new-rg")).not.toContain(writer);
+    expect(names("lab-new-rg")).not.toContain(reader);
+    // The byo lab holds nothing at the subscription.
+    expect(names("lab-byo-rg")).toContain(reader);
   });
 });

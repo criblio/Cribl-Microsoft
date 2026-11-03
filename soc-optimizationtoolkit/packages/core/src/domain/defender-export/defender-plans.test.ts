@@ -21,6 +21,7 @@ import {
   parsePricings,
 } from "./defender-plans";
 import type { PricingsRead } from "./defender-plans";
+import { LEAST_PRIVILEGE_OPERATIONS } from "../least-privilege";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // A FROZEN COPY inside the app (DBT-132), held byte-equal to the original for
@@ -202,11 +203,29 @@ describe("the app never writes a Defender plan", () => {
     expect(files.some((f) => f.endsWith("defender-plans.ts"))).toBe(true);
   }, 30000);
 
+  // The least-privilege registry's data file DESCRIBES every call the app
+  // makes (AZR-61), so it names the pricings read and, elsewhere, PUT verbs
+  // without sending anything. It is held to the same rule by the next pin
+  // instead, at the level of each described call.
+  const REGISTRY_DATA = join("least-privilege", "operations.ts");
+
   it("has no source file that names the pricings resource and a write verb", () => {
-    const offenders = ROOTS.flatMap(sourceFiles).filter((file) => {
-      const text = readFileSync(file, "utf8");
-      return /pricings/i.test(text) && /method:\s*["'](PUT|PATCH|DELETE)["']/.test(text);
-    });
+    const offenders = ROOTS.flatMap(sourceFiles)
+      .filter((file) => !file.endsWith(REGISTRY_DATA))
+      .filter((file) => {
+        const text = readFileSync(file, "utf8");
+        return /pricings/i.test(text) && /method:\s*["'](PUT|PATCH|DELETE)["']/.test(text);
+      });
     expect(offenders).toEqual([]);
   }, 30000);
+
+  it("describes no pricings write in the least-privilege registry", () => {
+    const writes = Object.values(LEAST_PRIVILEGE_OPERATIONS).flatMap((op) =>
+      op.calls.filter((call) => /pricings/i.test(call.path) && call.method !== "GET"),
+    );
+    expect(writes).toEqual([]);
+    expect(
+      Object.values(LEAST_PRIVILEGE_OPERATIONS).some((op) => /pricings\/write/i.test(op.operation)),
+    ).toBe(false);
+  });
 });

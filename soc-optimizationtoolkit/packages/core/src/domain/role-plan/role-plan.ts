@@ -14,17 +14,39 @@
  * commands (they carry a bespoke comment block instead, because a condition must
  * be added in the portal).
  *
- * COMPATIBILITY CONTRACT: {@link renderRoleAssignmentCli} reproduces the setup
- * wizard's legacy `buildAzScript` output BYTE-FOR-BYTE - the same placeholders
+ * COMPATIBILITY CONTRACT: {@link renderRoleAssignmentCli} keeps the setup
+ * wizard's legacy `buildAzScript` command lines and placeholders
  * (`<clientId>`, `<subscriptionId>`, and the path-dependent `<workspaceRg>` /
- * `<labRg>`) and the same verbatim per-path comment blocks. Characterization
- * tests pin the full expected strings.
+ * `<labRg>`). The lab paths' portal comment is built from the plan row
+ * (AZR-61), so it is pinned by the role and condition it must carry.
+ *
+ * ROLE NAMES COME FROM THE LEAST-PRIVILEGE REGISTRY (AZR-61, ADR 0009) wherever
+ * a role is the least role of the operation it is asked for. The one deliberate
+ * exception is the lab paths' Contributor: an UMBRELLA grant chosen because a
+ * lab touches some sixty operations across a dozen providers, and asking for
+ * each one's least role would hand an approver a list nobody grants. It is
+ * named here once, as a choice, not as anyone's least role.
  *
  * Pure: no IO, no fetch, no React, no Date / Math.random / crypto. Output is
  * deterministic.
  */
 
 import type { AzureSetupPath } from "../azure-config";
+import { leastRoleFor } from "../least-privilege";
+
+/**
+ * The lab paths' umbrella role (see the module header for why it is not read
+ * from the registry).
+ */
+const LAB_UMBRELLA_ROLE = "Contributor";
+
+/**
+ * The condition on every lab-path RBAC Administrator grant: the TTL identity
+ * gets Contributor, and Cribl's identity gets Monitoring Metrics Publisher on
+ * each DCR the lab deploys.
+ */
+export const LAB_RBAC_CONDITION =
+  "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.";
 
 /**
  * The scope level a role is assigned at. Kept abstract (a LEVEL, not a fully
@@ -85,13 +107,16 @@ export interface RoleRequirement {
  *   Administrator on the subscription, assigned via the portal and CONSTRAINED
  *   to only Contributor and Monitoring Metrics Publisher, only to service
  *   principals.
- * - `lab-byo-rg` - Contributor on the pre-created lab resource group only.
+ * - `lab-byo-rg` - Contributor on the pre-created lab resource group, plus RBAC
+ *   Administrator on that group with the same condition, because the lab
+ *   assigns its TTL identity Contributor in both resource-group modes (AZR-61
+ *   audit; foundation-phase.ts).
  */
 export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
   if (path === "lab-new-rg") {
     return [
       {
-        role: "Contributor",
+        role: LAB_UMBRELLA_ROLE,
         scopeLevel: "subscription",
         justification:
           "Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).",
@@ -100,12 +125,11 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
           "Nothing on this path runs - the lab cannot create its resource group, so there is nowhere to deploy.",
       },
       {
-        role: "RBAC Administrator",
+        role: leastRoleFor("lab.roleAssignment.write"),
         scopeLevel: "subscription",
         justification:
           "Assign the lab TTL self-destruct identity its delete role at deploy time.",
-        condition:
-          "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
+        condition: LAB_RBAC_CONDITION,
         assignViaPortal: true,
         feature: "Lab TTL self-destruct",
         withoutIt:
@@ -116,20 +140,31 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
   if (path === "lab-byo-rg") {
     return [
       {
-        role: "Contributor",
+        role: LAB_UMBRELLA_ROLE,
         scopeLevel: "resourceGroup",
         justification:
-          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.",
+          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it: the Event Grid provider registration (subscription) and the regional Network Watcher (NetworkWatcherRG) need rights there, or an admin who registers the provider and creates the watcher first.",
         feature: "Deploy the lab environment",
         withoutIt:
           "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
+      },
+      {
+        role: leastRoleFor("lab.roleAssignment.write"),
+        scopeLevel: "resourceGroup",
+        justification:
+          "Assign the lab TTL self-destruct identity its delete role on the lab resource group at deploy time.",
+        condition: LAB_RBAC_CONDITION,
+        assignViaPortal: true,
+        feature: "Lab TTL self-destruct",
+        withoutIt:
+          "The deploy stops at the TTL step: a lab with no working self-destruct is never left running.",
       },
     ];
   }
   // "existing"
   return [
     {
-      role: "Reader",
+      role: leastRoleFor("subscriptions.list"),
       scopeLevel: "subscription",
       justification:
         "Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.",
@@ -138,7 +173,7 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         "The app cannot find your workspace or read the DCRs already deployed, so every screen that starts from your environment is empty and gap analysis has nothing to compare against.",
     },
     {
-      role: "Monitoring Contributor",
+      role: leastRoleFor("dcr.write"),
       scopeLevel: "resourceGroup",
       justification:
         "Create and update Data Collection Rules in the workspace resource group.",
@@ -147,7 +182,7 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         "The app can still generate the DCR ARM template for someone else to deploy, but cannot deploy it itself - no data path is created.",
     },
     {
-      role: "Log Analytics Contributor",
+      role: leastRoleFor("table.write"),
       scopeLevel: "resourceGroup",
       justification:
         "Create custom Log Analytics tables and configure the workspace for ingestion.",
@@ -201,7 +236,8 @@ function commandFor(
  * Blank params render as placeholders so a partial copy is visibly incomplete:
  * `<clientId>`, `<subscriptionId>`, and the path-dependent resource group
  * (`<workspaceRg>` for `existing`, otherwise `<labRg>`). The per-path comment
- * blocks are preserved verbatim from the legacy `buildAzScript`.
+ * headers are the legacy `buildAzScript` ones; each portal requirement's
+ * comment block is built from its plan row.
  */
 export function renderRoleAssignmentCli(
   path: AzureSetupPath,
@@ -232,23 +268,52 @@ export function renderRoleAssignmentCli(
       ...commands,
     ].join("\n");
   }
-  if (path === "lab-new-rg") {
-    return [
-      "# Lab creates its own resource group and workspace: subscription Contributor",
-      "# covers RG creation plus all workspace/DCR operations inside the lab, so no",
-      "# workspace-scoped roles are needed on this path.",
-      ...commands,
-      "# Assign RBAC Administrator via the Azure portal so you can add the condition",
-      '# "Constrain roles and principal types": only Contributor and Monitoring',
-      "# Metrics Publisher, only to service principals (the lab TTL self-destruct",
-      "# assigns its delete role at deploy time).",
-    ].join("\n");
+  const header =
+    path === "lab-new-rg"
+      ? [
+          "# Lab creates its own resource group and workspace: subscription Contributor",
+          "# covers RG creation plus all workspace/DCR operations inside the lab, so no",
+          "# workspace-scoped roles are needed on this path.",
+        ]
+      : [
+          "# Pre-created lab resource group: least privilege for labs; the lab deploys",
+          "# its workspace and resources into this RG. A few lab steps reach outside it",
+          "# (Event Grid provider registration, the regional Network Watcher).",
+        ];
+  return [...header, ...commands, ...portalComments(path)].join("\n");
+}
+
+/**
+ * The comment block for each portal-assigned requirement of a path, built
+ * from the plan row itself - its role (the registry's least role) and its
+ * condition - so the script can never ask for a different grant than the plan
+ * (AZR-61 review: this block once restated both by hand, and it is the only
+ * place the script names the grant).
+ */
+function portalComments(path: AzureSetupPath): string[] {
+  const where = path === "lab-byo-rg" ? " on this resource group" : "";
+  return rolePlanForSetupPath(path)
+    .filter((req) => req.assignViaPortal === true)
+    .flatMap((req) =>
+      wrapComment(
+        `Assign ${req.role}${where} via the Azure portal so you can add the condition` +
+          (req.condition === undefined ? "." : ` "${req.condition}"`) +
+          ` (${req.justification.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}).`,
+      ),
+    );
+}
+
+/** Word-wrap text into `# ` comment lines no wider than 80 columns. */
+function wrapComment(text: string): string[] {
+  const lines: string[] = [];
+  let line = "#";
+  for (const word of text.split(" ")) {
+    if (line !== "#" && line.length + 1 + word.length > 80) {
+      lines.push(line);
+      line = "#";
+    }
+    line += " " + word;
   }
-  return [
-    "# Pre-created lab resource group: least privilege for labs; the lab deploys",
-    "# its workspace and resources into this RG with no subscription-scope rights.",
-    ...commands,
-    "# An admin must pre-assign the TTL self-destruct identity its delete rights",
-    "# on this resource group (the app cannot assign roles on this path).",
-  ].join("\n");
+  lines.push(line);
+  return lines;
 }

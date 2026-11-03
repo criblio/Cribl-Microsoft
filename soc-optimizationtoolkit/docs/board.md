@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 40 in progress, 140 done.**
+**102 in the backlog, 47 in progress, 140 done.**
 
 ## By menu item
 
@@ -26,21 +26,21 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Menu | Open | Done | Now |
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
-| Setup | 5 | 0 | 4 |
+| Setup | 10 | 0 | 7 |
 | Sentinel Integration | 50 | 79 | 22 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
-| Labs | 1 | 0 | 1 |
+| Labs | 5 | 0 | 4 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 9 | 3 | 0 |
+| Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 28 | 12 |
-| Azure Logging Map | 3 | 1 | 1 |
+| Azure Native Source Onboarding | 35 | 28 | 15 |
+| Azure Logging Map | 4 | 1 | 2 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 134.
+Open work totals 149.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 41% (25/61)
+### `AZR` Azure native source onboarding - 33% (25/76)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -63,7 +63,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/5 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/20 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -146,7 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (40)
+## In progress (47)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1181,9 +1181,90 @@ Started. Anything here with an unfinished dependency is called out on its card.
   or caches keyed on nothing, or on the first config). Reasoning in backlog.md
   section 6i.
 
+- **AZR-75** No change request asks for Event Hub listKeys, which Create Cribl source (listKeys credential) and the Defender export both call
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 least-privilege audit (comparison discrepancy, severity
+  high). POST .../authorizationRules/{rule}/listKeys is an /action Reader does
+  not grant, so Validate's eh-rule checks pass under Reader while listKeys
+  returns 403; no role plan, FEATURE_ROLES or ticket asked for any role that
+  grants it. FIX (AZR-61 branch): a feature role read from the registry -
+  Azure Event Hubs Data Owner on the namespace (scope level 'resource', named
+  in words because the namespace may sit in any resource group) - suppressed
+  only where subscription Contributor/Owner already covers it; the
+  justification states the Reader-passes-Validate trap. Unmeasured by design
+  (CAP-7b: never probed, a probe returns a key), which the ask-equals-measure
+  pin now records instead of hiding.
+
+- **AZR-76** The preflight measures the Defender export's actions but no change request asks for a role that grants them
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (severity high).
+  REQUIRED_ACTIONS['existing-subscription'] checks pricings/read,
+  automations/read and automations/write, and no plan asked for Security Admin
+  or any role holding automations/write. FIX (AZR-61 branch): two feature
+  roles read from the registry - Security Admin on the resource group that
+  holds CriblDefenderExport, and Security Reader on the subscription
+  (suppressed wherever subscription Reader already covers it).
+
+- **AZR-77** The role-assignment change request leaves out the feature roles the app-registration ticket and the preflight both cover
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (severity medium). roleAssignmentRequest was built
+  from the setup path's roles only, and Setup offers only that ticket to the
+  subscription owner, so the feature gaps the preflight reported (Sentinel
+  content, the DCR grant) were gaps no ticket the owner saw asked to close.
+  FIX (AZR-61 branch): the ticket lists the RBAC half of appPermissionPlan -
+  the path's own roles unchanged, then each feature role tagged [feature] with
+  its condition and justification.
+
+- **AZR-78** Bring-your-own lab: the plan says the app cannot assign roles, but every lab deploy assigns its TTL identity Contributor and aborts when it cannot
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (severity medium), confirmed in
+  foundation-phase.ts: the ttl-role-assignment step runs in both
+  resource-group modes. rolePlanForSetupPath('lab-byo-rg') asked for
+  Contributor only, its CLI comment said 'the app cannot assign roles on this
+  path', and REQUIRED_ACTIONS['lab-byo-rg'] checked roleAssignments/write as a
+  non-gating DCR-grant feature. FIX (AZR-61 branch): RBAC Administrator on the
+  lab resource group, conditioned to Contributor and Monitoring Metrics
+  Publisher for service principals (the lab-new-rg condition), assigned in the
+  portal; the preflight check is CORE with the TTL label; the CLI comment
+  block says so. Contributor alone now reads as not deploy-ready for a byo
+  lab, which is true.
+
+- **AZR-79** Bring-your-own lab preflight does not check resourceGroups/write, which the deploy needs to tag the group
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (severity medium), confirmed in
+  foundation-phase.ts: an existing group's TTL tags are PATCHed in both modes,
+  and labRequiredActions checked resourceGroups/write only in create-new mode,
+  so a principal without it passed the preflight and failed at the first step.
+  FIX (AZR-61 branch): bring-your-own checks it as 'Tag the lab resource group
+  with its TTL', action read from the registry.
+
+- **AZR-80** How-to rbac lines put the Defender automation write on the subscription and name Contributor where Azure Event Hubs Data Owner is the least role
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (two severity-low discrepancies cited by file and
+  line). The Defender export step rendered automations/write 'on the
+  subscription' though the automation lives in a resource group; the Event Hub
+  namespace and hub steps said '(Contributor includes it)'. FIX (AZR-61
+  branch): both read the least-privilege registry - the Defender line takes
+  its scope from the operation (on resource group {{resourceGroup}}), the
+  Event Hub lines take the operation's least role.
+
+- **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (discrepancy 22, low, wrong-role) and by AZR-61
+  review. blob-rbac said 'User Access Administrator or Owner' where RBAC
+  Administrator conditioned to the two blob roles is least; the flow-log line
+  named Network Contributor alone though the PUT also needs
+  networkWatchers/configureFlowLog/action and storage listKeys; the
+  storage-account line said 'Contributor includes it' where Storage Account
+  Contributor is least; the Event Grid line spelled the subscription action
+  without its systemTopics segment. FIX (AZR-61 branch): every one of these
+  lines reads operationAction / leastRoleFor / extraActions from the registry,
+  and a pin holds any '(X includes it)' line that names a registry action to
+  that action's least role.
+
 ---
 
-## Backlog - now (13)
+## Backlog - now (17)
 
 Next to pick up. Nothing blocks these.
 
@@ -1453,9 +1534,61 @@ Next to pick up. Nothing blocks these.
   rows for the Defender section; no Azure call on mount. Live check in Live
   Preview with an identity that lacks Microsoft.Security/automations/write.
 
+- **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
+  Labs GET and PUT the Event Grid provider registration at the subscription
+  (Microsoft.EventGrid/register/action), read NetworkWatcherRG and may write
+  the flow log on the watcher there, and the byo plan asked for Contributor on
+  the lab RG only while saying 'no subscription-scope rights are needed'.
+  AZR-61 review corrected the claim (role-plan justification, CLI header, and
+  a pin that no plan says it while asking for a subscription-scope role).
+  STILL OPEN: the ticket must either ask for register/action at the
+  subscription and Reader or Network Contributor on NetworkWatcherRG, or tell
+  the admin to pre-register the provider and create the watcher; the lab
+  preflight should check both.
+
+- **AZR-82** Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (discrepancies 10 and 11, medium,
+  missing-from-plan). Policy assignments, definitions, exemptions and
+  remediations, and managementGroups/descendants, are read at the customer's
+  management group (logging-map-requests.ts,
+  onboarding-validation/requests.ts, read-logging-map.ts); the Entra
+  diagnostic settings read (GET
+  /providers/microsoft.aadiam/diagnosticSettings) is tenant-level. No plan
+  asks for Management Group Reader or the aadiam read, whose least privilege
+  for a service principal is undocumented (low confidence). FIX: per-tenant
+  feature rows for both, the aadiam one marked unverified and optional, and
+  Validate reporting a 403 there as unknown, never red.
+
+- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
+  medium). A GET 2xx proves read only; the writes the features need (outputs,
+  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
+  user-based mode they are granted by policies.yml. With no worker group
+  chosen the probes hit undeclared leader paths and a non-admin's 403 is
+  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
+  measured manage right; skip the probes until a group is chosen (unknown, not
+  denied); state in the change requests that the Cribl-side least privilege is
+  'App user plus Org-admin install-time approval of policies.yml', with every
+  group in scope.
+
+- **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
+  onboard-batch associates the DCE with an AMPLS at its own subscription and
+  RG (Monitoring Contributor there); deployment-preview reads the DCE a DCR
+  names, which may sit elsewhere; Validate, Create Cribl source and Defender
+  read the Event Hub namespace, its rules and consumer groups, which may sit
+  in another subscription. FIX: name each as a resource-scoped feature row in
+  words (as listKeys is), and have the preflight report those scopes as
+  unknown rather than denied.
+
 ---
 
-## Backlog - next (45)
+## Backlog - next (49)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2114,6 +2247,72 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
+
+- **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  Not now because: Over-asking, not under-asking: an approver who grants it as
+  written gets a working app with broader rights than needed, so nothing fails
+  and no data is lost. It outranks features because it is the first thing a
+  security reviewer reading the existing-path ticket will push back on, but it
+  ranks below the open defects where a granted ticket still leaves a feature
+  failing (AZR-81, AZR-82, AZR-84).
+  FOUND by the AZR-61 audit (discrepancy 16, low, wrong-scope). Every
+  tables/write and savedSearches call addresses the workspace by full id, and
+  the registry's table.write scope is the workspace; Log Analytics Contributor
+  at the RG also carries VM-extension, storage listKeys and deployments rights
+  over everything in it. FIX: ask at the workspace (a resource-scoped row, as
+  the feature roles now derive), or offer a custom role with tables/read+write
+  and workspaces/read on the workspace.
+
+- **AZR-86** Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  Not now because: Each gap leaves a capability reading unknown where it could
+  read granted or denied, and unknown is honest: no screen claims a permission
+  it has not measured. The fixes need a live Graph measurement first (the
+  refusal shape is disputed in the repo), so ordering them before AZR-81..84,
+  where a granted ticket still fails at run time, would spend the live session
+  on the smaller cost.
+  FOUND by the AZR-61 audit (discrepancies 17, 18 and 21, low). Content
+  install also PUTs and DELETEs contentPackages and savedSearches
+  (content-install.ts), and a 403 on the DELETE is swallowed and resurfaces as
+  the original 400; Application.Read.All is asked but never probed, and the
+  repo disagrees with itself on whether Graph refuses with a 403 or an empty
+  200 (adapters.ts and proxies.yml vs list-service-principals.ts); the
+  background capability audit never measures the defender-* capabilities for
+  the existing setup path. FIX: add contentPackages/write and
+  savedSearches/write as feature checks; settle the Graph refusal shape live,
+  then probe it per tenant; run the subscription-scope evaluation in the
+  background audit, per tenant.
+
+- **AZR-88** The resource-creation change request omits the Event Hub tier and the Cribl principal's Event Hub data-plane grant
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  Not now because: The failure is loud and early: plan-cribl-source refuses
+  the Basic namespace with a message that names the tier, so nobody loses data
+  or time beyond one recreate. The data-plane half depends on ADR 0008
+  reaching this branch, so it cannot be finished before that merge anyway.
+  FOUND by the AZR-61 audit (discrepancy 23, low, change-request-gap).
+  plan-cribl-source refuses a Basic namespace, but the ticket never says
+  Standard or higher, so an admin can create the one tier the app then
+  rejects. Once ADR 0008 (Entra ID default credential) lands here, the ticket
+  should also ask for Azure Event Hubs Data Receiver for the Cribl service
+  principal on the namespace or hub, which replaces listKeys for that
+  credential kind.
+
+- **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
+  `AZR-F10` `bug` `settled` `blocked by AZR-61`
+  Not now because: Over-granting to an identity that lives only as long as the
+  lab and whose sole code path deletes the group: the excess is real but its
+  exposure window is the lab's TTL. Changing it touches the ABAC condition
+  analysis that keeps live lab deploys from failing halfway, so it should be
+  done with a live lab run, not ahead of the defects that fail today.
+  FOUND by the AZR-61 audit (discrepancy 24, low, excess-in-plan).
+  lab-foundation.ts only GETs and DELETEs the RG; resourceGroups/delete needs
+  no more than a custom role with resourceGroups/read and delete (or a
+  narrower built-in), and the RBAC Administrator condition
+  (LAB_RBAC_CONDITION) would then name that role instead of Contributor. FIX:
+  pick the role, change foundation-phase's role definition id and the
+  condition together, and re-pin the TTL grant analysis that looks for the
+  Contributor GUID.
 
 ---
 

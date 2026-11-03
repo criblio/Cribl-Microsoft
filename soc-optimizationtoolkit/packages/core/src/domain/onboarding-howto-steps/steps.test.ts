@@ -20,6 +20,7 @@ import {
 } from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
 import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
+import { LEAST_PRIVILEGE_OPERATIONS, leastRoleFor, operationAction, privilegeOperation } from "../least-privilege";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -394,5 +395,76 @@ describe("how-to step catalog", () => {
       "blob-flow-log-nsg",
       "blob-rbac",
     ]);
+  });
+});
+
+describe("AZR-61 - rbac lines read the least-privilege registry", () => {
+  it("names the registry's least role for creating the namespace and the hub", () => {
+    // Audit (low): the lines said "Contributor includes it"; Azure Event Hubs
+    // Data Owner holds Microsoft.EventHub/* and is the narrower built-in role.
+    expect(howToStep("eh-namespace")?.rbac.join(" ")).toContain(
+      `(${leastRoleFor("eventhub.namespace.write")} includes it)`,
+    );
+    expect(howToStep("eh-hub")?.rbac.join(" ")).toContain(
+      `(${leastRoleFor("eventhub.hub.write")} includes it)`,
+    );
+    expect(howToStep("eh-namespace")?.rbac.join(" ")).not.toContain("(Contributor includes it)");
+  });
+
+  it("names, wherever a line says which role includes a registry action, that action's least role", () => {
+    // Found by review: only the Event Hub and Defender lines read the
+    // registry; the flow-log, storage and Event Grid lines restated roles
+    // ("Contributor includes it" where Storage Account Contributor is least).
+    const wrong: string[] = [];
+    for (const step of ALL_HOWTO_STEPS) {
+      for (const line of step.rbac) {
+        const role = /\(([^()]+?) includes (?:it|them)\)/.exec(line)?.[1];
+        if (role === undefined) {
+          continue;
+        }
+        const named = Object.values(LEAST_PRIVILEGE_OPERATIONS).filter((op) =>
+          new RegExp(`(^|[ ,])${op.operation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`, "i").test(line),
+        );
+        if (named.length > 0 && !named.some((op) => op.leastRole === role)) {
+          wrong.push(`${step.id}: (${role}) for ${named.map((op) => op.id).join(", ")}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("states the flow log's extra actions and least role, and the Event Grid writes by the registry's action", () => {
+    for (const id of ["blob-flow-log-vnet", "blob-flow-log-nsg"]) {
+      const flow = (howToStep(id)?.rbac ?? []).join(" ");
+      expect(flow, id).toContain(operationAction("flowLog.write"));
+      expect(flow, id).toContain(leastRoleFor("flowLog.write"));
+      for (const extra of privilegeOperation("flowLog.write").extraActions ?? []) {
+        expect(flow, id).toContain(extra);
+      }
+    }
+    const grid = (howToStep("blob-event-grid")?.rbac ?? []).join(" ");
+    expect(grid).toContain(operationAction("eventGrid.systemTopic.write"));
+    expect(grid).toContain(operationAction("eventGrid.subscription.write"));
+    expect((howToStep("blob-storage-account")?.rbac ?? []).join(" ")).toContain(
+      `(${leastRoleFor("storageAccount.write")} includes it)`,
+    );
+  });
+
+  it("asks for the conditioned RBAC Administrator, not User Access Administrator, to grant the blob roles", () => {
+    // Audit discrepancy 22 (low).
+    const line = (howToStep("blob-rbac")?.rbac ?? []).join(" ");
+    expect(line).toContain(leastRoleFor("dcr.roleAssignment.write"));
+    expect(line).toContain("Storage Blob Data Reader");
+    expect(line).not.toContain("User Access Administrator");
+  });
+
+  it("puts the Defender export's automation write on the resource group, the list on the subscription", () => {
+    // Audit (low): every subscription action rendered "on the subscription",
+    // and the automation the PUT writes lives in a resource group.
+    const rbac = howToStep("defender-export")?.rbac ?? [];
+    const write = rbac.find((line) => line.startsWith(`${operationAction("defender.automation.write")} `));
+    const list = rbac.find((line) => line.startsWith(`${operationAction("defender.automations.list")} `));
+    expect(write).toContain("on resource group {{resourceGroup}}");
+    expect(list).toContain("on the subscription");
   });
 });

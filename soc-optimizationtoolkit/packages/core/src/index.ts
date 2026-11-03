@@ -25,6 +25,7 @@ export * from "./domain/dataflow-diagram";
 export * from "./domain/log-model";
 export * from "./domain/change-request";
 export * from "./domain/role-plan";
+export * from "./domain/least-privilege";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

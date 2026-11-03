@@ -11,18 +11,22 @@
  * any plain-text system and renders as a diagram wherever Markdown+Mermaid is
  * supported.
  *
- * The RBAC role model in {@link roleAssignmentRequest} mirrors EXACTLY the role
- * logic the setup wizard's az-CLI script builder uses (roles, scopes, and the
- * lab-new-rg "Constrain roles and principal types" condition), so a ticket asks
- * for precisely what the wizard would otherwise self-assign.
+ * Both permission tickets read ONE plan, {@link appPermissionPlan}: the setup
+ * path's own roles (role-plan, the same model the az-CLI script uses) plus the
+ * feature roles no setup path grants, whose names come from the least-privilege
+ * registry (AZR-61). {@link roleAssignmentRequest} lists the plan's RBAC half
+ * for the subscription owner - the path's roles first, exactly as the wizard
+ * would self-assign them, then the feature roles tagged `[feature]`.
+ * {@link appRegistrationRequest} adds the Graph permission, because it is the
+ * ticket sent before anything works. Neither restates a role.
  *
- * {@link appRegistrationRequest} asks for MORE than that: the full permission
- * plan from domain/app-permissions, which is the setup-path roles plus the Graph
- * application permission and the feature roles no setup path grants. The two
- * generators therefore differ on purpose - the role ticket asks the subscription
- * owner for what the wizard would self-assign, while the app-registration ticket
- * is the one an operator sends before anything works and so must name
- * everything. Neither restates the role model; both compose it.
+ * The role ticket used to carry the path's roles only (AZR-61 audit, medium):
+ * Setup offers only that ticket to the subscription owner, so the feature gaps
+ * the preflight reported were gaps no ticket the owner saw asked to close.
+ *
+ * SINGLE TENANT, FOR NOW. Every generator reads one config, so a ticket is one
+ * tenant's. Per-tenant tickets are AZR-62 (ADR 0009 decision 1), built on these
+ * generators rather than beside them.
  *
  * Any blank context field renders as a clear placeholder (for example
  * `<tenant id>`), so a partially filled request is visibly incomplete.
@@ -34,7 +38,7 @@
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
 import { appPermissionPlan, graphPermissions, rbacPermissions } from "../app-permissions";
 import type { AppPermission } from "../app-permissions";
-import { rolePlanForSetupPath } from "../role-plan";
+import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
   dataExportFlowMermaid,
@@ -65,12 +69,14 @@ export interface ChangeRequestOptions {
 interface RoleRequest {
   /** The Azure built-in role name to assign. */
   role: string;
-  /** The fully-qualified scope the role is assigned at. */
+  /** The fully-qualified scope the role is assigned at, or the resource in words. */
   scope: string;
   /** One-line justification for this specific role. */
   justification: string;
-  /** Optional assignment condition (used for the lab-new-rg RBAC Administrator). */
+  /** Optional assignment condition (the lab paths' RBAC Administrator, the DCR grant). */
   condition?: string;
+  /** `feature` roles are tagged in the ticket; the path's own roles are not. */
+  necessity: PermissionNecessity;
 }
 
 /** Render a heading followed by an ASCII underline and a body block. */
@@ -100,36 +106,25 @@ function resourceGroupScope(n: ResolvedNames): string {
 }
 
 /**
- * The RBAC roles a setup path requires, resolved into fully-qualified request
- * rows for a ticket. The role model itself (which roles, at which scope LEVEL,
- * with which justification and condition) is the single source of truth in
- * {@link rolePlanForSetupPath}; this function only turns each abstract scope
- * level into the concrete scope string for the resolved context, so the ticket
- * and the setup wizard's az-CLI script can never drift.
- *
- * - `existing`   - Reader on the subscription, plus Monitoring Contributor and
- *   Log Analytics Contributor scoped to the workspace resource group.
- * - `lab-new-rg` - Contributor on the subscription (resource-group creation is a
- *   subscription-level action and covers all lab operations), plus RBAC
- *   Administrator on the subscription CONSTRAINED to only Contributor and
- *   Monitoring Metrics Publisher, only to service principals.
- * - `lab-byo-rg` - Contributor on the pre-created lab resource group only.
+ * The RBAC roles to request for a setup path, resolved into request rows for a
+ * ticket: the RBAC half of {@link appPermissionPlan}, in plan order (the path's
+ * own roles, then the feature roles it does not already cover). This function
+ * only turns each abstract scope into the concrete scope for the resolved
+ * context, so the ticket and the setup wizard's az-CLI script can never drift.
  */
 function rolesForSetupPath(
   path: AzureSetupPath,
   n: ResolvedNames,
 ): RoleRequest[] {
-  return rolePlanForSetupPath(path).map((req) => {
+  return rbacPermissions(appPermissionPlan(path)).map((permission) => {
     const request: RoleRequest = {
-      role: req.role,
-      scope:
-        req.scopeLevel === "subscription"
-          ? subscriptionScope(n)
-          : resourceGroupScope(n),
-      justification: req.justification,
+      role: permission.name,
+      scope: permissionScope(permission, n),
+      justification: permission.justification,
+      necessity: permission.necessity,
     };
-    if (req.condition !== undefined) {
-      request.condition = req.condition;
+    if (permission.condition !== undefined) {
+      request.condition = permission.condition;
     }
     return request;
   });
@@ -157,9 +152,19 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
   if (permission.scopeLevel === "tenant") {
     return "tenant-wide (consented on the app registration)";
   }
-  return permission.scopeLevel === "subscription"
-    ? subscriptionScope(n)
-    : resourceGroupScope(n);
+  if (permission.scopeLevel === "resource") {
+    // A resource the config does not name (an Event Hub namespace may sit in
+    // any resource group), so the ticket says which, in words.
+    return permission.resource ?? "<resource>";
+  }
+  if (permission.scopeLevel === "subscription") {
+    return subscriptionScope(n);
+  }
+  // A group the operator may choose elsewhere (the Defender export's): the
+  // configured one is the default, and the caveat says the role follows the choice.
+  return permission.scopeCaveat === undefined
+    ? resourceGroupScope(n)
+    : resourceGroupScope(n) + " (" + permission.scopeCaveat + ")";
 }
 
 /** Column the permission-block values start at, and the wrap width. */
@@ -374,10 +379,19 @@ export function roleAssignmentRequest(
       "):",
   ];
   for (const r of roles) {
-    requested.push("- " + r.role + " at " + r.scope);
+    requested.push(
+      "- " + r.role + " at " + r.scope + (r.necessity === "feature" ? "  [feature]" : ""),
+    );
     if (r.condition !== undefined) {
       requested.push("    Condition: " + r.condition);
     }
+  }
+  if (roles.some((r) => r.necessity === "feature")) {
+    requested.push(
+      "",
+      "[feature] roles each unlock one named capability and can be refused on",
+      "their own; the untagged roles are what this setup path needs to work at all.",
+    );
   }
 
   const justifications = roles.map(

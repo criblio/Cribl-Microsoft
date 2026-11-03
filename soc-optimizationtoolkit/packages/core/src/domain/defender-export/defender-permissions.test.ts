@@ -12,8 +12,11 @@ import { REQUIRED_ACTIONS } from "../azure-permissions/azure-permissions";
 import {
   DEFENDER_ACTIONS_NOT_MEASURED,
   DEFENDER_NAMESPACE_ACTIONS,
+  DEFENDER_NAMESPACE_OPERATIONS,
   DEFENDER_SUBSCRIPTION_ACTIONS,
+  DEFENDER_SUBSCRIPTION_OPERATIONS,
 } from "./defender-permissions";
+import { operationAction } from "../least-privilege";
 
 const ALL = [...DEFENDER_SUBSCRIPTION_ACTIONS, ...DEFENDER_NAMESPACE_ACTIONS];
 
@@ -68,5 +71,25 @@ describe("Defender required actions", () => {
 
   it("states that the lists are not yet measured", () => {
     expect(DEFENDER_ACTIONS_NOT_MEASURED).toMatch(/^Needed, not yet measured\./);
+  });
+});
+
+describe("AZR-61 - the Defender actions are the registry's", () => {
+  it("carries, for every action, the registry operation it is read from", () => {
+    for (const entry of [...DEFENDER_SUBSCRIPTION_OPERATIONS, ...DEFENDER_NAMESPACE_OPERATIONS]) {
+      expect(entry.action).toBe(operationAction(entry.operationId));
+    }
+    expect(DEFENDER_SUBSCRIPTION_ACTIONS.map((a) => a.action)).toEqual(
+      DEFENDER_SUBSCRIPTION_OPERATIONS.map((o) => o.action),
+    );
+    expect(DEFENDER_NAMESPACE_ACTIONS.map((a) => a.action)).toEqual(
+      DEFENDER_NAMESPACE_OPERATIONS.map((o) => o.action),
+    );
+  });
+
+  it("never exposes the operation id through the RequiredAction lists the preflight reads", () => {
+    for (const action of [...DEFENDER_SUBSCRIPTION_ACTIONS, ...DEFENDER_NAMESPACE_ACTIONS]) {
+      expect(action).not.toHaveProperty("operationId");
+    }
   });
 });

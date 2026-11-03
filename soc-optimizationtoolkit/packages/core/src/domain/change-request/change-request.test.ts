@@ -15,6 +15,7 @@ import {
   resourceCreationRequest,
   roleAssignmentRequest,
 } from "./index";
+import { privilegeOperation } from "../least-privilege";
 import type { ChangeRequestContext } from "./index";
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
 
@@ -192,19 +193,41 @@ describe("appRegistrationRequest", () => {
 });
 
 describe("roleAssignmentRequest role selection", () => {
-  it("existing: Reader + Monitoring/Log Analytics Contributor, no RBAC Administrator", () => {
+  it("existing: Reader + Monitoring/Log Analytics Contributor as the path's own roles, unchanged", () => {
     const out = roleAssignmentRequest(ctxFor("existing"));
-    expect(out).toContain("Reader at /subscriptions/33333333-3333-3333-3333-333333333333");
+    expect(out).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
     expect(out).toContain(
-      "Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab",
+      "- Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
     expect(out).toContain(
-      "Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab",
+      "- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
-    expect(out).not.toContain("RBAC Administrator");
-    expect(out).not.toContain("Constrain roles and principal types");
     // One justification line per role, and the SP named by client id.
     expect(out).toContain("client id: 11111111-1111-1111-1111-111111111111");
+  });
+
+  it("existing: also asks the subscription owner for the FEATURE roles, tagged (AZR-61 audit, medium)", () => {
+    // RE-PINNED: this ticket used to carry the setup path's roles only, while
+    // the app-registration ticket and the preflight both covered the feature
+    // roles - and Setup offers only this ticket to the subscription owner, so
+    // the gap the preflight reported was one no ticket asked to close.
+    const out = roleAssignmentRequest(ctxFor("existing"));
+    const rg = "/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab";
+    expect(out).toContain(`- RBAC Administrator at ${rg}  [feature]`);
+    expect(out).toContain(`- Microsoft Sentinel Contributor at ${rg}  [feature]`);
+    // The export goes into whichever resource group the operator picks in the
+    // Defender section, so the ticket names the configured one as the default
+    // and says the role is needed wherever the export lands (review finding).
+    expect(out).toContain(`- Security Admin at ${rg}`);
+    const grant = out.slice(out.indexOf(`- Security Admin at ${rg}`));
+    expect(grant.slice(0, grant.indexOf("[feature]"))).toContain("Defender section");
+    expect(out).toContain(
+      `- Azure Event Hubs Data Owner at ${privilegeOperation("eventhub.rule.listKeys").scopeNote}  [feature]`,
+    );
+    expect(out).toContain("Condition: Constrain roles and principal types: only Monitoring Metrics Publisher");
+    expect(out).toContain("[feature] roles each unlock one named capability");
+    // A justification per feature role too.
+    expect(out).toContain(`- Security Admin (${rg} (the default; `);
   });
 
   it("lab-new-rg: subscription Contributor + RBAC Administrator with the constraint condition", () => {
@@ -222,13 +245,17 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).not.toContain("Reader at");
   });
 
-  it("lab-byo-rg: Contributor on the pre-created RG only, no RBAC Administrator", () => {
+  it("lab-byo-rg: Contributor plus conditioned RBAC Administrator on the pre-created RG (AZR-61 audit)", () => {
+    // RE-PINNED: the lab assigns its TTL identity Contributor in both
+    // resource-group modes, so this path needs RBAC Administrator on its group.
     const out = roleAssignmentRequest(ctxFor("lab-byo-rg"));
+    const rg = "/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab";
+    expect(out).toContain(`- Contributor at ${rg}\n`);
+    expect(out).toContain(`- RBAC Administrator at ${rg}\n`);
     expect(out).toContain(
-      "Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab",
+      "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
-    expect(out).not.toContain("RBAC Administrator");
-    expect(out).not.toContain("Reader at");
+    expect(out).not.toContain("- Reader at");
   });
 
   it("embeds both the deploy and ingestion flows, and renders placeholders when blank", () => {
@@ -319,5 +346,26 @@ describe("byte-safety and determinism", () => {
     for (const gen of generators) {
       expect(gen(ctxFor("lab-new-rg"))).toBe(gen(ctxFor("lab-new-rg")));
     }
+  });
+});
+
+describe("AZR-61 - the app-registration ticket asks for what the audit found missing", () => {
+  it("asks for Event Hub listKeys on the namespace, and says Reader passes Validate without it", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("- Azure Event Hubs Data Owner  [feature]");
+    expect(out).toContain("    Scope:          the Event Hub namespace that holds the rule");
+    expect(out).toContain("listKeys");
+  });
+
+  it("asks for the Defender export's automation write on the resource group", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    expect(out).toContain("- Security Admin  [feature]");
+  });
+
+  it("asks a subscription-Contributor lab path for none of them", () => {
+    const out = appRegistrationRequest(ctxFor("lab-new-rg"));
+    expect(out).not.toContain("Azure Event Hubs Data Owner");
+    expect(out).not.toContain("Security Admin");
+    expect(out).not.toContain("Security Reader");
   });
 });

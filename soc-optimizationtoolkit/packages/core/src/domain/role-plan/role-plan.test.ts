@@ -4,13 +4,16 @@
  *   1. rolePlanForSetupPath returns the exact roles, scope levels, and
  *      conditions per path (lab-new-rg carries the RBAC Administrator entry with
  *      its condition + assignViaPortal; existing does not).
- *   2. CHARACTERIZATION: renderRoleAssignmentCli reproduces the setup wizard's
- *      legacy buildAzScript output BYTE-FOR-BYTE, for all three paths, with both
- *      all-blank params (placeholders appear) and filled params. The full
- *      expected strings are pinned so any drift fails.
+ *   2. CHARACTERIZATION: renderRoleAssignmentCli's command lines, for all
+ *      three paths, with all-blank params (placeholders appear) and filled
+ *      params. The existing path is pinned byte-for-byte. The lab paths' portal
+ *      comment block is built from the plan's portal row (AZR-61 review), so
+ *      it is pinned by what it must carry - the registry's role and the
+ *      condition - rather than by restating either.
  */
 import { describe, expect, it } from "vitest";
-import { renderRoleAssignmentCli, rolePlanForSetupPath } from "./index";
+import { LAB_RBAC_CONDITION, renderRoleAssignmentCli, rolePlanForSetupPath } from "./index";
+import { leastRoleFor } from "../least-privilege";
 import type { RoleAssignmentCliParams } from "./index";
 
 const BLANK: RoleAssignmentCliParams = {
@@ -114,22 +117,53 @@ describe("rolePlanForSetupPath", () => {
     );
   });
 
-  it("returns the single lab-byo-rg resource-group Contributor role", () => {
+  it("returns the lab-byo-rg resource-group Contributor role, then RBAC Administrator for the TTL grant", () => {
+    // AZR-61 audit (medium): the foundation phase assigns the TTL identity
+    // Contributor in BOTH resource-group modes (foundation-phase.ts), and a
+    // failed assignment aborts the deploy. The plan used to say the app could
+    // not assign roles on this path; it does, every time.
     expect(rolePlanForSetupPath("lab-byo-rg")).toEqual([
       {
         role: "Contributor",
         scopeLevel: "resourceGroup",
         justification:
-          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group; no subscription-scope rights are needed.",
+          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it: the Event Grid provider registration (subscription) and the regional Network Watcher (NetworkWatcherRG) need rights there, or an admin who registers the provider and creates the watcher first.",
         feature: "Deploy the lab environment",
         withoutIt:
           "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
       },
+      {
+        role: "RBAC Administrator",
+        scopeLevel: "resourceGroup",
+        justification:
+          "Assign the lab TTL self-destruct identity its delete role on the lab resource group at deploy time.",
+        condition:
+          "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
+        assignViaPortal: true,
+        feature: "Lab TTL self-destruct",
+        withoutIt:
+          "The deploy stops at the TTL step: a lab with no working self-destruct is never left running.",
+      },
     ]);
+  });
+
+  it("reads every role name it can from the least-privilege registry (AZR-61)", () => {
+    // The existing path asks for one least role per job; the two lab umbrella
+    // grants (Contributor) are the one deliberate exception, documented in
+    // rolePlanForSetupPath.
+    expect(rolePlanForSetupPath("existing").map((r) => r.role)).toEqual([
+      leastRoleFor("subscriptions.list"),
+      leastRoleFor("dcr.write"),
+      leastRoleFor("table.write"),
+    ]);
+    for (const path of ["lab-new-rg", "lab-byo-rg"] as const) {
+      const rbac = rolePlanForSetupPath(path).find((r) => r.assignViaPortal === true);
+      expect(rbac?.role, path).toBe(leastRoleFor("lab.roleAssignment.write"));
+    }
   });
 });
 
-describe("renderRoleAssignmentCli - characterization (byte-for-byte with legacy buildAzScript)", () => {
+describe("renderRoleAssignmentCli - characterization", () => {
   it("existing, all-blank params -> placeholders", () => {
     expect(renderRoleAssignmentCli("existing", BLANK)).toBe(
       [
@@ -152,57 +186,61 @@ describe("renderRoleAssignmentCli - characterization (byte-for-byte with legacy 
     );
   });
 
-  it("lab-new-rg, all-blank params -> placeholders, RBAC Administrator not emitted as a command", () => {
-    expect(renderRoleAssignmentCli("lab-new-rg", BLANK)).toBe(
-      [
-        "# Lab creates its own resource group and workspace: subscription Contributor",
-        "# covers RG creation plus all workspace/DCR operations inside the lab, so no",
-        "# workspace-scoped roles are needed on this path.",
-        'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>',
-        "# Assign RBAC Administrator via the Azure portal so you can add the condition",
-        '# "Constrain roles and principal types": only Contributor and Monitoring',
-        "# Metrics Publisher, only to service principals (the lab TTL self-destruct",
-        "# assigns its delete role at deploy time).",
-      ].join("\n"),
-    );
+  /** The comment lines of a script, unwrapped into one string. */
+  const commentText = (cli: string): string =>
+    cli
+      .split("\n")
+      .filter((line) => line.startsWith("#"))
+      .map((line) => line.replace(/^# ?/, ""))
+      .join(" ");
+  const commandLines = (cli: string): string[] => cli.split("\n").filter((line) => !line.startsWith("#"));
+
+  it("lab-new-rg: one Contributor command; the RBAC Administrator grant is a portal comment, never a command", () => {
+    expect(commandLines(renderRoleAssignmentCli("lab-new-rg", BLANK))).toEqual([
+      'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>',
+    ]);
+    expect(commandLines(renderRoleAssignmentCli("lab-new-rg", FILLED))).toEqual([
+      'az role assignment create --assignee CID --role "Contributor" --scope /subscriptions/SUB',
+    ]);
   });
 
-  it("lab-new-rg, filled params", () => {
-    expect(renderRoleAssignmentCli("lab-new-rg", FILLED)).toBe(
-      [
-        "# Lab creates its own resource group and workspace: subscription Contributor",
-        "# covers RG creation plus all workspace/DCR operations inside the lab, so no",
-        "# workspace-scoped roles are needed on this path.",
-        'az role assignment create --assignee CID --role "Contributor" --scope /subscriptions/SUB',
-        "# Assign RBAC Administrator via the Azure portal so you can add the condition",
-        '# "Constrain roles and principal types": only Contributor and Monitoring',
-        "# Metrics Publisher, only to service principals (the lab TTL self-destruct",
-        "# assigns its delete role at deploy time).",
-      ].join("\n"),
-    );
+  it("lab-byo-rg: one resource-group Contributor command; the RBAC Administrator grant is a portal comment", () => {
+    expect(commandLines(renderRoleAssignmentCli("lab-byo-rg", BLANK))).toEqual([
+      'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<labRg>',
+    ]);
+    expect(commandLines(renderRoleAssignmentCli("lab-byo-rg", FILLED))).toEqual([
+      'az role assignment create --assignee CID --role "Contributor" --scope /subscriptions/SUB/resourceGroups/RG',
+    ]);
   });
 
-  it("lab-byo-rg, all-blank params -> placeholders", () => {
-    expect(renderRoleAssignmentCli("lab-byo-rg", BLANK)).toBe(
-      [
-        "# Pre-created lab resource group: least privilege for labs; the lab deploys",
-        "# its workspace and resources into this RG with no subscription-scope rights.",
-        'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<labRg>',
-        "# An admin must pre-assign the TTL self-destruct identity its delete rights",
-        "# on this resource group (the app cannot assign roles on this path).",
-      ].join("\n"),
-    );
+  it("names the portal grant by the registry's role and the plan's condition, on both lab paths", () => {
+    // Found by review (AZR-61): the comment block restated "RBAC Administrator"
+    // and the condition word for word, and it is the only place the script
+    // names that grant - a registry or condition change would have left the
+    // script Setup hands out asking for the old one.
+    for (const path of ["lab-new-rg", "lab-byo-rg"] as const) {
+      const text = commentText(renderRoleAssignmentCli(path, FILLED));
+      expect(text, path).toContain(`Assign ${leastRoleFor("lab.roleAssignment.write")} `);
+      expect(text, path).toContain(`"${LAB_RBAC_CONDITION}"`);
+      expect(text, path).toContain("Azure portal");
+    }
   });
 
-  it("lab-byo-rg, filled params", () => {
-    expect(renderRoleAssignmentCli("lab-byo-rg", FILLED)).toBe(
-      [
-        "# Pre-created lab resource group: least privilege for labs; the lab deploys",
-        "# its workspace and resources into this RG with no subscription-scope rights.",
-        'az role assignment create --assignee CID --role "Contributor" --scope /subscriptions/SUB/resourceGroups/RG',
-        "# An admin must pre-assign the TTL self-destruct identity its delete rights",
-        "# on this resource group (the app cannot assign roles on this path).",
-      ].join("\n"),
-    );
+  it("keeps every script line within 80 columns except the az commands", () => {
+    for (const path of ["lab-new-rg", "lab-byo-rg"] as const) {
+      for (const line of renderRoleAssignmentCli(path, FILLED).split("\n").filter((l) => l.startsWith("#"))) {
+        expect(line.length, line).toBeLessThanOrEqual(80);
+      }
+    }
+  });
+
+  it("never tells a byo-lab operator that no subscription-scope rights are needed", () => {
+    // AZR-61 audit discrepancy 7: labs register the Event Grid provider at
+    // the subscription and reach NetworkWatcherRG, and the path's own
+    // app-permission plan asks for subscription-scope feature roles.
+    expect(commentText(renderRoleAssignmentCli("lab-byo-rg", FILLED))).not.toMatch(/no subscription-scope/i);
+    for (const req of rolePlanForSetupPath("lab-byo-rg")) {
+      expect(req.justification).not.toMatch(/no subscription-scope/i);
+    }
   });
 });

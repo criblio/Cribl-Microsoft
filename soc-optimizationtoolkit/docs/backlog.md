@@ -1305,6 +1305,25 @@ performs, each Azure ARM / Graph / Cribl call behind it, and the least role
 or permission at the narrowest scope that allows it, as ONE registry the
 change-request generators and the permission checks read, never restated.
 
+**What the audit found, and where each finding went.** The audit's 24
+comparison discrepancies are each either worked by a card or kept on purpose
+with the reason stated in code; the full map is a pin
+(`least-privilege/discrepancies.test.ts`), so a re-run audit with a new
+finding fails until someone disposes of it. Cards: AZR-75 (listKeys asked
+nowhere), AZR-76 (Defender export actions measured, never asked), AZR-62
+(single-tenant tickets), AZR-77 (role ticket missing the feature roles),
+AZR-78 (byo lab TTL grant), AZR-79 (byo RG tag PATCH unchecked), AZR-80 and
+AZR-87 (How-to rbac lines), AZR-81 (byo lab reaches outside its RG), AZR-82
+(management-group and tenant reads), AZR-83 (Cribl probes and policies.yml),
+AZR-84 (cross-scope Azure Monitor and Event Hub targets), AZR-85 (Log
+Analytics Contributor wider than the workspace), AZR-86 (unmeasured content,
+Graph and Defender checks), AZR-88 (Event Hub tier in the resource ticket),
+AZR-89 (TTL identity over-granted). Kept on purpose: `deployments/write` in
+the preflight (the only measure of `arm.deploy` today) and the
+`onboardingStates/write` label (changes when the narrower grant is measured
+live). AZR-75..80 were filed as AZR-67..72 and renumbered before merging,
+because feature/azure-onboarding-live-pass already uses AZR-66 and AZR-67.
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked

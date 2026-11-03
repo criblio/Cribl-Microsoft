@@ -221,16 +221,31 @@ describe("evaluateScopeLines", () => {
     // breadth minus Microsoft.Authorization: every core action granted, the DCR
     // ingestion grant denied. Reporting that as MISSING would tell an operator
     // who can deploy that they cannot.
+    //
+    // RE-PINNED (AZR-61): this used lab-byo-rg, whose role assignment is CORE
+    // now (the lab assigns its TTL identity Contributor in both resource-group
+    // modes), so existing-rg is the path where the grant is still optional.
+    const body = {
+      value: [
+        { actions: ["*"], notActions: ["Microsoft.Authorization/*/Write"] },
+      ],
+    };
+    const lines = evaluateScopeLines("RG scope", 200, body, REQUIRED_ACTIONS["existing-rg"]);
+    expect(lines[0]).toBe(
+      "RG scope: all required actions granted; 1 optional action(s) missing",
+    );
+    expect(lines.some((l) => l.startsWith("  [optional]"))).toBe(true);
+  });
+
+  it("calls a bring-your-own lab scope BLOCKED when it cannot assign the TTL role (AZR-61)", () => {
     const body = {
       value: [
         { actions: ["*"], notActions: ["Microsoft.Authorization/*/Write"] },
       ],
     };
     const lines = evaluateScopeLines("RG scope", 200, body, required);
-    expect(lines[0]).toBe(
-      "RG scope: all required actions granted; 1 optional action(s) missing",
-    );
-    expect(lines.some((l) => l.startsWith("  [optional]"))).toBe(true);
+    expect(lines[0]).not.toContain("all required actions granted");
+    expect(lines.some((l) => l.startsWith("  [missing]"))).toBe(true);
   });
 
   it("renders actionable 401/403 messages and surfaces surprising shapes", () => {

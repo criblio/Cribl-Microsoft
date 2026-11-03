@@ -33,51 +33,69 @@
  * listKeys IS NEVER PROBED. A probe of it would succeed by returning a SAS key
  * into the iframe. It can only ever be established from effective actions.
  *
- * Inferred from Azure's built-in roles, not from this repository (verify live):
- * Security Admin covers the subscription list but not listKeys, which needs
- * Contributor or an equivalent on the namespace. Legacy asked for the same
- * pair (Deploy-DefenderExport.ps1:24-26).
+ * The least roles are the least-privilege registry's (AZR-61): Security Admin
+ * for the automation write on its resource group, Security Reader for the
+ * subscription reads, and Azure Event Hubs Data Owner - not Contributor, as
+ * this comment used to say - for listKeys on the namespace. Legacy asked for
+ * Security Admin plus Contributor (Deploy-DefenderExport.ps1:24-26).
+ *
+ * Every action string here is READ from the registry: each entry names the
+ * registry operation it comes from, so the How-to can also read that
+ * operation's scope (the automation write lands on a resource group, not the
+ * subscription).
  *
  * Pure: data only.
  */
 
 import type { RequiredAction } from "../azure-permissions/azure-permissions";
+import { operationAction } from "../least-privilege";
+import type { OperationId } from "../least-privilege";
 
 // Named so capability-mapping can key on them without restating the strings.
 /** Read which Defender plans are on (defender-plans). */
-export const DEFENDER_PRICINGS_READ = "Microsoft.Security/pricings/read";
+export const DEFENDER_PRICINGS_READ = operationAction("defender.pricings.read");
 /** List the subscription's continuous exports (defender-automation). */
-export const DEFENDER_AUTOMATIONS_READ = "Microsoft.Security/automations/read";
+export const DEFENDER_AUTOMATIONS_READ = operationAction("defender.automations.list");
 /** Create the continuous export (defender-automation). */
-export const DEFENDER_AUTOMATIONS_WRITE = "Microsoft.Security/automations/write";
+export const DEFENDER_AUTOMATIONS_WRITE = operationAction("defender.automation.write");
 
-/** Actions at the SUBSCRIPTION the export watches. */
-export const DEFENDER_SUBSCRIPTION_ACTIONS: readonly RequiredAction[] = [
-  {
-    action: DEFENDER_PRICINGS_READ,
-    label: "Read which Defender plans are enabled",
-    necessity: "feature",
-  },
-  {
-    action: DEFENDER_AUTOMATIONS_READ,
-    label: "List the subscription's continuous exports",
-    necessity: "feature",
-  },
-  {
-    action: DEFENDER_AUTOMATIONS_WRITE,
-    label: "Create the continuous export",
-    necessity: "feature",
-  },
+/** One Defender action and the registry operation it is read from. */
+export interface DefenderOperation extends RequiredAction {
+  readonly operationId: OperationId;
+}
+
+function defenderAction(operationId: OperationId, label: string): DefenderOperation {
+  return { operationId, action: operationAction(operationId), label, necessity: "feature" };
+}
+
+/** The subscription list, with each entry's registry operation (for its scope). */
+export const DEFENDER_SUBSCRIPTION_OPERATIONS: readonly DefenderOperation[] = [
+  defenderAction("defender.pricings.read", "Read which Defender plans are enabled"),
+  defenderAction("defender.automations.list", "List the subscription's continuous exports"),
+  defenderAction("defender.automation.write", "Create the continuous export"),
 ];
+
+/** The namespace list, with each entry's registry operation. */
+export const DEFENDER_NAMESPACE_OPERATIONS: readonly DefenderOperation[] = [
+  defenderAction("eventhub.rule.listKeys", "Read the connection string of the chosen Event Hub rule"),
+];
+
+/** Drop the registry key: the preflight's lists are plain RequiredActions. */
+function asRequired({ action, label, necessity }: DefenderOperation): RequiredAction {
+  return necessity === undefined ? { action, label } : { action, label, necessity };
+}
+
+/**
+ * Actions checked at the SUBSCRIPTION evaluation. The automation write lives
+ * in a resource group below it, which is why capability-mapping treats it as
+ * grant-only.
+ */
+export const DEFENDER_SUBSCRIPTION_ACTIONS: readonly RequiredAction[] =
+  DEFENDER_SUBSCRIPTION_OPERATIONS.map(asRequired);
 
 /** Actions on the Event Hub NAMESPACE the export sends to. */
-export const DEFENDER_NAMESPACE_ACTIONS: readonly RequiredAction[] = [
-  {
-    action: "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action",
-    label: "Read the connection string of the chosen Event Hub rule",
-    necessity: "feature",
-  },
-];
+export const DEFENDER_NAMESPACE_ACTIONS: readonly RequiredAction[] =
+  DEFENDER_NAMESPACE_OPERATIONS.map(asRequired);
 
 /**
  * The line shown above both lists. Visible copy: no card ids, dates or phases.
