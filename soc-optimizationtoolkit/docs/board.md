@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**98 in the backlog, 35 in progress, 134 done.**
+**97 in the backlog, 36 in progress, 134 done.**
 
 ## By menu item
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1115,9 +1115,29 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
+- **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The Listen rule picker offers every
+  rule that can Listen, including RootManageSharedAccessKey (Listen, Manage,
+  Send), with no warning; on a namespace whose only rule is Root it is the
+  only choice. listKeys then stores that key as a Cribl text secret, so anyone
+  who can read secrets in the worker group holds MANAGE on the whole namespace
+  (reconfigure, delete, mint keys), not read on one hub. The Send picker for
+  the Defender export already warns that a dedicated rule is safer; the Listen
+  side does not. OPERATOR DECISION 2026-11-03: offer both Entra ID OAuth
+  (default, [[AZR-59]]) and a Listen-only SAS rule (fallback); a
+  Manage-capable rule is REFUSED for the Cribl source in both modes. FIX (this
+  card, the quick half): the Listen picker lists only rules that can Listen
+  without Manage (Send-and-Listen allowed but warned), and the plan refuses a
+  Manage-capable rule or pasted connection string by key name, naming the
+  safer rule to create. Pin with ruleCanManage. Nothing was written: the armed
+  confirm was cancelled. Reasoning in backlog.md section 6h-i.
+
 ---
 
-## Backlog - now (16)
+## Backlog - now (15)
 
 Next to pick up. Nothing blocks these.
 
@@ -1375,26 +1395,6 @@ Next to pick up. Nothing blocks these.
   How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
   also refuses; the confirm names the consumer group. Pin both refusals and
   the confirm line.
-
-- **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. The Listen rule picker offers every
-  rule that can Listen, including RootManageSharedAccessKey (Listen, Manage,
-  Send), with no warning; on a namespace whose only rule is Root it is the
-  only choice. listKeys then stores that key as a Cribl text secret, so anyone
-  who can read secrets in the worker group holds MANAGE on the whole namespace
-  (reconfigure, delete, mint keys), not read on one hub. The Send picker for
-  the Defender export already warns that a dedicated rule is safer; the Listen
-  side does not. OPERATOR DECISION 2026-11-03: offer both Entra ID OAuth
-  (default, [[AZR-59]]) and a Listen-only SAS rule (fallback); a
-  Manage-capable rule is REFUSED for the Cribl source in both modes. FIX (this
-  card, the quick half): the Listen picker lists only rules that can Listen
-  without Manage (Send-and-Listen allowed but warned), and the plan refuses a
-  Manage-capable rule or pasted connection string by key name, naming the
-  safer rule to create. Pin with ruleCanManage. Nothing was written: the armed
-  confirm was cancelled. Reasoning in backlog.md section 6h-i.
 
 - **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
   `AZR-F9` `story` `settled`
