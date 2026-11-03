@@ -36,6 +36,7 @@ import type { ReactNode } from "react";
 import { patPolicyFor } from "@soc/core";
 import type {
   ContentPlatform,
+  JourneyFacts,
   LeaderProfileStore,
   WizardCapabilities,
   WizardPhase,
@@ -45,13 +46,19 @@ import type {
 import { AuaGate } from "../../frame/aua-gate";
 import { RepositoriesScreen } from "../repositories/repositories-screen";
 import { InfoTip } from "../../components/info-tip";
+import { SectionFoldScope } from "../../components/section-folding/section-fold-scope";
+import { useFoldScopeFolding } from "../../components/section-folding/use-fold-scope-folding";
 import { LeaderConnectStep } from "./leader-connect-step";
 import type { AppliedReconnect } from "./leader-connect-step";
 import { TargetChooser } from "./target-chooser";
 import { UploadWalkthroughStep } from "./upload-walkthrough-step";
 import {
+  WIZARD_PIN_PREFIX,
+  WIZARD_SECTION_IDS,
+  azureStepCurrent,
   deriveFooterStatus,
   deriveGetStarted,
+  githubStepCurrent,
   isFinalView,
   isFirstView,
   nextViewId,
@@ -130,6 +137,13 @@ export interface SetupWizardProps {
   repositoriesReachable?: boolean;
   /** DBT-246: forwarded to the GitHub step's RepositoriesScreen (token saved or cleared). */
   onTokenStatusChange?: (present: boolean) => void;
+  /**
+   * DBT-248: the journey facts the Setup page folds by. With them, the sections
+   * inside the GitHub and Connect Azure steps open collapsed - only the one
+   * that needs the operator is open - and fold as the operator moves on, like
+   * Setup. Absent = the sections render open and unfolded, as before.
+   */
+  foldFacts?: JourneyFacts;
   /** Fully-explicit footer signals; overrides the capability-derived defaults. */
   footerOverride?: WizardFooterInput;
   /** Finish the wizard and enter the app. */
@@ -165,6 +179,7 @@ export function SetupWizard(props: SetupWizardProps) {
     uploadArtifactName,
     repositoriesReachable = false,
     onTokenStatusChange,
+    foldFacts,
     footerOverride,
     onGetStarted,
     accepted,
@@ -293,12 +308,12 @@ export function SetupWizard(props: SetupWizardProps) {
             />
           )}
           {currentViewId === "connect-azure" && (
-            <>
+            <AzureSections foldFacts={foldFacts}>
               <AzureConnectStep />
               {azureConnectivitySection}
               {azureConnectSection}
               {azureResourcesSection}
-            </>
+            </AzureSections>
           )}
           {currentViewId === "repositories" && (
             <div className="wizard-step">
@@ -311,10 +326,12 @@ export function SetupWizard(props: SetupWizardProps) {
                 and installing a Cribl pack. None of that touches Azure. You can
                 add or replace the token later from Repositories.
               </p>
-              <RepositoriesScreen
-                platform={contentPlatform}
-                {...(onTokenStatusChange !== undefined ? { onTokenStatusChange } : {})}
-              />
+              <GithubSections foldFacts={foldFacts}>
+                <RepositoriesScreen
+                  platform={contentPlatform}
+                  {...(onTokenStatusChange !== undefined ? { onTokenStatusChange } : {})}
+                />
+              </GithubSections>
             </div>
           )}
         </div>
@@ -410,5 +427,41 @@ function AzureConnectStep() {
         />
       </p>
     </div>
+  );
+}
+
+/**
+ * The fold scope of one wizard step (DBT-248). Each step mounts its own, fresh,
+ * so moving between steps is not a fold event. Without facts there is no scope
+ * and the step's sections render as they always did.
+ */
+function GithubSections({ foldFacts, children }: { foldFacts: JourneyFacts | undefined; children: ReactNode }) {
+  if (foldFacts === undefined) return <>{children}</>;
+  return (
+    <StepFoldScope currentId={githubStepCurrent(foldFacts)}>
+      {children}
+    </StepFoldScope>
+  );
+}
+
+function AzureSections({ foldFacts, children }: { foldFacts: JourneyFacts | undefined; children: ReactNode }) {
+  if (foldFacts === undefined) return <>{children}</>;
+  return (
+    <StepFoldScope currentId={azureStepCurrent(foldFacts)}>
+      {children}
+    </StepFoldScope>
+  );
+}
+
+function StepFoldScope({ currentId, children }: { currentId: string | undefined; children: ReactNode }) {
+  const { folding, setBusy } = useFoldScopeFolding({
+    ids: WIZARD_SECTION_IDS,
+    currentId,
+    pinPrefix: WIZARD_PIN_PREFIX,
+  });
+  return (
+    <SectionFoldScope folding={folding} currentId={currentId} setBusy={setBusy}>
+      {children}
+    </SectionFoldScope>
   );
 }

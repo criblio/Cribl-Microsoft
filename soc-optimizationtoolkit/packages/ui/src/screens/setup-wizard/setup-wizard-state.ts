@@ -43,11 +43,13 @@
 import {
   deriveCloudBaseUrl,
   deriveSelfManagedBaseUrl,
+  nextAction,
   wizardProgress,
   wizardSteps,
 } from "@soc/core";
 import type {
   BaseUrlResult,
+  JourneyFacts,
   LeaderDeploymentType,
   WizardPhase,
   WizardSegment,
@@ -55,6 +57,7 @@ import type {
   WizardStepId,
   WizardTarget,
 } from "@soc/core";
+import { sectionForStage } from "../home/home-state";
 
 // ---------------------------------------------------------------------------
 // Concrete screen (view) list
@@ -399,4 +402,42 @@ export function deriveLeaderBaseUrl(
     address: input.address,
     port: input.port,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Folding (DBT-248): each wizard step that hosts sections folds like Setup.
+// ---------------------------------------------------------------------------
+
+/** Content-cache key prefix of the wizard's pins (shared by both steps; ids never collide). */
+export const WIZARD_PIN_PREFIX = "wizard-pinned-sections";
+
+/**
+ * Every section either step hosts, in page order. BOTH steps fold over the
+ * whole list: they share one stored pin list, and a step that only knew its
+ * own ids would overwrite the other step's pins when it saved. Ids a step does
+ * not render are folded and invisible.
+ */
+export const WIZARD_SECTION_IDS: readonly string[] = [
+  "azure-connectivity",
+  "azure-connect",
+  "azure-resources",
+  "github-token",
+  "sentinel-content",
+  "schema-tables",
+];
+
+/** The GitHub step's current section: the token, until one is saved. Unknown (not read yet) is not "none saved". */
+export function githubStepCurrent(facts: JourneyFacts): string | undefined {
+  return facts.tokenPresent === false ? "github-token" : undefined;
+}
+
+/**
+ * The Connect Azure step's current section, by the journey's own rules:
+ * connect while the identity or secret is missing, then the target while the
+ * choice needs one. Disconnected needs neither. The GitHub and accept stages
+ * are behind this step, so they are held satisfied here.
+ */
+export function azureStepCurrent(facts: JourneyFacts): string | undefined {
+  const action = nextAction({ ...facts, accepted: true, tokenPresent: true });
+  return action === null ? undefined : sectionForStage(action.stageId);
 }

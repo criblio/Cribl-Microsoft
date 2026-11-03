@@ -30,7 +30,7 @@
  * ports context.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { deriveJourney, readinessChips } from "@soc/core";
 import type { JourneyFacts } from "@soc/core";
@@ -40,7 +40,7 @@ import { RecentRuns } from "../../onboarding/recent-runs";
 import { NumberedSection } from "../../components/numbered-section";
 import { sectionFoldProps } from "../../components/section-folding/section-fold-context";
 import { SectionFoldScope } from "../../components/section-folding/section-fold-scope";
-import { useSectionFolding } from "../../components/section-folding/use-section-folding";
+import { useFoldScopeFolding } from "../../components/section-folding/use-fold-scope-folding";
 import {
   NO_ACTION_FALLBACK,
   SETUP_PIN_PREFIX,
@@ -96,21 +96,10 @@ export function HomeScreen({
   // is not in the list: it is the page's focus and never folds.
   // Sections report a long operation in flight (Save and connect, discovery,
   // a Refresh check); those stay open when the operator moves elsewhere.
-  const [busy, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
-  const setBusy = useCallback((id: string, isBusy: boolean) => {
-    setBusyIds((prev) => {
-      if (prev.has(id) === isBusy) return prev;
-      const next = new Set(prev);
-      if (isBusy) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
   const currentId = currentSetupSection(action);
-  const folding = useSectionFolding({
+  const { folding, setBusy } = useFoldScopeFolding({
     ids: SETUP_SECTION_IDS,
     currentId,
-    keepOpen: busy,
     pinPrefix: SETUP_PIN_PREFIX,
     anchorFor: setupAnchorFor,
   });

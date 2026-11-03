@@ -131,11 +131,15 @@ export function AzureResourcesSection({
   const setupPath = effectiveSetupPath(connectivity, savedSetupPath);
   const [stored, setStored] = useState("checking stored credentials...");
   const [validating, setValidating] = useState(false);
+  // Failure flags for the two operations that report into text areas: a folded
+  // section reopens on their false -> true edge (DBT-248).
+  const [recheckFailed, setRecheckFailed] = useState(false);
+  const [dependentFailed, setDependentFailed] = useState(false);
   const [scriptFeedback, setScriptFeedback] = useState("");
   const [discoverStatus, discoverOutput, runDiscover] = useRunner();
   useSectionRunState(RESOURCES_SECTION_ID, {
     busy: discoverStatus === "running" || validating,
-    failed: discoverStatus === "failed",
+    failed: discoverStatus === "failed" || recheckFailed || dependentFailed,
   });
 
   // Resource discovery state. Each list is null until its query has run; an
@@ -157,6 +161,7 @@ export function AzureResourcesSection({
     async (sub: string, path: AzureSetupPath) => {
       setWorkspaces(null);
       setResourceGroups(null);
+      setDependentFailed(false);
       if (sub === "") {
         setDependentStatus("");
         return;
@@ -196,6 +201,12 @@ export function AzureResourcesSection({
       ]);
 
       const notes: string[] = [];
+      setDependentFailed(
+        wsOutcome.status === "rejected" ||
+          !is2xx(wsOutcome.value.status) ||
+          rgOutcome.status === "rejected" ||
+          !is2xx(rgOutcome.value.status),
+      );
 
       if (wsOutcome.status === "rejected") {
         notes.push(`Workspace discovery error: ${String(wsOutcome.reason)}`);
@@ -362,6 +373,7 @@ export function AzureResourcesSection({
   // selected setup path uses. Token freshness is the adapter's job.
   const recheckAndValidate = useCallback(async () => {
     setValidating(true);
+    setRecheckFailed(false);
     try {
       const report = await buildKvReport();
       const baseLines = report.lines;
@@ -388,10 +400,12 @@ export function AzureResourcesSection({
         }
       } catch (err) {
         validationLines.push(`Permission validation error: ${String(err)}`);
+        setRecheckFailed(true);
       }
       setStored([...baseLines, "", "Permission validation:", ...validationLines].join("\n"));
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
+      setRecheckFailed(true);
     } finally {
       setValidating(false);
     }

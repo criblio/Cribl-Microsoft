@@ -1531,45 +1531,6 @@ function App() {
     />
   );
 
-  if (phase.phase === 'aua' || phase.phase === 'setup') {
-    return (
-      <PortsProvider {...portsProviderProps}>
-        <SetupWizard
-          capabilities={{
-            // Cribl is reachable BY CONSTRUCTION here: the app is served by the
-            // workspace it would talk to. The consolidated platform-link poll is
-            // the honest live signal, and 'checking...' must not read as a
-            // failure, so an unresolved poll counts as connected.
-            hasCribl: criblReachableUnlessFailed(platformLink),
-            hasAzure:
-              activeConfig.tenantId.trim() !== '' &&
-              activeConfig.clientId.trim() !== '',
-          }}
-          initialTarget="cribl-hosted"
-          lockTarget
-          // This page only renders because the app is already installed in the
-          // leader, so "where should the toolkit run?" and the .tgz upload
-          // walkthrough are both answered already (user report 2026-08-03).
-          // The cloud first run is Connect GitHub -> Connect Azure, then Get
-          // Started: only steps that can still be acted on.
-          installedInLeader
-          contentPlatform="cloud"
-          azureConnectivitySection={azureConnectivityElement}
-          azureConnectSection={azureConnectElement}
-          azureResourcesSection={azureResourcesElement}
-          onTokenStatusChange={handleTokenStatusChange}
-          accepted={phase.phase !== 'aua'}
-          onAccept={handleAccept}
-          // The wizard no longer produces a mode (capability-model-plan step
-          // 5). 'full' is what the plan says the app always runs as; the entry
-          // survives only as the "setup complete" signal until slice 3 deletes
-          // appMode outright.
-          onGetStarted={handleSetupComplete}
-        />
-      </PortsProvider>
-    );
-  }
-
   // The journey readiness FACTS (ux-flow-plan 4.1, Unit 6.5), composed from
   // signals this shell already owns - nothing new is probed. The split
   // replaces the conflated five-field gate: identity (tenant + client ids on
@@ -1610,6 +1571,46 @@ function App() {
     tokenRequired: patPolicyFor('cloud').required,
     tokenPresent,
   };
+
+  if (phase.phase === 'aua' || phase.phase === 'setup') {
+    return (
+      <PortsProvider {...portsProviderProps}>
+        <SetupWizard
+          capabilities={{
+            // Cribl is reachable BY CONSTRUCTION here: the app is served by the
+            // workspace it would talk to. The consolidated platform-link poll is
+            // the honest live signal, and 'checking...' must not read as a
+            // failure, so an unresolved poll counts as connected.
+            hasCribl: criblReachableUnlessFailed(platformLink),
+            hasAzure:
+              activeConfig.tenantId.trim() !== '' &&
+              activeConfig.clientId.trim() !== '',
+          }}
+          initialTarget="cribl-hosted"
+          lockTarget
+          // This page only renders because the app is already installed in the
+          // leader, so "where should the toolkit run?" and the .tgz upload
+          // walkthrough are both answered already (user report 2026-08-03).
+          // The cloud first run is Connect GitHub -> Connect Azure, then Get
+          // Started: only steps that can still be acted on.
+          installedInLeader
+          contentPlatform="cloud"
+          azureConnectivitySection={azureConnectivityElement}
+          azureConnectSection={azureConnectElement}
+          azureResourcesSection={azureResourcesElement}
+          onTokenStatusChange={handleTokenStatusChange}
+          foldFacts={journeyFacts}
+          accepted={phase.phase !== 'aua'}
+          onAccept={handleAccept}
+          // The wizard no longer produces a mode (capability-model-plan step
+          // 5). 'full' is what the plan says the app always runs as; the entry
+          // survives only as the "setup complete" signal until slice 3 deletes
+          // appMode outright.
+          onGetStarted={handleSetupComplete}
+        />
+      </PortsProvider>
+    );
+  }
 
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
   // speculative "not entered this session" warning): null while the secret
