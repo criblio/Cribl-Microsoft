@@ -514,7 +514,7 @@ function assemble(
     if (!eligibleKnown) return "Cross-check skipped: eligible volume not read (or only partly read).";
     if (!benefitComplete) {
       return benefit.unreadableRows > 0
-        ? "Cross-check skipped: some benefit rows (Operation) could not be read, so the applied figures are incomplete."
+        ? "Cross-check skipped: some benefit amount(s) could not be read, so the applied figures are incomplete."
         : "Cross-check skipped: the benefit read (Operation) was partial, so the applied figures are incomplete.";
     }
     if (pooledMode) {

@@ -903,7 +903,7 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
     expect(r.usedIsFloor).toBe(true);
     expect(view(r, "e5").crossCheck).toEqual({
       kind: "skipped",
-      reason: expect.stringMatching(/benefit rows \(Operation\) could not be read/),
+      reason: "Cross-check skipped: some benefit amount(s) could not be read, so the applied figures are incomplete.",
     });
   });
 
