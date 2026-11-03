@@ -1,7 +1,6 @@
 # Data allowances on the workspace inventory
 
-Status: Proposed - design agreed in brainstorming 2026-11-03; not built.
-Last-confirmed: 2026-11-03
+Status: Living - built on feature/data-volume-inventory (MIG-10..20, PR #198) and seen in Live Preview 2026-11-03; MIG-17 (benefit strings and bases) still open.
 
 ## Intent
 
@@ -78,9 +77,9 @@ page.
 
 ## What the operator sees (agreed: mockup option A with drill-down)
 
-On the Data Volume Inventory page (the panel now at
-`packages/ui/src/screens/siem-migration/workspace-inventory-panel.tsx`, moved
-by the first task):
+On the Data Volume Inventory page
+(`packages/ui/src/screens/data-volume-inventory/workspace-inventory-panel.tsx`,
+moved out of SIEM Migration by MIG-10):
 
 1. **Stat row** gains `daily billable after allowances` beside the existing
    `daily average, billable`.
@@ -187,8 +186,12 @@ These are the designer's calls, not the user's; each is cheap to reverse.
    tables; an eligible table not on Analytics is flagged "grant may not apply on
    this plan" rather than modelled.
 6. **More than one Sentinel workspace in the tenant** - USER DECISION
-   2026-11-03: the operator chooses. By default the cards cover the
-   inventoried workspace: Used and Over are exact for it, Granted is labelled
+   2026-11-03: the operator chooses. This rule is about the E5 grant only,
+   which is the one grant shared across the tenant; Servers P2 is summed per
+   subscription and applied at the workspace, so its card carries no
+   shared-workspace label and its cross-check is not skipped for the workspace
+   count (MIG-19, found in Live Preview). By default the cards cover the
+   inventoried workspace: Used and Over are exact for it, E5 Granted is labelled
    "tenant-wide, shared across N Sentinel workspaces" (N from the existing
    workspace discovery, which already counts Sentinel-enabled workspaces), and
    the cross-check is skipped with that reason; so are the E5 headroom and
@@ -203,15 +206,23 @@ These are the designer's calls, not the user's; each is cheap to reverse.
    workspace, so a day capped in the tenant sum may be one workspace running
    out. The Servers P2 cross-check runs on a single workspace only.
 
-## Open, for the builder to confirm live (Live Preview, a workspace with benefits)
+## Open, to confirm on a workspace that receives a benefit (MIG-17)
 
-1. Pricings readable with the roles the app already holds
-   (`Microsoft.Security/pricings/read`). If not, add a feature-level role entry
-   rather than widening an existing one.
+Measured 2026-11-03 on the lab tenant (80 workspaces, 4 subscriptions, az CLI,
+read-only): **no workspace received an E5 or Servers P2 benefit in 31 days**,
+so items 2 and 3 could not be measured. The owner chose to ship without them;
+MIG-17 stays open.
+
+1. Pricings readable - CONFIRMED for the lab identity: `GET
+   .../Microsoft.Security/pricings/VirtualMachines` answers (tier Free on two
+   subscriptions); a subscription not registered for Microsoft.Security answers
+   404 `SubscriptionNotRegistered`, which the code reports as `not read`. The
+   Resource Graph machine count answers (55 machines in one subscription).
 2. Which seat basis and which machine basis the `Operation` figures match -
-   record the answer in this document and in the card.
-3. Whether `Operation` benefit rows carry a type string per grant that can be
-   matched reliably; record the literal strings seen.
+   NOT MEASURED; the cross-check marks a basis when the data allows.
+3. The literal `Operation` benefit-type strings - NOT MEASURED; the
+   `BENEFIT_TYPE_PATTERNS` are placeholders, and an unrecognised type degrades
+   the read to one pooled figure rather than guessing.
 
 ## Left to the builder
 

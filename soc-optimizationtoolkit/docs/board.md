@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 37 in progress, 142 done.**
+**93 in the backlog, 35 in progress, 144 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 3 | 8 | 2 |
+| Data Volume Inventory | 1 | 10 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 128.
 
 ## Epics and features
 
@@ -136,18 +136,18 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 80% (16/20)
+### `MIG` SIEM migration analysis - 90% (18/20)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 8/11 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 10/11 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20 |
 
 ---
 
-## In progress (37)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,32 +1050,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-19** Servers P2 card calls the grant tenant-wide and skips its cross-check because the tenant has several Sentinel workspaces
-  `MIG-F2` `bug` `settled`
-  FOUND 2026-11-03 in Live Preview (jpederson org, law-jpederson-eastus,
-  branch feature/data-volume-inventory at d241d20): the Servers P2 card reads
-  "Tenant-wide, shared across 61 Sentinel workspaces" and its cross-check says
-  "skipped: the grant is tenant-wide and shared across 61 Sentinel
-  workspaces". Only the E5 grant is tenant-wide. Defender for Servers P2 is
-  500 MB per machine, summed per subscription and applied at the workspace the
-  machines report to (spec, The grants), so the multi-workspace rule (USER
-  DECISION 2026-11-03, spec call 6) must apply to E5 only. Fix: the
-  shared-workspace label and the workspace-count skip reason apply to the e5
-  view only; the Servers view keeps its own skip reasons (no capped day,
-  pricings not read, sums partial). Pin both.
-
-- **MIG-20** Allowance cards round sub-GB figures to 0.0 GB, hiding real eligible and over volume
-  `MIG-F2` `bug` `settled`
-  FOUND 2026-11-03 in Live Preview (same read as MIG-19): WindowsEvent is
-  eligible at 1.3 MB/day, but the Servers P2 card says "eligible 0.0 GB/day",
-  "granted 0.0 GB/day" and "0.0 GB/day over" (in warning colour) - with the
-  plan off, the true over is 1.3 MB/day. The cards format in fixed GB, so
-  small workspaces read as zero, which the inventory standard forbids for a
-  non-zero figure. Fix: every allowance figure uses formatMB (MB/GB/TB with
-  the existing thresholds) like the rest of the page; a figure that is exactly
-  0 may read 0; the over line uses the warning colour only when over > 0. Pin
-  with a 1.3 MB/day case.
-
 ---
 
 ## Backlog - now (11)
@@ -1933,7 +1907,14 @@ Settled and unblocked, sequenced behind now.
   that receives a benefit. Can start any time; its findings may change MIG-12
   patterns and MIG-13 defaults. Design:
   docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-17).
+  docs/data-volume-inventory-implementation-plan.md (task MIG-17). PARTIAL
+  2026-11-03 (live, read-only az CLI): 80 lab workspaces scanned with
+  BENEFIT_QUERY - none received an E5 or Servers P2 benefit in 31 days, so the
+  literal benefit-type strings, GB units and seat/machine basis were NOT
+  measured. Confirmed: pricings GET answers (Free on 2 subscriptions; 404
+  SubscriptionNotRegistered on 2, reported as not read), Resource Graph
+  machine count answers. USER DECISION 2026-11-03: ship without the rest; this
+  card stays open until a benefit-receiving workspace is available.
 
 - **DBT-235** Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor
   `DBT-F2` `story` `settled`
@@ -2448,7 +2429,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (142)
+## Done (144)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6274,6 +6255,38 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   discovery (new discoveryIncomplete option from the panel) - and for any
   cause floors the sums, skips every cross-check naming the cause, and floors
   Servers P2 granted; E5 stays exact. Reviewed clean.
+
+- **MIG-19** Servers P2 card calls the grant tenant-wide and skips its cross-check because the tenant has several Sentinel workspaces
+  `MIG-F2` `bug` `settled` `verified: both`
+  FOUND 2026-11-03 in Live Preview (jpederson org, law-jpederson-eastus,
+  branch feature/data-volume-inventory at d241d20): the Servers P2 card reads
+  "Tenant-wide, shared across 61 Sentinel workspaces" and its cross-check says
+  "skipped: the grant is tenant-wide and shared across 61 Sentinel
+  workspaces". Only the E5 grant is tenant-wide. Defender for Servers P2 is
+  500 MB per machine, summed per subscription and applied at the workspace the
+  machines report to (spec, The grants), so the multi-workspace rule (USER
+  DECISION 2026-11-03, spec call 6) must apply to E5 only. Fix: the
+  shared-workspace label and the workspace-count skip reason apply to the e5
+  view only; the Servers view keeps its own skip reasons (no capped day,
+  pricings not read, sums partial). Pin both. DONE 2026-11-03 (both, 03908a6):
+  the shared-workspace label and the workspace-count cross-check skip apply to
+  E5 only; Servers P2 keeps its own skip reasons. Pinned in core and UI; seen
+  in Live Preview - the Servers card no longer says tenant-wide.
+
+- **MIG-20** Allowance cards round sub-GB figures to 0.0 GB, hiding real eligible and over volume
+  `MIG-F2` `bug` `settled` `verified: both`
+  FOUND 2026-11-03 in Live Preview (same read as MIG-19): WindowsEvent is
+  eligible at 1.3 MB/day, but the Servers P2 card says "eligible 0.0 GB/day",
+  "granted 0.0 GB/day" and "0.0 GB/day over" (in warning colour) - with the
+  plan off, the true over is 1.3 MB/day. The cards format in fixed GB, so
+  small workspaces read as zero, which the inventory standard forbids for a
+  non-zero figure. Fix: every allowance figure uses formatMB (MB/GB/TB with
+  the existing thresholds) like the rest of the page; a figure that is exactly
+  0 may read 0; the over line uses the warning colour only when over > 0. Pin
+  with a 1.3 MB/day case. DONE 2026-11-03 (both, 0084c97): every allowance
+  figure formats with formatMB (mbPerDay); the live 1.3 MB/day case is pinned
+  and reads 'eligible 1.3 MB/day', '1.3 MB/day over' in Live Preview; GB
+  figures now show two decimals.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`
