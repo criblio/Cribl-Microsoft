@@ -22,6 +22,7 @@ const expected = buildEventHubInputBody({
   secretId: "azure_onb_eh_ns1_hub1_secret",
   sourceId: "defenderExport",
   sourceTitle: "Defender",
+  connectionTenantId: "t",
 });
 const record: CriblSourceRecord = {
   groupId: "g1",
@@ -81,6 +82,7 @@ describe("classifyExistingInput", () => {
       secretId: "azure_onb_blob_acct_q1_secret",
       sourceId: "vnetFlowLogs",
       sourceTitle: "VNet",
+      connectionTenantId: "t",
     });
     const blobRecord: CriblSourceRecord = { groupId: "g1", inputId: "azure_onb_blob_acct_q1", inputType: "azure_blob", secretId: "azure_onb_blob_acct_q1_secret" };
     for (const [edit, field] of [[{ disabled: true }, "disabled"], [{ sendToRoutes: false }, "sendToRoutes"]] as const) {

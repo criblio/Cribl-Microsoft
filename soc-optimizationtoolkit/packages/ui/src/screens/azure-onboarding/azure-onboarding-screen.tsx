@@ -52,6 +52,7 @@ import {
   encodeProgress,
   encodeSelection,
   laneTopics,
+  loadTenantDocument,
   listingRows,
   onboardingSource,
   paceAzureManagement,
@@ -61,6 +62,7 @@ import {
   readAllPages,
   readOnboardingCriblSide,
   stepsFor,
+  tenantDocumentKey,
   validateAzureOnboarding,
   withCriblSource,
   withWorkerGroup,
@@ -214,6 +216,16 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   const { ports, config } = usePorts();
   const store = ports.kvDocuments;
   const logger = ports.logger;
+  // Every document this screen keeps is ONE TENANT'S (ADR 0009 decision 3):
+  // the selection, and the How-to progress with its plan values and the
+  // records of the Cribl sources this app created. They live under
+  // `{key}.{tenantId}`; the legacy single-tenant document is moved under the
+  // active tenant the first time it is read (loadTenantDocument), and is never
+  // read as a document again. Null when the connection has no tenant id, which
+  // reads as an unknown load and blocks every save.
+  const activeTenant = config.tenantId;
+  const selectionKey = tenantDocumentKey(COVERAGE_SELECTION_KEY, activeTenant);
+  const progressKey = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, activeTenant);
 
   const [load, setLoad] = useState<OnboardingLoadState>({ status: "loading" });
   const [selection, setSelection] = useState<CoverageSelection | null>(null);
@@ -259,8 +271,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   useEffect(() => {
     if (store === undefined) return;
     let cancelled = false;
-    void store
-      .load(COVERAGE_SELECTION_KEY)
+    void loadTenantDocument(store, COVERAGE_SELECTION_KEY, activeTenant)
       .then(loadStateFrom, (error: unknown): OnboardingLoadState => ({
         // The port promises never to reject; if one does, it is a failed read,
         // and a failed read must block Save, never pass as a first run.
@@ -279,13 +290,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     return () => {
       cancelled = true;
     };
-  }, [store, logger]);
+  }, [store, logger, activeTenant]);
 
   useEffect(() => {
     if (store === undefined) return;
     let cancelled = false;
-    void store
-      .load(ONBOARDING_PROGRESS_KEY)
+    void loadTenantDocument(store, ONBOARDING_PROGRESS_KEY, activeTenant)
       .then(
         (answer: KvDocumentLoad): ProgressLoadState => progressLoadStateFrom(answer),
         (error: unknown): ProgressLoadState => ({ status: "read-unknown", reason: errorText(error) }),
@@ -306,7 +316,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     };
     // config is read once, at load, for the first-run defaults only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, logger]);
+  }, [store, logger, activeTenant]);
 
   useEffect(
     () => () => {
@@ -369,11 +379,11 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   }
 
   async function save(): Promise<void> {
-    if (!saveAllowed || store === undefined || selection === null) return;
+    if (!saveAllowed || store === undefined || selection === null || selectionKey === null) return;
     const written = selection;
     setSaving(true);
     try {
-      await store.save(COVERAGE_SELECTION_KEY, JSON.parse(encodeSelection(written)) as unknown);
+      await store.save(selectionKey, JSON.parse(encodeSelection(written)) as unknown);
       setLoad({ status: "ready", decoded: { selection: written, dropped: [], usedDefaults: false } });
       // A row toggled while the save was in flight is NOT in the stored
       // document, so the screen stays dirty and Save stays enabled for it.
@@ -411,14 +421,14 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
    */
   function commitProgress(next: OnboardingProgress, what: string): boolean {
     const state = latestProgressLoad.current;
-    if (store === undefined || !canWriteProgress(state)) return false;
+    if (store === undefined || progressKey === null || !canWriteProgress(state)) return false;
     const shown = withSavedProgress(state, next);
     latestProgressLoad.current = shown;
     setProgressLoad(shown);
     const body = JSON.parse(encodeProgress(next)) as unknown;
     progressChain.current = progressChain.current.then(async () => {
       try {
-        await store.save(ONBOARDING_PROGRESS_KEY, body);
+        await store.save(progressKey, body);
         // A save clears only its own earlier failure. Any other message - a
         // notice set by the click that queued this write, such as a choice not
         // carried over between modes - must outlive the write it explains.
@@ -606,6 +616,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
       measuredHubs,
       kvRecord: p.criblSources[sourceId] ?? null,
       credential,
+      tenantId: config.tenantId,
     });
     if (result.kind === "already-applied" && p.criblSources[sourceId] === undefined) {
       commitProgress(withCriblSource(p, sourceId, result.record), "cribl source found");
@@ -679,8 +690,9 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
       verdicts: lastResult?.verdicts ?? null,
       arrival: lastResult?.arrival ?? null,
       criblSide: criblSideReading,
+      tenantId: config.tenantId,
     };
-  }, [selection, progress, lastResult, criblSideReading]);
+  }, [selection, progress, lastResult, criblSideReading, config.tenantId]);
 
   const banners = store === undefined ? [] : loadBanners(load);
   const firstExtra = sections.length + 2;

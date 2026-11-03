@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import {
-  CAPABILITY_AUDIT_CACHE_KEY,
+  capabilityAuditCacheKey,
   EMPTY_AZURE_CONFIG,
   FakeAzureManagement,
   FakeContentCache,
@@ -95,7 +95,7 @@ describe("useCapabilityAudit", () => {
     const first = makePorts(cache);
     const firstRender = renderAudit(first.ports, CONFIG);
     await waitFor(() => expect(firstRender.seen.current?.running).toBe(false));
-    expect(await cache.get(CAPABILITY_AUDIT_CACHE_KEY)).not.toBeNull();
+    expect(await cache.get(capabilityAuditCacheKey("tenant-a"))).not.toBeNull();
     cleanup();
 
     const second = makePorts(cache);
@@ -179,13 +179,13 @@ describe("useCapabilityAudit", () => {
 
     const { rerender } = render(<Probe isReady={false} cfg={EMPTY_AZURE_CONFIG} />);
     expect(azure.calls).toHaveLength(0);
-    expect(await cache.get(CAPABILITY_AUDIT_CACHE_KEY)).toBeNull();
+    expect(await cache.get(capabilityAuditCacheKey("tenant-a"))).toBeNull();
 
     rerender(<Probe isReady={true} cfg={CONFIG} />);
     await waitFor(() => expect(azure.calls.length).toBeGreaterThan(0));
 
     // Exactly one audit, against the real config - not one per hydration step.
-    const stored = await cache.get(CAPABILITY_AUDIT_CACHE_KEY);
+    const stored = await cache.get(capabilityAuditCacheKey("tenant-a"));
     expect((stored as { connectionId: string }).connectionId).toContain("tenant-a");
   });
 

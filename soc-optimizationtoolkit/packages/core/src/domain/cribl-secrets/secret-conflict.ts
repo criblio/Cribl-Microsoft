@@ -9,6 +9,12 @@
  *
  *   patch   the secret's description carries this app's ownership stamp
  *           ({@link stampFor} of {@link APP_ID}, written by buildSecretBody)
+ *           and - when the caller names a tenant (ADR 0009) - names that same
+ *           tenant
+ *   refuse  other-tenant: stamped, but written for another tenant;
+ *           untagged-legacy: stamped, but from before tenants were named, so
+ *           whose it is cannot be read (the first other tenant to wire into
+ *           the group would otherwise take it over);
  *   refuse  foreign: it does not; unreadable: the read was refused, failed,
  *           or did not name the secret exactly once among objects only
  *           (findSecretRecord, DBT-187). An unknown owner is not ours.
@@ -30,6 +36,7 @@
 import { stampFor } from "../../kit/config-writes/ownership";
 import { APP_ID } from "./secret-body";
 import { findSecretRecord } from "./secret-record";
+import { normalizeTenantId, tenantDescriptionMarker, tenantNamedIn } from "../tenancy/tenancy";
 
 /** The GET /system/secrets/:id that followed a 409; `null` when the call itself threw. */
 export interface SecretConflictRead {
@@ -41,7 +48,7 @@ export type SecretConflictDecision =
   | { readonly kind: "patch" }
   | {
       readonly kind: "refuse";
-      readonly reason: "foreign" | "unreadable";
+      readonly reason: "foreign" | "unreadable" | "other-tenant" | "untagged-legacy";
       /** Operator-facing: names the secret id and says it was left unchanged. */
       readonly message: string;
     };
@@ -64,7 +71,11 @@ function unreadable(secretId: string, detail: string): SecretConflictDecision {
  * whose `items` holds exactly one entry with this id, among objects only
  * ({@link findSecretRecord}, DBT-187), with a stamped description is ours.
  */
-export function decideSecretConflict(secretId: string, read: SecretConflictRead | null): SecretConflictDecision {
+export function decideSecretConflict(
+  secretId: string,
+  read: SecretConflictRead | null,
+  tenantId?: string,
+): SecretConflictDecision {
   if (read === null) return unreadable(secretId, "the read failed");
   if (read.status < 200 || read.status >= 300) return unreadable(secretId, `HTTP ${read.status}`);
   const lookup = findSecretRecord(isRecord(read.body) ? read.body["items"] : undefined, secretId);
@@ -72,7 +83,35 @@ export function decideSecretConflict(secretId: string, read: SecretConflictRead 
   if (lookup.kind === "missing") return unreadable(secretId, `the read named no secret '${secretId}'`);
   const description = lookup.record["description"];
   const stamp = stampFor(APP_ID);
-  if (typeof description === "string" && description.includes(stamp)) return { kind: "patch" };
+  if (typeof description === "string" && description.includes(stamp)) {
+    // Ours - but for WHICH tenant (ADR 0009)? A secret that names another
+    // tenant is that tenant's, and replacing its value would silently break
+    // every destination of theirs that references it. One that names no tenant
+    // predates tenant naming: whose it is cannot be read, and an unknown owner
+    // is not this tenant, so it is refused with the one-line way to claim it.
+    if (tenantId === undefined) return { kind: "patch" };
+    const named = tenantNamedIn(description);
+    if (named === null) {
+      return {
+        kind: "refuse",
+        reason: "untagged-legacy",
+        message:
+          `Cribl secret '${secretId}' was written by this app before it named tenants, so which tenant's it is cannot be ` +
+          "shown; it was left unchanged, because if it is another tenant's, replacing it would break that tenant's destinations. " +
+          `If it is this tenant's, add ${tenantDescriptionMarker(tenantId)} to its description in Cribl, then run this again.`,
+      };
+    }
+    if (named !== normalizeTenantId(tenantId)) {
+      return {
+        kind: "refuse",
+        reason: "other-tenant",
+        message:
+          `Cribl secret '${secretId}' was written by this app for tenant ${named}, not ${normalizeTenantId(tenantId)}; ` +
+          "it was left unchanged, because replacing it would break that tenant's destinations.",
+      };
+    }
+    return { kind: "patch" };
+  }
   // The evidence is only that the stamp is absent, so the message says that and
   // no more: the secret may be another admin's, or one this app wrote before it
   // stamped its secrets (DBT-163). Either way it is not overwritten.

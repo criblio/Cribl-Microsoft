@@ -16,6 +16,10 @@ import {
 
 const src = (id: string): OnboardingSource => onboardingSource(id)!;
 
+/** The connection's tenant (ADR 0009): its first 8 hex digits go into every id. */
+const TENANT = "72F988BF-86F1-41AF-91AB-2D7CD011DB47";
+const OTHER_TENANT = "11111111-2222-3333-4444-555555555555";
+
 /** Every key and string value anywhere in `v`, depth first. */
 function deepStrings(v: unknown, out: string[] = []): string[] {
   if (typeof v === "string") out.push(v);
@@ -37,6 +41,7 @@ const EH_SPEC = {
   secretId: "azure_onb_eh_ns1_hub1_secret",
   sourceId: "defenderExport",
   sourceTitle: "Defender",
+  connectionTenantId: TENANT,
 };
 
 describe("buildEventHubInputBody", () => {
@@ -71,6 +76,17 @@ describe("buildEventHubInputBody", () => {
   it("is stamped with the app's ownership marker", () => {
     expect(String(body["description"])).toContain(stampFor(APP_ID));
   });
+
+  it("tags its events with the connection's tenant (ADR 0009)", () => {
+    // The Event Hub input authenticates with a connection string, so without
+    // this tag nothing on the input or its events says which tenant it reads.
+    expect(body["streamtags"]).toEqual([
+      "azure",
+      "azure-onboarding",
+      "defenderExport",
+      "tenant:72f988bf-86f1-41af-91ab-2d7cd011db47",
+    ]);
+  });
 });
 
 describe("buildBlobInputBody", () => {
@@ -83,6 +99,16 @@ describe("buildBlobInputBody", () => {
     secretId: "azure_onb_blob_acct_q1_secret",
     sourceId: "vnetFlowLogs",
     sourceTitle: "VNet",
+    connectionTenantId: TENANT,
+  });
+
+  it("tags its events with the connection's tenant (ADR 0009)", () => {
+    expect(body["streamtags"]).toEqual([
+      "azure",
+      "azure-onboarding",
+      "vnetFlowLogs",
+      "tenant:72f988bf-86f1-41af-91ab-2d7cd011db47",
+    ]);
   });
 
   it("is azure_blob with a backtick-quoted queue expression and clientSecret auth", () => {
@@ -118,30 +144,55 @@ describe("buildSecretBody", () => {
 describe("onboardingInputId / onboardingSecretId", () => {
   const values = { ...defaultPlanValues(null), namespace: "my-ns", hubName: "cribl.hub", storageAccount: "acct", queueName: "q-1" };
 
-  it("names a named-hub lane by its hub and an auto-created lane by its source", () => {
-    expect(onboardingInputId(src("defenderExport"), values)).toBe("azure_onb_eh_my_ns_cribl_hub");
-    expect(onboardingInputId(src("entraId"), values)).toBe("azure_onb_eh_my_ns_entraId");
-    expect(onboardingInputId(src("vnetFlowLogs"), values)).toBe("azure_onb_blob_acct_q_1");
+  it("names a named-hub lane by its hub and an auto-created lane by its source, after the tenant", () => {
+    expect(onboardingInputId(src("defenderExport"), values, TENANT)).toBe("azure_onb_eh_72f988bf_my_ns_cribl_hub");
+    expect(onboardingInputId(src("entraId"), values, TENANT)).toBe("azure_onb_eh_72f988bf_my_ns_entraId");
+    expect(onboardingInputId(src("vnetFlowLogs"), values, TENANT)).toBe("azure_onb_blob_72f988bf_acct_q_1");
+  });
+
+  it("gives two tenants two ids for the same namespace and hub, so one worker group can hold both", () => {
+    const a = onboardingInputId(src("defenderExport"), values, TENANT);
+    const b = onboardingInputId(src("defenderExport"), values, OTHER_TENANT);
+    expect(a).not.toBe(b);
+    expect(onboardingSecretId(a!)).not.toBe(onboardingSecretId(b!));
+  });
+
+  it("is null without a tenant - there is no tenant to name it after", () => {
+    expect(onboardingInputId(src("defenderExport"), values, "  ")).toBeNull();
   });
 
   it("is idempotent", () => {
-    expect(onboardingInputId(src("defenderExport"), values)).toBe(onboardingInputId(src("defenderExport"), { ...values }));
+    expect(onboardingInputId(src("defenderExport"), values, TENANT)).toBe(
+      onboardingInputId(src("defenderExport"), { ...values }, TENANT),
+    );
   });
 
   it("is null when a needed value is unset", () => {
-    expect(onboardingInputId(src("defenderExport"), { ...values, hubName: "" })).toBeNull();
-    expect(onboardingInputId(src("entraId"), { ...values, namespace: " " })).toBeNull();
-    expect(onboardingInputId(src("vnetFlowLogs"), { ...values, queueName: "" })).toBeNull();
+    expect(onboardingInputId(src("defenderExport"), { ...values, hubName: "" }, TENANT)).toBeNull();
+    expect(onboardingInputId(src("entraId"), { ...values, namespace: " " }, TENANT)).toBeNull();
+    expect(onboardingInputId(src("vnetFlowLogs"), { ...values, queueName: "" }, TENANT)).toBeNull();
   });
 
   it("stays within the length cap, the secret id too", () => {
     const long = { ...values, namespace: "n".repeat(50), hubName: "h".repeat(50) };
-    const id = onboardingInputId(src("defenderExport"), long)!;
+    const id = onboardingInputId(src("defenderExport"), long, TENANT)!;
     expect(id.length).toBeLessThanOrEqual(ONBOARDING_ID_MAX);
-    expect(id.startsWith("azure_onb_eh_n")).toBe(true);
+    expect(id.startsWith("azure_onb_eh_72f988bf_n")).toBe(true);
     const secret = onboardingSecretId(id);
     expect(secret.length).toBeLessThanOrEqual(ONBOARDING_ID_MAX);
     expect(secret.endsWith("_secret")).toBe(true);
+  });
+
+  it("keeps two over-long ids apart: the cap ends in a hash of the whole id, not a plain slice", () => {
+    // The tenant component spends 9 characters toward the cap, so truncation is
+    // likelier than before; a plain slice made two hubs past the cap one input.
+    const base = { ...values, namespace: "n".repeat(50) };
+    const a = onboardingInputId(src("defenderExport"), { ...base, hubName: "hub-a" }, TENANT)!;
+    const b = onboardingInputId(src("defenderExport"), { ...base, hubName: "hub-b" }, TENANT)!;
+    expect(a.length).toBe(ONBOARDING_ID_MAX);
+    expect(a).not.toBe(b);
+    expect(onboardingSecretId(a)).not.toBe(onboardingSecretId(b));
+    expect(onboardingSecretId(a).length).toBeLessThanOrEqual(ONBOARDING_ID_MAX);
   });
 });
 

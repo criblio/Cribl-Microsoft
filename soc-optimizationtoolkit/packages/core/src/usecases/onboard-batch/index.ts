@@ -3,6 +3,7 @@ export {
   onboardBatchStepsFor,
   batchTableStepName,
   paceAzureManagement,
+  createPacingBudget,
   pollAttemptsForTimeout,
   safeAzureManagement,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
@@ -14,6 +15,7 @@ export {
 export type {
   ArmAttempt,
   BatchPacing,
+  PacingBudget,
   CollectedArmRequest,
   CollectedArmRequestKind,
   OnboardBatchDceOutcome,

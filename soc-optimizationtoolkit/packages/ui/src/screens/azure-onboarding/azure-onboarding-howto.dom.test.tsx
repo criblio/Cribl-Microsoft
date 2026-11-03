@@ -25,6 +25,7 @@ import {
   FakeKvDocumentStore,
   FakeLogger,
   ONBOARDING_PROGRESS_KEY,
+  tenantDocumentKey,
   ONBOARDING_PROGRESS_KIND,
   ONBOARDING_PROGRESS_VERSION,
 } from "@soc/core";
@@ -53,6 +54,11 @@ const NEW_SECTION_TITLES = [
 ];
 
 afterEach(cleanup);
+
+// The CONFIG tenant's own documents (ADR 0009 decision 3): the screen reads and
+// writes `{key}.{tenantId}`, never the legacy single-tenant key.
+const SELECTION_KEY = tenantDocumentKey(COVERAGE_SELECTION_KEY, "tenant") as string;
+const PROGRESS_KEY = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, "tenant") as string;
 
 const SUB = "sub1";
 const RG = "rg1";
@@ -239,14 +245,17 @@ function button(name: string): HTMLButtonElement {
 }
 
 function progressSaves(store: FakeKvDocumentStore) {
-  return store.saves.filter((s) => s.key === ONBOARDING_PROGRESS_KEY);
+  return store.saves.filter((s) => s.key === PROGRESS_KEY);
 }
 
 describe("AzureOnboardingScreen - the How-to composition at mount", () => {
   it("loads exactly the selection and the progress document, and makes no Azure or Cribl call", async () => {
     const { store, azure, cribl } = mount();
     await loaded();
-    expect(store.loads).toEqual([COVERAGE_SELECTION_KEY, ONBOARDING_PROGRESS_KEY]);
+    // First run: each tenant document absent, so its legacy copy is looked at once.
+    expect([...store.loads].sort()).toEqual(
+      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY].sort(),
+    );
     expect(azure.calls).toEqual([]);
     expect(cribl.calls).toEqual([]);
     expect(cribl.listGroupsCalls).toBe(0);
@@ -257,7 +266,7 @@ describe("AzureOnboardingScreen - the How-to composition at mount", () => {
   });
 
   it("lists worker groups only when asked", async () => {
-    const { cribl } = mount({ store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }) });
+    const { cribl } = mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
     expect(cribl.listGroupsCalls).toBe(0);
     fireEvent.click(button("Load worker groups"));
@@ -268,7 +277,7 @@ describe("AzureOnboardingScreen - the How-to composition at mount", () => {
 
 describe("AzureOnboardingScreen - progress writes", () => {
   it("a tick writes the progress document once and never the selection", async () => {
-    const store = new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() });
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
     mount({ store });
     await loaded();
     const ticks = await waitFor(() => {
@@ -278,14 +287,14 @@ describe("AzureOnboardingScreen - progress writes", () => {
     });
     fireEvent.click(ticks[0] as HTMLElement);
     await waitFor(() => expect(progressSaves(store).length).toBe(1));
-    expect(store.saves.map((s) => s.key)).toEqual([ONBOARDING_PROGRESS_KEY]);
+    expect(store.saves.map((s) => s.key)).toEqual([PROGRESS_KEY]);
     const doc = progressSaves(store)[0]?.value as { kind: string; ticks: Record<string, unknown> };
     expect(doc.kind).toBe(ONBOARDING_PROGRESS_KIND);
     expect(Object.keys(doc.ticks).length).toBe(1);
   });
 
   it("a FAILED progress read blocks every progress write, and the selection's Save still works", async () => {
-    const store = new FakeKvDocumentStore().scriptLoad(ONBOARDING_PROGRESS_KEY, {
+    const store = new FakeKvDocumentStore().scriptLoad(PROGRESS_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
       status: 403,
@@ -299,14 +308,14 @@ describe("AzureOnboardingScreen - progress writes", () => {
     // The AZR-18 selection is untouched by the progress failure.
     fireEvent.click(screen.getByRole("checkbox", { name: DEFENDER_TITLE }));
     fireEvent.click(button("Save selection"));
-    await waitFor(() => expect(store.saves.map((s) => s.key)).toEqual([COVERAGE_SELECTION_KEY]));
+    await waitFor(() => expect(store.saves.map((s) => s.key)).toEqual([SELECTION_KEY]));
     expect(progressSaves(store)).toEqual([]);
   });
 
   it("the 'choice not carried over' notice outlives the progress save that its mode change queued", async () => {
     // The saved selection could not be read, and Defender is chosen in How-to mode.
-    const store = new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }).scriptLoad(
-      COVERAGE_SELECTION_KEY,
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }).scriptLoad(
+      SELECTION_KEY,
       { kind: "unknown", reason: "HTTP 403", status: 403 },
     );
     mount({ store });
@@ -323,7 +332,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
   });
 
   it("a successful progress save clears an earlier save failure", async () => {
-    const store = new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() });
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
     mount({ store });
     await loaded();
     const ticks = await waitFor(() => {
@@ -340,7 +349,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
   });
 
   it("a source in How-to mode hides the Defender deploy controls behind a note", async () => {
-    mount({ store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }) });
+    mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
     expect(screen.getByText(DEFENDER_HOWTO_NOTE)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Read Defender state" })).toBeNull();
@@ -356,7 +365,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
 
 describe("AzureOnboardingScreen - Validate", () => {
   it("sends only GETs, each one through the paced wrapper", async () => {
-    const { azure, pacing } = mount({ store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }) });
+    const { azure, pacing } = mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
     const validate = button("Validate (read only)");
     await waitFor(() => expect(validate.disabled).toBe(false));
@@ -372,7 +381,7 @@ describe("AzureOnboardingScreen - Validate", () => {
   // AZR-42 (found live 2026-10-28): after the plan moved to another namespace,
   // the old run's answers stayed beside the new values in every step.
   it("a run's answers stop describing the steps once the plan values change", async () => {
-    mount({ store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }) });
+    mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
     const validate = button("Validate (read only)");
     await waitFor(() => expect(validate.disabled).toBe(false));
@@ -393,7 +402,7 @@ describe("AzureOnboardingScreen - Validate", () => {
 
   it("without a pacing, Validate is disabled with its reason and reads nothing", async () => {
     const { azure } = mount({
-      store: new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() }),
+      store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }),
       pacing: null,
     });
     await loaded();
@@ -407,7 +416,7 @@ describe("AzureOnboardingScreen - Validate", () => {
 
 describe("AzureOnboardingScreen - the Cribl source create", () => {
   it("creates only on the second click, in order, records the ids, and keeps the pasted key out of progress", async () => {
-    const store = new FakeKvDocumentStore({ [ONBOARDING_PROGRESS_KEY]: progressDoc() });
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
     const { cribl, azure, view } = mount({ store });
     await loaded();
 

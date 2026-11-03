@@ -26,6 +26,8 @@ export * from "./domain/log-model";
 export * from "./domain/change-request";
 export * from "./domain/role-plan";
 export * from "./domain/least-privilege";
+// ADR 0009: tenant-scoped keys and ids, the credential lease, the tenant proof.
+export * from "./domain/tenancy";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

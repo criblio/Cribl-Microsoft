@@ -15,6 +15,7 @@ import { loadCachedCapabilities, runCapabilityAudit } from "./capability-audit";
 import type { CapabilityAuditInput, CapabilityAuditPorts } from "./capability-audit";
 import {
   CAPABILITY_AUDIT_CACHE_KEY,
+  capabilityAuditCacheKey,
   capabilityAuditKey,
   emptyCapabilitySet,
   serializeCapabilitySet,
@@ -181,7 +182,7 @@ describe("persistence", () => {
     const cache = new FakeContentCache();
     await runCapabilityAudit(ownerPorts(cache), INPUT);
 
-    const stored = await loadCachedCapabilities(cache);
+    const stored = await loadCachedCapabilities(cache, "tenant-a");
     expect(stored.auditedAt).toBe(NOW);
     expect(stored.connectionId).toBe(KEY);
   });
@@ -201,7 +202,7 @@ describe("persistence", () => {
     const first = await runCapabilityAudit({ azure, cribl: new FakeCriblClient(), cache }, subInput);
     expect(first.set.verdicts["defender-automation.write"]).toBe("granted");
 
-    const stored = await loadCachedCapabilities(cache);
+    const stored = await loadCachedCapabilities(cache, "tenant-a");
     expect(stored.verdicts["defender-plans.read"]).toBe("granted");
     expect(stored.verdicts["defender-automation.read"]).toBe("granted");
     expect(stored.verdicts["defender-automation.write"]).toBe("granted");
@@ -246,8 +247,8 @@ describe("cache failures are non-fatal", () => {
   });
 
   it("loadCachedCapabilities degrades to the empty set", async () => {
-    expect(await loadCachedCapabilities(exploding)).toEqual(emptyCapabilitySet());
-    expect(await loadCachedCapabilities(undefined)).toEqual(emptyCapabilitySet());
+    expect(await loadCachedCapabilities(exploding, "tenant-a")).toEqual(emptyCapabilitySet());
+    expect(await loadCachedCapabilities(undefined, "tenant-a")).toEqual(emptyCapabilitySet());
   });
 });
 
@@ -268,5 +269,45 @@ describe("the audit never throws", () => {
     // Nothing measured, and the caller still has something honest to render.
     expect(result.set.verdicts).toEqual({});
     expect(result.set.connectionId).toBe(KEY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One audit per tenant (ADR 0009; audit tenancy MEDIUM capability-codec.ts:31)
+// ---------------------------------------------------------------------------
+
+describe("the cache keeps one audit per tenant", () => {
+  const INPUT_B: CapabilityAuditInput = { ...INPUT, identity: { tenantId: "tenant-b", clientId: "client-b" } };
+
+  it("auditing tenant B leaves tenant A's audit in place, so switching back costs nothing", async () => {
+    // THE DEFECT: one slot for every connection, so measuring B overwrote A and
+    // switching back to A re-measured against the shared request budget.
+    const cache = new FakeContentCache();
+    await runCapabilityAudit(ownerPorts(cache), INPUT);
+    await runCapabilityAudit(ownerPorts(cache), INPUT_B);
+
+    expect((await loadCachedCapabilities(cache, "tenant-a")).connectionId).toBe(KEY);
+    const back = ownerPorts(cache);
+    const result = await runCapabilityAudit(back, INPUT);
+    expect(result.decision.run).toBe(false);
+    expect((back.azure as FakeAzureManagement).calls).toHaveLength(0);
+  });
+
+  it("files each tenant under its own key", () => {
+    expect(capabilityAuditCacheKey("Tenant-A")).toBe(`${CAPABILITY_AUDIT_CACHE_KEY}~tenant-a`);
+    expect(capabilityAuditCacheKey("tenant-a")).not.toBe(capabilityAuditCacheKey("tenant-b"));
+  });
+
+  it("moves the legacy single-slot audit only to the tenant it was measured for", async () => {
+    const cache = await seeded(KEY);
+    // Tenant B must not adopt A's verdicts - and must not destroy them either.
+    expect(await loadCachedCapabilities(cache, "tenant-b")).toEqual(emptyCapabilitySet());
+    expect(await cache.get(CAPABILITY_AUDIT_CACHE_KEY)).not.toBeNull();
+
+    const forA = await loadCachedCapabilities(cache, "tenant-a");
+    expect(forA.connectionId).toBe(KEY);
+    expect(await cache.get(capabilityAuditCacheKey("tenant-a"))).not.toBeNull();
+    // Moved once: the legacy slot is emptied.
+    expect(await cache.get(CAPABILITY_AUDIT_CACHE_KEY)).toBeNull();
   });
 });

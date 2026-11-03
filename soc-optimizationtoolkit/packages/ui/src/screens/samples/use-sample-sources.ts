@@ -67,7 +67,8 @@ export interface UseSampleSourcesInput {
 export function useSampleSources({
   enabled,
 }: UseSampleSourcesInput): SampleSourcesState {
-  const { ports } = usePorts();
+  const { ports, config } = usePorts();
+  const tenant = config.tenantId.trim().toLowerCase();
   const [groups, setGroups] = useState<SampleSourceGroups | null>(null);
   const [inventory, setInventory] = useState<SampleSourceInventory | null>(null);
   const [mode, setMode] = useState<AcquisitionMode | null>(null);
@@ -76,13 +77,21 @@ export function useSampleSources({
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingSources, setLoadingSources] = useState(false);
 
+  // Which listing is current. A connection switch starts a new listing, and the
+  // previous connection's answer, if it lands later, is dropped rather than
+  // shown under the new tenant's name (AZR-65).
+  const listingSeq = useRef(0);
+
   const loadGroups = useCallback(async () => {
+    const seq = ++listingSeq.current;
     setLoadingGroups(true);
     try {
       const found = await listSampleSourceGroups(ports.cribl, ports.logger);
+      if (seq !== listingSeq.current) return;
       setGroups(found);
       setNotes(found.notes);
     } catch (err) {
+      if (seq !== listingSeq.current) return;
       // listSampleSourceGroups folds its own failure into `ok: false`; this is
       // the truly-unexpected path, surfaced rather than swallowed.
       setNotes([
@@ -90,12 +99,17 @@ export function useSampleSources({
       ]);
       setGroups(null);
     } finally {
-      setLoadingGroups(false);
+      if (seq === listingSeq.current) setLoadingGroups(false);
     }
   }, [ports.cribl, ports.logger]);
 
+  // The same guard for stage two: a surface read still in flight when the
+  // connection changes must not land as the new connection's inventory.
+  const surfaceSeq = useRef(0);
+
   const loadSurface = useCallback(
     async (next: AcquisitionMode, groupId: string) => {
+      const seq = ++surfaceSeq.current;
       setLoadingSources(true);
       try {
         const found = await loadSampleSources(
@@ -103,40 +117,51 @@ export function useSampleSources({
           { mode: next, ...(groupId !== "" ? { groupId } : {}) },
           ports.logger,
         );
+        if (seq !== surfaceSeq.current) return;
         setInventory(found);
       } catch (err) {
+        if (seq !== surfaceSeq.current) return;
         setNotes([
           `Listing what is available failed: ${String(err)}. Uploading samples still works.`,
         ]);
       } finally {
-        setLoadingSources(false);
+        if (seq === surfaceSeq.current) setLoadingSources(false);
       }
     },
     [ports.cribl, ports.logger],
   );
 
-  // Stage one, ONCE EVER - not once per enablement, whatever this comment used
-  // to say (2026-08-20 audit). `started` is set below and at reload, and is
-  // never cleared, so the guard outlives any change to `enabled` or to the
-  // ports bundle.
+  // Stage one, ONCE PER CONNECTION. The guard records WHICH connection it
+  // listed for - the Azure tenant and the Cribl client - and never clears, so
+  // re-renders, an enablement flicker and a ports object rebuilt around the
+  // same client all leave it alone (the request-storm rule: one listing per
+  // connection, and a failure stays failed until the operator asks again).
   //
-  // That is load-bearing for the request-storm rule, and it has ONE consequence
-  // worth naming: `cloudPorts` is memoized on `activeConfig.tenantId`, so
-  // changing AZURE tenant rebuilds ports, changes `loadGroups`, re-fires this
-  // effect - and the guard swallows it. The operator would keep seeing the
-  // previous tenant's worker groups until they press Retry.
-  //
-  // Left as is deliberately: this deployment stays in a single Azure tenant, so
-  // the path is unreachable. If multi-tenant switching is ever added, THIS is
-  // the line that has to change - key the guard on the ports identity rather
-  // than a boolean - because the failure is one tenant's infrastructure shown
-  // under another tenant's name, which no operator would spot.
-  const started = useRef(false);
+  // A DIFFERENT connection lists again (AZR-65). The guard used to be a boolean
+  // set once, so switching the active connection to another tenant rebuilt
+  // ports, re-fired this effect, and the guard swallowed it: the screen kept
+  // the previous tenant's worker groups under the new tenant's name. It is keyed
+  // on the tenant as well as the client, because a shell that shares one Cribl
+  // adapter across tenants would otherwise bring the defect straight back. The
+  // switch also drops the previous connection's mode, group and inventory -
+  // the same defect one stage down.
+  const startedFor = useRef<{ cribl: unknown; tenant: string } | null>(null);
   useEffect(() => {
-    if (!enabled || started.current) return;
-    started.current = true;
+    if (!enabled) return;
+    const prev = startedFor.current;
+    if (prev !== null && prev.cribl === ports.cribl && prev.tenant === tenant) return;
+    startedFor.current = { cribl: ports.cribl, tenant };
+    if (prev !== null) {
+      surfaceSeq.current += 1;
+      setLoadingSources(false);
+      setGroups(null);
+      setInventory(null);
+      setMode(null);
+      setSelectedGroupId("");
+      setNotes([]);
+    }
     void loadGroups();
-  }, [enabled, loadGroups]);
+  }, [enabled, loadGroups, ports.cribl, tenant]);
 
   const selectMode = useCallback(
     (next: AcquisitionMode) => {
@@ -166,7 +191,7 @@ export function useSampleSources({
   );
 
   const reload = useCallback(() => {
-    started.current = true;
+    startedFor.current = { cribl: ports.cribl, tenant };
     if (mode === null) {
       void loadGroups();
       return;
@@ -176,7 +201,7 @@ export function useSampleSources({
       return;
     }
     void loadSurface(mode, selectedGroupId);
-  }, [mode, selectedGroupId, loadGroups, loadSurface]);
+  }, [mode, selectedGroupId, loadGroups, loadSurface, ports.cribl, tenant]);
 
   return {
     groups,

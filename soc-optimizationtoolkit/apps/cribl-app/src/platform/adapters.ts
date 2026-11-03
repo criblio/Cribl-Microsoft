@@ -1,7 +1,8 @@
 // Cloud-shell port adapters: the REAL implementations of the six @soc/core
 // ports for the Cribl App Platform. Everything here rides on the proven
 // primitives in platform/http.ts (bridge-safe fetchWithTimeout, kvUrl,
-// kvDelete, acquireArmToken) - see that module's header for the platform
+// kvDelete, acquireArmToken; credential-slot.ts owns the shared Azure token
+// slot) - see that module's header for the platform
 // findings these adapters are built around.
 //
 // No UI concerns live here. The shells wire these adapters into @soc/core
@@ -62,7 +63,8 @@ import type {
   PackRecordStore,
   StoredPack,
 } from '@soc/ui';
-import { acquireArmToken, acquireGraphToken, fetchWithTimeout, kvDelete, kvUrl } from './http';
+import { fetchWithTimeout, kvDelete, kvUrl } from './http';
+import { AzureCredentialSlot } from './credential-slot';
 import { PlatformKvDocumentStore } from './kv-document-store';
 
 // ---------------------------------------------------------------------------
@@ -229,10 +231,18 @@ const ARM_BASE_URL = 'https://management.azure.com';
 // Proxied external requests hit a 30s server-side timeout; racing at 25s
 // keeps the client-side failure loud and ahead of the platform's.
 const ARM_TIMEOUT_MS = 25000;
-// The FIXED encrypted KV key proxies.yml injects as `Bearer ${kv.azureArmToken}`
-// on management.azure.com requests. Single shared slot: one token is live at
-// a time, for the tenant this adapter was constructed with.
-const ARM_TOKEN_KV_KEY = 'azureArmToken';
+
+/**
+ * How an adapter uses the shared credential slot (platform/credential-slot.ts).
+ *   shared   an ordinary adapter: each request waits while a tenant session
+ *            holds the slot, and mints its own tenant's token whenever the slot
+ *            holds anyone else's (or none).
+ *   session  built by a tenant session for use INSIDE it: never waits (the
+ *            session already holds the slot, so waiting would deadlock) and
+ *            never mints on first use (the session minted for exactly this
+ *            tenant). It re-mints only on a 401.
+ */
+export type SlotMode = 'shared' | 'session';
 
 /**
  * AzureManagement over the platform proxy. The app NEVER sets an
@@ -240,12 +250,13 @@ const ARM_TOKEN_KV_KEY = 'azureArmToken';
  * server-side on every management.azure.com request (client-sent auth
  * headers are stripped by the proxy anyway).
  *
- * Token freshness: the adapter is constructed with the ACTIVE tenant id.
- * Before the first request of a sequence it acquires an ARM token via the
- * client_credentials flow (acquireArmToken - Basic auth injected from
- * kv.azureBasic) and PUTs it encrypted under azureArmToken. When a request
- * later comes back 401 (token expired mid-session), it re-acquires ONCE and
- * retries that request once; the retry's response is returned as-is.
+ * Token freshness: the SLOT - not this instance - knows whose ARM token sits
+ * in azureArmToken (audit tenancy HIGH, adapters.ts:256: a per-instance
+ * `tokenEnsured` boolean let tenant A's adapter keep sending under tenant B's
+ * token once B had replaced it). Before a request it mints for its own tenant
+ * only when the slot holds another tenant's token or none; on a 401 (expired or
+ * evicted) it re-mints ONCE and retries the request once, returning the retry's
+ * response as-is.
  *
  * Per the port contract this resolves {status, body} for every HTTP response
  * (4xx/5xx included) and rejects only on transport failure - which includes
@@ -253,42 +264,40 @@ const ARM_TOKEN_KV_KEY = 'azureArmToken';
  */
 export class PlatformAzureManagement implements AzureManagement {
   private readonly tenantId: string;
-  private tokenEnsured = false;
+  private readonly slot: AzureCredentialSlot;
+  private readonly mode: SlotMode;
 
-  constructor(tenantId: string) {
+  constructor(tenantId: string, slot: AzureCredentialSlot = azureCredentialSlot, mode: SlotMode = 'shared') {
     this.tenantId = tenantId;
+    this.slot = slot;
+    this.mode = mode;
   }
 
-  /**
-   * Acquire a fresh ARM token for the constructed tenant and store it
-   * encrypted under azureArmToken so the proxy can inject it. Callable
-   * directly before a request sequence; request() also invokes it lazily
-   * (first call) and on a 401 (once).
-   */
+  /** Acquire a fresh ARM token for the constructed tenant into the slot. */
   async ensureArmToken(): Promise<void> {
-    const token = await acquireArmToken(this.tenantId);
-    const res = await fetchWithTimeout(kvUrl(`${ARM_TOKEN_KV_KEY}?encrypted=true`), {
-      method: 'PUT',
-      body: token.access_token,
-    });
-    if (!res.ok) {
-      throw new Error(`PUT ${ARM_TOKEN_KV_KEY}?encrypted=true: HTTP ${res.status}\n${await res.text()}`);
-    }
-    this.tokenEnsured = true;
+    await this.slot.mintArm(this.tenantId);
   }
 
   async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
-    if (!this.tokenEnsured) {
-      await this.ensureArmToken();
-    }
-    const first = await this.throttleAware(() => this.send(opts));
-    if (first.status !== 401) {
-      return first;
-    }
-    // 401: the stored token was rejected (expired or evicted). Re-acquire
-    // ONCE and retry the request once; whatever comes back is the answer.
-    await this.ensureArmToken();
-    return this.throttleAware(() => this.send(opts));
+    return this.withSlot(() => this.send(opts));
+  }
+
+  /** Ensure this tenant's token, send, and on a 401 re-mint once and retry once. */
+  private withSlot(send: () => Promise<ArmResponse>): Promise<PortHttpResponse> {
+    const run = async (): Promise<PortHttpResponse> => {
+      if (this.mode === 'shared') {
+        await this.slot.ensureArm(this.tenantId);
+      }
+      const first = await this.throttleAware(send);
+      if (first.status !== 401) {
+        return first;
+      }
+      // 401: the stored token was rejected (expired or evicted). Re-acquire
+      // ONCE and retry the request once; whatever comes back is the answer.
+      await this.slot.mintArm(this.tenantId);
+      return this.throttleAware(send);
+    };
+    return this.mode === 'session' ? run() : this.slot.shared(this.tenantId, run);
   }
 
   /**
@@ -331,15 +340,7 @@ export class PlatformAzureManagement implements AzureManagement {
           '(ARM nextLink pagination) - refusing to request any other host',
       );
     }
-    if (!this.tokenEnsured) {
-      await this.ensureArmToken();
-    }
-    const first = await this.throttleAware(() => this.sendUrl(opts));
-    if (first.status !== 401) {
-      return first;
-    }
-    await this.ensureArmToken();
-    return this.throttleAware(() => this.sendUrl(opts));
+    return this.withSlot(() => this.sendUrl(opts));
   }
 
   private async sendUrl(
@@ -392,10 +393,6 @@ function retryAfterSecondsOf(res: Response): number | undefined {
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com';
 const GRAPH_TIMEOUT_MS = 25000;
-// The FIXED encrypted KV key proxies.yml injects as `Bearer ${kv.azureGraphToken}`
-// on graph.microsoft.com requests. Separate slot from azureArmToken: the Graph
-// audience differs, so ARM and Graph tokens cannot be shared.
-const GRAPH_TOKEN_KV_KEY = 'azureGraphToken';
 // Bound on @odata.nextLink pages the service-principal enumeration will follow.
 const GRAPH_MAX_PAGES = 20;
 // A generous page size; the picker only needs id/appId/displayName per SP.
@@ -424,31 +421,21 @@ function mapServicePrincipals(body: unknown): ServicePrincipalRef[] {
 /**
  * GraphDirectory over the platform proxy. Same token discipline as
  * PlatformAzureManagement: no client-set Authorization (proxies.yml injects
- * `Bearer ${kv.azureGraphToken}`), a Graph-audience token acquired lazily on
- * the first call and re-acquired once on a 401. A 403 is surfaced as a thrown
- * error with an Application.Read.All hint so the picker degrades to manual
- * object-id entry (the directory read needs that permission consented).
+ * `Bearer ${kv.azureGraphToken}`), and the shared slot - not this instance -
+ * decides whether the Graph token in the slot is this tenant's (minted when it
+ * is not, re-acquired once on a 401). A 403 is surfaced as a thrown error with
+ * an Application.Read.All hint so the picker degrades to manual object-id entry
+ * (the directory read needs that permission consented).
  */
 export class PlatformGraphDirectory implements GraphDirectory {
   private readonly tenantId: string;
-  private tokenEnsured = false;
+  private readonly slot: AzureCredentialSlot;
+  private readonly mode: SlotMode;
 
-  constructor(tenantId: string) {
+  constructor(tenantId: string, slot: AzureCredentialSlot = azureCredentialSlot, mode: SlotMode = 'shared') {
     this.tenantId = tenantId;
-  }
-
-  private async ensureGraphToken(): Promise<void> {
-    const token = await acquireGraphToken(this.tenantId);
-    const res = await fetchWithTimeout(kvUrl(`${GRAPH_TOKEN_KV_KEY}?encrypted=true`), {
-      method: 'PUT',
-      body: token.access_token,
-    });
-    if (!res.ok) {
-      throw new Error(
-        `PUT ${GRAPH_TOKEN_KV_KEY}?encrypted=true: HTTP ${res.status}\n${await res.text()}`,
-      );
-    }
-    this.tokenEnsured = true;
+    this.slot = slot;
+    this.mode = mode;
   }
 
   private async page(url: string): Promise<PortHttpResponse> {
@@ -459,8 +446,12 @@ export class PlatformGraphDirectory implements GraphDirectory {
   }
 
   async listServicePrincipals(): Promise<ServicePrincipalRef[]> {
-    if (!this.tokenEnsured) {
-      await this.ensureGraphToken();
+    return this.mode === 'session' ? this.list() : this.slot.shared(this.tenantId, () => this.list());
+  }
+
+  private async list(): Promise<ServicePrincipalRef[]> {
+    if (this.mode === 'shared') {
+      await this.slot.ensureGraph(this.tenantId);
     }
     let res = await this.page(GRAPH_SP_URL);
     if (res.status === 401 || res.status === 403) {
@@ -470,7 +461,7 @@ export class PlatformGraphDirectory implements GraphDirectory {
       // forever. Re-acquire ONCE (a fresh redemption reflects current consent)
       // and retry; a genuine missing-permission 403 simply repeats and is
       // surfaced with the hint below.
-      await this.ensureGraphToken();
+      await this.slot.mintGraph(this.tenantId);
       res = await this.page(GRAPH_SP_URL);
     }
     if (res.status !== 200) {
@@ -1842,6 +1833,24 @@ export interface CloudPorts {
    */
   criblDeploymentType: 'cloud' | 'onprem';
 }
+
+/**
+ * A credential slot whose sessions run with session-mode Azure and Graph
+ * adapters. Tests build their own; the app uses {@link azureCredentialSlot}.
+ */
+export function makeAzureCredentialSlot(): AzureCredentialSlot {
+  return new AzureCredentialSlot((tenantId, slot) => ({
+    azure: new PlatformAzureManagement(tenantId, slot, 'session'),
+    graph: new PlatformGraphDirectory(tenantId, slot, 'session'),
+  }));
+}
+
+/**
+ * THE app's credential slot: one per tab, because the KV slot it guards is one
+ * per app. Every ordinary Azure and Graph adapter shares it, which is what lets
+ * an adapter for tenant A know that tenant B's token replaced its own.
+ */
+export const azureCredentialSlot: AzureCredentialSlot = makeAzureCredentialSlot();
 
 /**
  * Build the cloud-shell adapter bundle. `tenantId` is the ACTIVE

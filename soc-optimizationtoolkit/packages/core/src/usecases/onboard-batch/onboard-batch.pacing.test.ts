@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   onboardBatch,
   paceAzureManagement,
+  createPacingBudget,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
 } from "./onboard-batch";
 import type {
@@ -146,6 +147,52 @@ describe("paceAzureManagement", () => {
     expect(() => paceAzureManagement(new FakeAzureManagement({ dataCollectionRulesList: [] }), pacing)).toThrow(
       RangeError,
     );
+  });
+
+  // Audit tenancy MEDIUM (App.tsx:163): every wrapper made its OWN budget, so
+  // two wrappers - one per tenant in a scan, or Validate beside the logging
+  // map - each spent a full minute's allowance against ONE proxy budget.
+  describe("an app-wide shared budget", () => {
+    const req = { method: "GET" as const, path: "/x", apiVersion: "v" };
+    function counting(state: { t: number }, issuedAt: number[]): AzureManagement {
+      return {
+        request: async () => {
+          issuedAt.push(state.t);
+          return { status: 200, body: {} };
+        },
+      };
+    }
+
+    it("is spent by EVERY wrapper that carries it", async () => {
+      const { state, sleeps, pacing } = fakeClock();
+      const shared = { ...pacing, shared: createPacingBudget(2) };
+      const issuedAt: number[] = [];
+      const tenantA = paceAzureManagement(counting(state, issuedAt), shared);
+      const tenantB = paceAzureManagement(counting(state, issuedAt), shared);
+
+      await tenantA.request(req);
+      await tenantB.request(req);
+      await tenantA.request(req);
+
+      // Two wrappers, one allowance of 2: the third call waits a minute.
+      expect(issuedAt).toEqual([0, 0, 60_000]);
+      expect(sleeps).toEqual([60_000]);
+    });
+
+    it("still honours a wrapper's own tighter cap", async () => {
+      const { state, sleeps, pacing } = fakeClock(1);
+      const issuedAt: number[] = [];
+      const paced = paceAzureManagement(counting(state, issuedAt), { ...pacing, shared: createPacingBudget(80) });
+      await paced.request(req);
+      await paced.request(req);
+      expect(issuedAt).toEqual([0, 60_000]);
+      expect(sleeps).toEqual([60_000]);
+    });
+
+    it("defaults to the 80-request allowance", () => {
+      expect(createPacingBudget().maxPerMinute).toBe(DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE);
+      expect(() => createPacingBudget(0)).toThrow(RangeError);
+    });
   });
 });
 

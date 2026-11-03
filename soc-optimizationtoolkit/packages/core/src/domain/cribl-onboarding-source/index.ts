@@ -18,8 +18,10 @@ export {
   isOnboardingInputId,
   isOnboardingSecretId,
   jsStringExpression,
+  legacyOnboardingInputId,
   onboardingInputId,
   onboardingSecretId,
+  tenantStreamtag,
 } from "./input-bodies";
 export type { BlobInputSpec, EventHubInputSpec } from "./input-bodies";
 

@@ -13,10 +13,11 @@
  * WHY THE EFFECT USES THE `launch` TRIGGER FOR MORE THAN LAUNCH. Two of the
  * plan's three re-audit events - connection switch and scope commit - already
  * change the audit key, so the effect re-fires and `launch` correctly declines
- * only when a cached set matches. The cache is ONE slot
- * (CAPABILITY_AUDIT_CACHE_KEY), so a match means a reload of the connection
- * audited last; switching BACK to a connection audited earlier re-measures,
- * because switching away overwrote its result. The third event, secret
+ * only when a cached set matches. The cache holds ONE audit PER TENANT
+ * (capabilityAuditCacheKey, ADR 0009), so switching back to another tenant's
+ * connection reuses its audit; within one tenant the last audit wins, so
+ * switching between two connections on the SAME tenant still re-measures. The
+ * third event, secret
  * re-entry, leaves the key untouched and must be reported by the shell through
  * {@link CapabilityAuditState.audit}.
  *

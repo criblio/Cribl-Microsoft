@@ -1,0 +1,32 @@
+/** Tenancy rules (ADR 0009 decisions 2 and 3). */
+export {
+  CREDENTIAL_LEASE_KEY,
+  CREDENTIAL_OWNER_KEY,
+  TENANT_PROOF_API_VERSION,
+  TENANT_TOKEN_LENGTH,
+  clearedCredentialOwner,
+  credentialOwnerMatches,
+  decodeCredentialOwner,
+  decodeLease,
+  encodeCredentialOwner,
+  isTenantMigrationMarker,
+  leaseHeldByOther,
+  normalizeTenantId,
+  proveTenant,
+  releasedLease,
+  takenLease,
+  tenantDescriptionMarker,
+  tenantNamedIn,
+  tenantDocumentKey,
+  tenantMigrationClaimKey,
+  tenantMigrationMarker,
+  tenantProofRequest,
+  tenantToken,
+} from "./tenancy";
+export type {
+  CredentialLease,
+  CredentialOwner,
+  LeaseVerdict,
+  TenantMigrationMarker,
+  TenantProof,
+} from "./tenancy";

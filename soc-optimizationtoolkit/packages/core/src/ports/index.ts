@@ -29,6 +29,15 @@ export {
   streamWorkerGroups,
 } from './cribl-client';
 export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
+export type {
+  CredentialSlot,
+  TenantPorts,
+  TenantProfile,
+  TenantRestore,
+  TenantRun,
+  TenantRunStage,
+  TenantSession,
+} from './tenant-session';
 export type { TaggedSampleStore } from './tagged-sample-store';
 export type { KvDocumentStore, KvDocumentLoad } from './kv-document-store';
 export { isKvDocumentKey } from './kv-document-store';

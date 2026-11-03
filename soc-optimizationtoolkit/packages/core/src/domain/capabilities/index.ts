@@ -63,6 +63,8 @@ export { annotateNavItems, unavailableCount } from "./nav-annotation";
 export type { CachedCapabilitySet } from "./capability-codec";
 export {
   CAPABILITY_AUDIT_CACHE_KEY,
+  auditKeyNamesTenant,
+  capabilityAuditCacheKey,
   parseCapabilitySet,
   serializeCapabilitySet,
 } from "./capability-codec";

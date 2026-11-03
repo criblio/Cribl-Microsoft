@@ -33,6 +33,8 @@ import type { SampleSourcesState } from "./use-sample-sources";
 afterEach(cleanup);
 
 const CONFIG: AzureConfig = { ...EMPTY_AZURE_CONFIG };
+const TENANT_A = "11111111-1111-1111-1111-111111111111";
+const TENANT_B = "22222222-2222-2222-2222-222222222222";
 
 const LAKE_PATH = "/products/lake/lakes/default/datasets";
 const INPUTS_PATH = "/system/inputs";
@@ -80,6 +82,7 @@ function renderProbe(opts: { cribl?: CriblStub; enabled?: boolean } = {}) {
   const cribl = opts.cribl ?? okCribl();
   const startEnabled = opts.enabled ?? true;
   let ports = { cribl } as unknown as UiPorts;
+  let config: AzureConfig = { ...CONFIG, tenantId: TENANT_A };
   const seen: { current: SampleSourcesState | null } = { current: null };
 
   function Probe({ enabled }: { enabled: boolean }) {
@@ -88,7 +91,7 @@ function renderProbe(opts: { cribl?: CriblStub; enabled?: boolean } = {}) {
   }
 
   const tree = (enabled: boolean) => (
-    <PortsProvider ports={ports} config={CONFIG}>
+    <PortsProvider ports={ports} config={config}>
       <Probe enabled={enabled} />
     </PortsProvider>
   );
@@ -103,6 +106,23 @@ function renderProbe(opts: { cribl?: CriblStub; enabled?: boolean } = {}) {
     rebuildPorts: (enabled: boolean = startEnabled) => {
       ports = { cribl } as unknown as UiPorts;
       rerender(tree(enabled));
+    },
+    /**
+     * Switch the ACTIVE connection to another Azure tenant, as the shell does:
+     * a new config, and (by default) a new ports bundle with its own Cribl
+     * client, because App.tsx rebuilds cloudPorts on the tenant. Pass
+     * `sameCribl` to keep the client, which is what a shell that shares its
+     * tenant-neutral adapters across tenants would hand over (AZR-65).
+     */
+    switchTenant: (
+      tenantId: string,
+      next: { cribl?: CriblStub; sameCribl?: boolean } = {},
+    ) => {
+      const nextCribl = next.sameCribl === true ? cribl : (next.cribl ?? okCribl());
+      ports = { cribl: nextCribl } as unknown as UiPorts;
+      config = { ...config, tenantId };
+      rerender(tree(startEnabled));
+      return nextCribl;
     },
     /** The state, asserted non-null so the tests read as one expression. */
     state: (): SampleSourcesState => {
@@ -340,5 +360,123 @@ describe("useSampleSources - a failure stays failed until asked again", () => {
     await waitFor(() => expect(cribl.request).toHaveBeenCalledTimes(2));
     // Re-reading the surface must not re-list the groups behind it.
     expect(cribl.listGroups).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useSampleSources - a tenant switch re-reads (AZR-65)", () => {
+  // THE DEFECT: `started` was a boolean set once and never cleared, so when the
+  // operator switched the active connection to another Azure tenant the shell
+  // rebuilt ports, the effect re-fired, and the guard swallowed it - the screen
+  // kept showing the previous tenant's worker groups under the new tenant's
+  // name until someone pressed Retry. The guard is now keyed on WHICH
+  // connection it listed for, so the request-storm rule (one listing per
+  // connection) still holds while a different connection lists again.
+
+  it("lists AGAIN for the new tenant, through the new tenant's client", async () => {
+    const probe = renderProbe();
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    expect(probe.cribl.listGroups).toHaveBeenCalledTimes(1);
+
+    const next = okCribl();
+    next.listGroups.mockResolvedValue(toListing([{ id: "tenant_b_group", product: "stream" }]));
+    probe.switchTenant(TENANT_B, { cribl: next });
+
+    await waitFor(() =>
+      expect(probe.state().groups?.streamGroupIds).toEqual(["tenant_b_group"]),
+    );
+    expect(next.listGroups).toHaveBeenCalledTimes(1);
+    // The old client is not asked again: the re-read is the new connection's.
+    expect(probe.cribl.listGroups).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads on a tenant change even when the Cribl client is the same object", async () => {
+    // Keyed on the TENANT, not only on the client's identity: a shell that
+    // shares its Cribl adapter across tenants must not resurrect the bug.
+    const probe = renderProbe();
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+
+    probe.switchTenant(TENANT_B, { sameCribl: true });
+    await waitFor(() => expect(probe.cribl.listGroups).toHaveBeenCalledTimes(2));
+  });
+
+  it("drops the previous tenant's mode, group and inventory", async () => {
+    // Showing tenant A's chosen group and its sources under tenant B is the
+    // same defect one stage down.
+    const probe = renderProbe();
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    act(() => probe.state().selectMode("live-capture"));
+    act(() => probe.state().selectGroup("default"));
+    await waitFor(() => expect(probe.state().inventory).not.toBeNull());
+
+    probe.switchTenant(TENANT_B);
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    expect(probe.state().mode).toBeNull();
+    expect(probe.state().selectedGroupId).toBe("");
+    expect(probe.state().inventory).toBeNull();
+  });
+
+  it("never lets the previous tenant's late answer overwrite the new one", async () => {
+    // Tenant A's listing is still in flight when the operator switches. When it
+    // finally lands it must be dropped, not shown under tenant B.
+    let releaseA: (v: ReturnType<typeof toListing>) => void = () => undefined;
+    const slow = okCribl();
+    slow.listGroups.mockImplementation(
+      () => new Promise((resolve) => {
+        releaseA = resolve as typeof releaseA;
+      }),
+    );
+    const probe = renderProbe({ cribl: slow });
+
+    const next = okCribl();
+    next.listGroups.mockResolvedValue(toListing([{ id: "tenant_b_group", product: "stream" }]));
+    probe.switchTenant(TENANT_B, { cribl: next });
+    await waitFor(() =>
+      expect(probe.state().groups?.streamGroupIds).toEqual(["tenant_b_group"]),
+    );
+
+    await act(async () => {
+      releaseA(toListing([{ id: "tenant_a_group", product: "stream" }]));
+      await Promise.resolve();
+    });
+    expect(probe.state().groups?.streamGroupIds).toEqual(["tenant_b_group"]);
+  });
+
+  it("drops the previous tenant's late SURFACE answer too", async () => {
+    // Stage two has the same race: tenant A's input listing lands after the
+    // switch and must not appear as tenant B's inventory.
+    let releaseA: (v: PortHttpResponse) => void = () => undefined;
+    const slow = okCribl();
+    slow.request.mockImplementation(
+      () => new Promise<PortHttpResponse>((resolve) => {
+        releaseA = resolve;
+      }),
+    );
+    const probe = renderProbe({ cribl: slow });
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    act(() => probe.state().selectMode("live-capture"));
+    act(() => probe.state().selectGroup("default"));
+    await waitFor(() => expect(slow.request).toHaveBeenCalledTimes(1));
+
+    probe.switchTenant(TENANT_B);
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    await act(async () => {
+      releaseA({ status: 200, body: { items: [{ id: "tenant_a_input", type: "syslog" }] } });
+      await Promise.resolve();
+    });
+    expect(probe.state().inventory).toBeNull();
+  });
+
+  it("still lists ONCE per tenant however the effect is re-fired", async () => {
+    // The request-storm rule survives the fix: re-renders and an enablement
+    // flicker after the switch do not list tenant B twice.
+    const probe = renderProbe();
+    await waitFor(() => expect(probe.state().groups).not.toBeNull());
+    const next = probe.switchTenant(TENANT_B);
+    await waitFor(() => expect(next.listGroups).toHaveBeenCalledTimes(1));
+
+    probe.rerender();
+    probe.rerender(false);
+    probe.rerender(true);
+    expect(next.listGroups).toHaveBeenCalledTimes(1);
   });
 });

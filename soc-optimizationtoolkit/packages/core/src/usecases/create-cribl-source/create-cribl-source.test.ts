@@ -86,7 +86,8 @@ function values(over: Partial<Record<keyof PlanValues, string>> = {}): PlanValue
   };
 }
 
-const INPUT_ID = onboardingInputId(defender(), values())!;
+const TENANT = "aaaaaaaa-0000-0000-0000-000000000001";
+const INPUT_ID = onboardingInputId(defender(), values(), TENANT)!;
 const SECRET_ID = onboardingSecretId(INPUT_ID);
 
 function planInput(credential: PlanCredential, over: Partial<PlanCriblSourceInput> = {}): PlanCriblSourceInput {
@@ -97,6 +98,7 @@ function planInput(credential: PlanCredential, over: Partial<PlanCriblSourceInpu
     measuredHubs: null,
     kvRecord: null,
     credential,
+    tenantId: TENANT,
     ...over,
   };
 }
@@ -341,6 +343,7 @@ describe("planCriblSource", () => {
       secretId: SECRET_ID,
       sourceId: "defenderExport",
       sourceTitle: defender().title,
+      connectionTenantId: TENANT,
     });
     h.cribl.respondWith(ok({ items: [existing] }));
     const plan = await planCriblSource(
@@ -362,12 +365,68 @@ describe("planCriblSource", () => {
       secretId: SECRET_ID,
       sourceId: "defenderExport",
       sourceTitle: defender().title,
+      connectionTenantId: TENANT,
     });
     h.cribl.respondWith(ok({ items: [existing] }));
     const record = { groupId: G, inputId: INPUT_ID, inputType: "eventhub" as const, secretId: SECRET_ID };
     const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }, { kvRecord: record }));
     expect(plan).toEqual({ kind: "already-applied", record });
     expect(h.writes()).toEqual([]);
+  });
+
+  it("keeps a lane's RECORDED id from before tenant ids, so an existing input is never created twice", async () => {
+    // ADR 0009 gave new ids a tenant component. A lane created earlier has a
+    // record naming the old id; planning under the new id found nothing and
+    // offered a SECOND input on the same hubs and consumer group. The record is
+    // this tenant's own (the progress document is tenant-scoped), so its id is
+    // the lane's id.
+    const LEGACY_ID = "azure_onb_eh_ns1_h1";
+    const LEGACY_SECRET = `${LEGACY_ID}_secret`;
+    const h = harness();
+    scriptAzurePlan(h);
+    const existing = buildEventHubInputBody({
+      id: LEGACY_ID,
+      namespace: "ns1",
+      topics: ["h1"],
+      consumerGroup: "cribl",
+      secretId: LEGACY_SECRET,
+      sourceId: "defenderExport",
+      sourceTitle: defender().title,
+      connectionTenantId: TENANT,
+    });
+    h.cribl.respondWith(ok({ items: [existing] }));
+    const record = { groupId: G, inputId: LEGACY_ID, inputType: "eventhub" as const, secretId: LEGACY_SECRET };
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }, { kvRecord: record }));
+    expect(plan).toEqual({ kind: "already-applied", record });
+    expect(h.writes()).toEqual([]);
+  });
+
+  it("does NOT keep a recorded id the CURRENT values would not produce - the operator changed the hub", async () => {
+    // Review finding: the record was kept whenever it was well-formed, so after
+    // the hub moved from h0 to h1 the plan targeted the OLD input, found it
+    // differing, and refused - and after the operator removed it, recreated it
+    // under an id naming h0 while it read h1.
+    for (const staleId of ["azure_onb_eh_ns1_h0", onboardingInputId(defender(), { ...values(), hubName: "h0" }, TENANT)!]) {
+      const h = harness();
+      scriptAzurePlan(h);
+      scriptCriblPlan(h);
+      const record = { groupId: G, inputId: staleId, inputType: "eventhub" as const, secretId: `${staleId}_secret` };
+      const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }, { kvRecord: record }));
+      expect(plan.kind, staleId).toBe("ready");
+      expect(plan.kind === "ready" ? plan.ready : null, staleId).toMatchObject({ inputId: INPUT_ID, secretId: SECRET_ID });
+    }
+  });
+
+  it("keeps a recorded LEGACY id only while it is the legacy id of the current values", async () => {
+    const h = harness();
+    scriptAzurePlan(h);
+    scriptCriblPlan(h);
+    const record = { groupId: G, inputId: "azure_onb_eh_ns1_h1", inputType: "eventhub" as const, secretId: "azure_onb_eh_ns1_h1_secret" };
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }, { kvRecord: record }));
+    expect(plan.kind === "ready" ? plan.ready : null).toMatchObject({
+      inputId: "azure_onb_eh_ns1_h1",
+      secretId: "azure_onb_eh_ns1_h1_secret",
+    });
   });
 
   it("refuses while a pending path cannot be placed", async () => {

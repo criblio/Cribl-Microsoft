@@ -62,10 +62,22 @@ user of the app and has no compare-and-swap:
 - **A lease** (a KV document naming the holder and an expiry) is taken before
   a swap and released after. It is best-effort: it stops this app's own tabs
   from interleaving, not a determined race.
-- **Proof of tenant before trusting a batch.** Before tenant N's reads count,
-  the session reads `GET /subscriptions/{sub}` (or `/tenants`) and checks the
-  returned `tenantId` is N. A mismatch (another tab swapped underneath) aborts
-  N's batch as unknown, never as red.
+- **Proof of tenant before AND after a batch.** Before tenant N's reads run,
+  and again after them, the session reads `GET /subscriptions/{sub}` and
+  checks the returned `tenantId` is N; the batch counts only when both answer
+  as N and the lease is still this holder's and unexpired when the work ends.
+  A mismatch, a refused proof or a lost lease (another tab swapped underneath)
+  makes N's batch unknown, never red. Save and connect and the secret probe
+  read the lease too, and do not write the slot while another tab holds it.
+- **What the proof does not prove.** The read names the subscription's HOME
+  tenant, not the token's issuer: a token from a tenant the subscription is
+  delegated to (Azure Lighthouse, `managedByTenants`) reads it too, so a
+  delegated subscription is unknown rather than proven. The Graph token is not
+  proven at all - no Graph read the app holds a permission for names the
+  token's tenant.
+- **Within one tab**, the credential slot admits ordinary requests for one
+  tenant at a time: a request for another tenant waits until those drain,
+  so no tenant can mint into the slot between another's token check and send.
 
 A multi-tenant read is therefore sequential and slower than single-tenant;
 results are cached per tenant so the dashboard does not re-read on every view.

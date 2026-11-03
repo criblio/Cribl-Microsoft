@@ -200,6 +200,12 @@ const FUNCTIONS = [
     ],
   },
   {
+    id: "tenant-session",
+    label: "Prove which tenant answered before another tenant's reads count",
+    necessity: "feature",
+    operations: ["entra.token", "subscription.read"],
+  },
+  {
     id: "siem-migration",
     label: "Inventory workspaces for a SIEM migration",
     necessity: "feature",

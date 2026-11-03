@@ -60,6 +60,9 @@ import type {
 import {
   commitTargetScope,
   computeInvalidation,
+  createPacingBudget,
+  CREDENTIAL_OWNER_KEY,
+  clearedCredentialOwner,
   DEFAULT_THEME_CHOICE,
   mustProduceArtifacts,
   EMPTY_AZURE_CONFIG,
@@ -101,7 +104,9 @@ import type {
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './platform/http';
 // Cloud-shell port adapters for the shared @soc/ui screens: the @soc/core
 // ports bound to the platform primitives (KV, proxy-injected auth, downloads).
-import { makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
+import { azureCredentialSlot, makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
+import { PlatformKvDocumentStore } from './platform/kv-document-store';
+import { connectThroughSlot, probeStoredSecret } from './platform/secret-connect';
 // The app-lifetime Logger (porting-plan Unit 3): bounded in-memory ring with
 // warn/error mirrored to one rolling plain KV entry. Module scope so the
 // ring survives connection switches and ports-bundle rebuilds.
@@ -151,6 +156,35 @@ const SETUP_KEY = 'setupComplete';
 const APP_OPTIONS_KEY = 'appOptions';
 const appStateStore = new PlatformSecretsStore();
 const appLogger = new PlatformLogger();
+// Plain JSON documents: the credential lease and the record of whose client
+// secret sits in the shared azureBasic slot (ADR 0009; @soc/core
+// CREDENTIAL_LEASE_KEY / CREDENTIAL_OWNER_KEY).
+const appDocuments = new PlatformKvDocumentStore();
+// This tab's credential-lease holder id. A lease held under any other id is
+// another tab reading a tenant through the shared slot.
+const TAB_HOLDER_ID = crypto.randomUUID();
+
+/**
+ * Clear (best effort) the record of whose secret is in azureBasic, wherever
+ * azureBasic itself is deleted, so a deleted secret leaves no stale claim for
+ * the secret probe to read.
+ */
+function clearCredentialOwnerRecord(): void {
+  void appDocuments.save(CREDENTIAL_OWNER_KEY, clearedCredentialOwner()).catch((err: unknown) => {
+    appLogger.warn('credential owner record not cleared', { error: String(err) });
+  });
+}
+
+/** The pieces of the secret paths (platform/secret-connect.ts) that never change. */
+const SECRET_PATH_DEPS = {
+  slot: azureCredentialSlot,
+  documents: appDocuments,
+  holderId: TAB_HOLDER_ID,
+  now: () => Date.now(),
+  mintArmToken: (tenantId: string) => acquireArmToken(tenantId),
+  writeArmToken: (token: string) => appStateStore.set('azureArmToken', token, { encrypted: true }),
+  logger: appLogger,
+};
 
 // The pacing hooks the batch-onboarding usecase runs its rolling-minute ARM
 // budget on (porting-plan Unit 6): the SHELL owns time - @soc/core never
@@ -158,9 +192,14 @@ const appLogger = new PlatformLogger();
 // renders. maxRequestsPerMinute stays at the @soc/core default (80/min),
 // leaving headroom under the platform proxy's ~100 req/min budget for the
 // status pollers and the operator's other screens.
+//
+// `shared` is ONE budget for the whole app (audit tenancy MEDIUM, App.tsx:163):
+// every paced wrapper - Validate, the batch, one per tenant in a scan - spends
+// it, instead of each spending a full allowance of its own.
 const BATCH_PACING: BatchPacing = {
   now: () => Date.now(),
   sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  shared: createPacingBudget(),
 };
 
 // The AzureConfig fields the Onboard screen cannot run without. tenantId
@@ -797,9 +836,12 @@ function App() {
   // azureBasic slot is the definitive probe. Success marks the secret live
   // (and stores a fresh azureArmToken, same as a connect); only a VERIFIED
   // failure surfaces a notice. 'idle' = nothing to probe yet (no identity).
+  // 'unproven': nothing was verified either way - the record of whose secret
+  // is stored names another connection, or another tab holds the credential
+  // lease. It is the journey's 'unknown', never a red.
   const [secretProbe, setSecretProbe] = useState<
     | { state: 'idle' | 'checking' | 'live' | 'missing' }
-    | { state: 'failed'; detail: string }
+    | { state: 'failed' | 'unproven'; detail: string }
   >({ state: 'idle' });
   const probedProfileRef = useRef<string | null>(null);
 
@@ -918,15 +960,26 @@ function App() {
 
   const activeConfig = getActiveConfig(store);
   const activeProfile = getActiveProfile(store);
+  // The store as of the latest render (and of a switch applied this tick), for
+  // async paths that must check the ACTIVE connection after an await - a render
+  // closure would still name the connection the path started on.
+  const storeRef = useRef(store);
+  useEffect(() => {
+    storeRef.current = store;
+  }, [store]);
 
   // The cloud port adapters for the @soc/ui screens, rebuilt when the
-  // ACTIVE connection's tenant changes (the ARM token flow is tenant-scoped;
-  // see makeCloudPorts). Construction is side-effect free. The logger rides
+  // ACTIVE connection's identity changes - tenant AND client (audit tenancy
+  // MEDIUM, App.tsx:928: a client change within one tenant is another app
+  // registration, so screens holding the old bundle must start again). The ARM
+  // and Graph adapters ride the app's one credential slot, which decides when a
+  // token must be re-minted. Construction is side-effect free. The logger rides
   // along BY REFERENCE (module-scoped), so its ring survives the rebuild and
   // every usecase invoked with this bundle logs for free.
   const cloudPorts = useMemo(
     () => makeCloudPorts(activeConfig.tenantId, appLogger),
-    [activeConfig.tenantId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clientId is the identity half the factory does not read
+    [activeConfig.tenantId, activeConfig.clientId]
   );
 
   // Which top-level surface to show (loading / AUA gate / mode select /
@@ -1008,6 +1061,7 @@ function App() {
   // the credentials panel is keyed by the active profile id and remounts.
   const applySwitch = useCallback(
     (prevConfig: AzureConfig, nextConfig: AzureConfig, nextId: string | null, nextStore: ProfileStore) => {
+      storeRef.current = nextStore;
       setStore(nextStore);
       setRenaming(false);
       const inv = computeInvalidation(prevConfig, nextConfig);
@@ -1020,6 +1074,9 @@ function App() {
       }
       if (needSecretClear) {
         void kvDelete('azureBasic');
+        clearCredentialOwnerRecord();
+        // The slot's tokens were minted with the secret just cleared.
+        azureCredentialSlot.noteSecretWritten();
       }
       if (needSecretClear) {
         setLiveSecretProfileId(null);
@@ -1066,6 +1123,7 @@ function App() {
       return;
     }
     const prevConfig = getActiveConfig(store);
+    azureCredentialSlot.forget(activeId);
     if (store.profiles.length <= 1) {
       const id = crypto.randomUUID();
       const nextStore: ProfileStore = {
@@ -1086,6 +1144,11 @@ function App() {
     // bridge; sequenced awaits would strand the second delete).
     void kvDelete('azureBasic');
     void kvDelete('azureArmToken');
+    clearCredentialOwnerRecord();
+    // Forget the tab's own copy too: a cleared secret must not be put back by a
+    // tenant session's restore.
+    if (store.activeProfileId !== null) azureCredentialSlot.forget(store.activeProfileId);
+    azureCredentialSlot.noteSecretWritten();
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
     setSwitchNotice('Stored secret cleared - re-enter the client secret in the App registration and connect section on Setup and Save and connect to re-authenticate.');
@@ -1201,28 +1264,33 @@ function App() {
     if (probedProfileRef.current === profileId) return;
     probedProfileRef.current = profileId;
     let cancelled = false;
+    let settled = false;
     setSecretProbe({ state: 'checking' });
+    const profile = {
+      id: profileId,
+      config: { tenantId: activeConfig.tenantId, clientId: activeConfig.clientId, subscriptionId: '' },
+    };
     void (async () => {
-      try {
-        const keys = await appStateStore.list('azure');
-        if (cancelled) return;
-        if (!keys.includes('azureBasic')) {
-          setSecretProbe({ state: 'missing' });
-          return;
-        }
-        const token = await acquireArmToken(activeConfig.tenantId);
-        await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });
-        if (cancelled) return;
+      const out = await probeStoredSecret(
+        { ...SECRET_PATH_DEPS, listKeys: () => appStateStore.list('azure') },
+        profile,
+        // Through the ref: the profile list is not a dependency, so editing any
+        // profile field never cancels a probe in flight.
+        (id) => storeRef.current.profiles.find((p) => p.id === id)?.name,
+      );
+      settled = true;
+      if (cancelled) return;
+      if (out.state === 'live') {
         handleSecretSaved(profileId, activeConfig.tenantId, activeConfig.clientId);
-        setSecretProbe({ state: 'live' });
-      } catch (err) {
-        if (!cancelled) {
-          setSecretProbe({ state: 'failed', detail: String(err) });
-        }
       }
+      setSecretProbe(out);
     })();
     return () => {
       cancelled = true;
+      // A run cancelled before it settled must be allowed to run again - the
+      // ref guard would otherwise leave this connection 'checking' all session
+      // (a dependency change mid-probe, or StrictMode's double effect).
+      if (!settled && probedProfileRef.current === profileId) probedProfileRef.current = null;
     };
   }, [
     hydrated,
@@ -1248,47 +1316,63 @@ function App() {
     clientId: string;
     clientSecret: string;
   }): Promise<AzureConnectResult> => {
-    try {
-      await appStateStore.set('azureBasic', btoa(`${input.clientId}:${input.clientSecret}`), {
-        encrypted: true,
-      });
-    } catch (err) {
-      return { ok: false, secretStored: false, message: String(err) };
+    const basic = btoa(`${input.clientId}:${input.clientSecret}`);
+    const profileId = store.activeProfileId;
+    if (profileId === null) {
+      return { ok: false, secretStored: false, message: 'No active connection - create or select a connection first.' };
+    }
+    // The secret and the verifying ARM token are written in ONE exclusive
+    // section of the slot, after the credential lease is checked, and the
+    // section ends by confirming this connection is still the active one
+    // (platform/secret-connect.ts). The tab keeps its own copy of the secret
+    // for this session only - the KV entry can never be read back, so this copy
+    // is the only way a tenant session can put this connection's secret back
+    // after reading another tenant. Never persisted, gone on reload.
+    const out = await connectThroughSlot(
+      {
+        ...SECRET_PATH_DEPS,
+        writeSecret: (value: string) => appStateStore.set('azureBasic', value, { encrypted: true }),
+        clearSlot: () => {
+          void kvDelete('azureBasic');
+          void kvDelete('azureArmToken');
+        },
+        activeProfile: () => getActiveProfile(storeRef.current),
+      },
+      { id: profileId, config: { tenantId: input.tenantId, clientId: input.clientId, subscriptionId: '' } },
+      { tenantId: input.tenantId, clientId: input.clientId, basic },
+    );
+    if (out.kind === 'leased' || out.kind === 'write-failed' || out.kind === 'changed') {
+      return { ok: false, secretStored: false, message: out.message };
     }
     // The encrypted slot is populated now, so mark the secret live regardless
-    // of whether the token step below succeeds.
-    if (store.activeProfileId !== null) {
-      handleSecretSaved(store.activeProfileId, input.tenantId, input.clientId);
-    }
+    // of whether the token step succeeded.
+    handleSecretSaved(profileId, input.tenantId, input.clientId);
     // THE trigger the audit key cannot reveal: a NEW secret just arrived. Tenant
     // and client id are unchanged, so the key does not move and the hook's own
     // effect will not re-fire - but what this identity can be MEASURED to do may
     // have gone from unmeasurable to measurable. Fired here rather than in
     // handleSecretSaved because only this path takes a secret from the operator.
     auditCapabilities('secret-entry');
-    try {
-      const token = await acquireArmToken(input.tenantId);
-      await appStateStore.set('azureArmToken', token.access_token, { encrypted: true });
-      handleConnected();
-      return {
-        ok: true,
-        secretStored: true,
-        message: [
-          'Connected.',
-          '  client secret: saved (encrypted, write-only) for this connection',
-          `  ARM token: acquired and stored encrypted (expires_in ${token.expires_in ?? '(missing)'})`,
-          '',
-          'Next: the Select resources and grant permissions section below discovers',
-          'subscriptions, selects your resources, and grants roles.',
-        ].join('\n'),
-      };
-    } catch (err) {
+    if (out.kind === 'token-failed') {
       return {
         ok: false,
         secretStored: true,
-        message: `Client secret saved, but the connect verification failed.\n${String(err)}`,
+        message: `Client secret saved, but the connect verification failed.\n${out.message}`,
       };
     }
+    handleConnected();
+    return {
+      ok: true,
+      secretStored: true,
+      message: [
+        'Connected.',
+        '  client secret: saved (encrypted, write-only) for this connection',
+        `  ARM token: acquired and stored encrypted (expires_in ${out.expiresIn ?? '(missing)'})`,
+        '',
+        'Next: the Select resources and grant permissions section below discovers',
+        'subscriptions, selects your resources, and grants roles.',
+      ].join('\n'),
+    };
   };
 
   // The EXPLICIT scope commit from the Integrate page's Azure Resources
@@ -1313,6 +1397,10 @@ function App() {
     }
     if (result.invalidation.clearSecret) {
       void kvDelete('azureBasic');
+      clearCredentialOwnerRecord();
+      // The identity changed, so the tab's copy is another identity's secret.
+      if (store.activeProfileId !== null) azureCredentialSlot.forget(store.activeProfileId);
+      azureCredentialSlot.noteSecretWritten();
       setLiveSecretProfileId(null);
       setLiveSecretIdentity(null);
     }
@@ -1599,7 +1687,9 @@ function App() {
         ? 'The stored client secret FAILED verification just now - token acquisition ' +
           'was refused. Re-enter the secret in the App registration and connect ' +
           `section on Setup. Detail: ${secretProbe.detail}`
-        : null;
+        : secretProbe.state === 'unproven'
+          ? `Whether the stored client secret is this connection's is not known: ${secretProbe.detail}.`
+          : null;
 
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
@@ -1670,7 +1760,9 @@ function App() {
                   ? 'not stored'
                   : secretProbe.state === 'failed'
                     ? 'failed verification'
-                    : 'unknown'}
+                    : secretProbe.state === 'unproven'
+                      ? 'unproven'
+                      : 'unknown'}
           </span>
           <span
             className="scope-chip"
@@ -2110,7 +2202,14 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <AzureOnboardingScreen pacing={BATCH_PACING} />
+        {/* Keyed on the active connection like the Setup sections, so a
+            connection switch starts the screen afresh rather than carrying the
+            previous tenant's run, worker group and Cribl side across (audit
+            tenancy MEDIUM, azure-onboarding-screen.tsx:245). */}
+        <AzureOnboardingScreen
+          key={`azure-onboarding-${store.activeProfileId ?? 'none'}`}
+          pacing={BATCH_PACING}
+        />
       </PortsProvider>
     </>
   );
@@ -2130,7 +2229,7 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <AzureLoggingMapScreen />
+        <AzureLoggingMapScreen key={`azure-logging-map-${store.activeProfileId ?? 'none'}`} />
       </PortsProvider>
     </>
   );

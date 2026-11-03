@@ -193,6 +193,35 @@ export interface BatchPacing {
   now: () => number;
   /** Delay hook (shell-owned; fake ticks in tests). */
   sleep: (ms: number) => Promise<void>;
+  /**
+   * The APP-WIDE budget every paced wrapper also spends (audit tenancy MEDIUM,
+   * App.tsx:163). Without it each wrapper - one per tenant in a scan, Validate
+   * beside the logging map - spent a full allowance of its own against the one
+   * proxy budget they all share. A wrapper's own maxRequestsPerMinute still
+   * applies on top as a tighter cap.
+   */
+  shared?: PacingBudget;
+}
+
+/**
+ * A rolling-minute budget shared by reference between paced wrappers. Mutable
+ * on purpose - sharing it IS the point - and created by the shell once per app.
+ */
+export interface PacingBudget {
+  readonly maxPerMinute: number;
+  current: PollBudget;
+}
+
+/**
+ * A fresh shared budget. Defaults to {@link DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE}.
+ *
+ * @throws RangeError when maxPerMinute is not a positive integer.
+ */
+export function createPacingBudget(maxPerMinute: number = DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE): PacingBudget {
+  if (!Number.isInteger(maxPerMinute) || maxPerMinute < 1) {
+    throw new RangeError(`maxPerMinute must be a positive integer (got ${maxPerMinute})`);
+  }
+  return { maxPerMinute, current: { maxPerMinute, recentRunTimestamps: [] } };
 }
 
 /** Input for {@link onboardBatch}. */
@@ -343,22 +372,32 @@ export function paceAzureManagement(
     );
   }
   let budget: PollBudget = { maxPerMinute, recentRunTimestamps: [] };
+  const shared = pacing.shared;
+
+  // How long until a FULL budget's oldest in-window issue leaves the sliding
+  // minute. maxPerMinute >= 1 guarantees a full budget's in-window list is
+  // non-empty.
+  const waitFor = (full: PollBudget, now: number): number => {
+    const inWindow = full.recentRunTimestamps.filter((t) => now - t < BUDGET_WINDOW_MS);
+    return BUDGET_WINDOW_MS - (now - Math.min(...inWindow));
+  };
 
   const acquire = async (): Promise<void> => {
     for (;;) {
       const now = pacing.now();
-      if (remainingBudget(budget, now) > 0) {
+      const localRoom = remainingBudget(budget, now) > 0;
+      const sharedRoom = shared === undefined || remainingBudget(shared.current, now) > 0;
+      if (localRoom && sharedRoom) {
         budget = recordRun(budget, now);
+        if (shared !== undefined) shared.current = recordRun(shared.current, now);
         return;
       }
-      // Window full: wait until the OLDEST in-window issue timestamp leaves
-      // the sliding minute, then re-check. maxPerMinute >= 1 guarantees the
-      // in-window list is non-empty here.
-      const inWindow = budget.recentRunTimestamps.filter(
-        (t) => now - t < BUDGET_WINDOW_MS,
-      );
-      const oldest = Math.min(...inWindow);
-      await pacing.sleep(Math.max(1, BUDGET_WINDOW_MS - (now - oldest)));
+      // A window is full: wait until its oldest issue leaves the minute, then
+      // re-check both.
+      const waits: number[] = [];
+      if (!localRoom) waits.push(waitFor(budget, now));
+      if (!sharedRoom && shared !== undefined) waits.push(waitFor(shared.current, now));
+      await pacing.sleep(Math.max(1, ...waits));
     }
   };
 

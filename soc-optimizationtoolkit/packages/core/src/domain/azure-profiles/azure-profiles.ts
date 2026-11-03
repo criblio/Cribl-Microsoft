@@ -9,7 +9,10 @@
  *
  * SECRET-EXCLUSION carries over from azure-config: a profile's config NEVER
  * carries the client secret. The secret lives only in the encrypted, write-only
- * `azureBasic` secrets-store entry, keyed per profile by the shell. Every config
+ * `azureBasic` entry - ONE slot for every profile, because the app proxy
+ * injects from a fixed key (ADR 0009) - plus, for the current browser session
+ * only, the shell's in-memory copy (platform/credential-slot.ts) that lets a
+ * tenant session put it back after reading another tenant. Every config
  * that enters this store on parse is run back through {@link parseAzureConfig},
  * so a stray `clientSecret`/`accessToken` planted in a persisted blob is
  * stripped before it can surface.

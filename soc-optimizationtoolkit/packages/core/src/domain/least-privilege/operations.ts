@@ -968,6 +968,22 @@ const OPERATIONS = {
       "GET https://management.azure.com/subscriptions?api-version=2022-12-01",
     ],
   },
+  "subscription.read": {
+    id: "subscription.read",
+    calls: [
+      { method: "GET", path: "/subscriptions/{sub}", api: "arm" },
+    ],
+    operation: "Microsoft.Resources/subscriptions/read",
+    leastRole: "Reader",
+    alsoGrantedBy: ["Contributor", "Owner", "Monitoring Reader", "Log Analytics Reader", "any role assigned at or under the subscription"],
+    scope: "subscription",
+    scopeNote: "the subscription the connection profile names",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/management-and-governance",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit: the tenant session's proof read (ADR 0009 decision 2), GET /subscriptions/{sub}, whose body names the subscription's tenantId. Same action as the audited GET /subscriptions list, which any role reaching the subscription grants.",
+  },
   "resourceGroups.list": {
     id: "resourceGroups.list",
     calls: [
