@@ -18,8 +18,12 @@ const E5_SKU = E5_QUALIFYING_SKUS.find((s) => s.skuPartNumber === "SPE_E5")!;
 
 const OPTS = { readAt: "2026-11-03T00:00:00Z", sentinelWorkspaces: 1 as number | null };
 
-function inventory(billableDailyAverageMB: number, workspaceId = WS): WorkspaceInventory {
-  return { workspaceId, totals: { billableDailyAverageMB } } as unknown as WorkspaceInventory;
+function inventory(
+  billableDailyAverageMB: number,
+  workspaceId = WS,
+  usageWarning: string | null = null,
+): WorkspaceInventory {
+  return { workspaceId, usageWarning, totals: { billableDailyAverageMB } } as unknown as WorkspaceInventory;
 }
 
 function queryResult(columns: string[], rows: unknown[][]): PortHttpResponse {
@@ -419,6 +423,27 @@ describe("readDataAllowances - the numbers", () => {
       OPTS,
     );
     expect(r.gaps.join("\n")).toMatch(/Eligible volume .* not read/);
+    // The VIEW says unknown: not zero eligible, and not "no capped day".
+    const e5 = view(r, "e5");
+    expect(e5.eligibleKnown).toBe(false);
+    expect(e5.crossCheck.kind).toBe("skipped");
+    expect((e5.crossCheck as { reason: string }).reason).toMatch(/eligible volume not read/);
+  });
+
+  it("eligibleKnown is true when the eligible read succeeded", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "M365 E5", 1]) },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    });
+    const r = await readDataAllowances(azure, graphWith(skusBody({ enabled: 1, consumed: 1 })), WS, inventory(0), OPTS);
+    expect(view(r, "e5").eligibleKnown).toBe(true);
+  });
+
+  it("sumsAreFloors follows a partial Usage answer in workspace scope", async () => {
+    const a = await readDataAllowances(routedAzure({}).azure, undefined, WS, inventory(0, WS, "Usage was partial"), OPTS);
+    expect(a.sumsAreFloors).toBe(true);
+    const b = await readDataAllowances(routedAzure({}).azure, undefined, WS, inventory(0), OPTS);
+    expect(b.sumsAreFloors).toBe(false);
   });
 });
 
@@ -476,11 +501,18 @@ describe("compareTenant", () => {
     expect(r.scope.notRead).toHaveLength(1);
     expect(r.scope.notRead[0]!.id).toBe(WS2);
     expect(r.scope.notRead[0]!.error).toMatch(/HTTP 403/);
-    for (const g of r.grants) expect(g.grantedIsFloor).toBe(true);
+    // E5 seat counts are tenant-wide and were read: an unread workspace does not floor them.
+    expect(view(r, "e5").grantedIsFloor).toBe(false);
+    expect(r.sumsAreFloors).toBe(true);
+    expect(r.queries.tables).toBeNull();
+    expect(r.gaps).toContain("Table plans are not read in a tenant comparison.");
     // Billable sums only the workspace that was read; used 1000 MB / 30.
     expect(r.afterAllowancesDailyMB).toBeCloseTo(300 - 1000 / 30);
-    // The tenant comparison does not skip the cross-check for shared workspaces.
-    expect(view(r, "e5").crossCheck.kind).not.toBe("skipped");
+    // A partial sum is never cross-checked.
+    for (const g of r.grants) {
+      expect(g.crossCheck.kind).toBe("skipped");
+      expect((g.crossCheck as { reason: string }).reason).toMatch(/1 workspace was not read/);
+    }
   });
 
   it("sums benefit and eligible volume across workspaces and counts a shared machine once", async () => {
@@ -504,7 +536,29 @@ describe("compareTenant", () => {
     expect(view(r, "e5").usage.eligibleByDay.get(DAY)).toBe(4000);
     expect(r.servers.rows[0]!.machinesReportingHere).toBe(1);
     expect(r.afterAllowancesDailyMB).toBeCloseTo(1000 - 2000 / 30);
-    expect(view(r, "e5").grantedIsFloor).toBe(true);
+    expect(view(r, "e5").grantedIsFloor).toBe(true); // licences not bound: floor from usage
+    expect(r.sumsAreFloors).toBe(false);
+  });
+
+  it("an unread workspace floors the Servers granted figure but not the E5 one", async () => {
+    const { azure } = routedAzure({
+      benefit: { [WS]: benefit([DAY, "M365 E5", 1], [DAY, "Defender for Servers", 1]), [WS2]: DENIED },
+      eligible: eligible([DAY, "SigninLogs", 2000], [DAY, "SecurityEvent", 2000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+    });
+    const r = await compareTenant(
+      azure,
+      graphWith(skusBody({ enabled: 100, consumed: 100 })),
+      [WS, WS2],
+      new Map([
+        [WS, inventory(300, WS)],
+        [WS2, inventory(700, WS2)],
+      ]),
+      { readAt: OPTS.readAt },
+    );
+    expect(view(r, "e5")).toMatchObject({ grantedMB: 500, grantedIsFloor: false });
+    expect(view(r, "servers-p2")).toMatchObject({ grantedMB: 500, grantedIsFloor: true });
   });
 
   it("a workspace with no inventory is listed as not read rather than read with a zero total", async () => {

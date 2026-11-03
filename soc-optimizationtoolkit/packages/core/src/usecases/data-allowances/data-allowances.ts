@@ -84,6 +84,11 @@ export interface GrantView {
   usage: GrantUsage;
   /** Null when the granted figure could not be established (never 0 for unknown). */
   grantedMB: number | null;
+  /**
+   * False when the eligible-volume read failed or was partial: `usage`
+   * eligible figures and `eligibleTables` are then unknown, not zero.
+   */
+  eligibleKnown: boolean;
   /** True when `grantedMB` is "at least" - a lower bound, not the figure. */
   grantedIsFloor: boolean;
   crossCheck: CrossCheck;
@@ -102,6 +107,11 @@ export interface DataAllowances {
   /** Total eligible vs total applied; set only when attribution is "pooled". */
   pooled: GrantUsage | null;
   afterAllowancesDailyMB: number;
+  /**
+   * True when eligible, used and after-allowances sums are lower bounds: a
+   * workspace was not read (tenant) or the Usage answer was partial (workspace).
+   */
+  sumsAreFloors: boolean;
   licences: LicenceRead;
   servers: { rows: ServersSubscriptionRow[]; unattributedMachines: number };
   scope:
@@ -119,7 +129,8 @@ export interface DataAllowances {
     machines: string;
     graph: string;
     pricings: string;
-    tables: string;
+    /** Null in a tenant comparison, which makes no tables call. */
+    tables: string | null;
   };
   /** Reads that failed but did not stop the result; each is stated, never a zero. */
   gaps: string[];
@@ -144,6 +155,8 @@ const errorText = (error: unknown): string =>
 interface WorkspaceReads {
   benefitRows: Row[];
   eligibleRows: Row[] | null;
+  /** False when the eligible read failed or came back partial. */
+  eligibleComplete: boolean;
   heartbeatRows: Row[] | null;
 }
 
@@ -168,6 +181,7 @@ async function readWorkspace(
 
   opts.onProgress?.(`Reading eligible volume${label}`);
   let eligibleRows: Row[] | null = null;
+  let eligibleComplete = false;
   try {
     const eligible = await runWorkspaceQuery(
       azure,
@@ -176,6 +190,7 @@ async function readWorkspace(
       "read eligible volume (Usage)",
     );
     eligibleRows = eligible.rows;
+    eligibleComplete = eligible.warning === null;
     if (eligible.warning !== null) {
       gaps.push(`The eligible volume read${label} was partial: ${eligible.warning}`);
     }
@@ -192,7 +207,7 @@ async function readWorkspace(
   } catch (error) {
     gaps.push(`Reporting machines${label} were not read: ${errorText(error)}`);
   }
-  return { benefitRows: benefit.rows, eligibleRows, heartbeatRows };
+  return { benefitRows: benefit.rows, eligibleRows, eligibleComplete, heartbeatRows };
 }
 
 /** table (lower-case) -> plan, or null when the list was refused or unreadable. */
@@ -338,8 +353,8 @@ interface Assembly {
   /** Why no cross-check can be run, when something other than the data says so. */
   workspaceSkipReason: string | null;
   plans: Map<string, string> | null;
-  /** Some workspaces were not read: every sum is a floor. */
-  floorAll: boolean;
+  /** Some workspaces were not read: the Servers machine count is a floor. */
+  floorServers: boolean;
 }
 
 function dayMap(): Map<string, number> {
@@ -375,6 +390,7 @@ function assemble(
     }
   }
 
+  const eligibleKnown = input.reads.length > 0 && input.reads.every((r) => r.eligibleComplete);
   const pooledMode = benefit.attribution === "pooled";
   const usedByGrant = new Map<GrantId, Map<string, number>>([
     ["e5", dayMap()],
@@ -387,6 +403,7 @@ function assemble(
   }
 
   const skipReason = (grant: GrantId): string | null => {
+    if (!eligibleKnown) return "Cross-check skipped: eligible volume not read (or only partly read).";
     if (pooledMode) {
       return `Cross-check skipped: the benefit type(s) ${benefit.unmatchedTypes.join(", ")} could not be attributed to a grant, so the benefit applied is only known in total.`;
     }
@@ -455,7 +472,8 @@ function assemble(
               ]);
       }
     }
-    if (input.floorAll && grantedMB !== null) grantedIsFloor = true;
+    // An unread workspace hides machines (Servers); the E5 seat count is tenant-wide.
+    if (input.floorServers && grant === "servers-p2" && grantedMB !== null) grantedIsFloor = true;
 
     const tables = [...eligibleByTable.get(grant)!.values()]
       .filter((t) => t.mb > 0)
@@ -466,7 +484,7 @@ function assemble(
         criblWritable: criblWritable(t.table),
       }))
       .sort((a, b) => b.eligibleDailyMB - a.eligibleDailyMB || a.table.localeCompare(b.table));
-    grants.push({ grant, usage, grantedMB, grantedIsFloor, crossCheck: check, eligibleTables: tables });
+    grants.push({ grant, usage, eligibleKnown, grantedMB, grantedIsFloor, crossCheck: check, eligibleTables: tables });
   }
 
   let pooled: GrantUsage | null = null;
@@ -556,7 +574,7 @@ export async function readDataAllowances(
     heartbeatComplete: reads.every((r) => r.heartbeatRows !== null),
     workspaceSkipReason,
     plans,
-    floorAll: false,
+    floorServers: false,
   });
   opts.logger?.info("data-allowances: read", {
     grants: result.grants.length,
@@ -565,6 +583,7 @@ export async function readDataAllowances(
   });
   return {
     ...result,
+    sumsAreFloors: inventory.usageWarning !== null,
     licences,
     servers,
     scope: { kind: "workspace", sentinelWorkspaces: n },
@@ -614,10 +633,14 @@ export async function compareTenant(
     licences,
     servers,
     heartbeatComplete: reads.every((r) => r.heartbeatRows !== null),
-    workspaceSkipReason: null,
+    workspaceSkipReason:
+      notRead.length > 0
+        ? `Cross-check skipped: ${notRead.length} workspace${notRead.length === 1 ? " was" : "s were"} not read, so the tenant sums are partial.`
+        : null,
     plans: null,
-    floorAll: notRead.length > 0,
+    floorServers: notRead.length > 0,
   });
+  gaps.push("Table plans are not read in a tenant comparison.");
   opts.logger?.info("data-allowances: tenant compared", {
     workspaces: workspaceIds.length,
     notRead: notRead.length,
@@ -625,10 +648,11 @@ export async function compareTenant(
   });
   return {
     ...result,
+    sumsAreFloors: notRead.length > 0,
     licences,
     servers,
     scope: { kind: "tenant", workspaces: [...workspaceIds], notRead },
-    queries: queriesFor("{workspaceId}"),
+    queries: { ...queriesFor("{workspaceId}"), tables: null },
     gaps,
   };
 }
