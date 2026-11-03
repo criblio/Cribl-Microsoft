@@ -1258,6 +1258,53 @@ the worker group control of the whole namespace, not read access to one hub.
 pasted connection string as the only Event Hub credential) is amended before
 AZR-59 is coded; until then AZR-58 alone narrows the SAS path.
 
+#### 6i. Multi-tenant Azure customers - DECIDED 2026-11-03
+
+Status: Decided (operator, 2026-11-03), building on feature/multi-tenant-azure.
+Cards: AZR-61 (least-privilege audit), AZR-62 (per-tenant connections and
+change requests), AZR-63 (gap dashboard), AZR-64 (tenant to Cribl mapping),
+AZR-65 (tenant switch shows the previous tenant's worker groups).
+
+**The request (operator, 2026-11-03):** improve the Azure connection
+experience for multi-tenant Azure customers, with a gap analysis of Azure
+native logging per tenant: a dashboard with a green or red indicator per
+tenant for what is configured in Azure vs not and what is onboarded to Cribl
+vs not; a Setup option to paste a comma-delimited list of tenant ids and
+download a change request for each; and an audit of what the app does and the
+least privilege each function needs, so the change requests are accurate.
+
+**What this reverses:** project memory recorded "single tenant only"
+(2026-08-20). That described the lab; the product now supports several
+tenants. The lab is still one tenant, so multi-tenant behaviour is proven with
+fakes until a second test tenant exists.
+
+**Decision 1 - how the app reaches each tenant: ONE APP REGISTRATION PER
+TENANT (chosen).** Each tenant gets its own app registration and secret,
+stored as one connection profile per tenant (the existing azure-profiles
+model). Rejected: a single multi-tenant app registration with admin consent
+per tenant (fewer secrets, one client id, but a different consent and token
+model than the app has); Azure Lighthouse delegation (one token sees every
+delegated subscription, but it cannot grant Entra/Graph or the tenant-level
+microsoft.aadiam diagnostic settings, so Entra logging gaps could be neither
+read nor configured). Consequence: the per-tenant change request asks that
+tenant to create its own app registration and grant it the audited least
+privileges; secrets per tenant are stored as each profile's encrypted secret.
+
+**Decision 2 - how tenants land in Cribl: BOTH, the operator chooses.** One
+workspace and worker group receiving every tenant, or a worker group per
+tenant. The tenant to Cribl mapping is configuration, and the dashboard's
+"onboarded to Cribl" column reads whichever the operator chose.
+
+**Decision 3 - sequencing: a parallel branch now.** Built on
+feature/multi-tenant-azure in its own worktree while
+feature/azure-onboarding-live-pass finishes; two PRs.
+
+**The least-privilege audit comes first** because the change requests and
+AZR-60's permission banners both derive from it: every function the app
+performs, each Azure ARM / Graph / Cribl call behind it, and the least role
+or permission at the narrowest scope that allows it, as ONE registry the
+change-request generators and the permission checks read, never restated.
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
