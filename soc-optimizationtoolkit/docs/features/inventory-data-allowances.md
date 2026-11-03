@@ -47,7 +47,7 @@ visible date. A table missing from the mapping is `Billable`, never a guess.
 | **Used** per grant per day | workspace `Operation` table: `Detail` = `Benefit amount used: X GB`, `OperationKey` = `Benefit type used: <type>`. Recorded since 2024-01-27 per Microsoft ([cost-usage](https://learn.microsoft.com/en-us/azure/azure-monitor/fundamentals/cost-usage#view-data-allocation-benefits)) | existing |
 | **Over** per grant per day | eligible minus used, per day, then averaged over the window | existing |
 | **Granted** (E5) | Graph `GET /v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo`; qualifying SKUs matched on `skuId` from a dated list | **NEW: `LicenseAssignment.Read.All`** (Graph application, admin consent) |
-| **Granted** (Servers P2) | ARM `Microsoft.Security/pricings/VirtualMachines` per subscription (plan + subPlan), times machines reporting to the workspace (Heartbeat, by `Computer` and `_SubscriptionId`) | expected existing; confirm live (see Open) |
+| **Granted** (Servers P2) | ARM `Microsoft.Security/pricings/VirtualMachines` per subscription (plan + subPlan), times machines reporting to the workspace (Heartbeat, by day, `Computer` and `_SubscriptionId`: the grant is per machine PER DAY, so machines are counted per day; the card shows the daily average and the cross-check compares each capped day with that day's count) | expected existing; confirm live (see Open) |
 
 `Used` and `Over` are Microsoft's own record and need no licence data, so they
 are exact even when Granted cannot be read.
@@ -108,7 +108,10 @@ by the first task):
 5. **"Queries that produced these numbers"** gains the `Operation` query, the
    eligible-volume query, and the Graph and ARM calls.
 6. **CSV** gains `Allowance`, `AllowanceEligibleDailyMB`, `AllowanceUsedDailyMB`,
-   `AllowanceOverDailyMB` columns (the grant-level figures repeated per row).
+   `AllowanceOverDailyMB` columns (the grant-level figures repeated per row),
+   and `AllowanceFigures`, which says whether those figures are `exact` or a
+   `lower bound` (a workspace not read, a partial Usage answer, or a partial
+   benefit read). An unknown figure is an empty cell, never 0.
 
 ### Without the new permission
 
@@ -188,12 +191,17 @@ These are the designer's calls, not the user's; each is cheap to reverse.
    inventoried workspace: Used and Over are exact for it, Granted is labelled
    "tenant-wide, shared across N Sentinel workspaces" (N from the existing
    workspace discovery, which already counts Sentinel-enabled workspaces), and
-   the cross-check is skipped with that reason. A "Compare against the whole
+   the cross-check is skipped with that reason; so are the E5 headroom and
+   meter, which would compare the tenant-wide grant with one workspace's
+   eligible volume. A "Compare against the whole
    tenant" action reads eligible volume and `Operation` benefit rows from every
    visible Sentinel workspace on demand, sums them, and then runs the
    cross-check tenant-wide. Workspaces it cannot read are listed as `not read`
    and the sums become `at least` (inventory standard). The same applies to
-   Servers P2 when a subscription's machines report to several workspaces.
+   Servers P2 when a subscription's machines report to several workspaces,
+   except the tenant-wide cross-check: the Servers P2 benefit is capped per
+   workspace, so a day capped in the tenant sum may be one workspace running
+   out. The Servers P2 cross-check runs on a single workspace only.
 
 ## Open, for the builder to confirm live (Live Preview, a workspace with benefits)
 

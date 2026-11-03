@@ -152,6 +152,7 @@ export function sourceCount(table: InventoryTable): number | null {
  * A CSV of the inventory, one row per table source, for the migration ticket.
  * The allowance columns repeat the grant-level figures per row; with no
  * allowance result (or an unknown figure) those cells are empty, never 0.
+ * AllowanceFigures says whether they are exact or lower bounds.
  */
 export function inventoryCsv(inventory: WorkspaceInventory, allowances: DataAllowances | null): string {
   const esc = (v: string | number) => {
@@ -163,6 +164,7 @@ export function inventoryCsv(inventory: WorkspaceInventory, allowances: DataAllo
       "Table", "TableDailyAvgMB", "TableBillableMB", "DaysWithData", "Solutions",
       "Source", "SourceKind", "SourceDailyAvgMB", "SourceEvents", "SourceStatus",
       "Allowance", "AllowanceEligibleDailyMB", "AllowanceUsedDailyMB", "AllowanceOverDailyMB",
+      "AllowanceFigures",
     ].join(","),
   ];
   for (const t of listingRows(inventory.tables)) {

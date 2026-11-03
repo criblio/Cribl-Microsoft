@@ -181,6 +181,12 @@ describe("crossCheck", () => {
   it("is skipped when there is no basis to compare", () => {
     expect(crossCheck([{ usedMB: 1 }], []).kind).toBe("skipped");
   });
+  it("pins both edges of the default 2% tolerance", () => {
+    // 12200 is 1.67% from 12000 (inside) and 2.4% from 12500 (outside).
+    expect(crossCheck([{ usedMB: 12200 }], bases)).toEqual({ kind: "matched", basis: "assigned", medianMB: 12200 });
+    // 12300 is 2.5% from 12000: outside the default.
+    expect(crossCheck([{ usedMB: 12300 }], [{ basis: "assigned", mb: 12000 }]).kind).toBe("unmatched");
+  });
   it("uses the median of an even count", () => {
     expect(crossCheck([{ usedMB: 11900 }, { usedMB: 12100 }], bases)).toEqual({
       kind: "matched",

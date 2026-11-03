@@ -66,9 +66,28 @@ export function grantedUnknownReason(view: GrantView, a: DataAllowances | null):
     if (a === null || a.licences.kind === "read") return "the granted figure could not be established";
     return "licence counts were not read and no benefit was applied in the window";
   }
-  if (a !== null && a.servers.rows.length === 0) return "no reporting machine was attributed to a subscription";
+  if (a !== null && a.servers.rows.length === 0) {
+    // A failed or partial Heartbeat read is not "no machines": it was not read.
+    if (!a.servers.heartbeatComplete) return "reporting machines were not read";
+    return a.servers.unattributedMachines > 0
+      ? "no reporting machine was attributed to a subscription"
+      : "no reporting machines were found";
+  }
   return "no subscription's Defender plan could be read";
 }
+
+/**
+ * Can this card compare its granted figure with its eligible volume? The E5
+ * grant is tenant-wide: in one workspace's view it is comparable only when
+ * that workspace is the tenant's only Sentinel workspace. Servers P2 is granted
+ * per workspace (machines reporting here), so it is always comparable.
+ */
+export function headroomApplies(view: GrantView, a: DataAllowances | null): boolean {
+  if (a === null || a.scope.kind !== "workspace" || view.grant !== "e5") return true;
+  return a.scope.sentinelWorkspaces === 1;
+}
+
+const TENANT_WIDE_HEADROOM = "headroom is tenant-wide - use Compare against the whole tenant";
 
 export interface GrantCardText {
   title: string;
@@ -84,6 +103,8 @@ export interface GrantCardText {
 export function grantCardText(view: GrantView, a: DataAllowances | null = null): GrantCardText {
   const floors = a?.sumsAreFloors === true;
   const atLeast = floors ? "at least " : "";
+  // A partial benefit read: Used is a lower bound, so Over (eligible - used) is not known.
+  const usedFloor = a?.usedIsFloor === true;
   const granted =
     view.grantedMB === null
       ? `not known - ${grantedUnknownReason(view, a)}`
@@ -91,25 +112,34 @@ export function grantCardText(view: GrantView, a: DataAllowances | null = null):
         ? `at least ${gbPerDay(view.grantedMB)}`
         : gbPerDay(view.grantedMB);
   const eligible = view.eligibleKnown ? `${atLeast}${gbPerDay(view.usage.eligibleDailyMB)}` : "not read";
-  const eligibleUsed = `eligible ${eligible}, used ${atLeast}${gbPerDay(view.usage.usedDailyMB)}`;
+  const usedAtLeast = floors || usedFloor ? "at least " : "";
+  const eligibleUsed = `eligible ${eligible}, used ${usedAtLeast}${gbPerDay(view.usage.usedDailyMB)}`;
 
   let status: string;
   if (!view.eligibleKnown) {
     status = "over and headroom not read";
+  } else if (usedFloor) {
+    status = "over not known (partial benefit read)";
   } else if (view.usage.overDailyMB > 0) {
     status = `${atLeast}${gbPerDay(view.usage.overDailyMB)} over`;
   } else if (view.grantedMB === null || view.grantedIsFloor || floors) {
     // Headroom needs an exact granted figure and an exact eligible sum.
     status = floors ? "over not known (partial read)" : "no day ran over";
+  } else if (!headroomApplies(view, a)) {
+    status = TENANT_WIDE_HEADROOM;
   } else {
     status = `${gbPerDay(Math.max(0, view.grantedMB - view.usage.eligibleDailyMB))} headroom`;
   }
   return { title: GRANT_LABEL[view.grant], granted, eligibleUsed, status };
 }
 
-/** Is the eligible-against-granted meter drawable? */
-export function meterOf(view: GrantView): { eligiblePct: number; grantedPct: number } | null {
+/** Is the eligible-against-granted meter drawable? Not for a grant this view cannot compare. */
+export function meterOf(
+  view: GrantView,
+  a: DataAllowances | null = null,
+): { eligiblePct: number; grantedPct: number } | null {
   if (!view.eligibleKnown || view.grantedMB === null || view.grantedMB <= 0) return null;
+  if (!headroomApplies(view, a)) return null;
   const max = Math.max(view.grantedMB, view.usage.eligibleDailyMB);
   if (max <= 0) return null;
   return {
@@ -130,13 +160,16 @@ export interface OverRow {
  */
 export function overCell(row: OverRow, a: DataAllowances | null, windowDays: number): string {
   const tag = allowanceFor(row.table);
-  if (tag.kind === "free") return "0";
+  // Usage's IsBillable is the authority: a Free-tagged table Usage still bills
+  // is billable volume no grant covers, never a 0 beside a billed figure.
+  if (tag.kind === "free") return row.billableMB > 0 ? formatMB(row.billableMB / windowDays) : "0";
   if (tag.kind === "billable") return formatMB(row.billableMB / windowDays);
   if (a === null) return "";
   if (a.attribution === "pooled") {
     if (a.pooled === null) return "not known";
     // The pooled overage is worked out from the eligible sum; unread, it is not a figure.
     if (!a.eligibleKnown) return "not read";
+    if (a.usedIsFloor) return "not known (partial benefit read)";
     return `share of ${a.sumsAreFloors ? "at least " : ""}${formatMB(a.pooled.overDailyMB)} (all grants)`;
   }
   const view = a.grants.find((g) => g.grant === tag.grant);
@@ -147,6 +180,7 @@ export function overCell(row: OverRow, a: DataAllowances | null, windowDays: num
     return row.billableMB > 0 ? "not read" : "0";
   }
   if (!view.eligibleKnown) return "not read";
+  if (a.usedIsFloor) return "not known (partial benefit read)";
   if (view.usage.overDailyMB <= 0) return a.sumsAreFloors ? "not known (partial read)" : "0";
   return `share of ${a.sumsAreFloors ? "at least " : ""}${formatMB(view.usage.overDailyMB)}`;
 }
@@ -222,11 +256,16 @@ export function basisFigures(view: GrantView, a: DataAllowances): BasisFigure[] 
   ];
 }
 
+/** A count that may be a daily average: up to two decimals, never rounded to 0. */
+export function countText(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
 /** `2,400 x 5 MB = 12.0 GB/day` - literal, so the operator can redo it. */
 export function arithmeticLine(f: BasisFigure): string {
   const label = basisLabel(f.basis);
   if (f.count === null || f.mb === null) return `${label}: not known`;
-  return `${label}: ${f.count.toLocaleString("en-US")} x ${f.mbPerUnit} MB = ${gbPerDay(f.mb)}`;
+  return `${label}: ${countText(f.count)} x ${f.mbPerUnit} MB = ${gbPerDay(f.mb)}`;
 }
 
 /**
@@ -325,26 +364,80 @@ export function tenantDiscoveryNote(discovery: WorkspaceDiscovery): string | nul
   );
 }
 
-/** The "daily billable after allowances" tile value. */
+/**
+ * The "daily billable after allowances" tile value: billable minus used. A
+ * floored Used makes it an upper bound ("at most"); with floored sums as well
+ * the direction is unknown, so no figure is claimed.
+ */
 export function afterAllowancesText(a: DataAllowances): string {
+  if (a.usedIsFloor) {
+    return a.sumsAreFloors ? "not known (partial read)" : `at most ${formatMB(a.afterAllowancesDailyMB)}`;
+  }
   return `${a.sumsAreFloors ? "at least " : ""}${formatMB(a.afterAllowancesDailyMB)}`;
 }
 
-/** The CSV's grant-level allowance cells for one table; empty strings for unknown. */
+/**
+ * What the cards say when no grant has a view. Claims "none" only about what
+ * was read: an unread eligible volume, an unread workspace or a partial
+ * benefit read each narrows the sentence, never widens it to a zero.
+ */
+export function noGrantsText(a: DataAllowances): string {
+  const tenant = a.scope.kind === "tenant" ? a.scope : null;
+  if (tenant !== null && tenant.notRead.length >= tenant.workspaces.length) {
+    return (
+      "No workspace was read, so whether any data allowance benefit was applied, or any table a " +
+      "grant covers has billable volume, is not known."
+    );
+  }
+  const readCount = tenant === null ? 0 : tenant.workspaces.length - tenant.notRead.length;
+  const where =
+    tenant === null
+      ? "this workspace"
+      : tenant.notRead.length > 0
+        ? `the ${readCount} workspace(s) that were read`
+        : "these workspaces";
+  const record = a.usedIsFloor ? "Microsoft's Operation record, read only in part," : "Microsoft's Operation record";
+  const benefit = `${record} shows no data allowance benefit applied to ${where} in the last 30 complete days`;
+  if (!a.eligibleKnown) {
+    return (
+      `${benefit}. Eligible volume was not read, so whether any table a grant covers has billable ` +
+      "volume is not known."
+    );
+  }
+  const unread =
+    tenant !== null && tenant.notRead.length > 0
+      ? ` The ${tenant.notRead.length} workspace(s) not read are not covered by this.`
+      : "";
+  return `${benefit}, and no table a grant covers has billable volume in that window.${unread}`;
+}
+
+/**
+ * The CSV's grant-level allowance cells for one table: Allowance, Eligible,
+ * Used, Over and AllowanceFigures, which says whether the figures are exact or
+ * lower bounds. Empty strings for unknown - never a 0 for a figure not known.
+ */
 export function allowanceCsvCells(
   table: string,
   a: DataAllowances | null,
-): [string, string, string, string] {
+): [string, string, string, string, string] {
   const tag = allowanceFor(table);
   const label = tagLabel(tag);
-  if (a === null || tag.kind !== "grant") return [label, "", "", ""];
+  if (a === null || tag.kind !== "grant") return [label, "", "", "", ""];
   const view = a.grants.find((g) => g.grant === tag.grant);
-  if (view === undefined) return [label, "", "", ""];
+  if (view === undefined) return [label, "", "", "", ""];
+  const flags: string[] = [];
+  if (a.sumsAreFloors) flags.push("lower bound");
+  if (a.usedIsFloor) flags.push("partial benefit read - used is a lower bound and over is not known");
+  const status = flags.length > 0 ? flags.join("; ") : "exact";
   const eligible = view.eligibleKnown ? view.usage.eligibleDailyMB.toFixed(3) : "";
   // Pooled: the benefit is known in total only, so per-grant used and over are not.
-  if (a.attribution === "pooled") return [label, eligible, "", ""];
-  const over = view.eligibleKnown ? view.usage.overDailyMB.toFixed(3) : "";
-  return [label, eligible, view.usage.usedDailyMB.toFixed(3), over];
+  if (a.attribution === "pooled") return [label, eligible, "", "", status];
+  // Over is not a figure when eligible is unread, Used is a floor, or a floored
+  // sum shows no overage (the card says "not known (partial read)", never 0).
+  const overKnown =
+    view.eligibleKnown && !a.usedIsFloor && !(a.sumsAreFloors && view.usage.overDailyMB <= 0);
+  const over = overKnown ? view.usage.overDailyMB.toFixed(3) : "";
+  return [label, eligible, view.usage.usedDailyMB.toFixed(3), over, status];
 }
 
 /** The info-tip text for every new figure, beside the computation it describes. */
@@ -364,15 +457,16 @@ export const ALLOWANCE_TIPS = {
     "5 MB a day. Tenant-wide, and entitled only if bought through EA, EAS or CSP, which " +
     "Graph cannot show - the cross-check against Microsoft's applied figure is the proof.",
   grantedServers:
-    "Machines that sent Heartbeat to this workspace in the window, from subscriptions on " +
-    "Defender for Servers Plan 2, times 500 MB a day.",
+    "Machines that sent Heartbeat to this workspace, counted per day and averaged over the " +
+    "30 days, from subscriptions on Defender for Servers Plan 2, times 500 MB a day.",
   eligibleUsed:
     "Eligible: billable MB from Usage for this grant's tables, summed over the window and " +
     "divided by 30. Used: the benefit Microsoft applied, from the Operation table, same window.",
   status:
     "Over: each day, eligible minus applied when positive, averaged over 30 days - the only " +
     "volume where Cribl reduction saves money. Headroom: granted minus eligible, shown only " +
-    "when both are exact.",
+    "when both are exact - and, for the tenant-wide E5 grant, only when this is the tenant's " +
+    "only Sentinel workspace.",
   chart:
     "Each day with data in the window: billable eligible MB from Usage against the benefit " +
     "Microsoft applied from Operation. Where the lines part, the grant ran out that day.",
@@ -381,5 +475,6 @@ export const ALLOWANCE_TIPS = {
     "grace / suspended = prepaidUnits.warning and .suspended, assigned = consumedUnits.",
   servers:
     "One row per subscription seen in Heartbeat._SubscriptionId. Plan from Microsoft.Security " +
-    "pricings (VirtualMachines); machines in the subscription from Resource Graph.",
+    "pricings (VirtualMachines); machines in the subscription from Resource Graph; machines " +
+    "reporting here counted per day and averaged over the 30 days.",
 } as const;

@@ -136,6 +136,11 @@ export interface ServersSubscriptionRow {
   subscriptionId: string;
   plan: "P2" | "P1" | "off" | "not-read";
   machinesInSubscription: number | null;
+  /**
+   * Machines that sent Heartbeat here, counted PER DAY and averaged over the
+   * window (the grant is 500 MB per machine per day, so a machine that lived
+   * one day earns one day's grant, not thirty). May be fractional.
+   */
   machinesReportingHere: number;
 }
 
@@ -172,7 +177,8 @@ export type CrossCheck =
   | { kind: "matched"; basis: string; medianMB: number }
   | { kind: "unmatched"; medianMB: number; diffs: Array<{ basis: string; pct: number }> };
 
-function median(values: number[]): number {
+/** The middle value (mean of the middle two for an even count). Empty input is the caller's to avoid. */
+export function median(values: readonly number[]): number {
   const s = [...values].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;

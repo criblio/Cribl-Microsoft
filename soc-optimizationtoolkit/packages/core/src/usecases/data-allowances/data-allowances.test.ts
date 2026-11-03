@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { compareTenant, readDataAllowances } from "./data-allowances";
+import { compareTenant, HEARTBEAT_QUERY, readDataAllowances } from "./data-allowances";
 import type { DataAllowances, GrantView } from "./data-allowances";
 import { workspaceArmId } from "../workspace-inventory/workspace-inventory";
 import type { WorkspaceInventory } from "../workspace-inventory/workspace-inventory";
-import { INVENTORY_TIMESPAN } from "../../domain/workspace-inventory";
+import { INVENTORY_TIMESPAN, INVENTORY_WINDOW_DAYS } from "../../domain/workspace-inventory";
+import { WINDOW_FILTER } from "../../domain/workspace-inventory/workspace-inventory";
 import { BENEFIT_QUERY } from "../../domain/data-allowances/benefit-usage";
 import { E5_QUALIFYING_SKUS } from "../../domain/data-allowances/allowance-catalog";
 import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-management";
@@ -36,8 +37,24 @@ const benefit = (...rows: Array<[string, string, number]>) =>
   queryResult(["Day", "BenefitType", "BenefitUsedGB"], rows);
 const eligible = (...rows: Array<[string, string, number]>) =>
   queryResult(["Day", "DataType", "EligibleMB"], rows);
+/** Thirty consecutive days, the window's length; the dates themselves do not matter. */
+const WINDOW_DAYS = Array.from({ length: INVENTORY_WINDOW_DAYS }, (_, i) =>
+  new Date(Date.UTC(2026, 9, 4 + i)).toISOString().slice(0, 10),
+);
+/** Each machine reports on every day of the window. */
 const heartbeat = (...rows: Array<[string, string]>) =>
-  queryResult(["Computer", "SubscriptionId"], rows);
+  queryResult(
+    ["Day", "Computer", "SubscriptionId"],
+    rows.flatMap(([computer, sub]) => WINDOW_DAYS.map((day) => [day, computer, sub])),
+  );
+/** Explicit machine-days: [day, computer, subscription]. */
+const heartbeatDays = (...rows: Array<[string, string, string]>) =>
+  queryResult(["Day", "Computer", "SubscriptionId"], rows);
+/** An answer Log Analytics returned with a partial-result error beside the rows. */
+const partial = (r: PortHttpResponse): PortHttpResponse => ({
+  status: 200,
+  body: { ...(r.body as object), error: { code: "PartialError", message: "query result truncated" } },
+});
 const DENIED: PortHttpResponse = { status: 403, body: { error: { code: "AuthorizationFailed" } } };
 const pricings = (tier: string, subPlan: string): PortHttpResponse => ({
   status: 200,
@@ -250,6 +267,20 @@ describe("readDataAllowances - licences", () => {
     }
     expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2 });
   });
+
+  it("an unknown Sentinel workspace count skips the cross-check even with seats read and a capped day", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "M365 E5", 0.5]) },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    });
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(azure, graph, WS, inventory(0), { ...OPTS, sentinelWorkspaces: null });
+    expect(view(r, "e5").usage.cappedDays).toHaveLength(1);
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/number of Sentinel workspaces .* unknown/),
+    });
+  });
 });
 
 describe("readDataAllowances - Servers P2", () => {
@@ -308,6 +339,106 @@ describe("readDataAllowances - Servers P2", () => {
     const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
     expect(r.gaps.join("\n")).toMatch(/Reporting machines .* not read/);
     expect(view(r, "servers-p2").grantedMB).toBeNull();
+    // Never "no reporting machines were found": the read did not happen.
+    expect(r.servers.heartbeatComplete).toBe(false);
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason: "Cross-check skipped: reporting machines were not read.",
+    });
+  });
+
+  it("an answered, empty Heartbeat says no reporting machines were found", async () => {
+    const { azure } = routedAzure({ ...base, heartbeat: heartbeat() });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(r.servers.heartbeatComplete).toBe(true);
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason: "Cross-check skipped: no reporting machines were found.",
+    });
+  });
+
+  it("a PARTIAL Heartbeat answer is a gap, floors Granted and skips the cross-check", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 0.5]) },
+      eligible: eligible([DAY, "SecurityEvent", 1000]),
+      heartbeat: partial(heartbeat(["vm1", "sub-a"])),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(r.gaps.join("\n")).toMatch(/reporting machines read was partial: query result truncated/);
+    expect(r.servers.heartbeatComplete).toBe(false);
+    expect(view(r, "servers-p2")).toMatchObject({ grantedMB: 500, grantedIsFloor: true });
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/reporting machines were only partly read/),
+    });
+  });
+
+  it("counts machines per day: thirty one-day machines earn one machine's daily grant, not thirty", async () => {
+    const { azure } = routedAzure({
+      ...base,
+      heartbeat: heartbeatDays(...WINDOW_DAYS.map((d, i): [string, string, string] => [d, `vm${i}`, "sub-a"])),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(r.servers.rows[0]!.machinesReportingHere).toBe(1);
+    expect(view(r, "servers-p2").grantedMB).toBe(500);
+  });
+
+  it("the cross-check compares a capped day with THAT day's machines (reporting-here basis)", async () => {
+    // 1 machine every day, plus 3 more on the capped day only: that day grants 2000 MB.
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 2]) },
+      eligible: eligible([DAY, "SecurityEvent", 3000]),
+      heartbeat: heartbeatDays(
+        ...WINDOW_DAYS.map((d): [string, string, string] => [d, "vm0", "sub-a"]),
+        [DAY, "vm1", "sub-a"],
+        [DAY, "vm2", "sub-a"],
+        [DAY, "vm3", "sub-a"],
+      ),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+      graph: { status: 200, body: { data: [{ subscriptionId: "sub-a", Machines: 9 }] } },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(view(r, "servers-p2").crossCheck).toEqual({ kind: "matched", basis: "reporting-here", medianMB: 2000 });
+  });
+
+  it("matches the reporting-here basis when Microsoft applied 500 MB for one machine reporting here", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 0.5]) },
+      eligible: eligible([DAY, "SecurityEvent", 1000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+      graph: { status: 200, body: { data: [{ subscriptionId: "sub-a", Machines: 4 }] } },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(view(r, "servers-p2").crossCheck).toEqual({ kind: "matched", basis: "reporting-here", medianMB: 500 });
+  });
+
+  it("matches the in-subscription basis when Microsoft applied 2.0 GB for the subscription's 4 machines", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 2]) },
+      eligible: eligible([DAY, "SecurityEvent", 3000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+      graph: { status: 200, body: { data: [{ subscriptionId: "sub-a", Machines: 4 }] } },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(view(r, "servers-p2").crossCheck).toEqual({ kind: "matched", basis: "in-subscription", medianMB: 2000 });
+  });
+
+  it("freezes the Heartbeat query: its output columns are what machinesOf reads (Day, Computer, SubscriptionId)", async () => {
+    expect(HEARTBEAT_QUERY).toBe(
+      [
+        "Heartbeat",
+        `| where ${WINDOW_FILTER}`,
+        "| summarize by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), Computer,",
+        "    SubscriptionId = tostring(_SubscriptionId)",
+      ].join("\n"),
+    );
+    const { azure } = routedAzure({});
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(r.queries.heartbeat).toBe(HEARTBEAT_QUERY);
   });
 
   it("a Resource Graph failure leaves machinesInSubscription null and says so", async () => {
@@ -437,6 +568,30 @@ describe("readDataAllowances - the numbers", () => {
     });
     const r = await readDataAllowances(azure, graphWith(skusBody({ enabled: 1, consumed: 1 })), WS, inventory(0), OPTS);
     expect(view(r, "e5").eligibleKnown).toBe(true);
+  });
+
+  it("a PARTIAL benefit answer makes Used a floor and skips the cross-check, with a stated gap", async () => {
+    const script: Script = {
+      benefit: { "*": partial(benefit([DAY, "M365 E5", 0.5])) },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    };
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(routedAzure(script).azure, graph, WS, inventory(0), OPTS);
+    expect(r.usedIsFloor).toBe(true);
+    expect(r.gaps.join("\n")).toMatch(/benefit read was partial/);
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/benefit read \(Operation\) was partial/),
+    });
+    const complete = await readDataAllowances(
+      routedAzure({ ...script, benefit: { "*": benefit([DAY, "M365 E5", 0.5]) } }).azure,
+      graph,
+      WS,
+      inventory(0),
+      OPTS,
+    );
+    expect(complete.usedIsFloor).toBe(false);
+    expect(view(complete, "e5").crossCheck.kind).toBe("matched");
   });
 
   it("sumsAreFloors follows a partial Usage answer in workspace scope", async () => {
@@ -575,6 +730,37 @@ describe("compareTenant", () => {
     );
     expect(view(r, "e5")).toMatchObject({ grantedMB: 500, grantedIsFloor: false });
     expect(view(r, "servers-p2")).toMatchObject({ grantedMB: 500, grantedIsFloor: true });
+  });
+
+  it("runs the E5 cross-check tenant-wide when every workspace was read, and skips Servers P2 (capped per workspace)", async () => {
+    // 100 assigned seats = 500 MB/day; each workspace applied 250 MB on a capped day.
+    const { azure } = routedAzure({
+      benefit: {
+        [WS]: benefit([DAY, "M365 E5", 0.25], [DAY, "Defender for Servers", 0.5]),
+        [WS2]: benefit([DAY, "M365 E5", 0.25], [DAY, "Defender for Servers", 0.5]),
+      },
+      eligible: eligible([DAY, "SigninLogs", 900], [DAY, "SecurityEvent", 1000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+    });
+    const r = await compareTenant(
+      azure,
+      graphWith(skusBody({ enabled: 120, consumed: 100 })),
+      [WS, WS2],
+      new Map([
+        [WS, inventory(300, WS)],
+        [WS2, inventory(700, WS2)],
+      ]),
+      { readAt: OPTS.readAt },
+    );
+    if (r.scope.kind !== "tenant") throw new Error("unreachable");
+    expect(r.scope.notRead).toEqual([]);
+    expect(view(r, "e5").crossCheck).toEqual({ kind: "matched", basis: "assigned", medianMB: 500 });
+    expect(view(r, "servers-p2").usage.cappedDays).toHaveLength(1);
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/capped per workspace/),
+    });
   });
 
   it("a workspace with no inventory is listed as not read rather than read with a zero total", async () => {

@@ -17,13 +17,17 @@ const BENEFIT_TYPE_PREFIX = "Benefit type used: ";
 /** A day is capped when eligible volume exceeds what was applied by more than 1%. */
 const CAP_TOLERANCE = 1.01;
 
-/** The spec's Operation query: one row per day and benefit type. */
+/**
+ * The spec's Operation query: one row per day and benefit type. The amount
+ * pattern allows an exponent: a small benefit can be written '1E-05 GB', and
+ * stopping at the 'E' would read it as 1 GB.
+ */
 export const BENEFIT_QUERY = [
   "Operation",
   `| where ${WINDOW_FILTER}`,
   '| where Detail startswith "Benefit amount used"',
   "| extend BenefitType = replace_string(OperationKey, 'Benefit type used: ', ''),",
-  "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+)', 1, Detail))",
+  "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+(?:[eE][-+]?[0-9]+)?)', 1, Detail))",
   "| summarize BenefitUsedGB = sum(BenefitUsedGB)",
   "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), BenefitType",
   "| order by Day asc",

@@ -28,7 +28,9 @@ import {
   grantCardText,
   grantedUnknownReason,
   licenceNote,
+  countText,
   meterOf,
+  noGrantsText,
   otherBasisNote,
   planLabel,
   planNote,
@@ -67,11 +69,7 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
       {a.attribution === "pooled" ? (
         <PooledSummary a={a} />
       ) : a.grants.length === 0 ? (
-        <p className="panel-desc">
-          Microsoft's Operation record shows no data allowance benefit applied to{" "}
-          {tenant !== null ? "these workspaces" : "this workspace"} in the last 30 complete days, and
-          no table a grant covers has billable volume in that window.
-        </p>
+        <p className="panel-desc">{noGrantsText(a)}</p>
       ) : (
         <div className="allowance-card-grid">
           {a.grants.map((g) => (
@@ -102,6 +100,7 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
 function PooledSummary({ a }: { a: DataAllowances }) {
   const p = a.pooled;
   const floors = a.sumsAreFloors ? "at least " : "";
+  const usedFloors = a.sumsAreFloors || a.usedIsFloor ? "at least " : "";
   // Core's own flag, not a fold over grants: a failed eligible read can leave
   // grants empty, and every() over [] would claim the eligible sum is known.
   const eligibleKnown = a.eligibleKnown;
@@ -116,13 +115,15 @@ function PooledSummary({ a }: { a: DataAllowances }) {
           <div className="allowance-card-line">
             eligible{" "}
             {eligibleKnown ? `${floors}${gbPerDay(p.eligibleDailyMB)}` : "not read"},
-            applied {floors}
+            applied {usedFloors}
             {gbPerDay(p.usedDailyMB)} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
           </div>
           <div className="allowance-card-status">
-            {eligibleKnown
-              ? `${floors}${gbPerDay(p.overDailyMB)} over, all grants together`
-              : "over: not read (eligible volume not read)"}
+            {!eligibleKnown
+              ? "over: not read (eligible volume not read)"
+              : a.usedIsFloor
+                ? "over: not known (partial benefit read)"
+                : `${floors}${gbPerDay(p.overDailyMB)} over, all grants together`}
           </div>
         </>
       )}
@@ -148,8 +149,8 @@ function PooledSummary({ a }: { a: DataAllowances }) {
 
 function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; readAt: string }) {
   const text = grantCardText(view, a);
-  const meter = meterOf(view);
-  const over = view.eligibleKnown && view.usage.overDailyMB > 0;
+  const meter = meterOf(view, a);
+  const over = view.eligibleKnown && !a.usedIsFloor && view.usage.overDailyMB > 0;
   const shared = sharedLabel(a);
   return (
     <div className="allowance-card">
@@ -313,7 +314,7 @@ function ServersGranted({ view, a }: { view: GrantView; a: DataAllowances }) {
                 </th>
                 <th>Plan</th>
                 <th>Machines in subscription</th>
-                <th>Machines reporting here</th>
+                <th>Machines reporting here (daily average)</th>
               </tr>
             </thead>
             <tbody>
@@ -324,7 +325,7 @@ function ServersGranted({ view, a }: { view: GrantView; a: DataAllowances }) {
                   </td>
                   <td>{planLabel(r.plan)}</td>
                   <td>{r.machinesInSubscription === null ? "not known" : r.machinesInSubscription.toLocaleString("en-US")}</td>
-                  <td>{r.machinesReportingHere.toLocaleString("en-US")}</td>
+                  <td>{countText(r.machinesReportingHere)}</td>
                 </tr>
               ))}
             </tbody>

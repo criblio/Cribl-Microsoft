@@ -95,3 +95,42 @@ describe("queries", () => {
     expect(BENEFIT_QUERY).toContain('startswith "Benefit amount used"');
   });
 });
+
+describe("query column contracts (a renamed column must fail here, not read as 'no benefit')", () => {
+  it("freezes BENEFIT_QUERY: it outputs Day, BenefitType and BenefitUsedGB, what parseBenefitRows reads", () => {
+    expect(BENEFIT_QUERY).toBe(
+      [
+        "Operation",
+        `| where ${WINDOW_FILTER}`,
+        '| where Detail startswith "Benefit amount used"',
+        "| extend BenefitType = replace_string(OperationKey, 'Benefit type used: ', ''),",
+        "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+(?:[eE][-+]?[0-9]+)?)', 1, Detail))",
+        "| summarize BenefitUsedGB = sum(BenefitUsedGB)",
+        "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), BenefitType",
+        "| order by Day asc",
+      ].join("\n"),
+    );
+    const r = parseBenefitRows([{ Day: "2026-10-01", BenefitType: "M365 E5", BenefitUsedGB: 1 }]);
+    expect(r.days).toEqual([{ day: "2026-10-01", grant: "e5", usedMB: 1000 }]);
+  });
+
+  it("freezes eligibleDailyQuery: it outputs Day, DataType and EligibleMB", () => {
+    expect(eligibleDailyQuery(["SigninLogs", "AuditLogs"])).toBe(
+      [
+        "Usage",
+        `| where ${WINDOW_FILTER} and DataType in ('SigninLogs', 'AuditLogs')`,
+        "    and IsBillable == true",
+        "| summarize EligibleMB = sum(Quantity)",
+        "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), DataType",
+      ].join("\n"),
+    );
+  });
+
+  it("reads an exponent in the benefit amount: '1E-05 GB' is 0.00001 GB, never 1 GB", () => {
+    const pattern = /extract\(@'(.+?)', 1, Detail\)/.exec(BENEFIT_QUERY)![1]!;
+    const amount = (detail: string) => new RegExp(pattern).exec(detail)?.[1];
+    expect(Number(amount("Benefit amount used: 1E-05 GB"))).toBe(0.00001);
+    expect(Number(amount("Benefit amount used: 2.5e+1 GB"))).toBe(25);
+    expect(Number(amount("Benefit amount used: 0.123 GB"))).toBe(0.123);
+  });
+});

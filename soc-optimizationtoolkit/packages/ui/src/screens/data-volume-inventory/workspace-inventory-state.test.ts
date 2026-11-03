@@ -98,7 +98,7 @@ describe("inventoryCsv", () => {
     }, null);
     // MIG-15: a Billable table's allowance figures are empty, never 0.
     expect(csv.split("\n")[1]).toBe(
-      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,',
+      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,,',
     );
   });
 });

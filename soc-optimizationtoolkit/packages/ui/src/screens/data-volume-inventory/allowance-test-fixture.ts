@@ -39,8 +39,9 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     eligibleKnown: true,
     afterAllowancesDailyMB: 0,
     sumsAreFloors: false,
+    usedIsFloor: false,
     licences: { kind: "not-bound" },
-    servers: { rows: [], unattributedMachines: 0 },
+    servers: { rows: [], unattributedMachines: 0, heartbeatComplete: true },
     scope: { kind: "workspace", sentinelWorkspaces: 1 },
     queries: {
       benefit: "Operation | benefit",

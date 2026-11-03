@@ -268,6 +268,28 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
     expect(tiles[2]).toBe("not read");
   });
 
+  it("the after-allowances tile is billable minus the benefit Microsoft applied", async () => {
+    const base = armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) });
+    const request = vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      // 0.03 GB = 30 MB applied in the window = 1.0 MB a day.
+      if (query.startsWith("Operation")) {
+        return {
+          status: 200,
+          body: table(["Day", "BenefitType", "BenefitUsedGB"], [["2026-10-20", "M365 E5", 0.03]]),
+        };
+      }
+      return base(req);
+    });
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    await discoverAndInventory();
+    const tiles = () => [...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent);
+    await waitFor(() => expect(tiles()[2]).toMatch(/MB$/));
+    // Billable 90 MB / 30 = 3.0 MB a day; minus 1.0 MB applied.
+    expect(tiles()[1]).toBe("3.0 MB");
+    expect(tiles()[2]).toBe("2.0 MB");
+  });
+
   it("adds the Allowance and Over columns once the allowances are read", async () => {
     renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) }));
     await discoverAndInventory();

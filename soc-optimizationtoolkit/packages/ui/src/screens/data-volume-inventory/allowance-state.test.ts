@@ -6,11 +6,15 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceInventory } from "@soc/core";
 import {
+  afterAllowancesText,
   arithmeticLine,
   basisFigures,
   crossCheckLine,
   grantCardText,
+  grantedUnknownReason,
   licenceNote,
+  meterOf,
+  noGrantsText,
   otherBasisNote,
   overCell,
   planNote,
@@ -77,6 +81,96 @@ describe("grantCardText", () => {
     expect(text.eligibleUsed).toBe("eligible at least 1.0 GB/day, used at least 0.8 GB/day");
     expect(text.status).toBe("at least 0.2 GB/day over");
   });
+
+  it("shows no headroom from a floored eligible sum even when Granted is exact (R11 tenant case)", () => {
+    const text = grantCardText(
+      grantView({ grantedMB: 12000, grantedIsFloor: false, usage: usage({ eligibleDailyMB: 9300, overDailyMB: 0 }) }),
+      allowances({ sumsAreFloors: true }),
+    );
+    expect(text.status).toBe("over not known (partial read)");
+  });
+
+  it("a partial benefit read: used reads at least and over is not known, never an exact figure", () => {
+    const text = grantCardText(
+      grantView({ usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }) }),
+      allowances({ usedIsFloor: true }),
+    );
+    expect(text.eligibleUsed).toBe("eligible 14.1 GB/day, used at least 12.0 GB/day");
+    expect(text.status).toBe("over not known (partial benefit read)");
+  });
+
+  it("E5 headroom and meter only when this is the tenant's only Sentinel workspace", () => {
+    const e5 = grantView({ grantedMB: 30000, usage: usage({ eligibleDailyMB: 9300, overDailyMB: 0 }) });
+    const one = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1 } });
+    expect(grantCardText(e5, one).status).toBe("20.7 GB/day headroom");
+    expect(meterOf(e5, one)).not.toBeNull();
+    for (const n of [2, null]) {
+      const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: n } });
+      expect(grantCardText(e5, shared).status).toBe("headroom is tenant-wide - use Compare against the whole tenant");
+      expect(meterOf(e5, shared)).toBeNull();
+    }
+    // The tenant comparison compares tenant-wide granted with the tenant-wide sum.
+    const tenant = allowances({ scope: { kind: "tenant", workspaces: ["a", "b"], notRead: [] } });
+    expect(grantCardText(e5, tenant).status).toBe("20.7 GB/day headroom");
+    // Servers P2 is granted per workspace (machines reporting here): its headroom stays.
+    const servers = grantView({ grant: "servers-p2", grantedMB: 2000, usage: usage({ eligibleDailyMB: 500 }) });
+    const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 3 } });
+    expect(grantCardText(servers, shared).status).toBe("1.5 GB/day headroom");
+    expect(meterOf(servers, shared)).not.toBeNull();
+  });
+});
+
+describe("grantedUnknownReason (Servers P2)", () => {
+  const servers = grantView({ grant: "servers-p2", grantedMB: null });
+  it("says machines were not read when Heartbeat failed, never that none were found", () => {
+    const a = allowances({ servers: { rows: [], unattributedMachines: 0, heartbeatComplete: false } });
+    expect(grantedUnknownReason(servers, a)).toBe("reporting machines were not read");
+  });
+  it("says none were found only for an answered, empty Heartbeat", () => {
+    expect(grantedUnknownReason(servers, allowances())).toBe("no reporting machines were found");
+    const unattributed = allowances({ servers: { rows: [], unattributedMachines: 2, heartbeatComplete: true } });
+    expect(grantedUnknownReason(servers, unattributed)).toBe("no reporting machine was attributed to a subscription");
+  });
+});
+
+describe("afterAllowancesText", () => {
+  it("is billable minus used, at least with floored sums, at most with a floored Used", () => {
+    expect(afterAllowancesText(allowances({ afterAllowancesDailyMB: 400 }))).toBe("400.0 MB");
+    expect(afterAllowancesText(allowances({ afterAllowancesDailyMB: 400, sumsAreFloors: true }))).toBe(
+      "at least 400.0 MB",
+    );
+    expect(afterAllowancesText(allowances({ afterAllowancesDailyMB: 400, usedIsFloor: true }))).toBe(
+      "at most 400.0 MB",
+    );
+    expect(
+      afterAllowancesText(allowances({ afterAllowancesDailyMB: 400, usedIsFloor: true, sumsAreFloors: true })),
+    ).toBe("not known (partial read)");
+  });
+});
+
+describe("noGrantsText", () => {
+  const tenant = (workspaces: string[], notRead: string[]) =>
+    ({ kind: "tenant", workspaces, notRead: notRead.map((id) => ({ id, error: "HTTP 403" })) }) as const;
+
+  it("claims no covered table had billable volume only when eligible volume was read", () => {
+    expect(noGrantsText(allowances())).toMatch(/no table a grant covers has billable volume/);
+    const unread = noGrantsText(allowances({ eligibleKnown: false }));
+    expect(unread).toMatch(/Eligible volume was not read/);
+    expect(unread).not.toMatch(/no table a grant covers has billable volume/);
+  });
+
+  it("limits the claim to the workspaces read, and makes none when none was read", () => {
+    const some = noGrantsText(allowances({ scope: tenant(["a", "b"], ["b"]) }));
+    expect(some).toMatch(/applied to the 1 workspace\(s\) that were read/);
+    expect(some).toMatch(/The 1 workspace\(s\) not read are not covered by this\./);
+    const none = noGrantsText(allowances({ eligibleKnown: false, scope: tenant(["a", "b"], ["a", "b"]) }));
+    expect(none).toMatch(/^No workspace was read/);
+    expect(none).not.toMatch(/no data allowance benefit applied/);
+  });
+
+  it("says the Operation record was read only in part when the benefit read was partial", () => {
+    expect(noGrantsText(allowances({ usedIsFloor: true }))).toMatch(/read only in part/);
+  });
 });
 
 describe("overCell", () => {
@@ -91,6 +185,18 @@ describe("overCell", () => {
   it("gives a billable table its own daily average and a free table 0", () => {
     expect(overCell({ table: "Syslog", billableMB: 90 }, e5Over, 30)).toBe("3.0 MB");
     expect(overCell({ table: "AzureActivity", billableMB: 0 }, e5Over, 30)).toBe("0");
+  });
+
+  it("a Free-tagged table Usage still bills shows its billable volume, never 0 (IsBillable is the authority)", () => {
+    expect(overCell({ table: "SecurityAlert", billableMB: 300 }, e5Over, 30)).toBe("10.0 MB");
+    expect(overCell({ table: "SecurityAlert", billableMB: 300 }, null, 30)).toBe("10.0 MB");
+  });
+
+  it("a partial benefit read leaves a grant table's over not known, never 0 or a share", () => {
+    const a = allowances({ usedIsFloor: true, grants: [grantView({ usage: usage({ overDailyMB: 2100 }) })] });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, a, 30)).toBe("not known (partial benefit read)");
+    const pooled = allowances({ usedIsFloor: true, attribution: "pooled", pooled: usage({ overDailyMB: 2100 }) });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, pooled, 30)).toBe("not known (partial benefit read)");
   });
 
   it("says not read, never 0, when the eligible read failed", () => {
@@ -186,6 +292,7 @@ describe("granted arithmetic and the other basis", () => {
           { subscriptionId: "s2", plan: "off", machinesInSubscription: 9, machinesReportingHere: 2 },
         ],
         unattributedMachines: 0,
+        heartbeatComplete: true,
       },
     });
     const lines = basisFigures(grantView({ grant: "servers-p2" }), a).map(arithmeticLine);
@@ -301,17 +408,57 @@ describe("inventoryCsv allowance columns", () => {
     },
   } as unknown as WorkspaceInventory;
 
-  it("adds four columns, empty (never 0) with no allowances", () => {
+  const rowOf = (a: Parameters<typeof inventoryCsv>[1]) => inventoryCsv(inventory, a).trim().split("\n")[1];
+
+  it("adds five columns, empty (never 0) with no allowances", () => {
     const [header, row] = inventoryCsv(inventory, null).trim().split("\n");
-    expect(header).toMatch(/,Allowance,AllowanceEligibleDailyMB,AllowanceUsedDailyMB,AllowanceOverDailyMB$/);
-    expect(row).toMatch(/,E5 5 MB\/user,,,$/);
+    expect(header).toMatch(
+      /,Allowance,AllowanceEligibleDailyMB,AllowanceUsedDailyMB,AllowanceOverDailyMB,AllowanceFigures$/,
+    );
+    expect(row).toMatch(/,E5 5 MB\/user,,,,$/);
   });
 
-  it("repeats the grant-level figures per row", () => {
+  it("repeats the grant-level figures per row, marked exact", () => {
     const a = allowances({
       grants: [grantView({ usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }) })],
     });
-    const row = inventoryCsv(inventory, a).trim().split("\n")[1];
-    expect(row).toMatch(/,E5 5 MB\/user,14100\.000,12000\.000,2100\.000$/);
+    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,14100\.000,12000\.000,2100\.000,exact$/);
+  });
+
+  it("pooled: per-grant Used and Over are empty, never 0", () => {
+    const a = allowances({
+      attribution: "pooled",
+      pooled: usage(),
+      grants: [grantView({ usage: usage({ eligibleDailyMB: 14100 }) })],
+    });
+    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,14100\.000,,,exact$/);
+  });
+
+  it("an unread eligible volume leaves Eligible and Over empty, never 0", () => {
+    const a = allowances({ grants: [grantView({ eligibleKnown: false, usage: usage({ usedDailyMB: 12000 }) })] });
+    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,,12000\.000,,exact$/);
+  });
+
+  it("floored sums are marked lower bound, and a floored zero over is empty, never 0.000", () => {
+    const zero = allowances({
+      sumsAreFloors: true,
+      grants: [grantView({ usage: usage({ eligibleDailyMB: 9300, usedDailyMB: 9300, overDailyMB: 0 }) })],
+    });
+    expect(rowOf(zero)).toMatch(/,E5 5 MB\/user,9300\.000,9300\.000,,lower bound$/);
+    const over = allowances({
+      sumsAreFloors: true,
+      grants: [grantView({ usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }) })],
+    });
+    expect(rowOf(over)).toMatch(/,14100\.000,12000\.000,2100\.000,lower bound$/);
+  });
+
+  it("a partial benefit read leaves Over empty and says Used is a lower bound", () => {
+    const a = allowances({
+      usedIsFloor: true,
+      grants: [grantView({ usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }) })],
+    });
+    expect(rowOf(a)).toMatch(
+      /,14100\.000,12000\.000,,partial benefit read - used is a lower bound and over is not known$/,
+    );
   });
 });

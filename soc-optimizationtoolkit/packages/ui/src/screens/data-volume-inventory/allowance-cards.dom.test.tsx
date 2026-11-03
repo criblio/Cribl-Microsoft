@@ -58,6 +58,24 @@ describe("AllowanceCards", () => {
     expect(text()).toMatch(/no data allowance benefit applied to this workspace in\s+the last 30 complete days/);
   });
 
+  it("grants [] with eligible volume unread: never claims no covered table had billable volume", () => {
+    renderCards(allowances({ grants: [], eligibleKnown: false }));
+    expect(text()).toContain("Eligible volume was not read");
+    expect(text()).not.toContain("no table a grant covers has billable volume");
+  });
+
+  it("draws no E5 meter or headroom when the grant is shared across Sentinel workspaces", () => {
+    renderCards(
+      allowances({
+        scope: { kind: "workspace", sentinelWorkspaces: 2 },
+        grants: [grantView({ usage: usage({ eligibleDailyMB: 6000 }) })],
+      }),
+    );
+    expect(document.querySelector(".allowance-meter")).toBeNull();
+    expect(text()).not.toContain("GB/day headroom");
+    expect(text()).toContain("headroom is tenant-wide - use Compare against the whole tenant");
+  });
+
   it("shows every gap as a warning line", () => {
     renderCards(allowances({ gaps: ["Table plans were not read: HTTP 403", "Reporting machines were not read: x"] }));
     const warnings = [...document.querySelectorAll(".match-warning")].map((e) => e.textContent);
@@ -169,6 +187,7 @@ describe("AllowanceCards", () => {
         servers: {
           rows: [{ subscriptionId: "sub-x", plan: "not-read", machinesInSubscription: null, machinesReportingHere: 3 }],
           unattributedMachines: 0,
+          heartbeatComplete: true,
         },
         grants: [grantView({ grant: "servers-p2", grantedMB: null })],
       }),
@@ -224,6 +243,39 @@ describe("AllowanceCards - tenant comparison (MIG-16)", () => {
     expect(text()).toMatch(/no data allowance benefit applied to these workspaces/);
     expect(text()).not.toContain("this workspace");
     expect(document.querySelector(".allowance-not-read")).toBeNull();
+  });
+
+  it("grants [] with every workspace not read: says none was read, never that no benefit was applied", () => {
+    renderCards(
+      allowances({
+        grants: [],
+        eligibleKnown: false,
+        sumsAreFloors: true,
+        scope: {
+          kind: "tenant",
+          workspaces: [WS("a"), WS("b")],
+          notRead: [
+            { id: WS("a"), error: "HTTP 403" },
+            { id: WS("b"), error: "HTTP 403" },
+          ],
+        },
+      }),
+    );
+    expect(text()).toContain("No workspace was read");
+    expect(text()).not.toContain("no data allowance benefit applied");
+    expect(text()).not.toContain("no table a grant covers has billable volume");
+  });
+
+  it("grants [] with one workspace not read: limits the claim to the workspaces read", () => {
+    renderCards(
+      allowances({
+        grants: [],
+        sumsAreFloors: true,
+        scope: { kind: "tenant", workspaces: [WS("a"), WS("b")], notRead: [{ id: WS("b"), error: "HTTP 403" }] },
+      }),
+    );
+    expect(text()).toMatch(/applied to the 1 workspace\(s\) that were read/);
+    expect(text()).not.toContain("applied to these workspaces");
   });
 
   it("renders the actions slot beside the cards", () => {

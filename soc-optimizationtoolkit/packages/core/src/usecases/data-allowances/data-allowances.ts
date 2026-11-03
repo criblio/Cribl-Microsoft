@@ -12,7 +12,10 @@
  * "not-read" (never "off"), a refused Graph read is `denied` (never "no
  * licences"), a refused table-plan read leaves every plan null (never
  * "Analytics"), and a failed eligible-volume, Heartbeat or Resource Graph read
- * is named in `gaps`.
+ * is named in `gaps`. A PARTIAL answer is treated like a failed one for
+ * completeness: a partial benefit read makes Used a lower bound
+ * (`usedIsFloor`), a partial Heartbeat read floors the Servers P2 figure, and
+ * neither is cross-checked.
  *
  * Pure orchestration over the AzureManagement and GraphDirectory ports: no
  * clock (`readAt` is injected), no timers. Calls are sequential on purpose;
@@ -31,6 +34,7 @@ import {
   criblWritable,
   eligibleTables,
 } from "../../domain/data-allowances/allowance-catalog";
+import { SERVERS_MB_PER_MACHINE_PER_DAY } from "../../domain/data-allowances/allowance-catalog";
 import type { GrantId } from "../../domain/data-allowances/allowance-catalog";
 import {
   BENEFIT_QUERY,
@@ -42,6 +46,7 @@ import type { GrantUsage } from "../../domain/data-allowances/benefit-usage";
 import {
   crossCheck,
   e5Granted,
+  median,
   parseSubscribedSkus,
   serversGranted,
 } from "../../domain/data-allowances/granted";
@@ -54,11 +59,17 @@ import type { WorkspaceInventory } from "../workspace-inventory/workspace-invent
 /** api-version of the workspace table list (`GET {workspaceId}/tables`). */
 const TABLES_API_VERSION = "2022-10-01";
 
-/** Which machines reported in the window, and from which subscription. */
-const HEARTBEAT_QUERY = [
+/**
+ * Which machines reported on each day of the window, and from which
+ * subscription. Per day, because the Servers P2 grant is 500 MB per machine
+ * PER DAY: a window-wide distinct count would credit a short-lived machine
+ * with thirty days of grant.
+ */
+export const HEARTBEAT_QUERY = [
   "Heartbeat",
   `| where ${WINDOW_FILTER}`,
-  "| summarize by Computer, SubscriptionId = tostring(_SubscriptionId)",
+  "| summarize by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), Computer,",
+  "    SubscriptionId = tostring(_SubscriptionId)",
 ].join("\n");
 
 /** How many machines each subscription holds (Azure VMs and Arc machines). */
@@ -118,8 +129,22 @@ export interface DataAllowances {
    * workspace was not read (tenant) or the Usage answer was partial (workspace).
    */
   sumsAreFloors: boolean;
+  /**
+   * True when an `Operation` (benefit) answer was partial: Used is a lower
+   * bound, so Over and after-allowances are not exact (the true figures could
+   * be lower) and no cross-check is run.
+   */
+  usedIsFloor: boolean;
   licences: LicenceRead;
-  servers: { rows: ServersSubscriptionRow[]; unattributedMachines: number };
+  servers: {
+    rows: ServersSubscriptionRow[];
+    unattributedMachines: number;
+    /**
+     * False when a Heartbeat read failed or was partial: an empty `rows` then
+     * means the machines were not read, never that there are none.
+     */
+    heartbeatComplete: boolean;
+  };
   scope:
     | { kind: "workspace"; sentinelWorkspaces: number | null }
     | {
@@ -160,10 +185,14 @@ const errorText = (error: unknown): string =>
 
 interface WorkspaceReads {
   benefitRows: Row[];
+  /** False when the benefit (Operation) answer came back partial. */
+  benefitComplete: boolean;
   eligibleRows: Row[] | null;
   /** False when the eligible read failed or came back partial. */
   eligibleComplete: boolean;
   heartbeatRows: Row[] | null;
+  /** False when the Heartbeat read failed or came back partial. */
+  heartbeatComplete: boolean;
 }
 
 /** The three workspace queries. Benefit failure throws; the others become gaps. */
@@ -206,14 +235,25 @@ async function readWorkspace(
 
   opts.onProgress?.(`Reading reporting machines${label}`);
   let heartbeatRows: Row[] | null = null;
+  let heartbeatComplete = false;
   try {
-    heartbeatRows = (
-      await runWorkspaceQuery(azure, workspaceId, HEARTBEAT_QUERY, "read reporting machines (Heartbeat)")
-    ).rows;
+    const hb = await runWorkspaceQuery(azure, workspaceId, HEARTBEAT_QUERY, "read reporting machines (Heartbeat)");
+    heartbeatRows = hb.rows;
+    heartbeatComplete = hb.warning === null;
+    if (hb.warning !== null) {
+      gaps.push(`The reporting machines read${label} was partial: ${hb.warning}`);
+    }
   } catch (error) {
     gaps.push(`Reporting machines${label} were not read: ${errorText(error)}`);
   }
-  return { benefitRows: benefit.rows, eligibleRows, eligibleComplete, heartbeatRows };
+  return {
+    benefitRows: benefit.rows,
+    benefitComplete: benefit.warning === null,
+    eligibleRows,
+    eligibleComplete,
+    heartbeatRows,
+    heartbeatComplete,
+  };
 }
 
 /** table (lower-case) -> plan, or null when the list was refused or unreadable. */
@@ -272,6 +312,14 @@ function planOf(read: PricingsRead): ServersSubscriptionRow["plan"] {
 interface MachineKey {
   subscription: string;
   computer: string;
+  day: string;
+}
+
+interface ServersRead {
+  rows: ServersSubscriptionRow[];
+  unattributedMachines: number;
+  /** subscription -> day -> machines that reported that day. */
+  byDay: Map<string, Map<string, number>>;
 }
 
 async function readServers(
@@ -279,20 +327,20 @@ async function readServers(
   machines: readonly MachineKey[],
   gaps: string[],
   opts: DataAllowancesOptions,
-): Promise<{ rows: ServersSubscriptionRow[]; unattributedMachines: number }> {
-  const here = new Map<string, Set<string>>();
+): Promise<ServersRead> {
+  const byDay = new Map<string, Map<string, number>>();
   const unattributed = new Set<string>();
   for (const m of machines) {
     if (m.subscription === "") {
       unattributed.add(m.computer);
       continue;
     }
-    const set = here.get(m.subscription) ?? new Set<string>();
-    set.add(m.computer);
-    here.set(m.subscription, set);
+    const days = byDay.get(m.subscription) ?? new Map<string, number>();
+    days.set(m.day, (days.get(m.day) ?? 0) + 1);
+    byDay.set(m.subscription, days);
   }
-  const subs = [...here.keys()];
-  if (subs.length === 0) return { rows: [], unattributedMachines: unattributed.size };
+  const subs = [...byDay.keys()];
+  if (subs.length === 0) return { rows: [], unattributedMachines: unattributed.size, byDay };
 
   const plans = new Map<string, ServersSubscriptionRow["plan"]>();
   for (const [index, sub] of subs.entries()) {
@@ -340,10 +388,12 @@ async function readServers(
       // A subscription Resource Graph does not return is not visible, not empty:
       // it holds at least the machines that reported here.
       machinesInSubscription: graphRead ? (inSubscription.get(sub) ?? null) : null,
-      machinesReportingHere: here.get(sub)!.size,
+      // Machine-days over the window, as a daily average: the grant is per day.
+      machinesReportingHere:
+        [...byDay.get(sub)!.values()].reduce((sum, n) => sum + n, 0) / INVENTORY_WINDOW_DAYS,
     }),
   );
-  return { rows, unattributedMachines: unattributed.size };
+  return { rows, unattributedMachines: unattributed.size, byDay };
 }
 
 // ---------------------------------------------------------------------------
@@ -354,10 +404,12 @@ interface Assembly {
   reads: readonly WorkspaceReads[];
   billableDailyAverageMB: number;
   licences: LicenceRead;
-  servers: { rows: ServersSubscriptionRow[]; unattributedMachines: number };
+  servers: ServersRead;
   heartbeatComplete: boolean;
   /** Why no cross-check can be run, when something other than the data says so. */
   workspaceSkipReason: string | null;
+  /** Why the Servers P2 cross-check alone cannot be run (tenant: capped per workspace). */
+  serversSkipReason: string | null;
   plans: Map<string, string> | null;
   /** Some workspaces were not read: the Servers machine count is a floor. */
   floorServers: boolean;
@@ -372,7 +424,10 @@ function add(map: Map<string, number>, key: string, value: number): void {
 
 function assemble(
   input: Assembly,
-): Pick<DataAllowances, "attribution" | "grants" | "pooled" | "eligibleKnown" | "afterAllowancesDailyMB"> {
+): Pick<
+  DataAllowances,
+  "attribution" | "grants" | "pooled" | "eligibleKnown" | "afterAllowancesDailyMB" | "usedIsFloor"
+> {
   const benefit = parseBenefitRows(input.reads.flatMap((r) => r.benefitRows));
   const eligibleByDay = new Map<GrantId, Map<string, number>>([
     ["e5", dayMap()],
@@ -397,6 +452,7 @@ function assemble(
   }
 
   const eligibleKnown = input.reads.length > 0 && input.reads.every((r) => r.eligibleComplete);
+  const benefitComplete = input.reads.every((r) => r.benefitComplete);
   const pooledMode = benefit.attribution === "pooled";
   const usedByGrant = new Map<GrantId, Map<string, number>>([
     ["e5", dayMap()],
@@ -410,6 +466,9 @@ function assemble(
 
   const skipReason = (grant: GrantId): string | null => {
     if (!eligibleKnown) return "Cross-check skipped: eligible volume not read (or only partly read).";
+    if (!benefitComplete) {
+      return "Cross-check skipped: the benefit read (Operation) was partial, so the applied figures are incomplete.";
+    }
     if (pooledMode) {
       return `Cross-check skipped: the benefit type(s) ${benefit.unmatchedTypes.join(", ")} could not be attributed to a grant, so the benefit applied is only known in total.`;
     }
@@ -461,19 +520,35 @@ function assemble(
           kind: "skipped",
           reason:
             skip ??
-            (rows.length === 0
-              ? "Cross-check skipped: no reporting machines were found."
-              : "Cross-check skipped: no subscription's Defender plan could be read."),
+            (rows.length > 0
+              ? "Cross-check skipped: no subscription's Defender plan could be read."
+              : input.heartbeatComplete
+                ? "Cross-check skipped: no reporting machines were found."
+                : "Cross-check skipped: reporting machines were not read."),
         };
       } else {
         const served = serversGranted(rows, input.servers.unattributedMachines);
+        // The card's figure is the per-day grant averaged over the window.
         grantedMB = served.grantedMB.reportingHere;
         grantedIsFloor = served.atLeast || !input.heartbeatComplete;
+        const p2 = rows.filter((r) => r.plan === "P2").map((r) => r.subscriptionId);
+        const grantedOn = (day: string): number =>
+          p2.reduce((sum, sub) => sum + (input.servers.byDay.get(sub)?.get(day) ?? 0), 0) *
+          SERVERS_MB_PER_MACHINE_PER_DAY;
+        const serversSkip =
+          skip ??
+          (!input.heartbeatComplete
+            ? "Cross-check skipped: reporting machines were only partly read, so the machine count is a floor."
+            : input.serversSkipReason);
         check =
-          skip !== null
-            ? { kind: "skipped", reason: skip }
+          serversSkip !== null
+            ? { kind: "skipped", reason: serversSkip }
             : crossCheck(usage.cappedDays, [
-                { basis: "reporting-here", mb: served.grantedMB.reportingHere },
+                // Each capped day against THAT day's machines, not the window average.
+                {
+                  basis: "reporting-here",
+                  mb: usage.cappedDays.length > 0 ? median(usage.cappedDays.map((d) => grantedOn(d.day))) : 0,
+                },
                 { basis: "in-subscription", mb: served.grantedMB.inSubscription ?? 0 },
               ]);
       }
@@ -509,6 +584,7 @@ function assemble(
     pooled,
     eligibleKnown,
     afterAllowancesDailyMB: Math.max(0, input.billableDailyAverageMB - usedDailyMB),
+    usedIsFloor: !benefitComplete,
   };
 }
 
@@ -519,14 +595,25 @@ function machinesOf(reads: readonly WorkspaceReads[]): MachineKey[] {
     for (const row of read.heartbeatRows ?? []) {
       const computer = String(row.Computer ?? "");
       const subscription = String(row.SubscriptionId ?? "").toLowerCase();
-      if (computer === "") continue;
-      const key = `${subscription}|${computer.toLowerCase()}`;
+      const day = typeof row.Day === "string" ? row.Day : "";
+      if (computer === "" || day === "") continue;
+      // A machine reporting to two workspaces on one day is one machine-day.
+      const key = `${subscription}|${computer.toLowerCase()}|${day}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ subscription, computer: computer.toLowerCase() });
+      out.push({ subscription, computer: computer.toLowerCase(), day });
     }
   }
   return out;
+}
+
+/** The Servers read as the result carries it: the per-day map stays internal. */
+function publicServers(servers: ServersRead, reads: readonly WorkspaceReads[]): DataAllowances["servers"] {
+  return {
+    rows: servers.rows,
+    unattributedMachines: servers.unattributedMachines,
+    heartbeatComplete: reads.length > 0 && reads.every((r) => r.heartbeatComplete),
+  };
 }
 
 function queriesFor(workspaceId: string): DataAllowances["queries"] {
@@ -578,8 +665,9 @@ export async function readDataAllowances(
     billableDailyAverageMB: inventory.totals.billableDailyAverageMB,
     licences,
     servers,
-    heartbeatComplete: reads.every((r) => r.heartbeatRows !== null),
+    heartbeatComplete: reads.every((r) => r.heartbeatComplete),
     workspaceSkipReason,
+    serversSkipReason: null,
     plans,
     floorServers: false,
   });
@@ -592,7 +680,7 @@ export async function readDataAllowances(
     ...result,
     sumsAreFloors: inventory.usageWarning !== null,
     licences,
-    servers,
+    servers: publicServers(servers, reads),
     scope: { kind: "workspace", sentinelWorkspaces: n },
     queries: queriesFor(workspaceId),
     gaps,
@@ -639,11 +727,15 @@ export async function compareTenant(
     billableDailyAverageMB: billable,
     licences,
     servers,
-    heartbeatComplete: reads.every((r) => r.heartbeatRows !== null),
+    heartbeatComplete: reads.every((r) => r.heartbeatComplete),
     workspaceSkipReason:
       notRead.length > 0
         ? `Cross-check skipped: ${notRead.length} workspace${notRead.length === 1 ? " was" : "s were"} not read, so the tenant sums are partial.`
         : null,
+    // E5 is pooled tenant-wide; Servers P2 is capped per workspace, so a capped
+    // day in the tenant sum can be one workspace running out, not the sum.
+    serversSkipReason:
+      "Cross-check skipped: the Servers P2 benefit is capped per workspace, so a tenant-wide daily sum cannot show any one workspace's cap. Run it on a single workspace.",
     plans: null,
     floorServers: notRead.length > 0,
   });
@@ -657,7 +749,7 @@ export async function compareTenant(
     ...result,
     sumsAreFloors: notRead.length > 0,
     licences,
-    servers,
+    servers: publicServers(servers, reads),
     scope: { kind: "tenant", workspaces: [...workspaceIds], notRead },
     queries: { ...queriesFor("{workspaceId}"), tables: null },
     gaps,
