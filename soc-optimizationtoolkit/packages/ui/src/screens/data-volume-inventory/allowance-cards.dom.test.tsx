@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { DataAllowances } from "@soc/core";
 import { AllowanceCards, AllowanceTagCell } from "./allowance-cards";
-import { allowances, grantView, usage } from "./allowance-test-fixture";
+import { allowances, grantView, servers as serversBlock, usage } from "./allowance-test-fixture";
 
 afterEach(cleanup);
 
@@ -285,16 +285,9 @@ describe("AllowanceCards", () => {
   it("renders an unread Defender plan as not read and an unknown machine count as not known", () => {
     renderCards(
       allowances({
-        servers: {
-          rows: [{ subscriptionId: "sub-x", plan: "not-read", machinesInSubscription: null, machinesReportingHere: 3 }],
-          unattributedMachines: 0,
-          heartbeatComplete: true,
-          granted: {
-            machines: { reportingHere: 0, inSubscription: null },
-            grantedMB: { reportingHere: 0, inSubscription: null },
-            atLeast: true,
-          },
-        },
+        servers: serversBlock([
+          { subscriptionId: "sub-x", plan: "not-read", machinesInSubscription: null, machinesReportingHere: 3 },
+        ]),
         grants: [grantView({ grant: "servers-p2", grantedMB: null })],
       }),
     );

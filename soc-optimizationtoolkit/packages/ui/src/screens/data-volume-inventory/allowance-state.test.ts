@@ -26,7 +26,7 @@ import {
   tagLabel,
   tenantDiscoveryNote,
 } from "./allowance-state";
-import { allowances, grantView, usage } from "./allowance-test-fixture";
+import { allowances, grantView, servers as serversBlock, usage } from "./allowance-test-fixture";
 import { inventoryCsv } from "./workspace-inventory-state";
 
 describe("tagLabel", () => {
@@ -127,14 +127,14 @@ describe("grantedUnknownReason (Servers P2)", () => {
   const servers = grantView({ grant: "servers-p2", grantedMB: null });
   it("says machines were not read when Heartbeat failed, never that none were found", () => {
     const a = allowances({
-      servers: { rows: [], unattributedMachines: 0, heartbeatComplete: false, granted: { machines: { reportingHere: 0, inSubscription: 0 }, grantedMB: { reportingHere: 0, inSubscription: 0 }, atLeast: false } },
+      servers: serversBlock([], { heartbeatComplete: false }),
     });
     expect(grantedUnknownReason(servers, a)).toBe("reporting machines were not read");
   });
   it("says none were found only for an answered, empty Heartbeat", () => {
     expect(grantedUnknownReason(servers, allowances())).toBe("no reporting machines were found");
     const unattributed = allowances({
-      servers: { rows: [], unattributedMachines: 2, heartbeatComplete: true, granted: { machines: { reportingHere: 0, inSubscription: 0 }, grantedMB: { reportingHere: 0, inSubscription: 0 }, atLeast: false } },
+      servers: serversBlock([], { unattributedMachines: 2 }),
     });
     expect(grantedUnknownReason(servers, unattributed)).toBe("no reporting machine was attributed to a subscription");
   });
@@ -305,19 +305,10 @@ describe("granted arithmetic and the other basis", () => {
 
   it("leaves the in-subscription machine count not known when Resource Graph missed one", () => {
     const a = allowances({
-      servers: {
-        rows: [
-          { subscriptionId: "s1", plan: "P2", machinesInSubscription: null, machinesReportingHere: 4 },
-          { subscriptionId: "s2", plan: "off", machinesInSubscription: 9, machinesReportingHere: 2 },
-        ],
-        unattributedMachines: 0,
-        heartbeatComplete: true,
-        granted: {
-          machines: { reportingHere: 4, inSubscription: null },
-          grantedMB: { reportingHere: 2000, inSubscription: null },
-          atLeast: false,
-        },
-      },
+      servers: serversBlock([
+        { subscriptionId: "s1", plan: "P2", machinesInSubscription: null, machinesReportingHere: 4 },
+        { subscriptionId: "s2", plan: "off", machinesInSubscription: 9, machinesReportingHere: 2 },
+      ]),
     });
     const lines = basisFigures(grantView({ grant: "servers-p2" }), a).map(arithmeticLine);
     expect(lines).toEqual([
@@ -517,16 +508,9 @@ describe("inventoryCsv allowance columns", () => {
 });
 
 describe("allowance honesty edge cases (MIG-21)", () => {
-  const p2Rows = {
-    rows: [{ subscriptionId: "s1", plan: "P2" as const, machinesInSubscription: 6, machinesReportingHere: 4 }],
-    unattributedMachines: 0,
-    heartbeatComplete: true,
-    granted: {
-      machines: { reportingHere: 4, inSubscription: 6 },
-      grantedMB: { reportingHere: 2000, inSubscription: 3000 },
-      atLeast: false,
-    },
-  };
+  const p2Rows = serversBlock([
+    { subscriptionId: "s1", plan: "P2", machinesInSubscription: 6, machinesReportingHere: 4 },
+  ]);
 
   it("a floored Servers Granted makes both arithmetic lines 'at least'", () => {
     const a = allowances({ servers: p2Rows });

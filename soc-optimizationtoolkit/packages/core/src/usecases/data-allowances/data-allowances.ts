@@ -163,6 +163,9 @@ export interface DataAllowances {
     /**
      * The P2 grant on each basis, as `serversGranted` computes it: the screen
      * shows these counts and figures rather than redoing the arithmetic.
+     * It covers only the rows read: its `atLeast` sees an unread plan but not
+     * a partial Heartbeat read, so the authoritative floor flag is the
+     * Servers P2 GrantView's `grantedIsFloor`.
      */
     granted: ServersGranted;
   };

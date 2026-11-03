@@ -84,7 +84,8 @@ export function grantedUnknownReason(view: GrantView, a: DataAllowances | null):
  */
 export function headroomApplies(view: GrantView, a: DataAllowances | null): boolean {
   if (a === null || a.scope.kind !== "workspace" || view.grant !== "e5") return true;
-  // A floored count (sentinelWorkspacesAtLeast) is always >= 2, so `=== 1` already excludes it.
+  // Invariant: a floored count (sentinelWorkspacesAtLeast) is always >= 2 -
+  // sentinelWorkspaceCount returns null rather than a floor of 0 or 1 - so `=== 1` excludes it.
   return a.scope.sentinelWorkspaces === 1;
 }
 

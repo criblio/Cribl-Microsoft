@@ -3,7 +3,10 @@
  * every field set, overridable per test. Test-only; never imported by the app.
  */
 
-import type { DataAllowances, GrantUsage, GrantView } from "@soc/core";
+import type { DataAllowances, GrantUsage, GrantView, ServersSubscriptionRow } from "@soc/core";
+// Core's own arithmetic, by module path: the barrel does not export it, and a
+// hand-written granted figure could disagree with the rows it sits beside.
+import { serversGranted } from "@soc/core/src/domain/data-allowances/granted";
 
 export function usage(partial: Partial<GrantUsage> = {}): GrantUsage {
   return {
@@ -31,6 +34,14 @@ export function grantView(partial: Partial<GrantView> = {}): GrantView {
   };
 }
 
+/** The servers block for `rows`, with `granted` computed from them as core does. */
+export function servers(
+  rows: ServersSubscriptionRow[] = [],
+  partial: Partial<Omit<DataAllowances["servers"], "rows" | "granted">> = {},
+): DataAllowances["servers"] {
+  return { rows, unattributedMachines: 0, heartbeatComplete: true, ...partial, granted: serversGranted(rows) };
+}
+
 export function allowances(partial: Partial<DataAllowances> = {}): DataAllowances {
   return {
     attribution: "per-grant",
@@ -41,12 +52,7 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     sumsAreFloors: false,
     usedIsFloor: false,
     licences: { kind: "not-bound" },
-    servers: {
-      rows: [],
-      unattributedMachines: 0,
-      heartbeatComplete: true,
-      granted: { machines: { reportingHere: 0, inSubscription: 0 }, grantedMB: { reportingHere: 0, inSubscription: 0 }, atLeast: false },
-    },
+    servers: servers(),
     scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: false },
     queries: {
       benefit: "Operation | benefit",
