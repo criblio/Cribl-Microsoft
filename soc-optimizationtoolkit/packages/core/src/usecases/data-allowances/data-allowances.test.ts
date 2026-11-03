@@ -253,7 +253,7 @@ describe("readDataAllowances - licences", () => {
     expect(e5.crossCheck).toMatchObject({ kind: "matched", basis: "assigned" });
   });
 
-  it("several Sentinel workspaces skip every cross-check, naming how many", async () => {
+  it("several Sentinel workspaces skip the E5 cross-check, naming how many", async () => {
     const { azure } = routedAzure({
       benefit: { "*": benefit([DAY, "M365 E5", 0.5]) },
       eligible: eligible([DAY, "SigninLogs", 900]),
@@ -266,6 +266,37 @@ describe("readDataAllowances - licences", () => {
       expect((g.crossCheck as { reason: string }).reason).toMatch(/2 Sentinel workspaces/);
     }
     expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2 });
+  });
+
+  it("several Sentinel workspaces do not skip the Servers P2 cross-check (MIG-19): only E5 is tenant-wide", async () => {
+    const DAY2 = "2026-10-20";
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY2, "M365 E5", 0.5], [DAY2, "Defender for Servers", 0.5]) },
+      eligible: eligible([DAY2, "SigninLogs", 900], [DAY2, "SecurityEvent", 1000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+      graph: { status: 200, body: { data: [{ subscriptionId: "sub-a", Machines: 4 }] } },
+    });
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(azure, graph, WS, inventory(0), { ...OPTS, sentinelWorkspaces: 61 });
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/61 Sentinel workspaces/),
+    });
+    expect(view(r, "servers-p2").crossCheck).toEqual({ kind: "matched", basis: "reporting-here", medianMB: 500 });
+  });
+
+  it("an unknown Sentinel workspace count skips the E5 cross-check but not Servers P2 (MIG-19)", async () => {
+    const DAY2 = "2026-10-20";
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY2, "Defender for Servers", 0.5]) },
+      eligible: eligible([DAY2, "SecurityEvent", 1000]),
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+      graph: { status: 200, body: { data: [{ subscriptionId: "sub-a", Machines: 4 }] } },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), { ...OPTS, sentinelWorkspaces: null });
+    expect(view(r, "servers-p2").crossCheck).toMatchObject({ kind: "matched" });
   });
 
   it("an unknown Sentinel workspace count skips the cross-check even with seats read and a capped day", async () => {

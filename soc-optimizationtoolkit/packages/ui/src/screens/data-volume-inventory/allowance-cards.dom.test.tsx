@@ -76,6 +76,18 @@ describe("AllowanceCards", () => {
     expect(text()).toContain("headroom is tenant-wide - use Compare against the whole tenant");
   });
 
+  it("says the grant is tenant-wide on the E5 card only, never on the Servers P2 card (MIG-19)", () => {
+    const scope = { kind: "workspace", sentinelWorkspaces: 61 } as const;
+    renderCards(allowances({ scope, grants: [grantView({ grant: "e5" })] }));
+    expect(text()).toContain("Tenant-wide, shared across 61 Sentinel workspaces.");
+    cleanup();
+    renderCards(allowances({ scope, grants: [grantView({ grant: "servers-p2", grantedMB: 500 })] }));
+    expect(text()).not.toContain("shared across 61");
+    cleanup();
+    renderCards(allowances({ scope: { kind: "workspace", sentinelWorkspaces: null }, grants: [grantView({ grant: "servers-p2", grantedMB: 500 })] }));
+    expect(text()).not.toContain("how many Sentinel workspaces share it is not known");
+  });
+
   it("shows every gap as a warning line", () => {
     renderCards(allowances({ gaps: ["Table plans were not read: HTTP 403", "Reporting machines were not read: x"] }));
     const warnings = [...document.querySelectorAll(".match-warning")].map((e) => e.textContent);

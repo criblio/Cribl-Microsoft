@@ -49,8 +49,9 @@ export interface AllowanceCardsProps {
   actions?: ReactNode;
 }
 
-function sharedLabel(a: DataAllowances): string | null {
-  if (a.scope.kind !== "workspace") return null;
+/** Only the E5 grant is tenant-wide; Servers P2 is granted per workspace (MIG-19). */
+function sharedLabel(view: GrantView, a: DataAllowances): string | null {
+  if (view.grant !== "e5" || a.scope.kind !== "workspace") return null;
   const n = a.scope.sentinelWorkspaces;
   if (n === null) return "Tenant-wide; how many Sentinel workspaces share it is not known.";
   return n > 1 ? `Tenant-wide, shared across ${n} Sentinel workspaces.` : null;
@@ -151,7 +152,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
   const text = grantCardText(view, a);
   const meter = meterOf(view, a);
   const over = view.eligibleKnown && !a.usedIsFloor && view.usage.overDailyMB > 0;
-  const shared = sharedLabel(a);
+  const shared = sharedLabel(view, a);
   return (
     <div className="allowance-card">
       <div className="allowance-card-title">{text.title}</div>

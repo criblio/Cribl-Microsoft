@@ -417,6 +417,8 @@ interface Assembly {
   heartbeatComplete: boolean;
   /** Why no cross-check can be run, when something other than the data says so. */
   workspaceSkipReason: string | null;
+  /** Why the E5 cross-check alone cannot be run (the grant is tenant-wide and shared). */
+  e5SkipReason: string | null;
   /** Why the Servers P2 cross-check alone cannot be run (tenant: capped per workspace). */
   serversSkipReason: string | null;
   plans: Map<string, string> | null;
@@ -482,6 +484,7 @@ function assemble(
       return `Cross-check skipped: the benefit type(s) ${benefit.unmatchedTypes.join(", ")} could not be attributed to a grant, so the benefit applied is only known in total.`;
     }
     if (input.workspaceSkipReason !== null) return input.workspaceSkipReason;
+    if (grant === "e5" && input.e5SkipReason !== null) return input.e5SkipReason;
     return grant === "e5" && input.licences.kind !== "read"
       ? "Cross-check skipped: seat counts not read (LicenseAssignment.Read.All)."
       : null;
@@ -662,7 +665,8 @@ export async function readDataAllowances(
   const licences = await readLicences(graph, opts.readAt);
 
   const n = opts.sentinelWorkspaces;
-  const workspaceSkipReason =
+  // Only the E5 grant is tenant-wide; Servers P2 is granted per workspace.
+  const e5SkipReason =
     n === null
       ? "Cross-check skipped: the number of Sentinel workspaces sharing these grants is unknown."
       : n > 1
@@ -675,7 +679,8 @@ export async function readDataAllowances(
     licences,
     servers,
     heartbeatComplete: reads.every((r) => r.heartbeatComplete),
-    workspaceSkipReason,
+    workspaceSkipReason: null,
+    e5SkipReason,
     serversSkipReason: null,
     plans,
     floorServers: false,
@@ -752,6 +757,7 @@ export async function compareTenant(
     workspaceSkipReason: sumsAreFloors
       ? `Cross-check skipped: the tenant sums are partial - ${causes.join("; ")}.`
       : null,
+    e5SkipReason: null,
     // E5 is pooled tenant-wide; Servers P2 is capped per workspace, so a capped
     // day in the tenant sum can be one workspace running out, not the sum.
     serversSkipReason:
