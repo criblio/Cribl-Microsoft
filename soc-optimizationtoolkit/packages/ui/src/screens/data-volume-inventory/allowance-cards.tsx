@@ -54,6 +54,8 @@ function sharedLabel(view: GrantView, a: DataAllowances): string | null {
   if (view.grant !== "e5" || a.scope.kind !== "workspace") return null;
   const n = a.scope.sentinelWorkspaces;
   if (n === null) return "Tenant-wide; how many Sentinel workspaces share it is not known.";
+  // Incomplete discovery: the count is what was seen, and there may be more.
+  if (a.scope.sentinelWorkspacesAtLeast) return `Tenant-wide, shared across at least ${n} Sentinel workspaces.`;
   return n > 1 ? `Tenant-wide, shared across ${n} Sentinel workspaces.` : null;
 }
 
@@ -167,7 +169,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
         <div
           className="allowance-meter"
           role="img"
-          aria-label={`Eligible ${mbPerDay(view.usage.eligibleDailyMB)} against granted ${mbPerDay(view.grantedMB!)}`}
+          aria-label={`Eligible ${mbPerDay(view.usage.eligibleDailyMB)} against granted ${text.granted}`}
         >
           <div
             className={over ? "allowance-meter-fill allowance-meter-fill-over" : "allowance-meter-fill"}

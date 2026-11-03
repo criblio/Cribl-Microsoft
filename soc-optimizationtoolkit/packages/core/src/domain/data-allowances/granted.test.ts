@@ -129,6 +129,35 @@ describe("e5Granted", () => {
   });
 });
 
+describe("e5Granted - SKU status and overlap (MIG-21)", () => {
+  it("counts seats only on Enabled or Warning SKUs; a dead SKU stays in the table but grants nothing", () => {
+    for (const status of ["Suspended", "LockedOut", "Deleted"]) {
+      const r = e5Granted([E5, { ...SEC, capabilityStatus: status }]);
+      expect(r.assigned).toBe(1940);
+      expect(r.purchased).toBe(2000);
+      expect(r.grantedMB).toEqual({ assigned: 9700, purchased: 10000 });
+      const dead = r.rows.find((x) => x.skuPartNumber === "IDENTITY_THREAT_PROTECTION");
+      expect(dead?.capabilityStatus).toBe(status);
+      expect(dead?.qualifies).toBe(true);
+      expect(dead?.reason).toBe(
+        `Qualifies: Microsoft 365 E5 Security family, but the SKU is ${status}, so its seats are not counted`,
+      );
+    }
+    const grace = e5Granted([{ ...E5, capabilityStatus: "Warning" }]);
+    expect(grace.assigned).toBe(1940);
+    expect(grace.purchased).toBe(2000);
+  });
+
+  it("flags assigned as possibly double-counted only when two live qualifying SKUs have seats", () => {
+    expect(e5Granted([E5, SEC]).assignedMayDoubleCount).toBe(true);
+    expect(e5Granted([E5]).assignedMayDoubleCount).toBe(false);
+    expect(e5Granted([E5, { ...SEC, consumed: 0 }]).assignedMayDoubleCount).toBe(false);
+    expect(e5Granted([E5, { ...SEC, capabilityStatus: "Suspended" }]).assignedMayDoubleCount).toBe(false);
+    // A non-qualifying SKU with seats is not an overlap.
+    expect(e5Granted([E5, E3]).assignedMayDoubleCount).toBe(false);
+  });
+});
+
 describe("serversGranted", () => {
   const row = (
     plan: ServersSubscriptionRow["plan"],

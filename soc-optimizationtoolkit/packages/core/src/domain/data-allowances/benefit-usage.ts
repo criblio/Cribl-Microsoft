@@ -74,21 +74,39 @@ function grantForType(type: string): GrantId | null {
 }
 
 /**
+ * A benefit amount as a number, or null when it is not one. Number(null) and
+ * Number("") are 0, and a missing amount is not a zero benefit: it was not read.
+ */
+function benefitGB(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * Operation rows to per-day usage. If ANY benefit type is unrecognised the
  * whole result is pooled: attributing the recognised rows alone would present
- * a partial split as the whole.
+ * a partial split as the whole. A row with no day or no readable amount is
+ * dropped and COUNTED in `unreadableRows`: the caller must treat Used as a
+ * lower bound when it is not 0.
  */
 export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): {
   days: BenefitDay[];
   attribution: "per-grant" | "pooled";
   unmatchedTypes: string[];
+  unreadableRows: number;
 } {
   const parsed: Array<{ day: string; grant: GrantId | null; usedMB: number }> = [];
   const unmatched = new Set<string>();
+  let unreadableRows = 0;
   for (const row of rows) {
     const day = typeof row.Day === "string" ? row.Day : "";
-    const gb = Number(row.BenefitUsedGB);
-    if (!day || !Number.isFinite(gb)) continue;
+    const gb = benefitGB(row.BenefitUsedGB);
+    if (!day || gb === null) {
+      unreadableRows += 1;
+      continue;
+    }
     const type = String(row.BenefitType ?? "");
     const grant = grantForType(type);
     if (grant === null) unmatched.add(type);
@@ -103,6 +121,7 @@ export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): 
     })),
     attribution: pooled ? "pooled" : "per-grant",
     unmatchedTypes: [...unmatched],
+    unreadableRows,
   };
 }
 

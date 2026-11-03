@@ -35,6 +35,7 @@ import {
   afterAllowancesText,
   overCell,
   sentinelWorkspaceCount,
+  sentinelWorkspaceCountIsFloor,
   sentinelWorkspaceIds,
   tenantDiscoveryNote,
 } from "./allowance-state";
@@ -149,6 +150,7 @@ export function WorkspaceInventoryPanel() {
         onProgress: setProgress,
         readAt,
         sentinelWorkspaces: sentinelWorkspaceCount(discovery),
+        sentinelWorkspacesAtLeast: sentinelWorkspaceCountIsFloor(discovery),
       });
       setAllowances({ result, readAt });
     } catch (err) {

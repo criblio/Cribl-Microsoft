@@ -61,6 +61,11 @@ function armStub(usage: Answer, usage2?: Answer) {
     if (req.path === `${WS_ID}/query` || req.path === `${WS2_ID}/query`) {
       const query = (req.body as { query: string }).query;
       if (query.startsWith("Usage")) return req.path.startsWith(WS2_ID) ? usage2! : usage;
+      // No benefit applied. A row without a readable amount is counted as
+      // unreadable (MIG-21), so the benefit read gets its own, empty, answer.
+      if (query.startsWith("Operation")) {
+        return { status: 200, body: table(["Day", "BenefitType", "BenefitUsedGB"], []) };
+      }
       return {
         status: 200,
         body: table(

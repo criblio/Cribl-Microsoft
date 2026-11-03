@@ -72,9 +72,24 @@ export const HEARTBEAT_QUERY = [
   "    SubscriptionId = tostring(_SubscriptionId)",
 ].join("\n");
 
-/** How many machines each subscription holds (Azure VMs and Arc machines). */
-const MACHINES_QUERY =
-  "resources | where type in~ ('microsoft.compute/virtualmachines', 'microsoft.hybridcompute/machines') | summarize Machines = count() by subscriptionId";
+/**
+ * How many machines each subscription holds. This APPROXIMATES Defender for
+ * Servers' billed machine count: Azure VMs that are running or starting (a
+ * deallocated VM is not billed), Uniform scale-set instances (which live in
+ * computeresources, not resources), and every Arc machine.
+ */
+const MACHINES_QUERY = [
+  "resources",
+  "| where (type =~ 'microsoft.compute/virtualmachines'",
+  "    and tostring(properties.extended.instanceView.powerState.code) in~ ('PowerState/running', 'PowerState/starting'))",
+  "    or type =~ 'microsoft.hybridcompute/machines'",
+  "| project subscriptionId",
+  "| union (computeresources",
+  "    | where type =~ 'microsoft.compute/virtualmachinescalesets/virtualmachines'",
+  "        and tostring(properties.extended.instanceView.powerState.code) in~ ('PowerState/running', 'PowerState/starting')",
+  "    | project subscriptionId)",
+  "| summarize Machines = count() by subscriptionId",
+].join("\n");
 
 const GRAPH_CALL =
   "GET /v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo";
@@ -146,7 +161,12 @@ export interface DataAllowances {
     heartbeatComplete: boolean;
   };
   scope:
-    | { kind: "workspace"; sentinelWorkspaces: number | null }
+    | {
+        kind: "workspace";
+        sentinelWorkspaces: number | null;
+        /** True when discovery was incomplete: there may be more than `sentinelWorkspaces`. */
+        sentinelWorkspacesAtLeast: boolean;
+      }
     | {
         kind: "tenant";
         workspaces: string[];
@@ -424,6 +444,8 @@ interface Assembly {
   plans: Map<string, string> | null;
   /** Some workspaces were not read: the Servers machine count is a floor. */
   floorServers: boolean;
+  /** The result's gap list; assembly adds what it finds unreadable. */
+  gaps: string[];
 }
 
 function dayMap(): Map<string, number> {
@@ -463,7 +485,14 @@ function assemble(
   }
 
   const eligibleKnown = input.reads.length > 0 && input.reads.every((r) => r.eligibleComplete);
-  const benefitComplete = input.reads.every((r) => r.benefitComplete);
+  // A benefit row whose amount could not be read is a benefit not counted:
+  // Used becomes a lower bound exactly as a partial benefit answer makes it.
+  if (benefit.unreadableRows > 0) {
+    input.gaps.push(
+      `${benefit.unreadableRows} benefit row(s) could not be read (no day or no readable amount), so Used is a lower bound.`,
+    );
+  }
+  const benefitComplete = input.reads.every((r) => r.benefitComplete) && benefit.unreadableRows === 0;
   const pooledMode = benefit.attribution === "pooled";
   const usedByGrant = new Map<GrantId, Map<string, number>>([
     ["e5", dayMap()],
@@ -478,7 +507,9 @@ function assemble(
   const skipReason = (grant: GrantId): string | null => {
     if (!eligibleKnown) return "Cross-check skipped: eligible volume not read (or only partly read).";
     if (!benefitComplete) {
-      return "Cross-check skipped: the benefit read (Operation) was partial, so the applied figures are incomplete.";
+      return benefit.unreadableRows > 0
+        ? "Cross-check skipped: some benefit rows (Operation) could not be read, so the applied figures are incomplete."
+        : "Cross-check skipped: the benefit read (Operation) was partial, so the applied figures are incomplete.";
     }
     if (pooledMode) {
       return `Cross-check skipped: the benefit type(s) ${benefit.unmatchedTypes.join(", ")} could not be attributed to a grant, so the benefit applied is only known in total.`;
@@ -534,9 +565,11 @@ function assemble(
             skip ??
             (rows.length > 0
               ? "Cross-check skipped: no subscription's Defender plan could be read."
-              : input.heartbeatComplete
-                ? "Cross-check skipped: no reporting machines were found."
-                : "Cross-check skipped: reporting machines were not read."),
+              : !input.heartbeatComplete
+                ? "Cross-check skipped: reporting machines were not read."
+                : input.servers.unattributedMachines > 0
+                  ? `Cross-check skipped: ${input.servers.unattributedMachines} reporting machine(s) were found, but none carried a subscription id, so no Defender plan could be read.`
+                  : "Cross-check skipped: no reporting machines were found."),
         };
       } else {
         const served = serversGranted(rows, input.servers.unattributedMachines);
@@ -653,7 +686,11 @@ export async function readDataAllowances(
   graph: GraphDirectory | undefined,
   workspaceId: string,
   inventory: WorkspaceInventory,
-  opts: DataAllowancesOptions & { sentinelWorkspaces: number | null },
+  opts: DataAllowancesOptions & {
+    sentinelWorkspaces: number | null;
+    /** Discovery was incomplete, so `sentinelWorkspaces` is a lower bound. */
+    sentinelWorkspacesAtLeast?: boolean;
+  },
 ): Promise<DataAllowances> {
   const gaps: string[] = [];
   const reads = [await readWorkspace(azure, workspaceId, "", gaps, opts)];
@@ -665,12 +702,13 @@ export async function readDataAllowances(
   const licences = await readLicences(graph, opts.readAt);
 
   const n = opts.sentinelWorkspaces;
+  const atLeastN = opts.sentinelWorkspacesAtLeast === true;
   // Only the E5 grant is tenant-wide; Servers P2 is granted per workspace.
   const e5SkipReason =
     n === null
       ? "Cross-check skipped: the number of Sentinel workspaces sharing these grants is unknown."
-      : n > 1
-        ? `Cross-check skipped: the grant is tenant-wide and shared across ${n} Sentinel workspaces, so one workspace's benefit cannot be compared with it.`
+      : n > 1 || atLeastN
+        ? `Cross-check skipped: the grant is tenant-wide and shared across ${atLeastN ? "at least " : ""}${n} Sentinel workspaces, so one workspace's benefit cannot be compared with it.`
         : null;
 
   const result = assemble({
@@ -684,6 +722,7 @@ export async function readDataAllowances(
     serversSkipReason: null,
     plans,
     floorServers: false,
+    gaps,
   });
   opts.logger?.info("data-allowances: read", {
     grants: result.grants.length,
@@ -695,7 +734,7 @@ export async function readDataAllowances(
     sumsAreFloors: inventory.usageWarning !== null,
     licences,
     servers: publicServers(servers, reads),
-    scope: { kind: "workspace", sentinelWorkspaces: n },
+    scope: { kind: "workspace", sentinelWorkspaces: n, sentinelWorkspacesAtLeast: atLeastN },
     queries: queriesFor(workspaceId),
     gaps,
   };
@@ -764,6 +803,7 @@ export async function compareTenant(
       "Cross-check skipped: the Servers P2 benefit is capped per workspace, so a tenant-wide daily sum cannot show any one workspace's cap. Run it on a single workspace.",
     plans: null,
     floorServers: sumsAreFloors,
+    gaps,
   });
   gaps.push("Table plans are not read in a tenant comparison.");
   if (discoveryIncomplete) {

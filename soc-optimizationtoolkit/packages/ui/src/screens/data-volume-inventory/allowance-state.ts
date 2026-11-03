@@ -84,7 +84,7 @@ export function grantedUnknownReason(view: GrantView, a: DataAllowances | null):
  */
 export function headroomApplies(view: GrantView, a: DataAllowances | null): boolean {
   if (a === null || a.scope.kind !== "workspace" || view.grant !== "e5") return true;
-  return a.scope.sentinelWorkspaces === 1;
+  return a.scope.sentinelWorkspaces === 1 && !a.scope.sentinelWorkspacesAtLeast;
 }
 
 const TENANT_WIDE_HEADROOM = "headroom is tenant-wide - use Compare against the whole tenant";
@@ -133,12 +133,17 @@ export function grantCardText(view: GrantView, a: DataAllowances | null = null):
   return { title: GRANT_LABEL[view.grant], granted, eligibleUsed, status };
 }
 
-/** Is the eligible-against-granted meter drawable? Not for a grant this view cannot compare. */
+/**
+ * Is the eligible-against-granted meter drawable? Not for a grant this view
+ * cannot compare, and not when Granted is only a lower bound: a marker at the
+ * floor would draw a headroom (or an overage) the text withholds.
+ */
 export function meterOf(
   view: GrantView,
   a: DataAllowances | null = null,
 ): { eligiblePct: number; grantedPct: number } | null {
   if (!view.eligibleKnown || view.grantedMB === null || view.grantedMB <= 0) return null;
+  if (view.grantedIsFloor) return null;
   if (!headroomApplies(view, a)) return null;
   const max = Math.max(view.grantedMB, view.usage.eligibleDailyMB);
   if (max <= 0) return null;
@@ -229,29 +234,63 @@ export interface BasisFigure {
   mbPerUnit: number;
   /** null when the count is not known. */
   mb: number | null;
+  /** The count is a lower bound (a plan or a workspace was not read, or a read was partial). */
+  atLeast: boolean;
+  /** A caveat on the count the arithmetic cannot show, or null. */
+  note: string | null;
 }
+
+const DOUBLE_COUNT_NOTE =
+  "may count a user twice - more than one qualifying SKU has seats assigned, and Graph cannot " +
+  "show which users hold both; the cross-check settles it";
 
 export function basisFigures(view: GrantView, a: DataAllowances): BasisFigure[] {
   if (view.grant === "e5") {
     if (a.licences.kind !== "read") return [];
     const e5 = a.licences.e5;
     return [
-      { basis: "assigned", count: e5.assigned, mbPerUnit: E5_MB_PER_SEAT_PER_DAY, mb: e5.grantedMB.assigned },
-      { basis: "purchased", count: e5.purchased, mbPerUnit: E5_MB_PER_SEAT_PER_DAY, mb: e5.grantedMB.purchased },
+      {
+        basis: "assigned",
+        count: e5.assigned,
+        mbPerUnit: E5_MB_PER_SEAT_PER_DAY,
+        mb: e5.grantedMB.assigned,
+        atLeast: false,
+        note: e5.assignedMayDoubleCount ? DOUBLE_COUNT_NOTE : null,
+      },
+      {
+        basis: "purchased",
+        count: e5.purchased,
+        mbPerUnit: E5_MB_PER_SEAT_PER_DAY,
+        mb: e5.grantedMB.purchased,
+        atLeast: false,
+        note: null,
+      },
     ];
   }
+  // A floored Granted (a plan or workspace not read, a partial Heartbeat)
+  // floors both machine counts: they leave out the same machines.
+  const atLeast = view.grantedIsFloor;
   const p2 = a.servers.rows.filter((r) => r.plan === "P2");
   const here = p2.reduce((sum, r) => sum + r.machinesReportingHere, 0);
   const inSub = p2.some((r) => r.machinesInSubscription === null)
     ? null
     : p2.reduce((sum, r) => sum + (r.machinesInSubscription ?? 0), 0);
   return [
-    { basis: "reporting-here", count: here, mbPerUnit: SERVERS_MB_PER_MACHINE_PER_DAY, mb: here * SERVERS_MB_PER_MACHINE_PER_DAY },
+    {
+      basis: "reporting-here",
+      count: here,
+      mbPerUnit: SERVERS_MB_PER_MACHINE_PER_DAY,
+      mb: here * SERVERS_MB_PER_MACHINE_PER_DAY,
+      atLeast,
+      note: null,
+    },
     {
       basis: "in-subscription",
       count: inSub,
       mbPerUnit: SERVERS_MB_PER_MACHINE_PER_DAY,
       mb: inSub === null ? null : inSub * SERVERS_MB_PER_MACHINE_PER_DAY,
+      atLeast,
+      note: null,
     },
   ];
 }
@@ -261,11 +300,16 @@ export function countText(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-/** `2,400 x 5 MB = 12.00 GB/day` - literal, so the operator can redo it. */
+/**
+ * `2,400 x 5 MB = 12.00 GB/day` - literal, so the operator can redo it. A
+ * floored count reads "at least" on both sides; a caveat follows in brackets.
+ */
 export function arithmeticLine(f: BasisFigure): string {
   const label = basisLabel(f.basis);
   if (f.count === null || f.mb === null) return `${label}: not known`;
-  return `${label}: ${countText(f.count)} x ${f.mbPerUnit} MB = ${mbPerDay(f.mb)}`;
+  const atLeast = f.atLeast ? "at least " : "";
+  const note = f.note === null ? "" : ` (${f.note})`;
+  return `${label}: ${atLeast}${countText(f.count)} x ${f.mbPerUnit} MB = ${atLeast}${mbPerDay(f.mb)}${note}`;
 }
 
 /**
@@ -337,6 +381,17 @@ export function sentinelWorkspaceCount(discovery: WorkspaceDiscovery | null): nu
   const incomplete = discovery.failures.length > 0 || rows.some((w) => w.sentinel === "unknown");
   if (incomplete && enabled <= 1) return null;
   return enabled;
+}
+
+/**
+ * True when sentinelWorkspaceCount is a lower bound: discovery was incomplete
+ * but still saw more than one Sentinel workspace.
+ */
+export function sentinelWorkspaceCountIsFloor(discovery: WorkspaceDiscovery | null): boolean {
+  if (discovery === null) return false;
+  const rows = listingRows(discovery.workspaces);
+  const incomplete = discovery.failures.length > 0 || rows.some((w) => w.sentinel === "unknown");
+  return incomplete && sentinelWorkspaceCount(discovery) !== null;
 }
 
 /** MIG-16: the Sentinel-enabled workspaces a tenant comparison covers, in discovery order. */
@@ -426,6 +481,8 @@ export function allowanceCsvCells(
   const view = a.grants.find((g) => g.grant === tag.grant);
   if (view === undefined) return [label, "", "", "", ""];
   const flags: string[] = [];
+  if (!view.eligibleKnown) flags.push("eligible not read - eligible and over are not known");
+  if (a.attribution === "pooled") flags.push("benefit known only in total - used and over are not split by grant");
   if (a.sumsAreFloors) flags.push("lower bound");
   if (a.usedIsFloor) flags.push("partial benefit read - used is a lower bound and over is not known");
   const status = flags.length > 0 ? flags.join("; ") : "exact";
@@ -451,7 +508,8 @@ export const ALLOWANCE_TIPS = {
   overColumn:
     "Billable volume a day that no grant covers. A grant's overage is pooled across all of " +
     "its tables, so a grant table reads 'share of' that overage - it is never split per " +
-    "table. A billable table's cell is its whole billable daily average; a free table's is 0.",
+    "table. A billable table's cell is its whole billable daily average. A free table's is 0, " +
+    "unless Usage still bills it: then it is that billed daily average, which no grant covers.",
   grantedE5:
     "Qualifying seats from Microsoft Graph subscribedSkus (assigned = consumedUnits) times " +
     "5 MB a day. Tenant-wide, and entitled only if bought through EA, EAS or CSP, which " +

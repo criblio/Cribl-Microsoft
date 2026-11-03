@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import type { WorkspaceInventory } from "@soc/core";
 import {
   afterAllowancesText,
+  ALLOWANCE_TIPS,
   arithmeticLine,
+  headroomApplies,
   basisFigures,
   crossCheckLine,
   grantCardText,
@@ -19,6 +21,7 @@ import {
   overCell,
   planNote,
   sentinelWorkspaceCount,
+  sentinelWorkspaceCountIsFloor,
   sentinelWorkspaceIds,
   tagLabel,
   tenantDiscoveryNote,
@@ -101,11 +104,11 @@ describe("grantCardText", () => {
 
   it("E5 headroom and meter only when this is the tenant's only Sentinel workspace", () => {
     const e5 = grantView({ grantedMB: 30000, usage: usage({ eligibleDailyMB: 9300, overDailyMB: 0 }) });
-    const one = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1 } });
+    const one = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: false } });
     expect(grantCardText(e5, one).status).toBe("20.70 GB/day headroom");
     expect(meterOf(e5, one)).not.toBeNull();
     for (const n of [2, null]) {
-      const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: n } });
+      const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: n, sentinelWorkspacesAtLeast: false } });
       expect(grantCardText(e5, shared).status).toBe("headroom is tenant-wide - use Compare against the whole tenant");
       expect(meterOf(e5, shared)).toBeNull();
     }
@@ -114,7 +117,7 @@ describe("grantCardText", () => {
     expect(grantCardText(e5, tenant).status).toBe("20.70 GB/day headroom");
     // Servers P2 is granted per workspace (machines reporting here): its headroom stays.
     const servers = grantView({ grant: "servers-p2", grantedMB: 2000, usage: usage({ eligibleDailyMB: 500 }) });
-    const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 3 } });
+    const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 3, sentinelWorkspacesAtLeast: false } });
     expect(grantCardText(servers, shared).status).toBe("1.50 GB/day headroom");
     expect(meterOf(servers, shared)).not.toBeNull();
   });
@@ -260,6 +263,7 @@ describe("granted arithmetic and the other basis", () => {
         rows: [],
         purchased: 2600,
         assigned: 2400,
+        assignedMayDoubleCount: false,
         inGrace: 0,
         suspended: 0,
         possiblyMissing: 0,
@@ -425,18 +429,20 @@ describe("inventoryCsv allowance columns", () => {
     expect(rowOf(a)).toMatch(/,E5 5 MB\/user,14100\.000,12000\.000,2100\.000,exact$/);
   });
 
-  it("pooled: per-grant Used and Over are empty, never 0", () => {
+  it("pooled: per-grant Used and Over are empty, never 0, and never marked exact (MIG-21)", () => {
     const a = allowances({
       attribution: "pooled",
       pooled: usage(),
       grants: [grantView({ usage: usage({ eligibleDailyMB: 14100 }) })],
     });
-    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,14100\.000,,,exact$/);
+    expect(rowOf(a)).toMatch(
+      /,E5 5 MB\/user,14100\.000,,,benefit known only in total - used and over are not split by grant$/,
+    );
   });
 
-  it("an unread eligible volume leaves Eligible and Over empty, never 0", () => {
+  it("an unread eligible volume leaves Eligible and Over empty, never 0, and never marked exact (MIG-21)", () => {
     const a = allowances({ grants: [grantView({ eligibleKnown: false, usage: usage({ usedDailyMB: 12000 }) })] });
-    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,,12000\.000,,exact$/);
+    expect(rowOf(a)).toMatch(/,E5 5 MB\/user,,12000\.000,,eligible not read - eligible and over are not known$/);
   });
 
   it("floored sums are marked lower bound, and a floored zero over is empty, never 0.000", () => {
@@ -460,5 +466,90 @@ describe("inventoryCsv allowance columns", () => {
     expect(rowOf(a)).toMatch(
       /,14100\.000,12000\.000,,partial benefit read - used is a lower bound and over is not known$/,
     );
+  });
+});
+
+describe("allowance honesty edge cases (MIG-21)", () => {
+  const p2Rows = {
+    rows: [{ subscriptionId: "s1", plan: "P2" as const, machinesInSubscription: 6, machinesReportingHere: 4 }],
+    unattributedMachines: 0,
+    heartbeatComplete: true,
+  };
+
+  it("a floored Servers Granted makes both arithmetic lines 'at least'", () => {
+    const a = allowances({ servers: p2Rows });
+    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: true }), a).map(arithmeticLine)).toEqual([
+      "machines reporting here: at least 4 x 500 MB = at least 2.00 GB/day",
+      "machines in the subscription: at least 6 x 500 MB = at least 3.00 GB/day",
+    ]);
+    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: false }), a).map(arithmeticLine)).toEqual([
+      "machines reporting here: 4 x 500 MB = 2.00 GB/day",
+      "machines in the subscription: 6 x 500 MB = 3.00 GB/day",
+    ]);
+  });
+
+  it("says beside the assigned arithmetic when two qualifying SKUs may count one user twice", () => {
+    const e5 = (assignedMayDoubleCount: boolean) =>
+      allowances({
+        licences: {
+          kind: "read",
+          readAt: "2026-11-03T00:00:00Z",
+          e5: {
+            rows: [],
+            purchased: 2600,
+            assigned: 2400,
+            assignedMayDoubleCount,
+            inGrace: 0,
+            suspended: 0,
+            possiblyMissing: 0,
+            grantedMB: { assigned: 12000, purchased: 13000 },
+          },
+        },
+      });
+    const [assigned, purchased] = basisFigures(grantView(), e5(true)).map(arithmeticLine);
+    expect(assigned).toMatch(/^assigned seats: 2,400 x 5 MB = 12\.00 GB\/day \(may count a user twice/);
+    expect(purchased).toBe("purchased seats: 2,600 x 5 MB = 13.00 GB/day");
+    expect(basisFigures(grantView(), e5(false)).map(arithmeticLine)[0]).toBe("assigned seats: 2,400 x 5 MB = 12.00 GB/day");
+  });
+
+  it("draws no meter when Granted is only a lower bound", () => {
+    const floor = grantView({ grant: "servers-p2", grantedMB: 2000, grantedIsFloor: true, usage: usage({ eligibleDailyMB: 500 }) });
+    expect(meterOf(floor, allowances())).toBeNull();
+    expect(meterOf({ ...floor, grantedIsFloor: false }, allowances())).not.toBeNull();
+  });
+
+  it("a discovery-floored Sentinel count is a floor, and never makes E5 headroom comparable", () => {
+    const ws = (id: string, sentinel: "enabled" | "unknown") => ({
+      id,
+      name: id,
+      subscriptionId: "s",
+      subscriptionName: "",
+      resourceGroup: "r",
+      location: "l",
+      sentinel,
+    });
+    expect(
+      sentinelWorkspaceCountIsFloor({ workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("b", "enabled")] }, subscriptionsSearched: 2, failures: [{ subscriptionId: "s9", subscriptionName: "", error: "403" }] }),
+    ).toBe(true);
+    expect(
+      sentinelWorkspaceCountIsFloor({ workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("b", "enabled"), ws("c", "unknown")] }, subscriptionsSearched: 1, failures: [] }),
+    ).toBe(true);
+    expect(
+      sentinelWorkspaceCountIsFloor({ workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("b", "enabled")] }, subscriptionsSearched: 1, failures: [] }),
+    ).toBe(false);
+    // A count discovery could not establish is null, not a floor.
+    expect(
+      sentinelWorkspaceCountIsFloor({ workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("c", "unknown")] }, subscriptionsSearched: 1, failures: [] }),
+    ).toBe(false);
+    expect(sentinelWorkspaceCountIsFloor(null)).toBe(false);
+    const floored = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: true } });
+    expect(headroomApplies(grantView(), floored)).toBe(false);
+  });
+
+  it("the Over column tip no longer says a free table is always 0", () => {
+    expect(ALLOWANCE_TIPS.overColumn).not.toMatch(/a free table's is 0\.?"?$/);
+    expect(ALLOWANCE_TIPS.overColumn).toContain("unless Usage still bills it");
+    // and the cell it describes does show billed volume for a billed Free table
+    expect(overCell({ table: "AzureActivity", billableMB: 300 }, allowances(), 30)).not.toBe("0");
   });
 });

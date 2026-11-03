@@ -41,6 +41,29 @@ describe("parseBenefitRows", () => {
   });
 });
 
+describe("parseBenefitRows - unreadable amounts (MIG-21)", () => {
+  it("drops a null, empty or non-numeric amount and counts it, never reading it as 0 MB", () => {
+    const r = parseBenefitRows([
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: null },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "" },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "  " },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "n/a" },
+      { Day: "d1", BenefitType: "M365 E5" },
+      { Day: "", BenefitType: "M365 E5", BenefitUsedGB: 1 },
+      { Day: "d2", BenefitType: "M365 E5", BenefitUsedGB: "1.5" },
+      { Day: "d3", BenefitType: "M365 E5", BenefitUsedGB: 0 },
+    ]);
+    expect(r.unreadableRows).toBe(6);
+    expect(r.days).toEqual([
+      { day: "d2", grant: "e5", usedMB: 1500 },
+      { day: "d3", grant: "e5", usedMB: 0 },
+    ]);
+  });
+  it("counts nothing unreadable when every row reads", () => {
+    expect(parseBenefitRows([{ Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: 2 }]).unreadableRows).toBe(0);
+  });
+});
+
 describe("foldGrantUsage", () => {
   it("computes over, capped days and max used", () => {
     const g = foldGrantUsage(

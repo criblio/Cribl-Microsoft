@@ -67,7 +67,7 @@ describe("AllowanceCards", () => {
   it("draws no E5 meter or headroom when the grant is shared across Sentinel workspaces", () => {
     renderCards(
       allowances({
-        scope: { kind: "workspace", sentinelWorkspaces: 2 },
+        scope: { kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: false },
         grants: [grantView({ usage: usage({ eligibleDailyMB: 6000 }) })],
       }),
     );
@@ -77,15 +77,43 @@ describe("AllowanceCards", () => {
   });
 
   it("says the grant is tenant-wide on the E5 card only, never on the Servers P2 card (MIG-19)", () => {
-    const scope = { kind: "workspace", sentinelWorkspaces: 61 } as const;
+    const scope = { kind: "workspace", sentinelWorkspaces: 61, sentinelWorkspacesAtLeast: false } as const;
     renderCards(allowances({ scope, grants: [grantView({ grant: "e5" })] }));
     expect(text()).toContain("Tenant-wide, shared across 61 Sentinel workspaces.");
     cleanup();
     renderCards(allowances({ scope, grants: [grantView({ grant: "servers-p2", grantedMB: 500 })] }));
     expect(text()).not.toContain("shared across 61");
     cleanup();
-    renderCards(allowances({ scope: { kind: "workspace", sentinelWorkspaces: null }, grants: [grantView({ grant: "servers-p2", grantedMB: 500 })] }));
+    renderCards(allowances({ scope: { kind: "workspace", sentinelWorkspaces: null, sentinelWorkspacesAtLeast: false }, grants: [grantView({ grant: "servers-p2", grantedMB: 500 })] }));
     expect(text()).not.toContain("how many Sentinel workspaces share it is not known");
+  });
+
+  it("says 'at least N' workspaces share the E5 grant when discovery was incomplete (MIG-21)", () => {
+    renderCards(
+      allowances({
+        scope: { kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: true },
+        grants: [grantView({ grant: "e5" })],
+      }),
+    );
+    expect(text()).toContain("Tenant-wide, shared across at least 2 Sentinel workspaces.");
+    expect(text()).not.toContain("shared across 2 Sentinel");
+  });
+
+  it("draws no meter for a floored Granted, and the meter's label carries the card's granted words (MIG-21)", () => {
+    const servers = (grantedIsFloor: boolean) =>
+      allowances({
+        grants: [
+          grantView({ grant: "servers-p2", grantedMB: 2000, grantedIsFloor, usage: usage({ eligibleDailyMB: 500 }) }),
+        ],
+      });
+    renderCards(servers(true));
+    expect(text()).toContain("granted at least 2.00 GB/day");
+    expect(document.querySelector(".allowance-meter")).toBeNull();
+    cleanup();
+    renderCards(servers(false));
+    expect(document.querySelector(".allowance-meter")?.getAttribute("aria-label")).toBe(
+      "Eligible 500.0 MB/day against granted 2.00 GB/day",
+    );
   });
 
   it("formats sub-GB allowance figures in MB, never 0.0 GB, and warns on over only when over is above zero (MIG-20)", () => {
@@ -144,6 +172,7 @@ describe("AllowanceCards", () => {
             ],
             purchased: 2600,
             assigned: 2400,
+            assignedMayDoubleCount: false,
             inGrace: 0,
             suspended: 0,
             possiblyMissing: 40,

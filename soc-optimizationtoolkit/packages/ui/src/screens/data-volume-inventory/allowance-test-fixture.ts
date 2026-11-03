@@ -42,7 +42,7 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     usedIsFloor: false,
     licences: { kind: "not-bound" },
     servers: { rows: [], unattributedMachines: 0, heartbeatComplete: true },
-    scope: { kind: "workspace", sentinelWorkspaces: 1 },
+    scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: false },
     queries: {
       benefit: "Operation | benefit",
       eligible: "Usage | eligible",

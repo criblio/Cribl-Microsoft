@@ -265,7 +265,7 @@ describe("readDataAllowances - licences", () => {
       expect(g.crossCheck.kind).toBe("skipped");
       expect((g.crossCheck as { reason: string }).reason).toMatch(/2 Sentinel workspaces/);
     }
-    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2 });
+    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: false });
   });
 
   it("several Sentinel workspaces do not skip the Servers P2 cross-check (MIG-19): only E5 is tenant-wide", async () => {
@@ -854,5 +854,80 @@ describe("compareTenant", () => {
     const r = await compareTenant(azure, undefined, [WS], new Map(), { readAt: OPTS.readAt });
     if (r.scope.kind !== "tenant") throw new Error("unreachable");
     expect(r.scope.notRead.map((n) => n.id)).toEqual([WS]);
+  });
+});
+
+describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
+  const DAY = "2026-10-20";
+
+  it("a benefit row with no readable amount is a gap and floors Used, never a 0 MB applied", async () => {
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(
+      routedAzure({
+        benefit: {
+          "*": queryResult(["Day", "BenefitType", "BenefitUsedGB"], [
+            [DAY, "M365 E5", 0.5],
+            [DAY, "M365 E5", null],
+          ]),
+        },
+        eligible: eligible([DAY, "SigninLogs", 900]),
+      }).azure,
+      graph,
+      WS,
+      inventory(0),
+      OPTS,
+    );
+    expect(r.gaps).toContain(
+      "1 benefit row(s) could not be read (no day or no readable amount), so Used is a lower bound.",
+    );
+    expect(r.usedIsFloor).toBe(true);
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/benefit rows \(Operation\) could not be read/),
+    });
+  });
+
+  it("a discovery-floored Sentinel workspace count reads 'at least' in the skip reason and the scope", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "M365 E5", 0.5]) },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    });
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(azure, graph, WS, inventory(0), {
+      ...OPTS,
+      sentinelWorkspaces: 2,
+      sentinelWorkspacesAtLeast: true,
+    });
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/shared across at least 2 Sentinel workspaces/),
+    });
+    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: true });
+  });
+
+  it("machines found without a subscription id never read as 'no reporting machines were found'", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 1]) },
+      eligible: eligible([DAY, "SecurityEvent", 1500]),
+      heartbeat: heartbeat(["onprem-1", ""], ["onprem-2", ""]),
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason:
+        "Cross-check skipped: 2 reporting machine(s) were found, but none carried a subscription id, so no Defender plan could be read.",
+    });
+  });
+
+  it("the machines query counts running VMs, Uniform scale-set instances and Arc machines only", async () => {
+    const { azure, calls } = routedAzure({ heartbeat: heartbeat(["vm1", "sub-a"]) });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    const posted = calls.find((c) => c.path === "/providers/Microsoft.ResourceGraph/resources");
+    const query = (posted!.body as { query: string }).query;
+    expect(query).toBe(r.queries.machines);
+    expect(query).toMatch(/powerState\.code\) in~ \('PowerState\/running', 'PowerState\/starting'\)/);
+    expect(query).toMatch(/computeresources[\s\S]*microsoft\.compute\/virtualmachinescalesets\/virtualmachines/);
+    expect(query).toMatch(/microsoft\.hybridcompute\/machines/);
+    expect(query).toMatch(/summarize Machines = count\(\) by subscriptionId$/);
   });
 });
