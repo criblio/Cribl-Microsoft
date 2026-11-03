@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 36 in progress, 146 done.**
+**93 in the backlog, 36 in progress, 147 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 3 | 12 | 0 |
+| Data Volume Inventory | 2 | 13 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 129.
 
 ## Epics and features
 
@@ -136,14 +136,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 83% (20/24)
+### `MIG` SIEM migration analysis - 88% (21/24)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 12/15 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 13/15 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24 |
 
 ---
 
@@ -1050,22 +1050,25 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
-  `MIG-F2` `enabler` `settled`
+- **MIG-24** Allowance UI polish: tooltips, native title text, change-request link, chart readout and layout, tenant read cost
+  `MIG-F2` `story` `settled`
   Triaged 2026-11-03 from the deferred review minors of PR #198 against main
   37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
   soc-optimizationtoolkit/; "state" =
   packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
-  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
-  core serversGranted arithmetic - consume core's figures; GrantCard and
-  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
-  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
-  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
-  nothing and re-exporting internals ruling R10 keeps off the public surface;
-  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
-  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
-  core - remove or use; workspace-inventory-panel.tsx header still describes
-  SiemMigrationScreen.
+  allowance-cards.tsx in the same folder. grantedServers tip says "this
+  workspace" also in the tenant comparison (state ~460); the pooled overage
+  line has no InfoTip (cards ~122); native title= hover text used (cards ~85,
+  workspace-inventory-panel.tsx ~493) which the info-affordances standard
+  forbids; the spec says the denied-licence state "offers the change request"
+  but it only names it in words - add a link to Setup's app-permissions change
+  request; chart max floored at 1 so the readout can say "Peak 1.0 MB" above
+  the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px
+  SVG units that shrink on narrow cards (styles.css ~3497); grid keeps
+  minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full
+  inventoryWorkspace including per-table source breakdowns when only Usage
+  totals are needed (workspace-inventory-panel.tsx ~181) - slow on large
+  tenants.
 
 ---
 
@@ -1957,7 +1960,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (37)
+## Backlog - later (36)
 
 Settled, gated on something above.
 
@@ -2444,29 +2447,9 @@ Settled, gated on something above.
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
 
-- **MIG-24** Allowance UI polish: tooltips, native title text, change-request link, chart readout and layout, tenant read cost
-  `MIG-F2` `story` `settled`
-  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
-  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
-  soc-optimizationtoolkit/; "state" =
-  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
-  allowance-cards.tsx in the same folder. grantedServers tip says "this
-  workspace" also in the tenant comparison (state ~460); the pooled overage
-  line has no InfoTip (cards ~122); native title= hover text used (cards ~85,
-  workspace-inventory-panel.tsx ~493) which the info-affordances standard
-  forbids; the spec says the denied-licence state "offers the change request"
-  but it only names it in words - add a link to Setup's app-permissions change
-  request; chart max floored at 1 so the readout can say "Peak 1.0 MB" above
-  the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px
-  SVG units that shrink on narrow cards (styles.css ~3497); grid keeps
-  minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full
-  inventoryWorkspace including per-table source breakdowns when only Usage
-  totals are needed (workspace-inventory-panel.tsx ~181) - slow on large
-  tenants.
-
 ---
 
-## Done (146)
+## Done (147)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6387,6 +6370,30 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   control, Free Defender plan -> off, chart draws no eligible line when
   eligible is not read, plus a panel test for an unreadable benefit row. No
   bug exposed.
+
+- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
+  `MIG-F2` `enabler` `settled` `verified: pins`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
+  core serversGranted arithmetic - consume core's figures; GrantCard and
+  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
+  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
+  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
+  nothing and re-exporting internals ruling R10 keeps off the public surface;
+  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
+  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
+  core - remove or use; workspace-inventory-panel.tsx header still describes
+  SiemMigrationScreen. DONE 2026-11-03 (pins, 0962f09..50b781f): the UI reads
+  core's Servers figures (serversGranted returns machines;
+  DataAllowances.servers.granted), one QueryBlocks helper for both query
+  lists, dead _unattributedMachines parameter and its one test removed
+  (behaviour still pinned at use-case level), unused domain index deleted,
+  four internals off the barrel, dead headroomApplies clause removed, gap
+  reworded to benefit amount(s), stale panel header fixed. Behaviour
+  unchanged; review clean.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`
