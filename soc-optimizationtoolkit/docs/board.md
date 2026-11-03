@@ -421,22 +421,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   INPUT type is `eventhub`; `azure_eventhub` is the DESTINATION type
   (live-architecture.ts and the vendored OpenAPI InputEventhub). Storage
   transports use the queue-driven `azure_blob` input. The source needs a
-  LISTEN-capable rule (Listen or Manage); the AZR-18 prerequisite picks a
-  SEND-capable rule for the Defender export, so its key is not reused unless
-  that rule also has Listen. This slice uses an EXISTING Listen-capable rule
-  chosen in a picker, or a pasted connection string whose host, key name and
-  EntityPath are checked against the namespace and its rules before any write.
-  Creating a Listen rule and a dedicated consumer group is [[AZR-36]]. Commit
-  and deploy go through the adopted claude-kit cribl-config-writes code:
-  deploy on /products/stream/groups/:g, falling back to /master/groups/:g only
-  on a 404, then configVersion compared with the commit. The secret body uses
-  `secretType`, not `type` (the existing writers' mistake is [[DBT-151]]).
-  Routing the new input to the Sentinel destination is [[AZR-35]], not this
-  card. NOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not
-  verified live, and NOTHING has been written to a real worker group. Input
-  and secret bodies, the non-secret connection-string descriptor with
-  checkPastedCredential, the existing-object classifiers, laneTopics and
-  COMMIT_MARKERS are in `domain/cribl-onboarding-source/`. The usecase
+  LISTEN-capable rule (Listen without Manage since AZR-58 on 2026-11-03, which
+  refuses a Manage-capable key; ADR 0008 makes Entra ID the default); the
+  AZR-18 prerequisite picks a SEND-capable rule for the Defender export, so
+  its key is not reused unless that rule also has Listen. This slice uses an
+  EXISTING Listen-capable rule chosen in a picker, or a pasted connection
+  string whose host, key name and EntityPath are checked against the namespace
+  and its rules before any write. Creating a Listen rule and a dedicated
+  consumer group is [[AZR-36]]. Commit and deploy go through the adopted
+  claude-kit cribl-config-writes code: deploy on /products/stream/groups/:g,
+  falling back to /master/groups/:g only on a 404, then configVersion compared
+  with the commit. The secret body uses `secretType`, not `type` (the existing
+  writers' mistake is [[DBT-151]]). Routing the new input to the Sentinel
+  destination is [[AZR-35]], not this card. NOTE 2026-10-26 (implementation,
+  AZR-30..34 build): BUILT, not verified live, and NOTHING has been written to
+  a real worker group. Input and secret bodies, the non-secret
+  connection-string descriptor with checkPastedCredential, the existing-object
+  classifiers, laneTopics and COMMIT_MARKERS are in
+  `domain/cribl-onboarding-source/`. The usecase
   `usecases/create-cribl-source/`: planCriblSource makes GETs only;
   applyCriblSource re-checks the commit scope, secret and input, then runs
   listKeys or re-parses the paste, POSTs the secret with secretType text (a
