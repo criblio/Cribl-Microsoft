@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 35 in progress, 144 done.**
+**96 in the backlog, 36 in progress, 144 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 1 | 10 | 0 |
+| Data Volume Inventory | 5 | 10 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 128.
+Open work totals 132.
 
 ## Epics and features
 
@@ -136,18 +136,18 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 90% (18/20)
+### `MIG` SIEM migration analysis - 75% (18/24)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 10/11 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 10/15 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24 |
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,6 +1050,35 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **MIG-21** Allowance honesty edge cases: null benefit rows read as 0, seats double-counted, floors drawn as exact
+  `MIG-F2` `bug` `settled`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. Each item misleads an operator: (1)
+  benefit-usage.ts ~90: Number(null)/Number("") make a null or empty
+  BenefitUsedGB a definite 0 MB applied, and unparseable rows are dropped
+  uncounted - drop them and report the count as a gap; (2) granted.ts ~112:
+  assigned seats sum consumedUnits across qualifying SKUs regardless of
+  capabilityStatus - a suspended/locked-out SKU's seats and a user holding two
+  qualifying SKUs inflate Granted; count only Enabled/Warning SKUs and label
+  the double-licence overlap as an upper bound unless de-duplicated; (3) cards
+  ~57 / state ~333: "shared across N" shows an exact N when discovery was
+  incomplete - say "at least N"; (4) state ~243/268: the Servers
+  reporting-here arithmetic line reads as exact when grantedIsFloor; (5) state
+  ~141 / cards ~170: meterOf ignores grantedIsFloor (bar implies headroom the
+  text withholds; aria-label says "granted X" without "at least"); (6)
+  data-allowances.ts ~535: says "no reporting machines were found" when
+  machines were found but none carried a subscription id; (7) state ~454: the
+  overColumn tip says a free table's over is 0, but overCell now shows billed
+  volume for a Free-tagged table that Usage bills; (8) state ~428: CSV
+  AllowanceFigures says "exact" on rows whose Eligible/Over are blank because
+  eligible was not read; (9) data-allowances.ts ~66: the
+  machines-in-subscription Resource Graph query counts deallocated VMs and
+  omits Uniform scale-set instances. Pin each with a test that fails without
+  its fix.
+
 ---
 
 ## Backlog - now (11)
@@ -1263,7 +1292,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (46)
+## Backlog - next (48)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1916,6 +1945,41 @@ Settled and unblocked, sequenced behind now.
   machine count answers. USER DECISION 2026-11-03: ship without the rest; this
   card stays open until a benefit-receiving workspace is available.
 
+- **MIG-22** Allowance test pins that cannot fail today
+  `MIG-F2` `enabler` `settled`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. Code paths are correct but nothing
+  fails if they regress: sentinelWorkspaceCount failures-non-empty branch
+  (state ~338); overCell with sumsAreFloors ("not known (partial read)", "at
+  least" share prefix) (state ~184); the panel Over-column assertion '3.0 MB'
+  also equals the Daily avg cell (workspace-inventory-panel.dom.test.tsx
+  ~280-300) so it passes vacuously; eligible-table lists pinned only by length
+  plus one member (allowance-catalog.test.ts ~44); only SPE_E5_USGOV_DOD
+  pinned as may-qualify - FLW/A5/F5/G5/E7 widening untested (granted.test.ts
+  ~117); no test for the "off" Defender plan (data-allowances.test.ts);
+  nothing asserts the chart's eligible line is absent when eligible was not
+  read (allowance-chart.tsx ~83). Mutation-check each new pin.
+
+- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
+  `MIG-F2` `enabler` `settled`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
+  core serversGranted arithmetic - consume core's figures; GrantCard and
+  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
+  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
+  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
+  nothing and re-exporting internals ruling R10 keeps off the public surface;
+  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
+  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
+  core - remove or use; workspace-inventory-panel.tsx header still describes
+  SiemMigrationScreen.
+
 - **DBT-235** Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor
   `DBT-F2` `story` `settled`
   PARKED 2026-10-29 on local branch wip/dbt-195-review-uncommitted-wt15
@@ -1940,7 +2004,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (36)
+## Backlog - later (37)
 
 Settled, gated on something above.
 
@@ -2426,6 +2490,26 @@ Settled, gated on something above.
   days ago'. This card persists a lastSeen per input (KV, written only from a
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
+
+- **MIG-24** Allowance UI polish: tooltips, native title text, change-request link, chart readout and layout, tenant read cost
+  `MIG-F2` `story` `settled`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. grantedServers tip says "this
+  workspace" also in the tenant comparison (state ~460); the pooled overage
+  line has no InfoTip (cards ~122); native title= hover text used (cards ~85,
+  workspace-inventory-panel.tsx ~493) which the info-affordances standard
+  forbids; the spec says the denied-licence state "offers the change request"
+  but it only names it in words - add a link to Setup's app-permissions change
+  request; chart max floored at 1 so the readout can say "Peak 1.0 MB" above
+  the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px
+  SVG units that shrink on narrow cards (styles.css ~3497); grid keeps
+  minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full
+  inventoryWorkspace including per-table source breakdowns when only Usage
+  totals are needed (workspace-inventory-panel.tsx ~181) - slow on large
+  tenants.
 
 ---
 
