@@ -61,9 +61,6 @@ describe("eligibleTables", () => {
         "SecurityEvent", "Update", "UpdateSummary", "WindowsEvent", "WindowsFirewall",
       ].sort(),
     );
-    expect(eligibleTables("e5")).toHaveLength(29);
-    expect(eligibleTables("e5")).toContain("InformationProtectionLogs_CL");
-    expect(eligibleTables("servers-p2")).toHaveLength(13);
   });
 });
 

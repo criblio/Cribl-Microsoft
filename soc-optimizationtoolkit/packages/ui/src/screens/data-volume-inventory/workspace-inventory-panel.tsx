@@ -4,8 +4,8 @@
  * tenant, pick one, and inventory its tables, the sources feeding each, and the
  * daily average volume over the last 30 complete days.
  *
- * Its own component rather than more of SiemMigrationScreen: it shares no
- * state with the export analysis above it, and the screen was 554 lines.
+ * The body of the Data Volume Inventory page (route data-volume-inventory);
+ * the allowance cards and their state live beside it in this folder.
  *
  * Every read here is on-demand behind a button - discovery is one ARM list per
  * subscription plus a solutions list, and an inventory is one query per ten

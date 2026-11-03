@@ -214,18 +214,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
           )}
 
           <h4 className="allowance-detail-heading">Queries and calls</h4>
-          <pre className="siem-inventory-query">{a.queries.benefit}</pre>
-          <pre className="siem-inventory-query">{a.queries.eligible}</pre>
-          {view.grant === "e5" ? (
-            <pre className="siem-inventory-query">{a.queries.graph}</pre>
-          ) : (
-            <>
-              <pre className="siem-inventory-query">{a.queries.heartbeat}</pre>
-              <pre className="siem-inventory-query">{a.queries.pricings}</pre>
-              <pre className="siem-inventory-query">{a.queries.machines}</pre>
-            </>
-          )}
-          {a.queries.tables !== null && <pre className="siem-inventory-query">GET {a.queries.tables}</pre>}
+          <QueryBlocks queries={a.queries} keys={view.grant === "e5" ? E5_QUERY_KEYS : SERVERS_QUERY_KEYS} />
         </div>
       </details>
     </div>
@@ -387,16 +376,25 @@ export function AllowanceTagCell({ table, a }: { table: string; a: DataAllowance
 
 /** The allowance queries and calls, for the panel's "Queries that produced these numbers". */
 export function AllowanceQueries({ a }: { a: DataAllowances }) {
-  const q = a.queries;
+  return <QueryBlocks queries={a.queries} keys={ALL_QUERY_KEYS} />;
+}
+
+type QueryKey = Exclude<keyof DataAllowances["queries"], "tables">;
+
+const E5_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "graph"];
+const SERVERS_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "heartbeat", "pricings", "machines"];
+const ALL_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "heartbeat", "machines", "graph", "pricings"];
+
+/** The named queries in the given order, then the tables call when this read made one. */
+function QueryBlocks({ queries, keys }: { queries: DataAllowances["queries"]; keys: readonly QueryKey[] }) {
   return (
     <>
-      <pre className="siem-inventory-query">{q.benefit}</pre>
-      <pre className="siem-inventory-query">{q.eligible}</pre>
-      <pre className="siem-inventory-query">{q.heartbeat}</pre>
-      <pre className="siem-inventory-query">{q.machines}</pre>
-      <pre className="siem-inventory-query">{q.graph}</pre>
-      <pre className="siem-inventory-query">{q.pricings}</pre>
-      {q.tables !== null && <pre className="siem-inventory-query">GET {q.tables}</pre>}
+      {keys.map((k) => (
+        <pre key={k} className="siem-inventory-query">
+          {queries[k]}
+        </pre>
+      ))}
+      {queries.tables !== null && <pre className="siem-inventory-query">GET {queries.tables}</pre>}
     </>
   );
 }
