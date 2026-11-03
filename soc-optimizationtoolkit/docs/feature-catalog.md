@@ -239,6 +239,7 @@ Setup-path gating (2026-07-02): the wizard asks WHICH environment the user is ta
 | KQL validation and monitoring (ENG-32, GUI-17/18, SYN drift checks) | Workspace | Log Analytics Reader |
 | AD user lookups via Graph (LKP-02 redesign) | Tenant (Graph) | User.Read.All application permission, admin consent |
 | O365 app permission validation (DOC-02) | Tenant (Graph) | Application.Read.All application permission, admin consent |
+| E5 data allowance, granted seats (data volume inventory) | Tenant (Graph) | LicenseAssignment.Read.All application permission, admin consent (license SKUs and seat counts only) |
 | Cribl ingestion (separate SP recommended, existing repo pattern) | Per DCR | Monitoring Metrics Publisher |
 
 The preflight should test these with real read/no-op calls rather than trusting role names, since customers use custom roles; the checked-actions list also doubles as the definition of a least-privilege custom role for security-conscious customers.

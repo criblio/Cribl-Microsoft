@@ -251,7 +251,7 @@ const READ_PLANS: DefenderPlansState = {
   kind: "read",
   pricings: {
     kind: "read",
-    enabled: [{ name: "VirtualMachines", displayName: "Defender for Servers", tier: "Standard" }],
+    enabled: [{ name: "VirtualMachines", displayName: "Defender for Servers", tier: "Standard", subPlan: "" }],
     disabled: [],
     unrecognized: [],
   },
@@ -397,7 +397,7 @@ describe("defenderStateNote - an empty automations list is not a measured absenc
 // Plans
 // ---------------------------------------------------------------------------
 
-const ALL_FREE = DEFENDER_PLANS.map((p) => ({ ...p, tier: "Free" }));
+const ALL_FREE = DEFENDER_PLANS.map((p) => ({ ...p, tier: "Free", subPlan: "" }));
 
 describe("planSummary - only a read with no Standard pricing says no paid plan", () => {
   it("12 known Free plans plus one unrecognised Standard pricing is NOT 'no paid plan'", () => {
