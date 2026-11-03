@@ -3576,7 +3576,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-11"
       ],
@@ -3584,13 +3584,14 @@
       "type": "enabler",
       "priority": "next",
       "title": "Core: granted from E5 seats and Servers P2 machines, and the cross-check against applied benefit",
-      "detail": "The cross-check settles assigned vs purchased seats and subscription vs workspace machines from the customer's own data; 2% tolerance, marked only when exactly one basis matches. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-13)."
+      "detail": "The cross-check settles assigned vs purchased seats and subscription vs workspace machines from the customer's own data; 2% tolerance, marked only when exactly one basis matches. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-13).\n\nDONE 2026-11-03 (pins, 08bf694): granted.ts - parseSubscribedSkus, e5Granted (qualifies on skuId; unlisted E5/A5/F5/G5/E7/FLW-looking SKUs read 'may qualify' and sum into possiblyMissing), serversGranted (P2 only; not-read rows make it a floor), crossCheck (2% tolerance, exactly one basis). defender-plans PlanStatus gains subPlan.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-12",
         "MIG-13"
