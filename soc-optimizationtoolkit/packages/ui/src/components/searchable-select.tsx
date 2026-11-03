@@ -151,6 +151,15 @@ export interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * The control's accessible name, on the trigger button (DBT-249). The label
+   * decoy absorbs a wrapping <label>, so without this the trigger is an
+   * unnamed button. The filter input is named "Filter <label>" unless
+   * ariaLabel says otherwise.
+   */
+  label: string;
+  /** A hover hint on the trigger, e.g. why the control is disabled. */
+  title?: string;
   className?: string;
   /**
    * What the popover says when there are NO options at all (DBT-134). Kept
@@ -169,6 +178,8 @@ export function SearchableSelect({
   placeholder = "Select...",
   disabled = false,
   ariaLabel,
+  label,
+  title,
   className,
   emptyText = NO_OPTIONS_TEXT,
 }: SearchableSelectProps) {
@@ -206,6 +217,8 @@ export function SearchableSelect({
         type="button"
         className="searchable-select-control"
         disabled={disabled}
+        aria-label={label}
+        title={title}
         aria-haspopup="listbox"
         aria-expanded={c.open}
         onClick={() => c.setOpen((o) => !o)}
@@ -223,7 +236,7 @@ export function SearchableSelect({
           }}
           onKeyDown={onKeyDown}
           inputRef={c.inputRef}
-          ariaLabel={ariaLabel ?? "Filter options"}
+          ariaLabel={ariaLabel ?? (label !== undefined ? `Filter ${label}` : "Filter options")}
         >
           {c.filtered.length === 0 ? (
             <li className="searchable-select-empty">
@@ -259,6 +272,15 @@ export interface SearchableMultiSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * The control's accessible name, on the trigger button (DBT-249). The label
+   * decoy absorbs a wrapping <label>, so without this the trigger is an
+   * unnamed button. The filter input is named "Filter <label>" unless
+   * ariaLabel says otherwise.
+   */
+  label: string;
+  /** A hover hint on the trigger, e.g. why the control is disabled. */
+  title?: string;
   className?: string;
   /**
    * What the popover says when there are NO options at all (DBT-134). Kept
@@ -277,6 +299,8 @@ export function SearchableMultiSelect({
   placeholder = "Select...",
   disabled = false,
   ariaLabel,
+  label,
+  title,
   className,
   emptyText = NO_OPTIONS_TEXT,
 }: SearchableMultiSelectProps) {
@@ -316,6 +340,8 @@ export function SearchableMultiSelect({
         type="button"
         className="searchable-select-control"
         disabled={disabled}
+        aria-label={label}
+        title={title}
         aria-haspopup="listbox"
         aria-expanded={c.open}
         onClick={() => c.setOpen((o) => !o)}
@@ -333,7 +359,7 @@ export function SearchableMultiSelect({
           }}
           onKeyDown={onKeyDown}
           inputRef={c.inputRef}
-          ariaLabel={ariaLabel ?? "Filter options"}
+          ariaLabel={ariaLabel ?? (label !== undefined ? `Filter ${label}` : "Filter options")}
         >
           {c.filtered.length === 0 ? (
             <li className="searchable-select-empty">
