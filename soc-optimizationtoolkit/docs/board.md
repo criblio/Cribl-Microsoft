@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**97 in the backlog, 35 in progress, 135 done.**
+**95 in the backlog, 37 in progress, 135 done.**
 
 ## By menu item
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1115,9 +1115,39 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
+- **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. With consumer group cribl absent on
+  ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404),
+  the Defender lane's Create planned and armed, and the confirm did not
+  mention the consumer group. buildEventHubInputBody sets groupId to the
+  plan's consumerGroup (input-bodies.ts:147), so the created eventhub input
+  would fail to read. The plan already refuses until Validate has seen a hub
+  in a complete listing; the consumer group deserves the same gate. FIX: the
+  plan reads the consumer group by name and refuses on a 404, pointing at the
+  How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
+  also refuses; the confirm names the consumer group. Pin both refusals and
+  the confirm line.
+
+- **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
+  `AZR-F9` `bug` `settled`
+  Not now because: The sentence is still understood and names the right source
+  type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
+  fixed in that pass rather than ahead of the defects that would write a bad
+  source.
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The confirm's first line reads 'Create
+  a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so
+  the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the
+  label, or reword so no article depends on it. Pin the exact confirm lines
+  for both transports.
+
 ---
 
-## Backlog - now (15)
+## Backlog - now (14)
 
 Next to pick up. Nothing blocks these.
 
@@ -1360,22 +1390,6 @@ Next to pick up. Nothing blocks these.
   changes what the second row checks. Pin: no two rows of one run render the
   same visible text.
 
-- **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. With consumer group cribl absent on
-  ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404),
-  the Defender lane's Create planned and armed, and the confirm did not
-  mention the consumer group. buildEventHubInputBody sets groupId to the
-  plan's consumerGroup (input-bodies.ts:147), so the created eventhub input
-  would fail to read. The plan already refuses until Validate has seen a hub
-  in a complete listing; the consumer group deserves the same gate. FIX: the
-  plan reads the consumer group by name and refuses on a 404, pointing at the
-  How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
-  also refuses; the confirm names the consumer group. Pin both refusals and
-  the confirm line.
-
 - **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
   `AZR-F9` `story` `settled`
   OPERATOR DECISION 2026-11-03, asked during the ADR 0007 live pass when the
@@ -1406,7 +1420,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (46)
+## Backlog - next (45)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2065,20 +2079,6 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
-
-- **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
-  `AZR-F9` `bug` `settled`
-  Not now because: The sentence is still understood and names the right source
-  type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
-  fixed in that pass rather than ahead of the defects that would write a bad
-  source.
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. The confirm's first line reads 'Create
-  a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so
-  the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the
-  label, or reword so no article depends on it. Pin the exact confirm lines
-  for both transports.
 
 ---
 
