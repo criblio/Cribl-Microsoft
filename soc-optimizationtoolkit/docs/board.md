@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 40 in progress, 140 done.**
+**93 in the backlog, 41 in progress, 140 done.**
 
 ## By menu item
 
@@ -146,7 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (40)
+## In progress (41)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1116,6 +1116,34 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
+- **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
+  `AZR-F9` `story` `settled`
+  OPERATOR DECISION 2026-11-03, asked during the ADR 0007 live pass when the
+  create was about to store RootManageSharedAccessKey: 'Offer both'. The
+  vendored Cribl OpenAPI InputEventhub sasl block supports mechanism
+  oauthbearer with clientId, tenantId, clientSecretAuthType (secret or
+  certificate), clientTextSecret / certificateName, oauthEndpoint and scope,
+  so the input can authenticate as an Entra service principal with RBAC 'Azure
+  Event Hubs Data Receiver' scoped to the hub, and no SAS key leaves Azure.
+  The Blob lane already uses tenant + client + secret. SCOPE: the credential
+  choice gains 'Entra ID (recommended)' as the default for Event Hub lanes;
+  the body builder emits the oauthbearer sasl block referencing a Cribl text
+  secret for the client secret; Validate gains a read of the principal's role
+  assignment on the hub (Data Receiver, or Data Owner), a refused read
+  unknown; the How-to gains the role-assignment step; Listen-only SAS stays as
+  the fallback per [[AZR-58]]. ADR 0007 (credential section) is amended BEFORE
+  code, and the amendment names what it falsifies. OPEN: which Cribl version
+  first ships eventhub oauthbearer (this leader's spec has it), the exact
+  oauthEndpoint and scope for Event Hubs (expected
+  https://<ns>.servicebus.windows.net/.default), and whether the identity is
+  the app's own Azure principal or a separate Cribl principal (the plan values
+  already carry 'Cribl service principal object ID'). Live check in Live
+  Preview before done. Reasoning in backlog.md section 6h-i.
+  DECISION: How should the Cribl Event Hub source authenticate?
+    [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
+    [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
+    [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
+
 - **AZR-61** Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope
   `AZR-F10` `enabler` `settled`
   OPERATOR REQUEST 2026-11-03: "an audit of what the app does and what the
@@ -1183,7 +1211,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1391,34 +1419,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
-  `AZR-F9` `story` `settled`
-  OPERATOR DECISION 2026-11-03, asked during the ADR 0007 live pass when the
-  create was about to store RootManageSharedAccessKey: 'Offer both'. The
-  vendored Cribl OpenAPI InputEventhub sasl block supports mechanism
-  oauthbearer with clientId, tenantId, clientSecretAuthType (secret or
-  certificate), clientTextSecret / certificateName, oauthEndpoint and scope,
-  so the input can authenticate as an Entra service principal with RBAC 'Azure
-  Event Hubs Data Receiver' scoped to the hub, and no SAS key leaves Azure.
-  The Blob lane already uses tenant + client + secret. SCOPE: the credential
-  choice gains 'Entra ID (recommended)' as the default for Event Hub lanes;
-  the body builder emits the oauthbearer sasl block referencing a Cribl text
-  secret for the client secret; Validate gains a read of the principal's role
-  assignment on the hub (Data Receiver, or Data Owner), a refused read
-  unknown; the How-to gains the role-assignment step; Listen-only SAS stays as
-  the fallback per [[AZR-58]]. ADR 0007 (credential section) is amended BEFORE
-  code, and the amendment names what it falsifies. OPEN: which Cribl version
-  first ships eventhub oauthbearer (this leader's spec has it), the exact
-  oauthEndpoint and scope for Event Hubs (expected
-  https://<ns>.servicebus.windows.net/.default), and whether the identity is
-  the app's own Azure principal or a separate Cribl principal (the plan values
-  already carry 'Cribl service principal object ID'). Live check in Live
-  Preview before done. Reasoning in backlog.md section 6h-i.
-  DECISION: How should the Cribl Event Hub source authenticate?
-    [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
-    [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
-    [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
 - **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
   `AZR-F9` `story` `settled`
