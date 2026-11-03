@@ -960,7 +960,7 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
     });
   });
 
-  it("the machines query counts running VMs, Uniform scale-set instances and Arc machines only", async () => {
+  it("the machines query counts running VMs, Uniform scale-set instances and Connected Arc machines only", async () => {
     const { azure, calls } = routedAzure({ heartbeat: heartbeat(["vm1", "sub-a"]) });
     const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
     const posted = calls.find((c) => c.path === "/providers/Microsoft.ResourceGraph/resources");
@@ -968,7 +968,9 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
     expect(query).toBe(r.queries.machines);
     expect(query).toMatch(/powerState\.code\) in~ \('PowerState\/running', 'PowerState\/starting'\)/);
     expect(query).toMatch(/computeresources[\s\S]*microsoft\.compute\/virtualmachinescalesets\/virtualmachines/);
-    expect(query).toMatch(/microsoft\.hybridcompute\/machines/);
+    expect(query).toMatch(
+      /\(type =~ 'microsoft\.hybridcompute\/machines' and tostring\(properties\.status\) =~ 'Connected'\)/,
+    );
     expect(query).toMatch(/summarize Machines = count\(\) by subscriptionId$/);
   });
 });

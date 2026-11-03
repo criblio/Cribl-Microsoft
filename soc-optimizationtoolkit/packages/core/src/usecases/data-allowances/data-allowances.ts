@@ -76,13 +76,14 @@ export const HEARTBEAT_QUERY = [
  * How many machines each subscription holds. This APPROXIMATES Defender for
  * Servers' billed machine count: Azure VMs that are running or starting (a
  * deallocated VM is not billed), Uniform scale-set instances (which live in
- * computeresources, not resources), and every Arc machine.
+ * computeresources, not resources), and Arc machines whose agent is Connected
+ * (a Disconnected or Expired Arc machine is not billed).
  */
 const MACHINES_QUERY = [
   "resources",
   "| where (type =~ 'microsoft.compute/virtualmachines'",
   "    and tostring(properties.extended.instanceView.powerState.code) in~ ('PowerState/running', 'PowerState/starting'))",
-  "    or type =~ 'microsoft.hybridcompute/machines'",
+  "    or (type =~ 'microsoft.hybridcompute/machines' and tostring(properties.status) =~ 'Connected')",
   "| project subscriptionId",
   "| union (computeresources",
   "    | where type =~ 'microsoft.compute/virtualmachinescalesets/virtualmachines'",
