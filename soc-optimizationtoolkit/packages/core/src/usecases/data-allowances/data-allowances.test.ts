@@ -766,12 +766,14 @@ describe("compareTenant", () => {
   describe("floors beyond unread workspaces (MIG-18)", () => {
     const both = (usageWarning: string | null, opts: { discoveryIncomplete?: boolean } = {}) => {
       const { azure } = routedAzure({
-        benefit: { "*": benefit([DAY, "M365 E5", 1]) },
-        eligible: eligible([DAY, "SigninLogs", 2000]),
+        benefit: { "*": benefit([DAY, "M365 E5", 1], [DAY, "Defender for Servers", 1]) },
+        eligible: eligible([DAY, "SigninLogs", 2000], [DAY, "SecurityEvent", 2000]),
+        heartbeat: heartbeat(["vm1", "sub-a"]),
+        pricings: { "sub-a": pricings("Standard", "P2") },
       });
       return compareTenant(
         azure,
-        undefined,
+        graphWith(skusBody({ enabled: 100, consumed: 100 })),
         [WS, WS2],
         new Map([
           [WS, inventory(300, WS, usageWarning)],
@@ -779,6 +781,19 @@ describe("compareTenant", () => {
         ]),
         { readAt: OPTS.readAt, ...opts },
       );
+    };
+
+    /** Cross-check skipped naming the cause; Servers granted floored; E5 seat-based granted exact. */
+    const expectPartialTenant = (r: DataAllowances, cause: RegExp) => {
+      expect(r.grants.length).toBeGreaterThan(0);
+      for (const g of r.grants) {
+        expect(g.crossCheck.kind).toBe("skipped");
+        const reason = (g.crossCheck as { reason: string }).reason;
+        expect(reason).toMatch(/^Cross-check skipped: the tenant sums are partial - /);
+        expect(reason).toMatch(cause);
+      }
+      expect(view(r, "servers-p2").grantedIsFloor).toBe(true);
+      expect(view(r, "e5").grantedIsFloor).toBe(false);
     };
 
     it("is exact when every workspace was read cleanly and discovery was complete", async () => {
@@ -792,12 +807,14 @@ describe("compareTenant", () => {
       if (r.scope.kind !== "tenant") throw new Error("unreachable");
       expect(r.scope.notRead).toEqual([]);
       expect(r.sumsAreFloors).toBe(true);
+      expectPartialTenant(r, /a workspace's Usage answer was partial/);
     });
 
     it("floors the sums and says so when discovery could not see every workspace", async () => {
       const r = await both(null, { discoveryIncomplete: true });
       expect(r.sumsAreFloors).toBe(true);
       expect(r.gaps.some((g) => /may be missing workspaces discovery could not see/.test(g))).toBe(true);
+      expectPartialTenant(r, /workspace discovery could not see every workspace/);
     });
   });
 

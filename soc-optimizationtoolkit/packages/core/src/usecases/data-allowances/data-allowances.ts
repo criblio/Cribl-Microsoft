@@ -733,25 +733,33 @@ export async function compareTenant(
   opts.onProgress?.("Reading license seat counts");
   const licences = await readLicences(graph, opts.readAt);
 
+  const discoveryIncomplete = opts.discoveryIncomplete === true;
+  // Every cause of a floored sum: each also skips the cross-check and floors
+  // the per-workspace-capped Servers granted figure (E5's seat count stays exact).
+  const causes: string[] = [];
+  if (notRead.length > 0) {
+    causes.push(`${notRead.length} workspace${notRead.length === 1 ? " was" : "s were"} not read`);
+  }
+  if (partialUsage) causes.push("a workspace's Usage answer was partial");
+  if (discoveryIncomplete) causes.push("workspace discovery could not see every workspace");
+  const sumsAreFloors = causes.length > 0;
   const result = assemble({
     reads,
     billableDailyAverageMB: billable,
     licences,
     servers,
     heartbeatComplete: reads.every((r) => r.heartbeatComplete),
-    workspaceSkipReason:
-      notRead.length > 0
-        ? `Cross-check skipped: ${notRead.length} workspace${notRead.length === 1 ? " was" : "s were"} not read, so the tenant sums are partial.`
-        : null,
+    workspaceSkipReason: sumsAreFloors
+      ? `Cross-check skipped: the tenant sums are partial - ${causes.join("; ")}.`
+      : null,
     // E5 is pooled tenant-wide; Servers P2 is capped per workspace, so a capped
     // day in the tenant sum can be one workspace running out, not the sum.
     serversSkipReason:
       "Cross-check skipped: the Servers P2 benefit is capped per workspace, so a tenant-wide daily sum cannot show any one workspace's cap. Run it on a single workspace.",
     plans: null,
-    floorServers: notRead.length > 0,
+    floorServers: sumsAreFloors,
   });
   gaps.push("Table plans are not read in a tenant comparison.");
-  const discoveryIncomplete = opts.discoveryIncomplete === true;
   if (discoveryIncomplete) {
     gaps.push(
       "Workspace discovery was incomplete, so this comparison may be missing workspaces discovery could not see; the sums are lower bounds.",
@@ -764,7 +772,7 @@ export async function compareTenant(
   });
   return {
     ...result,
-    sumsAreFloors: notRead.length > 0 || partialUsage || discoveryIncomplete,
+    sumsAreFloors,
     licences,
     servers: publicServers(servers, reads),
     scope: { kind: "tenant", workspaces: [...workspaceIds], notRead },
