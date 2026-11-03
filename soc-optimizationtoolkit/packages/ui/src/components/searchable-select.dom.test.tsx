@@ -297,3 +297,32 @@ describe("SearchableSelect focus and disabled options (DBT-249)", () => {
     cleanup();
   });
 });
+
+// DBT-249 follow-up (operator 2026-11-03): a native <select>'s empty option
+// let an operator clear a choice; clearLabel brings that back explicitly.
+describe("SearchableSelect clearLabel", () => {
+  it("offers the clear choice only once something is chosen, and clearing sends an empty value", () => {
+    const onChange = vi.fn();
+    const empty = render(<SearchableSelect options={OPTIONS} value="" onChange={onChange} label="Group" clearLabel="None" />);
+    fireEvent.click(empty.getByRole("button", { name: "Group" }));
+    expect([...empty.container.querySelectorAll(".searchable-select-option")].map((o) => o.textContent)).not.toContain("None");
+    cleanup();
+
+    const chosen = render(<SearchableSelect options={OPTIONS} value="o11yDemo" onChange={onChange} label="Group" clearLabel="None" />);
+    fireEvent.click(chosen.getByRole("button", { name: "Group" }));
+    const rows = [...chosen.container.querySelectorAll(".searchable-select-option")];
+    expect(rows[0]!.textContent).toBe("None");
+    fireEvent.click(rows[0]!);
+    expect(onChange).toHaveBeenLastCalledWith("");
+    cleanup();
+  });
+
+  it("offers no clear choice without clearLabel", () => {
+    const { getByRole, container } = render(
+      <SearchableSelect options={OPTIONS} value="o11yDemo" onChange={() => {}} label="Group" />,
+    );
+    fireEvent.click(getByRole("button", { name: "Group" }));
+    expect(container.querySelectorAll(".searchable-select-option").length).toBe(OPTIONS.length);
+    cleanup();
+  });
+});

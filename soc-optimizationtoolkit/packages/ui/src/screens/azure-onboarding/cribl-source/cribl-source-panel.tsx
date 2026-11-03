@@ -154,6 +154,7 @@ export function CriblSourcePanel(props: CriblSourcePanelProps) {
             <SearchableSelect
               label="Worker group"
               placeholder="Choose a worker group"
+              clearLabel="None"
               value={groupId}
               options={groups.map((g) => ({ value: g.id, label: g.id }))}
               onChange={onGroupChange}
@@ -369,6 +370,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
             <SearchableSelect
               label={`Listen rule for ${row.title}`}
               placeholder="Choose a rule with Listen rights"
+              clearLabel="None"
               value={rule}
               disabled={ruleRows.length === 0}
               options={ruleRows.map((r) => ({

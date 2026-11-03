@@ -393,6 +393,7 @@ export function DefenderExportSection({
           <SearchableSelect
             label="Resource group"
             placeholder="Choose a resource group"
+            clearLabel="None"
             value={resourceGroup?.name ?? ""}
             disabled={groupRows.length === 0}
             options={groupRows.map((g) => ({

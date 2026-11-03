@@ -520,7 +520,8 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     mount({ azure });
     await loaded();
     await chooseTarget("SendOnly");
-    expect(optionLabels("Event Hub")).toEqual([HUB, OTHER_HUB]);
+    // "None" leads once a hub is chosen (DBT-249 follow-up).
+    expect(optionLabels("Event Hub")).toEqual(["None", HUB, OTHER_HUB]);
     expect(screen.queryByText(/was not found in namespace/)).toBeNull();
     expect(screen.getByText("Only the first page was listed - Azure returned more.")).toBeTruthy();
   });
@@ -551,6 +552,27 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       "POST /providers/Microsoft.ResourceGraph/resources",
     ]);
+  });
+});
+
+// DBT-249 follow-up (operator 2026-11-03): the native empty option used to
+// clear these pickers; "None" does it now, and clearing the namespace resets
+// the hub and rule with it.
+describe("AzureOnboardingScreen - clearing a picker", () => {
+  it("None clears the rule, and clears the namespace together with its hub and rule", async () => {
+    mount();
+    await readyToDeploy();
+    expect(button("Deploy alert export").disabled).toBe(false);
+
+    choose("Authorization rule", "None");
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    expect(button("Deploy alert export").disabled).toBe(true);
+
+    choose("Event Hub namespace", "None");
+    expect(shown("Event Hub namespace")).toBe("Choose a namespace");
+    expect(shown("Event Hub")).toBe("Choose an Event Hub");
+    expect(picker("Event Hub").disabled).toBe(true);
+    expect(picker("Authorization rule").disabled).toBe(true);
   });
 });
 

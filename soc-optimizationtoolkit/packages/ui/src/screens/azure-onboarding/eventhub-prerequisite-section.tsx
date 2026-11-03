@@ -125,6 +125,19 @@ export function EventHubPrerequisiteSection({
     }
   }
 
+  /**
+   * "None" on the namespace picker (DBT-249): the namespace, hub and rule go
+   * together, and a read still in flight for the old namespace is dropped.
+   */
+  function clearNamespace(): void {
+    targetRead.current += 1;
+    setHubs(null);
+    setRules(null);
+    setMissingHub("");
+    setLoadingTarget(false);
+    onChange({ namespace: null, hubName: "", rule: null });
+  }
+
   async function chooseNamespace(ns: NamespaceRef, hubName = ""): Promise<void> {
     const ref: NamespaceRef = {
       subscriptionId: ns.subscriptionId,
@@ -224,12 +237,18 @@ export function EventHubPrerequisiteSection({
               label="Event Hub namespace"
               placeholder="Choose a namespace"
               value={namespaceRows.some((n) => namespaceKey(n) === chosenKey) ? chosenKey : ""}
-              disabled={namespaceRows.length === 0}
+              disabled={namespaceRows.length === 0 && value.namespace === null}
               options={namespaceRows.map((ns) => ({
                 value: namespaceKey(ns),
                 label: `${ns.name} (${ns.resourceGroup}${ns.skuName !== "" ? `, ${ns.skuName}` : ""})`,
               }))}
+              clearLabel="None"
+              hasValue={value.namespace !== null}
               onChange={(key) => {
+                if (key === "") {
+                  clearNamespace();
+                  return;
+                }
                 const ns = namespaceRows.find((n) => namespaceKey(n) === key);
                 if (ns !== undefined) void chooseNamespace(ns);
               }}
@@ -269,6 +288,7 @@ export function EventHubPrerequisiteSection({
             <SearchableSelect
               label="Event Hub"
               placeholder="Choose an Event Hub"
+              clearLabel="None"
               value={value.hubName}
               disabled={value.namespace === null || hubOptions.length === 0}
               options={hubOptions.map((name) => ({ value: name, label: name }))}
@@ -295,6 +315,7 @@ export function EventHubPrerequisiteSection({
             <SearchableSelect
               label="Authorization rule"
               placeholder="Choose a rule that can send"
+              clearLabel="None"
               value={value.rule?.name ?? ""}
               disabled={ruleChoices.length === 0}
               options={ruleChoices.map((rule) => ({

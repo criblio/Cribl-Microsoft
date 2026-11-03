@@ -181,6 +181,18 @@ export interface SearchableSelectProps {
    * as the operator's typo.
    */
   emptyText?: string;
+  /**
+   * When set, and a value is chosen, the list starts with this choice (e.g.
+   * "None") and picking it sends "" - the clear a native <select>'s empty
+   * option gave (DBT-249). Omit it where an empty value means nothing.
+   */
+  clearLabel?: string;
+  /**
+   * Whether something is chosen, for clearLabel, when the chosen thing need
+   * not be one of the options (a namespace set from a pasted resource id).
+   * Defaults to value !== "".
+   */
+  hasValue?: boolean;
 }
 
 /** Single-select combobox: pick one option; the popover closes on selection. */
@@ -195,8 +207,15 @@ export function SearchableSelect({
   title,
   className,
   emptyText = NO_OPTIONS_TEXT,
+  clearLabel,
+  hasValue,
 }: SearchableSelectProps) {
-  const c = useCombo(options);
+  const chosen = hasValue ?? value !== "";
+  const listed = useMemo(
+    () => (clearLabel !== undefined && chosen ? [{ value: "", label: clearLabel }, ...options] : options),
+    [clearLabel, chosen, options],
+  );
+  const c = useCombo(listed);
 
   const pick = useCallback(
     (v: string) => {

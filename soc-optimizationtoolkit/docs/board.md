@@ -6727,8 +6727,12 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   clickable) and are restored as disabled. DBT-38's add-column CSS rule lost
   its now-dead select half and became a child-combinator input rule, with its
   pin updated. Mutation-checked: trigger name, filter name, focus return
-  (fails the DBT-208 pin too) and the disabled guard. KNOWN CHANGE for review:
-  three onboarding pickers whose native empty option let an operator clear a
-  choice now cannot be cleared once picked (the logging-map trace kept a real
-  None option). Live check outstanding: the onboarding namespace picker in
-  Live Preview.
+  (fails the DBT-208 pin too) and the disabled guard. FOLLOW-UP (operator
+  chose 2026-11-03): SearchableSelect gained clearLabel (a leading choice that
+  sends "" once something is chosen) and hasValue (chosen even when not in the
+  options, e.g. a pasted namespace id); the six onboarding pickers (namespace,
+  hub, rule, resource group, worker group, Listen rule) offer None. None on
+  the namespace resets hub and rule and drops a read in flight, and the
+  namespace picker stays enabled while a pasted namespace is set.
+  Mutation-checked: dropping the reset or ignoring hasValue each fails a pin.
+  Live check outstanding: the onboarding namespace picker in Live Preview.
