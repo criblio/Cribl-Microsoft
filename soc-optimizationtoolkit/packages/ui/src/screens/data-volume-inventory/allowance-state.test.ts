@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { WorkspaceInventory } from "@soc/core";
+import type { WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import {
   afterAllowancesText,
   ALLOWANCE_TIPS,
@@ -217,6 +217,17 @@ describe("overCell", () => {
     expect(overCell({ table: "SigninLogs", billableMB: 300 }, unread, 30)).toBe("not read");
   });
 
+  it("floored sums: a share reads 'at least', and a zero overage is not known, never 0 (MIG-22)", () => {
+    const floored = (overDailyMB: number) =>
+      allowances({ sumsAreFloors: true, grants: [grantView({ usage: usage({ overDailyMB }) })] });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, floored(2100), 30)).toBe("share of at least 2.10 GB");
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, floored(0), 30)).toBe("not known (partial read)");
+    const pooled = allowances({ sumsAreFloors: true, attribution: "pooled", pooled: usage({ overDailyMB: 2100 }) });
+    expect(overCell({ table: "SigninLogs", billableMB: 300 }, pooled, 30)).toBe(
+      "share of at least 2.10 GB (all grants)",
+    );
+  });
+
   it("is empty for a grant table before allowances are read", () => {
     expect(overCell({ table: "SigninLogs", billableMB: 300 }, null, 30)).toBe("");
   });
@@ -349,6 +360,33 @@ describe("planNote and sentinelWorkspaceCount", () => {
         failures: [],
       }),
     ).toBeNull();
+  });
+});
+
+describe("sentinelWorkspaceCount with failed subscriptions (MIG-22)", () => {
+  const ws = (id: string) => ({
+    id,
+    name: id,
+    subscriptionId: "s",
+    subscriptionName: "",
+    resourceGroup: "r",
+    location: "l",
+    sentinel: "enabled" as const,
+  });
+  const failed = [{ subscriptionId: "s9", subscriptionName: "", error: "403" }];
+  const found = (first: string, ...rest: string[]): WorkspaceDiscovery => ({
+    workspaces: { kind: "rows", rows: [ws(first), ...rest.map(ws)] },
+    subscriptionsSearched: 2,
+    failures: failed,
+  });
+
+  it("is null, not 1, when one Sentinel workspace was seen but a subscription failed", () => {
+    expect(sentinelWorkspaceCount(found("a"))).toBeNull();
+    expect(sentinelWorkspaceCount({ workspaces: { kind: "empty" }, subscriptionsSearched: 2, failures: failed })).toBeNull();
+  });
+
+  it("is a floor of the count seen when two or more were found despite a failure", () => {
+    expect(sentinelWorkspaceCount(found("a", "b"))).toBe(2);
   });
 });
 

@@ -296,13 +296,18 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
   });
 
   it("adds the Allowance and Over columns once the allowances are read", async () => {
-    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) }));
+    // Total 120 MB but billable 90 MB, so Daily avg (4.0 MB) differs from Over (3.0 MB).
+    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 120, 90, 30, "[]"]]) }));
     await discoverAndInventory();
     await waitFor(() => expect(document.body.textContent).toContain("Over allowance / day"));
     const row = screen.getByText("Syslog").closest("tr")!;
     await waitFor(() => expect(row.textContent).toContain("Billable"));
+    const headers = [...document.querySelectorAll("th")].map((th) => th.textContent ?? "");
+    const cell = (header: string) =>
+      row.querySelectorAll("td")[headers.findIndex((h) => h.startsWith(header))]!.textContent;
+    expect(cell("Daily avg")).toBe("4.0 MB");
     // A billable table's overage is its own billable daily average: 90 / 30.
-    expect(row.textContent).toContain("3.0 MB");
+    expect(cell("Over allowance")).toBe("3.0 MB");
     await waitFor(() => expect(document.body.textContent).toContain("Operation"));
   });
 });

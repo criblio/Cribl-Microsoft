@@ -42,6 +42,25 @@ describe("allowanceFor", () => {
 
 describe("eligibleTables", () => {
   it("has the spec's counts", () => {
+    // MIG-22: the full lists, sorted, so a swapped or dropped table fails (not length + one member).
+    expect([...eligibleTables("e5")].sort()).toEqual(
+      [
+        "AADManagedIdentitySignInLogs", "AADNonInteractiveUserSignInLogs", "AADProvisioningLogs",
+        "AADServicePrincipalSignInLogs", "ADFSSignInLogs", "AlertEvidence", "AuditLogs", "CloudAppEvents",
+        "DeviceEvents", "DeviceFileCertificateInfo", "DeviceFileEvents", "DeviceImageLoadEvents", "DeviceInfo",
+        "DeviceLogonEvents", "DeviceNetworkEvents", "DeviceNetworkInfo", "DeviceProcessEvents",
+        "DeviceRegistryEvents", "DynamicEventCollection", "EmailAttachmentInfo", "EmailEvents",
+        "EmailPostDeliveryEvents", "EmailUrlInfo", "IdentityDirectoryEvents", "IdentityLogonEvents",
+        "IdentityQueryEvents", "InformationProtectionLogs_CL", "McasShadowItReporting", "SigninLogs",
+      ].sort(),
+    );
+    expect([...eligibleTables("servers-p2")].sort()).toEqual(
+      [
+        "DeviceCustomFileEvents", "DeviceCustomRegistryEvents", "MDCFileIntegrityMonitoringEvents",
+        "ProtectionStatus", "SecurityAlert", "SecurityBaseline", "SecurityBaselineSummary", "SecurityDetection",
+        "SecurityEvent", "Update", "UpdateSummary", "WindowsEvent", "WindowsFirewall",
+      ].sort(),
+    );
     expect(eligibleTables("e5")).toHaveLength(29);
     expect(eligibleTables("e5")).toContain("InformationProtectionLogs_CL");
     expect(eligibleTables("servers-p2")).toHaveLength(13);

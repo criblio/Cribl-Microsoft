@@ -129,6 +129,27 @@ describe("e5Granted", () => {
   });
 });
 
+describe("e5Granted - the may-qualify pattern (MIG-22)", () => {
+  const id = "11111111-0000-0000-0000-000000000000";
+
+  it.each(["M365_FLW_ODD", "ODD_A5_X", "ODD_F5_X", "ODD_G5_X", "ODD_E7_X", "odd_flw_lowercase"])(
+    "%s looks like the offer and is flagged may-qualify, not granted",
+    (part) => {
+      const r = e5Granted([sku({ skuId: id, skuPartNumber: part, consumed: 10 })]);
+      expect(r.rows[0]!.qualifies).toBe(false);
+      expect(r.rows[0]!.reason.startsWith("may qualify")).toBe(true);
+      expect(r.possiblyMissing).toBe(10);
+      expect(r.assigned).toBe(0);
+    },
+  );
+
+  it("a part number with none of those markers is plainly not in the offer", () => {
+    const r = e5Granted([sku({ skuId: id, skuPartNumber: "SPE_E3_X", consumed: 10 })]);
+    expect(r.rows[0]!.reason).toContain("not in the Microsoft 365 E5/A5/F5/G5/E7 offer");
+    expect(r.possiblyMissing).toBe(0);
+  });
+});
+
 describe("e5Granted - SKU status and overlap (MIG-21)", () => {
   it("counts seats only on Enabled or Warning SKUs; a dead SKU stays in the table but grants nothing", () => {
     for (const status of ["Suspended", "LockedOut", "Deleted"]) {

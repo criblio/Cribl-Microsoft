@@ -180,6 +180,15 @@ describe("AllowanceCards", () => {
     expect(text()).toContain("over and headroom not read");
   });
 
+  it("draws no eligible line when eligible volume was not read, only the applied line (MIG-22)", () => {
+    renderCards(allowances({ grants: [grantView({ eligibleKnown: false, usage: usage({ usedDailyMB: 500 }) })] }));
+    expect(document.querySelector(".allowance-line-eligible")).toBeNull();
+    expect(document.querySelector(".allowance-line-applied")).not.toBeNull();
+    cleanup();
+    renderCards(allowances({ grants: [grantView()] }));
+    expect(document.querySelector(".allowance-line-eligible")).not.toBeNull();
+  });
+
   it("draws the meter when eligible and granted are both known", () => {
     renderCards(allowances({ grants: [grantView({ usage: usage({ eligibleDailyMB: 6000 }) })] }));
     expect(document.querySelector(".allowance-meter")).not.toBeNull();

@@ -347,6 +347,26 @@ describe("readDataAllowances - Servers P2", () => {
     expect(view(r, "servers-p2").crossCheck.kind).toBe("skipped");
   });
 
+  it("a Free VirtualMachines plan is off (read, not not-read); granted is 0 only when every subscription was read (MIG-22)", async () => {
+    const all = routedAzure({
+      ...base,
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Free", "") },
+    });
+    const r = await readDataAllowances(all.azure, undefined, WS, inventory(0), OPTS);
+    expect(r.servers.rows[0]!.plan).toBe("off");
+    expect(view(r, "servers-p2")).toMatchObject({ grantedMB: 0, grantedIsFloor: false });
+
+    const partial = routedAzure({
+      ...base,
+      heartbeat: heartbeat(["vm1", "sub-a"], ["vm2", "sub-b"]),
+      pricings: { "sub-a": pricings("Free", ""), "sub-b": DENIED },
+    });
+    const p = await readDataAllowances(partial.azure, undefined, WS, inventory(0), OPTS);
+    expect(p.servers.rows.map((x) => x.plan)).toEqual(["off", "not-read"]);
+    expect(view(p, "servers-p2").grantedIsFloor).toBe(true);
+  });
+
   it("grantedMB is null, not 0, when Heartbeat reported no machines at all", async () => {
     const { azure } = routedAzure({ ...base, heartbeat: heartbeat() });
     const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
