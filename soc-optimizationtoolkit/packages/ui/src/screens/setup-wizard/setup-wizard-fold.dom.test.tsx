@@ -82,22 +82,36 @@ function ports(s: Setup): UiPorts {
 }
 
 /** The connectivity section over real state, so choosing a radio takes effect. */
-function StatefulConnectivity({ initial }: { initial: AzureConfig }) {
+function StatefulConnectivity({
+  initial,
+  onChosen,
+}: {
+  initial: AzureConfig;
+  onChosen?: (c: AzureConfig) => void;
+}) {
   const [config, setConfig] = useState(initial);
   return (
     <AzureConnectivitySection
       config={config}
-      onChange={setConfig}
+      onChange={(c) => {
+        setConfig(c);
+        onChosen?.(c);
+      }}
       storedIdentity={config.clientId !== ""}
       onClearIdentity={() => {}}
     />
   );
 }
 
-function mount(s: Setup) {
+function mount(s: Setup, follow = false) {
+  return render(<Root s={s} follow={follow} />);
+}
+
+function Root({ s, follow }: { s: Setup; follow: boolean }) {
+  const [facts, setFacts] = useState(s.facts);
   const config = s.config ?? configWith({});
   const ctx: ChangeRequestContext = { appName: "test", config };
-  return render(
+  return (
     <PortsProvider ports={ports(s)} config={config}>
       <SetupWizard
         capabilities={{ hasCribl: true, hasAzure: true }}
@@ -105,10 +119,13 @@ function mount(s: Setup) {
         initialTarget="cribl-hosted"
         lockTarget
         installedInLeader
-        foldFacts={s.facts}
+        foldFacts={facts}
         onGetStarted={s.onGetStarted ?? (() => {})}
         azureConnectivitySection={
-          <StatefulConnectivity initial={config} />
+          <StatefulConnectivity
+            initial={config}
+            onChosen={follow ? (c) => setFacts((f) => ({ ...f, connectivity: c.connectivity })) : undefined}
+          />
         }
         azureConnectSection={
           <AzureConnectSection
@@ -118,7 +135,7 @@ function mount(s: Setup) {
             onClientIdChange={() => {}}
             setupPath={config.setupPath}
             onSetupPathChange={() => {}}
-            secretLive={s.facts.secretLive === "live"}
+            secretLive={facts.secretLive === "live"}
             ctx={ctx}
             onConnect={async () => ({ ok: true, secretStored: true, message: "" })}
             storageNote="note"
@@ -140,7 +157,7 @@ function mount(s: Setup) {
           />
         }
       />
-    </PortsProvider>,
+    </PortsProvider>
   );
 }
 
@@ -341,6 +358,24 @@ describe("wizard checklist opens when chosen (DBT-248 final review)", () => {
     next();
     expect(screen.queryByRole("heading", { name: "What this app may do in Azure" })).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    expect(isFolded("What this app may do in Azure")).toBe(false);
+  });
+});
+
+describe("choosing Partially Connected is a move (DBT-248 re-review)", () => {
+  it("the checklist stays open when current follows the choice (Disconnected -> Partial, secret missing)", async () => {
+    mount(
+      {
+        store: new Map(),
+        config: configWith({ connectivity: "disconnected" }),
+        facts: factsWith({ connectivity: "disconnected", secretLive: "missing" }),
+      },
+      true,
+    );
+    next();
+    fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "What this app may do in Azure" })).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 20));
     expect(isFolded("What this app may do in Azure")).toBe(false);
   });
 });

@@ -77,6 +77,9 @@ export function AzureConnectivitySection({
       onChange({ ...config, connectivity: value, setupPath: "existing" });
       // The operator just asked for this checklist: open it rather than leave
       // it folded behind the radio they pressed (DBT-248).
+      // Choosing it is also a move to this section: it ends the load fold, so a
+      // current section that follows the choice cannot refold it.
+      fold?.onActivate();
       fold?.onCollapsedChange(false);
       return;
     }

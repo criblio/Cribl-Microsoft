@@ -103,24 +103,41 @@ function ports(s: Setup): UiPorts {
 }
 
 /** The connectivity section over real state, so choosing a radio takes effect. */
-function StatefulConnectivity({ initial }: { initial: AzureConfig }) {
+function StatefulConnectivity({
+  initial,
+  onChosen,
+}: {
+  initial: AzureConfig;
+  onChosen?: (c: AzureConfig) => void;
+}) {
   const [config, setConfig] = useState(initial);
   return (
     <AzureConnectivitySection
       config={config}
-      onChange={setConfig}
+      onChange={(c) => {
+        setConfig(c);
+        onChosen?.(c);
+      }}
       storedIdentity={config.clientId !== ""}
       onClearIdentity={() => {}}
     />
   );
 }
 
-function mount(s: Setup, facts: JourneyFacts) {
+function mount(s: Setup, initialFacts: JourneyFacts, followConnectivity = false) {
+  return render(<Root s={s} initialFacts={initialFacts} follow={followConnectivity} />);
+}
+
+function Root({ s, initialFacts, follow }: { s: Setup; initialFacts: JourneyFacts; follow: boolean }) {
+  const [facts, setFacts] = useState(initialFacts);
   const config = s.config ?? configWith({});
   const ctx: ChangeRequestContext = { appName: "test", config };
   const sections = (
     <>
-      <StatefulConnectivity initial={config} />
+      <StatefulConnectivity
+        initial={config}
+        onChosen={follow ? (c) => setFacts((f) => ({ ...f, connectivity: c.connectivity })) : undefined}
+      />
       <AzureConnectSection
         tenantId={config.tenantId}
         onTenantIdChange={() => {}}
@@ -149,7 +166,7 @@ function mount(s: Setup, facts: JourneyFacts) {
       <RepositoriesScreen platform="cloud" />
     </>
   );
-  return render(
+  return (
     <PortsProvider ports={ports(s)} config={config}>
       <HomeScreen
         facts={facts}
@@ -160,7 +177,7 @@ function mount(s: Setup, facts: JourneyFacts) {
         onNavigate={() => {}}
         setupSections={sections}
       />
-    </PortsProvider>,
+    </PortsProvider>
   );
 }
 
@@ -371,6 +388,20 @@ describe("Setup page folding (DBT-248)", () => {
     await settle();
     expect(screen.queryByRole("heading", { name: "What this app may do in Azure" })).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    expect(isFolded("What this app may do in Azure")).toBe(false);
+  });
+
+  it("choosing Partially Connected counts as a move: the checklist stays open when current follows the choice", async () => {
+    // Disconnected -> Partial with the secret missing: current goes from none to connect.
+    mount(
+      { store: new Map(), config: configWith({ connectivity: "disconnected" }) },
+      factsWith({ connectivity: "disconnected", secretLive: "missing" }),
+      true,
+    );
+    await settle();
+    fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "What this app may do in Azure" })).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 20));
     expect(isFolded("What this app may do in Azure")).toBe(false);
   });
 
