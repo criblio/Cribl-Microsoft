@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**98 in the backlog, 36 in progress, 135 done.**
+**97 in the backlog, 36 in progress, 136 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 7 | 1 | 0 |
+| Data Volume Inventory | 6 | 2 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 134.
+Open work totals 133.
 
 ## Epics and features
 
@@ -136,14 +136,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 53% (9/17)
+### `MIG` SIEM migration analysis - 59% (10/17)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 1/8 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 2/8 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17 |
 
 ---
 
@@ -1050,12 +1050,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-11** Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids
+- **MIG-12** Core: benefit used (Operation table) and eligible volume per grant, folded per day
   `MIG-F2` `enabler` `settled`
-  One data module with each row sourced to a Microsoft page and dated; a table
-  not in it is Billable, never a guess. SKU ids copied from the licensing CSV,
-  never from memory. Design: docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-11).
+  Used and Over come from Microsoft's own Operation record, so they are exact
+  without licence data. Unknown benefit types degrade to one pooled figure.
+  Design: docs/features/inventory-data-allowances.md. Plan:
+  docs/data-volume-inventory-implementation-plan.md (task MIG-12).
 
 ---
 
@@ -1270,7 +1270,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (51)
+## Backlog - next (50)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1908,15 +1908,8 @@ Settled and unblocked, sequenced behind now.
   *UserName (were *UserID); the ASim tables' username/app_name/processName now
   map to *Name columns.
 
-- **MIG-12** Core: benefit used (Operation table) and eligible volume per grant, folded per day
-  `MIG-F2` `enabler` `settled` `blocked by MIG-11`
-  Used and Over come from Microsoft's own Operation record, so they are exact
-  without licence data. Unknown benefit types degrade to one pooled figure.
-  Design: docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-12).
-
 - **MIG-13** Core: granted from E5 seats and Servers P2 machines, and the cross-check against applied benefit
-  `MIG-F2` `enabler` `settled` `blocked by MIG-11`
+  `MIG-F2` `enabler` `settled`
   The cross-check settles assigned vs purchased seats and subscription vs
   workspace machines from the customer's own data; 2% tolerance, marked only
   when exactly one basis matches. Design:
@@ -2465,7 +2458,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (135)
+## Done (136)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6195,6 +6188,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (requires workspace.read), panel and state moved to
   screens/data-volume-inventory, SIEM Migration renders no inventory (DOM
   pin), board menu un-planned. Live Preview check rides on MIG-17's live run.
+
+- **MIG-11** Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids
+  `MIG-F2` `enabler` `settled` `verified: pins`
+  One data module with each row sourced to a Microsoft page and dated; a table
+  not in it is Billable, never a guess. SKU ids copied from the licensing CSV,
+  never from memory. Design: docs/features/inventory-data-allowances.md. Plan:
+  docs/data-volume-inventory-implementation-plan.md (task MIG-11). DONE
+  2026-11-03 (pins, 9d3db49): allowance-catalog.ts - Free/E5/Servers P2 table
+  lists from the spec, criblWritable, 24 qualifying E5 SKUs copied from
+  Microsoft's licensing CSV (2026-08-19); 27 FAQ-named SKUs had no exact CSV
+  row and render as 'may qualify' downstream (Ruling R4).
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

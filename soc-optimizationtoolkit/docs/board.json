@@ -3548,19 +3548,20 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-11",
       "type": "enabler",
       "priority": "next",
       "title": "Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids",
-      "detail": "One data module with each row sourced to a Microsoft page and dated; a table not in it is Billable, never a guess. SKU ids copied from the licensing CSV, never from memory. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-11)."
+      "detail": "One data module with each row sourced to a Microsoft page and dated; a table not in it is Billable, never a guess. SKU ids copied from the licensing CSV, never from memory. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-11).\n\nDONE 2026-11-03 (pins, 9d3db49): allowance-catalog.ts - Free/E5/Servers P2 table lists from the spec, criblWritable, 24 qualifying E5 SKUs copied from Microsoft's licensing CSV (2026-08-19); 27 FAQ-named SKUs had no exact CSV row and render as 'may qualify' downstream (Ruling R4).",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-11"
       ],
