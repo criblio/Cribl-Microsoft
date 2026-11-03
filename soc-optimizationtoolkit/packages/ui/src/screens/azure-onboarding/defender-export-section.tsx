@@ -56,6 +56,7 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   unmeasuredInventoryMessage,
   verifiedNoneInventoryMessage,
@@ -389,19 +390,17 @@ export function DefenderExportSection({
         {groupsMessage !== null && <PickerLine message={groupsMessage} />}
         <label className="field">
           <span className="field-label">Existing resource group for the export</span>
-          <select
-            aria-label="Resource group"
+          <SearchableSelect
+            label="Resource group"
+            placeholder="Choose a resource group"
             value={resourceGroup?.name ?? ""}
             disabled={groupRows.length === 0}
-            onChange={(e) => setResourceGroup(groupRows.find((g) => g.name === e.target.value) ?? null)}
-          >
-            <option value="">Choose a resource group</option>
-            {groupRows.map((g) => (
-              <option key={g.name} value={g.name}>
-                {g.location !== "" ? `${g.name} (${g.location})` : g.name}
-              </option>
-            ))}
-          </select>
+            options={groupRows.map((g) => ({
+              value: g.name,
+              label: g.location !== "" ? `${g.name} (${g.location})` : g.name,
+            }))}
+            onChange={(name) => setResourceGroup(groupRows.find((g) => g.name === name) ?? null)}
+          />
           <span className="field-hint">The export is created in this group, at its location.</span>
         </label>
       </div>

@@ -39,6 +39,7 @@ function useCombo(options: readonly SelectOption[]) {
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const filtered = useMemo(() => filterOptions(options, query), [options, query]);
 
@@ -46,6 +47,16 @@ function useCombo(options: readonly SelectOption[]) {
     setOpen(false);
     setQuery("");
   }, []);
+
+  /**
+   * Close and hand keyboard focus back to the trigger (DBT-249): the filter
+   * input that held focus unmounts, and without this focus falls to <body>.
+   * An outside click closes WITHOUT this - the user put focus elsewhere.
+   */
+  const closeToTrigger = useCallback(() => {
+    close();
+    triggerRef.current?.focus();
+  }, [close]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +67,7 @@ function useCombo(options: readonly SelectOption[]) {
       }
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") closeToTrigger();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -64,7 +75,7 @@ function useCombo(options: readonly SelectOption[]) {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, close]);
+  }, [open, close, closeToTrigger]);
 
   useEffect(() => {
     setHighlight((h) => clampHighlight(h, filtered.length));
@@ -80,7 +91,9 @@ function useCombo(options: readonly SelectOption[]) {
     filtered,
     rootRef,
     inputRef,
+    triggerRef,
     close,
+    closeToTrigger,
   };
 }
 
@@ -187,10 +200,11 @@ export function SearchableSelect({
 
   const pick = useCallback(
     (v: string) => {
+      if (options.find((o) => o.value === v)?.disabled === true) return;
       onChange(v);
-      c.close();
+      c.closeToTrigger();
     },
-    [onChange, c],
+    [onChange, c, options],
   );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -215,6 +229,7 @@ export function SearchableSelect({
       <LabelDecoy />
       <button
         type="button"
+        ref={c.triggerRef}
         className="searchable-select-control"
         disabled={disabled}
         aria-label={label}
@@ -248,7 +263,8 @@ export function SearchableSelect({
                 key={o.value}
                 role="option"
                 aria-selected={o.value === value}
-                className={`searchable-select-option${i === c.highlight ? " is-highlighted" : ""}${o.value === value ? " is-selected" : ""}`}
+                aria-disabled={o.disabled === true ? true : undefined}
+                className={`searchable-select-option${i === c.highlight ? " is-highlighted" : ""}${o.value === value ? " is-selected" : ""}${o.disabled === true ? " is-disabled" : ""}`}
                 onMouseEnter={() => c.setHighlight(i)}
                 onClick={() => pick(o.value)}
               >
@@ -309,11 +325,12 @@ export function SearchableMultiSelect({
 
   const toggle = useCallback(
     (v: string) => {
+      if (options.find((o) => o.value === v)?.disabled === true) return;
       onChange(
         selected.has(v) ? values.filter((x) => x !== v) : [...values, v],
       );
     },
-    [onChange, selected, values],
+    [onChange, selected, values, options],
   );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -338,6 +355,7 @@ export function SearchableMultiSelect({
       <LabelDecoy />
       <button
         type="button"
+        ref={c.triggerRef}
         className="searchable-select-control"
         disabled={disabled}
         aria-label={label}
@@ -371,7 +389,8 @@ export function SearchableMultiSelect({
                 key={o.value}
                 role="option"
                 aria-selected={selected.has(o.value)}
-                className={`searchable-select-option searchable-select-option-multi${i === c.highlight ? " is-highlighted" : ""}${selected.has(o.value) ? " is-selected" : ""}`}
+                aria-disabled={o.disabled === true ? true : undefined}
+                className={`searchable-select-option searchable-select-option-multi${i === c.highlight ? " is-highlighted" : ""}${selected.has(o.value) ? " is-selected" : ""}${o.disabled === true ? " is-disabled" : ""}`}
                 onMouseEnter={() => c.setHighlight(i)}
                 onClick={() => toggle(o.value)}
               >

@@ -26,6 +26,14 @@
 
 import { CUSTOM_COLUMN_TYPES } from "@soc/core";
 import type { ManualColumnDraft, ManualRowStatus } from "./manual-schema-state";
+import { SearchableSelect } from "../components/searchable-select";
+import type { SelectOption } from "../components/searchable-select";
+
+/** The column types, in the core order, as picker options. */
+const TYPE_OPTIONS: readonly SelectOption[] = CUSTOM_COLUMN_TYPES.map((t) => ({
+  value: t,
+  label: t,
+}));
 
 export interface ManualSchemaEditorProps {
   /** The rows being edited; the host owns the array. */
@@ -100,19 +108,14 @@ export function ManualSchemaEditor(props: ManualSchemaEditorProps) {
                   </span>
                 )}
               </span>
-              <select
+              <SearchableSelect
                 className="manual-schema-select"
-                aria-label={`Field ${index + 1} type`}
+                label={`Field ${index + 1} type`}
+                options={TYPE_OPTIONS}
                 value={row.type}
                 disabled={busy}
-                onChange={(ev) => onEdit(row.id, { type: ev.target.value })}
-              >
-                {CUSTOM_COLUMN_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={(type) => onEdit(row.id, { type })}
+              />
               <button
                 className="gap-reset-button"
                 onClick={() => onRemove(row.id)}

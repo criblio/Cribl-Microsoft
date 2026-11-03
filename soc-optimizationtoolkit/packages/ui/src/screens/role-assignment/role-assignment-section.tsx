@@ -263,6 +263,7 @@ export function RoleAssignmentSection({
               value={objectId}
               onChange={setObjectId}
               disabled={spLoading}
+              label="Ingestion service principal (object id)"
               placeholder={
                 spLoading
                   ? "Loading service principals..."

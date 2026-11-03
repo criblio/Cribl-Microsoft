@@ -174,6 +174,7 @@ const POLICY_BAR_TIP =
   "determinable keys, dropping anything could break it, so the action is " +
   "disabled.";
 
+
 /** The action-dropdown options (the Cribl pipeline dispositions). */
 const ACTION_OPTIONS: readonly MatchAction[] = [
   "keep",
@@ -1391,6 +1392,7 @@ export function MappingReviewSection({
                   value={report.tableName}
                   onChange={(t) => changeTable(report.logType, t)}
                   disabled={analyzing}
+                  label={`Destination table for ${report.logType}`}
                   ariaLabel="Filter destination tables"
                 />
               </div>
@@ -1696,28 +1698,27 @@ export function MappingReviewSection({
                               {example.text}
                             </td>
                             <td>
-                              <select
+                              <SearchableSelect
                                 className="mapping-select"
+                                label={`Dest Field for ${m.source}`}
+                                options={[
+                                  { value: m.dest, label: m.dest },
+                                  ...report.destSchema
+                                    .filter((d) => d.name !== m.dest)
+                                    .map((d) => ({ value: d.name, label: d.name })),
+                                ]}
                                 value={m.dest}
-                                onChange={(e) =>
+                                placeholder=""
+                                onChange={(next) =>
                                   chooseDest(
                                     report,
                                     effective,
                                     m.source,
-                                    e.target.value,
+                                    next,
                                     approved,
                                   )
                                 }
-                              >
-                                <option value={m.dest}>{m.dest}</option>
-                                {report.destSchema
-                                  .filter((d) => d.name !== m.dest)
-                                  .map((d) => (
-                                    <option key={d.name} value={d.name}>
-                                      {d.name}
-                                    </option>
-                                  ))}
-                              </select>
+                              />
                             </td>
                             <td className="match-field-type">{m.destType}</td>
                             <td>
@@ -1728,26 +1729,26 @@ export function MappingReviewSection({
                               </span>
                             </td>
                             <td>
-                              <select
+                              <SearchableSelect
                                 className="mapping-select"
-                                value={m.action}
-                                title={columnlessReason ?? undefined}
-                                onChange={(e) =>
-                                  updateAction(report, m.source, e.target.value)
-                                }
-                              >
-                                {ACTION_OPTIONS.map((act) => {
-                                  // DBT-209: the reducer refuses these here.
+                                label={`Action for ${m.source}`}
+                                options={ACTION_OPTIONS.map((act) => {
+                                  // DBT-209: the reducer refuses these here; they
+                                  // stay listed, disabled, with the label saying
+                                  // what to do instead.
                                   const refused =
                                     act !== m.action &&
                                     actionEditRefusal(m, act, catchAllColumn) !== null;
-                                  return (
-                                    <option key={act} value={act} disabled={refused}>
-                                      {refused ? `${act} (choose a Dest Field first)` : act}
-                                    </option>
-                                  );
+                                  return {
+                                    value: act,
+                                    label: refused ? `${act} (choose a Dest Field first)` : act,
+                                    disabled: refused,
+                                  };
                                 })}
-                              </select>
+                                value={m.action}
+                                title={columnlessReason ?? undefined}
+                                onChange={(next) => updateAction(report, m.source, next)}
+                              />
                             </td>
                           </tr>,
                           claim !== null && (

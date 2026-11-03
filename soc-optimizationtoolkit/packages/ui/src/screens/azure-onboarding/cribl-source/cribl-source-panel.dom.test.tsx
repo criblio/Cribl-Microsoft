@@ -227,10 +227,13 @@ describe("CriblSourcePanel", () => {
   it("offers only Listen rules without Manage for listKeys, none preselected", () => {
     const p = props({ modes: { defenderExport: "automate" } });
     render(<CriblSourcePanel {...p} />);
-    const select = screen.getByLabelText(/Listen rule for/) as HTMLSelectElement;
-    const names = Array.from(select.options).map((o) => o.value);
-    expect(names).toEqual(["", "reader", "reader2"]);
-    expect(select.value).toBe("");
+    const picker = screen.getByRole("button", { name: /Listen rule for/ });
+    expect(picker.textContent).toBe("Choose a rule with Listen rights");
+    fireEvent.click(picker);
+    const names = Array.from(document.querySelectorAll(".searchable-select-option-label")).map(
+      (o) => o.textContent,
+    );
+    expect(names).toEqual(["reader (Listen)", "reader2 (Listen)"]);
     expect(createButton().disabled).toBe(true);
   });
 
@@ -391,7 +394,11 @@ describe("CriblSourcePanel - attestation and listKeys wiring", () => {
       onPlan: vi.fn(async (): Promise<PlanCriblSourceResult> => ({ kind: "ready", ready: readyListKeys })),
     });
     render(<CriblSourcePanel {...p} />);
-    fireEvent.change(screen.getByLabelText(/Listen rule for/), { target: { value: "reader" } });
+    fireEvent.click(screen.getByRole("button", { name: /Listen rule for/ }));
+    const reader = Array.from(document.querySelectorAll(".searchable-select-option")).find(
+      (o) => o.querySelector(".searchable-select-option-label")?.textContent === "reader (Listen)",
+    );
+    fireEvent.click(reader!);
     fireEvent.click(createButton());
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm: create the source" })).toBeTruthy());
     expect(vi.mocked(p.onPlan).mock.calls[0]![1]).toEqual({ kind: "listKeys", rule: "reader" });

@@ -9,6 +9,11 @@ export interface SelectOption {
   value: string;
   label: string;
   hint?: string;
+  /**
+   * Shown but not choosable (DBT-249; e.g. DBT-209's refused Action choices).
+   * Put the reason in the label or hint so it is read, not just greyed out.
+   */
+  disabled?: boolean;
 }
 
 /**

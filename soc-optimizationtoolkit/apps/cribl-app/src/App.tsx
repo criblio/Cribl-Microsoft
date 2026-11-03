@@ -44,6 +44,7 @@ import {
   useCapabilityAudit,
   useConsolidatedPolling,
   useMergedPolls,
+  SearchableSelect,
 } from '@soc/ui';
 import type {
   AppFrameNav,
@@ -1624,16 +1625,12 @@ function App() {
                 }}
               />
             ) : (
-              <select
+              <SearchableSelect
+                label="Connection"
+                options={store.profiles.map((p) => ({ value: p.id, label: p.name }))}
                 value={store.activeProfileId ?? ''}
-                onChange={(e) => handleSelectProfile(e.target.value)}
-              >
-                {store.profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={handleSelectProfile}
+              />
             )}
           </label>
           <div className="connection-actions">

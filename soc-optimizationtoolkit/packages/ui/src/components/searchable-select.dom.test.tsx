@@ -10,7 +10,7 @@
  * toggles the popover.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { render, fireEvent, cleanup } from "@testing-library/react";
 import {
@@ -230,6 +230,70 @@ describe("SearchableSelect accessible name (DBT-249)", () => {
       <SearchableMultiSelect options={OPTIONS} values={[]} onChange={() => {}} label="Additional worker groups" />,
     );
     expect(getByRole("button", { name: "Additional worker groups" })).toBeTruthy();
+    cleanup();
+  });
+});
+
+// DBT-249 review: the conversions exposed two gaps a native <select> did not
+// have - focus fell to <body> after a pick, and no single option could be
+// disabled (DBT-209's refused Action choices became clickable).
+describe("SearchableSelect focus and disabled options (DBT-249)", () => {
+  it("returns focus to the trigger after a click pick, an Enter pick and Escape", () => {
+    const onChange = vi.fn();
+    const { getByRole, container } = render(
+      <SearchableSelect options={OPTIONS} value="" onChange={onChange} label="Group" />,
+    );
+    const trigger = getByRole("button", { name: "Group" });
+    fireEvent.click(trigger);
+    fireEvent.click(container.querySelectorAll(".searchable-select-option")[1]!);
+    expect(onChange).toHaveBeenLastCalledWith("DatacenterEast");
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(container.querySelector(".searchable-select-option")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    cleanup();
+  });
+
+  it("shows a disabled option, marks it, and never chooses it by click or Enter", () => {
+    const onChange = vi.fn();
+    const opts = [
+      { value: "keep", label: "keep" },
+      { value: "rename", label: "rename (choose a Dest Field first)", disabled: true },
+    ];
+    const { getByRole, container } = render(
+      <SearchableSelect options={opts} value="keep" onChange={onChange} label="Action" />,
+    );
+    fireEvent.click(getByRole("button", { name: "Action" }));
+    const rows = container.querySelectorAll(".searchable-select-option");
+    expect(rows.length).toBe(2);
+    expect(rows[1]!.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(rows[1]!);
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.mouseEnter(rows[1]!);
+    fireEvent.keyDown(container.querySelector("input[type=text], input:not([type])")!, { key: "Enter" });
+    expect(onChange).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("never toggles a disabled option in the multi-select", () => {
+    const onChange = vi.fn();
+    const { getByRole, container } = render(
+      <SearchableMultiSelect
+        options={[{ value: "a", label: "a" }, { value: "b", label: "b", disabled: true }]}
+        values={[]}
+        onChange={onChange}
+        label="Groups"
+      />,
+    );
+    fireEvent.click(getByRole("button", { name: "Groups" }));
+    fireEvent.click(container.querySelectorAll(".searchable-select-option")[1]!);
+    expect(onChange).not.toHaveBeenCalled();
     cleanup();
   });
 });

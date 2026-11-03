@@ -18,6 +18,7 @@ import { TABLE_FILTER_PLACEHOLDER } from "../dcr-automation/workspace-tables-sta
 import { buildSupportBundle, filterLogEntries, formatLogLine } from "@soc/core";
 import type { LogContextValue, LogEntry } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   LEVEL_FILTER_OPTIONS,
   RECENT_JOBS_LIMIT,
@@ -115,13 +116,15 @@ export function LogsScreen({ getRecentLogs, platformInfo }: LogsScreenProps) {
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Minimum level</span>
-          <select value={level} onChange={(e) => setLevel(e.target.value)}>
-            {LEVEL_FILTER_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            label="Minimum level"
+            options={LEVEL_FILTER_OPTIONS.map((option) => ({
+              value: option,
+              label: option,
+            }))}
+            value={level}
+            onChange={setLevel}
+          />
         </label>
         <label className="field">
           <span className="field-label">Job id</span>

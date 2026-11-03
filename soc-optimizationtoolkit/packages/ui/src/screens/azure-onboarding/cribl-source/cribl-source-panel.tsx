@@ -55,6 +55,7 @@ import type {
   SourceMode,
 } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
+import { SearchableSelect } from "../../../components/searchable-select";
 import { WorkerGroupField } from "../../../components/worker-group-field";
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
 import {
@@ -150,18 +151,13 @@ export function CriblSourcePanel(props: CriblSourcePanelProps) {
         </button>
         <WorkerGroupField state={workerGroups} onRetry={onLoadGroups}>
           {(groups) => (
-            <select
-              aria-label="Worker group"
+            <SearchableSelect
+              label="Worker group"
+              placeholder="Choose a worker group"
               value={groupId}
-              onChange={(e) => onGroupChange(e.target.value)}
-            >
-              <option value="">Choose a worker group</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.id}
-                </option>
-              ))}
-            </select>
+              options={groups.map((g) => ({ value: g.id, label: g.id }))}
+              onChange={onGroupChange}
+            />
           )}
         </WorkerGroupField>
         <InfoTip text={GROUP_TIP} />
@@ -370,19 +366,17 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
             <span className="field-label">
               Listen rule <InfoTip text={RULE_TIP} />
             </span>
-            <select
-              aria-label={`Listen rule for ${row.title}`}
+            <SearchableSelect
+              label={`Listen rule for ${row.title}`}
+              placeholder="Choose a rule with Listen rights"
               value={rule}
               disabled={ruleRows.length === 0}
-              onChange={(e) => setRule(e.target.value)}
-            >
-              <option value="">Choose a rule with Listen rights</option>
-              {ruleRows.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {`${r.name} (${r.rights.join(", ")})`}
-                </option>
-              ))}
-            </select>
+              options={ruleRows.map((r) => ({
+                value: r.name,
+                label: `${r.name} (${r.rights.join(", ")})`,
+              }))}
+              onChange={setRule}
+            />
           </label>
         )}
 

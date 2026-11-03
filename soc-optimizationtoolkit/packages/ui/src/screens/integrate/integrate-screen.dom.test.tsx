@@ -1112,17 +1112,21 @@ function renderWithGroup(request = vi.fn().mockResolvedValue(ROUTABLE_OUTPUTS)) 
 
 /** Switch the Pack wiring control to the routable shape. */
 async function chooseRoutable(container: HTMLElement) {
-  const wiring = [...container.querySelectorAll("select")].find((sel) =>
-    [...sel.options].some((o) => o.value === "routable"),
+  const wiring = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Pack wiring"]',
   );
   expect(wiring).toBeTruthy();
+  fireEvent.click(wiring!);
+  const routable = [
+    ...(wiring!.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+      []),
+  ].find((o) => o.textContent === "Routable - selectable from the Cribl Routes page");
+  expect(routable).toBeTruthy();
   await act(async () => {
-    fireEvent.change(wiring as HTMLSelectElement, {
-      target: { value: "routable" },
-    });
+    fireEvent.click(routable!);
   });
-  expect((wiring as HTMLSelectElement).value).toBe("routable");
-  return wiring as HTMLSelectElement;
+  expect(wiring!.textContent).toBe("Routable - selectable from the Cribl Routes page");
+  return wiring!;
 }
 
 describe("IntegrateScreen - routable pack prerequisites (GEN-16)", () => {
@@ -1219,7 +1223,12 @@ describe("IntegrateScreen - worker-group listing states (DBT-134)", () => {
       expect(section.textContent).toMatch(/Cribl returned no worker groups this account can see/),
     );
     expect(section.textContent).not.toMatch(/No matches/);
-    expect(section.querySelector(".searchable-select")).toBeNull();
+    // No worker-group picker: the one combobox left is the Pack wiring choice.
+    expect(
+      [...section.querySelectorAll(".searchable-select-control")].map((b) =>
+        b.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Pack wiring"]);
     expect(
       section.querySelector('button[aria-label="Retry loading groups"]'),
     ).not.toBeNull();
@@ -1588,10 +1597,8 @@ describe("IntegrateScreen - an existing Sentinel destination (GEN-21)", () => {
     // The shape is not a choice on this path. DBT-225: it used to be a
     // disabled select plus its explanation; it is now one fixed line, and no
     // shape select renders at all.
-    const shape = [...view.container.querySelectorAll("select")].find((s) =>
-      [...s.options].some((o) => o.value === "routable"),
-    );
-    expect(shape).toBeUndefined();
+    const shape = view.container.querySelector('button[aria-label="Pack wiring"]');
+    expect(shape).toBeNull();
     expect(
       view.container.querySelector('[data-testid="pack-wiring-fixed"]')?.textContent,
     ).toMatch(/^Pack wiring: Routable/);

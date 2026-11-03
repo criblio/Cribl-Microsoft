@@ -262,9 +262,45 @@ function button(name: string): HTMLButtonElement {
   return screen.getByRole("button", { name }) as HTMLButtonElement;
 }
 
-function select(label: string): HTMLSelectElement {
-  return screen.getByRole("combobox", { name: label }) as HTMLSelectElement;
+/** A picker's trigger (SearchableSelect), named by its label. */
+function picker(label: string): HTMLButtonElement {
+  return screen.getByRole("button", { name: label }) as HTMLButtonElement;
 }
+
+/** What the picker shows: the chosen option's label, or its placeholder. */
+function shown(label: string): string {
+  return picker(label).textContent ?? "";
+}
+
+/** Open a picker, read its option labels, and close it again. */
+function optionLabels(label: string): string[] {
+  fireEvent.click(picker(label));
+  const labels = [...document.querySelectorAll(".searchable-select-option-label")].map(
+    (o) => o.textContent ?? "",
+  );
+  fireEvent.click(picker(label));
+  return labels;
+}
+
+/**
+ * Choose the option whose value is `value`. Each option's label is the value,
+ * or the value followed by " (detail)" - a rule's rights, a group's location.
+ */
+function choose(label: string, value: string): void {
+  fireEvent.click(picker(label));
+  const option = [...document.querySelectorAll(".searchable-select-option")].find((o) => {
+    const text = o.querySelector(".searchable-select-option-label")?.textContent ?? "";
+    return text === value || text.startsWith(`${value} (`);
+  });
+  if (option === undefined) throw new Error(`no option ${value} in ${label}`);
+  fireEvent.click(option);
+}
+
+/** The labels the rule picker shows for each rule the fake namespace lists. */
+const RULE_LABEL: Record<string, string> = {
+  SendOnly: "SendOnly (Send)",
+  RootManageSharedAccessKey: "RootManageSharedAccessKey (Listen, Manage, Send)",
+};
 
 /** Paste HUB_ID into the id field, apply it, and wait for the reads. */
 async function pasteHubId(): Promise<void> {
@@ -282,11 +318,11 @@ async function chooseTarget(rule?: string): Promise<void> {
   await pasteHubId();
   await waitFor(() => {
     expect(screen.queryByText("Reading hubs and authorization rules...")).toBeNull();
-    expect(select("Event Hub").value).toBe(HUB);
+    expect(shown("Event Hub")).toBe(HUB);
   });
   if (rule !== undefined) {
-    fireEvent.change(select("Authorization rule"), { target: { value: rule } });
-    expect(select("Authorization rule").value).toBe(rule);
+    choose("Authorization rule", rule);
+    expect(shown("Authorization rule")).toBe(RULE_LABEL[rule]);
   }
 }
 
@@ -301,10 +337,10 @@ async function readDefender(): Promise<void> {
 async function chooseGroup(): Promise<void> {
   fireEvent.click(button("Load resource groups"));
   await waitFor(() => {
-    expect(select("Resource group").disabled).toBe(false);
+    expect(picker("Resource group").disabled).toBe(false);
   });
-  fireEvent.change(select("Resource group"), { target: { value: TARGET_RG } });
-  expect(select("Resource group").value).toBe(TARGET_RG);
+  choose("Resource group", TARGET_RG);
+  expect(shown("Resource group")).toBe(`${TARGET_RG} (${TARGET_LOCATION})`);
 }
 
 /** Tick Defender, pick a Send rule, read the state, pick the resource group. */
@@ -441,8 +477,10 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     await loaded();
     fireEvent.click(checkbox(DEFENDER_TITLE));
     await chooseTarget();
-    const options = [...select("Authorization rule").options].map((o) => o.value);
-    expect(options).toEqual([""]);
+    // No rule is offered: the picker has nothing to open and shows its prompt.
+    expect(picker("Authorization rule").disabled).toBe(true);
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    expect(document.querySelectorAll(".searchable-select-option").length).toBe(0);
     expect(screen.getByText(/None of this namespace's authorization rules can send events: ListenOnly \(Listen\)/)).toBeTruthy();
     await readDefender();
     await chooseGroup();
@@ -454,8 +492,8 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     mount();
     await loaded();
     await chooseTarget();
-    expect(select("Authorization rule").value).toBe("");
-    fireEvent.change(select("Authorization rule"), { target: { value: "RootManageSharedAccessKey" } });
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    choose("Authorization rule", "RootManageSharedAccessKey");
     expect(screen.getByText(/A dedicated rule with only Send rights is safer/)).toBeTruthy();
     expect(screen.getByText("Rights: Listen, Manage, Send")).toBeTruthy();
   });
@@ -468,10 +506,10 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
       expect(
         screen.getByText(`Event Hub ${HUB} was not found in namespace ${NS_NAME}. Choose an existing Event Hub.`),
       ).toBeTruthy();
-      fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+      choose("Authorization rule", "SendOnly");
     });
-    expect(select("Event Hub").value).toBe("");
-    expect([...select("Event Hub").options].map((o) => o.value)).toEqual(["", OTHER_HUB]);
+    expect(shown("Event Hub")).toBe("Choose an Event Hub");
+    expect(optionLabels("Event Hub")).toEqual([OTHER_HUB]);
     expect(button("Deploy alert export").disabled).toBe(true);
     expect(screen.getByText("Choose the Event Hub the alerts go to.")).toBeTruthy();
     expect(azure.puts()).toEqual([]);
@@ -482,7 +520,7 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     mount({ azure });
     await loaded();
     await chooseTarget("SendOnly");
-    expect([...select("Event Hub").options].map((o) => o.value)).toEqual(["", HUB, OTHER_HUB]);
+    expect(optionLabels("Event Hub")).toEqual([HUB, OTHER_HUB]);
     expect(screen.queryByText(/was not found in namespace/)).toBeNull();
     expect(screen.getByText("Only the first page was listed - Azure returned more.")).toBeTruthy();
   });
@@ -509,7 +547,7 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     const { azure } = mount();
     await loaded();
     fireEvent.click(button("Find namespaces"));
-    await waitFor(() => expect(select("Event Hub namespace").disabled).toBe(false));
+    await waitFor(() => expect(picker("Event Hub namespace").disabled).toBe(false));
     expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       "POST /providers/Microsoft.ResourceGraph/resources",
     ]);
@@ -560,28 +598,28 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     {
       input: "the authorization rule",
       change: async () => {
-        fireEvent.change(select("Authorization rule"), { target: { value: "RootManageSharedAccessKey" } });
+        choose("Authorization rule", "RootManageSharedAccessKey");
       },
       revert: async () => {
-        fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+        choose("Authorization rule", "SendOnly");
       },
     },
     {
       input: "the resource group",
       change: async () => {
-        fireEvent.change(select("Resource group"), { target: { value: EH_RG } });
+        choose("Resource group", EH_RG);
       },
       revert: async () => {
-        fireEvent.change(select("Resource group"), { target: { value: TARGET_RG } });
+        choose("Resource group", TARGET_RG);
       },
     },
     {
       input: "the Event Hub",
       change: async () => {
-        fireEvent.change(select("Event Hub"), { target: { value: OTHER_HUB } });
+        choose("Event Hub", OTHER_HUB);
       },
       revert: async () => {
-        fireEvent.change(select("Event Hub"), { target: { value: HUB } });
+        choose("Event Hub", HUB);
       },
     },
     {
@@ -595,7 +633,7 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
           expect(screen.queryByText("Reading hubs and authorization rules...")).toBeNull();
           expect(screen.getByText(new RegExp(`Namespace ${NS_B} in resource group`))).toBeTruthy();
         });
-        fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+        choose("Authorization rule", "SendOnly");
       },
     },
     {

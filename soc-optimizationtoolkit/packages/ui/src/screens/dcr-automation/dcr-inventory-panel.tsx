@@ -624,6 +624,7 @@ export function DcrInventoryPanel() {
               setPreview(null);
             }}
             placeholder="Select a resource group..."
+            label="Resource group"
             ariaLabel="Filter resource groups"
           />
         </label>
@@ -799,7 +800,7 @@ export function DcrInventoryPanel() {
                 const nativeTable = !preview.table.endsWith("_CL");
                 return (
                   <>
-                    {/* DBT-38: the input and select below are NOT wrapped in a
+                    {/* DBT-38: the input and type picker below are NOT wrapped in a
                         <label className="field">, and `.field input` /
                         `.field select` are descendant selectors, so without a
                         container of their own they render as raw browser
@@ -811,17 +812,12 @@ export function DcrInventoryPanel() {
                         value={newColName}
                         onChange={(ev) => setNewColName(ev.target.value)}
                       />
-                      <select
-                        aria-label="New column type"
+                      <SearchableSelect
+                        label="New column type"
                         value={newColType}
-                        onChange={(ev) => setNewColType(ev.target.value)}
-                      >
-                        {CUSTOM_COLUMN_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
+                        options={CUSTOM_COLUMN_TYPES.map((t) => ({ value: t, label: t }))}
+                        onChange={setNewColType}
+                      />
                       <button
                         className="run-button"
                         onClick={() => void addColumn()}

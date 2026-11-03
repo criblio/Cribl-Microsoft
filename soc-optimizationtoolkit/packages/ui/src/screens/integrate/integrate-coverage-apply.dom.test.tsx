@@ -167,9 +167,10 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
     expect(gapRow(container, "in")?.className).toBe(
       "mapping-row mapping-row-rename",
     );
-    expect(gapRow(container, "in")!.querySelectorAll("select")[0]!.value).toBe(
-      "ReceivedBytes",
-    );
+    expect(
+      gapRow(container, "in")!.querySelectorAll(".mapping-select .searchable-select-control")[0]!
+        .textContent,
+    ).toBe("ReceivedBytes");
     expect(unmappedColumns(container)).not.toContain("ReceivedBytes");
     expect(chips(rules)).not.toContain("ReceivedBytes");
   });
@@ -211,9 +212,11 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
         "mapping-row mapping-row-rename",
       );
     });
-    const selects = gapRow(container, "PanSrcMac")!.querySelectorAll("select");
-    expect(selects[0]!.value).toBe("SourceMACAddress");
-    expect(selects[1]!.value).toBe("rename");
+    const selects = gapRow(container, "PanSrcMac")!.querySelectorAll(
+      ".mapping-select .searchable-select-control",
+    );
+    expect(selects[0]!.textContent).toBe("SourceMACAddress");
+    expect(selects[1]!.textContent).toBe("rename");
     expect(unmappedColumns(container)).not.toContain("SourceMACAddress");
     // Same path as the Unmapped Destination Fields panel: approval withdrawn.
     expect(fieldsSummary(container)).toContain("Approval Required");

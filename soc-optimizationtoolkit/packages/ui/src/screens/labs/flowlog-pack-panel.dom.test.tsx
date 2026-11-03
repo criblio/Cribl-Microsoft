@@ -59,11 +59,12 @@ describe("FlowLogPackPanel - worker-group listing states (DBT-134)", () => {
       ),
     );
     fireEvent.click(screen.getByRole("button", { name: "Load worker groups" }));
-    await waitFor(() =>
-      expect(container.querySelector<HTMLSelectElement>("label.field select")?.value).toBe("prod"),
-    );
+    const trigger = () =>
+      screen.getByRole("button", { name: "Worker group (where to deploy)" });
+    await waitFor(() => expect(trigger().textContent).toBe("prod"));
+    fireEvent.click(trigger());
     expect(
-      [...container.querySelectorAll("label.field select option")].map((o) => o.textContent),
+      [...container.querySelectorAll(".searchable-select-option")].map((o) => o.textContent),
     ).toEqual(["prod"]);
   });
 });

@@ -36,6 +36,22 @@ function sample(fields: Record<string, string>): TaggedSample {
 
 const BOTH = { qqvendorfield: "00:11:22:33:44:55", qqother: "x" };
 
+/** The row's Dest Field and Action comboboxes, in that order. */
+const rowControls = (row: HTMLElement): HTMLButtonElement[] => [
+  ...row.querySelectorAll<HTMLButtonElement>(".mapping-select .searchable-select-control"),
+];
+
+/** Open a combobox and click the option whose text is exactly `text`. */
+function chooseOption(control: HTMLElement, text: string): void {
+  fireEvent.click(control);
+  const option = [
+    ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+      []),
+  ].find((o) => o.textContent === text);
+  if (option === undefined) throw new Error(`no option "${text}"`);
+  fireEvent.click(option);
+}
+
 function rowFor(container: HTMLElement, source: string): HTMLTableRowElement {
   const row = [
     ...container.querySelectorAll<HTMLTableRowElement>(
@@ -76,14 +92,8 @@ async function renderEdited() {
   await waitFor(() => {
     expect(container.querySelector(".mapping-review-grid")).not.toBeNull();
   });
-  fireEvent.change(
-    rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
-    { target: { value: "SourceMACAddress" } },
-  );
-  fireEvent.change(
-    rowFor(container, "qqother").querySelectorAll("select.mapping-select")[1]!,
-    { target: { value: "drop" } },
-  );
+  chooseOption(rowControls(rowFor(container, "qqvendorfield"))[0]!, "SourceMACAddress");
+  chooseOption(rowControls(rowFor(container, "qqother"))[1]!, "drop");
   await waitFor(() => {
     expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("drop");
   });
@@ -172,10 +182,7 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     await waitFor(() => {
       expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("overflow");
     });
-    fireEvent.change(
-      rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
-      { target: { value: "SourceMACAddress" } },
-    );
+    chooseOption(rowControls(rowFor(container, "qqvendorfield"))[0]!, "SourceMACAddress");
     await waitFor(() => {
       expect(effective.PanOS?.find((m) => m.source === "qqvendorfield")?.action).toBe(
         "rename",

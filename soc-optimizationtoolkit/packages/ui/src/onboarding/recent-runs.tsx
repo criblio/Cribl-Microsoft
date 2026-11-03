@@ -16,6 +16,7 @@ import { ONBOARD_TABLE_JOB_KIND } from "@soc/core";
 import type { JobRecord, OnboardTableOutcome } from "@soc/core";
 import { usePorts } from "../ports-context";
 import { InfoTip } from "../components/info-tip";
+import { SearchableSelect } from "../components/searchable-select";
 import { formatStepLine } from "./step-line";
 import { summaryText } from "./summary";
 
@@ -98,17 +99,12 @@ export function RecentRuns({
       </summary>
       <div className="panel-controls">
         {jobs !== null && jobs.length > 0 && (
-          <select
-            aria-label="Choose a run"
+          <SearchableSelect
+            label="Choose a run"
+            options={jobs.map((job) => ({ value: job.id, label: label(job) }))}
             value={selected?.id ?? ""}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
-                {label(job)}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedId}
+          />
         )}
         <button className="run-button" onClick={() => void load()}>
           Refresh

@@ -29,6 +29,7 @@ import { THEME_LABELS } from "../frame/theme-state";
 import type { ThemeControl } from "../frame/theme-toggle";
 import { validateConfigJson } from "./config-json";
 import { InfoTip } from "../components/info-tip";
+import { SearchableSelect } from "../components/searchable-select";
 
 /** One label/value row in the platform info section. */
 export interface PlatformInfoRow {
@@ -130,21 +131,18 @@ export function SettingsScreen(props: SettingsScreenProps) {
                   }
                 />
               </span>
-              <select
+              <SearchableSelect
+                label="Theme"
                 className="theme-select"
+                options={THEME_CHOICES.map((choice) => ({
+                  value: choice,
+                  label: THEME_LABELS[choice],
+                }))}
                 value={themeControl.theme}
-                onChange={(event) =>
-                  void themeControl.onThemeChange(
-                    parseThemeChoice(event.target.value),
-                  )
+                onChange={(value) =>
+                  void themeControl.onThemeChange(parseThemeChoice(value))
                 }
-              >
-                {THEME_CHOICES.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {THEME_LABELS[choice]}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="settings-row">
               <span className="settings-row-label">Resolved theme</span>

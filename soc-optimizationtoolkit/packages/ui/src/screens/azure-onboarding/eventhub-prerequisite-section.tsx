@@ -52,6 +52,7 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   hubListMessage,
   namespaceListMessage,
@@ -68,7 +69,7 @@ export interface EventHubTarget {
   readonly rule: EventHubTargetRule | null;
 }
 
-/** A stable key for one namespace, for the select's values. */
+/** A stable key for one namespace, for the picker's values. */
 function namespaceKey(ns: NamespaceRef): string {
   return `${ns.subscriptionId}/${ns.resourceGroup}/${ns.name}`;
 }
@@ -219,22 +220,20 @@ export function EventHubPrerequisiteSection({
         <div className="form-grid">
           <label className="field">
             <span className="field-label">Namespace</span>
-            <select
-              aria-label="Event Hub namespace"
+            <SearchableSelect
+              label="Event Hub namespace"
+              placeholder="Choose a namespace"
               value={namespaceRows.some((n) => namespaceKey(n) === chosenKey) ? chosenKey : ""}
               disabled={namespaceRows.length === 0}
-              onChange={(e) => {
-                const ns = namespaceRows.find((n) => namespaceKey(n) === e.target.value);
+              options={namespaceRows.map((ns) => ({
+                value: namespaceKey(ns),
+                label: `${ns.name} (${ns.resourceGroup}${ns.skuName !== "" ? `, ${ns.skuName}` : ""})`,
+              }))}
+              onChange={(key) => {
+                const ns = namespaceRows.find((n) => namespaceKey(n) === key);
                 if (ns !== undefined) void chooseNamespace(ns);
               }}
-            >
-              <option value="">Choose a namespace</option>
-              {namespaceRows.map((ns) => (
-                <option key={namespaceKey(ns)} value={namespaceKey(ns)}>
-                  {`${ns.name} (${ns.resourceGroup}${ns.skuName !== "" ? `, ${ns.skuName}` : ""})`}
-                </option>
-              ))}
-            </select>
+            />
           </label>
 
           <label className="field">
@@ -267,22 +266,17 @@ export function EventHubPrerequisiteSection({
 
           <label className="field">
             <span className="field-label">Event Hub</span>
-            <select
-              aria-label="Event Hub"
+            <SearchableSelect
+              label="Event Hub"
+              placeholder="Choose an Event Hub"
               value={value.hubName}
               disabled={value.namespace === null || hubOptions.length === 0}
-              onChange={(e) => {
+              options={hubOptions.map((name) => ({ value: name, label: name }))}
+              onChange={(name) => {
                 setMissingHub("");
-                onChange({ ...value, hubName: e.target.value });
+                onChange({ ...value, hubName: name });
               }}
-            >
-              <option value="">Choose an Event Hub</option>
-              {hubOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {missingHub !== "" && value.namespace !== null && (
             <PickerLine
@@ -298,24 +292,22 @@ export function EventHubPrerequisiteSection({
 
           <label className="field">
             <span className="field-label">Namespace authorization rule</span>
-            <select
-              aria-label="Authorization rule"
+            <SearchableSelect
+              label="Authorization rule"
+              placeholder="Choose a rule that can send"
               value={value.rule?.name ?? ""}
               disabled={ruleChoices.length === 0}
-              onChange={(e) =>
+              options={ruleChoices.map((rule) => ({
+                value: rule.name,
+                label: `${rule.name} (${rule.rights.join(", ")})`,
+              }))}
+              onChange={(name) =>
                 onChange({
                   ...value,
-                  rule: ruleChoices.find((r) => r.name === e.target.value) ?? null,
+                  rule: ruleChoices.find((r) => r.name === name) ?? null,
                 })
               }
-            >
-              <option value="">Choose a rule that can send</option>
-              {ruleChoices.map((rule) => (
-                <option key={rule.name} value={rule.name}>
-                  {`${rule.name} (${rule.rights.join(", ")})`}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {rules !== null && ruleListMessage(rules) !== null && (
             <PickerLine message={ruleListMessage(rules) as PickerMessage} />

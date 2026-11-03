@@ -73,6 +73,22 @@ async function renderAnalyzed() {
   };
 }
 
+/** The row's Dest Field and Action comboboxes, in that order. */
+const rowControls = (row: HTMLElement): HTMLButtonElement[] => [
+  ...row.querySelectorAll<HTMLButtonElement>(".mapping-select .searchable-select-control"),
+];
+
+/** Open a combobox and click the option whose text is exactly `text`. */
+function chooseOption(control: HTMLElement, text: string): void {
+  fireEvent.click(control);
+  const option = [
+    ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+      []),
+  ].find((o) => o.textContent === text);
+  if (option === undefined) throw new Error(`no option "${text}"`);
+  fireEvent.click(option);
+}
+
 function rowFor(container: HTMLElement, source: string): HTMLTableRowElement {
   const row = [
     ...container.querySelectorAll<HTMLTableRowElement>(
@@ -97,11 +113,8 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
       "Field Mappings (1 mapped, 1 to overflow, 1 unmapped)",
     );
 
-    const destSelect = () =>
-      rowFor(container, "qqvendorfield").querySelector<HTMLSelectElement>(
-        "select.mapping-select",
-      )!;
-    fireEvent.change(destSelect(), { target: { value: "SourceMACAddress" } });
+    const destSelect = () => rowControls(rowFor(container, "qqvendorfield"))[0]!;
+    chooseOption(destSelect(), "SourceMACAddress");
 
     await waitFor(() => {
       expect(rowFor(container, "qqvendorfield").cells[3]!.textContent).toContain(
@@ -120,7 +133,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
     expect(summary(container)).toContain("Modified");
 
     // Set it back: the baseline row returns and nothing reads as modified.
-    fireEvent.change(destSelect(), { target: { value: "AdditionalExtensions" } });
+    chooseOption(destSelect(), "AdditionalExtensions");
     await waitFor(() => {
       expect(summary(container)).toContain(
         "Field Mappings (1 mapped, 1 to overflow, 1 unmapped)",
@@ -134,10 +147,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
 
   it("shows a chosen column as a reviewer choice, not as an exact match", async () => {
     const { container } = await renderAnalyzed();
-    const destSelect = rowFor(container, "qqvendorfield").querySelector<HTMLSelectElement>(
-      "select.mapping-select",
-    )!;
-    fireEvent.change(destSelect, { target: { value: "SourceMACAddress" } });
+    chooseOption(rowControls(rowFor(container, "qqvendorfield"))[0]!, "SourceMACAddress");
     await waitFor(() => {
       expect(
         rowFor(container, "qqvendorfield").querySelector(".match-conf")?.className,
@@ -153,10 +163,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
   // catch-all, which the serialize then overwrites - the field is lost.
   it("makes a column-bound row moved into the catch-all an overflow row", async () => {
     const { container, effective } = await renderAnalyzed();
-    const destSelect = rowFor(container, "TimeGenerated").querySelector<HTMLSelectElement>(
-      "select.mapping-select",
-    )!;
-    fireEvent.change(destSelect, { target: { value: "AdditionalExtensions" } });
+    chooseOption(rowControls(rowFor(container, "TimeGenerated"))[0]!, "AdditionalExtensions");
     await waitFor(() => {
       expect(summary(container)).toContain(
         "Field Mappings (0 mapped, 2 to overflow, 2 unmapped)",
@@ -174,40 +181,59 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
 // reducer the table's catch-all, which refuses it, and the select says why.
 describe("mapping review - the Action select on an overflow row (DBT-209)", () => {
   const actionSelect = (container: HTMLElement, source: string) =>
-    rowFor(container, source).querySelectorAll<HTMLSelectElement>(
-      "select.mapping-select",
-    )[1]!;
+    rowControls(rowFor(container, source))[1]!;
+  /** Open the row's Action list and read every option's text, in order. */
+  const actionOptions = (container: HTMLElement, source: string): string[] => {
+    const control = actionSelect(container, source);
+    fireEvent.click(control);
+    const texts = [
+      ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+        []),
+    ].map((o) => o.textContent ?? "");
+    fireEvent.click(control);
+    return texts;
+  };
+  const REFUSED = " (choose a Dest Field first)";
 
-  it("disables the actions that need a column and says to choose one in Dest Field", async () => {
+  it("marks the actions that need a column and says to choose one in Dest Field", async () => {
     const { container } = await renderAnalyzed();
     const select = actionSelect(container, "qqvendorfield");
-    const disabled = [...select.options]
-      .filter((o) => o.disabled)
-      .map((o) => o.value);
-    expect(disabled).toEqual(["keep", "rename", "coerce", "decode"]);
-    const rename = [...select.options].find((o) => o.value === "rename")!;
-    expect(rename.textContent).toBe("rename (choose a Dest Field first)");
+    // A refused action is listed, disabled (DBT-249 restored per-option
+    // disabled), and says in its own text what to do instead.
+    const options = actionOptions(container, "qqvendorfield");
+    const refused = options
+      .filter((o) => o.endsWith(REFUSED))
+      .map((o) => o.slice(0, -REFUSED.length));
+    expect(refused).toEqual(["keep", "rename", "coerce", "decode"]);
+    expect(options).toContain("rename (choose a Dest Field first)");
+    fireEvent.click(select);
+    const disabled = [...(select.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ?? [])]
+      .filter((o) => o.getAttribute("aria-disabled") === "true")
+      .map((o) => o.textContent);
+    fireEvent.click(select);
+    expect(disabled).toEqual(["keep", "rename", "coerce", "decode"].map((a) => a + REFUSED));
     expect(select.title).toBe(
       "keep, rename, coerce and decode need a destination column, and " +
         "AdditionalExtensions is the catch-all: choose a column in Dest Field " +
         "first, which sets the action for you.",
     );
     // A row in a real column keeps every action.
-    expect(
-      [...actionSelect(container, "TimeGenerated").options].some((o) => o.disabled),
-    ).toBe(false);
+    expect(actionOptions(container, "TimeGenerated")).toEqual([
+      "keep",
+      "rename",
+      "coerce",
+      "decode",
+      "overflow",
+      "drop",
+    ]);
   });
 
-  it("refuses a rename that reaches the reducer anyway: the row stays overflow, unmodified", async () => {
+  it("a click on a refused action changes nothing: the row stays overflow, unmodified", async () => {
     const { container, report, effective } = await renderAnalyzed();
     const before = report.fieldMappings.find((m) => m.source === "qqvendorfield");
-    fireEvent.change(actionSelect(container, "qqvendorfield"), {
-      target: { value: "rename" },
-    });
+    chooseOption(actionSelect(container, "qqvendorfield"), "rename (choose a Dest Field first)");
     // Drop goes through, so the refusal is not the select ignoring changes.
-    fireEvent.change(actionSelect(container, "TimeGenerated"), {
-      target: { value: "drop" },
-    });
+    chooseOption(actionSelect(container, "TimeGenerated"), "drop");
     await waitFor(() => {
       expect(effective().PanOS?.find((m) => m.source === "TimeGenerated")?.action).toBe(
         "drop",

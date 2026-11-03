@@ -270,7 +270,12 @@ describe("DBT-192 - no rule takes a mapping-table cell out of the table", () => 
     const row = () => container.querySelector<HTMLTableRowElement>('tr[data-source="SrcUserName"]')!;
     const seen: string[] = [];
     for (const action of ["keep", "rename", "coerce", "decode", "overflow", "drop"]) {
-      fireEvent.change(row().cells[6].querySelector("select")!, { target: { value: action } });
+      const control = row().cells[6].querySelector<HTMLElement>(".searchable-select-control")!;
+      fireEvent.click(control);
+      const option = [...row().cells[6].querySelectorAll(".searchable-select-option")].find(
+        (o) => o.textContent === action,
+      );
+      fireEvent.click(option!);
       await waitFor(() => expect(row().className).toBe(`mapping-row mapping-row-${action}`));
       seen.push(...offenders(bodyCells(container), RULES).map((o) => `${action}: ${o}`));
     }

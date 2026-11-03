@@ -8,6 +8,7 @@
 import { useCallback, useState } from "react";
 import { assembleFlowLogPack, finalizeFlowLogPack } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { WorkerGroupField } from "../../components/worker-group-field";
 import {
   useInitialWorkerGroup,
@@ -114,13 +115,12 @@ export function FlowLogPackPanel({ defaultStorageAccount }: FlowLogPackPanelProp
           <span className="field-label">Worker group (where to deploy)</span>
           <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
             {(groups) => (
-              <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.id}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                label="Worker group (where to deploy)"
+                options={groups.map((group) => ({ value: group.id, label: group.id }))}
+                value={groupId}
+                onChange={setGroupId}
+              />
             )}
           </WorkerGroupField>
         </label>
