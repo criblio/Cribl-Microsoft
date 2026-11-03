@@ -3650,13 +3650,38 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-18",
       "type": "bug",
       "priority": "now",
       "title": "Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete",
-      "detail": "FOUND 2026-11-03 by the Task 7 implementer and the branch review (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors only from scope.notRead (data-allowances.ts ~750), while readDataAllowances also honours inventory.usageWarning (~681). So in a tenant comparison, a workspace that WAS read but whose Usage answer was partial, or workspaces discovery could not see (failed subscriptions, Sentinel state unknown), leave the eligible / used / after-allowances sums shown as exact instead of \"at least\" - an inventory-standard breach (docs/inventory-standard.md). The panel shows a separate warning line for the discovery case, but the cards do not say \"at least\". Fix: compareTenant sets sumsAreFloors when any read inventory carries usageWarning, and takes a discovery-incomplete flag from the panel; pin both in data-allowances.test.ts and a panel DOM test."
+      "detail": "FOUND 2026-11-03 by the Task 7 implementer and the branch review (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors only from scope.notRead (data-allowances.ts ~750), while readDataAllowances also honours inventory.usageWarning (~681). So in a tenant comparison, a workspace that WAS read but whose Usage answer was partial, or workspaces discovery could not see (failed subscriptions, Sentinel state unknown), leave the eligible / used / after-allowances sums shown as exact instead of \"at least\" - an inventory-standard breach (docs/inventory-standard.md). The panel shows a separate warning line for the discovery case, but the cards do not say \"at least\". Fix: compareTenant sets sumsAreFloors when any read inventory carries usageWarning, and takes a discovery-incomplete flag from the panel; pin both in data-allowances.test.ts and a panel DOM test.\n\nDONE 2026-11-03 (pins, 59e07d2..d241d20): compareTenant gathers every floor cause - unread workspace, a read workspace's partial Usage answer, incomplete discovery (new discoveryIncomplete option from the panel) - and for any cause floors the sums, skips every cross-check naming the cause, and floors Servers P2 granted; E5 stays exact. Reviewed clean.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "type": "bug",
+      "priority": "now",
+      "id": "MIG-19",
+      "title": "Servers P2 card calls the grant tenant-wide and skips its cross-check because the tenant has several Sentinel workspaces",
+      "detail": "FOUND 2026-11-03 in Live Preview (jpederson org, law-jpederson-eastus, branch feature/data-volume-inventory at d241d20): the Servers P2 card reads \"Tenant-wide, shared across 61 Sentinel workspaces\" and its cross-check says \"skipped: the grant is tenant-wide and shared across 61 Sentinel workspaces\". Only the E5 grant is tenant-wide. Defender for Servers P2 is 500 MB per machine, summed per subscription and applied at the workspace the machines report to (spec, The grants), so the multi-workspace rule (USER DECISION 2026-11-03, spec call 6) must apply to E5 only. Fix: the shared-workspace label and the workspace-count skip reason apply to the e5 view only; the Servers view keeps its own skip reasons (no capped day, pricings not read, sums partial). Pin both."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "type": "bug",
+      "priority": "now",
+      "id": "MIG-20",
+      "title": "Allowance cards round sub-GB figures to 0.0 GB, hiding real eligible and over volume",
+      "detail": "FOUND 2026-11-03 in Live Preview (same read as MIG-19): WindowsEvent is eligible at 1.3 MB/day, but the Servers P2 card says \"eligible 0.0 GB/day\", \"granted 0.0 GB/day\" and \"0.0 GB/day over\" (in warning colour) - with the plan off, the true over is 1.3 MB/day. The cards format in fixed GB, so small workspaces read as zero, which the inventory standard forbids for a non-zero figure. Fix: every allowance figure uses formatMB (MB/GB/TB with the existing thresholds) like the rest of the page; a figure that is exactly 0 may read 0; the over line uses the warning colour only when over > 0. Pin with a 1.3 MB/day case."
     },
     {
       "settled": "settled",
