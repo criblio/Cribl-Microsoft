@@ -3535,19 +3535,20 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-10",
       "type": "story",
       "priority": "next",
       "title": "Move the workspace inventory out of SIEM Migration into its own Data Volume Inventory page (tools)",
-      "detail": "USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data Volume Inventory, tools section; SIEM Migration keeps no link. Removes data-volume-inventory from PLANNED_MENUS. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-10)."
+      "detail": "USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data Volume Inventory, tools section; SIEM Migration keeps no link. Removes data-volume-inventory from PLANNED_MENUS. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-10).\n\nDONE 2026-11-03 (pins, 64217dd): own route data-volume-inventory in tools (requires workspace.read), panel and state moved to screens/data-volume-inventory, SIEM Migration renders no inventory (DOM pin), board menu un-planned. Live Preview check rides on MIG-17's live run.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "id": "MIG-11",
       "type": "enabler",
