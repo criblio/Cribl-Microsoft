@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 35 in progress, 140 done.**
+**94 in the backlog, 40 in progress, 140 done.**
 
 ## By menu item
 
@@ -26,7 +26,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Menu | Open | Done | Now |
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
-| Setup | 3 | 0 | 2 |
+| Setup | 5 | 0 | 4 |
 | Sentinel Integration | 50 | 79 | 22 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 29 | 28 | 9 |
+| Azure Native Source Onboarding | 32 | 28 | 12 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 129.
+Open work totals 134.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 45% (25/56)
+### `AZR` Azure native source onboarding - 41% (25/61)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -63,6 +63,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/5 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -145,7 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (40)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1114,6 +1115,71 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
+
+- **AZR-61** Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope
+  `AZR-F10` `enabler` `settled`
+  OPERATOR REQUEST 2026-11-03: "an audit of what the app does and what the
+  least privileges are for each function it needs to ensure the change
+  requests are accurate." SCOPE: inventory every function the app performs
+  (setup, DCR automation, Sentinel integration, packs, onboarding, validate,
+  logging map, labs, discovery...), every Azure ARM, Microsoft Graph and Cribl
+  API call behind each (method, path, scope), and the least built-in role or
+  specific action at the narrowest scope that permits it, with Microsoft Learn
+  citations. Lands as ONE registry in @soc/core that app-permissions, the
+  change-request generators, the permission preflight and AZR-60 all read -
+  never a second list - with a pin that every Azure call site in the code maps
+  to a registry row (a call with no row fails). Discrepancies with today's
+  app-permissions plan are reported, not silently fixed. Reasoning in
+  backlog.md section 6i.
+
+- **AZR-62** Setup: paste a comma-delimited list of tenant ids, get one connection per tenant and a downloadable change request for each
+  `AZR-F10` `story` `settled`
+  OPERATOR REQUEST 2026-11-03. Decision 1: one app registration per tenant,
+  one connection profile per tenant (azure-profiles). SCOPE: Setup accepts a
+  comma (and newline) delimited list of tenant ids, validates each as a GUID
+  (invalid ones named, duplicates collapsed), creates or reuses a connection
+  profile per tenant without overwriting an existing one's secret, and offers
+  a change request per tenant to download (and all as one archive or a
+  combined file): create the app registration in THAT tenant, the audited
+  least privileges from AZR-61 with their scopes, and the secret hand-back.
+  Built on domain/change-request; every placeholder visible when a value is
+  unknown. Reasoning in backlog.md section 6i.
+
+- **AZR-63** Multi-tenant native logging gap dashboard: per tenant, configured in Azure vs not, onboarded to Cribl vs not
+  `AZR-F10` `story` `settled`
+  OPERATOR REQUEST 2026-11-03: "a dashboard that shows each tenant and a green
+  or red indicator for what is being collected vs what is already produced and
+  onboarded to cribl." SCOPE: a screen listing each connected tenant against
+  each Azure native logging source (the onboarding catalog: Defender export,
+  Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...),
+  with two indicators per cell - configured in Azure, onboarded to Cribl -
+  each green, red or UNKNOWN (inventory-honesty: a refused or unread check is
+  never red). Reuses the Validate classifiers per tenant through that tenant's
+  connection; Cribl side through AZR-64's mapping. Reads only on request,
+  paced per tenant within the shared budget; mount makes no Azure call. Per
+  the house dashboard standards, every tile has an (i). Reasoning in
+  backlog.md section 6i.
+
+- **AZR-64** Tenant to Cribl mapping: one workspace for every tenant, or a worker group per tenant, chosen by the operator
+  `AZR-F10` `story` `settled`
+  Decision 2 (operator 2026-11-03): build for both. SCOPE: a persisted mapping
+  (KV) from tenant to Cribl destination (the shared group, or a group per
+  tenant), defaulting to unset rather than guessing; Cribl source ids carry
+  the tenant so two tenants' sources never collide in one group; the gap
+  dashboard and the onboarding create read the mapping. Reasoning in
+  backlog.md section 6i.
+
+- **AZR-65** Changing the Azure tenant keeps showing the previous tenant's worker groups
+  `AZR-F10` `bug` `settled`
+  KNOWN since the 2026-08-20 architecture audit and left unfixed because the
+  product was single-tenant (project memory, now reversed):
+  use-sample-sources.ts's started ref is never cleared, and cloudPorts is
+  memoized on activeConfig.tenantId, so a tenant change rebuilds ports,
+  re-fires the effect, and the guard swallows it. With multi-tenant customers
+  this is a live defect. FIX: reset on the tenant key; pin a tenant switch
+  re-reads. Then sweep for the same single-tenant assumption elsewhere (refs
+  or caches keyed on nothing, or on the first config). Reasoning in backlog.md
+  section 6i.
 
 ---
 

@@ -3831,7 +3831,7 @@
       "id": "AZR-61",
       "type": "enabler",
       "priority": "now",
-      "menu": "setup",
+      "menu": "home",
       "title": "Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope",
       "detail": "OPERATOR REQUEST 2026-11-03: \"an audit of what the app does and what the least privileges are for each function it needs to ensure the change requests are accurate.\" SCOPE: inventory every function the app performs (setup, DCR automation, Sentinel integration, packs, onboarding, validate, logging map, labs, discovery...), every Azure ARM, Microsoft Graph and Cribl API call behind each (method, path, scope), and the least built-in role or specific action at the narrowest scope that permits it, with Microsoft Learn citations. Lands as ONE registry in @soc/core that app-permissions, the change-request generators, the permission preflight and AZR-60 all read - never a second list - with a pin that every Azure call site in the code maps to a registry row (a call with no row fails). Discrepancies with today's app-permissions plan are reported, not silently fixed. Reasoning in backlog.md section 6i."
     },
@@ -3844,7 +3844,7 @@
       "id": "AZR-62",
       "type": "story",
       "priority": "now",
-      "menu": "setup",
+      "menu": "home",
       "title": "Setup: paste a comma-delimited list of tenant ids, get one connection per tenant and a downloadable change request for each",
       "detail": "OPERATOR REQUEST 2026-11-03. Decision 1: one app registration per tenant, one connection profile per tenant (azure-profiles). SCOPE: Setup accepts a comma (and newline) delimited list of tenant ids, validates each as a GUID (invalid ones named, duplicates collapsed), creates or reuses a connection profile per tenant without overwriting an existing one's secret, and offers a change request per tenant to download (and all as one archive or a combined file): create the app registration in THAT tenant, the audited least privileges from AZR-61 with their scopes, and the secret hand-back. Built on domain/change-request; every placeholder visible when a value is unknown. Reasoning in backlog.md section 6i."
     },

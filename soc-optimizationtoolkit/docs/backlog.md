@@ -1258,7 +1258,7 @@ the worker group control of the whole namespace, not read access to one hub.
 pasted connection string as the only Event Hub credential) is amended before
 AZR-59 is coded; until then AZR-58 alone narrows the SAS path.
 
-#### 6i. Multi-tenant Azure customers - DECIDED 2026-11-03
+### 6i. Multi-tenant Azure customers - DECIDED 2026-11-03
 
 Status: Decided (operator, 2026-11-03), building on feature/multi-tenant-azure.
 Cards: AZR-61 (least-privilege audit), AZR-62 (per-tenant connections and
