@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 35 in progress, 141 done.**
+**93 in the backlog, 36 in progress, 141 done.**
 
 ## By menu item
 
@@ -147,7 +147,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,9 +1050,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **MIG-18** Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete
+  `MIG-F2` `bug` `settled`
+  FOUND 2026-11-03 by the Task 7 implementer and the branch review
+  (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors
+  only from scope.notRead (data-allowances.ts ~750), while readDataAllowances
+  also honours inventory.usageWarning (~681). So in a tenant comparison, a
+  workspace that WAS read but whose Usage answer was partial, or workspaces
+  discovery could not see (failed subscriptions, Sentinel state unknown),
+  leave the eligible / used / after-allowances sums shown as exact instead of
+  "at least" - an inventory-standard breach (docs/inventory-standard.md). The
+  panel shows a separate warning line for the discovery case, but the cards do
+  not say "at least". Fix: compareTenant sets sumsAreFloors when any read
+  inventory carries usageWarning, and takes a discovery-incomplete flag from
+  the panel; pin both in data-allowances.test.ts and a panel DOM test.
+
 ---
 
-## Backlog - now (12)
+## Backlog - now (11)
 
 Next to pick up. Nothing blocks these.
 
@@ -1260,21 +1275,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **MIG-18** Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete
-  `MIG-F2` `bug` `settled`
-  FOUND 2026-11-03 by the Task 7 implementer and the branch review
-  (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors
-  only from scope.notRead (data-allowances.ts ~750), while readDataAllowances
-  also honours inventory.usageWarning (~681). So in a tenant comparison, a
-  workspace that WAS read but whose Usage answer was partial, or workspaces
-  discovery could not see (failed subscriptions, Sentinel state unknown),
-  leave the eligible / used / after-allowances sums shown as exact instead of
-  "at least" - an inventory-standard breach (docs/inventory-standard.md). The
-  panel shows a separate warning line for the discovery case, but the cards do
-  not say "at least". Fix: compareTenant sets sumsAreFloors when any read
-  inventory carries usageWarning, and takes a discovery-incomplete flag from
-  the panel; pin both in data-allowances.test.ts and a panel DOM test.
 
 ---
 
