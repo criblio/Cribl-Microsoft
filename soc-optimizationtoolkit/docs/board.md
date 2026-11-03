@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 41 in progress, 140 done.**
+**94 in the backlog, 41 in progress, 140 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 28 | 12 |
+| Azure Native Source Onboarding | 33 | 28 | 13 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 134.
+Open work totals 135.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 41% (25/61)
+### `AZR` Azure native source onboarding - 40% (25/62)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/39 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/5 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1213,7 +1213,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1454,6 +1454,24 @@ Next to pick up. Nothing blocks these.
   what is needed. Pins: denied, granted, unknown, never-checked and grant-only
   rows for the Defender section; no Azure call on mount. Live check in Live
   Preview with an identity that lacks Microsoft.Security/automations/write.
+
+- **AZR-66** The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx
+  passes { kind: "client-secret", ...principal } where principal is
+  config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx),
+  i.e. the APP'S OWN app registration, and the operator pastes that
+  registration's secret, which is then stored as the Cribl text secret. That
+  registration holds ARM write rights (DCRs, role assignments, Defender
+  export), so anyone who can read the worker group's secrets gets them - the
+  class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's
+  Manage key. ADR 0008 section 2 claimed the Blob lane already used a
+  dedicated Cribl principal; it does not, and the ADR is corrected under
+  AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the
+  Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable),
+  refuse the app's own client id (reason app-principal, as AZR-59 does for
+  Event Hub), and update the Blob How-to steps; existing Blob inputs created
+  with the app's identity are reported, not silently rewritten.
 
 ---
 

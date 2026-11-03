@@ -3883,6 +3883,18 @@
       "priority": "now",
       "title": "Changing the Azure tenant keeps showing the previous tenant's worker groups",
       "detail": "KNOWN since the 2026-08-20 architecture audit and left unfixed because the product was single-tenant (project memory, now reversed): use-sample-sources.ts's started ref is never cleared, and cloudPorts is memoized on activeConfig.tenantId, so a tenant change rebuilds ports, re-fires the effect, and the guard swallows it. With multi-tenant customers this is a live defect. FIX: reset on the tenant key; pin a tenant switch re-reads. Then sweep for the same single-tenant assumption elsewhere (refs or caches keyed on nothing, or on the first config). Reasoning in backlog.md section 6i."
+    },
+    {
+      "id": "AZR-66",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret",
+      "detail": "FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx passes { kind: \"client-secret\", ...principal } where principal is config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx), i.e. the APP'S OWN app registration, and the operator pastes that registration's secret, which is then stored as the Cribl text secret. That registration holds ARM write rights (DCRs, role assignments, Defender export), so anyone who can read the worker group's secrets gets them - the class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's Manage key. ADR 0008 section 2 claimed the Blob lane already used a dedicated Cribl principal; it does not, and the ADR is corrected under AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable), refuse the app's own client id (reason app-principal, as AZR-59 does for Event Hub), and update the Blob How-to steps; existing Blob inputs created with the app's identity are reported, not silently rewritten."
     }
   ],
   "features": [
