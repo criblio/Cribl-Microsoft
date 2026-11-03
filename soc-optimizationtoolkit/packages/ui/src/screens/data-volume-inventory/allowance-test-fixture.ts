@@ -3,10 +3,8 @@
  * every field set, overridable per test. Test-only; never imported by the app.
  */
 
+import { serversGranted } from "@soc/core";
 import type { DataAllowances, GrantUsage, GrantView, ServersSubscriptionRow } from "@soc/core";
-// Core's own arithmetic, by module path: the barrel does not export it, and a
-// hand-written granted figure could disagree with the rows it sits beside.
-import { serversGranted } from "@soc/core/src/domain/data-allowances/granted";
 
 export function usage(partial: Partial<GrantUsage> = {}): GrantUsage {
   return {

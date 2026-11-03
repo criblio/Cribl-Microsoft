@@ -266,6 +266,10 @@ describe("AllowanceCards", () => {
     const status = document.querySelector(".allowance-card-status")!;
     expect(status.querySelector(".info-tip-pop")!.textContent).toBe(ALLOWANCE_TIPS.pooledOver);
     expect(text()).toContain("could not be attributed");
+    // The pooled view names the source page of the grant it lists tables for.
+    const link = document.querySelector(".allowance-cards a")!;
+    expect([link.textContent, link.getAttribute("href")]).toEqual([ALLOWANCE_SOURCES.e5.title, ALLOWANCE_SOURCES.e5.url]);
+    expect(text()).toContain(`, as of ${ALLOWANCE_CATALOG_AS_OF}.`);
     expect(text()).toContain("Basic plan - grant may not apply on this plan");
     expect(text()).toContain("Cribl cannot write this table (Microsoft connector only)");
   });
@@ -398,6 +402,28 @@ describe("AllowanceCards - tenant comparison (MIG-16)", () => {
     );
     expect(text()).toMatch(/applied to the 1 workspace\(s\) that were read/);
     expect(text()).not.toContain("applied to these workspaces");
+  });
+
+  it("words the Servers machine count for the workspaces read, not 'here', in a tenant comparison", () => {
+    const rows = [{ subscriptionId: "sub-x", plan: "P2" as const, machinesInSubscription: 6, machinesReportingHere: 4 }];
+    const grants = [grantView({ grant: "servers-p2", grantedMB: 2000 })];
+    renderCards(
+      allowances({
+        servers: serversBlock(rows),
+        grants,
+        scope: { kind: "tenant", workspaces: [WS("a"), WS("b")], notRead: [] },
+      }),
+    );
+    const headers = [...document.querySelectorAll("th")].map(ownText);
+    expect(headers).toContain("Machines reporting to the workspaces read (daily average)");
+    expect(text()).toContain("machines reporting to the workspaces read: 4 x 500 MB = 2.00 GB/day");
+    // The visible copy (the InfoTips are separate text); not "here".
+    expect([...document.querySelectorAll("th, .allowance-arithmetic")].map(ownText).join("|")).not.toContain("here");
+    cleanup();
+    // One workspace keeps "here": the count is that workspace's.
+    renderCards(allowances({ servers: serversBlock(rows), grants }));
+    expect([...document.querySelectorAll("th")].map(ownText)).toContain("Machines reporting here (daily average)");
+    expect(text()).toContain("machines reporting here: 4 x 500 MB = 2.00 GB/day");
   });
 
   it("renders the actions slot beside the cards", () => {

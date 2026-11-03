@@ -142,7 +142,7 @@ function PooledSummary({ a }: { a: DataAllowances }) {
         Microsoft's benefit record could not be split by grant, so no per-grant meter or overage is
         drawn.
       </p>
-      {reason !== undefined && <p className="field-hint">{crossCheckLine(reason)}</p>}
+      {reason !== undefined && <p className="field-hint">{crossCheckLine(reason, a.scope.kind === "tenant")}</p>}
       {p !== null && (
         <EligibleAppliedChart eligibleByDay={p.eligibleByDay} usedByDay={p.usedByDay} eligibleKnown={eligibleKnown} />
       )}
@@ -209,7 +209,7 @@ function GrantCard({ view, a, readAt, onOpenChangeRequest }: GrantCardProps) {
           )}
           {basisFigures(view, a).map((f) => (
             <div key={f.basis} className="allowance-arithmetic">
-              {arithmeticLine(f)}
+              {arithmeticLine(f, a.scope.kind === "tenant")}
             </div>
           ))}
           {otherBasisNote(view, a) !== null && <p className="field-hint">{otherBasisNote(view, a)}</p>}
@@ -228,7 +228,7 @@ function GrantCard({ view, a, readAt, onOpenChangeRequest }: GrantCardProps) {
           <EligibleSource view={view} />
 
           <h4 className="allowance-detail-heading">Cross-check</h4>
-          <p className="field-hint">{crossCheckLine(view.crossCheck)}</p>
+          <p className="field-hint">{crossCheckLine(view.crossCheck, a.scope.kind === "tenant")}</p>
           {view.grant === "e5" && a.licences.kind === "read" && (
             <p className="field-hint">Seat counts as of {a.licences.readAt}, compared with the last 30 days.</p>
           )}
@@ -343,7 +343,7 @@ function ServersGranted({ view, a }: { view: GrantView; a: DataAllowances }) {
                 </th>
                 <th>Plan</th>
                 <th>Machines in subscription</th>
-                <th>Machines reporting here (daily average)</th>
+                <th>{a.scope.kind === "tenant" ? "Machines reporting to the workspaces read" : "Machines reporting here"} (daily average)</th>
               </tr>
             </thead>
             <tbody>

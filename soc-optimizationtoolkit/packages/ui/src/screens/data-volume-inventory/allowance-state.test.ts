@@ -289,7 +289,7 @@ describe("granted arithmetic and the other basis", () => {
   });
 
   it("writes the literal arithmetic for both bases", () => {
-    const lines = basisFigures(grantView(), e5Read).map(arithmeticLine);
+    const lines = basisFigures(grantView(), e5Read).map((f) => arithmeticLine(f));
     expect(lines).toEqual([
       "assigned seats: 2,400 x 5 MB = 12.00 GB/day",
       "purchased seats: 2,600 x 5 MB = 13.00 GB/day",
@@ -311,7 +311,7 @@ describe("granted arithmetic and the other basis", () => {
         { subscriptionId: "s2", plan: "off", machinesInSubscription: 9, machinesReportingHere: 2 },
       ]),
     });
-    const lines = basisFigures(grantView({ grant: "servers-p2" }), a).map(arithmeticLine);
+    const lines = basisFigures(grantView({ grant: "servers-p2" }), a).map((f) => arithmeticLine(f));
     expect(lines).toEqual([
       "machines reporting here: 4 x 500 MB = 2.00 GB/day",
       "machines in the subscription: not known",
@@ -515,11 +515,11 @@ describe("allowance honesty edge cases (MIG-21)", () => {
 
   it("a floored Servers Granted makes both arithmetic lines 'at least'", () => {
     const a = allowances({ servers: p2Rows });
-    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: true }), a).map(arithmeticLine)).toEqual([
+    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: true }), a).map((f) => arithmeticLine(f))).toEqual([
       "machines reporting here: at least 4 x 500 MB = at least 2.00 GB/day",
       "machines in the subscription: at least 6 x 500 MB = at least 3.00 GB/day",
     ]);
-    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: false }), a).map(arithmeticLine)).toEqual([
+    expect(basisFigures(grantView({ grant: "servers-p2", grantedIsFloor: false }), a).map((f) => arithmeticLine(f))).toEqual([
       "machines reporting here: 4 x 500 MB = 2.00 GB/day",
       "machines in the subscription: 6 x 500 MB = 3.00 GB/day",
     ]);
@@ -543,10 +543,10 @@ describe("allowance honesty edge cases (MIG-21)", () => {
           },
         },
       });
-    const [assigned, purchased] = basisFigures(grantView(), e5(true)).map(arithmeticLine);
+    const [assigned, purchased] = basisFigures(grantView(), e5(true)).map((f) => arithmeticLine(f));
     expect(assigned).toMatch(/^assigned seats: 2,400 x 5 MB = 12\.00 GB\/day \(may count a user twice/);
     expect(purchased).toBe("purchased seats: 2,600 x 5 MB = 13.00 GB/day");
-    expect(basisFigures(grantView(), e5(false)).map(arithmeticLine)[0]).toBe("assigned seats: 2,400 x 5 MB = 12.00 GB/day");
+    expect(basisFigures(grantView(), e5(false)).map((f) => arithmeticLine(f))[0]).toBe("assigned seats: 2,400 x 5 MB = 12.00 GB/day");
   });
 
   it("draws no meter when Granted is only a lower bound", () => {

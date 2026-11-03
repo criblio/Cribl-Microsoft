@@ -23,6 +23,7 @@ export {
 } from "../../domain/data-allowances/allowance-catalog";
 export type { AllowanceTag, GrantId } from "../../domain/data-allowances/allowance-catalog";
 export type { GrantUsage } from "../../domain/data-allowances/benefit-usage";
+export { serversGranted } from "../../domain/data-allowances/granted";
 export type {
   CrossCheck,
   LicenceRow,

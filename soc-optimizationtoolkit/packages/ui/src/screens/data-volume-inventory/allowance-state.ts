@@ -205,11 +205,16 @@ const BASIS_LABEL: Record<string, string> = {
   "in-subscription": "machines in the subscription",
 };
 
-export function basisLabel(basis: string): string {
-  return BASIS_LABEL[basis] ?? basis;
+/** In a tenant comparison the Servers count spans the workspaces read, so "here" would mislead. */
+const TENANT_BASIS_LABEL: Record<string, string> = {
+  "reporting-here": "machines reporting to the workspaces read",
+};
+
+export function basisLabel(basis: string, tenant = false): string {
+  return (tenant ? TENANT_BASIS_LABEL[basis] : undefined) ?? BASIS_LABEL[basis] ?? basis;
 }
 
-export function crossCheckLine(c: CrossCheck): string {
+export function crossCheckLine(c: CrossCheck, tenant = false): string {
   switch (c.kind) {
     case "skipped":
       return /^cross-check skipped/i.test(c.reason) ? c.reason : `Cross-check skipped: ${c.reason}.`;
@@ -221,11 +226,11 @@ export function crossCheckLine(c: CrossCheck): string {
     case "matched":
       return (
         `Consistent: on days the grant ran out, Microsoft applied a median of ` +
-        `${mbPerDay(c.medianMB)}, which matches the ${basisLabel(c.basis)} basis.`
+        `${mbPerDay(c.medianMB)}, which matches the ${basisLabel(c.basis, tenant)} basis.`
       );
     case "unmatched": {
       const diffs = c.diffs
-        .map((d) => `${basisLabel(d.basis)} by ${d.pct >= 0 ? "+" : ""}${(d.pct * 100).toFixed(1)}%`)
+        .map((d) => `${basisLabel(d.basis, tenant)} by ${d.pct >= 0 ? "+" : ""}${(d.pct * 100).toFixed(1)}%`)
         .join(", ");
       return (
         `Not matched: on days the grant ran out, Microsoft applied a median of ` +
@@ -308,8 +313,8 @@ export function countText(n: number): string {
  * `2,400 x 5 MB = 12.00 GB/day` - literal, so the operator can redo it. A
  * floored count reads "at least" on both sides; a caveat follows in brackets.
  */
-export function arithmeticLine(f: BasisFigure): string {
-  const label = basisLabel(f.basis);
+export function arithmeticLine(f: BasisFigure, tenant = false): string {
+  const label = basisLabel(f.basis, tenant);
   if (f.count === null || f.mb === null) return `${label}: not known`;
   const atLeast = f.atLeast ? "at least " : "";
   const note = f.note === null ? "" : ` (${f.note})`;
@@ -325,11 +330,12 @@ export function otherBasisNote(view: GrantView, a: DataAllowances): string | nul
   if (c.kind !== "matched") return null;
   const primary = view.grant === "e5" ? "assigned" : "reporting-here";
   if (c.basis === primary) return null;
+  const tenant = a.scope.kind === "tenant";
   const figure = basisFigures(view, a).find((f) => f.basis === c.basis);
   const mb = figure?.mb ?? null;
   return (
-    `Microsoft's applied figure matched the ${basisLabel(c.basis)} basis` +
-    `${mb === null ? "" : ` (${mbPerDay(mb)})`}, not the ${basisLabel(primary)} figure shown as Granted.`
+    `Microsoft's applied figure matched the ${basisLabel(c.basis, tenant)} basis` +
+    `${mb === null ? "" : ` (${mbPerDay(mb)})`}, not the ${basisLabel(primary, tenant)} figure shown as Granted.`
   );
 }
 

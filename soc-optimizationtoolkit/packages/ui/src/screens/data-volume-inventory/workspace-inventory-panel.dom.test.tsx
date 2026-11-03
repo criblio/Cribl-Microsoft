@@ -78,14 +78,18 @@ function armStub(usage: Answer, usage2?: Answer) {
   });
 }
 
-function renderPanel(request: ReturnType<typeof armStub>) {
+function renderPanel(
+  request: ReturnType<typeof armStub>,
+  extra: { graph?: unknown; onOpenChangeRequest?: () => void } = {},
+) {
   const ports = {
     azure: { request },
     artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    ...(extra.graph === undefined ? {} : { graph: extra.graph }),
   } as unknown as UiPorts;
   render(
     <PortsProvider ports={ports} config={CONFIG}>
-      <WorkspaceInventoryPanel />
+      <WorkspaceInventoryPanel onOpenChangeRequest={extra.onOpenChangeRequest} />
     </PortsProvider>,
   );
   return ports;
@@ -469,5 +473,70 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
     const cards = document.querySelector(".allowance-cards")!.textContent!;
     expect(cards).toContain("at least");
     expect(cards).toMatch(/may be missing workspaces discovery could not see/);
+  });
+});
+
+describe("WorkspaceInventoryPanel - change request pass-through (MIG-25)", () => {
+  const USAGE_OK: Answer = { status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) };
+  const COMPARE = "Compare against the whole tenant";
+  const CHANGE_REQUEST = { name: "Open the app permissions change request on Setup" };
+
+  /** An E5 benefit and eligible volume on top of `base`, so the E5 card renders. */
+  function withE5Card(base: ReturnType<typeof vi.fn>) {
+    return vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.includes("Benefit amount used")) {
+        return { status: 200, body: table(["Day", "BenefitType", "BenefitUsedGB"], [["2026-10-20", "M365 E5", 1]]) };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 2000]]) };
+      }
+      return base(req);
+    });
+  }
+
+  /** A Graph port whose licence read is refused with a 403. */
+  const graph403 = () => ({
+    readSubscribedSkus: vi.fn().mockResolvedValue({ kind: "denied", detail: "Graph subscribedSkus: HTTP 403 - consent needed" }),
+  });
+
+  it("hands the shell's callback to the single-workspace cards", async () => {
+    const open = vi.fn();
+    renderPanel(withE5Card(armStub(USAGE_OK)) as unknown as ReturnType<typeof armStub>, {
+      graph: graph403(),
+      onOpenChangeRequest: open,
+    });
+    await discoverAndInventory();
+    fireEvent.click(await screen.findByRole("button", CHANGE_REQUEST));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the shell's callback to the tenant comparison cards", async () => {
+    const open = vi.fn();
+    const base = armStub(USAGE_OK, USAGE_OK);
+    const request = withE5Card(
+      vi.fn(async (req: AzureManagementRequest) => {
+        if (req.path.endsWith("/Microsoft.OperationsManagement/solutions")) {
+          return {
+            status: 200,
+            body: {
+              value: [
+                { name: "SecurityInsights(law-1)", properties: { workspaceResourceId: WS_ID } },
+                { name: "SecurityInsights(law-2)", properties: { workspaceResourceId: WS2_ID } },
+              ],
+            },
+          };
+        }
+        return base(req);
+      }),
+    );
+    renderPanel(request as unknown as ReturnType<typeof armStub>, { graph: graph403(), onOpenChangeRequest: open });
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\) across 1 subscription\(s\), 2 with Sentinel/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    fireEvent.click(await screen.findByText(COMPARE));
+    await screen.findByText("Compared across 2 Sentinel workspaces, 2 read.");
+    fireEvent.click(await screen.findByRole("button", CHANGE_REQUEST));
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });
