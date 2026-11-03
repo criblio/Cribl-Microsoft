@@ -87,6 +87,8 @@ export interface PlanStatus {
   readonly name: string;
   readonly displayName: string;
   readonly tier: string;
+  /** `properties.subPlan` ("P1", "P2"), or "" when Azure sent none. */
+  readonly subPlan: string;
 }
 
 /** A pricing Azure returned whose name is not in {@link DEFENDER_PLANS}. */
@@ -184,6 +186,7 @@ export function parsePricings(response: PortHttpResponse): PricingsResult {
   }
 
   const tierByName = new Map<string, string>();
+  const subPlanByName = new Map<string, string>();
   const unrecognized: UnrecognizedPricing[] = [];
   const known = new Set(DEFENDER_PLANS.map((p) => p.name));
   for (const [index, item] of value.entries()) {
@@ -200,6 +203,7 @@ export function parsePricings(response: PortHttpResponse): PricingsResult {
     }
     if (known.has(name)) {
       tierByName.set(name, tier);
+      subPlanByName.set(name, str(props["subPlan"]));
     } else {
       unrecognized.push({ name, tier });
     }
@@ -210,7 +214,12 @@ export function parsePricings(response: PortHttpResponse): PricingsResult {
   for (const plan of DEFENDER_PLANS) {
     const tier = tierByName.get(plan.name);
     if (tier === undefined) continue;
-    const entry = { name: plan.name, displayName: plan.displayName, tier };
+    const entry = {
+      name: plan.name,
+      displayName: plan.displayName,
+      tier,
+      subPlan: subPlanByName.get(plan.name) ?? "",
+    };
     (isStandard(tier) ? enabled : disabled).push(entry);
   }
   return { kind: "read", enabled, disabled, unrecognized };

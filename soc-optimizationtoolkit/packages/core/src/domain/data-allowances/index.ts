@@ -17,4 +17,11 @@ export {
   parseBenefitRows,
 } from "./benefit-usage";
 export type { BenefitDay, GrantUsage } from "./benefit-usage";
+export { crossCheck, e5Granted, parseSubscribedSkus, serversGranted } from "./granted";
+export type {
+  CrossCheck,
+  LicenceRow,
+  ServersSubscriptionRow,
+  SubscribedSku,
+} from "./granted";
 export type { AllowanceTag, GrantId, QualifyingSku } from "./allowance-catalog";
