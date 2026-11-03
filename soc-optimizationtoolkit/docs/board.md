@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**96 in the backlog, 36 in progress, 137 done.**
+**94 in the backlog, 38 in progress, 137 done.**
 
 ## By menu item
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1115,6 +1115,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
+- **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. Step eh-consumer-group-auto
+  (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub
+  Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and
+  requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs
+  consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For
+  Entra the hubs are the insights-logs-* hubs Azure creates, so the row
+  answers a different question. Reproduced: with no insights-logs-* hub in the
+  namespace, creating consumer group cribl on ehjpedersoneastus turned that
+  Entra row from 'not found' to 'as expected'. A false 'as expected' on a step
+  that is not done. FIX: for the auto-hub step, check the consumer group on
+  each auto-created hub present in a complete hub listing; with none present
+  the row says no hub exists yet (as the arrival lines do since AZR-47); a
+  refused or incomplete listing is unknown. Pin: a cribl group on the named
+  hub never satisfies the auto-hub step; mutation-check.
+
+- **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. validate-panel.tsx renders every result
+  row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside
+  the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and
+  eh-consumer-group) therefore shows two identical sentences, one red 'not
+  found' and one green 'as expected', with nothing on screen to say which is
+  which. FIX: when a step has more than one check kind, each row says in words
+  what it checked (for example 'the hubs Azure creates' vs 'the consumer
+  group'), never the raw kind id. Lands with or after [[AZR-54]], which
+  changes what the second row checks. Pin: no two rows of one run render the
+  same visible text.
+
 - **DBT-249** 36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard
   `DBT-F2` `bug` `settled`
   REPORTED 2026-11-03 by the operator during the ADR 0007 live pass: "The
@@ -1143,7 +1177,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (15)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1351,40 +1385,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. Step eh-consumer-group-auto
-  (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub
-  Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and
-  requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs
-  consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For
-  Entra the hubs are the insights-logs-* hubs Azure creates, so the row
-  answers a different question. Reproduced: with no insights-logs-* hub in the
-  namespace, creating consumer group cribl on ehjpedersoneastus turned that
-  Entra row from 'not found' to 'as expected'. A false 'as expected' on a step
-  that is not done. FIX: for the auto-hub step, check the consumer group on
-  each auto-created hub present in a complete hub listing; with none present
-  the row says no hub exists yet (as the arrival lines do since AZR-47); a
-  refused or incomplete listing is unknown. Pin: a cribl group on the named
-  hub never satisfies the auto-hub step; mutation-check.
-
-- **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. validate-panel.tsx renders every result
-  row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside
-  the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and
-  eh-consumer-group) therefore shows two identical sentences, one red 'not
-  found' and one green 'as expected', with nothing on screen to say which is
-  which. FIX: when a step has more than one check kind, each row says in words
-  what it checked (for example 'the hubs Azure creates' vs 'the consumer
-  group'), never the raw kind id. Lands with or after [[AZR-54]], which
-  changes what the second row checks. Pin: no two rows of one run render the
-  same visible text.
 
 - **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
   `AZR-F9` `story` `settled`

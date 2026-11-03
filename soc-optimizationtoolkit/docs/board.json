@@ -3701,7 +3701,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
@@ -3713,7 +3713,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
