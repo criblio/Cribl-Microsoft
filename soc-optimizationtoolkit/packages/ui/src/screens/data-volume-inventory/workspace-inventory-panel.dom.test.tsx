@@ -374,4 +374,47 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
     const unread = [...document.querySelectorAll(".allowance-not-read")].map((e) => e.textContent);
     expect(unread).toEqual([expect.stringMatching(/^law-2: not read - .*read Usage: HTTP 403/)]);
   });
+  it("reads the sums as at least when discovery could not list every subscription (MIG-18)", async () => {
+    const base = tenantStub(USAGE_OK);
+    const request = vi.fn(async (req: AzureManagementRequest) => {
+      if (req.path === "/subscriptions") {
+        return {
+          status: 200,
+          body: {
+            value: [
+              { subscriptionId: "sub-1", displayName: "Prod", state: "Enabled" },
+              { subscriptionId: "sub-2", displayName: "Denied", state: "Enabled" },
+            ],
+          },
+        };
+      }
+      if (req.path.startsWith("/subscriptions/sub-2/")) {
+        return { status: 403, body: { error: { code: "AuthorizationFailed" } } };
+      }
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      // An E5 benefit answer and eligible volume, so a grant card is rendered.
+      if (query.includes("Benefit amount used")) {
+        return {
+          status: 200,
+          body: table(["Day", "BenefitType", "BenefitUsedGB"], [["2026-10-20", "M365 E5", 1]]),
+        };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 2000]]) };
+      }
+      return base(req);
+    });
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\)/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    fireEvent.click(await screen.findByText(COMPARE));
+    await screen.findByText("Compared across 2 Sentinel workspaces, 2 read.");
+
+    expect(vi.mocked(compareTenant).mock.calls[0]![4]).toMatchObject({ discoveryIncomplete: true });
+    expect(document.querySelector(".allowance-not-read")).toBeNull();
+    const cards = document.querySelector(".allowance-cards")!.textContent!;
+    expect(cards).toContain("at least");
+    expect(cards).toMatch(/may be missing workspaces discovery could not see/);
+  });
 });

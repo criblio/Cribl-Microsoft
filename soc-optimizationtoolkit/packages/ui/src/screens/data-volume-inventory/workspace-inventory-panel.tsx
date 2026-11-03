@@ -194,6 +194,7 @@ export function WorkspaceInventoryPanel() {
         logger: ports.logger,
         onProgress: setProgress,
         readAt,
+        discoveryIncomplete: discovery !== null && tenantDiscoveryNote(discovery) !== null,
       });
       const notRead =
         result.scope.kind === "tenant"

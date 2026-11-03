@@ -174,6 +174,15 @@ export interface DataAllowancesOptions {
   readAt: string;
 }
 
+export interface CompareTenantOptions extends DataAllowancesOptions {
+  /**
+   * True when workspace discovery could not see every workspace (a failed
+   * subscription, or a Sentinel state it could not determine). The sums are
+   * then lower bounds even though every named workspace was read.
+   */
+  discoveryIncomplete?: boolean;
+}
+
 type Row = Record<string, unknown>;
 
 const errorText = (error: unknown): string =>
@@ -698,10 +707,11 @@ export async function compareTenant(
   graph: GraphDirectory | undefined,
   workspaceIds: readonly string[],
   inventories: ReadonlyMap<string, WorkspaceInventory>,
-  opts: DataAllowancesOptions,
+  opts: CompareTenantOptions,
 ): Promise<DataAllowances> {
   const gaps: string[] = [];
   const reads: WorkspaceReads[] = [];
+  let partialUsage = false;
   const notRead: Array<{ id: string; error: string }> = [];
   let billable = 0;
   for (const [index, id] of workspaceIds.entries()) {
@@ -714,6 +724,7 @@ export async function compareTenant(
     try {
       reads.push(await readWorkspace(azure, id, label, gaps, opts));
       billable += inventory.totals.billableDailyAverageMB;
+      if (inventory.usageWarning !== null) partialUsage = true;
     } catch (error) {
       notRead.push({ id, error: errorText(error) });
     }
@@ -740,6 +751,12 @@ export async function compareTenant(
     floorServers: notRead.length > 0,
   });
   gaps.push("Table plans are not read in a tenant comparison.");
+  const discoveryIncomplete = opts.discoveryIncomplete === true;
+  if (discoveryIncomplete) {
+    gaps.push(
+      "Workspace discovery was incomplete, so this comparison may be missing workspaces discovery could not see; the sums are lower bounds.",
+    );
+  }
   opts.logger?.info("data-allowances: tenant compared", {
     workspaces: workspaceIds.length,
     notRead: notRead.length,
@@ -747,7 +764,7 @@ export async function compareTenant(
   });
   return {
     ...result,
-    sumsAreFloors: notRead.length > 0,
+    sumsAreFloors: notRead.length > 0 || partialUsage || discoveryIncomplete,
     licences,
     servers: publicServers(servers, reads),
     scope: { kind: "tenant", workspaces: [...workspaceIds], notRead },

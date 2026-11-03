@@ -763,6 +763,44 @@ describe("compareTenant", () => {
     });
   });
 
+  describe("floors beyond unread workspaces (MIG-18)", () => {
+    const both = (usageWarning: string | null, opts: { discoveryIncomplete?: boolean } = {}) => {
+      const { azure } = routedAzure({
+        benefit: { "*": benefit([DAY, "M365 E5", 1]) },
+        eligible: eligible([DAY, "SigninLogs", 2000]),
+      });
+      return compareTenant(
+        azure,
+        undefined,
+        [WS, WS2],
+        new Map([
+          [WS, inventory(300, WS, usageWarning)],
+          [WS2, inventory(700, WS2)],
+        ]),
+        { readAt: OPTS.readAt, ...opts },
+      );
+    };
+
+    it("is exact when every workspace was read cleanly and discovery was complete", async () => {
+      const r = await both(null, { discoveryIncomplete: false });
+      expect(r.sumsAreFloors).toBe(false);
+      expect(r.gaps.join(" ")).not.toMatch(/discovery could not see/);
+    });
+
+    it("floors the sums when a read workspace's Usage answer was partial", async () => {
+      const r = await both("Usage answer was partial");
+      if (r.scope.kind !== "tenant") throw new Error("unreachable");
+      expect(r.scope.notRead).toEqual([]);
+      expect(r.sumsAreFloors).toBe(true);
+    });
+
+    it("floors the sums and says so when discovery could not see every workspace", async () => {
+      const r = await both(null, { discoveryIncomplete: true });
+      expect(r.sumsAreFloors).toBe(true);
+      expect(r.gaps.some((g) => /may be missing workspaces discovery could not see/.test(g))).toBe(true);
+    });
+  });
+
   it("a workspace with no inventory is listed as not read rather than read with a zero total", async () => {
     const { azure } = routedAzure({});
     const r = await compareTenant(azure, undefined, [WS], new Map(), { readAt: OPTS.readAt });
