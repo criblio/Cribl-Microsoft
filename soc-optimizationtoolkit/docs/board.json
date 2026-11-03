@@ -3895,6 +3895,18 @@
       "dependsOn": [],
       "title": "The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret",
       "detail": "FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx passes { kind: \"client-secret\", ...principal } where principal is config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx), i.e. the APP'S OWN app registration, and the operator pastes that registration's secret, which is then stored as the Cribl text secret. That registration holds ARM write rights (DCRs, role assignments, Defender export), so anyone who can read the worker group's secrets gets them - the class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's Manage key. ADR 0008 section 2 claimed the Blob lane already used a dedicated Cribl principal; it does not, and the ADR is corrected under AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable), refuse the app's own client id (reason app-principal, as AZR-59 does for Event Hub), and update the Blob How-to steps; existing Blob inputs created with the app's identity are reported, not silently rewritten."
+    },
+    {
+      "id": "AZR-67",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "bug",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses",
+      "detail": "FOUND 2026-11-03 by the architecture audit (duplicated decision). classify.ts judges the eh-rule-listen check with ruleCanListen (\"Listen or Manage\"), while planCriblSource and the Listen picker use ruleSafeForCriblSource since AZR-58. Seen live the same morning: \"Create the rule RootManageSharedAccessKey that Cribl reads with: as expected\" for a rule the create now refuses. FIX: eh-rule-listen uses ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the rights; pin it; update the stale connection-string.ts header."
     }
   ],
   "features": [
