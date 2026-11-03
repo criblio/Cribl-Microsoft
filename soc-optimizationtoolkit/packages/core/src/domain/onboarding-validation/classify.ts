@@ -34,7 +34,7 @@ import {
   eventHubNamespacePath,
   overprivilegedRoleCovering,
   receiverRoleCovering,
-  ruleCanListen,
+  ruleSafeForCriblSource,
   ruleCanManage,
   ruleCanSend,
 } from "../eventhub-arm/eventhub-arm";
@@ -758,7 +758,8 @@ export function classifyCheck(
     case "eh-rule-send":
       return classifyRule(read, value(values, "sendRule"), ruleCanSend, "Send or Manage");
     case "eh-rule-listen":
-      return classifyRule(read, value(values, "listenRule"), ruleCanListen, "Listen or Manage");
+      // AZR-67: the same rule the create applies (AZR-58) - Listen, never Manage.
+      return classifyRule(read, value(values, "listenRule"), ruleSafeForCriblSource, "Listen, without Manage");
     case "eh-rule-manage":
       // The rule Azure creates hubs with: Send alone is a difference, not done.
       return classifyRule(read, value(values, "sendRule"), ruleCanManage, "Manage");

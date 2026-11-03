@@ -9,14 +9,12 @@
 
 export {
   APP_ID,
-  EVENTHUB_OAUTH_ENDPOINT,
   IDENTITY_FIELDS,
   ONBOARDING_ID_MAX,
   ONBOARDING_INPUT_ID_PREFIX,
   buildBlobInputBody,
   buildEventHubInputBody,
   buildSecretBody,
-  eventHubOAuthScope,
   isOnboardingInputId,
   isOnboardingSecretId,
   jsStringExpression,

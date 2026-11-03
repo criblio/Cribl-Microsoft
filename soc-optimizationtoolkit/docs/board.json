@@ -3901,12 +3901,13 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses",
-      "detail": "FOUND 2026-11-03 by the architecture audit (duplicated decision). classify.ts judges the eh-rule-listen check with ruleCanListen (\"Listen or Manage\"), while planCriblSource and the Listen picker use ruleSafeForCriblSource since AZR-58. Seen live the same morning: \"Create the rule RootManageSharedAccessKey that Cribl reads with: as expected\" for a rule the create now refuses. FIX: eh-rule-listen uses ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the rights; pin it; update the stale connection-string.ts header."
+      "detail": "FOUND 2026-11-03 by the architecture audit (duplicated decision). classify.ts judges the eh-rule-listen check with ruleCanListen (\"Listen or Manage\"), while planCriblSource and the Listen picker use ruleSafeForCriblSource since AZR-58. Seen live the same morning: \"Create the rule RootManageSharedAccessKey that Cribl reads with: as expected\" for a rule the create now refuses. FIX: eh-rule-listen uses ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the rights; pin it; update the stale connection-string.ts header.\n\nDONE 2026-11-03 (pins): eh-rule-listen now uses ruleSafeForCriblSource, the same rule the create applies. A Manage-capable rule reads present-differs (expected \"Listen, without Manage\"), and Listen-only or Listen-and-Send reads as expected. The pin failed before the fix and passes after. The stale connection-string.ts header is corrected. Live check outstanding: against the lab namespace (only RootManageSharedAccessKey), the Cribl-reads-with step should now read present but different.",
+      "verified": "pins"
     }
   ],
   "features": [

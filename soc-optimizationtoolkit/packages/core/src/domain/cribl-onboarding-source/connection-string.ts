@@ -9,7 +9,7 @@
  *
  * {@link checkPastedCredential} refuses BEFORE any write when the paste cannot
  * be the credential the lane needs: another namespace, a rule the namespace
- * does not list, a rule without Listen or Manage (a Cribl SOURCE reads, so the
+ * does not list, a rule without Listen, a Manage-capable rule (AZR-58) (a Cribl SOURCE reads, so the
  * Defender export's Send rule is not enough), or an EntityPath for a hub the
  * lane does not read. When the rules list itself could not be read the rights
  * are UNKNOWN, never assumed; only an explicit operator attestation passes it,

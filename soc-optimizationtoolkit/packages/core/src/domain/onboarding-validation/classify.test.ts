@@ -222,17 +222,29 @@ describe("Event Hub checks", () => {
     });
   });
 
-  it("a Send-only listen rule differs on rights; Manage is fine; a missing rule is absent", () => {
+  it("a Send-only listen rule differs on rights; a missing rule is absent", () => {
     const rules = readRows([
       { name: "reader", properties: { rights: ["Send"] } },
       { name: "sender", properties: { rights: ["Manage", "Send", "Listen"] } },
     ]);
     expect(classifyCheck("eh-rule-listen", FULL, [rules])).toEqual({
       kind: "present-differs",
-      diffs: [{ field: "rights", expected: "Listen or Manage", actual: "Send" }],
+      diffs: [{ field: "rights", expected: "Listen, without Manage", actual: "Send" }],
     });
     expect(classifyCheck("eh-rule-send", FULL, [rules])).toEqual({ kind: "as-expected" });
     expect(classifyCheck("eh-rule-listen", { ...FULL, listenRule: "nope" }, [rules])).toEqual({ kind: "absent" });
+  });
+
+  // AZR-67: the create refuses a Manage-capable key (AZR-58), so Validate must
+  // not call that rule done for the step Cribl reads with.
+  it("a Manage-capable listen rule differs on rights; Listen-only and Listen-and-Send are as expected", () => {
+    const rules = (rights: string[]) => readRows([{ name: "reader", properties: { rights } }]);
+    expect(classifyCheck("eh-rule-listen", FULL, [rules(["Manage", "Listen", "Send"])])).toEqual({
+      kind: "present-differs",
+      diffs: [{ field: "rights", expected: "Listen, without Manage", actual: "Manage, Listen, Send" }],
+    });
+    expect(classifyCheck("eh-rule-listen", FULL, [rules(["Listen"])])).toEqual({ kind: "as-expected" });
+    expect(classifyCheck("eh-rule-listen", FULL, [rules(["Listen", "Send"])])).toEqual({ kind: "as-expected" });
   });
 
   it("rule rows that cannot be parsed are unknown, never absent", () => {

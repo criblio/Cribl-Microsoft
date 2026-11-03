@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 42 in progress, 140 done.**
+**94 in the backlog, 41 in progress, 141 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 34 | 28 | 14 |
+| Azure Native Source Onboarding | 33 | 29 | 13 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 136.
+Open work totals 135.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 40% (25/63)
+### `AZR` Azure native source onboarding - 41% (26/63)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/40 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 24/40 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/5 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -146,7 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (42)
+## In progress (41)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1231,17 +1231,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   re-reads. Then sweep for the same single-tenant assumption elsewhere (refs
   or caches keyed on nothing, or on the first config). Reasoning in backlog.md
   section 6i.
-
-- **AZR-67** Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-03 by the architecture audit (duplicated decision).
-  classify.ts judges the eh-rule-listen check with ruleCanListen ("Listen or
-  Manage"), while planCriblSource and the Listen picker use
-  ruleSafeForCriblSource since AZR-58. Seen live the same morning: "Create the
-  rule RootManageSharedAccessKey that Cribl reads with: as expected" for a
-  rule the create now refuses. FIX: eh-rule-listen uses
-  ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the
-  rights; pin it; update the stale connection-string.ts header.
 
 ---
 
@@ -2658,7 +2647,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (140)
+## Done (141)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6854,3 +6843,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   namespace picker stays enabled while a pasted namespace is set.
   Mutation-checked: dropping the reset or ignoring hasValue each fails a pin.
   Live check outstanding: the onboarding namespace picker in Live Preview.
+
+- **AZR-67** Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-03 by the architecture audit (duplicated decision).
+  classify.ts judges the eh-rule-listen check with ruleCanListen ("Listen or
+  Manage"), while planCriblSource and the Listen picker use
+  ruleSafeForCriblSource since AZR-58. Seen live the same morning: "Create the
+  rule RootManageSharedAccessKey that Cribl reads with: as expected" for a
+  rule the create now refuses. FIX: eh-rule-listen uses
+  ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the
+  rights; pin it; update the stale connection-string.ts header. DONE
+  2026-11-03 (pins): eh-rule-listen now uses ruleSafeForCriblSource, the same
+  rule the create applies. A Manage-capable rule reads present-differs
+  (expected "Listen, without Manage"), and Listen-only or Listen-and-Send
+  reads as expected. The pin failed before the fix and passes after. The stale
+  connection-string.ts header is corrected. Live check outstanding: against
+  the lab namespace (only RootManageSharedAccessKey), the Cribl-reads-with
+  step should now read present but different.
