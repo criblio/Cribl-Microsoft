@@ -29,9 +29,9 @@ export const GRANT_LABEL: Record<GrantId, string> = {
   "servers-p2": "Servers P2 500 MB/machine",
 };
 
-/** One decimal of GB a day, the unit the cards speak in (decimal: 1 GB = 1000 MB). */
-export function gbPerDay(mb: number): string {
-  return `${(mb / 1000).toFixed(1)} GB/day`;
+/** A daily volume in the unit that keeps it readable (MB, GB or TB, via formatMB): a sub-GB figure never rounds to 0.0 GB. */
+export function mbPerDay(mb: number): string {
+  return `${formatMB(mb)}/day`;
 }
 
 export function tagLabel(tag: AllowanceTag): string {
@@ -109,11 +109,11 @@ export function grantCardText(view: GrantView, a: DataAllowances | null = null):
     view.grantedMB === null
       ? `not known - ${grantedUnknownReason(view, a)}`
       : view.grantedIsFloor
-        ? `at least ${gbPerDay(view.grantedMB)}`
-        : gbPerDay(view.grantedMB);
-  const eligible = view.eligibleKnown ? `${atLeast}${gbPerDay(view.usage.eligibleDailyMB)}` : "not read";
+        ? `at least ${mbPerDay(view.grantedMB)}`
+        : mbPerDay(view.grantedMB);
+  const eligible = view.eligibleKnown ? `${atLeast}${mbPerDay(view.usage.eligibleDailyMB)}` : "not read";
   const usedAtLeast = floors || usedFloor ? "at least " : "";
-  const eligibleUsed = `eligible ${eligible}, used ${usedAtLeast}${gbPerDay(view.usage.usedDailyMB)}`;
+  const eligibleUsed = `eligible ${eligible}, used ${usedAtLeast}${mbPerDay(view.usage.usedDailyMB)}`;
 
   let status: string;
   if (!view.eligibleKnown) {
@@ -121,14 +121,14 @@ export function grantCardText(view: GrantView, a: DataAllowances | null = null):
   } else if (usedFloor) {
     status = "over not known (partial benefit read)";
   } else if (view.usage.overDailyMB > 0) {
-    status = `${atLeast}${gbPerDay(view.usage.overDailyMB)} over`;
+    status = `${atLeast}${mbPerDay(view.usage.overDailyMB)} over`;
   } else if (view.grantedMB === null || view.grantedIsFloor || floors) {
     // Headroom needs an exact granted figure and an exact eligible sum.
     status = floors ? "over not known (partial read)" : "no day ran over";
   } else if (!headroomApplies(view, a)) {
     status = TENANT_WIDE_HEADROOM;
   } else {
-    status = `${gbPerDay(Math.max(0, view.grantedMB - view.usage.eligibleDailyMB))} headroom`;
+    status = `${mbPerDay(Math.max(0, view.grantedMB - view.usage.eligibleDailyMB))} headroom`;
   }
   return { title: GRANT_LABEL[view.grant], granted, eligibleUsed, status };
 }
@@ -208,7 +208,7 @@ export function crossCheckLine(c: CrossCheck): string {
     case "matched":
       return (
         `Consistent: on days the grant ran out, Microsoft applied a median of ` +
-        `${gbPerDay(c.medianMB)}, which matches the ${basisLabel(c.basis)} basis.`
+        `${mbPerDay(c.medianMB)}, which matches the ${basisLabel(c.basis)} basis.`
       );
     case "unmatched": {
       const diffs = c.diffs
@@ -216,7 +216,7 @@ export function crossCheckLine(c: CrossCheck): string {
         .join(", ");
       return (
         `Not matched: on days the grant ran out, Microsoft applied a median of ` +
-        `${gbPerDay(c.medianMB)}, which differs from ${diffs || "no basis"}. Neither basis is marked.`
+        `${mbPerDay(c.medianMB)}, which differs from ${diffs || "no basis"}. Neither basis is marked.`
       );
     }
   }
@@ -261,11 +261,11 @@ export function countText(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-/** `2,400 x 5 MB = 12.0 GB/day` - literal, so the operator can redo it. */
+/** `2,400 x 5 MB = 12.00 GB/day` - literal, so the operator can redo it. */
 export function arithmeticLine(f: BasisFigure): string {
   const label = basisLabel(f.basis);
   if (f.count === null || f.mb === null) return `${label}: not known`;
-  return `${label}: ${countText(f.count)} x ${f.mbPerUnit} MB = ${gbPerDay(f.mb)}`;
+  return `${label}: ${countText(f.count)} x ${f.mbPerUnit} MB = ${mbPerDay(f.mb)}`;
 }
 
 /**
@@ -281,7 +281,7 @@ export function otherBasisNote(view: GrantView, a: DataAllowances): string | nul
   const mb = figure?.mb ?? null;
   return (
     `Microsoft's applied figure matched the ${basisLabel(c.basis)} basis` +
-    `${mb === null ? "" : ` (${gbPerDay(mb)})`}, not the ${basisLabel(primary)} figure shown as Granted.`
+    `${mb === null ? "" : ` (${mbPerDay(mb)})`}, not the ${basisLabel(primary)} figure shown as Granted.`
   );
 }
 

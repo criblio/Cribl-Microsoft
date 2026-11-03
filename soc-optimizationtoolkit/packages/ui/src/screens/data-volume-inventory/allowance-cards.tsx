@@ -24,7 +24,7 @@ import {
   basisFigures,
   criblWritableNote,
   crossCheckLine,
-  gbPerDay,
+  mbPerDay,
   grantCardText,
   grantedUnknownReason,
   licenceNote,
@@ -115,16 +115,16 @@ function PooledSummary({ a }: { a: DataAllowances }) {
         <>
           <div className="allowance-card-line">
             eligible{" "}
-            {eligibleKnown ? `${floors}${gbPerDay(p.eligibleDailyMB)}` : "not read"},
+            {eligibleKnown ? `${floors}${mbPerDay(p.eligibleDailyMB)}` : "not read"},
             applied {usedFloors}
-            {gbPerDay(p.usedDailyMB)} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
+            {mbPerDay(p.usedDailyMB)} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
           </div>
           <div className="allowance-card-status">
             {!eligibleKnown
               ? "over: not read (eligible volume not read)"
               : a.usedIsFloor
                 ? "over: not known (partial benefit read)"
-                : `${floors}${gbPerDay(p.overDailyMB)} over, all grants together`}
+                : `${floors}${mbPerDay(p.overDailyMB)} over, all grants together`}
           </div>
         </>
       )}
@@ -167,7 +167,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
         <div
           className="allowance-meter"
           role="img"
-          aria-label={`Eligible ${gbPerDay(view.usage.eligibleDailyMB)} against granted ${gbPerDay(view.grantedMB!)}`}
+          aria-label={`Eligible ${mbPerDay(view.usage.eligibleDailyMB)} against granted ${mbPerDay(view.grantedMB!)}`}
         >
           <div
             className={over ? "allowance-meter-fill allowance-meter-fill-over" : "allowance-meter-fill"}
@@ -238,7 +238,7 @@ function E5Granted({ view, a }: { view: GrantView; a: DataAllowances }) {
         <p className="match-warning">{note}</p>
         {view.grantedMB !== null && (
           <p className="field-hint">
-            Granted is shown as at least {gbPerDay(view.grantedMB)}: the largest benefit Microsoft
+            Granted is shown as at least {mbPerDay(view.grantedMB)}: the largest benefit Microsoft
             applied on any day in the window. Headroom is not shown. Used and Over are unaffected.
           </p>
         )}

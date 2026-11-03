@@ -45,29 +45,29 @@ describe("grantCardText", () => {
         usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }),
       }),
     );
-    expect(text.status).toBe("2.1 GB/day over");
-    expect(text.granted).toBe("12.0 GB/day");
-    expect(text.eligibleUsed).toBe("eligible 14.1 GB/day, used 12.0 GB/day");
+    expect(text.status).toBe("2.10 GB/day over");
+    expect(text.granted).toBe("12.00 GB/day");
+    expect(text.eligibleUsed).toBe("eligible 14.10 GB/day, used 12.00 GB/day");
   });
 
   it("says the headroom as granted minus eligible", () => {
     const text = grantCardText(
       grantView({ grantedMB: 30000, usage: usage({ eligibleDailyMB: 9300, usedDailyMB: 9300, overDailyMB: 0 }) }),
     );
-    expect(text.status).toBe("20.7 GB/day headroom");
+    expect(text.status).toBe("20.70 GB/day headroom");
   });
 
   it("reads a floored granted figure as 'at least' and shows no headroom", () => {
     const text = grantCardText(
       grantView({ grantedMB: 12000, grantedIsFloor: true, usage: usage({ eligibleDailyMB: 9300 }) }),
     );
-    expect(text.granted).toBe("at least 12.0 GB/day");
+    expect(text.granted).toBe("at least 12.00 GB/day");
     expect(text.status).not.toMatch(/headroom/);
   });
 
   it("never renders an unread eligible volume as zero", () => {
     const text = grantCardText(grantView({ eligibleKnown: false, usage: usage({ usedDailyMB: 500 }) }));
-    expect(text.eligibleUsed).toBe("eligible not read, used 0.5 GB/day");
+    expect(text.eligibleUsed).toBe("eligible not read, used 500.0 MB/day");
     expect(text.status).toBe("over and headroom not read");
   });
 
@@ -78,8 +78,8 @@ describe("grantCardText", () => {
       a,
     );
     expect(text.granted).toBe("not known - licence counts were not read and no benefit was applied in the window");
-    expect(text.eligibleUsed).toBe("eligible at least 1.0 GB/day, used at least 0.8 GB/day");
-    expect(text.status).toBe("at least 0.2 GB/day over");
+    expect(text.eligibleUsed).toBe("eligible at least 1.00 GB/day, used at least 800.0 MB/day");
+    expect(text.status).toBe("at least 200.0 MB/day over");
   });
 
   it("shows no headroom from a floored eligible sum even when Granted is exact (R11 tenant case)", () => {
@@ -95,14 +95,14 @@ describe("grantCardText", () => {
       grantView({ usage: usage({ eligibleDailyMB: 14100, usedDailyMB: 12000, overDailyMB: 2100 }) }),
       allowances({ usedIsFloor: true }),
     );
-    expect(text.eligibleUsed).toBe("eligible 14.1 GB/day, used at least 12.0 GB/day");
+    expect(text.eligibleUsed).toBe("eligible 14.10 GB/day, used at least 12.00 GB/day");
     expect(text.status).toBe("over not known (partial benefit read)");
   });
 
   it("E5 headroom and meter only when this is the tenant's only Sentinel workspace", () => {
     const e5 = grantView({ grantedMB: 30000, usage: usage({ eligibleDailyMB: 9300, overDailyMB: 0 }) });
     const one = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1 } });
-    expect(grantCardText(e5, one).status).toBe("20.7 GB/day headroom");
+    expect(grantCardText(e5, one).status).toBe("20.70 GB/day headroom");
     expect(meterOf(e5, one)).not.toBeNull();
     for (const n of [2, null]) {
       const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: n } });
@@ -111,11 +111,11 @@ describe("grantCardText", () => {
     }
     // The tenant comparison compares tenant-wide granted with the tenant-wide sum.
     const tenant = allowances({ scope: { kind: "tenant", workspaces: ["a", "b"], notRead: [] } });
-    expect(grantCardText(e5, tenant).status).toBe("20.7 GB/day headroom");
+    expect(grantCardText(e5, tenant).status).toBe("20.70 GB/day headroom");
     // Servers P2 is granted per workspace (machines reporting here): its headroom stays.
     const servers = grantView({ grant: "servers-p2", grantedMB: 2000, usage: usage({ eligibleDailyMB: 500 }) });
     const shared = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 3 } });
-    expect(grantCardText(servers, shared).status).toBe("1.5 GB/day headroom");
+    expect(grantCardText(servers, shared).status).toBe("1.50 GB/day headroom");
     expect(meterOf(servers, shared)).not.toBeNull();
   });
 });
@@ -236,7 +236,7 @@ describe("crossCheckLine", () => {
 
   it("names the matched basis, and both differences when unmatched", () => {
     expect(crossCheckLine({ kind: "matched", basis: "purchased", medianMB: 13000 })).toMatch(
-      /^Consistent: .*13\.0 GB\/day.*purchased seats basis/,
+      /^Consistent: .*13\.00 GB\/day.*purchased seats basis/,
     );
     expect(
       crossCheckLine({
@@ -271,15 +271,15 @@ describe("granted arithmetic and the other basis", () => {
   it("writes the literal arithmetic for both bases", () => {
     const lines = basisFigures(grantView(), e5Read).map(arithmeticLine);
     expect(lines).toEqual([
-      "assigned seats: 2,400 x 5 MB = 12.0 GB/day",
-      "purchased seats: 2,600 x 5 MB = 13.0 GB/day",
+      "assigned seats: 2,400 x 5 MB = 12.00 GB/day",
+      "purchased seats: 2,600 x 5 MB = 13.00 GB/day",
     ]);
   });
 
   it("says when Microsoft matched the basis Granted does not use", () => {
     const view = grantView({ crossCheck: { kind: "matched", basis: "purchased", medianMB: 13000 } });
     expect(otherBasisNote(view, e5Read)).toBe(
-      "Microsoft's applied figure matched the purchased seats basis (13.0 GB/day), not the assigned seats figure shown as Granted.",
+      "Microsoft's applied figure matched the purchased seats basis (13.00 GB/day), not the assigned seats figure shown as Granted.",
     );
     expect(otherBasisNote(grantView({ crossCheck: { kind: "matched", basis: "assigned", medianMB: 1 } }), e5Read)).toBeNull();
   });
@@ -297,7 +297,7 @@ describe("granted arithmetic and the other basis", () => {
     });
     const lines = basisFigures(grantView({ grant: "servers-p2" }), a).map(arithmeticLine);
     expect(lines).toEqual([
-      "machines reporting here: 4 x 500 MB = 2.0 GB/day",
+      "machines reporting here: 4 x 500 MB = 2.00 GB/day",
       "machines in the subscription: not known",
     ]);
   });

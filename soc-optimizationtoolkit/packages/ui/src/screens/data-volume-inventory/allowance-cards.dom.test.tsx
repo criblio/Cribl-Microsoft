@@ -36,7 +36,7 @@ describe("AllowanceCards", () => {
     );
     expect(document.querySelectorAll(".allowance-card")).toHaveLength(1);
     expect(screen.getByText(/Licence counts were not read: .*LicenseAssignment\.Read\.All/)).toBeTruthy();
-    expect(text()).toContain("granted at least 9.0 GB/day");
+    expect(text()).toContain("granted at least 9.00 GB/day");
     expect(text()).not.toContain("GB/day headroom");
     expect(text()).toContain("Headroom is not shown");
   });
@@ -88,6 +88,29 @@ describe("AllowanceCards", () => {
     expect(text()).not.toContain("how many Sentinel workspaces share it is not known");
   });
 
+  it("formats sub-GB allowance figures in MB, never 0.0 GB, and warns on over only when over is above zero (MIG-20)", () => {
+    const servers = (overDailyMB: number) =>
+      allowances({
+        grants: [
+          grantView({
+            grant: "servers-p2",
+            grantedMB: 0,
+            usage: usage({ eligibleDailyMB: 1.3, usedDailyMB: 0, overDailyMB }),
+            eligibleTables: [{ table: "WindowsEvent", eligibleDailyMB: 1.3, plan: "Analytics", criblWritable: "yes" }],
+          }),
+        ],
+      });
+    renderCards(servers(1.3));
+    expect(text()).toContain("eligible 1.3 MB/day");
+    expect(text()).toContain("1.3 MB/day over");
+    expect(text()).toContain("granted 0 MB/day");
+    expect(text()).not.toContain("0.0 GB");
+    expect(document.querySelector(".allowance-card-status")!.className).toContain("allowance-card-status-over");
+    cleanup();
+    renderCards(servers(0));
+    expect(document.querySelector(".allowance-card-status")!.className).not.toContain("allowance-card-status-over");
+  });
+
   it("shows every gap as a warning line", () => {
     renderCards(allowances({ gaps: ["Table plans were not read: HTTP 403", "Reporting machines were not read: x"] }));
     const warnings = [...document.querySelectorAll(".match-warning")].map((e) => e.textContent);
@@ -104,7 +127,7 @@ describe("AllowanceCards", () => {
   it("draws the meter when eligible and granted are both known", () => {
     renderCards(allowances({ grants: [grantView({ usage: usage({ eligibleDailyMB: 6000 }) })] }));
     expect(document.querySelector(".allowance-meter")).not.toBeNull();
-    expect(text()).toContain("6.0 GB/day headroom");
+    expect(text()).toContain("6.00 GB/day headroom");
   });
 
   it("lists every SKU with its reason, warns of possibly missing seats, and names the matched other basis", () => {
@@ -139,9 +162,9 @@ describe("AllowanceCards", () => {
     expect(screen.getByText("may qualify - not in the matched SKU list")).toBeTruthy();
     expect(document.querySelectorAll(".allowance-row-dim")).toHaveLength(2);
     expect(text()).toContain("40 assigned seat(s) are on SKUs that may qualify");
-    expect(text()).toContain("assigned seats: 2,400 x 5 MB = 12.0 GB/day");
-    expect(text()).toContain("purchased seats: 2,600 x 5 MB = 13.0 GB/day");
-    expect(text()).toContain("matched the purchased seats basis (13.0 GB/day)");
+    expect(text()).toContain("assigned seats: 2,400 x 5 MB = 12.00 GB/day");
+    expect(text()).toContain("purchased seats: 2,600 x 5 MB = 13.00 GB/day");
+    expect(text()).toContain("matched the purchased seats basis (13.00 GB/day)");
   });
 
   it("shows a pooled benefit as one combined line with no per-grant meter", () => {
@@ -158,7 +181,7 @@ describe("AllowanceCards", () => {
       }),
     );
     expect(document.querySelector(".allowance-meter")).toBeNull();
-    expect(text()).toContain("5.0 GB/day over, all grants together");
+    expect(text()).toContain("5.00 GB/day over, all grants together");
     expect(text()).toContain("could not be attributed");
     expect(text()).toContain("Basic plan - grant may not apply on this plan");
     expect(text()).toContain("Cribl cannot write this table (Microsoft connector only)");
@@ -176,7 +199,7 @@ describe("AllowanceCards", () => {
     expect(text()).toContain("eligible not read");
     expect(text()).toContain("over: not read");
     expect(text()).not.toContain("GB/day over");
-    expect(text()).not.toContain("eligible 4.0 GB/day");
+    expect(text()).not.toContain("eligible 4.00 GB/day");
   });
 
   it("pooled with grants [] after a failed eligible read: no eligible 0.0 and no 0.0 over", () => {
@@ -190,7 +213,7 @@ describe("AllowanceCards", () => {
     );
     expect(text()).toContain("eligible not read");
     expect(text()).toContain("over: not read");
-    expect(text()).not.toContain("0.0 GB/day");
+    expect(text()).not.toMatch(/(^|[^\d.])0 MB\/day/);
   });
 
   it("renders an unread Defender plan as not read and an unknown machine count as not known", () => {
@@ -245,8 +268,8 @@ describe("AllowanceCards - tenant comparison (MIG-16)", () => {
     expect(unread).toEqual(["law-3: not read - read Usage: HTTP 403"]);
     // The id is shortened to the name; the full resource id is not the label.
     expect(text()).not.toContain(`${WS("law-3")}: `);
-    expect(text()).toContain("granted at least 1.5 GB/day");
-    expect(text()).toContain("eligible at least 0.9 GB/day, used at least 0.8 GB/day");
+    expect(text()).toContain("granted at least 1.50 GB/day");
+    expect(text()).toContain("eligible at least 900.0 MB/day, used at least 800.0 MB/day");
     expect(text()).not.toContain("headroom");
   });
 
