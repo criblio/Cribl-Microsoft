@@ -337,7 +337,7 @@ describe("WorkspaceInventoryPanel - an unreadable benefit row (MIG-22)", () => {
     });
     renderPanel(request as unknown as ReturnType<typeof armStub>);
     await discoverAndInventory();
-    await screen.findByText(/1 benefit row\(s\) could not be read \(no day or no readable amount\), so Used is a lower bound\./);
+    await screen.findByText(/1 benefit amount\(s\) could not be read \(no day or no readable amount\), so Used is a lower bound\./);
     const card = document.querySelector(".allowance-card")!.textContent!;
     // 1 GB readable / 30 days = 33.3 MB a day, and only a floor.
     expect(card).toContain("used at least 33.3 MB/day");

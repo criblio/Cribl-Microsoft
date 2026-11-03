@@ -84,7 +84,8 @@ export function grantedUnknownReason(view: GrantView, a: DataAllowances | null):
  */
 export function headroomApplies(view: GrantView, a: DataAllowances | null): boolean {
   if (a === null || a.scope.kind !== "workspace" || view.grant !== "e5") return true;
-  return a.scope.sentinelWorkspaces === 1 && !a.scope.sentinelWorkspacesAtLeast;
+  // A floored count (sentinelWorkspacesAtLeast) is always >= 2, so `=== 1` already excludes it.
+  return a.scope.sentinelWorkspaces === 1;
 }
 
 const TENANT_WIDE_HEADROOM = "headroom is tenant-wide - use Compare against the whole tenant";
@@ -276,25 +277,21 @@ export function basisFigures(view: GrantView, a: DataAllowances): BasisFigure[] 
   // A floored Granted (a plan or workspace not read, a partial Heartbeat)
   // floors both machine counts: they leave out the same machines.
   const atLeast = view.grantedIsFloor;
-  const p2 = a.servers.rows.filter((r) => r.plan === "P2");
-  const here = p2.reduce((sum, r) => sum + r.machinesReportingHere, 0);
-  const inSub = p2.some((r) => r.machinesInSubscription === null)
-    ? null
-    : p2.reduce((sum, r) => sum + (r.machinesInSubscription ?? 0), 0);
+  const { machines, grantedMB } = a.servers.granted;
   return [
     {
       basis: "reporting-here",
-      count: here,
+      count: machines.reportingHere,
       mbPerUnit: SERVERS_MB_PER_MACHINE_PER_DAY,
-      mb: here * SERVERS_MB_PER_MACHINE_PER_DAY,
+      mb: grantedMB.reportingHere,
       atLeast,
       note: null,
     },
     {
       basis: "in-subscription",
-      count: inSub,
+      count: machines.inSubscription,
       mbPerUnit: SERVERS_MB_PER_MACHINE_PER_DAY,
-      mb: inSub === null ? null : inSub * SERVERS_MB_PER_MACHINE_PER_DAY,
+      mb: grantedMB.inSubscription,
       atLeast,
       note: null,
     },

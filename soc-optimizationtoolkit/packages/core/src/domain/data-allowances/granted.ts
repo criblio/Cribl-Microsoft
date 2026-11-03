@@ -168,15 +168,20 @@ export interface ServersSubscriptionRow {
   machinesReportingHere: number;
 }
 
+/** The P2 grant on each basis: the machine counts and what they earn per day. */
+export interface ServersGranted {
+  /** Machine counts behind `grantedMB`; `inSubscription` is null when any P2 count is unknown. */
+  machines: { reportingHere: number; inSubscription: number | null };
+  grantedMB: { reportingHere: number; inSubscription: number | null };
+  atLeast: boolean;
+}
+
 /**
  * Defender for Servers P2 grant. Only P2 subscriptions grant; machines that
  * could not be attributed to a subscription never change the figure. A
  * subscription that could not be read makes the figure a lower bound.
  */
-export function serversGranted(
-  rows: readonly ServersSubscriptionRow[],
-  _unattributedMachines: number,
-): { grantedMB: { reportingHere: number; inSubscription: number | null }; atLeast: boolean } {
+export function serversGranted(rows: readonly ServersSubscriptionRow[]): ServersGranted {
   let here = 0;
   let inSub: number | null = 0;
   let atLeast = false;
@@ -187,6 +192,7 @@ export function serversGranted(
     inSub = inSub === null || r.machinesInSubscription === null ? null : inSub + r.machinesInSubscription;
   }
   return {
+    machines: { reportingHere: here, inSubscription: inSub },
     grantedMB: {
       reportingHere: here * SERVERS_MB_PER_MACHINE_PER_DAY,
       inSubscription: inSub === null ? null : inSub * SERVERS_MB_PER_MACHINE_PER_DAY,

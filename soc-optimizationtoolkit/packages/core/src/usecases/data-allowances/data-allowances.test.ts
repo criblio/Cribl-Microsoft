@@ -898,7 +898,7 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
       OPTS,
     );
     expect(r.gaps).toContain(
-      "1 benefit row(s) could not be read (no day or no readable amount), so Used is a lower bound.",
+      "1 benefit amount(s) could not be read (no day or no readable amount), so Used is a lower bound.",
     );
     expect(r.usedIsFloor).toBe(true);
     expect(view(r, "e5").crossCheck).toEqual({
@@ -922,7 +922,7 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
       OPTS,
     );
     expect(r.gaps).toContain(
-      "1 benefit row(s) could not be read (no day or no readable amount), so Used is a lower bound.",
+      "1 benefit amount(s) could not be read (no day or no readable amount), so Used is a lower bound.",
     );
     expect(r.usedIsFloor).toBe(true);
     expect(view(r, "e5").crossCheck.kind).toBe("skipped");

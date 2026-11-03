@@ -50,7 +50,7 @@ import {
   parseSubscribedSkus,
   serversGranted,
 } from "../../domain/data-allowances/granted";
-import type { CrossCheck, ServersSubscriptionRow } from "../../domain/data-allowances/granted";
+import type { CrossCheck, ServersGranted, ServersSubscriptionRow } from "../../domain/data-allowances/granted";
 import { INVENTORY_WINDOW_DAYS } from "../../domain/workspace-inventory";
 import { WINDOW_FILTER } from "../../domain/workspace-inventory/workspace-inventory";
 import { runWorkspaceQuery } from "../workspace-inventory/workspace-inventory";
@@ -159,6 +159,11 @@ export interface DataAllowances {
      * means the machines were not read, never that there are none.
      */
     heartbeatComplete: boolean;
+    /**
+     * The P2 grant on each basis, as `serversGranted` computes it: the screen
+     * shows these counts and figures rather than redoing the arithmetic.
+     */
+    granted: ServersGranted;
   };
   scope:
     | {
@@ -489,7 +494,7 @@ function assemble(
   // Used becomes a lower bound exactly as a partial benefit answer makes it.
   if (benefit.unreadableRows > 0) {
     input.gaps.push(
-      `${benefit.unreadableRows} benefit row(s) could not be read (no day or no readable amount), so Used is a lower bound.`,
+      `${benefit.unreadableRows} benefit amount(s) could not be read (no day or no readable amount), so Used is a lower bound.`,
     );
   }
   const benefitComplete = input.reads.every((r) => r.benefitComplete) && benefit.unreadableRows === 0;
@@ -572,7 +577,7 @@ function assemble(
                   : "Cross-check skipped: no reporting machines were found."),
         };
       } else {
-        const served = serversGranted(rows, input.servers.unattributedMachines);
+        const served = serversGranted(rows);
         // The card's figure is the per-day grant averaged over the window.
         grantedMB = served.grantedMB.reportingHere;
         grantedIsFloor = served.atLeast || !input.heartbeatComplete;
@@ -658,6 +663,7 @@ function publicServers(servers: ServersRead, reads: readonly WorkspaceReads[]): 
     rows: servers.rows,
     unattributedMachines: servers.unattributedMachines,
     heartbeatComplete: reads.length > 0 && reads.every((r) => r.heartbeatComplete),
+    granted: serversGranted(servers.rows),
   };
 }
 

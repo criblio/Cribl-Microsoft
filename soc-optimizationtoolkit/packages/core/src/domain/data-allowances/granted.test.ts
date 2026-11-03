@@ -191,20 +191,17 @@ describe("serversGranted", () => {
     machinesReportingHere: here,
   });
   it("grants only P2 subscriptions, by machines reporting here", () => {
-    const r = serversGranted([row("P2", 46, 80), row("P2", 14, 20), row("P1", 9, 9)], 0);
+    const r = serversGranted([row("P2", 46, 80), row("P2", 14, 20), row("P1", 9, 9)]);
     expect(r.grantedMB.reportingHere).toBe(30000);
     expect(r.grantedMB.inSubscription).toBe(50000);
     expect(r.atLeast).toBe(false);
+    expect(r.machines).toEqual({ reportingHere: 60, inSubscription: 100 });
   });
   it("is a lower bound when a subscription was not read", () => {
-    expect(serversGranted([row("P2", 46), row("not-read", 5)], 0).atLeast).toBe(true);
+    expect(serversGranted([row("P2", 46), row("not-read", 5)]).atLeast).toBe(true);
   });
   it("is null for in-subscription when a P2 count is unknown", () => {
-    expect(serversGranted([row("P2", 46, null)], 0).grantedMB.inSubscription).toBeNull();
-  });
-  it("never lets unattributed machines change the granted figure", () => {
-    const rows = [row("P2", 46), row("P2", 14)];
-    expect(serversGranted(rows, 0)).toEqual(serversGranted(rows, 500));
+    expect(serversGranted([row("P2", 46, null)]).grantedMB.inSubscription).toBeNull();
   });
 });
 

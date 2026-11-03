@@ -289,6 +289,11 @@ describe("AllowanceCards", () => {
           rows: [{ subscriptionId: "sub-x", plan: "not-read", machinesInSubscription: null, machinesReportingHere: 3 }],
           unattributedMachines: 0,
           heartbeatComplete: true,
+          granted: {
+            machines: { reportingHere: 0, inSubscription: null },
+            grantedMB: { reportingHere: 0, inSubscription: null },
+            atLeast: true,
+          },
         },
         grants: [grantView({ grant: "servers-p2", grantedMB: null })],
       }),
