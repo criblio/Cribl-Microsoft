@@ -3591,7 +3591,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-12",
         "MIG-13"
@@ -3600,13 +3600,14 @@
       "type": "story",
       "priority": "next",
       "title": "Read licence counts (Graph subscribedSkus, new LicenseAssignment.Read.All) and Defender plans for the allowances",
-      "detail": "New feature-level Graph permission; without consent Granted reads \"at least\" the largest applied day. Pricings reuse defender-plans (subPlan added). Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-14)."
+      "detail": "New feature-level Graph permission; without consent Granted reads \"at least\" the largest applied day. Pricings reuse defender-plans (subPlan added). Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-14).\n\nDONE 2026-11-03 (pins, e2ba7c3..6a498a7): GraphDirectory.readSubscribedSkus + platform adapter (403 -> denied, re-acquire once), LicenseAssignment.Read.All in GRAPH_PERMISSIONS (feature), usecase readDataAllowances / compareTenant: Operation, eligible Usage, Heartbeat, pricings per subscription, one Resource Graph machine count, table plans. Honesty: failed eligible read -> eligibleKnown false and cross-check skipped; unread workspace -> tenant cross-check skipped and Servers granted a floor; sumsAreFloors flags partial sums.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-10",
         "MIG-14"
