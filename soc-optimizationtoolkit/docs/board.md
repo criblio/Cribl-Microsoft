@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 37 in progress, 139 done.**
+**94 in the backlog, 35 in progress, 141 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 3 | 5 | 0 |
+| Data Volume Inventory | 2 | 7 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 129.
 
 ## Epics and features
 
@@ -136,18 +136,18 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 76% (13/17)
+### `MIG` SIEM migration analysis - 83% (15/18)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 5/8 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 7/9 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18 |
 
 ---
 
-## In progress (37)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,23 +1050,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-15** Data Volume Inventory: allowance cards with drill-downs, tag and over-allowance columns, CSV columns
-  `MIG-F2` `story` `settled`
-  Mockup option A with drill-down (agreed 2026-11-03): licence and machine
-  count tables, the arithmetic, the query behind every number, the
-  reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md.
-  Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15).
-
-- **MIG-16** Compare data allowances against the whole tenant (all Sentinel workspaces), on demand
-  `MIG-F2` `story` `settled` `blocked by MIG-15`
-  USER DECISION 2026-11-03: the operator chooses; default is this workspace
-  with Granted labelled tenant-wide and the cross-check skipped. Design:
-  docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-16).
-
 ---
 
-## Backlog - now (11)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1274,6 +1260,21 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
+
+- **MIG-18** Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete
+  `MIG-F2` `bug` `settled`
+  FOUND 2026-11-03 by the Task 7 implementer and the branch review
+  (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors
+  only from scope.notRead (data-allowances.ts ~750), while readDataAllowances
+  also honours inventory.usageWarning (~681). So in a tenant comparison, a
+  workspace that WAS read but whose Usage answer was partial, or workspaces
+  discovery could not see (failed subscriptions, Sentinel state unknown),
+  leave the eligible / used / after-allowances sums shown as exact instead of
+  "at least" - an inventory-standard breach (docs/inventory-standard.md). The
+  panel shows a separate warning line for the discovery case, but the cards do
+  not say "at least". Fix: compareTenant sets sumsAreFloors when any read
+  inventory carries usageWarning, and takes a discovery-incomplete flag from
+  the panel; pin both in data-allowances.test.ts and a panel DOM test.
 
 ---
 
@@ -2436,7 +2437,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (139)
+## Done (141)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6217,6 +6218,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Honesty: failed eligible read -> eligibleKnown false and cross-check
   skipped; unread workspace -> tenant cross-check skipped and Servers granted
   a floor; sumsAreFloors flags partial sums.
+
+- **MIG-15** Data Volume Inventory: allowance cards with drill-downs, tag and over-allowance columns, CSV columns
+  `MIG-F2` `story` `settled` `verified: pins`
+  Mockup option A with drill-down (agreed 2026-11-03): licence and machine
+  count tables, the arithmetic, the query behind every number, the
+  reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md.
+  Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15). DONE
+  2026-11-03 (pins, f076e5e..0b7068b + fix wave 0640e9e): allowance cards with
+  drill-downs (licence table, arithmetic, 30-day eligible-vs-applied SVG
+  chart, eligible tables with plan and Cribl-writable flags, cross-check line,
+  queries), Allowance and Over columns, CSV columns with an AllowanceFigures
+  exact/floor marker. Every unknown renders as not read / not known / at
+  least. Not yet seen in Live Preview (the shared main checkout runs another
+  branch).
+
+- **MIG-16** Compare data allowances against the whole tenant (all Sentinel workspaces), on demand
+  `MIG-F2` `story` `settled` `verified: pins`
+  USER DECISION 2026-11-03: the operator chooses; default is this workspace
+  with Granted labelled tenant-wide and the cross-check skipped. Design:
+  docs/features/inventory-data-allowances.md. Plan:
+  docs/data-volume-inventory-implementation-plan.md (task MIG-16). DONE
+  2026-11-03 (pins, f80d9d4 + 0640e9e): Compare against the whole tenant -
+  inventories every visible Sentinel workspace one at a time, then
+  compareTenant; unread workspaces listed by name, cross-check skipped when
+  any is unread. Known gap filed as MIG-18.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

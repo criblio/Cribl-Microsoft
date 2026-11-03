@@ -3607,7 +3607,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-10",
         "MIG-14"
@@ -3616,13 +3616,14 @@
       "type": "story",
       "priority": "next",
       "title": "Data Volume Inventory: allowance cards with drill-downs, tag and over-allowance columns, CSV columns",
-      "detail": "Mockup option A with drill-down (agreed 2026-11-03): licence and machine count tables, the arithmetic, the query behind every number, the reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15)."
+      "detail": "Mockup option A with drill-down (agreed 2026-11-03): licence and machine count tables, the arithmetic, the query behind every number, the reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15).\n\nDONE 2026-11-03 (pins, f076e5e..0b7068b + fix wave 0640e9e): allowance cards with drill-downs (licence table, arithmetic, 30-day eligible-vs-applied SVG chart, eligible tables with plan and Cribl-writable flags, cross-check line, queries), Allowance and Over columns, CSV columns with an AllowanceFigures exact/floor marker. Every unknown renders as not read / not known / at least. Not yet seen in Live Preview (the shared main checkout runs another branch).",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-15"
       ],
@@ -3630,7 +3631,8 @@
       "type": "story",
       "priority": "next",
       "title": "Compare data allowances against the whole tenant (all Sentinel workspaces), on demand",
-      "detail": "USER DECISION 2026-11-03: the operator chooses; default is this workspace with Granted labelled tenant-wide and the cross-check skipped. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-16)."
+      "detail": "USER DECISION 2026-11-03: the operator chooses; default is this workspace with Granted labelled tenant-wide and the cross-check skipped. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-16).\n\nDONE 2026-11-03 (pins, f80d9d4 + 0640e9e): Compare against the whole tenant - inventories every visible Sentinel workspace one at a time, then compareTenant; unread workspaces listed by name, cross-check skipped when any is unread. Known gap filed as MIG-18.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
@@ -3643,6 +3645,18 @@
       "priority": "next",
       "title": "Live: Operation benefit type strings, GB units, pricings and machine-count reads, and which seat/machine basis Microsoft applies",
       "detail": "The spec's three open items plus the unit question, measured on a workspace that receives a benefit. Can start any time; its findings may change MIG-12 patterns and MIG-13 defaults. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-17)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-18",
+      "type": "bug",
+      "priority": "now",
+      "title": "Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete",
+      "detail": "FOUND 2026-11-03 by the Task 7 implementer and the branch review (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors only from scope.notRead (data-allowances.ts ~750), while readDataAllowances also honours inventory.usageWarning (~681). So in a tenant comparison, a workspace that WAS read but whose Usage answer was partial, or workspaces discovery could not see (failed subscriptions, Sentinel state unknown), leave the eligible / used / after-allowances sums shown as exact instead of \"at least\" - an inventory-standard breach (docs/inventory-standard.md). The panel shows a separate warning line for the discovery case, but the cards do not say \"at least\". Fix: compareTenant sets sumsAreFloors when any read inventory carries usageWarning, and takes a discovery-incomplete flag from the panel; pin both in data-allowances.test.ts and a panel DOM test."
     },
     {
       "settled": "settled",
