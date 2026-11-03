@@ -3533,6 +3533,160 @@
     },
     {
       "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-10",
+      "type": "story",
+      "priority": "next",
+      "title": "Move the workspace inventory out of SIEM Migration into its own Data Volume Inventory page (tools)",
+      "detail": "USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data Volume Inventory, tools section; SIEM Migration keeps no link. Removes data-volume-inventory from PLANNED_MENUS. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-10).\n\nDONE 2026-11-03 (pins, 64217dd): own route data-volume-inventory in tools (requires workspace.read), panel and state moved to screens/data-volume-inventory, SIEM Migration renders no inventory (DOM pin), board menu un-planned. Live Preview check rides on MIG-17's live run.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-11",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids",
+      "detail": "One data module with each row sourced to a Microsoft page and dated; a table not in it is Billable, never a guess. SKU ids copied from the licensing CSV, never from memory. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-11).\n\nDONE 2026-11-03 (pins, 9d3db49): allowance-catalog.ts - Free/E5/Servers P2 table lists from the spec, criblWritable, 24 qualifying E5 SKUs copied from Microsoft's licensing CSV (2026-08-19); 27 FAQ-named SKUs had no exact CSV row and render as 'may qualify' downstream (Ruling R4).",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [
+        "MIG-11"
+      ],
+      "id": "MIG-12",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: benefit used (Operation table) and eligible volume per grant, folded per day",
+      "detail": "Used and Over come from Microsoft's own Operation record, so they are exact without licence data. Unknown benefit types degrade to one pooled figure. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-12).\n\nDONE 2026-11-03 (pins, d5adfd6): benefit-usage.ts - BENEFIT_QUERY over Operation, eligibleDailyQuery over Usage (billable only), parseBenefitRows (unknown type -> whole read pooled), foldGrantUsage (per-day over clamped at 0, capped day = used > 0 and eligible > used x 1.01). Benefit-type patterns are placeholders until MIG-17 records the literal strings.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [
+        "MIG-11"
+      ],
+      "id": "MIG-13",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: granted from E5 seats and Servers P2 machines, and the cross-check against applied benefit",
+      "detail": "The cross-check settles assigned vs purchased seats and subscription vs workspace machines from the customer's own data; 2% tolerance, marked only when exactly one basis matches. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-13).\n\nDONE 2026-11-03 (pins, 08bf694): granted.ts - parseSubscribedSkus, e5Granted (qualifies on skuId; unlisted E5/A5/F5/G5/E7/FLW-looking SKUs read 'may qualify' and sum into possiblyMissing), serversGranted (P2 only; not-read rows make it a floor), crossCheck (2% tolerance, exactly one basis). defender-plans PlanStatus gains subPlan.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [
+        "MIG-12",
+        "MIG-13"
+      ],
+      "id": "MIG-14",
+      "type": "story",
+      "priority": "next",
+      "title": "Read licence counts (Graph subscribedSkus, new LicenseAssignment.Read.All) and Defender plans for the allowances",
+      "detail": "New feature-level Graph permission; without consent Granted reads \"at least\" the largest applied day. Pricings reuse defender-plans (subPlan added). Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-14).\n\nDONE 2026-11-03 (pins, e2ba7c3..6a498a7): GraphDirectory.readSubscribedSkus + platform adapter (403 -> denied, re-acquire once), LicenseAssignment.Read.All in GRAPH_PERMISSIONS (feature), usecase readDataAllowances / compareTenant: Operation, eligible Usage, Heartbeat, pricings per subscription, one Resource Graph machine count, table plans. Honesty: failed eligible read -> eligibleKnown false and cross-check skipped; unread workspace -> tenant cross-check skipped and Servers granted a floor; sumsAreFloors flags partial sums.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [
+        "MIG-10",
+        "MIG-14"
+      ],
+      "id": "MIG-15",
+      "type": "story",
+      "priority": "next",
+      "title": "Data Volume Inventory: allowance cards with drill-downs, tag and over-allowance columns, CSV columns",
+      "detail": "Mockup option A with drill-down (agreed 2026-11-03): licence and machine count tables, the arithmetic, the query behind every number, the reroute-forfeit warning. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-15).\n\nDONE 2026-11-03 (pins, f076e5e..0b7068b + fix wave 0640e9e): allowance cards with drill-downs (licence table, arithmetic, 30-day eligible-vs-applied SVG chart, eligible tables with plan and Cribl-writable flags, cross-check line, queries), Allowance and Over columns, CSV columns with an AllowanceFigures exact/floor marker. Every unknown renders as not read / not known / at least. Not yet seen in Live Preview (the shared main checkout runs another branch).",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [
+        "MIG-15"
+      ],
+      "id": "MIG-16",
+      "type": "story",
+      "priority": "next",
+      "title": "Compare data allowances against the whole tenant (all Sentinel workspaces), on demand",
+      "detail": "USER DECISION 2026-11-03: the operator chooses; default is this workspace with Granted labelled tenant-wide and the cross-check skipped. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-16).\n\nDONE 2026-11-03 (pins, f80d9d4 + 0640e9e): Compare against the whole tenant - inventories every visible Sentinel workspace one at a time, then compareTenant; unread workspaces listed by name, cross-check skipped when any is unread. Known gap filed as MIG-18.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-17",
+      "type": "spike",
+      "priority": "next",
+      "title": "Live: Operation benefit type strings, GB units, pricings and machine-count reads, and which seat/machine basis Microsoft applies",
+      "detail": "The spec's three open items plus the unit question, measured on a workspace that receives a benefit. Can start any time; its findings may change MIG-12 patterns and MIG-13 defaults. Design: docs/features/inventory-data-allowances.md. Plan: docs/data-volume-inventory-implementation-plan.md (task MIG-17).\n\nPARTIAL 2026-11-03 (live, read-only az CLI): 80 lab workspaces scanned with BENEFIT_QUERY - none received an E5 or Servers P2 benefit in 31 days, so the literal benefit-type strings, GB units and seat/machine basis were NOT measured. Confirmed: pricings GET answers (Free on 2 subscriptions; 404 SubscriptionNotRegistered on 2, reported as not read), Resource Graph machine count answers. USER DECISION 2026-11-03: ship without the rest; this card stays open until a benefit-receiving workspace is available."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-18",
+      "type": "bug",
+      "priority": "now",
+      "title": "Tenant allowance comparison shows exact sums when a read workspace had a partial Usage answer or discovery was incomplete",
+      "detail": "FOUND 2026-11-03 by the Task 7 implementer and the branch review (feature/data-volume-inventory, f80d9d4). compareTenant sets sumsAreFloors only from scope.notRead (data-allowances.ts ~750), while readDataAllowances also honours inventory.usageWarning (~681). So in a tenant comparison, a workspace that WAS read but whose Usage answer was partial, or workspaces discovery could not see (failed subscriptions, Sentinel state unknown), leave the eligible / used / after-allowances sums shown as exact instead of \"at least\" - an inventory-standard breach (docs/inventory-standard.md). The panel shows a separate warning line for the discovery case, but the cards do not say \"at least\". Fix: compareTenant sets sumsAreFloors when any read inventory carries usageWarning, and takes a discovery-incomplete flag from the panel; pin both in data-allowances.test.ts and a panel DOM test.\n\nDONE 2026-11-03 (pins, 59e07d2..d241d20): compareTenant gathers every floor cause - unread workspace, a read workspace's partial Usage answer, incomplete discovery (new discoveryIncomplete option from the panel) - and for any cause floors the sums, skips every cross-check naming the cause, and floors Servers P2 granted; E5 stays exact. Reviewed clean.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "type": "bug",
+      "priority": "now",
+      "id": "MIG-19",
+      "title": "Servers P2 card calls the grant tenant-wide and skips its cross-check because the tenant has several Sentinel workspaces",
+      "detail": "FOUND 2026-11-03 in Live Preview (jpederson org, law-jpederson-eastus, branch feature/data-volume-inventory at d241d20): the Servers P2 card reads \"Tenant-wide, shared across 61 Sentinel workspaces\" and its cross-check says \"skipped: the grant is tenant-wide and shared across 61 Sentinel workspaces\". Only the E5 grant is tenant-wide. Defender for Servers P2 is 500 MB per machine, summed per subscription and applied at the workspace the machines report to (spec, The grants), so the multi-workspace rule (USER DECISION 2026-11-03, spec call 6) must apply to E5 only. Fix: the shared-workspace label and the workspace-count skip reason apply to the e5 view only; the Servers view keeps its own skip reasons (no capped day, pricings not read, sums partial). Pin both.\n\nDONE 2026-11-03 (both, 03908a6): the shared-workspace label and the workspace-count cross-check skip apply to E5 only; Servers P2 keeps its own skip reasons. Pinned in core and UI; seen in Live Preview - the Servers card no longer says tenant-wide.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "type": "bug",
+      "priority": "now",
+      "id": "MIG-20",
+      "title": "Allowance cards round sub-GB figures to 0.0 GB, hiding real eligible and over volume",
+      "detail": "FOUND 2026-11-03 in Live Preview (same read as MIG-19): WindowsEvent is eligible at 1.3 MB/day, but the Servers P2 card says \"eligible 0.0 GB/day\", \"granted 0.0 GB/day\" and \"0.0 GB/day over\" (in warning colour) - with the plan off, the true over is 1.3 MB/day. The cards format in fixed GB, so small workspaces read as zero, which the inventory standard forbids for a non-zero figure. Fix: every allowance figure uses formatMB (MB/GB/TB with the existing thresholds) like the rest of the page; a figure that is exactly 0 may read 0; the over line uses the warning colour only when over > 0. Pin with a 1.3 MB/day case.\n\nDONE 2026-11-03 (both, 0084c97): every allowance figure formats with formatMB (mbPerDay); the live 1.3 MB/day case is pinned and reads 'eligible 1.3 MB/day', '1.3 MB/day over' in Live Preview; GB figures now show two decimals.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
       "status": "done",
@@ -3863,6 +4017,12 @@
       "epic": "MIG",
       "menu": "siem-migration",
       "title": "Sentinel workspace data-source inventory"
+    },
+    {
+      "id": "MIG-F2",
+      "epic": "MIG",
+      "menu": "data-volume-inventory",
+      "title": "Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine)"
     }
   ]
 }

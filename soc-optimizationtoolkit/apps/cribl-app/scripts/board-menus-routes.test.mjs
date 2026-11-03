@@ -141,6 +141,23 @@ describe('azure-onboarding (AZR-18)', () => {
   });
 });
 
+describe('data-volume-inventory (MIG-10)', () => {
+  it('is a tools-section route labelled as the board labels it', () => {
+    const row = rows.find((r) => r.id === 'data-volume-inventory');
+    expect(row).toEqual({
+      id: 'data-volume-inventory',
+      label: 'Data Volume Inventory',
+      requiresId: 'data-volume-inventory',
+      section: 'tools',
+    });
+    expect(MENU_LABELS['data-volume-inventory']).toBe('Data Volume Inventory');
+  });
+
+  it('is no longer PLANNED', () => {
+    expect(PLANNED_MENUS).not.toContain('data-volume-inventory');
+  });
+});
+
 describe('the rollup sentence about PLANNED menus', () => {
   // It was hard-coded "Two menus are PLANNED" and survived AZR-18 routing
   // azure-onboarding, because check-board only compares board.md with a

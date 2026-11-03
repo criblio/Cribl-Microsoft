@@ -29,10 +29,16 @@ vi.mock("./http", () => ({
   kvUrl: (key: string) => `https://leader.example/api/v1/kvstore/${key}`,
   kvDelete: vi.fn(),
   acquireArmToken: vi.fn(),
-  acquireGraphToken: vi.fn(),
+  acquireGraphToken: vi.fn(async () => ({ access_token: "tok" })),
 }));
 
-const { PlatformCriblClient, PlatformSecretsStore, KvContentCache, PlatformGithubPat } =
+const {
+  PlatformCriblClient,
+  PlatformSecretsStore,
+  KvContentCache,
+  PlatformGithubPat,
+  PlatformGraphDirectory,
+} =
   await import("./adapters");
 
 afterEach(() => {
@@ -233,5 +239,49 @@ describe("KV readers: only a 404 or the encrypted-value 403 reads as absent (DBT
         /GET githubPatStatus: HTTP 403\n\{"message":"Forbidden"\}/,
       );
     });
+  });
+});
+
+describe("PlatformGraphDirectory.readSubscribedSkus (MIG-14)", () => {
+  const SKUS_URL =
+    "https://graph.microsoft.com/v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo";
+
+  /** Token PUTs succeed; the SKU GET answers the scripted statuses in order. */
+  function scriptSkus(...statuses: number[]) {
+    const queue = [...statuses];
+    fetchWithTimeout.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return { ok: true, status: 200, text: async () => "" };
+      if (url !== SKUS_URL) throw new Error(`unexpected url ${url}`);
+      const status = queue.shift() ?? 500;
+      return {
+        ok: status === 200,
+        status,
+        text: async () => JSON.stringify(status === 200 ? { value: [{ skuId: "x" }] } : {}),
+        headers: { get: () => "application/json" },
+      };
+    });
+  }
+  const skuGets = () =>
+    fetchWithTimeout.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "GET");
+
+  it("reads the SKU list with the select the spec names", async () => {
+    scriptSkus(200);
+    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    expect(result).toEqual({ kind: "read", body: { value: [{ skuId: "x" }] } });
+    expect(skuGets()).toHaveLength(1);
+  });
+
+  it("re-acquires the token once on a 403, then returns denied naming LicenseAssignment.Read.All", async () => {
+    scriptSkus(403, 403);
+    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    expect(skuGets()).toHaveLength(2);
+    expect(result).toMatchObject({ kind: "denied", status: 403 });
+    expect((result as { detail: string }).detail).toMatch(/LicenseAssignment\.Read\.All/);
+  });
+
+  it("a 403 that a fresh token clears reads the list", async () => {
+    scriptSkus(403, 200);
+    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    expect(result.kind).toBe("read");
   });
 });

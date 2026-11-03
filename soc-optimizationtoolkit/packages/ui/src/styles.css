@@ -109,6 +109,10 @@
   /* Azure Logging Map: the soft fill behind "ours" chips and covered scopes
    * (the stroke reuses --tone-search, the teal no other diagram state uses). */
   --lm-ours-bg: #e6fffb;
+  /* Chart series slots 1 and 2 (dataviz reference: blue, orange), validated
+   * for CVD separation on the light surface; dark selects its own steps. */
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
   /* Load-bearing monospace stack (technical values, counts, summaries,
    * placeholders, the REPOS status line, code chips). Previously several rules
    * referenced var(--font-mono) with no fallback and silently rendered as
@@ -175,6 +179,8 @@
   --tier-pipeline-bg: #2a1220;
   --tone-search: #33bcb7;
   --lm-ours-bg: #0f2a2a;
+  --chart-series-1: #3987e5;
+  --chart-series-2: #d95926;
 }
 
 * {
@@ -3362,6 +3368,151 @@ button.readiness-pill:focus-visible {
   white-space: pre-wrap;
   margin: 4px 0;
   color: var(--text);
+}
+
+/* Data Volume Inventory: data allowance cards (MIG-15). Card grammar follows
+ * .match-stat (raised inset, control radius, monospace figures). */
+.allowance-cards {
+  margin: 10px 0;
+}
+.allowance-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+}
+.allowance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.allowance-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.allowance-card-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.allowance-card-status {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.allowance-card-status-over {
+  color: var(--warn);
+}
+/* Eligible against a granted marker; the marker is the grant, the fill the use. */
+.allowance-meter {
+  position: relative;
+  height: 8px;
+  margin: 4px 0;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+.allowance-meter-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--chart-series-1);
+}
+.allowance-meter-fill-over {
+  background: var(--chart-series-2);
+}
+.allowance-meter-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  background: var(--text-strong);
+}
+.allowance-detail {
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.allowance-detail-heading {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.allowance-arithmetic {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.allowance-row-dim td {
+  color: var(--text-faint);
+}
+.allowance-total-row td {
+  font-weight: 700;
+}
+/* MIG-16: one tenant-comparison workspace that was not read, by name. */
+.allowance-not-read {
+  margin-top: 2px;
+}
+.allowance-chart {
+  margin: 4px 0;
+}
+.allowance-chart-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text);
+}
+.allowance-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  vertical-align: middle;
+}
+.allowance-swatch-eligible {
+  background: var(--chart-series-1);
+}
+.allowance-swatch-applied {
+  background: var(--chart-series-2);
+}
+.allowance-chart-svg {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+.allowance-chart-grid {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+.allowance-chart-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.allowance-chart-label {
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+.allowance-line-eligible,
+.allowance-line-applied {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.allowance-line-eligible {
+  stroke: var(--chart-series-1);
+}
+.allowance-line-applied {
+  stroke: var(--chart-series-2);
+}
+.allowance-chart-hit {
+  fill: transparent;
 }
 
 /* Enable Sentinel Content (content-install section). */
