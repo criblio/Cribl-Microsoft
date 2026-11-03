@@ -62,8 +62,6 @@ const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
  * shipped menus is how a rollup starts overstating what exists:
  *
  *   windows-events    PLANNED. backlog.md#5's Windows Event analysis screen
- *   data-volume-inventory  PLANNED until MIG-10 routes it in the tools
- *                     section (the workspace inventory leaving SIEM Migration)
  *
  * (azure-onboarding was PLANNED until AZR-18 shipped its route; it now sits in
  * the development section after eventhub-discovery, its prerequisite screen.
@@ -87,6 +85,7 @@ export const MENUS = [
   'repositories',
   'labs',
   'logs',
+  'data-volume-inventory',
   'settings',
   // development
   'siem-migration',
@@ -99,7 +98,6 @@ export const MENUS = [
   'harness',
   // planned - no route exists yet
   'windows-events',
-  'data-volume-inventory',
   // cross-cutting
   'none',
 ];
@@ -128,7 +126,7 @@ export const MENU_LABELS = {
 };
 
 /** The menus that name a screen nobody can open yet. */
-export const PLANNED_MENUS = ['windows-events', 'data-volume-inventory'];
+export const PLANNED_MENUS = ['windows-events'];
 
 /**
  * The rollup's sentence about PLANNED menus, derived from PLANNED_MENUS so it

@@ -21,7 +21,7 @@ reasoning is in `backlog.md` and their full text in the git history of
 
 Which part of the product each card is about, using the app's own route
 ids. `Cross-cutting` is release mechanics, docs and board tooling - work no
-operator sees on any screen. Two menus are PLANNED and have no route yet.
+operator sees on any screen. One menu is PLANNED and has no route yet.
 
 | Menu | Open | Done | Now |
 |---|---|---|---|
@@ -32,13 +32,13 @@ operator sees on any screen. Two menus are PLANNED and have no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
+| Data Volume Inventory | 8 | 0 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 27 | 23 | 7 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Data Volume Inventory | 8 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
 Open work totals 135.
