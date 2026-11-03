@@ -3725,19 +3725,20 @@
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-56",
       "type": "bug",
       "title": "The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read",
-      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. With consumer group cribl absent on ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404), the Defender lane's Create planned and armed, and the confirm did not mention the consumer group. buildEventHubInputBody sets groupId to the plan's consumerGroup (input-bodies.ts:147), so the created eventhub input would fail to read. The plan already refuses until Validate has seen a hub in a complete listing; the consumer group deserves the same gate. FIX: the plan reads the consumer group by name and refuses on a 404, pointing at the How-to step (or [[AZR-36]] once it exists); a refused read is unknown and also refuses; the confirm names the consumer group. Pin both refusals and the confirm line."
+      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. With consumer group cribl absent on ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404), the Defender lane's Create planned and armed, and the confirm did not mention the consumer group. buildEventHubInputBody sets groupId to the plan's consumerGroup (input-bodies.ts:147), so the created eventhub input would fail to read. The plan already refuses until Validate has seen a hub in a complete listing; the consumer group deserves the same gate. FIX: the plan reads the consumer group by name and refuses on a 404, pointing at the How-to step (or [[AZR-36]] once it exists); a refused read is unknown and also refuses; the confirm names the consumer group. Pin both refusals and the confirm line.\n\nDONE 2026-11-03 (pins): after the credential checks, the plan GETs the consumer group by name on every hub the source will read (buildHubConsumerGroupGetRequest). A 404 on any hub refuses consumer-group-missing, naming the group and those hubs; any other refused read refuses consumer-group-unreadable and is never taken as present. The ready plan carries readsFrom (hubs and consumer group, null for Blob), and the confirm says \"Reads hub h1 with consumer group cribl.\" The plan GET count went from 5 to 6 in the GET-only pin, and the screen fake gained the consumer-group route. Mutation-checked: treating a 404 as present fails 1 pin. Live check outstanding with the resumed pass.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
@@ -3745,7 +3746,8 @@
       "type": "bug",
       "priorityWhy": "The sentence is still understood and names the right source type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is fixed in that pass rather than ahead of the defects that would write a bad source.",
       "title": "The Cribl source confirm reads 'Create a Azure Event Hubs source'",
-      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. The confirm's first line reads 'Create a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the label, or reword so no article depends on it. Pin the exact confirm lines for both transports."
+      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. The confirm's first line reads 'Create a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the label, or reword so no article depends on it. Pin the exact confirm lines for both transports.\n\nDONE 2026-11-03 (pins): the confirm now opens \"New Cribl source <id>, an Azure Event Hubs source (eventhub), in worker group <g>.\" Both type labels start with Azure, and the pins fix the exact first line for both transports and forbid \" a A\" anywhere in the confirm.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",

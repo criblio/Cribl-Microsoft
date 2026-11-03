@@ -111,6 +111,10 @@ class RoutingAzure implements AzureManagement {
     if (r.path === `${NS_PATH}/eventhubs`) {
       return ok({ value: [{ name: HUB, id: `${NS_PATH}/eventhubs/${HUB}`, properties: { partitionCount: 2 } }] });
     }
+    // AZR-56: the plan reads the consumer group the source will use.
+    if (r.path === `${NS_PATH}/eventhubs/${HUB}/consumergroups/cribl`) {
+      return ok({ name: "cribl", id: `${NS_PATH}/eventhubs/${HUB}/consumergroups/cribl` });
+    }
     return notFound();
   }
 }

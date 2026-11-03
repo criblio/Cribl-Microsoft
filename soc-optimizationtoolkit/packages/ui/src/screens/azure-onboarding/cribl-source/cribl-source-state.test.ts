@@ -60,6 +60,7 @@ const READY: ReadyCriblSource = {
   namespace: { subscriptionId: "sub", resourceGroup: "rg", name: "ns1" },
   kvRecord: null,
   secretDescription: "",
+  readsFrom: { hubs: ["h1"], consumerGroup: "cribl" },
 };
 
 const RECORD = { groupId: "g1", inputId: READY.inputId, inputType: "eventhub" as const, secretId: READY.secretId };
@@ -301,6 +302,26 @@ describe("confirmText", () => {
       expect(text, part).toContain(part);
     }
     expect(text).not.toContain("confirmed that");
+  });
+
+  // AZR-56: the consumer group is part of what the operator is agreeing to.
+  it("names the hubs the source reads and its consumer group", () => {
+    expect(confirmText(READY)).toContain("Reads hub h1 with consumer group cribl.");
+    expect(confirmText({ ...READY, readsFrom: { hubs: ["h1", "h2"], consumerGroup: "cg" } })).toContain(
+      "Reads hubs h1, h2 with consumer group cg.",
+    );
+    expect(confirmText({ ...READY, readsFrom: null }).join(" ")).not.toContain("consumer group");
+  });
+
+  // AZR-57: the first line read "Create a Azure Event Hubs source".
+  it("opens with a sentence whose article never depends on the source type", () => {
+    expect(confirmText(READY)[0]).toBe(
+      "New Cribl source azure_onb_eh_ns1_h1, an Azure Event Hubs source (eventhub), in worker group g1.",
+    );
+    expect(confirmText({ ...READY, inputType: "azure_blob", readsFrom: null })[0]).toBe(
+      "New Cribl source azure_onb_eh_ns1_h1, an Azure Blob Storage source (azure_blob), in worker group g1.",
+    );
+    for (const line of confirmText(READY)) expect(line).not.toContain(" a A");
   });
 
   // DBT-164: the kit commits only the files still pending after the create,

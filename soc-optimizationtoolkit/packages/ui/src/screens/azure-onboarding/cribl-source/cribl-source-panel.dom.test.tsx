@@ -60,6 +60,7 @@ const READY: ReadyCriblSource = {
   namespace: { subscriptionId: "sub", resourceGroup: "rg", name: "ns1" },
   kvRecord: null,
   secretDescription: "",
+  readsFrom: { hubs: ["h1"], consumerGroup: "cribl" },
 };
 
 const OUTCOME: ApplyCriblSourceOutcome = {
@@ -263,6 +264,7 @@ const READY_BLOB: ReadyCriblSource = {
   keyNameOrPrincipal: "client-1",
   credentialKind: "client-secret",
   descriptor: null,
+  readsFrom: null,
 } as ReadyCriblSource;
 
 function blobProps(over: Partial<CriblSourcePanelProps> = {}): CriblSourcePanelProps {

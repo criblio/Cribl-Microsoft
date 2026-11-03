@@ -109,9 +109,9 @@ const RULES = {
   ],
 };
 
-/** Azure answers for the plan: namespace (sku), then the rules list. */
+/** Azure answers for the plan: namespace (sku), the rules list, then the consumer group on h1. */
 function scriptAzurePlan(h: ReturnType<typeof harness>, sku = "Standard"): void {
-  h.azure.respondWith(ok({ name: "ns1", sku: { name: sku } }), ok(RULES));
+  h.azure.respondWith(ok({ name: "ns1", sku: { name: sku } }), ok(RULES), ok({ name: "cribl" }));
 }
 
 /** Cribl answers for a clean plan: no inputs, no secret, nothing pending. */
@@ -206,8 +206,9 @@ describe("planCriblSource", () => {
   it("makes only GETs, on both ports, and names what the confirm shows", async () => {
     const h = harness();
     const ready = await readyListKeys(h);
-    expect(h.log.length).toBe(5);
+    expect(h.log.length).toBe(6);
     expect(h.log.every((e) => e.req.method === "GET")).toBe(true);
+    expect(ready.readsFrom).toEqual({ hubs: ["h1"], consumerGroup: "cribl" });
     expect(ready).toMatchObject({
       groupId: G,
       inputId: INPUT_ID,
@@ -217,6 +218,32 @@ describe("planCriblSource", () => {
       commitFiles: [`groups/${G}/local/cribl/inputs.yml`, `groups/${G}/local/cribl/secrets.yml`, `groups/${G}/local/cribl/auth/cribl.secret`],
       dirtyAlready: [],
     });
+  });
+
+  // AZR-56: an input whose consumer group does not exist cannot read.
+  it("reads the plan's consumer group on the lane's hub, by name", async () => {
+    const h = harness();
+    await readyListKeys(h);
+    const cg = h.log.find((e) => e.port === "azure" && e.req.path.includes("/consumergroups/"));
+    expect(cg?.req.path).toMatch(/\/namespaces\/ns1\/eventhubs\/h1\/consumergroups\/cribl$/);
+  });
+
+  it("refuses a missing consumer group before any Cribl call, naming the group and the hub", async () => {
+    const h = harness();
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), ok(RULES), status(404, { error: { code: "NotFound" } }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "consumer-group-missing" });
+    expect(JSON.stringify(plan)).toContain("cribl");
+    expect(JSON.stringify(plan)).toContain("h1");
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+  });
+
+  it("refuses when the consumer group cannot be read, never assuming it exists", async () => {
+    const h = harness();
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), ok(RULES), status(403, { error: { code: "AuthorizationFailed" } }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "consumer-group-unreadable" });
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
   });
 
   it("refuses a listKeys rule without Listen before any write", async () => {
@@ -280,7 +307,7 @@ describe("planCriblSource", () => {
 
   it("carries an attestation into ready when the rules read is denied and the operator attested", async () => {
     const h = harness();
-    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), status(403, { error: { code: "AuthorizationFailed" } }));
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), status(403, { error: { code: "AuthorizationFailed" } }), ok({ name: "cribl" }));
     scriptCriblPlan(h);
     const plan = await planCriblSource(
       h.ports,

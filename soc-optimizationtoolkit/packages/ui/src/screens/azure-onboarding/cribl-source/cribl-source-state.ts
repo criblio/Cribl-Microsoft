@@ -216,6 +216,8 @@ export const PLAN_REFUSAL_COPY: Readonly<Record<PlanRefusalReason, string>> = {
   "unknown-rule": "That key name is not one of the namespace's authorization rules.",
   "rule-cannot-listen": "This key cannot listen: its rule has no Listen rights.",
   "rule-can-manage": "This key can Manage the namespace, so it is not stored in Cribl. Use a Listen-only rule.",
+  "consumer-group-missing": "The consumer group does not exist on the hub yet, so the source could not read. Create it, run Validate, then create the source.",
+  "consumer-group-unreadable": "The consumer group could not be read, so whether the source could read is unknown.",
   "wrong-namespace": "Wrong namespace: the connection string is for another Event Hub namespace.",
   "entity-mismatch": "The connection string is scoped to a different hub than this source reads.",
   "rule-rights-unknown": "The rules could not be read, so whether this key can listen is unknown.",
@@ -409,11 +411,18 @@ export function confirmText(ready: ReadyCriblSource): string[] {
       : ready.credentialKind === "listKeys"
         ? `Reads with the key of rule ${ready.keyNameOrPrincipal}, fetched from Azure when you confirm.`
         : `Reads with the pasted key of rule ${ready.keyNameOrPrincipal}.`;
+  // AZR-57: both type labels start with "Azure", so "an" is right for each;
+  // the pin holds every label to that.
   const lines = [
-    `Create a ${INPUT_TYPE_LABEL[ready.inputType]} with id ${ready.inputId} in worker group ${ready.groupId}.`,
+    `New Cribl source ${ready.inputId}, an ${INPUT_TYPE_LABEL[ready.inputType]}, in worker group ${ready.groupId}.`,
     `Store its credential in a new Cribl secret ${ready.secretId}; the source names the secret and never holds the key.`,
     who,
   ];
+  // AZR-56: the consumer group is part of what is being agreed to.
+  if (ready.readsFrom !== null) {
+    const { hubs, consumerGroup } = ready.readsFrom;
+    lines.push(`Reads ${hubs.length === 1 ? "hub" : "hubs"} ${hubs.join(", ")} with consumer group ${consumerGroup}.`);
+  }
   if (ready.attested) {
     lines.push(
       `You confirmed that ${ready.keyNameOrPrincipal} has Listen rights; the app could not read the rules to check.`,

@@ -35,6 +35,7 @@ import type { Logger } from "../../ports/logger";
 import {
   buildNamespaceAuthRulesListRequest,
   buildNamespaceGetRequest,
+  buildHubConsumerGroupGetRequest,
   namespaceSupportsKafka,
   parseNamespaceAuthRules,
   ruleCanListen,
@@ -135,6 +136,8 @@ export type PlanRefusalReason =
   | "unknown-rule"
   | "rule-cannot-listen"
   | PastedCredentialRefusal
+  | "consumer-group-missing"
+  | "consumer-group-unreadable"
   | "inputs-unreadable"
   | "input-differs"
   | "input-foreign"
@@ -176,6 +179,11 @@ export interface ReadyCriblSource {
   readonly kvRecord: CriblSourceRecord | null;
   /** The secret's human description (stamped when the body is built). */
   readonly secretDescription: string;
+  /**
+   * What an Event Hub source reads: its hubs and consumer group, each group
+   * confirmed present on each hub by the plan (AZR-56). Null for Blob.
+   */
+  readonly readsFrom: { readonly hubs: readonly string[]; readonly consumerGroup: string } | null;
 }
 
 export type PlanCriblSourceResult =
@@ -329,6 +337,7 @@ export async function planCriblSource(
   let descriptor: ConnectionDescriptor | null = null;
   let attested = false;
   let namespace: NamespaceRef | null = null;
+  let readsFrom: ReadyCriblSource["readsFrom"] = null;
 
   if (credential.kind === "client-secret") {
     const tenantId = credential.tenantId.trim();
@@ -405,6 +414,36 @@ export async function planCriblSource(
       keyNameOrPrincipal = credential.descriptor.keyName;
     }
 
+    // AZR-56: an eventhub input whose consumer group is missing is created but
+    // never reads. Read the group by name on every hub the source will read; a
+    // 404 is missing, any other refusal is unknown, and both refuse.
+    const missing: string[] = [];
+    for (const hub of topics.topics) {
+      const cgRead = await readSingle(
+        ports.azure,
+        buildHubConsumerGroupGetRequest(namespace, hub, consumerGroup),
+        `consumer group ${consumerGroup} on ${hub}`,
+      );
+      if (cgRead.state === "refused") {
+        if (cgRead.refusal.status === 404) {
+          missing.push(hub);
+          continue;
+        }
+        return refused(
+          "consumer-group-unreadable",
+          `The consumer group ${consumerGroup} on hub ${hub} could not be read (${cgRead.refusal.text}), so whether the source could read is unknown.`,
+        );
+      }
+    }
+    if (missing.length > 0) {
+      return refused(
+        "consumer-group-missing",
+        `The consumer group ${consumerGroup} does not exist on ${missing.length === 1 ? "hub" : "hubs"} ${missing.join(", ")}, so the source would be created but could not read. ` +
+          "Create it (the How-to step for the consumer group says how), run Validate, then create the source.",
+      );
+    }
+    readsFrom = { hubs: [...topics.topics], consumerGroup };
+
     inputBody = buildEventHubInputBody({
       id: inputId,
       namespace: namespace.name,
@@ -477,6 +516,7 @@ export async function planCriblSource(
       namespace,
       kvRecord: input.kvRecord,
       secretDescription: `Azure onboarding credential for ${inputId}`,
+      readsFrom,
     },
   };
 }

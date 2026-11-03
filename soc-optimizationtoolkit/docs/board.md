@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**95 in the backlog, 37 in progress, 135 done.**
+**95 in the backlog, 35 in progress, 137 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 24 | 11 |
+| Azure Native Source Onboarding | 30 | 26 | 10 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 132.
+Open work totals 130.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 38% (21/55)
+### `AZR` Azure native source onboarding - 42% (23/55)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 19/37 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 21/37 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1114,36 +1114,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
-
-- **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. With consumer group cribl absent on
-  ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404),
-  the Defender lane's Create planned and armed, and the confirm did not
-  mention the consumer group. buildEventHubInputBody sets groupId to the
-  plan's consumerGroup (input-bodies.ts:147), so the created eventhub input
-  would fail to read. The plan already refuses until Validate has seen a hub
-  in a complete listing; the consumer group deserves the same gate. FIX: the
-  plan reads the consumer group by name and refuses on a 404, pointing at the
-  How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
-  also refuses; the confirm names the consumer group. Pin both refusals and
-  the confirm line.
-
-- **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
-  `AZR-F9` `bug` `settled`
-  Not now because: The sentence is still understood and names the right source
-  type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
-  fixed in that pass rather than ahead of the defects that would write a bad
-  source.
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. The confirm's first line reads 'Create
-  a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so
-  the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the
-  label, or reword so no article depends on it. Pin the exact confirm lines
-  for both transports.
 
 ---
 
@@ -2571,7 +2541,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (135)
+## Done (137)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6587,6 +6557,48 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson
   org: at scroll top, clicking inside Add Sample Data left Select Sentinel
   Solution open and Add Sample Data in place, and sections 3-8 folded.
+
+- **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. With consumer group cribl absent on
+  ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404),
+  the Defender lane's Create planned and armed, and the confirm did not
+  mention the consumer group. buildEventHubInputBody sets groupId to the
+  plan's consumerGroup (input-bodies.ts:147), so the created eventhub input
+  would fail to read. The plan already refuses until Validate has seen a hub
+  in a complete listing; the consumer group deserves the same gate. FIX: the
+  plan reads the consumer group by name and refuses on a 404, pointing at the
+  How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
+  also refuses; the confirm names the consumer group. Pin both refusals and
+  the confirm line. DONE 2026-11-03 (pins): after the credential checks, the
+  plan GETs the consumer group by name on every hub the source will read
+  (buildHubConsumerGroupGetRequest). A 404 on any hub refuses
+  consumer-group-missing, naming the group and those hubs; any other refused
+  read refuses consumer-group-unreadable and is never taken as present. The
+  ready plan carries readsFrom (hubs and consumer group, null for Blob), and
+  the confirm says "Reads hub h1 with consumer group cribl." The plan GET
+  count went from 5 to 6 in the GET-only pin, and the screen fake gained the
+  consumer-group route. Mutation-checked: treating a 404 as present fails 1
+  pin. Live check outstanding with the resumed pass.
+
+- **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
+  `AZR-F9` `bug` `settled` `verified: pins`
+  Not now because: The sentence is still understood and names the right source
+  type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
+  fixed in that pass rather than ahead of the defects that would write a bad
+  source.
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The confirm's first line reads 'Create
+  a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so
+  the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the
+  label, or reword so no article depends on it. Pin the exact confirm lines
+  for both transports. DONE 2026-11-03 (pins): the confirm now opens "New
+  Cribl source <id>, an Azure Event Hubs source (eventhub), in worker group
+  <g>." Both type labels start with Azure, and the pins fix the exact first
+  line for both transports and forbid " a A" anywhere in the confirm.
 
 - **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
   `AZR-F9` `bug` `settled` `verified: pins`
