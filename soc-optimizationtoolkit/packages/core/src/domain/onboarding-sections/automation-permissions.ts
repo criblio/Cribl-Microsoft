@@ -24,12 +24,12 @@
  * ONLY THIS CONNECTION'S SET. The audit hook keeps the previous connection's
  * set until the new audit lands, so a caller passes the audit key and a set
  * measured for another connection is read as never checked here
- * (usableCapabilitySet). Without that guard a connection switch would block
- * Deploy on verdicts nobody measured for the new identity.
+ * (usableCapabilitySet). Without that guard a connection switch would warn
+ * against Deploy on verdicts nobody measured for the new identity.
  *
- * THE CHECK'S AGE IS IN THE BLOCKING COPY. The set comes from a one-slot cache
+ * THE CHECK'S AGE IS IN THE DENIAL COPY. The set comes from a one-slot cache
  * that is re-measured only on a key change or a manual re-check, so a denial
- * can be days old. Given `nowIso`, the blocked banner and deploy reason say
+ * can be days old. Given `nowIso`, the denied banner and deploy caution say
  * when the check ran ("the permission check 3 days ago found ...") and offer
  * Re-check permissions first.
  *
@@ -52,14 +52,14 @@
  * `denied` for it into unknown, so a set written before that rule cannot
  * resurrect the claim.
  *
- * DEPLOY IS BLOCKED ONLY BY A MEASURED DENIAL OF A CORE CAPABILITY - the
- * operator's request, written on the card. This is a deliberate, scoped
- * departure from capabilities.ts rule 3 ("the audit informs and offers, never
- * forbids"): the verdict is Azure's own effective-action evaluation at the very
- * subscription the export is written to, the deploy re-lists before it writes
- * (so a refused automations read would fail it anyway), and the How-to path is
- * the offered fallback. A capability deploy does not need (plans.read) is
- * `informational`: its denial warns but never blocks.
+ * NOTHING HERE DISABLES DEPLOY. capabilities.ts rule 3 holds: the audit
+ * informs and offers, never forbids (operator decision 2026-11-03, which
+ * withdrew a block the first build put on a measured core denial). A measured
+ * denial of a core capability is an error banner plus a caution beside Deploy
+ * that Azure will likely refuse it; Deploy stays clickable, its two-step confirm
+ * is unchanged, and Azure's own answer at the write is reported as it comes. A
+ * capability deploy does not need (plans.read) is `informational`: its denial
+ * only warns.
  *
  * VISIBLE COPY. Every string here reaches the screen: no card ids, dates or
  * phases (the copy-history gate in the ui package reads them).
@@ -88,7 +88,7 @@ import type { ItemAvailability } from "./onboarding-sections";
 /**
  * Whether automating the source depends on the capability.
  *
- *   core           the deploy cannot work without it; a measured denial blocks
+ *   core           the deploy cannot work without it; a measured denial cautions
  *   informational  the section reads something with it, deploy works without
  */
 export type AutomationNecessity = "core" | "informational";
@@ -207,12 +207,14 @@ export interface AutomationNeedRow {
 /**
  * The banner over the section.
  *
- *   blocked       a core capability was measured denied: deploy is blocked
+ *   denied        a core capability was measured denied: Azure will likely
+ *                 refuse the deploy, which stays offered (the audit informs,
+ *                 never forbids - capabilities.ts rule 3)
  *   not-measured  a core capability is unknown, never checked or unreachable
  *   partial       only an informational capability is denied: deploy works
  */
 export interface AutomationBanner {
-  readonly kind: "blocked" | "not-measured" | "partial";
+  readonly kind: "denied" | "not-measured" | "partial";
   readonly tone: "info" | "warning" | "error";
   readonly text: string;
   /** Whether Re-check permissions is offered (not without an identity to check). */
@@ -222,8 +224,12 @@ export interface AutomationBanner {
 export interface AutomationPermissionView {
   readonly rows: readonly AutomationNeedRow[];
   readonly banner: AutomationBanner | null;
-  /** Non-null only for a measured denial of a core capability. */
-  readonly deployBlockedReason: string | null;
+  /**
+   * Shown beside Deploy for a measured denial of a core capability; null
+   * otherwise. A caution, never a block: Deploy stays clickable and Azure's
+   * own answer at the write is what decides (operator decision 2026-11-03).
+   */
+  readonly deployCaution: string | null;
 }
 
 export interface AutomationPermissionInput {
@@ -240,7 +246,7 @@ export interface AutomationPermissionInput {
    * the set is trusted as this connection's (a shell that wires no key).
    */
   readonly auditKey?: string;
-  /** The shell's clock, so the blocking copy can say how old the check is. */
+  /** The shell's clock, so the denial copy can say how old the check is. */
   readonly nowIso?: string;
 }
 
@@ -289,7 +295,7 @@ function rolesOf(needs: readonly AutomationCapabilityNeed[]): string {
 
 /**
  * The banner and per-capability rows for one automatable source, from the
- * cached audit alone. Precedence: a core denial blocks; otherwise any core
+ * cached audit alone. Precedence: a core denial comes first; otherwise any core
  * capability not known to be granted gets the soft note; otherwise an
  * informational denial warns; otherwise there is nothing to say.
  */
@@ -319,18 +325,19 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
     return {
       rows,
       banner: {
-        kind: "blocked",
+        kind: "denied",
         tone: "error",
         text:
           `${check.charAt(0).toUpperCase()}${check.slice(1)} found your Azure identity cannot ${does} ` +
-          `(${actions}), so this section cannot set ${source} up. If the role was granted since, ` +
+          `(${actions}), so Azure will likely refuse this section's deploy of ${source}. If the role was granted since, ` +
           `Re-check permissions. Otherwise switch ${source} to How-to in section ${howtoSection} to see its ` +
           `steps, or ask an administrator for ${rolesOf(denied)} on the subscription.`,
         offerRecheck: true,
       },
-      deployBlockedReason:
-        `Deploy is blocked: ${check} found your Azure identity cannot ${does} (${actions}). ` +
-        `Re-check permissions if the role was granted since, or switch it to How-to in section ${howtoSection}.`,
+      deployCaution:
+        `Azure will likely refuse this deploy: ${check} found your Azure identity cannot ${does} (${actions}). ` +
+        `Deploy stays available because Azure's answer decides. Re-check permissions if the role was ` +
+        `granted since, or switch it to How-to in section ${howtoSection}.`,
     };
   }
 
@@ -345,7 +352,7 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
           text: `No Azure identity is connected, so whether it can set ${source} up has not been checked.`,
           offerRecheck: false,
         },
-        deployBlockedReason: null,
+        deployCaution: null,
       };
     }
     if (open.some((r) => r.state === "never-checked")) {
@@ -360,7 +367,7 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
             `at each step is what decides.`,
           offerRecheck: true,
         },
-        deployBlockedReason: null,
+        deployCaution: null,
       };
     }
     const grantOnly = open.some((r) => r.need.grantOnly);
@@ -377,7 +384,7 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
             : " Re-check permissions to measure it; Azure's own answer at each step is what decides."),
         offerRecheck: true,
       },
-      deployBlockedReason: null,
+      deployCaution: null,
     };
   }
 
@@ -392,12 +399,12 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
         tone: "warning",
         text:
           `Your Azure identity cannot ${phrase(informational.map((n) => n.does))}. Deploy does not need it ` +
-          `and is not blocked; ask an administrator for ${rolesOf(informational)} to see it.`,
+          `and still works; ask an administrator for ${rolesOf(informational)} to see it.`,
         offerRecheck: true,
       },
-      deployBlockedReason: null,
+      deployCaution: null,
     };
   }
 
-  return { rows, banner: null, deployBlockedReason: null };
+  return { rows, banner: null, deployCaution: null };
 }

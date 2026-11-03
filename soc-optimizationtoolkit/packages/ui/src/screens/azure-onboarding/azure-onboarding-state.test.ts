@@ -615,7 +615,7 @@ describe("visible copy carries no project history", () => {
     add("rule.note", ruleNote({ name: "r", rights: ["Manage"] }));
     for (const o of OUTCOMES) add(`outcome.${o.kind}`, deployOutcomeMessage(o).text);
 
-    // AZR-60: every banner, deploy reason and row label core's permission view
+    // AZR-60: every banner, deploy caution and row label core's permission view
     // can produce, for every declared source.
     const verdictSets: CapabilitySet["verdicts"][] = [];
     for (const v of ["granted", "denied", undefined] as const) {
@@ -646,7 +646,7 @@ describe("visible copy carries no project history", () => {
         for (const capabilities of sets) {
           const v = automationPermissionView({ permissions, capabilities, context, howtoSection: 8 });
           add(`perm.${id}.${ctxName}.banner`, v.banner?.text);
-          add(`perm.${id}.${ctxName}.deploy`, v.deployBlockedReason);
+          add(`perm.${id}.${ctxName}.deploy`, v.deployCaution);
           for (const r of v.rows) add(`perm.${id}.${ctxName}.row`, r.stateLabel);
         }
       }

@@ -23,10 +23,10 @@
  * capability set the shell already holds (usePorts) - no Azure call on mount.
  * The shell's audit key (`permissionsAuditKey`) keeps a set measured for
  * another connection from being read as this one's while a new audit runs.
- * A measured denial of a core capability blocks Deploy: the button is
- * aria-disabled (still focusable) with the reason beside it AND as its
- * aria-describedby, so a keyboard or screen-reader user hears why; the click
- * does nothing. Unknown or never checked is a soft note, never worded as
+ * A measured denial of a core capability is a CAUTION beside Deploy, never a
+ * block (operator decision 2026-11-03; capabilities.ts rule 3: the audit
+ * informs, never forbids): the caution is also the button's aria-describedby,
+ * and Deploy stays clickable because Azure's own answer at the write decides. Unknown or never checked is a soft note, never worded as
  * denied, and never blocks.
  *
  * WHAT IT WRITES. One automation, create-only, after a TWO-STEP arm/confirm
@@ -122,7 +122,7 @@ export interface DefenderExportSectionProps {
   recheckingPermissions?: boolean;
   /** The current connection's audit key; a set for another connection is not trusted. */
   permissionsAuditKey?: string;
-  /** The shell's clock, so a blocking denial says how old the check is. */
+  /** The shell's clock, so a denial says how old the check is. */
   permissionsNow?: () => string;
 }
 
@@ -158,8 +158,8 @@ export function DefenderExportSection({
           ...(permissionsAuditKey !== undefined ? { auditKey: permissionsAuditKey } : {}),
           ...(permissionsNow !== undefined ? { nowIso: permissionsNow() } : {}),
         });
-  const blockedReason = permissionView?.deployBlockedReason ?? null;
-  const blockedReasonId = useId();
+  const caution = permissionView?.deployCaution ?? null;
+  const cautionId = useId();
 
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState("");
@@ -229,7 +229,7 @@ export function DefenderExportSection({
     selection?.enabled ?? null,
     readSeq,
   ]);
-  const armed = reason === null && blockedReason === null && armedFor === armKey;
+  const armed = reason === null && armedFor === armKey;
   // Drop a stale arm outright: otherwise reverting the change would re-arm it.
   useEffect(() => {
     setArmedFor((current) => (current !== null && current !== armKey ? null : current));
@@ -238,7 +238,6 @@ export function DefenderExportSection({
   async function confirmDeploy(): Promise<void> {
     if (
       reason !== null ||
-      blockedReason !== null ||
       namespace === null ||
       target.rule === null ||
       resourceGroup === null
@@ -490,22 +489,17 @@ export function DefenderExportSection({
         <button
           type="button"
           className="next-action-button"
-          // A measured permission denial keeps the button focusable
-          // (aria-disabled) and names the reason as its description; the
-          // other gates keep their plain disabled.
-          disabled={blockedReason === null && (reason !== null || armed)}
-          aria-disabled={blockedReason !== null ? true : undefined}
-          aria-describedby={blockedReason !== null ? blockedReasonId : undefined}
-          onClick={() => {
-            if (blockedReason !== null) return;
-            setArmedFor(armKey);
-          }}
+          // A measured permission denial is described, never disabled: the
+          // caution is the button's description and Azure decides at the write.
+          disabled={reason !== null || armed}
+          aria-describedby={caution !== null ? cautionId : undefined}
+          onClick={() => setArmedFor(armKey)}
         >
           {running ? "Deploying..." : "Deploy alert export"}
         </button>
-        {blockedReason !== null && (
-          <span className="field-hint" id={blockedReasonId}>
-            {blockedReason}
+        {caution !== null && (
+          <span className="field-hint" id={cautionId}>
+            {caution}
           </span>
         )}
         {reason !== null && <span className="field-hint">{reason}</span>}

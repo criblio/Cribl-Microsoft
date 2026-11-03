@@ -2113,7 +2113,7 @@ function App() {
         {/* AZR-60: the Defender section's permission banner offers the
             connection bar's own re-check rather than a second audit. The key
             keeps the previous connection's set (held until the new audit
-            lands) from blocking Deploy; the clock dates a blocking denial. */}
+            lands) from being read as this one's; the clock dates a denial. */}
         <AzureOnboardingScreen
           pacing={BATCH_PACING}
           onRecheckPermissions={capabilityAudit.refresh}

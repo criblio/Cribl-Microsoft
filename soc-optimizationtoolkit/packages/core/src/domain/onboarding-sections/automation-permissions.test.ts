@@ -8,8 +8,10 @@
 //     (inventory-honesty: unknown is not denied);
 //   - the grant-only write (automations/write evaluated above its resource
 //     group) shown as denied, which nobody measured;
-//   - deploy disabled for anything short of a measured, core denial;
-//   - a denial of a capability deploy does not need blocking deploy anyway.
+//   - a deploy caution for anything short of a measured, core denial;
+//   - a denial of a capability deploy does not need cautioning deploy anyway.
+// Nothing here ever disables Deploy: the audit informs, never forbids
+// (operator decision 2026-11-03).
 
 import { describe, expect, it } from "vitest";
 
@@ -128,48 +130,51 @@ describe("the declaration", () => {
 });
 
 describe("automationPermissionView", () => {
-  it("granted: every row granted, no banner, deploy not blocked", () => {
+  it("granted: every row granted, no banner, no deploy caution", () => {
     const v = view(audited({ plans: "granted", read: "granted", write: "granted" }));
     expect(v.rows.map((r) => r.state)).toEqual(["granted", "granted", "granted"]);
     expect(v.banner).toBeNull();
-    expect(v.deployBlockedReason).toBeNull();
+    expect(v.deployCaution).toBeNull();
   });
 
-  it("denied: a blocking banner naming the action, the role and the How-to section; deploy blocked with it", () => {
+  it("denied: an error banner naming the action, the role and the How-to section; a deploy caution with it", () => {
     const v = view(audited({ plans: "granted", read: "denied", write: "granted" }));
     expect(v.rows.map((r) => r.state)).toEqual(["granted", "denied", "granted"]);
-    expect(v.banner?.kind).toBe("blocked");
+    expect(v.banner?.kind).toBe("denied");
     expect(v.banner?.tone).toBe("error");
+    expect(v.banner?.text).toContain("Azure will likely refuse");
+    expect(v.banner?.text).not.toMatch(/cannot set .* up|blocked/);
     expect(v.banner?.offerRecheck).toBe(true);
     const text = v.banner?.text ?? "";
     expect(text).toContain("your Azure identity cannot list the subscription's continuous exports");
     expect(text).toContain("Defender for Cloud alert export");
     expect(text).toContain("section 8");
     expect(text).toContain("Security Reader");
-    expect(v.deployBlockedReason).toContain(DEFENDER_AUTOMATIONS_READ);
-    expect(v.deployBlockedReason).toContain("section 8");
+    expect(v.deployCaution).toContain(DEFENDER_AUTOMATIONS_READ);
+    expect(v.deployCaution).toContain("section 8");
   });
 
-  it("blocked copy says how to reach the How-to steps: the row must be switched to How-to first", () => {
+  it("denial copy says how to reach the How-to steps: the row must be switched to How-to first", () => {
     // The Defender row is in Automate mode while this section renders, and the
     // How-to section lists steps only for How-to rows.
     const v = view(audited({ read: "denied" }));
     expect(v.banner?.text).toContain("switch Defender for Cloud alert export to How-to in section 8");
-    expect(v.deployBlockedReason).toContain("switch it to How-to in section 8");
+    expect(v.deployCaution).toContain("switch it to How-to in section 8");
   });
 
-  it("blocked copy says how old the check is, and offers Re-check before anything else", () => {
+  it("denial copy says how old the check is, and offers Re-check before anything else", () => {
     const v = view(audited({ read: "denied" }), CONNECTED, { nowIso: "2026-11-06T10:00:00.000Z" });
     expect(v.banner?.text).toMatch(/^The permission check 3 days ago found/);
-    expect(v.deployBlockedReason).toMatch(/^Deploy is blocked: the permission check 3 days ago found/);
-    const reason = v.deployBlockedReason ?? "";
+    expect(v.deployCaution).toMatch(/^Azure will likely refuse this deploy: the permission check 3 days ago found/);
+    expect(v.deployCaution).toContain("Deploy stays available");
+    const reason = v.deployCaution ?? "";
     expect(reason.indexOf("Re-check permissions")).toBeGreaterThan(-1);
     expect(reason.indexOf("Re-check permissions")).toBeLessThan(reason.indexOf("How-to"));
     // Without a clock the copy still says it is the LAST check, not a present fact.
     expect(view(audited({ read: "denied" })).banner?.text).toMatch(/^The last permission check found/);
   });
 
-  it("a set measured for ANOTHER connection is never-checked here: no denial wording and no block", () => {
+  it("a set measured for ANOTHER connection is never-checked here: no denial wording and no caution", () => {
     // The audit hook keeps the previous connection's set until the new audit
     // lands; its verdicts answer a different question.
     const v = view(audited({ plans: "denied", read: "denied", write: "denied" }), CONNECTED, {
@@ -179,9 +184,9 @@ describe("automationPermissionView", () => {
     expect(v.banner?.kind).toBe("not-measured");
     expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
     for (const r of v.rows) expect(r.stateLabel).not.toMatch(DENIAL_WORDS);
-    expect(v.deployBlockedReason).toBeNull();
-    // The same set under its own key still blocks (the guard is not "never block").
-    expect(view(audited({ read: "denied" }), CONNECTED, { auditKey: "conn" }).deployBlockedReason).not.toBeNull();
+    expect(v.deployCaution).toBeNull();
+    // The same set under its own key still cautions (the guard is not "never caution").
+    expect(view(audited({ read: "denied" }), CONNECTED, { auditKey: "conn" }).deployCaution).not.toBeNull();
   });
 
   it("row labels stay short: a denial says Denied once, the grant-only miss names its kind", () => {
@@ -191,13 +196,13 @@ describe("automationPermissionView", () => {
     expect(grantOnly?.stateLabel).toBe("Not measured (grant-only check)");
   });
 
-  it("denied names every missing core action, and still blocks when the others are unmeasured", () => {
+  it("denied names every missing core action, and still cautions when the others are unmeasured", () => {
     // The write is grant-only, so a cached `denied` for it must not count;
-    // automations/read alone is what blocks here.
+    // automations/read alone is what cautions here.
     const v = view(audited({ read: "denied" }));
-    expect(v.banner?.kind).toBe("blocked");
+    expect(v.banner?.kind).toBe("denied");
     expect(v.rows.map((r) => r.state)).toEqual(["unknown", "denied", "unknown"]);
-    expect(v.deployBlockedReason).not.toBeNull();
+    expect(v.deployCaution).not.toBeNull();
   });
 
   it("unknown: the audit ran but did not measure these - a soft note with Re-check, never worded as denied", () => {
@@ -208,10 +213,10 @@ describe("automationPermissionView", () => {
     expect(v.banner?.offerRecheck).toBe(true);
     expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
     for (const r of v.rows) expect(r.stateLabel).not.toMatch(DENIAL_WORDS);
-    expect(v.deployBlockedReason).toBeNull();
+    expect(v.deployCaution).toBeNull();
   });
 
-  it("never-checked: no audit has run (an empty set, or no set wired) - a soft note, deploy not blocked", () => {
+  it("never-checked: no audit has run (an empty set, or no set wired) - a soft note, no deploy caution", () => {
     for (const set of [{ verdicts: {}, auditedAt: null, connectionId: null }, undefined]) {
       const v = view(set);
       expect(v.rows.map((r) => r.state)).toEqual(["never-checked", "never-checked", "never-checked"]);
@@ -219,11 +224,11 @@ describe("automationPermissionView", () => {
       expect(v.banner?.text).toMatch(/not been checked/);
       expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
       expect(v.banner?.offerRecheck).toBe(true);
-      expect(v.deployBlockedReason).toBeNull();
+      expect(v.deployCaution).toBeNull();
     }
   });
 
-  it("grant-only: a write that is not granted reads unknown, never denied, and never blocks deploy", () => {
+  it("grant-only: a write that is not granted reads unknown, never denied, and never cautions deploy", () => {
     // What capability-mapping records for a miss (nothing), and a cached
     // `denied` from a set written before the grant-only rule - both unknown.
     for (const write of [undefined, "denied" as const]) {
@@ -235,7 +240,7 @@ describe("automationPermissionView", () => {
       expect(row?.stateLabel).not.toMatch(DENIAL_WORDS);
       expect(v.banner?.kind).toBe("not-measured");
       expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
-      expect(v.deployBlockedReason).toBeNull();
+      expect(v.deployCaution).toBeNull();
     }
   });
 
@@ -245,14 +250,14 @@ describe("automationPermissionView", () => {
     expect(v.banner?.kind).toBe("not-measured");
     expect(v.banner?.offerRecheck).toBe(false);
     expect(v.banner?.text).toMatch(/No Azure identity is connected/);
-    expect(v.deployBlockedReason).toBeNull();
+    expect(v.deployCaution).toBeNull();
   });
 
-  it("a denied capability deploy does not need warns without blocking deploy", () => {
+  it("a denied capability deploy does not need warns without a deploy caution", () => {
     const v = view(audited({ plans: "denied", read: "granted", write: "granted" }));
     expect(v.banner?.kind).toBe("partial");
     expect(v.banner?.tone).toBe("warning");
     expect(v.banner?.text).toContain("read which Defender plans are enabled");
-    expect(v.deployBlockedReason).toBeNull();
+    expect(v.deployCaution).toBeNull();
   });
 });

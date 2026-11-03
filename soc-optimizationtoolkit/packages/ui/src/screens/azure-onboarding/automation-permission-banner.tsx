@@ -4,15 +4,15 @@
  * it (AZR-60). The model is core's automationPermissionView; this only draws
  * it.
  *
- *   blocked       error tone, names the missing action(s), the role, how old
+ *   denied        error tone, names the missing action(s), the role, how old
  *                 the check is and how to reach the How-to steps (switch the
- *                 row to How-to); the section's deploy is aria-disabled with
- *                 the reason as its accessible description. NOT a live alert:
+ *                 row to How-to); the section's Deploy stays clickable with a
+ *                 caution as its accessible description. NOT a live alert:
  *                 the verdict is cached and present at mount, so announcing it
  *                 would interrupt the screen reader on every visit.
  *   not-measured  a soft info note - never worded as a denial
  *                 (claude-kit standards/inventory-honesty.md)
- *   partial       a warning that does not block deploy
+ *   partial       a warning about a capability deploy does not need
  *
  * Every banner offers the How-to row for the source (the operator's fallback),
  * and, unless there is no identity to check, the existing Re-check permissions

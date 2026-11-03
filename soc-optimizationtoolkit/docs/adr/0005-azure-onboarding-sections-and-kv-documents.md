@@ -313,24 +313,21 @@ actions. It now holds only for the namespace `listKeys` (CAP-7b):
 - **The section reads the cached audit, never Azure.** `automationPermissionView`
   maps the declaration and the `CapabilitySet` in the ports context to a
   banner. Mount still makes the two KV loads and no Azure call (ADR 0007).
-- **Only a measured core denial blocks deploy**, with the button aria-disabled
-  and the reason beside it, pointing at the source's How-to row. Unknown,
-  never-checked and a grant-only miss are a soft note with Re-check
-  permissions, never worded as denied. A denied informational capability warns
-  and does not block.
-- **This departs from capabilities.ts rule 3** ("the audit informs, never
-  forbids") for this one control, at the operator's request on the card. The
-  verdict is Azure's own effective-action evaluation at the subscription the
-  export is written to, and the How-to path is the fallback. No off-scope
-  verdict can block it: the Defender export targets only the
-  configured subscription the audit measured.
-- **It also departs from claude-kit `standards/cribl-app-permissions.md`**,
-  which since 2026-10 latches a control only on a refusal actually received
-  and annotates an audit's prediction. The block here is on a cached
-  prediction, so three things bound it: only a set measured for the CURRENT
-  audit key can block (a set held over from another connection while a new
-  audit runs reads as not checked); the blocked banner and the Deploy reason
-  say how old the check is ("the permission check 3 days ago found ...") and
-  offer Re-check permissions first; and the reason is the button's
-  `aria-describedby`. There is no "deploy anyway" path: a stale denial is
-  cleared by Re-check, not by attempting the write.
+- **Nothing disables Deploy; the audit informs, never forbids** (capabilities.ts
+  rule 3, and claude-kit `standards/cribl-app-permissions.md`, which latches a
+  control only on a refusal actually received). A measured denial of a core
+  capability is an error banner naming the action, the role and the source's
+  How-to row, plus a caution beside Deploy (also its `aria-describedby`) that
+  Azure will likely refuse it. Deploy stays clickable behind its usual
+  two-step confirm, and Azure's own answer at the write is what decides.
+  Unknown, never-checked and a grant-only miss are a soft note with Re-check
+  permissions, never worded as denied. A denied informational capability
+  only warns.
+- **The first build blocked Deploy on a measured core denial; the operator
+  withdrew that the same day** (2026-11-03) in favour of the caution above,
+  because the request was for a banner pointing at How-to, not a gate.
+- **The caution is bounded like any cached prediction.** Only a set measured
+  for the CURRENT audit key counts (a set held over from another connection
+  while a new audit runs reads as not checked), and the banner and caution say
+  how old the check is ("the permission check 3 days ago found ...") and offer
+  Re-check permissions before How-to.
