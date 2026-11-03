@@ -501,6 +501,12 @@ export function allowanceCsvCells(
   return [label, eligible, view.usage.usedDailyMB.toFixed(3), over, status];
 }
 
+/** The Granted line's tip: the Servers P2 count is per workspace, or across a tenant comparison. */
+export function grantedTip(view: GrantView, a: DataAllowances): string {
+  if (view.grant === "e5") return ALLOWANCE_TIPS.grantedE5;
+  return a.scope.kind === "tenant" ? ALLOWANCE_TIPS.grantedServersTenant : ALLOWANCE_TIPS.grantedServers;
+}
+
 /** The info-tip text for every new figure, beside the computation it describes. */
 export const ALLOWANCE_TIPS = {
   afterAllowances:
@@ -521,9 +527,17 @@ export const ALLOWANCE_TIPS = {
   grantedServers:
     "Machines that sent Heartbeat to this workspace, counted per day and averaged over the " +
     "30 days, from subscriptions on Defender for Servers Plan 2, times 500 MB a day.",
+  grantedServersTenant:
+    "Machines that sent Heartbeat to any workspace read, counted once a day even when one " +
+    "machine reports to several, averaged over the 30 days, from subscriptions on Defender " +
+    "for Servers Plan 2, times 500 MB a day.",
   eligibleUsed:
     "Eligible: billable MB from Usage for this grant's tables, summed over the window and " +
     "divided by 30. Used: the benefit Microsoft applied, from the Operation table, same window.",
+  pooledOver:
+    "Each day, the eligible volume of every grant together minus the whole benefit Microsoft " +
+    "applied, when positive, averaged over 30 days. One figure for all grants: the benefit " +
+    "record could not be split by grant.",
   status:
     "Over: each day, eligible minus applied when positive, averaged over 30 days - the only " +
     "volume where Cribl reduction saves money. Headroom: granted minus eligible, shown only " +

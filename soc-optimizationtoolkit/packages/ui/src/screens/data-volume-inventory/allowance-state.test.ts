@@ -13,6 +13,7 @@ import {
   basisFigures,
   crossCheckLine,
   grantCardText,
+  grantedTip,
   grantedUnknownReason,
   licenceNote,
   meterOf,
@@ -587,5 +588,16 @@ describe("allowance honesty edge cases (MIG-21)", () => {
     expect(ALLOWANCE_TIPS.overColumn).toContain("unless Usage still bills it");
     // and the cell it describes does show billed volume for a billed Free table
     expect(overCell({ table: "AzureActivity", billableMB: 300 }, allowances(), 30)).toBe("10.0 MB");
+  });
+});
+
+describe("grantedTip", () => {
+  it("says 'this workspace' for Servers P2 only in a one-workspace view", () => {
+    const servers = grantView({ grant: "servers-p2" });
+    expect(grantedTip(servers, allowances())).toBe(ALLOWANCE_TIPS.grantedServers);
+    const tenant = allowances({ scope: { kind: "tenant", workspaces: ["a", "b"], notRead: [] } });
+    expect(grantedTip(servers, tenant)).toBe(ALLOWANCE_TIPS.grantedServersTenant);
+    expect(ALLOWANCE_TIPS.grantedServersTenant).not.toMatch(/this workspace/);
+    expect(grantedTip(grantView({ grant: "e5" }), tenant)).toBe(ALLOWANCE_TIPS.grantedE5);
   });
 });

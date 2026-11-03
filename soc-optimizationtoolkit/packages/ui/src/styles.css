@@ -3377,7 +3377,8 @@ button.readiness-pill:focus-visible {
 }
 .allowance-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* min(): a card narrower than 300px takes the full width instead of overflowing it. */
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: 10px;
 }
 .allowance-card {
@@ -3494,9 +3495,13 @@ button.readiness-pill:focus-visible {
   stroke: var(--border);
   stroke-width: 1;
 }
-.allowance-chart-label {
-  font-size: 10px;
-  fill: var(--text-muted);
+/* The first and last dates, in HTML so they keep their size on a narrow card. */
+.allowance-chart-dates {
+  display: flex;
+  justify-content: space-between;
+  max-width: 640px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 .allowance-line-eligible,
 .allowance-line-applied {

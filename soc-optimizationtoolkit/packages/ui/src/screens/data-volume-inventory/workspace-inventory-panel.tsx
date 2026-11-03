@@ -65,7 +65,15 @@ const SOURCES_TIP =
   "one row. _BilledSize and Usage are separate measurements and can differ by a few " +
   "percent, so a table's sources need not add up exactly to its Usage total.";
 
-export function WorkspaceInventoryPanel() {
+export interface WorkspaceInventoryPanelProps {
+  /**
+   * Opens Setup's app-permissions change request, for a refused licence read.
+   * The shell owns navigation; omitted, the cards name it in words only.
+   */
+  onOpenChangeRequest?: () => void;
+}
+
+export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInventoryPanelProps = {}) {
   const { ports } = usePorts();
   const [discovery, setDiscovery] = useState<WorkspaceDiscovery | null>(null);
   const [discoveryError, setDiscoveryError] = useState("");
@@ -398,6 +406,7 @@ export function WorkspaceInventoryPanel() {
               <AllowanceCards
                 allowances={tenant.result}
                 readAt={tenant.readAt}
+                onOpenChangeRequest={onOpenChangeRequest}
                 actions={
                   <button className="run-button" disabled={busy !== null} onClick={() => setTenant(null)}>
                     Back to this workspace
@@ -410,6 +419,7 @@ export function WorkspaceInventoryPanel() {
               <AllowanceCards
                 allowances={allowances.result}
                 readAt={allowances.readAt}
+                onOpenChangeRequest={onOpenChangeRequest}
                 actions={
                   sentinelWorkspaceIds(discovery).length > 1 ? (
                     <>
@@ -495,9 +505,16 @@ export function WorkspaceInventoryPanel() {
                               {t.sources.sources.map((s, i) => {
                                 const label = sourceLabel(s);
                                 return (
-                                  <div key={`${s.source}-${s.attribution}-${i}`} title={label.title}>
+                                  <div key={`${s.source}-${s.attribution}-${i}`}>
                                     {label.text} ({label.kind}) - {formatMB(s.dailyAverageMB)}/day,{" "}
                                     {s.events.toLocaleString()} events
+                                    {/* The full id, or what a remainder row means: only when the text does not already say it. */}
+                                    {label.tip !== label.text && (
+                                      <>
+                                        {" "}
+                                        <InfoTip text={label.tip} />
+                                      </>
+                                    )}
                                   </div>
                                 );
                               })}

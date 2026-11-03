@@ -15,6 +15,8 @@ export type {
   LicenceRead,
 } from "./data-allowances";
 export {
+  ALLOWANCE_CATALOG_AS_OF,
+  ALLOWANCE_SOURCES,
   allowanceFor,
   E5_MB_PER_SEAT_PER_DAY,
   SERVERS_MB_PER_MACHINE_PER_DAY,

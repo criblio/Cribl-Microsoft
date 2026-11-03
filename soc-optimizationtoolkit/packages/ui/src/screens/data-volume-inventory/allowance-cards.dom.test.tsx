@@ -5,10 +5,14 @@
  * eligible volume, a pooled benefit, and every stated gap.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { ALLOWANCE_CATALOG_AS_OF, ALLOWANCE_SOURCES } from "@soc/core";
 import type { DataAllowances } from "@soc/core";
 import { AllowanceCards, AllowanceTagCell } from "./allowance-cards";
+import { ALLOWANCE_TIPS } from "./allowance-state";
 import { allowances, grantView, servers as serversBlock, usage } from "./allowance-test-fixture";
 
 afterEach(cleanup);
@@ -18,6 +22,16 @@ function renderCards(a: DataAllowances) {
 }
 
 const text = () => document.body.textContent ?? "";
+
+/** An element's own words, without the text of the InfoTips inside it. */
+function ownText(e: Element): string {
+  const copy = e.cloneNode(true) as Element;
+  copy.querySelectorAll(".info-tip").forEach((t) => t.remove());
+  return (copy.textContent ?? "").trim();
+}
+
+/** Every InfoTip's text, in document order. */
+const tips = () => [...document.querySelectorAll(".info-tip-pop")].map((e) => e.textContent);
 
 describe("AllowanceCards", () => {
   it("names LicenseAssignment.Read.All and shows no headroom when the licence read is refused", () => {
@@ -248,6 +262,9 @@ describe("AllowanceCards", () => {
     );
     expect(document.querySelector(".allowance-meter")).toBeNull();
     expect(text()).toContain("5.00 GB/day over, all grants together");
+    // The pooled overage explains itself like a grant card's status line.
+    const status = document.querySelector(".allowance-card-status")!;
+    expect(status.querySelector(".info-tip-pop")!.textContent).toBe(ALLOWANCE_TIPS.pooledOver);
     expect(text()).toContain("could not be attributed");
     expect(text()).toContain("Basic plan - grant may not apply on this plan");
     expect(text()).toContain("Cribl cannot write this table (Microsoft connector only)");
@@ -328,8 +345,14 @@ describe("AllowanceCards - tenant comparison (MIG-16)", () => {
       }),
     );
     expect(text()).toContain("Compared across 3 Sentinel workspaces, 2 read.");
-    const unread = [...document.querySelectorAll(".allowance-not-read")].map((e) => e.textContent);
+    const unread = [...document.querySelectorAll(".allowance-not-read")].map(ownText);
     expect(unread).toEqual(["law-3: not read - read Usage: HTTP 403"]);
+    // The full resource id sits behind an InfoTip, never a native title.
+    expect(tips()).toContain(`Workspace resource id: ${WS("law-3")}`);
+    expect(document.querySelector("[title]")).toBeNull();
+    // Granted here is summed across the workspaces read, not "this workspace".
+    expect(tips()).toContain(ALLOWANCE_TIPS.grantedServersTenant);
+    expect(tips()).not.toContain(ALLOWANCE_TIPS.grantedServers);
     // The id is shortened to the name; the full resource id is not the label.
     expect(text()).not.toContain(`${WS("law-3")}: `);
     expect(text()).toContain("granted at least 1.50 GB/day");
@@ -403,5 +426,97 @@ describe("AllowanceTagCell", () => {
     expect(text()).toContain(
       "keeps its grant only if it still lands in SigninLogs; routing it to a _CL table forfeits up to 300.0 MB/day of coverage",
     );
+  });
+});
+
+describe("AllowanceCards - change request, sources and chart (MIG-24)", () => {
+  it("links a permission-refused licence read to Setup's change request when the shell offers it", () => {
+    const denied = (detail: string) =>
+      allowances({ licences: { kind: "denied", detail }, grants: [grantView({ grantedMB: null })] });
+    const open = vi.fn();
+    render(
+      <AllowanceCards
+        allowances={denied("Graph subscribedSkus: HTTP 403 - consent needed")}
+        readAt="2026-11-03T10:00:00.000Z"
+        onOpenChangeRequest={open}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open the app permissions change request on Setup" }));
+    expect(open).toHaveBeenCalledTimes(1);
+    cleanup();
+    // Without the shell's navigation the note names it in words only.
+    renderCards(denied("Graph subscribedSkus: HTTP 403 - consent needed"));
+    expect(screen.queryByRole("button", { name: /change request/ })).toBeNull();
+    cleanup();
+    // A refusal the permission does not fix is not offered the change request.
+    render(
+      <AllowanceCards
+        allowances={denied("Graph subscribedSkus: HTTP 502")}
+        readAt="2026-11-03T10:00:00.000Z"
+        onOpenChangeRequest={open}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /change request/ })).toBeNull();
+  });
+
+  it("names each grant's Microsoft source page and the catalog date under Eligible", () => {
+    renderCards(allowances({ grants: [grantView({ grant: "e5" }), grantView({ grant: "servers-p2" })] }));
+    const links = [...document.querySelectorAll(".allowance-detail a")].map((a) => [
+      a.textContent,
+      a.getAttribute("href"),
+      a.getAttribute("target"),
+    ]);
+    expect(links).toEqual([
+      [ALLOWANCE_SOURCES.e5.title, ALLOWANCE_SOURCES.e5.url, "_blank"],
+      [ALLOWANCE_SOURCES["servers-p2"].title, ALLOWANCE_SOURCES["servers-p2"].url, "_blank"],
+    ]);
+    expect(text()).toContain(`, as of ${ALLOWANCE_CATALOG_AS_OF}.`);
+  });
+
+  it("reads the chart's real peak, not the scale's floor, when every day is under 1 MB", () => {
+    renderCards(
+      allowances({
+        grants: [
+          grantView({
+            usage: usage({
+              eligibleByDay: new Map([["2026-10-01", 0.4], ["2026-10-02", 0.2]]),
+              usedByDay: new Map([["2026-10-01", 0.1], ["2026-10-02", 0.1]]),
+            }),
+          }),
+        ],
+      }),
+    );
+    expect(text()).toContain("Peak 400.0 KB a day.");
+    expect(text()).not.toContain("Peak 1.0 MB");
+  });
+
+  it("puts the chart's dates in HTML below the plot, not as SVG text that shrinks with it", () => {
+    renderCards(
+      allowances({
+        grants: [
+          grantView({
+            usage: usage({
+              eligibleByDay: new Map([["2026-10-01", 5], ["2026-10-30", 9]]),
+              usedByDay: new Map([["2026-10-01", 5], ["2026-10-30", 9]]),
+            }),
+          }),
+        ],
+      }),
+    );
+    expect(document.querySelector(".allowance-chart-svg text")).toBeNull();
+    const dates = [...document.querySelectorAll(".allowance-chart-dates span")].map((e) => e.textContent);
+    expect(dates).toEqual(["2026-10-01", "2026-10-30"]);
+    // The lines keep 2px however far the SVG is scaled down.
+    const lines = [...document.querySelectorAll(".allowance-chart-svg path")];
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+  });
+
+  it("lets a card narrower than 300px take the full width instead of overflowing", () => {
+    const css = readFileSync(resolve(__dirname, "../../styles.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = /\.allowance-card-grid\s*\{([^}]*)\}/.exec(css)![1]!;
+    expect(rule).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(300px,\s*100%\),\s*1fr\)\)/);
+    const dates = /\.allowance-chart-dates\s*\{([^}]*)\}/.exec(css)![1]!;
+    expect(dates).toMatch(/font-size:\s*11px/);
   });
 });

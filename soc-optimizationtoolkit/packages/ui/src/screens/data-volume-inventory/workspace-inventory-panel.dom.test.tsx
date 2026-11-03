@@ -145,6 +145,8 @@ describe("WorkspaceInventoryPanel", () => {
     expect(screen.getByText("Heartbeat")).toBeTruthy();
     expect(screen.getByText(/Breakdown failed: .*although Usage billed it/)).toBeTruthy();
     expect(screen.getByText(/1 table\(s\) have no source breakdown/)).toBeTruthy();
+    // Explanations are InfoTips, never native title hover text.
+    expect(document.querySelector("[title]")).toBeNull();
   });
 
   it("says a REFUSED Usage read is a refusal, not an empty workspace", async () => {
