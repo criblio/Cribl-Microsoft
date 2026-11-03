@@ -9,4 +9,12 @@ export {
   LICENSING_CSV_AS_OF,
   SERVERS_MB_PER_MACHINE_PER_DAY,
 } from "./allowance-catalog";
+export {
+  BENEFIT_QUERY,
+  BENEFIT_TYPE_PATTERNS,
+  eligibleDailyQuery,
+  foldGrantUsage,
+  parseBenefitRows,
+} from "./benefit-usage";
+export type { BenefitDay, GrantUsage } from "./benefit-usage";
 export type { AllowanceTag, GrantId, QualifyingSku } from "./allowance-catalog";
