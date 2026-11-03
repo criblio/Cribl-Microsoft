@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**95 in the backlog, 36 in progress, 145 done.**
+**94 in the backlog, 36 in progress, 146 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 4 | 11 | 0 |
+| Data Volume Inventory | 3 | 12 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 131.
+Open work totals 130.
 
 ## Epics and features
 
@@ -136,14 +136,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 79% (19/24)
+### `MIG` SIEM migration analysis - 83% (20/24)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 11/15 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 12/15 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24 |
 
 ---
 
@@ -1050,23 +1050,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-22** Allowance test pins that cannot fail today
+- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
   `MIG-F2` `enabler` `settled`
   Triaged 2026-11-03 from the deferred review minors of PR #198 against main
   37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
   soc-optimizationtoolkit/; "state" =
   packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
-  allowance-cards.tsx in the same folder. Code paths are correct but nothing
-  fails if they regress: sentinelWorkspaceCount failures-non-empty branch
-  (state ~338); overCell with sumsAreFloors ("not known (partial read)", "at
-  least" share prefix) (state ~184); the panel Over-column assertion '3.0 MB'
-  also equals the Daily avg cell (workspace-inventory-panel.dom.test.tsx
-  ~280-300) so it passes vacuously; eligible-table lists pinned only by length
-  plus one member (allowance-catalog.test.ts ~44); only SPE_E5_USGOV_DOD
-  pinned as may-qualify - FLW/A5/F5/G5/E7 widening untested (granted.test.ts
-  ~117); no test for the "off" Defender plan (data-allowances.test.ts);
-  nothing asserts the chart's eligible line is absent when eligible was not
-  read (allowance-chart.tsx ~83). Mutation-check each new pin.
+  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
+  core serversGranted arithmetic - consume core's figures; GrantCard and
+  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
+  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
+  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
+  nothing and re-exporting internals ruling R10 keeps off the public surface;
+  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
+  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
+  core - remove or use; workspace-inventory-panel.tsx header still describes
+  SiemMigrationScreen.
 
 ---
 
@@ -1281,7 +1280,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (47)
+## Backlog - next (46)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1934,23 +1933,6 @@ Settled and unblocked, sequenced behind now.
   machine count answers. USER DECISION 2026-11-03: ship without the rest; this
   card stays open until a benefit-receiving workspace is available.
 
-- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
-  `MIG-F2` `enabler` `settled`
-  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
-  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
-  soc-optimizationtoolkit/; "state" =
-  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
-  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
-  core serversGranted arithmetic - consume core's figures; GrantCard and
-  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
-  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
-  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
-  nothing and re-exporting internals ruling R10 keeps off the public surface;
-  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
-  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
-  core - remove or use; workspace-inventory-panel.tsx header still describes
-  SiemMigrationScreen.
-
 - **DBT-235** Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor
   `DBT-F2` `story` `settled`
   PARKED 2026-10-29 on local branch wip/dbt-195-review-uncommitted-wt15
@@ -2484,7 +2466,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (145)
+## Done (146)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6380,6 +6362,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   machine count = running VMs + Arc + running Uniform scale-set instances.
   Live: both queries answer on law-jpederson-eastus; a datatable probe
   confirmed sum() skips the unreadable row and countif counts it.
+
+- **MIG-22** Allowance test pins that cannot fail today
+  `MIG-F2` `enabler` `settled` `verified: pins`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. Code paths are correct but nothing
+  fails if they regress: sentinelWorkspaceCount failures-non-empty branch
+  (state ~338); overCell with sumsAreFloors ("not known (partial read)", "at
+  least" share prefix) (state ~184); the panel Over-column assertion '3.0 MB'
+  also equals the Daily avg cell (workspace-inventory-panel.dom.test.tsx
+  ~280-300) so it passes vacuously; eligible-table lists pinned only by length
+  plus one member (allowance-catalog.test.ts ~44); only SPE_E5_USGOV_DOD
+  pinned as may-qualify - FLW/A5/F5/G5/E7 widening untested (granted.test.ts
+  ~117); no test for the "off" Defender plan (data-allowances.test.ts);
+  nothing asserts the chart's eligible line is absent when eligible was not
+  read (allowance-chart.tsx ~83). Mutation-check each new pin. DONE 2026-11-03
+  (pins, 3367184..ae32fa4): tests only, every pin mutation-checked -
+  sentinelWorkspaceCount with failed subscriptions, overCell floors (share of
+  at least / not known), the panel Over column no longer equal to Daily avg,
+  exact eligible-table lists, may-qualify for FLW/A5/F5/G5/E7 with a negative
+  control, Free Defender plan -> off, chart draws no eligible line when
+  eligible is not read, plus a panel test for an unreadable benefit row. No
+  bug exposed.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`
