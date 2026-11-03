@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 41 in progress, 141 done.**
+**93 in the backlog, 42 in progress, 141 done.**
 
 ## By menu item
 
@@ -146,7 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (41)
+## In progress (42)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1167,6 +1167,39 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
+  `AZR-F9` `story` `settled`
+  OPERATOR REQUEST 2026-11-03, during the ADR 0007 live pass: "We should also
+  detect if the user has granted the correct permissions for each Native
+  logging source configuration in Azure and if not put a banner on the section
+  that would automate it and tell the users to reference the How To section."
+  WHAT EXISTS: CAP-7a (merged) measures defender-plans.read,
+  defender-automation.read and defender-automation.write through the app-wide
+  permission check, whose results are cached (the connection bar's
+  "permissions: checked N days ago"). The Defender section ignores them and
+  still lists DEFENDER_SUBSCRIPTION_ACTIONS and DEFENDER_NAMESPACE_ACTIONS as
+  "needed, not yet measured" (ADR 0005 section 7, written before CAP-7a). The
+  How-to steps already carry per-step rbac lists. SCOPE: (1) one declaration
+  per automatable source of the capabilities its automation needs (Defender
+  today: plans.read, automation.read, automation.write; namespace listKeys is
+  CAP-7b, still unmeasured, and stays shown as unmeasured), kept beside
+  ITEM_AVAILABILITY so a source that becomes automatable must declare them;
+  (2) the section reads the CACHED capability results - no new ARM call on
+  mount, preserving ADR 0007 item 1 - and renders a banner: denied -> "Your
+  Azure identity cannot <action>, so this section cannot set <source> up.
+  Follow the How-to steps for it in section 8, or ask an administrator for
+  <role>." with a link to the source's How-to; unknown or never checked -> a
+  softer note saying it was not measured, with Re-check permissions, never
+  worded as denied (inventory-honesty: unknown is not denied); a grant-only
+  check (automations/write at subscription scope reads unknown on a miss, per
+  CAP-7a review) is never shown as denied; (3) a denied core capability
+  disables the section's deploy with that reason (cribl-app-permissions:
+  aria-disabled plus visible reason); (4) sources that are How-to only today
+  get no banner (nothing to automate) - their How-to rbac lists already say
+  what is needed. Pins: denied, granted, unknown, never-checked and grant-only
+  rows for the Defender section; no Azure call on mount. Live check in Live
+  Preview with an identity that lacks Microsoft.Security/automations/write.
+
 - **AZR-61** Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope
   `AZR-F10` `enabler` `settled`
   OPERATOR REQUEST 2026-11-03: "an audit of what the app does and what the
@@ -1234,7 +1267,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1442,39 +1475,6 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
-
-- **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
-  `AZR-F9` `story` `settled`
-  OPERATOR REQUEST 2026-11-03, during the ADR 0007 live pass: "We should also
-  detect if the user has granted the correct permissions for each Native
-  logging source configuration in Azure and if not put a banner on the section
-  that would automate it and tell the users to reference the How To section."
-  WHAT EXISTS: CAP-7a (merged) measures defender-plans.read,
-  defender-automation.read and defender-automation.write through the app-wide
-  permission check, whose results are cached (the connection bar's
-  "permissions: checked N days ago"). The Defender section ignores them and
-  still lists DEFENDER_SUBSCRIPTION_ACTIONS and DEFENDER_NAMESPACE_ACTIONS as
-  "needed, not yet measured" (ADR 0005 section 7, written before CAP-7a). The
-  How-to steps already carry per-step rbac lists. SCOPE: (1) one declaration
-  per automatable source of the capabilities its automation needs (Defender
-  today: plans.read, automation.read, automation.write; namespace listKeys is
-  CAP-7b, still unmeasured, and stays shown as unmeasured), kept beside
-  ITEM_AVAILABILITY so a source that becomes automatable must declare them;
-  (2) the section reads the CACHED capability results - no new ARM call on
-  mount, preserving ADR 0007 item 1 - and renders a banner: denied -> "Your
-  Azure identity cannot <action>, so this section cannot set <source> up.
-  Follow the How-to steps for it in section 8, or ask an administrator for
-  <role>." with a link to the source's How-to; unknown or never checked -> a
-  softer note saying it was not measured, with Re-check permissions, never
-  worded as denied (inventory-honesty: unknown is not denied); a grant-only
-  check (automations/write at subscription scope reads unknown on a miss, per
-  CAP-7a review) is never shown as denied; (3) a denied core capability
-  disables the section's deploy with that reason (cribl-app-permissions:
-  aria-disabled plus visible reason); (4) sources that are How-to only today
-  get no banner (nothing to automate) - their How-to rbac lists already say
-  what is needed. Pins: denied, granted, unknown, never-checked and grant-only
-  rows for the Defender section; no Azure call on mount. Live check in Live
-  Preview with an identity that lacks Microsoft.Security/automations/write.
 
 - **AZR-66** The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret
   `AZR-F9` `bug` `settled`
