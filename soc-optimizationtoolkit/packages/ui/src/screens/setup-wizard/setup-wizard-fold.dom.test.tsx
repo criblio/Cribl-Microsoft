@@ -7,6 +7,7 @@
  * operator moves. Moving between wizard steps is not a fold event.
  */
 
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { AzureConfig, ChangeRequestContext, JourneyFacts } from "@soc/core";
@@ -80,6 +81,19 @@ function ports(s: Setup): UiPorts {
   } as unknown as UiPorts;
 }
 
+/** The connectivity section over real state, so choosing a radio takes effect. */
+function StatefulConnectivity({ initial }: { initial: AzureConfig }) {
+  const [config, setConfig] = useState(initial);
+  return (
+    <AzureConnectivitySection
+      config={config}
+      onChange={setConfig}
+      storedIdentity={config.clientId !== ""}
+      onClearIdentity={() => {}}
+    />
+  );
+}
+
 function mount(s: Setup) {
   const config = s.config ?? configWith({});
   const ctx: ChangeRequestContext = { appName: "test", config };
@@ -94,12 +108,7 @@ function mount(s: Setup) {
         foldFacts={s.facts}
         onGetStarted={s.onGetStarted ?? (() => {})}
         azureConnectivitySection={
-          <AzureConnectivitySection
-            config={config}
-            onChange={() => {}}
-            storedIdentity={config.clientId !== ""}
-            onClearIdentity={() => {}}
-          />
+          <StatefulConnectivity initial={config} />
         }
         azureConnectSection={
           <AzureConnectSection
@@ -176,12 +185,10 @@ describe("wizard GitHub step folding (DBT-248)", () => {
     // reports one, which un-gates the sections behind it for the move.
     mount({ store: new Map(), hasPat: true, facts: factsWith({ tokenPresent: false }) });
     await waitFor(() => expect(open(GITHUB_TITLES)).toEqual(["GitHub personal access token"]));
-    // Let the stored pins arrive: until then the load fold may still re-derive.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 30));
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
-    fireEvent.pointerDown(sectionOf("Sentinel content"));
+    // The real gesture: the press lands first (and moves), then the click opens.
+    const expand = screen.getByRole("button", { name: "Expand Sentinel content" });
+    fireEvent.pointerDown(expand);
+    fireEvent.click(expand);
     await waitFor(() => expect(open(GITHUB_TITLES)).toEqual(["Sentinel content"]));
   });
 
@@ -274,5 +281,106 @@ describe("wizard Connect Azure step folding (DBT-248)", () => {
     back();
     next();
     expect(open(AZURE_TITLES)).toEqual(["App registration and connect"]);
+  });
+});
+
+const badgeOf = (title: string) =>
+  sectionOf(title).querySelector(".numbered-section-badge")?.getAttribute("aria-label");
+const PINS_KEY = "wizard-pinned-sections:u1";
+
+describe("wizard badge numbers (DBT-248 final review)", () => {
+  function partialAzureStep() {
+    mount({
+      store: new Map(),
+      config: configWith({ connectivity: "partial", workspaceName: "", resourceGroup: "" }),
+      facts: factsWith({
+        connectivity: "partial",
+        secretLive: "missing",
+        scopeCommitted: false,
+        subscriptionChosen: false,
+      }),
+    });
+    next();
+  }
+
+  it("Partially Connected numbers the checklist, connect and resources 1, 2, 3 - no repeats", () => {
+    partialAzureStep();
+    expect(badgeOf("What this app may do in Azure")).toBe("Section 1");
+    expect(badgeOf("App registration and connect")).toBe("Section 2");
+    expect(badgeOf("Select resources and grant permissions")).toBe("Section 3");
+  });
+
+  it("the checklist is folded behind the radios while connect is current", () => {
+    partialAzureStep();
+    expect(isFolded("What this app may do in Azure")).toBe(true);
+    expect(isFolded("App registration and connect")).toBe(false);
+  });
+
+  it("Fully Connected numbers connect and resources 1, 2", () => {
+    mount({
+      store: new Map(),
+      config: configWith({ workspaceName: "", resourceGroup: "" }),
+      facts: factsWith({ secretLive: "missing", scopeCommitted: false, subscriptionChosen: false }),
+    });
+    next();
+    expect(badgeOf("App registration and connect")).toBe("Section 1");
+    expect(badgeOf("Select resources and grant permissions")).toBe("Section 2");
+  });
+
+  it("the GitHub step numbers its three sections 1, 2, 3", async () => {
+    mount({ store: new Map(), facts: factsWith({ tokenPresent: false }), hasPat: false });
+    await waitFor(() => expect(badgeOf("Sentinel content")).toBe("Section 2"));
+    expect(badgeOf("GitHub personal access token")).toBe("Section 1");
+    expect(badgeOf("Schema tables (KQL validation)")).toBe("Section 3");
+  });
+});
+
+describe("wizard checklist opens when chosen (DBT-248 final review)", () => {
+  it("choosing Partially Connected opens the checklist it reveals", () => {
+    mount({ store: new Map(), facts: factsWith({}) });
+    next();
+    expect(screen.queryByRole("heading", { name: "What this app may do in Azure" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    expect(isFolded("What this app may do in Azure")).toBe(false);
+  });
+});
+
+describe("wizard pins and anchors (DBT-248 final review)", () => {
+  it("a stored pin under the wizard key reopens its section", async () => {
+    const store = new Map<string, unknown>([[PINS_KEY, JSON.stringify(["sentinel-content"])]]);
+    mount({ store, hasPat: false, facts: factsWith({ tokenPresent: false }) });
+    await waitFor(() =>
+      expect(open(GITHUB_TITLES)).toEqual(["GitHub personal access token", "Sentinel content"]),
+    );
+  });
+
+  it("a pin set in the GitHub step survives a pin saved from the Azure step", async () => {
+    const store = new Map<string, unknown>();
+    mount({ store, facts: factsWith({ tokenPresent: true, secretLive: "missing" }) });
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "GitHub personal access token" })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pin Sentinel content open" }));
+    await waitFor(() => expect(JSON.parse(store.get(PINS_KEY) as string)).toEqual(["sentinel-content"]));
+    next();
+    // The Azure step loads the shared list before it saves.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pin App registration and connect open" })).toBeTruthy());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pin App registration and connect open" }));
+    await waitFor(() =>
+      expect((JSON.parse(store.get(PINS_KEY) as string) as string[]).sort()).toEqual([
+        "azure-connect",
+        "sentinel-content",
+      ]),
+    );
+  });
+
+  it("wizard sections carry wizard-prefixed DOM ids, not bare ones", () => {
+    mount({ store: new Map(), facts: factsWith({ secretLive: "missing" }) });
+    next();
+    expect(sectionOf("App registration and connect").id).toBe("wizard-section-azure-connect");
+    expect(document.getElementById("azure-connect")).toBeNull();
   });
 });

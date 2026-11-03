@@ -426,6 +426,11 @@ export const WIZARD_SECTION_IDS: readonly string[] = [
   "schema-tables",
 ];
 
+/** The DOM id a wizard section scrolls to (Setup prefixes its own the same way). */
+export function wizardAnchorFor(id: string): string {
+  return `wizard-section-${id}`;
+}
+
 /** The GitHub step's current section: the token, until one is saved. Unknown (not read yet) is not "none saved". */
 export function githubStepCurrent(facts: JourneyFacts): string | undefined {
   return facts.tokenPresent === false ? "github-token" : undefined;
@@ -440,4 +445,20 @@ export function githubStepCurrent(facts: JourneyFacts): string | undefined {
 export function azureStepCurrent(facts: JourneyFacts): string | undefined {
   const action = nextAction({ ...facts, accepted: true, tokenPresent: true });
   return action === null ? undefined : sectionForStage(action.stageId);
+}
+
+/**
+ * The section ids a wizard step actually renders, in page order - what the
+ * badges number over, so a section a choice removes leaves no gap or repeat.
+ * Mirrors visibleSetupSections on the Setup page.
+ */
+export function wizardStepSections(step: "azure" | "github", facts: JourneyFacts): string[] {
+  if (step === "github") return ["github-token", "sentinel-content", "schema-tables"];
+  const connectivity = facts.connectivity ?? "full";
+  if (connectivity === "disconnected") return [];
+  return [
+    ...(connectivity === "partial" ? ["azure-connectivity"] : []),
+    "azure-connect",
+    "azure-resources",
+  ];
 }

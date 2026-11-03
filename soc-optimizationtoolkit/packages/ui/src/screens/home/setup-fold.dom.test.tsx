@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { AzureConfig, ChangeRequestContext, JourneyFacts } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
@@ -101,17 +102,25 @@ function ports(s: Setup): UiPorts {
   } as unknown as UiPorts;
 }
 
+/** The connectivity section over real state, so choosing a radio takes effect. */
+function StatefulConnectivity({ initial }: { initial: AzureConfig }) {
+  const [config, setConfig] = useState(initial);
+  return (
+    <AzureConnectivitySection
+      config={config}
+      onChange={setConfig}
+      storedIdentity={config.clientId !== ""}
+      onClearIdentity={() => {}}
+    />
+  );
+}
+
 function mount(s: Setup, facts: JourneyFacts) {
   const config = s.config ?? configWith({});
   const ctx: ChangeRequestContext = { appName: "test", config };
   const sections = (
     <>
-      <AzureConnectivitySection
-        config={config}
-        onChange={() => {}}
-        storedIdentity={config.clientId !== ""}
-        onClearIdentity={() => {}}
-      />
+      <StatefulConnectivity initial={config} />
       <AzureConnectSection
         tenantId={config.tenantId}
         onTenantIdChange={() => {}}
@@ -355,6 +364,14 @@ describe("Setup page folding (DBT-248)", () => {
     ).toBeTruthy();
     expect(isFolded("What this app may do in Azure")).toBe(true);
     expect(summaryOf("What this app may do in Azure")).toMatch(/^Requesting: /);
+  });
+
+  it("choosing Partially Connected opens the checklist it reveals", async () => {
+    mount({ store: new Map() }, factsWith({}));
+    await settle();
+    expect(screen.queryByRole("heading", { name: "What this app may do in Azure" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Partially Connected" }));
+    expect(isFolded("What this app may do in Azure")).toBe(false);
   });
 
   it("a move during an in-flight Save and connect does not fold the connect section", async () => {

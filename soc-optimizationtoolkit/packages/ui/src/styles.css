@@ -3180,10 +3180,11 @@ button.readiness-pill:focus-visible {
  * Repositories / PAT settings (porting-plan Unit 14): the reachability status
  * line (a state, never "downloaded N files") with a tone-coloured dot.
  * ------------------------------------------------------------------------- */
+/* The sections space themselves (.numbered-section margin-bottom): a flex gap on top
+ * of it doubled the space around the token and content sections on Setup. */
 .repositories-screen {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 .reachability {
   display: flex;

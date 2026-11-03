@@ -160,4 +160,36 @@ describe("useSectionFolding", () => {
     expect(seen.length).toBeGreaterThan(1);
     expect(seen[seen.length - 1]).toBe(seen[seen.length - 2]);
   });
+
+  it("a pin clicked before the stored pins load is merged with them, and written only after the load", async () => {
+    const store = new Map<string, unknown>([["fixture-pinned:u-9", JSON.stringify(["one"])]]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ports = {
+      contentCache: {
+        get: async (k: string) => {
+          await gate;
+          return store.get(k) ?? null;
+        },
+        set: async (k: string, v: unknown) => {
+          store.set(k, v);
+        },
+      },
+      user: { current: async () => ({ id: "u-9" }) },
+    } as unknown as UiPorts;
+    mount(ports, <Page currentId="two" />);
+    fireEvent.click(screen.getByTestId("pin-three"));
+    await new Promise((r) => setTimeout(r, 0));
+    // Not yet written: the stored list has not been read, so a write would replace it.
+    expect(store.get("fixture-pinned:u-9")).toBe(JSON.stringify(["one"]));
+    release();
+    await waitFor(() =>
+      expect(JSON.parse(store.get("fixture-pinned:u-9") as string).sort()).toEqual(["one", "three"]),
+    );
+    // Both pins hold: the stored one opened on load, the in-session one stayed.
+    expect(state("one")).toBe("open");
+    expect(state("three")).toBe("open");
+  });
 });

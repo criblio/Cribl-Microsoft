@@ -64,6 +64,8 @@ import {
   nextViewId,
   previousViewId,
   resolveCurrentViewId,
+  wizardAnchorFor,
+  wizardStepSections,
   wizardViewProgress,
   wizardViews,
 } from "./setup-wizard-state";
@@ -438,7 +440,10 @@ function AzureConnectStep() {
 function GithubSections({ foldFacts, children }: { foldFacts: JourneyFacts | undefined; children: ReactNode }) {
   if (foldFacts === undefined) return <>{children}</>;
   return (
-    <StepFoldScope currentId={githubStepCurrent(foldFacts)}>
+    <StepFoldScope
+      currentId={githubStepCurrent(foldFacts)}
+      visible={wizardStepSections("github", foldFacts)}
+    >
       {children}
     </StepFoldScope>
   );
@@ -447,20 +452,37 @@ function GithubSections({ foldFacts, children }: { foldFacts: JourneyFacts | und
 function AzureSections({ foldFacts, children }: { foldFacts: JourneyFacts | undefined; children: ReactNode }) {
   if (foldFacts === undefined) return <>{children}</>;
   return (
-    <StepFoldScope currentId={azureStepCurrent(foldFacts)}>
+    <StepFoldScope
+      currentId={azureStepCurrent(foldFacts)}
+      visible={wizardStepSections("azure", foldFacts)}
+    >
       {children}
     </StepFoldScope>
   );
 }
 
-function StepFoldScope({ currentId, children }: { currentId: string | undefined; children: ReactNode }) {
+function StepFoldScope({
+  currentId,
+  visible,
+  children,
+}: {
+  currentId: string | undefined;
+  /** The section ids this step renders, in order: the badges number over these. */
+  visible: readonly string[];
+  children: ReactNode;
+}) {
   const { folding, setBusy } = useFoldScopeFolding({
     ids: WIZARD_SECTION_IDS,
     currentId,
     pinPrefix: WIZARD_PIN_PREFIX,
+    anchorFor: wizardAnchorFor,
   });
+  const numberFor = (id: string): number | undefined => {
+    const at = visible.indexOf(id);
+    return at < 0 ? undefined : at + 1;
+  };
   return (
-    <SectionFoldScope folding={folding} currentId={currentId} setBusy={setBusy}>
+    <SectionFoldScope folding={folding} numberFor={numberFor} currentId={currentId} setBusy={setBusy}>
       {children}
     </SectionFoldScope>
   );

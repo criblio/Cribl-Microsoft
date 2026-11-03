@@ -89,27 +89,53 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
   }, []);
 
   // Pins are remembered per user; with no identity (or a refused read) they
-  // live for this session only.
+  // live for this session only. A pin changed BEFORE the stored list has been
+  // read is held as a session change and merged over the stored list when it
+  // arrives - writing first would replace the stored pins with just the new one.
   const [pinned, setPinnedSet] = useState<ReadonlySet<string>>(() => new Set());
+  const pinnedRef = useRef<ReadonlySet<string>>(pinned);
+  // Writable only once the stored list has been read for a known user.
   const pinKeyRef = useRef<string | null>(null);
+  const loadedRef = useRef(false);
+  const sessionPinOps = useRef(new Map<string, boolean>());
   const pinCache = ports.contentCache;
   const pinUser = ports.user;
+  const writePins = useCallback(
+    (key: string, next: ReadonlySet<string>) => {
+      void pinCache?.set(key, JSON.stringify([...next])).catch(() => {
+        // Best effort: the pin still holds for this session.
+      });
+    },
+    [pinCache],
+  );
   useEffect(() => {
     let cancelled = false;
+    loadedRef.current = false;
+    pinKeyRef.current = null;
     void (async () => {
       try {
         const me = await pinUser.current();
         const key = pinnedKey(pinPrefix, me.id);
-        pinKeyRef.current = key;
         const raw = await pinCache?.get(key);
         if (!cancelled) {
-          const pins = parsePinned(raw, idsRef.current);
-          setPinnedSet(new Set(pins));
+          const merged = new Set(parsePinned(raw, idsRef.current));
+          const ops = sessionPinOps.current;
+          for (const [id, on] of ops) {
+            if (on) merged.add(id);
+            else merged.delete(id);
+          }
+          pinnedRef.current = merged;
+          setPinnedSet(merged);
+          pinKeyRef.current = key;
+          loadedRef.current = true;
+          // A pin set while loading is now safe to save, over the stored list.
+          if (ops.size > 0) writePins(key, merged);
+          ops.clear();
           // A pinned section is open, including on load.
           setCollapsedSet((prev) => {
-            if (!pins.some((id) => prev.has(id))) return prev;
+            if (![...merged].some((id) => prev.has(id))) return prev;
             const next = new Set(prev);
-            for (const id of pins) next.delete(id);
+            for (const id of merged) next.delete(id);
             return next;
           });
         }
@@ -120,21 +146,19 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
     return () => {
       cancelled = true;
     };
-  }, [pinCache, pinUser, pinPrefix]);
+  }, [pinCache, pinUser, pinPrefix, writePins]);
   const setPinned = useCallback(
     (id: string, pin: boolean) => {
-      const next = new Set(pinned);
+      const next = new Set(pinnedRef.current);
       if (pin) next.add(id);
       else next.delete(id);
+      pinnedRef.current = next;
       setPinnedSet(next);
       const key = pinKeyRef.current;
-      if (key !== null) {
-        void pinCache?.set(key, JSON.stringify([...next])).catch(() => {
-          // Best effort: the pin still holds for this session.
-        });
-      }
+      if (key !== null && loadedRef.current) writePins(key, next);
+      else sessionPinOps.current.set(id, pin);
     },
-    [pinned, pinCache],
+    [writePins],
   );
 
   const activeRef = useRef<string | null>(null);

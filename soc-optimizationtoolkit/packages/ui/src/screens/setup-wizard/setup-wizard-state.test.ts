@@ -8,7 +8,7 @@
  * derivation, the Get Started gate, and the leader base-URL dispatch.
  */
 import { describe, expect, it } from "vitest";
-import type { WizardShape } from "@soc/core";
+import type { JourneyFacts, WizardShape } from "@soc/core";
 import {
   GET_STARTED_NOT_FINAL_REASON,
   deriveFooterStatus,
@@ -19,6 +19,7 @@ import {
   nextViewId,
   previousViewId,
   resolveCurrentViewId,
+  wizardStepSections,
   wizardViewIds,
   wizardViewProgress,
   wizardViews,
@@ -330,5 +331,29 @@ describe("the cloud first run (installed in the leader)", () => {
   it("keeps the GitHub view skippable when the token is optional", () => {
     const views = wizardViews(cloud, { repositoriesRequired: false });
     expect(views.find((v) => v.id === "repositories")?.skippable).toBe(true);
+  });
+});
+
+describe("wizardStepSections (the ids a step actually renders, in order)", () => {
+  const facts = (connectivity: JourneyFacts["connectivity"]) => ({ connectivity }) as JourneyFacts;
+  it("the GitHub step is always its three sections", () => {
+    expect(wizardStepSections("github", facts("full"))).toEqual([
+      "github-token",
+      "sentinel-content",
+      "schema-tables",
+    ]);
+  });
+  it("Fully Connected: connect then resources, no checklist", () => {
+    expect(wizardStepSections("azure", facts("full"))).toEqual(["azure-connect", "azure-resources"]);
+  });
+  it("Partially Connected: the checklist comes first", () => {
+    expect(wizardStepSections("azure", facts("partial"))).toEqual([
+      "azure-connectivity",
+      "azure-connect",
+      "azure-resources",
+    ]);
+  });
+  it("Disconnected: neither connect nor resources", () => {
+    expect(wizardStepSections("azure", facts("disconnected"))).toEqual([]);
   });
 });
