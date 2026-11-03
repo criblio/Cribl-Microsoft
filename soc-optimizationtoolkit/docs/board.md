@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 35 in progress, 134 done.**
+**99 in the backlog, 36 in progress, 134 done.**
 
 ## By menu item
 
@@ -147,7 +147,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,6 +1050,14 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **MIG-10** Move the workspace inventory out of SIEM Migration into its own Data Volume Inventory page (tools)
+  `MIG-F2` `story` `settled`
+  USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data
+  Volume Inventory, tools section; SIEM Migration keeps no link. Removes
+  data-volume-inventory from PLANNED_MENUS. Design:
+  docs/features/inventory-data-allowances.md. Plan:
+  docs/data-volume-inventory-implementation-plan.md (task MIG-10).
+
 ---
 
 ## Backlog - now (11)
@@ -1263,7 +1271,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (53)
+## Backlog - next (52)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1900,14 +1908,6 @@ Settled and unblocked, sequenced behind now.
   SeverityName); CommonSecurityLog user_name/src_user_name now map to
   *UserName (were *UserID); the ASim tables' username/app_name/processName now
   map to *Name columns.
-
-- **MIG-10** Move the workspace inventory out of SIEM Migration into its own Data Volume Inventory page (tools)
-  `MIG-F2` `story` `settled`
-  USER DECISION 2026-11-03: own page, route data-volume-inventory, label Data
-  Volume Inventory, tools section; SIEM Migration keeps no link. Removes
-  data-volume-inventory from PLANNED_MENUS. Design:
-  docs/features/inventory-data-allowances.md. Plan:
-  docs/data-volume-inventory-implementation-plan.md (task MIG-10).
 
 - **MIG-11** Core: dated allowance catalog - table to grant (Free / E5 / Servers P2) and qualifying E5 SKU ids
   `MIG-F2` `enabler` `settled`

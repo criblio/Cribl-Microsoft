@@ -3535,7 +3535,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [],
       "id": "MIG-10",
       "type": "story",
