@@ -339,7 +339,7 @@ function ServersGranted({ view, a }: { view: GrantView; a: DataAllowances }) {
             <thead>
               <tr>
                 <th>
-                  Subscription <InfoTip text={ALLOWANCE_TIPS.servers} />
+                  Subscription <InfoTip text={a.scope.kind === "tenant" ? ALLOWANCE_TIPS.serversTenant : ALLOWANCE_TIPS.servers} />
                 </th>
                 <th>Plan</th>
                 <th>Machines in subscription</th>

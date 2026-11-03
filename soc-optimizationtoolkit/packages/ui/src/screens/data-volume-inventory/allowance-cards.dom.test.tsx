@@ -419,11 +419,16 @@ describe("AllowanceCards - tenant comparison (MIG-16)", () => {
     expect(text()).toContain("machines reporting to the workspaces read: 4 x 500 MB = 2.00 GB/day");
     // The visible copy (the InfoTips are separate text); not "here".
     expect([...document.querySelectorAll("th, .allowance-arithmetic")].map(ownText).join("|")).not.toContain("here");
+    expect(tips()).toContain(ALLOWANCE_TIPS.serversTenant);
+    expect(tips()).not.toContain(ALLOWANCE_TIPS.servers);
+    expect(ALLOWANCE_TIPS.serversTenant).not.toContain("here");
     cleanup();
     // One workspace keeps "here": the count is that workspace's.
     renderCards(allowances({ servers: serversBlock(rows), grants }));
     expect([...document.querySelectorAll("th")].map(ownText)).toContain("Machines reporting here (daily average)");
     expect(text()).toContain("machines reporting here: 4 x 500 MB = 2.00 GB/day");
+    expect(tips()).toContain(ALLOWANCE_TIPS.servers);
+    expect(tips()).not.toContain(ALLOWANCE_TIPS.serversTenant);
   });
 
   it("renders the actions slot beside the cards", () => {

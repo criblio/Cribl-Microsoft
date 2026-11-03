@@ -559,4 +559,8 @@ export const ALLOWANCE_TIPS = {
     "One row per subscription seen in Heartbeat._SubscriptionId. Plan from Microsoft.Security " +
     "pricings (VirtualMachines); machines in the subscription from Resource Graph; machines " +
     "reporting here counted per day and averaged over the 30 days.",
+  serversTenant:
+    "One row per subscription seen in Heartbeat._SubscriptionId. Plan from Microsoft.Security " +
+    "pricings (VirtualMachines); machines in the subscription from Resource Graph; machines " +
+    "reporting to the workspaces read counted per day and averaged over the 30 days.",
 } as const;
