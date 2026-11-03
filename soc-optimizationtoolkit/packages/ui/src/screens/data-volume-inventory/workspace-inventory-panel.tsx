@@ -180,9 +180,12 @@ export function WorkspaceInventoryPanel() {
       try {
         inventories.set(
           id,
+          // Usage totals are all the comparison sums: skip the per-table
+          // source breakdown, one query per ten tables on a large tenant.
           await inventoryWorkspace(ports.azure, id, {
             logger: ports.logger,
             onProgress: (message) => setProgress(`Reading ${step}: ${message}`),
+            sources: false,
           }),
         );
       } catch (err) {

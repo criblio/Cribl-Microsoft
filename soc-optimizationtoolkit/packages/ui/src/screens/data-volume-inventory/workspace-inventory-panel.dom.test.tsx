@@ -390,7 +390,8 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
   it("compares every Sentinel workspace, naming the one being read, then offers the way back", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    fireEvent.click(await inventoryLaw1(tenantStub(USAGE_OK, gate)));
+    const request = tenantStub(USAGE_OK, gate);
+    fireEvent.click(await inventoryLaw1(request));
     // Only the other workspace is read again; the shown inventory is reused.
     await screen.findByText(/law-2 \(1 of 1\)/);
     release();
@@ -401,6 +402,13 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
     expect(ids).toEqual([WS_ID, WS2_ID]);
     expect([...inventories.keys()].sort()).toEqual([WS_ID, WS2_ID]);
     expect(document.querySelector(".allowance-not-read")).toBeNull();
+    // Usage totals only for the other workspace: no per-table source breakdown.
+    const law2Queries = request.mock.calls
+      .map(([req]) => req as AzureManagementRequest)
+      .filter((req) => req.path === `${WS2_ID}/query`)
+      .map((req) => (req.body as { query: string }).query);
+    expect(law2Queries.some((q) => q.startsWith("Usage"))).toBe(true);
+    expect(law2Queries.filter((q) => q.startsWith("union isfuzzy=true withsource=SourceTable"))).toEqual([]);
 
     fireEvent.click(screen.getByText("Back to this workspace"));
     expect(screen.queryByText(/Compared across/)).toBeNull();
