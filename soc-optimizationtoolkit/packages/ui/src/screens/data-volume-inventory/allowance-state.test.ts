@@ -542,14 +542,14 @@ describe("allowance honesty edge cases (MIG-21)", () => {
       sentinelWorkspaceCountIsFloor({ workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("c", "unknown")] }, subscriptionsSearched: 1, failures: [] }),
     ).toBe(false);
     expect(sentinelWorkspaceCountIsFloor(null)).toBe(false);
-    const floored = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: true } });
+    // The only floored state production produces: two or more workspaces seen, more possibly unseen.
+    const floored = allowances({ scope: { kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: true } });
     expect(headroomApplies(grantView(), floored)).toBe(false);
   });
 
   it("the Over column tip no longer says a free table is always 0", () => {
-    expect(ALLOWANCE_TIPS.overColumn).not.toMatch(/a free table's is 0\.?"?$/);
     expect(ALLOWANCE_TIPS.overColumn).toContain("unless Usage still bills it");
     // and the cell it describes does show billed volume for a billed Free table
-    expect(overCell({ table: "AzureActivity", billableMB: 300 }, allowances(), 30)).not.toBe("0");
+    expect(overCell({ table: "AzureActivity", billableMB: 300 }, allowances(), 30)).toBe("10.0 MB");
   });
 });

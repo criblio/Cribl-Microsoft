@@ -307,6 +307,39 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
   });
 });
 
+describe("WorkspaceInventoryPanel - an unreadable benefit row (MIG-22)", () => {
+  it("shows the gap line and reads Used as a floor, never as an exact figure", async () => {
+    const base = armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) });
+    const request = vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.includes("Benefit amount used")) {
+        // One readable day (1 GB) and one whose amount did not extract.
+        return {
+          status: 200,
+          body: table(
+            ["Day", "BenefitType", "BenefitUsedGB"],
+            [
+              ["2026-10-20", "M365 E5", 1],
+              ["2026-10-21", "M365 E5", null],
+            ],
+          ),
+        };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 2000]]) };
+      }
+      return base(req);
+    });
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    await discoverAndInventory();
+    await screen.findByText(/1 benefit row\(s\) could not be read \(no day or no readable amount\), so Used is a lower bound\./);
+    const card = document.querySelector(".allowance-card")!.textContent!;
+    // 1 GB readable / 30 days = 33.3 MB a day, and only a floor.
+    expect(card).toContain("used at least 33.3 MB/day");
+    expect(card).toContain("over not known (partial benefit read)");
+  });
+});
+
 describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
   const USAGE_OK: Answer = { status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) };
   const COMPARE = "Compare against the whole tenant";
