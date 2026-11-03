@@ -217,7 +217,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     rbac: ["Microsoft.EventHub/namespaces/eventhubs/consumergroups/write on the namespace."],
     confirmHow: "Every hub Azure created in {{namespace}} lists the consumer group {{consumerGroup}}.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "consumerGroup"],
-    checkKinds: ["eh-hub", "eh-consumer-group"],
+    checkKinds: ["eh-hub", "eh-consumer-group-auto"],
     provenance: "inferred",
   },
   {

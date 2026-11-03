@@ -29,6 +29,9 @@ export const CHECK_KINDS = [
   "eh-rule-listen",
   "eh-rule-manage",
   "eh-consumer-group",
+  // AZR-54: the group on each hub Azure created itself, read per hub after
+  // the hub listing; never the plan's named hub.
+  "eh-consumer-group-auto",
   "defender-plans",
   "defender-provider",
   "defender-export",

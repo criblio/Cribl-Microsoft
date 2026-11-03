@@ -440,3 +440,73 @@ describe("reuses the logging-map pager", () => {
     }
   });
 });
+
+// AZR-54: the auto-created-hub step's consumer group was read on the plan's
+// NAMED hub, so a group there made "on each hub Azure creates" read as
+// expected while no such hub existed.
+describe("the consumer group on the hubs Azure creates (AZR-54)", () => {
+  const AUTO = checkKey("entraId", "eh-consumer-group-auto", "eh-consumer-group-auto");
+  const cgPath = (hub: string) => `${HUBS_PATH}/${hub}/consumergroups/cribl`;
+  const FOUND: PortHttpResponse = { status: 200, body: { name: "cribl" } };
+  const NOT_FOUND: PortHttpResponse = { status: 404, body: { error: { code: "NotFound", message: "x" } } };
+  const hubs = (...names: string[]): Route => onPath(HUBS_PATH, { status: 200, body: { value: names.map((name) => ({ name })) } });
+
+  it("a group on the named hub never satisfies it; with no auto hub yet it is unknown, not as expected", async () => {
+    const azure = new RecordingAzure([hubs("defender-alerts"), onPath(cgPath("defender-alerts"), FOUND)]);
+    const result = await validateAzureOnboarding(azure, planValidation(["entraId"], FULL));
+    const v = result.verdicts[AUTO];
+    expect(v?.kind).toBe("unknown");
+    expect(v?.kind === "unknown" && v.reason).toBe("unmeasurable");
+    expect(v?.kind === "unknown" && v.detail).toContain("has not created");
+    expect(azure.calls.some((c) => c.path.endsWith("/consumergroups/cribl"))).toBe(false);
+  });
+
+  it("reads the group by name on each auto-created hub that exists, and only those", async () => {
+    const azure = new RecordingAzure([
+      hubs("insights-logs-signinlogs", "insights-logs-auditlogs", "unrelated"),
+      onPath(cgPath("insights-logs-signinlogs"), FOUND),
+      onPath(cgPath("insights-logs-auditlogs"), FOUND),
+    ]);
+    const result = await validateAzureOnboarding(azure, planValidation(["entraId"], FULL));
+    expect(result.verdicts[AUTO]).toEqual({ kind: "as-expected" });
+    const cg = azure.calls.filter((c) => c.path.endsWith("/consumergroups/cribl")).map((c) => c.path).sort();
+    expect(cg).toEqual([cgPath("insights-logs-auditlogs"), cgPath("insights-logs-signinlogs")]);
+    expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
+  });
+
+  it("names the hubs that lack the group, and is absent when none has it", async () => {
+    const partial = new RecordingAzure([
+      hubs("insights-logs-signinlogs", "insights-logs-auditlogs"),
+      onPath(cgPath("insights-logs-signinlogs"), FOUND),
+      onPath(cgPath("insights-logs-auditlogs"), NOT_FOUND),
+    ]);
+    const p = (await validateAzureOnboarding(partial, planValidation(["entraId"], FULL))).verdicts[AUTO];
+    expect(p?.kind).toBe("present-differs");
+    expect(JSON.stringify(p)).toContain("insights-logs-auditlogs");
+    expect(JSON.stringify(p)).not.toContain("missing on insights-logs-signinlogs");
+
+    const none = new RecordingAzure([hubs("insights-logs-signinlogs"), onPath(cgPath("insights-logs-signinlogs"), NOT_FOUND)]);
+    expect((await validateAzureOnboarding(none, planValidation(["entraId"], FULL))).verdicts[AUTO]).toEqual({ kind: "absent" });
+  });
+
+  it("a refused group read is unknown with its reason, never absent", async () => {
+    const azure = new RecordingAzure([hubs("insights-logs-signinlogs"), onPath(cgPath("insights-logs-signinlogs"), DENIED)]);
+    const v = (await validateAzureOnboarding(azure, planValidation(["entraId"], FULL))).verdicts[AUTO];
+    expect(v?.kind === "unknown" && v.reason).toBe("denied");
+  });
+
+  it("a denied hub listing is unknown and reads no group", async () => {
+    const azure = new RecordingAzure([onPath(HUBS_PATH, DENIED)]);
+    const v = (await validateAzureOnboarding(azure, planValidation(["entraId"], FULL))).verdicts[AUTO];
+    expect(v?.kind === "unknown" && v.reason).toBe("denied");
+    expect(azure.calls.some((c) => c.path.endsWith("/consumergroups/cribl"))).toBe(false);
+  });
+
+  it("the stated bound covers the per-hub reads", async () => {
+    const all = ["insights-logs-auditlogs", "insights-logs-signinlogs", "insights-logs-serviceprincipalsigninlogs", "insights-logs-managedidentitysigninlogs", "insights-logs-provisioninglogs", "insights-logs-riskyusers", "insights-logs-userriskevents", "insights-logs-riskyserviceprincipals", "insights-logs-serviceprincipalriskevents"];
+    const azure = new RecordingAzure([hubs(...all), ...all.map((h) => onPath(cgPath(h), FOUND))]);
+    const plan = planValidation(["entraId"], FULL);
+    await validateAzureOnboarding(azure, plan);
+    expect(azure.calls.length).toBeLessThanOrEqual(plan.maxReads);
+  });
+});

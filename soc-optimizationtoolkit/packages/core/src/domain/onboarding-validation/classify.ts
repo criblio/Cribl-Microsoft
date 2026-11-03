@@ -723,6 +723,14 @@ export function classifyCheck(
       return classifyRule(read, value(values, "sendRule"), ruleCanManage, "Manage");
     case "eh-consumer-group":
       return classifyConsumerGroup(values);
+    case "eh-consumer-group-auto": {
+      // Only the listing reaches here; the per-hub group reads are the
+      // usecase's second phase. A listing that names no target is final.
+      const targets = autoHubTargets(read, expectations);
+      return targets.kind === "verdict"
+        ? targets.verdict
+        : unknown("failed", "The consumer groups on the hubs Azure created were not read.");
+    }
     case "defender-plans":
       return classifyPlans(rows);
     case "defender-provider":
@@ -834,4 +842,76 @@ export function classifyHubArrival(
     if (!listedHubs.some((name) => name.toLowerCase() === wanted)) return { kind: "no-hub" };
   }
   return classifyArrival(read, window);
+}
+
+// ---------------------------------------------------------------------------
+// AZR-54: the consumer group on each hub Azure created itself
+// ---------------------------------------------------------------------------
+
+/** At most this many hubs have their group read in one run; more is truncated. */
+export const MAX_AUTO_HUB_GROUP_READS = 20;
+
+/**
+ * Which hubs the auto-created-hub consumer-group check reads, from the hub
+ * listing: the expected hub names (or prefix) that EXIST. A refused or
+ * incomplete listing is unknown; a complete listing with none of them means
+ * Azure has not created them yet, so there is nothing to check - unknown
+ * "unmeasurable", never absent and never as expected.
+ */
+export function autoHubTargets(
+  listing: ListRead<unknown>,
+  ex: CheckExpectations,
+): { readonly kind: "targets"; readonly hubs: readonly string[] } | { readonly kind: "verdict"; readonly verdict: StepVerdict } {
+  if (listing.state === "refused") return { kind: "verdict", verdict: refusalVerdict("eh-hub", listing.refusal) };
+  const names = measuredHubNames(listing);
+  if (names === null) {
+    return { kind: "verdict", verdict: unknown("failed", "The hub list was not read in full, so which hubs Azure created is unknown.") };
+  }
+  const expected = ex.expectedHubs ?? [];
+  const hubs =
+    expected.length > 0
+      ? names.filter((n) => expected.some((e) => same(e, n)))
+      : ex.expectedHubPrefix !== undefined
+        ? names.filter((n) => n.toLowerCase().startsWith(ex.expectedHubPrefix!.toLowerCase()))
+        : [];
+  if (hubs.length === 0) {
+    return {
+      kind: "verdict",
+      verdict: unknown(
+        "unmeasurable",
+        "Azure has not created any of these hubs yet (it does when the first logs are sent), so there is no hub to give the consumer group.",
+      ),
+    };
+  }
+  if (hubs.length > MAX_AUTO_HUB_GROUP_READS) {
+    return {
+      kind: "verdict",
+      verdict: unknown("truncated", `${hubs.length} hubs match; at most ${MAX_AUTO_HUB_GROUP_READS} are checked in one run.`),
+    };
+  }
+  return { kind: "targets", hubs };
+}
+
+/**
+ * The verdict over the per-hub group reads (each a GET by name, so a 404 is
+ * that hub lacking it). Any other refusal is unknown with its reason.
+ */
+export function classifyAutoHubConsumerGroups(
+  consumerGroup: string,
+  reads: readonly (readonly [hub: string, read: ListRead<unknown>])[],
+): StepVerdict {
+  const missing: string[] = [];
+  for (const [, read] of reads) {
+    if (read.state !== "refused") continue;
+    const r = read.refusal;
+    if (r.reason === "http" && r.status === 404 && !UNREGISTERED_CODES.test(r.code)) continue;
+    return unknown(refusalReason(r), r.text);
+  }
+  for (const [hub, read] of reads) if (read.state === "refused") missing.push(hub);
+  if (missing.length === 0) return { kind: "as-expected" };
+  if (missing.length === reads.length) return { kind: "absent" };
+  return {
+    kind: "present-differs",
+    diffs: [{ field: "consumer group", expected: `${consumerGroup} on every hub Azure created`, actual: `missing on ${missing.join(", ")}` }],
+  };
 }

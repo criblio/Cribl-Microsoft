@@ -59,15 +59,20 @@ import { stepsFor } from "../../domain/onboarding-howto-steps/steps";
 import {
   arrivalRequestFor,
   checkExpectationsFor,
+  planNamespace,
   requestsFor,
   type CheckExpectations,
   type CheckReadShape,
 } from "../../domain/onboarding-validation/requests";
 import {
+  MAX_AUTO_HUB_GROUP_READS,
+  autoHubTargets,
+  classifyAutoHubConsumerGroups,
   classifyCheck,
   classifyHubArrival,
   measuredHubNames,
 } from "../../domain/onboarding-validation/classify";
+import { buildHubConsumerGroupGetRequest } from "../../domain/eventhub-arm";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
 import { MAX_LIST_PAGES } from "../azure-discovery";
 
@@ -273,7 +278,12 @@ export function planValidation(
     missing,
     firstPageReads,
     listReads,
-    maxReads: firstPageReads + listReads * (MAX_LIST_PAGES - 1),
+    maxReads:
+      firstPageReads +
+      listReads * (MAX_LIST_PAGES - 1) +
+      checks
+        .filter((c) => c.kind === "eh-consumer-group-auto" && c.missing.length === 0)
+        .reduce((n, c) => n + Math.min(c.expectations.expectedHubs?.length ?? MAX_AUTO_HUB_GROUP_READS, MAX_AUTO_HUB_GROUP_READS), 0),
   };
 }
 
@@ -373,6 +383,10 @@ function completeHubListing(
  * them), deduped, GET only. Never throws on an Azure failure: each one is a
  * refusal the classifier turns into unknown with its reason.
  */
+function isAborted(signal: ValidationSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 export async function validateAzureOnboarding(
   azure: AzureManagement,
   plan: ValidationPlan,
@@ -411,12 +425,55 @@ export async function validateAzureOnboarding(
     onProgress?.(done, plan.firstPageReads);
   }
 
+  // AZR-54: the second phase. The consumer group on each hub Azure created is
+  // read only for the hubs the listing shows exist; reads are shared across
+  // sources that name the same hub.
+  const autoGroupVerdicts = new Map<string, StepVerdict>();
+  const groupReads = new Map<string, ListRead<unknown>>();
+  for (const check of plan.checks) {
+    if (check.kind !== "eh-consumer-group-auto" || check.missing.length > 0) continue;
+    const listing = check.readKeys.length > 0 ? reads.get(check.readKeys[0]!) : undefined;
+    if (listing === undefined || cancelled || signal?.aborted === true) continue;
+    const targets = autoHubTargets(listing, check.expectations);
+    if (targets.kind === "verdict") {
+      autoGroupVerdicts.set(check.key, targets.verdict);
+      continue;
+    }
+    const group = (plan.values.consumerGroup ?? "").trim();
+    const perHub: (readonly [string, ListRead<unknown>])[] = [];
+    for (const hub of targets.hubs) {
+      // Read through a call: the signal can flip during the awaits below.
+      if (isAborted(signal)) {
+        cancelled = true;
+        break;
+      }
+      const request = buildHubConsumerGroupGetRequest(planNamespace(plan.values), hub, group);
+      const key = describeRequest(request);
+      let read = groupReads.get(key);
+      if (read === undefined) {
+        read = await perform(azure, { key, request, shape: "single", context: `consumer group ${group} on ${hub}` });
+        groupReads.set(key, read);
+        done += 1;
+        onProgress?.(done, plan.firstPageReads);
+      }
+      perHub.push([hub, read]);
+    }
+    if (perHub.length === targets.hubs.length) {
+      autoGroupVerdicts.set(check.key, classifyAutoHubConsumerGroups(group, perHub));
+    }
+  }
+
   const verdicts: Record<string, StepVerdict> = {};
   const checks: CheckResult[] = [];
   for (const check of plan.checks) {
     const checkReads = check.readKeys.map((k) => reads.get(k));
     let verdict: StepVerdict;
-    if (check.missing.length > 0) {
+    const autoGroup = autoGroupVerdicts.get(check.key);
+    if (autoGroup !== undefined) {
+      verdict = autoGroup;
+    } else if (check.kind === "eh-consumer-group-auto" && check.missing.length === 0 && cancelled) {
+      verdict = CANCELLED;
+    } else if (check.missing.length > 0) {
       verdict = classifyCheck(check.kind, plan.values, [], check.expectations);
     } else if (checkReads.some((r) => r === undefined)) {
       verdict = CANCELLED;

@@ -125,6 +125,8 @@ describe("how-to step catalog", () => {
     // 'eh-rule-send' is classified as Send OR Manage, so it would pass a
     // Send-only rule for the step whose whole point is Manage (AZR-39).
     expect(howToStep("eh-rule-diagnostic")!.checkKinds).toEqual(["eh-rule-manage"]);
+    // AZR-54: the named-hub consumer-group check never answers for the hubs Azure creates.
+    expect(howToStep("eh-consumer-group-auto")!.checkKinds).toEqual(["eh-hub", "eh-consumer-group-auto"]);
     expect(howToStep("eh-rule-send")!.checkKinds).toEqual(["eh-rule-send"]);
     const sendChecked = ALL_HOWTO_STEPS.filter((s) => s.checkKinds.includes("eh-rule-send")).map((s) => s.id);
     expect(sendChecked).toEqual(["eh-rule-send"]);

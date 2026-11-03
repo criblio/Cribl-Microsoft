@@ -3701,26 +3701,28 @@
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-54",
       "type": "bug",
       "title": "Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates",
-      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. Step eh-consumer-group-auto (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For Entra the hubs are the insights-logs-* hubs Azure creates, so the row answers a different question. Reproduced: with no insights-logs-* hub in the namespace, creating consumer group cribl on ehjpedersoneastus turned that Entra row from 'not found' to 'as expected'. A false 'as expected' on a step that is not done. FIX: for the auto-hub step, check the consumer group on each auto-created hub present in a complete hub listing; with none present the row says no hub exists yet (as the arrival lines do since AZR-47); a refused or incomplete listing is unknown. Pin: a cribl group on the named hub never satisfies the auto-hub step; mutation-check."
+      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. Step eh-consumer-group-auto (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For Entra the hubs are the insights-logs-* hubs Azure creates, so the row answers a different question. Reproduced: with no insights-logs-* hub in the namespace, creating consumer group cribl on ehjpedersoneastus turned that Entra row from 'not found' to 'as expected'. A false 'as expected' on a step that is not done. FIX: for the auto-hub step, check the consumer group on each auto-created hub present in a complete hub listing; with none present the row says no hub exists yet (as the arrival lines do since AZR-47); a refused or incomplete listing is unknown. Pin: a cribl group on the named hub never satisfies the auto-hub step; mutation-check.\n\nDONE 2026-11-03 (pins): new check kind eh-consumer-group-auto replaces eh-consumer-group on the auto-created-hub step. It plans the hub listing (shared with eh-hub) and the usecase reads the group by name on each expected hub the COMPLETE listing shows, in a second phase like arrival. No such hub yet is unknown \"unmeasurable\" (Azure has not created them), never as expected or absent; a refused or incomplete listing is unknown; a 404 on some hubs is present-differs naming them, on all is absent; any other refusal is unknown with its reason. maxReads counts the extra reads (capped at 20 hubs, truncated beyond). The kind joined the lane transport set, which an early run of the lanes pin caught. Mutation-checked: targeting every listed hub fails 2 pins; losing the missing-hub bookkeeping fails 1. Live check outstanding: against ehnsjpedersoneastus the Entra row should now read unmeasurable while cribl exists only on ehjpedersoneastus.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F9",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-55",
       "type": "bug",
       "title": "Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'",
-      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. validate-panel.tsx renders every result row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and eh-consumer-group) therefore shows two identical sentences, one red 'not found' and one green 'as expected', with nothing on screen to say which is which. FIX: when a step has more than one check kind, each row says in words what it checked (for example 'the hubs Azure creates' vs 'the consumer group'), never the raw kind id. Lands with or after [[AZR-54]], which changes what the second row checks. Pin: no two rows of one run render the same visible text."
+      "detail": "FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during the ADR 0007 live-verification pass. validate-panel.tsx renders every result row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and eh-consumer-group) therefore shows two identical sentences, one red 'not found' and one green 'as expected', with nothing on screen to say which is which. FIX: when a step has more than one check kind, each row says in words what it checked (for example 'the hubs Azure creates' vs 'the consumer group'), never the raw kind id. Lands with or after [[AZR-54]], which changes what the second row checks. Pin: no two rows of one run render the same visible text.\n\nDONE 2026-11-03 (pins): a Validate row names what it checked (CHECK_SUBJECT, one phrase per check kind, exhaustive and distinct) whenever its step has more than one check for the source, e.g. \"... - the hubs: not found\" beside \"... - the consumer group on each hub Azure created: ...\"; single-check rows are unchanged.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",

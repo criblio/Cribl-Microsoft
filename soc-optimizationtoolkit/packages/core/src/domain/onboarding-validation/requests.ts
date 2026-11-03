@@ -170,6 +170,7 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "eh-rule-listen": [...SUB_RG_NS, "listenRule"],
   "eh-rule-manage": [...SUB_RG_NS, "sendRule"],
   "eh-consumer-group": [...SUB_RG_NS, "hubName", "consumerGroup"],
+  "eh-consumer-group-auto": [...SUB_RG_NS, "consumerGroup"],
   "defender-plans": ["subscriptionId"],
   "defender-provider": ["subscriptionId"],
   "defender-export": [...SUB_RG_NS, "hubName"],
@@ -321,6 +322,9 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
     case "eh-namespace":
       return [single(buildNamespaceGetRequest(ns), `Event Hub namespace ${ns.name}`)];
     case "eh-hub":
+    // AZR-54: the hub listing first; the per-hub group reads follow it
+    // (validateAzureOnboarding), because which hubs exist is only known then.
+    case "eh-consumer-group-auto":
       return [list(buildNamespaceHubsListRequest(ns), `hubs in ${ns.name}`)];
     case "eh-rule-send":
     case "eh-rule-listen":

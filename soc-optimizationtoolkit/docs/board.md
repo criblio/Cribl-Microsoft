@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 38 in progress, 137 done.**
+**94 in the backlog, 36 in progress, 139 done.**
 
 ## By menu item
 
@@ -35,12 +35,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 26 | 11 |
+| Azure Native Source Onboarding | 29 | 28 | 9 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 132.
+Open work totals 130.
 
 ## Epics and features
 
@@ -49,7 +49,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 41% (23/56)
+### `AZR` Azure native source onboarding - 45% (25/56)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -62,7 +62,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 21/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -145,7 +145,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (38)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1114,40 +1114,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
-
-- **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. Step eh-consumer-group-auto
-  (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub
-  Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and
-  requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs
-  consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For
-  Entra the hubs are the insights-logs-* hubs Azure creates, so the row
-  answers a different question. Reproduced: with no insights-logs-* hub in the
-  namespace, creating consumer group cribl on ehjpedersoneastus turned that
-  Entra row from 'not found' to 'as expected'. A false 'as expected' on a step
-  that is not done. FIX: for the auto-hub step, check the consumer group on
-  each auto-created hub present in a complete hub listing; with none present
-  the row says no hub exists yet (as the arrival lines do since AZR-47); a
-  refused or incomplete listing is unknown. Pin: a cribl group on the named
-  hub never satisfies the auto-hub step; mutation-check.
-
-- **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
-  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
-  the ADR 0007 live-verification pass. validate-panel.tsx renders every result
-  row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside
-  the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and
-  eh-consumer-group) therefore shows two identical sentences, one red 'not
-  found' and one green 'as expected', with nothing on screen to say which is
-  which. FIX: when a step has more than one check kind, each row says in words
-  what it checked (for example 'the hubs Azure creates' vs 'the consumer
-  group'), never the raw kind id. Lands with or after [[AZR-54]], which
-  changes what the second row checks. Pin: no two rows of one run render the
-  same visible text.
 
 - **DBT-249** 36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard
   `DBT-F2` `bug` `settled`
@@ -2600,7 +2566,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (137)
+## Done (139)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6616,6 +6582,57 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson
   org: at scroll top, clicking inside Add Sample Data left Select Sentinel
   Solution open and Add Sample Data in place, and sections 3-8 folded.
+
+- **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. Step eh-consumer-group-auto
+  (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub
+  Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and
+  requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs
+  consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For
+  Entra the hubs are the insights-logs-* hubs Azure creates, so the row
+  answers a different question. Reproduced: with no insights-logs-* hub in the
+  namespace, creating consumer group cribl on ehjpedersoneastus turned that
+  Entra row from 'not found' to 'as expected'. A false 'as expected' on a step
+  that is not done. FIX: for the auto-hub step, check the consumer group on
+  each auto-created hub present in a complete hub listing; with none present
+  the row says no hub exists yet (as the arrival lines do since AZR-47); a
+  refused or incomplete listing is unknown. Pin: a cribl group on the named
+  hub never satisfies the auto-hub step; mutation-check. DONE 2026-11-03
+  (pins): new check kind eh-consumer-group-auto replaces eh-consumer-group on
+  the auto-created-hub step. It plans the hub listing (shared with eh-hub) and
+  the usecase reads the group by name on each expected hub the COMPLETE
+  listing shows, in a second phase like arrival. No such hub yet is unknown
+  "unmeasurable" (Azure has not created them), never as expected or absent; a
+  refused or incomplete listing is unknown; a 404 on some hubs is
+  present-differs naming them, on all is absent; any other refusal is unknown
+  with its reason. maxReads counts the extra reads (capped at 20 hubs,
+  truncated beyond). The kind joined the lane transport set, which an early
+  run of the lanes pin caught. Mutation-checked: targeting every listed hub
+  fails 2 pins; losing the missing-hub bookkeeping fails 1. Live check
+  outstanding: against ehnsjpedersoneastus the Entra row should now read
+  unmeasurable while cribl exists only on ehjpedersoneastus.
+
+- **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. validate-panel.tsx renders every result
+  row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside
+  the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and
+  eh-consumer-group) therefore shows two identical sentences, one red 'not
+  found' and one green 'as expected', with nothing on screen to say which is
+  which. FIX: when a step has more than one check kind, each row says in words
+  what it checked (for example 'the hubs Azure creates' vs 'the consumer
+  group'), never the raw kind id. Lands with or after [[AZR-54]], which
+  changes what the second row checks. Pin: no two rows of one run render the
+  same visible text. DONE 2026-11-03 (pins): a Validate row names what it
+  checked (CHECK_SUBJECT, one phrase per check kind, exhaustive and distinct)
+  whenever its step has more than one check for the source, e.g. "... - the
+  hubs: not found" beside "... - the consumer group on each hub Azure created:
+  ..."; single-check rows are unchanged.
 
 - **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
   `AZR-F9` `bug` `settled` `verified: pins`

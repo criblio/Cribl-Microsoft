@@ -366,6 +366,7 @@ const EVENTHUB_TRANSPORT_KINDS: ReadonlySet<CheckKind> = new Set<CheckKind>([
   "eh-rule-listen",
   "eh-rule-manage",
   "eh-consumer-group",
+  "eh-consumer-group-auto",
 ]);
 
 const BLOB_TRANSPORT_KINDS: ReadonlySet<CheckKind> = new Set<CheckKind>([
