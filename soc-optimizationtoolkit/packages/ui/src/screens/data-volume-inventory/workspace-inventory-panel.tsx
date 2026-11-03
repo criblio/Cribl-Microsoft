@@ -10,10 +10,15 @@
  * Every read here is on-demand behind a button - discovery is one ARM list per
  * subscription plus a solutions list, and an inventory is one query per ten
  * tables, against a proxy budget of 100 requests a minute.
+ *
+ * MIG-16: after an inventory, "Compare against the whole tenant" inventories
+ * every other Sentinel-enabled workspace one at a time (that same budget) and
+ * shows the allowances summed across all of them.
  */
 
 import { useMemo, useState } from "react";
 import {
+  compareTenant,
   discoverWorkspaces,
   inventoryWorkspace,
   listingCount,
@@ -25,7 +30,14 @@ import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { AllowanceCards, AllowanceQueries, AllowanceTagCell } from "./allowance-cards";
-import { ALLOWANCE_TIPS, afterAllowancesText, overCell, sentinelWorkspaceCount } from "./allowance-state";
+import {
+  ALLOWANCE_TIPS,
+  afterAllowancesText,
+  overCell,
+  sentinelWorkspaceCount,
+  sentinelWorkspaceIds,
+  tenantDiscoveryNote,
+} from "./allowance-state";
 import {
   discoveryHeadline,
   formatMB,
@@ -59,11 +71,15 @@ export function WorkspaceInventoryPanel() {
   const [selectedId, setSelectedId] = useState("");
   const [inventory, setInventory] = useState<WorkspaceInventory | null>(null);
   const [inventoryError, setInventoryError] = useState("");
-  const [busy, setBusy] = useState<"discover" | "inventory" | "allowances" | null>(null);
+  const [busy, setBusy] = useState<"discover" | "inventory" | "allowances" | "tenant" | null>(null);
   // MIG-15: the allowances belong to the shown inventory - cleared when a new
   // inventory replaces it, read after it, and never shown beside another one.
   const [allowances, setAllowances] = useState<{ result: DataAllowances; readAt: string } | null>(null);
   const [allowanceError, setAllowanceError] = useState("");
+  // MIG-16: the tenant comparison replaces the cards while it is shown, and is
+  // dropped with the inventory it was started from.
+  const [tenant, setTenant] = useState<{ result: DataAllowances; readAt: string } | null>(null);
+  const [tenantError, setTenantError] = useState("");
   const [progress, setProgress] = useState("");
   const [saveNote, setSaveNote] = useState("");
 
@@ -109,6 +125,8 @@ export function WorkspaceInventoryPanel() {
       setInventory(null);
       setAllowances(null);
       setAllowanceError("");
+      setTenant(null);
+      setTenantError("");
       setInventoryError(
         `${workspaceNameOf(target)}: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -119,6 +137,8 @@ export function WorkspaceInventoryPanel() {
     setInventory(read);
     setAllowances(null);
     setAllowanceError("");
+    setTenant(null);
+    setTenantError("");
     // The inventory is on screen from here on; the allowance read only adds to it.
     setBusy("allowances");
     setProgress("Reading data allowances");
@@ -133,6 +153,61 @@ export function WorkspaceInventoryPanel() {
       setAllowances({ result, readAt });
     } catch (err) {
       setAllowanceError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+      setProgress("");
+    }
+  };
+
+  // MIG-16: inventory every OTHER Sentinel-enabled workspace one at a time -
+  // the shown inventory is reused - then sum the allowances across all of them.
+  // A workspace whose Usage read fails is left out of the map, so compareTenant
+  // lists it as not read; its own error replaces compareTenant's generic one.
+  const compareAcrossTenant = async () => {
+    if (inventory === null) return;
+    const ids = sentinelWorkspaceIds(discovery);
+    setBusy("tenant");
+    setTenantError("");
+    const inventories = new Map<string, WorkspaceInventory>();
+    if (ids.includes(inventory.workspaceId)) inventories.set(inventory.workspaceId, inventory);
+    const others = ids.filter((id) => id !== inventory.workspaceId);
+    const failed = new Map<string, string>();
+    for (const [index, id] of others.entries()) {
+      const step = `${workspaceNameOf(id)} (${index + 1} of ${others.length})`;
+      setProgress(`Reading ${step}`);
+      try {
+        inventories.set(
+          id,
+          await inventoryWorkspace(ports.azure, id, {
+            logger: ports.logger,
+            onProgress: (message) => setProgress(`Reading ${step}: ${message}`),
+          }),
+        );
+      } catch (err) {
+        failed.set(id, err instanceof Error ? err.message : String(err));
+      }
+    }
+    setProgress("Comparing data allowances across the tenant");
+    const readAt = new Date().toISOString();
+    try {
+      const result = await compareTenant(ports.azure, ports.graph, ids, inventories, {
+        logger: ports.logger,
+        onProgress: setProgress,
+        readAt,
+      });
+      const notRead =
+        result.scope.kind === "tenant"
+          ? result.scope.notRead.map((w) => {
+              const error = failed.get(w.id);
+              return error === undefined ? w : { id: w.id, error: `Usage not read - ${error}` };
+            })
+          : [];
+      setTenant({
+        result: result.scope.kind === "tenant" ? { ...result, scope: { ...result.scope, notRead } } : result,
+        readAt,
+      });
+    } catch (err) {
+      setTenantError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
       setProgress("");
@@ -304,8 +379,47 @@ export function WorkspaceInventoryPanel() {
               Could not read the data allowance benefit, so no allowance is shown - {allowanceError}
             </p>
           )}
-          {allowances !== null && (
-            <AllowanceCards allowances={allowances.result} readAt={allowances.readAt} />
+          {tenantError !== "" && (
+            <p className="match-warning">
+              Could not compare the data allowances across the tenant - {tenantError}
+            </p>
+          )}
+          {tenant !== null ? (
+            <>
+              {discovery !== null && tenantDiscoveryNote(discovery) !== null && (
+                <p className="match-warning">{tenantDiscoveryNote(discovery)}</p>
+              )}
+              <AllowanceCards
+                allowances={tenant.result}
+                readAt={tenant.readAt}
+                actions={
+                  <button className="run-button" disabled={busy !== null} onClick={() => setTenant(null)}>
+                    Back to this workspace
+                  </button>
+                }
+              />
+            </>
+          ) : (
+            allowances !== null && (
+              <AllowanceCards
+                allowances={allowances.result}
+                readAt={allowances.readAt}
+                actions={
+                  sentinelWorkspaceIds(discovery).length > 1 ? (
+                    <>
+                      <button
+                        className="run-button"
+                        disabled={busy !== null}
+                        onClick={() => void compareAcrossTenant()}
+                      >
+                        Compare against the whole tenant
+                      </button>
+                      {busy === "tenant" && <span className="field-hint">{progress}</span>}
+                    </>
+                  ) : undefined
+                }
+              />
+            )
           )}
           {gaps !== null && gaps.failed + gaps.partial > 0 && (
             <p className="match-warning">

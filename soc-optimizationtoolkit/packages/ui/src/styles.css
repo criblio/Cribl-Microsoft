@@ -3455,6 +3455,10 @@ button.readiness-pill:focus-visible {
 .allowance-total-row td {
   font-weight: 700;
 }
+/* MIG-16: one tenant-comparison workspace that was not read, by name. */
+.allowance-not-read {
+  margin-top: 2px;
+}
 .allowance-chart {
   margin: 4px 0;
 }

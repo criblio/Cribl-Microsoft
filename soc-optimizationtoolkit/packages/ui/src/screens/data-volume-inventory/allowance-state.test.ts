@@ -15,7 +15,9 @@ import {
   overCell,
   planNote,
   sentinelWorkspaceCount,
+  sentinelWorkspaceIds,
   tagLabel,
+  tenantDiscoveryNote,
 } from "./allowance-state";
 import { allowances, grantView, usage } from "./allowance-test-fixture";
 import { inventoryCsv } from "./workspace-inventory-state";
@@ -236,6 +238,46 @@ describe("planNote and sentinelWorkspaceCount", () => {
         failures: [],
       }),
     ).toBeNull();
+  });
+});
+
+describe("sentinelWorkspaceIds and tenantDiscoveryNote (MIG-16)", () => {
+  const ws = (id: string, sentinel: "enabled" | "not-enabled" | "unknown") => ({
+    id,
+    name: id,
+    subscriptionId: "s",
+    subscriptionName: "",
+    resourceGroup: "r",
+    location: "l",
+    sentinel,
+  });
+
+  it("returns only the Sentinel-enabled ids, in discovery order", () => {
+    expect(sentinelWorkspaceIds(null)).toEqual([]);
+    expect(
+      sentinelWorkspaceIds({
+        workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("b", "not-enabled"), ws("c", "unknown"), ws("d", "enabled")] },
+        subscriptionsSearched: 1,
+        failures: [],
+      }),
+    ).toEqual(["a", "d"]);
+    expect(sentinelWorkspaceIds({ workspaces: { kind: "empty" }, subscriptionsSearched: 1, failures: [] })).toEqual([]);
+  });
+
+  it("says what discovery could not see, and nothing when it saw everything", () => {
+    expect(
+      tenantDiscoveryNote({ workspaces: { kind: "rows", rows: [ws("a", "enabled")] }, subscriptionsSearched: 1, failures: [] }),
+    ).toBeNull();
+    expect(
+      tenantDiscoveryNote({
+        workspaces: { kind: "rows", rows: [ws("a", "enabled"), ws("c", "unknown")] },
+        subscriptionsSearched: 2,
+        failures: [{ subscriptionId: "s2", subscriptionName: "", error: "HTTP 403" }],
+      }),
+    ).toBe(
+      "Discovery was incomplete - 1 subscription(s) not listed, 1 workspace(s) with Sentinel state unknown - " +
+        "so Sentinel workspaces it could not see are not in this comparison.",
+    );
   });
 });
 

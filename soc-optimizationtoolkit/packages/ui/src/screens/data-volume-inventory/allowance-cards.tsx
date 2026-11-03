@@ -7,8 +7,10 @@
  *
  * Honesty (docs/inventory-standard.md): every unknown renders as "not read" or
  * "not known" with its reason, never as 0, and every gap the read reported is
- * shown. Also exports the table's Allowance cell and the allowance queries for
- * the panel's "Queries that produced these numbers".
+ * shown. In a tenant comparison (MIG-16) every workspace that was not read is
+ * listed by name as "not read", and the sums read "at least". Also exports
+ * the table's Allowance cell and the allowance queries for the panel's
+ * "Queries that produced these numbers".
  */
 
 import type { ReactNode } from "react";
@@ -35,12 +37,13 @@ import {
   tagRule,
 } from "./allowance-state";
 import { formatMB } from "./format-mb";
+import { workspaceNameOf } from "./workspace-inventory-state";
 
 export interface AllowanceCardsProps {
   allowances: DataAllowances;
   /** ISO time the allowances were read. */
   readAt: string;
-  /** Room for an action beside the cards (the tenant comparison, later). */
+  /** Room for an action beside the cards: the tenant comparison, or the way back from it. */
   actions?: ReactNode;
 }
 
@@ -52,14 +55,22 @@ function sharedLabel(a: DataAllowances): string | null {
 }
 
 export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCardsProps) {
+  const tenant = a.scope.kind === "tenant" ? a.scope : null;
   return (
     <div className="allowance-cards">
+      {tenant !== null && (
+        <p className="panel-desc">
+          Compared across {tenant.workspaces.length} Sentinel workspaces,{" "}
+          {tenant.workspaces.length - tenant.notRead.length} read.
+        </p>
+      )}
       {a.attribution === "pooled" ? (
         <PooledSummary a={a} />
       ) : a.grants.length === 0 ? (
         <p className="panel-desc">
-          Microsoft's Operation record shows no data allowance benefit applied to this workspace in
-          the last 30 complete days, and no table a grant covers has billable volume in that window.
+          Microsoft's Operation record shows no data allowance benefit applied to{" "}
+          {tenant !== null ? "these workspaces" : "this workspace"} in the last 30 complete days, and
+          no table a grant covers has billable volume in that window.
         </p>
       ) : (
         <div className="allowance-card-grid">
@@ -68,11 +79,15 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
           ))}
         </div>
       )}
-      {a.scope.kind === "tenant" && a.scope.notRead.length > 0 && (
-        <p className="match-warning">
-          {a.scope.notRead.length} workspace(s) not read, so every sum is a floor:{" "}
-          {a.scope.notRead.map((w) => `${w.id}: ${w.error}`).join("; ")}
-        </p>
+      {tenant !== null && tenant.notRead.length > 0 && (
+        <div className="match-warning">
+          {tenant.notRead.length} workspace(s) not read, so every sum is a floor:
+          {tenant.notRead.map((w) => (
+            <div key={w.id} className="allowance-not-read" title={w.id}>
+              {workspaceNameOf(w.id)}: not read - {w.error}
+            </div>
+          ))}
+        </div>
       )}
       {a.gaps.map((gap, i) => (
         <p key={`${i}-${gap}`} className="match-warning">

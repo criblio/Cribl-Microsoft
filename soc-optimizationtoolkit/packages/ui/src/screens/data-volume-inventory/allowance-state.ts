@@ -300,6 +300,31 @@ export function sentinelWorkspaceCount(discovery: WorkspaceDiscovery | null): nu
   return enabled;
 }
 
+/** MIG-16: the Sentinel-enabled workspaces a tenant comparison covers, in discovery order. */
+export function sentinelWorkspaceIds(discovery: WorkspaceDiscovery | null): string[] {
+  if (discovery === null) return [];
+  return listingRows(discovery.workspaces)
+    .filter((w) => w.sentinel === "enabled")
+    .map((w) => w.id);
+}
+
+/**
+ * MIG-16: what discovery could not see, so a tenant comparison is not read as
+ * covering the whole tenant. Null when every subscription was listed and every
+ * workspace's Sentinel state is known.
+ */
+export function tenantDiscoveryNote(discovery: WorkspaceDiscovery): string | null {
+  const unknown = listingRows(discovery.workspaces).filter((w) => w.sentinel === "unknown").length;
+  const parts: string[] = [];
+  if (discovery.failures.length > 0) parts.push(`${discovery.failures.length} subscription(s) not listed`);
+  if (unknown > 0) parts.push(`${unknown} workspace(s) with Sentinel state unknown`);
+  if (parts.length === 0) return null;
+  return (
+    `Discovery was incomplete - ${parts.join(", ")} - so Sentinel workspaces it could not ` +
+    "see are not in this comparison."
+  );
+}
+
 /** The "daily billable after allowances" tile value. */
 export function afterAllowancesText(a: DataAllowances): string {
   return `${a.sumsAreFloors ? "at least " : ""}${formatMB(a.afterAllowancesDailyMB)}`;

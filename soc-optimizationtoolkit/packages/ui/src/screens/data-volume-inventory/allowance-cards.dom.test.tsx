@@ -190,6 +190,54 @@ describe("AllowanceCards", () => {
   });
 });
 
+describe("AllowanceCards - tenant comparison (MIG-16)", () => {
+  const WS = (name: string) =>
+    `/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.OperationalInsights/workspaces/${name}`;
+
+  it("lists an unread workspace by name as not read, and the granted figures read at least", () => {
+    renderCards(
+      allowances({
+        sumsAreFloors: true,
+        scope: {
+          kind: "tenant",
+          workspaces: [WS("law-1"), WS("law-2"), WS("law-3")],
+          notRead: [{ id: WS("law-3"), error: "read Usage: HTTP 403" }],
+        },
+        queries: { ...allowances().queries, tables: null },
+        grants: [
+          grantView({ grant: "servers-p2", grantedMB: 1500, grantedIsFloor: true, usage: usage({ eligibleDailyMB: 900, usedDailyMB: 800 }) }),
+        ],
+      }),
+    );
+    expect(text()).toContain("Compared across 3 Sentinel workspaces, 2 read.");
+    const unread = [...document.querySelectorAll(".allowance-not-read")].map((e) => e.textContent);
+    expect(unread).toEqual(["law-3: not read - read Usage: HTTP 403"]);
+    // The id is shortened to the name; the full resource id is not the label.
+    expect(text()).not.toContain(`${WS("law-3")}: `);
+    expect(text()).toContain("granted at least 1.5 GB/day");
+    expect(text()).toContain("eligible at least 0.9 GB/day, used at least 0.8 GB/day");
+    expect(text()).not.toContain("headroom");
+  });
+
+  it("says no benefit was applied to these workspaces, not to this workspace", () => {
+    renderCards(allowances({ grants: [], scope: { kind: "tenant", workspaces: [WS("a"), WS("b")], notRead: [] } }));
+    expect(text()).toMatch(/no data allowance benefit applied to these workspaces/);
+    expect(text()).not.toContain("this workspace");
+    expect(document.querySelector(".allowance-not-read")).toBeNull();
+  });
+
+  it("renders the actions slot beside the cards", () => {
+    render(
+      <AllowanceCards
+        allowances={allowances()}
+        readAt="2026-11-03T10:00:00.000Z"
+        actions={<button>Back to this workspace</button>}
+      />,
+    );
+    expect(screen.getByText("Back to this workspace").closest(".panel-controls")).not.toBeNull();
+  });
+});
+
 describe("AllowanceTagCell", () => {
   it("warns that rerouting a grant table to _CL forfeits its eligible volume", () => {
     render(

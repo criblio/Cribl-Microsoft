@@ -8,12 +8,23 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { compareTenant } from "@soc/core";
 import type { AzureConfig, AzureManagementRequest } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { WorkspaceInventoryPanel } from "./workspace-inventory-panel";
 
-afterEach(cleanup);
+// MIG-16: a pass-through spy, so the tenant comparison runs for real and the
+// test can still see which workspaces it was asked to compare.
+vi.mock("@soc/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@soc/core")>();
+  return { ...actual, compareTenant: vi.fn(actual.compareTenant) };
+});
+
+afterEach(() => {
+  cleanup();
+  vi.mocked(compareTenant).mockClear();
+});
 
 const CONFIG = { subscriptionId: "", resourceGroup: "", workspaceName: "" } as unknown as AzureConfig;
 const WS_ID =
@@ -266,5 +277,79 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
     // A billable table's overage is its own billable daily average: 90 / 30.
     expect(row.textContent).toContain("3.0 MB");
     await waitFor(() => expect(document.body.textContent).toContain("Operation"));
+  });
+});
+
+describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
+  const USAGE_OK: Answer = { status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) };
+  const COMPARE = "Compare against the whole tenant";
+
+  /** Both workspaces Sentinel-enabled; law-2's Usage answer waits on `gate` when given. */
+  function tenantStub(usage2: Answer, gate?: Promise<void>) {
+    const base = armStub(USAGE_OK, usage2);
+    return vi.fn(async (req: AzureManagementRequest) => {
+      if (req.path.endsWith("/Microsoft.OperationsManagement/solutions")) {
+        return {
+          status: 200,
+          body: {
+            value: [
+              { name: "SecurityInsights(law-1)", properties: { workspaceResourceId: WS_ID } },
+              { name: "SecurityInsights(law-2)", properties: { workspaceResourceId: WS2_ID } },
+            ],
+          },
+        };
+      }
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (gate !== undefined && req.path === `${WS2_ID}/query` && query.startsWith("Usage")) await gate;
+      return base(req);
+    });
+  }
+
+  async function inventoryLaw1(request: ReturnType<typeof vi.fn>) {
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\) across 1 subscription\(s\), 2 with Sentinel/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    return screen.findByText(COMPARE);
+  }
+
+  it("offers no tenant comparison when discovery found one Sentinel workspace", async () => {
+    renderPanel(armStub(USAGE_OK, USAGE_OK));
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\).*1 with Sentinel/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    await screen.findByText(/no data allowance benefit applied to this workspace/);
+    expect(screen.queryByText(COMPARE)).toBeNull();
+  });
+
+  it("compares every Sentinel workspace, naming the one being read, then offers the way back", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    fireEvent.click(await inventoryLaw1(tenantStub(USAGE_OK, gate)));
+    // Only the other workspace is read again; the shown inventory is reused.
+    await screen.findByText(/law-2 \(1 of 1\)/);
+    release();
+    await screen.findByText("Compared across 2 Sentinel workspaces, 2 read.");
+
+    expect(compareTenant).toHaveBeenCalledTimes(1);
+    const [, , ids, inventories] = vi.mocked(compareTenant).mock.calls[0]!;
+    expect(ids).toEqual([WS_ID, WS2_ID]);
+    expect([...inventories.keys()].sort()).toEqual([WS_ID, WS2_ID]);
+    expect(document.querySelector(".allowance-not-read")).toBeNull();
+
+    fireEvent.click(screen.getByText("Back to this workspace"));
+    expect(screen.queryByText(/Compared across/)).toBeNull();
+    expect(screen.getByText(COMPARE)).toBeTruthy();
+    expect(screen.getByText(/no data allowance benefit applied to this workspace/)).toBeTruthy();
+  });
+
+  it("lists a workspace whose Usage read was refused by name as not read, never as a zero", async () => {
+    fireEvent.click(await inventoryLaw1(tenantStub({ status: 403, body: { error: { code: "AuthorizationFailed" } } })));
+    await screen.findByText("Compared across 2 Sentinel workspaces, 1 read.");
+    const [, , ids, inventories] = vi.mocked(compareTenant).mock.calls[0]!;
+    expect(ids).toEqual([WS_ID, WS2_ID]);
+    expect([...inventories.keys()]).toEqual([WS_ID]);
+    const unread = [...document.querySelectorAll(".allowance-not-read")].map((e) => e.textContent);
+    expect(unread).toEqual([expect.stringMatching(/^law-2: not read - .*read Usage: HTTP 403/)]);
   });
 });
