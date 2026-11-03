@@ -1225,6 +1225,39 @@ scattered across six sections lose that ordering unless it is made explicit.
 Hubs; several sections here create one and wire a source to it. Check for overlap
 before building a second Event Hub surface beside it.
 
+#### 6h-i. How the Cribl Event Hub source authenticates - DECIDED 2026-11-03
+
+Status: Decided (operator, 2026-11-03), not built. Cards: AZR-58 (refuse a
+Manage-capable rule), AZR-59 (Entra ID OAuth as the default).
+
+**Found in the ADR 0007 live pass.** On a namespace whose only rule is
+`RootManageSharedAccessKey`, the AZR-34 create armed to `listKeys` that rule
+and store its key as a Cribl text secret. The secret handling itself is sound:
+the key is fetched only after confirm, never shown, never put in the app's KV
+store, and the input names the secret rather than holding it. The problem is
+which key it is: a Manage-capable SAS key gives anyone who can read secrets in
+the worker group control of the whole namespace, not read access to one hub.
+
+**Options weighed:**
+
+- **Entra ID OAuth only.** The vendored Cribl `InputEventhub` sasl block
+  supports `oauthbearer` with client id, tenant, client secret or certificate.
+  The input authenticates as a service principal holding "Azure Event Hubs
+  Data Receiver" on the hub; no shared key leaves Azure and access is revoked
+  per principal. The Blob lane already authenticates this way. Rejected as the
+  ONLY path because some customers cannot grant RBAC on the namespace to a
+  Cribl principal and can only hand over a connection string.
+- **SAS with a Listen-only rule only.** Smallest change, but a SAS key is
+  still a long-lived shared secret, rotation silently breaks the source, and it
+  keeps the Event Hub lane the odd one out beside Blob. Rejected as the default.
+- **Both (CHOSEN).** Entra ID OAuth is the default credential for Event Hub
+  lanes; a Listen-only SAS rule is the fallback. A Manage-capable rule (or a
+  pasted connection string whose key name is one) is REFUSED in both modes.
+
+**What this falsifies:** ADR 0007's credential section (SAS via listKeys or a
+pasted connection string as the only Event Hub credential) is amended before
+AZR-59 is coded; until then AZR-58 alone narrows the SAS path.
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
