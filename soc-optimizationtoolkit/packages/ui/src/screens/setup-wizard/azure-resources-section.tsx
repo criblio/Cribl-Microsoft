@@ -139,7 +139,8 @@ export function AzureResourcesSection({
   const [discoverStatus, discoverOutput, runDiscover] = useRunner();
   useSectionRunState(RESOURCES_SECTION_ID, {
     busy: discoverStatus === "running" || validating,
-    failed: discoverStatus === "failed" || recheckFailed || dependentFailed,
+    // One flag per operation: each failure is its own edge.
+    failed: [discoverStatus === "failed", recheckFailed, dependentFailed],
   });
 
   // Resource discovery state. Each list is null until its query has run; an
@@ -448,7 +449,7 @@ export function AzureResourcesSection({
     <>
       <ChangeRequestBlock
         title="Cannot assign roles yourself? Generate a change request"
-        description={
+        titleTip={
           'The human-readable companion to the az CLI script below: a paste-ready ticket asking a team ' +
           'with RBAC rights to assign exactly the roles this setup path requires, at the named scopes, ' +
           'with a justification per role. Blank fields appear as clear placeholders.'
@@ -458,7 +459,7 @@ export function AzureResourcesSection({
       />
       <ChangeRequestBlock
         title="Need a resource group or Event Hub created? Generate a change request"
-        description={
+        titleTip={
           'A paste-ready ticket asking for the Azure resources this app needs but you may lack rights ' +
           'to create: for the new-lab-RG path a resource group with a mandatory TTL auto-delete, plus ' +
           'an Event Hub namespace for the diagnostic-settings export path.'

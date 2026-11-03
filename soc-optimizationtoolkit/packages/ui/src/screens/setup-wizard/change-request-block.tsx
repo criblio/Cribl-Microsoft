@@ -18,8 +18,10 @@ import { usePorts } from "../../ports-context";
 
 export interface ChangeRequestBlockProps {
   title: string;
-  /** One line, always visible. */
-  description: string;
+  /** One line, always visible. Omit when the whole explanation sits behind `titleTip`. */
+  description?: string;
+  /** An explanation shown only behind an InfoTip beside the heading (DBT-248). */
+  titleTip?: string;
   /** The longer explanation, shown only behind an InfoTip beside the description. */
   detail?: string;
   /** Downloaded filename. */
@@ -30,6 +32,7 @@ export interface ChangeRequestBlockProps {
 export function ChangeRequestBlock({
   title,
   description,
+  titleTip,
   detail,
   filename,
   generate,
@@ -60,11 +63,16 @@ export function ChangeRequestBlock({
 
   return (
     <div className="change-request">
-      <span className="field-label">{title}</span>
-      <p className="panel-desc">
-        {description}
-        {detail !== undefined && <InfoTip label={`About ${title}`} text={detail} />}
-      </p>
+      <span className="field-label">
+        {title}
+        {titleTip !== undefined && <InfoTip label={`About ${title}`} text={titleTip} />}
+      </span>
+      {(description !== undefined || detail !== undefined) && (
+        <p className="panel-desc">
+          {description}
+          {detail !== undefined && <InfoTip label={`About ${title}`} text={detail} />}
+        </p>
+      )}
       <div className="panel-controls">
         <button
           className="run-button"

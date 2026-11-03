@@ -64,8 +64,16 @@ export function useSectionFold(id: string): SectionFoldProps | undefined {
  * scope (DBT-248): while `busy` the section stays open when the operator moves
  * elsewhere, and when `failed` turns true the section reopens so the failure is
  * not hidden behind a folded header. Outside a scope this does nothing.
+ *
+ * `failed` may be a list of flags, one per operation that can fail. Each flag
+ * is its own false -> true edge: a flag left true by an earlier failure must not
+ * swallow the edge of a different operation failing later (a single combined
+ * boolean stays true and never reopens the section again).
  */
-export function useSectionRunState(id: string, state: { busy: boolean; failed: boolean }): void {
+export function useSectionRunState(
+  id: string,
+  state: { busy: boolean; failed: boolean | readonly boolean[] },
+): void {
   const scope = useContext(FoldScopeContext);
   const setBusy = scope?.setBusy;
   const setCollapsed = scope?.folding.setCollapsed;
@@ -73,9 +81,14 @@ export function useSectionRunState(id: string, state: { busy: boolean; failed: b
     setBusy?.(id, state.busy);
     return () => setBusy?.(id, false);
   }, [id, setBusy, state.busy]);
-  const wasFailed = useRef(false);
+  const flags: readonly boolean[] = typeof state.failed === "boolean" ? [state.failed] : state.failed;
+  const was = useRef<readonly boolean[]>([]);
+  const key = flags.map(Number).join("");
   useEffect(() => {
-    if (state.failed && !wasFailed.current) setCollapsed?.(id, false);
-    wasFailed.current = state.failed;
-  }, [id, setCollapsed, state.failed]);
+    const before = was.current;
+    if (flags.some((f, i) => f && !before[i])) setCollapsed?.(id, false);
+    was.current = flags;
+    // flags is rebuilt each render; its content is what `key` tracks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, setCollapsed, key]);
 }

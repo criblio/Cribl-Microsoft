@@ -98,6 +98,19 @@ describe("resources section failures reopen it", () => {
     await waitFor(() => expect(folded()).toBe(false));
   });
 
+  it("a discovery failure reopens the section after an earlier Re-check failure left its flag set", async () => {
+    // No secrets port: Re-check fails and its flag stays true. A later,
+    // different failure (Discover rejects) must still be a failure edge.
+    mount({ azure: { request: () => Promise.reject(new Error("boom")) } } as unknown as Partial<UiPorts>);
+    await waitFor(() => expect(folded()).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Re-check and validate permissions", hidden: true }));
+    await waitFor(() => expect(folded()).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Select resources and grant permissions" }));
+    await waitFor(() => expect(folded()).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Discover / refresh from Azure", hidden: true }));
+    await waitFor(() => expect(folded()).toBe(false));
+  });
+
   it("stays folded when the listing succeeds", async () => {
     const request = vi.fn(async ({ path }: { path: string }) =>
       path === "/subscriptions"
@@ -116,5 +129,23 @@ describe("resources section failures reopen it", () => {
     await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
     await new Promise((r) => setTimeout(r, 20));
     expect(folded()).toBe(true);
+  });
+});
+
+describe("resources section change-request descriptions (DBT-248 live check)", () => {
+  const TIPS: ReadonlyArray<[string, RegExp]> = [
+    ["Cannot assign roles yourself? Generate a change request", /human-readable companion to the az CLI script/],
+    ["Need a resource group or Event Hub created? Generate a change request", /paste-ready ticket asking for the Azure resources/],
+  ];
+  it.each(TIPS)("%s: the paragraph is behind its InfoTip, the heading and button stay", async (title, text) => {
+    mount({ azure: { request: () => new Promise(() => undefined) } } as unknown as Partial<UiPorts>);
+    await waitFor(() => expect(folded()).toBe(true));
+    expect(screen.queryAllByText(text, { selector: "p" })).toHaveLength(0);
+    expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Generate change request", hidden: true }).length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: `About ${title}`, hidden: true }));
+    expect(
+      screen.getAllByRole("tooltip", { hidden: true }).some((t) => text.test(t.textContent ?? "")),
+    ).toBe(true);
   });
 });
