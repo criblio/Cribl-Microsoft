@@ -105,12 +105,18 @@ export function grantCardText(view: GrantView, a: DataAllowances | null = null):
   const atLeast = floors ? "at least " : "";
   // A partial benefit read: Used is a lower bound, so Over (eligible - used) is not known.
   const usedFloor = a?.usedIsFloor === true;
+  // Graph cannot de-duplicate a user holding two qualifying SKUs: say so on the
+  // card itself, not only in the drill-down arithmetic.
+  const mayDoubleCount =
+    view.grant === "e5" && a?.licences.kind === "read" && a.licences.e5.assignedMayDoubleCount
+      ? " (may count users holding two qualifying licences twice)"
+      : "";
   const granted =
     view.grantedMB === null
       ? `not known - ${grantedUnknownReason(view, a)}`
       : view.grantedIsFloor
-        ? `at least ${mbPerDay(view.grantedMB)}`
-        : mbPerDay(view.grantedMB);
+        ? `at least ${mbPerDay(view.grantedMB)}${mayDoubleCount}`
+        : `${mbPerDay(view.grantedMB)}${mayDoubleCount}`;
   const eligible = view.eligibleKnown ? `${atLeast}${mbPerDay(view.usage.eligibleDailyMB)}` : "not read";
   const usedAtLeast = floors || usedFloor ? "at least " : "";
   const eligibleUsed = `eligible ${eligible}, used ${usedAtLeast}${mbPerDay(view.usage.usedDailyMB)}`;

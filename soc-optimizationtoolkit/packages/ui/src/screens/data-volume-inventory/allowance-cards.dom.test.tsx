@@ -99,6 +99,34 @@ describe("AllowanceCards", () => {
     expect(text()).not.toContain("shared across 2 Sentinel");
   });
 
+  it("puts the possible double count on the E5 card's Granted line, not only in the drill-down (MIG-21)", () => {
+    const e5 = (assignedMayDoubleCount: boolean) =>
+      allowances({
+        licences: {
+          kind: "read",
+          readAt: "2026-11-03T10:00:00.000Z",
+          e5: {
+            rows: [],
+            purchased: 2600,
+            assigned: 2400,
+            assignedMayDoubleCount,
+            inGrace: 0,
+            suspended: 0,
+            possiblyMissing: 0,
+            grantedMB: { assigned: 12000, purchased: 13000 },
+          },
+        },
+        grants: [grantView({ grant: "e5", grantedMB: 12000 })],
+      });
+    renderCards(e5(true));
+    const line = () => document.querySelector(".allowance-card-line")?.textContent ?? "";
+    expect(line()).toContain("granted 12.00 GB/day (may count users holding two qualifying licences twice)");
+    cleanup();
+    renderCards(e5(false));
+    expect(line()).toContain("granted 12.00 GB/day");
+    expect(line()).not.toContain("twice");
+  });
+
   it("draws no meter for a floored Granted, and the meter's label carries the card's granted words (MIG-21)", () => {
     const servers = (grantedIsFloor: boolean) =>
       allowances({

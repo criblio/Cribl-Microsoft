@@ -20,7 +20,9 @@ const CAP_TOLERANCE = 1.01;
 /**
  * The spec's Operation query: one row per day and benefit type. The amount
  * pattern allows an exponent: a small benefit can be written '1E-05 GB', and
- * stopping at the 'E' would read it as 1 GB.
+ * stopping at the 'E' would read it as 1 GB. sum() skips nulls, so an event
+ * whose amount does not extract would vanish inside its group: `Unreadable`
+ * counts those events so the parse can report them.
  */
 export const BENEFIT_QUERY = [
   "Operation",
@@ -28,7 +30,7 @@ export const BENEFIT_QUERY = [
   '| where Detail startswith "Benefit amount used"',
   "| extend BenefitType = replace_string(OperationKey, 'Benefit type used: ', ''),",
   "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+(?:[eE][-+]?[0-9]+)?)', 1, Detail))",
-  "| summarize BenefitUsedGB = sum(BenefitUsedGB)",
+  "| summarize BenefitUsedGB = sum(BenefitUsedGB), Unreadable = countif(isnull(BenefitUsedGB))",
   "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), BenefitType",
   "| order by Day asc",
 ].join("\n");
@@ -103,10 +105,13 @@ export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): 
   for (const row of rows) {
     const day = typeof row.Day === "string" ? row.Day : "";
     const gb = benefitGB(row.BenefitUsedGB);
+    // Events the server-side sum() skipped because their amount did not extract.
+    const skipped = typeof row.Unreadable === "number" && row.Unreadable > 0 ? row.Unreadable : 0;
     if (!day || gb === null) {
-      unreadableRows += 1;
+      unreadableRows += Math.max(1, skipped);
       continue;
     }
+    unreadableRows += skipped;
     const type = String(row.BenefitType ?? "");
     const grant = grantForType(type);
     if (grant === null) unmatched.add(type);
