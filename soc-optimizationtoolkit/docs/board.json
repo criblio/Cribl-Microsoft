@@ -3728,13 +3728,26 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-24",
       "type": "story",
       "priority": "later",
       "title": "Allowance UI polish: tooltips, native title text, change-request link, chart readout and layout, tenant read cost",
-      "detail": "Triaged 2026-11-03 from the deferred review minors of PR #198 against main 37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to soc-optimizationtoolkit/; \"state\" = packages/ui/src/screens/data-volume-inventory/allowance-state.ts, \"cards\" = allowance-cards.tsx in the same folder. grantedServers tip says \"this workspace\" also in the tenant comparison (state ~460); the pooled overage line has no InfoTip (cards ~122); native title= hover text used (cards ~85, workspace-inventory-panel.tsx ~493) which the info-affordances standard forbids; the spec says the denied-licence state \"offers the change request\" but it only names it in words - add a link to Setup's app-permissions change request; chart max floored at 1 so the readout can say \"Peak 1.0 MB\" above the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px SVG units that shrink on narrow cards (styles.css ~3497); grid keeps minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full inventoryWorkspace including per-table source breakdowns when only Usage totals are needed (workspace-inventory-panel.tsx ~181) - slow on large tenants."
+      "detail": "Triaged 2026-11-03 from the deferred review minors of PR #198 against main 37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to soc-optimizationtoolkit/; \"state\" = packages/ui/src/screens/data-volume-inventory/allowance-state.ts, \"cards\" = allowance-cards.tsx in the same folder. grantedServers tip says \"this workspace\" also in the tenant comparison (state ~460); the pooled overage line has no InfoTip (cards ~122); native title= hover text used (cards ~85, workspace-inventory-panel.tsx ~493) which the info-affordances standard forbids; the spec says the denied-licence state \"offers the change request\" but it only names it in words - add a link to Setup's app-permissions change request; chart max floored at 1 so the readout can say \"Peak 1.0 MB\" above the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px SVG units that shrink on narrow cards (styles.css ~3497); grid keeps minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full inventoryWorkspace including per-table source breakdowns when only Usage totals are needed (workspace-inventory-panel.tsx ~181) - slow on large tenants.\n\nDONE 2026-11-03 (pins, ef330664..370e3991): tenant-scope granted tip, pooled overage InfoTip, native title= hover text replaced by InfoTips, real change-request link via an optional onOpenChangeRequest callback the shell wires, chart readout shows the real peak and HTML date labels, responsive grid, tenant compare reads Usage totals only (sources: false - tables marked not requested, never empty), each grant names its Microsoft source page and catalog date, test fixtures build servers.granted with core, only Connected Arc machines counted (live: 2 of 26 Arc machines Connected). Shell wiring of the change-request link to be seen in Live Preview with MIG-25.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "MIG-25",
+      "type": "bug",
+      "priority": "now",
+      "title": "Tenant comparison still says \"machines reporting here\"; change-request pass-through and pooled source link unpinned",
+      "detail": "FOUND 2026-11-03 by the MIG-24 review (fix/dvi-review-followups at 370e3991). (1) In a tenant comparison the Servers table header \"Machines reporting here (daily average)\" (allowance-cards.tsx ~346) and the arithmetic label \"machines reporting here\" (allowance-state.ts ~204) still say \"here\", though the count is across the workspaces read - the tip was fixed in MIG-24 but the visible copy now disagrees with it; use tenant wording (\"machines reporting to the workspaces read\") in tenant scope. (2) The panel passes onOpenChangeRequest to both AllowanceCards (single and tenant) with no pin - deleting either line type-checks and no test fails; add a panel test with a Graph stub answering 403 that clicks the change-request button and asserts the callback spy. (3) EligibleSource in the pooled view's per-grant details has no pin; add one assertion to the existing pooled test. Pin each with a test that fails without it."
     },
     {
       "settled": "settled",
