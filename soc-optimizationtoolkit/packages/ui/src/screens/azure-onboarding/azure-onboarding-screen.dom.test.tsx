@@ -30,7 +30,7 @@
  *   - the connection string never reaches the DOM or the log.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   COVERAGE_CATALOG,
@@ -47,6 +47,9 @@ import type {
   AzureConfig,
   AzureManagement,
   AzureManagementRequest,
+  CapabilityContext,
+  CapabilitySet,
+  CapabilityVerdict,
   PortHttpResponse,
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
@@ -208,6 +211,13 @@ function mount(opts: {
   azure?: RoutingAzure;
   store?: FakeKvDocumentStore | null;
   logger?: FakeLogger;
+  /** The shell's cached capability audit (AZR-60); absent = no audit wired. */
+  capabilities?: CapabilitySet;
+  capabilityContext?: CapabilityContext;
+  onRecheckPermissions?: () => void;
+  /** The shell's current audit key and clock (AZR-60). */
+  permissionsAuditKey?: string;
+  permissionsNow?: () => string;
 } = {}) {
   const azure = opts.azure ?? new RoutingAzure();
   const store = opts.store === undefined ? new FakeKvDocumentStore() : opts.store;
@@ -218,8 +228,17 @@ function mount(opts: {
     ...(store === null ? {} : { kvDocuments: store }),
   } as unknown as UiPorts;
   const view = render(
-    <PortsProvider ports={ports} config={CONFIG}>
-      <AzureOnboardingScreen />
+    <PortsProvider
+      ports={ports}
+      config={CONFIG}
+      capabilities={opts.capabilities}
+      capabilityContext={opts.capabilityContext}
+    >
+      <AzureOnboardingScreen
+        onRecheckPermissions={opts.onRecheckPermissions}
+        permissionsAuditKey={opts.permissionsAuditKey}
+        permissionsNow={opts.permissionsNow}
+      />
     </PortsProvider>,
   );
   return { azure, store, logger, view };
@@ -262,9 +281,45 @@ function button(name: string): HTMLButtonElement {
   return screen.getByRole("button", { name }) as HTMLButtonElement;
 }
 
-function select(label: string): HTMLSelectElement {
-  return screen.getByRole("combobox", { name: label }) as HTMLSelectElement;
+/** A picker's trigger (SearchableSelect), named by its label. */
+function picker(label: string): HTMLButtonElement {
+  return screen.getByRole("button", { name: label }) as HTMLButtonElement;
 }
+
+/** What the picker shows: the chosen option's label, or its placeholder. */
+function shown(label: string): string {
+  return picker(label).textContent ?? "";
+}
+
+/** Open a picker, read its option labels, and close it again. */
+function optionLabels(label: string): string[] {
+  fireEvent.click(picker(label));
+  const labels = [...document.querySelectorAll(".searchable-select-option-label")].map(
+    (o) => o.textContent ?? "",
+  );
+  fireEvent.click(picker(label));
+  return labels;
+}
+
+/**
+ * Choose the option whose value is `value`. Each option's label is the value,
+ * or the value followed by " (detail)" - a rule's rights, a group's location.
+ */
+function choose(label: string, value: string): void {
+  fireEvent.click(picker(label));
+  const option = [...document.querySelectorAll(".searchable-select-option")].find((o) => {
+    const text = o.querySelector(".searchable-select-option-label")?.textContent ?? "";
+    return text === value || text.startsWith(`${value} (`);
+  });
+  if (option === undefined) throw new Error(`no option ${value} in ${label}`);
+  fireEvent.click(option);
+}
+
+/** The labels the rule picker shows for each rule the fake namespace lists. */
+const RULE_LABEL: Record<string, string> = {
+  SendOnly: "SendOnly (Send)",
+  RootManageSharedAccessKey: "RootManageSharedAccessKey (Listen, Manage, Send)",
+};
 
 /** Paste HUB_ID into the id field, apply it, and wait for the reads. */
 async function pasteHubId(): Promise<void> {
@@ -282,11 +337,11 @@ async function chooseTarget(rule?: string): Promise<void> {
   await pasteHubId();
   await waitFor(() => {
     expect(screen.queryByText("Reading hubs and authorization rules...")).toBeNull();
-    expect(select("Event Hub").value).toBe(HUB);
+    expect(shown("Event Hub")).toBe(HUB);
   });
   if (rule !== undefined) {
-    fireEvent.change(select("Authorization rule"), { target: { value: rule } });
-    expect(select("Authorization rule").value).toBe(rule);
+    choose("Authorization rule", rule);
+    expect(shown("Authorization rule")).toBe(RULE_LABEL[rule]);
   }
 }
 
@@ -301,10 +356,10 @@ async function readDefender(): Promise<void> {
 async function chooseGroup(): Promise<void> {
   fireEvent.click(button("Load resource groups"));
   await waitFor(() => {
-    expect(select("Resource group").disabled).toBe(false);
+    expect(picker("Resource group").disabled).toBe(false);
   });
-  fireEvent.change(select("Resource group"), { target: { value: TARGET_RG } });
-  expect(select("Resource group").value).toBe(TARGET_RG);
+  choose("Resource group", TARGET_RG);
+  expect(shown("Resource group")).toBe(`${TARGET_RG} (${TARGET_LOCATION})`);
 }
 
 /** Tick Defender, pick a Send rule, read the state, pick the resource group. */
@@ -441,8 +496,10 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     await loaded();
     fireEvent.click(checkbox(DEFENDER_TITLE));
     await chooseTarget();
-    const options = [...select("Authorization rule").options].map((o) => o.value);
-    expect(options).toEqual([""]);
+    // No rule is offered: the picker has nothing to open and shows its prompt.
+    expect(picker("Authorization rule").disabled).toBe(true);
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    expect(document.querySelectorAll(".searchable-select-option").length).toBe(0);
     expect(screen.getByText(/None of this namespace's authorization rules can send events: ListenOnly \(Listen\)/)).toBeTruthy();
     await readDefender();
     await chooseGroup();
@@ -454,8 +511,8 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     mount();
     await loaded();
     await chooseTarget();
-    expect(select("Authorization rule").value).toBe("");
-    fireEvent.change(select("Authorization rule"), { target: { value: "RootManageSharedAccessKey" } });
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    choose("Authorization rule", "RootManageSharedAccessKey");
     expect(screen.getByText(/A dedicated rule with only Send rights is safer/)).toBeTruthy();
     expect(screen.getByText("Rights: Listen, Manage, Send")).toBeTruthy();
   });
@@ -468,10 +525,10 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
       expect(
         screen.getByText(`Event Hub ${HUB} was not found in namespace ${NS_NAME}. Choose an existing Event Hub.`),
       ).toBeTruthy();
-      fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+      choose("Authorization rule", "SendOnly");
     });
-    expect(select("Event Hub").value).toBe("");
-    expect([...select("Event Hub").options].map((o) => o.value)).toEqual(["", OTHER_HUB]);
+    expect(shown("Event Hub")).toBe("Choose an Event Hub");
+    expect(optionLabels("Event Hub")).toEqual([OTHER_HUB]);
     expect(button("Deploy alert export").disabled).toBe(true);
     expect(screen.getByText("Choose the Event Hub the alerts go to.")).toBeTruthy();
     expect(azure.puts()).toEqual([]);
@@ -482,7 +539,8 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     mount({ azure });
     await loaded();
     await chooseTarget("SendOnly");
-    expect([...select("Event Hub").options].map((o) => o.value)).toEqual(["", HUB, OTHER_HUB]);
+    // "None" leads once a hub is chosen (DBT-249 follow-up).
+    expect(optionLabels("Event Hub")).toEqual(["None", HUB, OTHER_HUB]);
     expect(screen.queryByText(/was not found in namespace/)).toBeNull();
     expect(screen.getByText("Only the first page was listed - Azure returned more.")).toBeTruthy();
   });
@@ -509,10 +567,31 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     const { azure } = mount();
     await loaded();
     fireEvent.click(button("Find namespaces"));
-    await waitFor(() => expect(select("Event Hub namespace").disabled).toBe(false));
+    await waitFor(() => expect(picker("Event Hub namespace").disabled).toBe(false));
     expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       "POST /providers/Microsoft.ResourceGraph/resources",
     ]);
+  });
+});
+
+// DBT-249 follow-up (operator 2026-11-03): the native empty option used to
+// clear these pickers; "None" does it now, and clearing the namespace resets
+// the hub and rule with it.
+describe("AzureOnboardingScreen - clearing a picker", () => {
+  it("None clears the rule, and clears the namespace together with its hub and rule", async () => {
+    mount();
+    await readyToDeploy();
+    expect(button("Deploy alert export").disabled).toBe(false);
+
+    choose("Authorization rule", "None");
+    expect(shown("Authorization rule")).toBe("Choose a rule that can send");
+    expect(button("Deploy alert export").disabled).toBe(true);
+
+    choose("Event Hub namespace", "None");
+    expect(shown("Event Hub namespace")).toBe("Choose a namespace");
+    expect(shown("Event Hub")).toBe("Choose an Event Hub");
+    expect(picker("Event Hub").disabled).toBe(true);
+    expect(picker("Authorization rule").disabled).toBe(true);
   });
 });
 
@@ -560,28 +639,28 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     {
       input: "the authorization rule",
       change: async () => {
-        fireEvent.change(select("Authorization rule"), { target: { value: "RootManageSharedAccessKey" } });
+        choose("Authorization rule", "RootManageSharedAccessKey");
       },
       revert: async () => {
-        fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+        choose("Authorization rule", "SendOnly");
       },
     },
     {
       input: "the resource group",
       change: async () => {
-        fireEvent.change(select("Resource group"), { target: { value: EH_RG } });
+        choose("Resource group", EH_RG);
       },
       revert: async () => {
-        fireEvent.change(select("Resource group"), { target: { value: TARGET_RG } });
+        choose("Resource group", TARGET_RG);
       },
     },
     {
       input: "the Event Hub",
       change: async () => {
-        fireEvent.change(select("Event Hub"), { target: { value: OTHER_HUB } });
+        choose("Event Hub", OTHER_HUB);
       },
       revert: async () => {
-        fireEvent.change(select("Event Hub"), { target: { value: HUB } });
+        choose("Event Hub", HUB);
       },
     },
     {
@@ -595,7 +674,7 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
           expect(screen.queryByText("Reading hubs and authorization rules...")).toBeNull();
           expect(screen.getByText(new RegExp(`Namespace ${NS_B} in resource group`))).toBeTruthy();
         });
-        fireEvent.change(select("Authorization rule"), { target: { value: "SendOnly" } });
+        choose("Authorization rule", "SendOnly");
       },
     },
     {
@@ -728,5 +807,211 @@ describe("AzureOnboardingScreen - the plans read", () => {
     expect(view.container.textContent ?? "").not.toMatch(NO_PLAN);
     expect(screen.getByText(/It never turns a plan on or changes a plan's tier/)).toBeTruthy();
     expect(screen.getByText(/Needed, not yet measured/)).toBeTruthy();
+  });
+});
+
+/** A cached audit with the three Defender verdicts as given; absent when undefined. */
+function audit(verdicts: { plans?: CapabilityVerdict; read?: CapabilityVerdict; write?: CapabilityVerdict }): CapabilitySet {
+  return {
+    verdicts: {
+      ...(verdicts.plans === undefined ? {} : { "defender-plans.read": verdicts.plans }),
+      ...(verdicts.read === undefined ? {} : { "defender-automation.read": verdicts.read }),
+      ...(verdicts.write === undefined ? {} : { "defender-automation.write": verdicts.write }),
+    },
+    auditedAt: "2026-11-03T10:00:00.000Z",
+    connectionId: "conn",
+  };
+}
+
+const CONNECTED: CapabilityContext = { azureIdentityPresent: true, criblReachable: true };
+const ALL_GRANTED = audit({ plans: "granted", read: "granted", write: "granted" });
+const DENIAL_WORDS = /\bdenied\b|\bcannot\b|\brefused\b/i;
+
+function banner(): HTMLElement | null {
+  return screen.queryByTestId("azo-permission-banner");
+}
+
+/** The measured permission row for one Azure action. */
+function permissionRow(action: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`[data-permission-action="${action}"]`);
+  if (row === null) throw new Error(`no permission row ${action}`);
+  return row;
+}
+
+describe("AzureOnboardingScreen - permissions to automate the Defender export (AZR-60)", () => {
+  it("denied: an error banner names the action, the role and the How-to section; Deploy stays clickable with a caution, and writes only after the confirm", async () => {
+    const { azure, store } = mount({
+      capabilities: audit({ plans: "granted", read: "denied", write: "granted" }),
+      capabilityContext: CONNECTED,
+    });
+    await loaded();
+    // The banner comes from the CACHED audit: mount still costs no Azure call.
+    expect(store?.loads).toEqual([COVERAGE_SELECTION_KEY, ONBOARDING_PROGRESS_KEY]);
+    expect(azure.calls).toEqual([]);
+
+    const b = banner();
+    expect(b?.getAttribute("data-kind")).toBe("denied");
+    expect(b?.textContent).toContain("your Azure identity cannot list the subscription's continuous exports");
+    expect(b?.textContent).toContain("section 8");
+    expect(b?.textContent).toContain("Security Reader");
+    expect(b?.textContent).toContain("Microsoft.Security/automations/read");
+    expect(b?.querySelector(".info-tip")).not.toBeNull();
+    // A cached verdict present at mount is not a reaction to the user: styled
+    // as an error, but not a live alert that interrupts the screen reader.
+    expect(b?.querySelector(".azure-onboarding-banner-error")).not.toBeNull();
+    expect(b?.querySelector('[role="alert"]')).toBeNull();
+
+    await readyToDeploy();
+    const deploy = button("Deploy alert export");
+    // The audit informs, never forbids (operator decision 2026-11-03).
+    expect(deploy.getAttribute("aria-disabled")).toBeNull();
+    expect(deploy.disabled).toBe(false);
+    const reason = deploy.parentElement?.textContent ?? "";
+    expect(reason).toContain("Azure will likely refuse this deploy");
+    expect(reason).toContain("Microsoft.Security/automations/read");
+    // The reason is the button's accessible description, not only a sibling.
+    const describedBy = deploy.getAttribute("aria-describedby");
+    expect(describedBy).not.toBeNull();
+    const description = document.getElementById(describedBy ?? "")?.textContent ?? "";
+    expect(description).toMatch(/^Azure will likely refuse this deploy: the last permission check found your Azure identity cannot list/);
+    // Clicking arms the usual two-step confirm; nothing is written before it.
+    fireEvent.click(deploy);
+    expect(screen.getByRole("group", { name: "Confirm deploy" })).toBeTruthy();
+    expect(azure.puts()).toEqual([]);
+    expect(permissionRow("Microsoft.Security/automations/read").textContent).toMatch(/Denied/);
+  });
+
+  it("granted: no banner, every measured row says granted, and Deploy carries no caution", async () => {
+    const { azure } = mount({ capabilities: ALL_GRANTED, capabilityContext: CONNECTED });
+    await loaded();
+    expect(azure.calls).toEqual([]);
+    expect(banner()).toBeNull();
+    for (const action of [
+      "Microsoft.Security/pricings/read",
+      "Microsoft.Security/automations/read",
+      "Microsoft.Security/automations/write",
+    ]) {
+      expect(permissionRow(action).textContent).toMatch(/Granted/);
+    }
+    await readyToDeploy();
+    const deploy = button("Deploy alert export");
+    expect(deploy.getAttribute("aria-describedby")).toBeNull();
+    expect(deploy.disabled).toBe(false);
+    fireEvent.click(deploy);
+    expect(screen.getByRole("group", { name: "Confirm deploy" })).toBeTruthy();
+  });
+
+  it("unknown: a soft note that is never worded as denied, with Re-check permissions, and no Deploy caution", async () => {
+    const onRecheckPermissions = vi.fn();
+    const { azure } = mount({ capabilities: audit({}), capabilityContext: CONNECTED, onRecheckPermissions });
+    await loaded();
+    expect(azure.calls).toEqual([]);
+    const b = banner();
+    expect(b?.getAttribute("data-kind")).toBe("not-measured");
+    expect(b?.textContent).not.toMatch(DENIAL_WORDS);
+    expect(b?.textContent).toMatch(/did not measure/);
+    fireEvent.click(button("Re-check permissions"));
+    expect(onRecheckPermissions).toHaveBeenCalledTimes(1);
+    // The re-check is the shell's; this screen spent nothing on it.
+    expect(azure.calls).toEqual([]);
+    await readyToDeploy();
+    expect(button("Deploy alert export").getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("never checked: no audit wired reads as not checked yet, never as denied, and points at the connection bar", async () => {
+    const { azure } = mount();
+    await loaded();
+    expect(azure.calls).toEqual([]);
+    const b = banner();
+    expect(b?.getAttribute("data-kind")).toBe("not-measured");
+    expect(b?.textContent).toMatch(/not been checked/);
+    expect(b?.textContent).not.toMatch(DENIAL_WORDS);
+    // No re-check wired by the shell: the section says where the existing one is.
+    expect(screen.queryByRole("button", { name: "Re-check permissions" })).toBeNull();
+    expect(b?.textContent).toContain("Re-check permissions in the connection bar");
+    expect(permissionRow("Microsoft.Security/automations/write").textContent).toMatch(/Not checked yet/);
+    await readyToDeploy();
+    expect(button("Deploy alert export").getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("grant-only: a write the subscription check did not grant is unmeasured, not denied, and no Deploy caution", async () => {
+    // A set written before the grant-only rule may still carry `denied`.
+    mount({
+      capabilities: audit({ plans: "granted", read: "granted", write: "denied" }),
+      capabilityContext: CONNECTED,
+    });
+    await loaded();
+    const b = banner();
+    expect(b?.getAttribute("data-kind")).toBe("not-measured");
+    expect(b?.textContent).not.toMatch(DENIAL_WORDS);
+    const row = permissionRow("Microsoft.Security/automations/write");
+    expect(row.textContent).toMatch(/Not measured/);
+    expect(row.textContent).not.toMatch(DENIAL_WORDS);
+    await readyToDeploy();
+    expect(button("Deploy alert export").getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("the How-to button focuses the Defender row in the How-to section, and makes no Azure call", async () => {
+    const { azure } = mount({ capabilities: audit({ read: "denied" }), capabilityContext: CONNECTED });
+    await loaded();
+    await waitFor(() => {
+      expect(document.querySelector('.azo-howto-row[data-source="defenderExport"]')).not.toBeNull();
+    });
+    fireEvent.click(button("Go to the How-to steps for Defender for Cloud alert export"));
+    // The row is in Automate mode (the section renders only then), and the
+    // How-to section lists steps only for How-to rows: focus lands on the
+    // switch the banner tells the operator to use.
+    const focused = document.activeElement as HTMLInputElement | null;
+    expect(focused?.getAttribute("aria-label")).toBe("How-to Defender for Cloud alert export");
+    expect(focused?.type).toBe("radio");
+    expect(banner()?.textContent).toContain("switch Defender for Cloud alert export to How-to in section 8");
+    expect(azure.calls).toEqual([]);
+  });
+
+  it("a set measured for another connection puts no caution on Deploy and is not worded as denied", async () => {
+    // The audit hook keeps connection A's set while B's audit runs.
+    const { azure } = mount({
+      capabilities: audit({ plans: "denied", read: "denied", write: "denied" }),
+      capabilityContext: CONNECTED,
+      permissionsAuditKey: "another-connection",
+    });
+    await loaded();
+    expect(azure.calls).toEqual([]);
+    const b = banner();
+    expect(b?.getAttribute("data-kind")).toBe("not-measured");
+    expect(b?.textContent).not.toMatch(DENIAL_WORDS);
+    await readyToDeploy();
+    const deploy = button("Deploy alert export");
+    expect(deploy.getAttribute("aria-disabled")).toBeNull();
+    expect(deploy.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("the denial copy says how old the permission check is", async () => {
+    mount({
+      capabilities: audit({ read: "denied" }),
+      capabilityContext: CONNECTED,
+      permissionsAuditKey: "conn",
+      permissionsNow: () => "2026-11-10T10:00:00.000Z",
+    });
+    await loaded();
+    expect(banner()?.textContent).toContain("The permission check 7 days ago found");
+    await readyToDeploy();
+    const deploy = button("Deploy alert export");
+    expect(deploy.disabled).toBe(false);
+    expect(document.getElementById(deploy.getAttribute("aria-describedby") ?? "")?.textContent).toContain(
+      "the permission check 7 days ago found",
+    );
+  });
+
+  it("keeps the Event Hub namespace listKeys listed as not measured", async () => {
+    mount({ capabilities: ALL_GRANTED, capabilityContext: CONNECTED });
+    await loaded();
+    // The hint sits in the namespace list's own block, not under the measured
+    // subscription rows it would otherwise contradict.
+    const hint = screen.getByText(/Needed, not yet measured/);
+    const block = hint.closest(".azure-onboarding-actions");
+    expect(block?.textContent).toContain("On the Event Hub namespace");
+    expect(block?.textContent).toMatch(/listKeys\/action/);
+    expect(block?.querySelector("[data-permission-action]")).toBeNull();
   });
 });

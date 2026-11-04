@@ -11,7 +11,11 @@
  *      GET /system/inputs
  *   3. listKeys (Azure POST), or   - the credential, read only now, after the
  *      parse the paste closure       re-checks; a paste whose descriptor moved
- *                                    since the plan refuses ('pasted-changed')
+ *                                    since the plan refuses ('pasted-changed').
+ *                                    An Entra ID (ADR 0008) or Blob plan takes
+ *                                    the pasted client secret the same way; its
+ *                                    plan names no namespace and listKeys is
+ *                                    never called for it (AZR-59 pin)
  *   4. POST /system/secrets        - {id, secretType:'text', value}. A 409
  *                                    refuses; never PATCH
  *   5. GET /system/inputs,         - re-listed right before the create; an id
@@ -39,6 +43,7 @@ import {
   classifyExistingInput,
   classifyExistingSecret,
   isInvalidConnection,
+  looksLikeConnectionString,
   parseEventHubConnectionString,
   sameDescriptor,
 } from "../../domain/cribl-onboarding-source";
@@ -93,6 +98,7 @@ export type ApplyRefusalReason =
   | "inputs-unreadable"
   | "secret-unreadable"
   | "paste-invalid"
+  | "paste-is-connection-string"
   | "pasted-changed"
   | "secret-exists";
 
@@ -252,6 +258,14 @@ export async function applyCriblSource(
     }
     value = raw.trim();
     if (value === "") return refuse("paste-invalid", "The pasted credential is empty; paste it again.");
+    // An Entra ID or Blob plan takes a CLIENT SECRET. A key-bearing connection
+    // string there (RootManageSharedAccessKey included) is never stored.
+    if (ready.descriptor === null && looksLikeConnectionString(value)) {
+      return refuse(
+        "paste-is-connection-string",
+        "The client secret field holds a connection string, not a client secret, so nothing was stored. Paste the service principal's client secret.",
+      );
+    }
     if (ready.descriptor !== null) {
       const parsed = parseEventHubConnectionString(value);
       if (isInvalidConnection(parsed)) {

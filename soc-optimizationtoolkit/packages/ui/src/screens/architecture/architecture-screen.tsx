@@ -48,7 +48,10 @@ import type {
   PatternRecommendation,
 } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
-import { SearchableMultiSelect } from "../../components/searchable-select";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "../../components/searchable-select";
 import { WorkerGroupField } from "../../components/worker-group-field";
 import {
   useInitialWorkerGroup,
@@ -384,13 +387,12 @@ function LiveArchitecturePanel({
         </button>
         <WorkerGroupField state={workerGroups.state} onRetry={workerGroups.reload}>
           {(groups) => (
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.id}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              label="Worker group"
+              options={groups.map((group) => ({ value: group.id, label: group.id }))}
+              value={groupId}
+              onChange={setGroupId}
+            />
           )}
         </WorkerGroupField>
         <label className="integrate-check">
@@ -433,6 +435,7 @@ function LiveArchitecturePanel({
               values={selectedFlows}
               onChange={setSelectedFlows}
               placeholder="All flows drawn - select to narrow..."
+              label="Flow inventory"
               ariaLabel="Filter flows"
             />
           </label>
@@ -694,6 +697,7 @@ function EdgeFleetsPanel({
                     }))
                   }
                   placeholder="All flows drawn - select to narrow..."
+                  label={`Flow inventory for fleet ${inventory.fleetId}`}
                   ariaLabel={`Filter flows for fleet ${inventory.fleetId}`}
                 />
               </label>
@@ -946,6 +950,7 @@ export function ArchitectureScreen({
             values={products}
             onChange={setProducts}
             placeholder="Select Cribl products..."
+            label="Cribl products in use"
             ariaLabel="Filter Cribl products"
           />
         </label>
@@ -959,6 +964,7 @@ export function ArchitectureScreen({
             values={resources}
             onChange={setResources}
             placeholder="Select Azure resources..."
+            label="Azure resources in use"
             ariaLabel="Filter Azure resources"
           />
           <span className="field-hint">
@@ -977,6 +983,7 @@ export function ArchitectureScreen({
             values={sources}
             onChange={setSources}
             placeholder="Select log sources..."
+            label="Specific log sources (optional)"
             ariaLabel="Filter log sources"
           />
           <span className="field-hint">
@@ -992,6 +999,7 @@ export function ArchitectureScreen({
             values={solutionSources}
             onChange={setSolutionSources}
             placeholder="Search the solution catalog..."
+            label="Sources from Sentinel solutions (optional)"
             ariaLabel="Filter Sentinel solutions"
           />
           <span className="field-hint">

@@ -3,6 +3,7 @@ import { readRefused, readRows } from "../logging-map/list-read";
 import type { NamespaceAuthRule } from "../eventhub-arm";
 import {
   checkPastedCredential,
+  looksLikeConnectionString,
   parseEventHubConnectionString,
   sameDescriptor,
   type ConnectionDescriptor,
@@ -70,10 +71,28 @@ describe("checkPastedCredential", () => {
     expect(checkPastedCredential(d("sender"), ctx)).toMatchObject({ ok: false, reason: "rule-cannot-listen" });
   });
 
-  it("accepts a Listen rule and a Manage-only rule", () => {
+  it("accepts a Listen rule, and a Listen-and-Send rule", () => {
     expect(checkPastedCredential(d("reader"), ctx)).toEqual({ ok: true, attested: false });
+    const listenSend = readRows<NamespaceAuthRule>([{ name: "ls", id: "x", rights: ["Listen", "Send"] }]);
+    expect(checkPastedCredential(d("ls"), { ...ctx, rules: listenSend })).toEqual({ ok: true, attested: false });
+  });
+
+  // AZR-58: a Manage key in a Cribl secret is control of the whole namespace.
+  it("refuses a Manage-capable rule, alone or with Listen and Send, naming the rule", () => {
     const manageOnly = readRows<NamespaceAuthRule>([{ name: "m", id: "x", rights: ["Manage"] }]);
-    expect(checkPastedCredential(d("m"), { ...ctx, rules: manageOnly })).toEqual({ ok: true, attested: false });
+    const refusal = checkPastedCredential(d("m"), { ...ctx, rules: manageOnly });
+    expect(refusal).toMatchObject({ ok: false, reason: "rule-can-manage" });
+    expect(refusal.ok === false && refusal.detail).toContain("m");
+    expect(checkPastedCredential(d("admin"), ctx)).toMatchObject({ ok: false, reason: "rule-can-manage" });
+  });
+
+  it("refuses RootManageSharedAccessKey by name even when the rules could not be read and the operator attested", () => {
+    for (const name of ["RootManageSharedAccessKey", "rootmanagesharedaccesskey"]) {
+      expect(checkPastedCredential(d(name), { ...ctx, rules: denied, attested: true })).toMatchObject({
+        ok: false,
+        reason: "rule-can-manage",
+      });
+    }
   });
 
   it("refuses another namespace", () => {
@@ -103,5 +122,21 @@ describe("checkPastedCredential", () => {
 
   it("ignores an attestation when the rules WERE read", () => {
     expect(checkPastedCredential(d("sender"), { ...ctx, attested: true })).toMatchObject({ ok: false, reason: "rule-cannot-listen" });
+  });
+});
+
+// Review finding 8 (AZR-59): a client-secret field must never take a key.
+describe("looksLikeConnectionString", () => {
+  it("is true for Event Hub, storage and SAS strings, the Manage key included", () => {
+    expect(looksLikeConnectionString(SAMPLE)).toBe(true);
+    expect(looksLikeConnectionString("Endpoint=sb://ns1.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=k")).toBe(true);
+    expect(looksLikeConnectionString("  sharedaccesskey = k")).toBe(true);
+    expect(looksLikeConnectionString("DefaultEndpointsProtocol=https;AccountName=sa;AccountKey=k;EndpointSuffix=core.windows.net")).toBe(true);
+    expect(looksLikeConnectionString("BlobEndpoint=https://sa.blob.core.windows.net/;SharedAccessSignature=sv=2022&sig=x")).toBe(true);
+  });
+
+  it("is false for an Entra client secret and for empty input", () => {
+    expect(looksLikeConnectionString("abc8Q~Zx.yz-0123456789_ABCDEFGHIJKLmnop")).toBe(false);
+    expect(looksLikeConnectionString("")).toBe(false);
   });
 });

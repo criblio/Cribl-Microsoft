@@ -19,7 +19,7 @@ import {
   managementGroupDefinitionsPath,
 } from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
-import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
+import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders, templateTexts } from "./steps";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -106,6 +106,7 @@ describe("how-to step catalog", () => {
       "eh-rule-send",
       "eh-rule-listen",
       "eh-consumer-group",
+      "eh-role-receiver",
       "eh-network",
       "defender-plans",
       "defender-provider",
@@ -125,6 +126,8 @@ describe("how-to step catalog", () => {
     // 'eh-rule-send' is classified as Send OR Manage, so it would pass a
     // Send-only rule for the step whose whole point is Manage (AZR-39).
     expect(howToStep("eh-rule-diagnostic")!.checkKinds).toEqual(["eh-rule-manage"]);
+    // AZR-54: the named-hub consumer-group check never answers for the hubs Azure creates.
+    expect(howToStep("eh-consumer-group-auto")!.checkKinds).toEqual(["eh-hub", "eh-consumer-group-auto"]);
     expect(howToStep("eh-rule-send")!.checkKinds).toEqual(["eh-rule-send"]);
     const sendChecked = ALL_HOWTO_STEPS.filter((s) => s.checkKinds.includes("eh-rule-send")).map((s) => s.id);
     expect(sendChecked).toEqual(["eh-rule-send"]);
@@ -383,6 +386,8 @@ describe("how-to step catalog", () => {
     expect(ALL_HOWTO_STEPS.filter((s) => s.provenance === "inferred").map((s) => s.id)).toEqual([
       "eh-rule-diagnostic",
       "eh-consumer-group-auto",
+      "eh-role-receiver",
+      "eh-role-receiver-auto",
       "eh-network",
       "policy-audit-remediate",
       "policy-community-remediate",
@@ -392,5 +397,45 @@ describe("how-to step catalog", () => {
       "blob-flow-log-nsg",
       "blob-rbac",
     ]);
+  });
+});
+
+// AZR-59, ADR 0008 section 4: the Cribl principal's receive role, per hub family.
+describe("the Cribl principal's Event Hubs receive role", () => {
+  it("gives every Event Hub source exactly one receive-role step, checked by eh-role-receiver", () => {
+    for (const source of ONBOARDING_SOURCES) {
+      const ids = stepsFor(source.id).map((s) => s.id).filter((id) => id.startsWith("eh-role-receiver"));
+      if (source.transport === "eventhub") {
+        expect(ids, source.id).toEqual([source.hubNaming === "auto-created" ? "eh-role-receiver-auto" : "eh-role-receiver"]);
+      } else {
+        expect(ids, source.id).toEqual([]);
+      }
+    }
+    expect(howToStep("eh-role-receiver")!.checkKinds).toEqual(["eh-role-receiver"]);
+    expect(howToStep("eh-role-receiver-auto")!.checkKinds).toEqual(["eh-role-receiver"]);
+  });
+
+  it("names the exact az command, the role, the principal and the hub scope", () => {
+    const step = howToStep("eh-role-receiver")!;
+    expect(step.title).toBe("Give the Cribl principal Azure Event Hubs Data Receiver on the hub {{hubName}}");
+    expect(step.cli).toBe(
+      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
+    );
+    expect(step.rbac.join(" ")).toContain("Microsoft.Authorization/roleAssignments/write on the hub");
+    expect(step.rbac.join(" ")).toMatch(/User Access Administrator/);
+    expect(step.rbac.join(" ")).toMatch(/Role Based Access Control Administrator/);
+    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
+    expect(howToStep("eh-role-receiver-auto")!.cli).not.toContain("eventhubs/");
+  });
+
+  it("never instructs Data Owner, Manage or a SAS key", () => {
+    for (const id of ["eh-role-receiver", "eh-role-receiver-auto"]) {
+      const text = templateTexts(howToStep(id)!).join("\n");
+      expect(text, id).not.toMatch(/Data Owner|RootManageSharedAccessKey|listKeys/);
+    }
+  });
+
+  it("marks the SAS Listen rule as the fallback to Entra ID", () => {
+    expect(howToStep("eh-rule-listen")!.warning).toMatch(/Entra ID/);
   });
 });

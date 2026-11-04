@@ -50,10 +50,8 @@ describe("ManualSchemaEditor", () => {
   it("renders one name input and one type select per row", () => {
     renderEditor(rows(["1", "ClientIP", "string"], ["2", "Bytes", "long"]));
     expect(screen.getAllByRole("textbox")).toHaveLength(2);
-    expect(screen.getAllByRole("combobox")).toHaveLength(2);
-    expect(
-      (screen.getByLabelText("Field 2 type") as HTMLSelectElement).value,
-    ).toBe("long");
+    expect(screen.getAllByRole("button", { name: /^Field \d+ type$/ })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Field 2 type" }).textContent).toBe("long");
   });
 
   it("reports the edited ROW ID, not the index", () => {
@@ -117,9 +115,10 @@ describe("ManualSchemaEditor", () => {
 
   it("offers every type the tables API accepts, and no others", () => {
     renderEditor(rows(["1", "ClientIP", "string"]));
+    fireEvent.click(screen.getByRole("button", { name: "Field 1 type" }));
     const options = Array.from(
-      (screen.getByLabelText("Field 1 type") as HTMLSelectElement).options,
-    ).map((o) => o.value);
+      document.querySelectorAll(".searchable-select-option"),
+    ).map((o) => o.textContent);
     // Exact set, not a superset: an extra option here is a value core rejects.
     expect(options).toEqual([
       "string",

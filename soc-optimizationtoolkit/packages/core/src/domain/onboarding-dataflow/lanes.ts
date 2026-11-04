@@ -359,26 +359,44 @@ export function tickText(tick: TickState): string {
   }
 }
 
-const EVENTHUB_TRANSPORT_KINDS: ReadonlySet<CheckKind> = new Set<CheckKind>([
-  "eh-namespace",
-  "eh-hub",
-  "eh-rule-send",
-  "eh-rule-listen",
-  "eh-rule-manage",
-  "eh-consumer-group",
-]);
-
-const BLOB_TRANSPORT_KINDS: ReadonlySet<CheckKind> = new Set<CheckKind>([
-  "storage-account",
-  "storage-container",
-  "storage-queue",
-  "eventgrid-topic",
-  "eventgrid-subscription",
-  "storage-rbac",
-]);
+/**
+ * Which transport card each check kind belongs to, or null for the emitter
+ * card. EXHAUSTIVE on purpose (architecture audit 2026-11-03): AZR-54 and
+ * AZR-59 each added an Event Hub kind to a hand-kept Set and had to remember
+ * it here; a Record over CheckKind makes typecheck ask instead.
+ */
+const TRANSPORT_OF_KIND: Readonly<Record<CheckKind, OnboardingTransport | null>> = {
+  "eh-namespace": "eventhub",
+  "eh-hub": "eventhub",
+  "eh-rule-send": "eventhub",
+  "eh-rule-listen": "eventhub",
+  "eh-rule-manage": "eventhub",
+  "eh-consumer-group": "eventhub",
+  "eh-consumer-group-auto": "eventhub",
+  "eh-role-receiver": "eventhub",
+  "storage-account": "blob",
+  "storage-container": "blob",
+  "storage-queue": "blob",
+  "eventgrid-topic": "blob",
+  "eventgrid-subscription": "blob",
+  "storage-rbac": "blob",
+  "defender-plans": null,
+  "defender-provider": null,
+  "defender-export": null,
+  "entra-setting": null,
+  "activity-log-setting": null,
+  "policy-assignment": null,
+  "policy-set-definition": null,
+  "policy-definition": null,
+  "policy-identity-roles": null,
+  "policy-remediation": null,
+  "xdr-streaming": null,
+  "network-watcher": null,
+  "flow-log": null,
+};
 
 function isTransportKind(transport: OnboardingTransport, kind: CheckKind): boolean {
-  return transport === "eventhub" ? EVENTHUB_TRANSPORT_KINDS.has(kind) : BLOB_TRANSPORT_KINDS.has(kind);
+  return TRANSPORT_OF_KIND[kind] === transport;
 }
 
 /** Which card a step configures: the transport when all its checks are transport checks. */

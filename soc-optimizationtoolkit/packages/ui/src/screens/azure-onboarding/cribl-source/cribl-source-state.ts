@@ -15,6 +15,12 @@
  * DESCRIPTOR - produces another key and disarms. Reverting the change does not
  * re-arm: a stale arm is dropped outright.
  *
+ * ENTRA ID FIRST (ADR 0008). An Event Hub lane offers Entra ID - a dedicated
+ * Cribl service principal holding Azure Event Hubs Data Receiver - first and
+ * as the default; listKeys and a pasted connection string are the fallbacks.
+ * Its client secret is handled exactly as the Blob lane's: a ref in the panel,
+ * never this module.
+ *
  * SECRETS. A pasted connection string never reaches this module: the panel
  * parses it (core parseEventHubConnectionString) and hands over only the
  * non-secret descriptor {host, keyName, entityPath}. Nothing here can render
@@ -23,7 +29,7 @@
  * No React, no IO, no clock.
  */
 
-import { PLAN_VALUE_KEYS, isInvalidConnection, onboardingSource, ruleCanListen } from "@soc/core";
+import { PLAN_VALUE_KEYS, isInvalidConnection, onboardingSource, ruleCanManage, ruleSafeForCriblSource } from "@soc/core";
 import type {
   ApplyCriblSourceOutcome,
   ApplyFailureStage,
@@ -103,13 +109,14 @@ export function sourceRows(
 // ---------------------------------------------------------------------------
 
 /**
- * The rules a Cribl Event Hub SOURCE can read with: Listen or Manage. This is
- * deliberately separate from the Defender picker's sendableRules
- * (azure-onboarding-state.ts:631) - a Send-only rule lets the export write but
+ * The rules a Cribl Event Hub SOURCE may read with: Listen, and NOT Manage
+ * (AZR-58 - a Manage key in a Cribl secret is control of the namespace). This
+ * is deliberately separate from the Defender picker's sendableRules
+ * (azure-onboarding-state.ts) - a Send-only rule lets the export write but
  * cannot be read from. Nothing is preselected.
  */
 export function listenRules<T extends { readonly rights: readonly string[] }>(rules: readonly T[]): T[] {
-  return rules.filter((r) => ruleCanListen(r.rights));
+  return rules.filter((r) => ruleSafeForCriblSource(r.rights));
 }
 
 /** The rule picker's message, or null when there are Listen rules to pick. */
@@ -121,7 +128,15 @@ export function listenRuleMessage(read: ListRead<NamespaceAuthRule> | null): str
   if (read.rows.length === 0) return "This namespace has no authorization rules.";
   if (listenRules(read.rows).length === 0) {
     const names = read.rows.map((r) => `${r.name} (${r.rights.join(", ") || "no rights"})`);
-    return `None of this namespace's authorization rules can listen: ${names.join("; ")}. Create a rule with Listen rights in the portal.`;
+    const manage = read.rows.filter((r) => ruleCanManage(r.rights)).map((r) => r.name);
+    if (manage.length > 0) {
+      return (
+        `None of this namespace's authorization rules can be used: ${names.join("; ")}. ` +
+        `${manage.join(", ")} can Manage the namespace, so its key is not put in a Cribl secret. ` +
+        "Create a Listen-only rule in the portal and read the rules again."
+      );
+    }
+    return `None of this namespace's authorization rules can listen: ${names.join("; ")}. Create a Listen-only rule in the portal.`;
   }
   return null;
 }
@@ -136,21 +151,26 @@ export interface CredentialChoice {
   readonly isDefault: boolean;
 }
 
+const ENTRA_LABEL = "Entra ID - a Cribl service principal (recommended)";
 const LIST_KEYS_LABEL = "Let the app read the key of the chosen Listen rule when you confirm";
 const PASTE_LABEL = "Paste a connection string for a Listen rule";
 const CLIENT_SECRET_LABEL = "Paste the service principal's client secret";
 
 /**
- * The credential sources a lane offers (D7). Event Hub offers both; an
- * Automated source defaults to the app reading the key, a How-to source to a
- * pasted connection string. Blob always uses a service principal secret; an
- * account-key connection string is never offered.
+ * The credential sources a lane offers (D7, ADR 0008). An Event Hub lane
+ * offers Entra ID first and as the default whatever its mode, then the two
+ * SAS fallbacks: the app reading a Listen rule's key, or a pasted connection
+ * string. Blob always uses a service principal secret; an account-key
+ * connection string is never offered. `mode` no longer changes the Event Hub
+ * default; it stays in the signature for the callers.
  */
-export function credentialChoices(mode: SourceMode, transport: OnboardingTransport): CredentialChoice[] {
+export function credentialChoices(_mode: SourceMode, transport: OnboardingTransport): CredentialChoice[] {
   if (transport === "blob") return [{ kind: "client-secret", label: CLIENT_SECRET_LABEL, isDefault: true }];
-  const listKeys: CredentialChoice = { kind: "listKeys", label: LIST_KEYS_LABEL, isDefault: mode === "automate" };
-  const paste: CredentialChoice = { kind: "paste", label: PASTE_LABEL, isDefault: mode !== "automate" };
-  return mode === "automate" ? [listKeys, paste] : [paste, listKeys];
+  return [
+    { kind: "entra-id", label: ENTRA_LABEL, isDefault: true },
+    { kind: "listKeys", label: LIST_KEYS_LABEL, isDefault: false },
+    { kind: "paste", label: PASTE_LABEL, isDefault: false },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +215,16 @@ export const PLAN_REFUSAL_COPY: Readonly<Record<PlanRefusalReason, string>> = {
   "no-group": "Choose a worker group first.",
   "missing-value": "A plan value this source needs is not filled in.",
   "credential-mismatch": "The credential does not fit this source's transport.",
+  "app-principal":
+    "That client ID is this app's own registration. Use a service principal dedicated to Cribl: anyone who can read the worker group's secrets could use its secret.",
+  "principal-mismatch":
+    "The client ID belongs to a different service principal than the object ID in the plan values, so the role would be checked for one principal while the source signs in as another. Make the object ID match the client ID.",
+  "receiver-role-overprivileged":
+    "The Cribl service principal holds Azure Event Hubs Data Owner, which includes listKeys on every access rule. Its secret in a Cribl secret would control the namespace. Grant only Azure Event Hubs Data Receiver on the hub.",
+  "receiver-role-missing":
+    "The Cribl service principal does not hold Azure Event Hubs Data Receiver on the hub or the namespace, so the source could not read. Assign it, then create the source.",
+  "receiver-role-unreadable":
+    "The Cribl service principal's role assignments could not be read, so whether it can read the hub is unknown.",
   "blob-source": "A blob source reads no hub.",
   "no-hub-named": "The plan names no hub for this source.",
   "hubs-not-measured": "No hub has appeared yet in a complete hub list: run Validate (read only) first.",
@@ -205,7 +235,10 @@ export const PLAN_REFUSAL_COPY: Readonly<Record<PlanRefusalReason, string>> = {
   "sku-unknown": "The namespace's tier could not be determined, so Kafka support is unknown.",
   "rules-unreadable": "The namespace's authorization rules could not be read.",
   "unknown-rule": "That key name is not one of the namespace's authorization rules.",
-  "rule-cannot-listen": "This key cannot listen: its rule has neither Listen nor Manage rights.",
+  "rule-cannot-listen": "This key cannot listen: its rule has no Listen rights.",
+  "rule-can-manage": "This key can Manage the namespace, so it is not stored in Cribl. Use a Listen-only rule.",
+  "consumer-group-missing": "The consumer group does not exist on the hub yet, so the source could not read. Create it, run Validate, then create the source.",
+  "consumer-group-unreadable": "The consumer group could not be read, so whether the source could read is unknown.",
   "wrong-namespace": "Wrong namespace: the connection string is for another Event Hub namespace.",
   "entity-mismatch": "The connection string is scoped to a different hub than this source reads.",
   "rule-rights-unknown": "The rules could not be read, so whether this key can listen is unknown.",
@@ -237,8 +270,37 @@ export interface CreateGateInput {
   readonly pasteCheck: PastedCredentialCheck | null;
   /** laneTopics for the lane (Event Hub only); null when not computed. */
   readonly topics: LaneTopics | null;
-  /** The blob lane's pasted client secret is present (blob only). */
+  /** The pasted client secret is present (blob and Entra ID). */
   readonly hasClientSecret?: boolean;
+  /** The Cribl principal's ids (Entra ID only); objectId is the plan value. */
+  readonly entra?: { readonly tenantId: string; readonly clientId: string; readonly objectId: string };
+  /** This app's own registration client id, refused as the Cribl principal. */
+  readonly appClientId?: string;
+  /**
+   * The pasted client secret (blob and Entra ID) looks like a key-bearing
+   * connection string (core looksLikeConnectionString). A flag, never the value.
+   */
+  readonly secretIsConnectionString?: boolean;
+}
+
+/** Why Create is disabled when a connection string was pasted as a client secret. */
+export const CLIENT_SECRET_IS_CONNECTION_STRING =
+  "That is a connection string, not a client secret. A connection string's key is never stored as the service principal's secret; paste the client secret.";
+
+const ENTRA_SECRET_NEEDED = "Paste the Cribl service principal's client secret.";
+
+/** Why an Entra ID lane cannot plan yet, or null. */
+function entraDisabledReason(g: CreateGateInput): string | null {
+  const ids = g.entra;
+  const missing: string[] = [];
+  if (ids === undefined || ids.tenantId.trim() === "") missing.push("tenant ID");
+  if (ids === undefined || ids.clientId.trim() === "") missing.push("client ID");
+  if (ids === undefined || ids.objectId.trim() === "") missing.push("object ID");
+  if (missing.length > 0) return `Enter the Cribl service principal's ${missing.join(", ")}.`;
+  const app = g.appClientId?.trim().toLowerCase() ?? "";
+  if (ids !== undefined && app !== "" && ids.clientId.trim().toLowerCase() === app) return PLAN_REFUSAL_COPY["app-principal"];
+  if (g.hasClientSecret !== true) return ENTRA_SECRET_NEEDED;
+  return g.secretIsConnectionString === true ? CLIENT_SECRET_IS_CONNECTION_STRING : null;
 }
 
 /** Why Create is disabled, or null when it can be armed. */
@@ -248,10 +310,12 @@ export function createDisabledReason(g: CreateGateInput): string | null {
   if (g.credentialKind === null) return "Choose where the credential comes from.";
   if (g.transport === "blob") {
     if (g.credentialKind !== "client-secret") return PLAN_REFUSAL_COPY["credential-mismatch"];
-    return g.hasClientSecret === true ? null : "Paste the service principal's client secret.";
+    if (g.hasClientSecret !== true) return "Paste the service principal's client secret.";
+    return g.secretIsConnectionString === true ? CLIENT_SECRET_IS_CONNECTION_STRING : null;
   }
   if (g.credentialKind === "client-secret") return PLAN_REFUSAL_COPY["credential-mismatch"];
   if (g.topics !== null && g.topics.kind === "refused") return PLAN_REFUSAL_COPY[g.topics.reason];
+  if (g.credentialKind === "entra-id") return entraDisabledReason(g);
   if (g.credentialKind === "listKeys") {
     return g.rule.trim() === "" ? "Choose a rule with Listen rights." : null;
   }
@@ -303,6 +367,8 @@ export interface ArmInputs {
   /** Bumped on every Azure or Cribl read the plan depends on. */
   readonly readSeq: number;
   readonly descriptor: ConnectionDescriptor | null;
+  /** Entra ID only: [tenantId, clientId] as entered, both named by the confirm. */
+  readonly entra?: readonly [string, string] | null;
 }
 
 /** The arm key: any change to what the confirm names produces a different one. */
@@ -316,6 +382,7 @@ export function armKey(a: ArmInputs): string {
     PLAN_VALUE_KEYS.map((k) => a.values[k]),
     a.readSeq,
     a.descriptor === null ? null : [a.descriptor.host, a.descriptor.keyName, a.descriptor.entityPath ?? null],
+    a.entra ?? null,
   ]);
 }
 
@@ -393,17 +460,39 @@ export function isArmed(state: ConfirmState, key: string): state is Extract<Conf
  * (DBT-164).
  */
 export function confirmText(ready: ReadyCriblSource): string[] {
+  const entra = ready.entraPrincipal;
   const who =
-    ready.credentialKind === "client-secret"
+    ready.credentialKind === "entra-id" && entra !== null
+      ? `Authenticates with Entra ID as the Cribl service principal ${entra.clientId} (object ID ${entra.objectId}, tenant ${entra.tenantId}). ` +
+        `Object ID ${entra.objectId} holds ${entra.role} at ${entra.roleScope}. No SAS key is used.`
+      : ready.credentialKind === "client-secret"
       ? `Authenticates as service principal ${ready.keyNameOrPrincipal}.`
       : ready.credentialKind === "listKeys"
         ? `Reads with the key of rule ${ready.keyNameOrPrincipal}, fetched from Azure when you confirm.`
         : `Reads with the pasted key of rule ${ready.keyNameOrPrincipal}.`;
+  // AZR-57: both type labels start with "Azure", so "an" is right for each;
+  // the pin holds every label to that.
   const lines = [
-    `Create a ${INPUT_TYPE_LABEL[ready.inputType]} with id ${ready.inputId} in worker group ${ready.groupId}.`,
-    `Store its credential in a new Cribl secret ${ready.secretId}; the source names the secret and never holds the key.`,
+    `New Cribl source ${ready.inputId}, an ${INPUT_TYPE_LABEL[ready.inputType]}, in worker group ${ready.groupId}.`,
+    ready.credentialKind === "entra-id"
+      ? `Store the principal's client secret in a new Cribl secret ${ready.secretId}; the source names the secret and never holds it.`
+      : `Store its credential in a new Cribl secret ${ready.secretId}; the source names the secret and never holds the key.`,
     who,
   ];
+  // AZR-59 review: the role is read for the object id; the input signs in as
+  // the client id. Say whether the directory tied them, never imply it.
+  if (ready.credentialKind === "entra-id" && entra !== null) {
+    lines.push(
+      entra.principalCheck === "matched"
+        ? `The directory confirms client ID ${entra.clientId} is object ID ${entra.objectId}.`
+        : `The role was read for object ID ${entra.objectId} as entered; the app could not confirm that client ID ${entra.clientId} is that principal. Check they belong together before you confirm.`,
+    );
+  }
+  // AZR-56: the consumer group is part of what is being agreed to.
+  if (ready.readsFrom !== null) {
+    const { hubs, consumerGroup } = ready.readsFrom;
+    lines.push(`Reads ${hubs.length === 1 ? "hub" : "hubs"} ${hubs.join(", ")} with consumer group ${consumerGroup}.`);
+  }
   if (ready.attested) {
     lines.push(
       `You confirmed that ${ready.keyNameOrPrincipal} has Listen rights; the app could not read the rules to check.`,
@@ -479,6 +568,7 @@ const APPLY_REFUSAL_COPY: Readonly<Record<ApplyRefusalReason, string>> = {
   "inputs-unreadable": "Not created: Cribl's sources could not be read again.",
   "secret-unreadable": "Not created: Cribl's secrets could not be read again.",
   "paste-invalid": "Not created: the pasted connection string is no longer valid.",
+  "paste-is-connection-string": "Not created: a connection string was pasted where the client secret goes, so nothing was stored.",
   "pasted-changed": "Not created: the pasted connection string changed after the confirm.",
   "secret-exists": "Not created: Cribl refused the secret because one with this id already exists.",
 };

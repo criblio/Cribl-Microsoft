@@ -237,7 +237,44 @@ export interface VerdictRow {
   readonly stepId: string;
   readonly kind: CheckResult["kind"];
   readonly view: VerdictView;
+  /**
+   * What this row checked, in words, when its step has more than one check for
+   * the source; null otherwise (AZR-55: two checks of one step read as the
+   * same sentence with opposite verdicts).
+   */
+  readonly subject: string | null;
 }
+
+/** What each check kind reads, as the operator would say it (AZR-55). */
+export const CHECK_SUBJECT: Readonly<Record<CheckKind, string>> = {
+  "eh-namespace": "the namespace",
+  "eh-hub": "the hubs",
+  "eh-rule-send": "the Send rule",
+  "eh-rule-listen": "the Listen rule",
+  "eh-rule-manage": "the Manage rule",
+  "eh-consumer-group": "the consumer group on the hub",
+  "eh-consumer-group-auto": "the consumer group on each hub Azure created",
+  "eh-role-receiver": "the Cribl principal's Event Hubs receive role",
+  "defender-plans": "the Defender plans",
+  "defender-provider": "the Microsoft.Security provider",
+  "defender-export": "the continuous export",
+  "entra-setting": "the Entra diagnostic setting",
+  "activity-log-setting": "the Activity Log diagnostic setting",
+  "policy-assignment": "the policy assignment",
+  "policy-set-definition": "the initiative definition",
+  "policy-definition": "the custom policy definitions",
+  "policy-identity-roles": "the assignment identity's roles",
+  "policy-remediation": "the remediation tasks",
+  "xdr-streaming": "the XDR streaming settings",
+  "network-watcher": "the Network Watcher",
+  "storage-account": "the storage account",
+  "storage-container": "the blob container",
+  "storage-queue": "the storage queue",
+  "eventgrid-topic": "the Event Grid system topic",
+  "eventgrid-subscription": "the Event Grid subscription",
+  "flow-log": "the flow log",
+  "storage-rbac": "the storage role assignment",
+};
 
 export interface SourceVerdictGroup {
   readonly sourceId: OnboardingSourceId;
@@ -250,13 +287,15 @@ export function verdictGroups(result: Pick<ValidationResult, "checks">): SourceV
   const groups = new Map<OnboardingSourceId, VerdictRow[]>();
   for (const c of result.checks) {
     const rows = groups.get(c.sourceId) ?? [];
-    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict, c.kind) });
+    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict, c.kind), subject: null });
     groups.set(c.sourceId, rows);
   }
   return [...groups].map(([sourceId, rows]) => ({
     sourceId,
     title: onboardingSource(sourceId)?.title ?? sourceId,
-    rows,
+    rows: rows.map((r) =>
+      rows.filter((o) => o.stepId === r.stepId).length > 1 ? { ...r, subject: CHECK_SUBJECT[r.kind] } : r,
+    ),
   }));
 }
 

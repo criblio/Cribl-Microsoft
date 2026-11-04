@@ -71,6 +71,53 @@ describe("classifyExistingInput", () => {
     }
   });
 
+  // AZR-59: a hand-edited OAuth input refuses by name, exactly as the SAS body does.
+  it("a hand edit to an Entra ID input's OAuth fields is differs, naming the field", () => {
+    const oauth = buildEventHubInputBody({
+      id: "azure_onb_eh_ns1_hub1",
+      namespace: "ns1",
+      topics: ["hub1"],
+      consumerGroup: "cribl",
+      secretId: "azure_onb_eh_ns1_hub1_secret",
+      sourceId: "defenderExport",
+      sourceTitle: "Defender",
+      auth: { kind: "entra-id", tenantId: "t1", clientId: "c1" },
+    });
+    const oauthStored = { ...oauth, connectionTimeout: 10000 };
+    const sasl = oauth["sasl"] as Record<string, unknown>;
+    expect(classifyExistingInput({ read: { state: "read", items: [oauthStored] }, expected: oauth, recorded: record })).toEqual({ kind: "ours-matching" });
+    const cases: [Record<string, unknown>, string][] = [
+      [{ ...oauthStored, sasl: { ...sasl, clientId: "someone-else" } }, "sasl.clientId"],
+      [{ ...oauthStored, sasl: { ...sasl, tenantId: "t2" } }, "sasl.tenantId"],
+      [{ ...oauthStored, sasl: { ...sasl, scope: "https://other.servicebus.windows.net/.default" } }, "sasl.scope"],
+      [{ ...oauthStored, sasl: { ...sasl, clientTextSecret: "other_secret" } }, "sasl.clientTextSecret"],
+      [{ ...oauthStored, sasl: { ...sasl, oauthEndpoint: "https://login.microsoftonline.us" } }, "sasl.oauthEndpoint"],
+      [{ ...oauthStored, sasl: { ...sasl, clientSecretAuthType: "manual" } }, "sasl.clientSecretAuthType"],
+    ];
+    for (const [edited, field] of cases) {
+      expect(classifyExistingInput({ read: { state: "read", items: [edited] }, expected: oauth, recorded: record })).toEqual({
+        kind: "differs",
+        fields: [field],
+      });
+    }
+  });
+
+  it("an existing SAS input where an Entra ID one is planned is differs, not already applied", () => {
+    const oauth = buildEventHubInputBody({
+      id: "azure_onb_eh_ns1_hub1",
+      namespace: "ns1",
+      topics: ["hub1"],
+      consumerGroup: "cribl",
+      secretId: "azure_onb_eh_ns1_hub1_secret",
+      sourceId: "defenderExport",
+      sourceTitle: "Defender",
+      auth: { kind: "entra-id", tenantId: "t1", clientId: "c1" },
+    });
+    const v = classifyExistingInput({ read: { state: "read", items: [stored] }, expected: oauth, recorded: record });
+    expect(v.kind).toBe("differs");
+    expect(v.kind === "differs" ? v.fields : []).toEqual(expect.arrayContaining(["sasl.mechanism", "sasl.clientId"]));
+  });
+
   it("a hand edit to a blob input's run state or routing is differs", () => {
     const blob = buildBlobInputBody({
       id: "azure_onb_blob_acct_q1",

@@ -4946,6 +4946,14 @@ button.readiness-pill:focus-visible {
   color: var(--accent-strong);
   font-weight: 600;
 }
+/* DBT-249: shown, not choosable; the label or hint carries the reason. */
+.searchable-select-option.is-disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.searchable-select-option.is-disabled.is-highlighted {
+  background: transparent;
+}
 .searchable-select-option-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -5899,8 +5907,9 @@ details[open] > summary::before {
    generic controls row and also holds a file input and several .field-wrapped
    controls that already have these tokens. Same shape as `.enrich-add input`,
    which exists for this reason and solves it this way. */
-.dcr-add-column input,
-.dcr-add-column select {
+/* DBT-249: the type picker is now a SearchableSelect, which styles itself;
+   the child combinator keeps this rule off the combobox's own filter input. */
+.dcr-add-column > input {
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -5911,8 +5920,7 @@ details[open] > summary::before {
   color: var(--text);
 }
 
-.dcr-add-column input:focus,
-.dcr-add-column select:focus {
+.dcr-add-column > input:focus {
   outline: none;
   border-color: var(--border-focus);
 }

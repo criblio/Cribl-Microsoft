@@ -835,6 +835,9 @@ export { validateConfigJson } from "./screens/config-json";
 export type { ConfigJsonResult } from "./screens/config-json";
 
 // Shared widgets.
+// DBT-249: the one dropdown control, so the app shell uses it too.
+export { SearchableSelect, SearchableMultiSelect } from "./components/searchable-select";
+export type { SelectOption } from "./components/searchable-select";
 export { InfoTip } from "./components/info-tip";
 export type { InfoTipProps } from "./components/info-tip";
 

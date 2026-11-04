@@ -53,6 +53,18 @@ function summary(container: HTMLElement): string {
   ).replace(/\s+/g, " ");
 }
 
+function runPicker(container: HTMLElement): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(
+    '.recent-runs button[aria-label="Choose a run"]',
+  );
+}
+
+function optionTexts(container: HTMLElement): (string | null)[] {
+  return [...container.querySelectorAll(".searchable-select-option")].map(
+    (o) => o.textContent,
+  );
+}
+
 describe("RecentRuns (DBT-125)", () => {
   it("is collapsed by default, and its one line says how many and which was latest", async () => {
     const { container } = renderRuns(12);
@@ -65,19 +77,24 @@ describe("RecentRuns (DBT-125)", () => {
   it("lists every run in a dropdown, newest first, and shows the latest", async () => {
     const { container } = renderRuns(12);
     await waitFor(() => expect(summary(container)).toContain("(12)"));
-    const select = container.querySelector<HTMLSelectElement>(".recent-runs select")!;
-    expect([...select.options].map((o) => o.textContent)).toEqual(
+    const trigger = runPicker(container)!;
+    expect(trigger.textContent).toBe("run job-1");
+    fireEvent.click(trigger);
+    expect(optionTexts(container)).toEqual(
       Array.from({ length: 12 }, (_, i) => `run job-${i + 1}`),
     );
-    expect(select.value).toBe("job-1");
     expect(container.querySelector(".recent-runs pre")?.textContent).toBe("detail job-1");
   });
 
   it("shows the run picked in the dropdown, and only that one", async () => {
     const { container } = renderRuns(12);
     await waitFor(() => expect(summary(container)).toContain("(12)"));
-    const select = container.querySelector<HTMLSelectElement>(".recent-runs select")!;
-    fireEvent.change(select, { target: { value: "job-7" } });
+    fireEvent.click(runPicker(container)!);
+    const option = [...container.querySelectorAll(".searchable-select-option")].find(
+      (o) => o.textContent === "run job-7",
+    );
+    fireEvent.click(option!);
+    expect(runPicker(container)?.textContent).toBe("run job-7");
     const shown = [...container.querySelectorAll(".recent-runs pre")].map((p) => p.textContent);
     expect(shown).toEqual(["detail job-7"]);
   });
@@ -85,6 +102,6 @@ describe("RecentRuns (DBT-125)", () => {
   it("says so when nothing has run, with no dropdown to open", async () => {
     const { container } = renderRuns(0);
     await waitFor(() => expect(summary(container)).toContain("none recorded yet"));
-    expect(container.querySelector(".recent-runs select")).toBeNull();
+    expect(runPicker(container)).toBeNull();
   });
 });

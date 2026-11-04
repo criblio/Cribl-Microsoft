@@ -30,6 +30,7 @@ import {
   buildNamespaceAuthRulesListRequest,
   buildNamespaceGetRequest,
   buildNamespaceHubsListRequest,
+  eventHubNamespacePath,
   eventHubResourceId,
   type NamespaceRef,
 } from "../eventhub-arm/eventhub-arm";
@@ -170,6 +171,9 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "eh-rule-listen": [...SUB_RG_NS, "listenRule"],
   "eh-rule-manage": [...SUB_RG_NS, "sendRule"],
   "eh-consumer-group": [...SUB_RG_NS, "hubName", "consumerGroup"],
+  "eh-consumer-group-auto": [...SUB_RG_NS, "consumerGroup"],
+  // hubName is optional: without it only the namespace scope is read.
+  "eh-role-receiver": [...SUB_RG_NS, "criblPrincipalObjectId"],
   "defender-plans": ["subscriptionId"],
   "defender-provider": ["subscriptionId"],
   "defender-export": [...SUB_RG_NS, "hubName"],
@@ -321,6 +325,9 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
     case "eh-namespace":
       return [single(buildNamespaceGetRequest(ns), `Event Hub namespace ${ns.name}`)];
     case "eh-hub":
+    // AZR-54: the hub listing first; the per-hub group reads follow it
+    // (validateAzureOnboarding), because which hubs exist is only known then.
+    case "eh-consumer-group-auto":
       return [list(buildNamespaceHubsListRequest(ns), `hubs in ${ns.name}`)];
     case "eh-rule-send":
     case "eh-rule-listen":
@@ -457,6 +464,29 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
           `event subscriptions on ${v(values, "systemTopic")}`,
         ),
       ];
+    case "eh-role-receiver": {
+      // assignedTo() at a scope returns the grants at and above it, so the
+      // namespace read answers for a namespace-or-above grant and the hub read
+      // (only when the plan names a hub) for one on that hub (ADR 0008).
+      const principal = v(values, "criblPrincipalObjectId");
+      const ns = planNamespace(values);
+      const hub = v(values, "hubName");
+      const reads = [
+        list(
+          roleAssignmentsForPrincipalRequest(eventHubNamespacePath(ns), principal),
+          `role assignments of the Cribl principal on namespace ${ns.name}`,
+        ),
+      ];
+      if (hub !== "") {
+        reads.push(
+          list(
+            roleAssignmentsForPrincipalRequest(eventHubResourceId(ns, hub), principal),
+            `role assignments of the Cribl principal on hub ${hub}`,
+          ),
+        );
+      }
+      return reads;
+    }
     case "storage-rbac":
       return [
         list(

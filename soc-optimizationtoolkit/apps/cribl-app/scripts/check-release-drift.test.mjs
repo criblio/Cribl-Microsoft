@@ -29,20 +29,34 @@ describe('evaluateReleaseDrift', () => {
     expect(result.packagedVersion).toBe('1.12.0');
   });
 
-  it('catches a hand-bumped manifest running ahead of the tarball', () => {
-    // The lock moves WITH the manifest here: npm copies that field, so a
-    // hand-bump plus an npm install leaves them agreeing with each other and
-    // disagreeing with the tarball.
+  it('WARNS, not errors, while the manifest is ahead of the tarball, and names the release command (DBT-299)', () => {
+    // The operator's rule (2026-11-04): every PR to main runs "npm run bump",
+    // version only; packaging stays batched. So a manifest ahead of the last
+    // package is the normal state between releases. The warning names the
+    // command that packages THIS version, because a bare "npm run package"
+    // would bump a second time - the double-bump the old error guarded.
     const result = evaluateReleaseDrift(
       facts({ manifestVersion: '1.12.1', lockVersion: '1.12.1' }),
     );
 
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain('1.12.1');
-    expect(result.errors[0]).toContain('1.12.0');
-    expect(result.errors[0]).toContain('package.json');
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('1.12.1');
+    expect(result.warnings[0]).toContain('1.12.0');
+    expect(result.warnings[0]).toContain('npm run package -- --version 1.12.1');
     // The packaged tarball stays the authority - it is what people install.
     expect(result.packagedVersion).toBe('1.12.0');
+  });
+
+  it('still ERRORS on a manifest BEHIND the tarball, which no bump or package produces', () => {
+    const result = evaluateReleaseDrift(
+      facts({ manifestVersion: '1.11.9', lockVersion: '1.11.9' }),
+    );
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('1.11.9');
+    expect(result.errors[0]).toContain('1.12.0');
+    expect(result.errors[0]).toContain('package.json');
   });
 
   it('catches the lock recording a version its package.json has moved past', () => {
@@ -74,7 +88,7 @@ describe('evaluateReleaseDrift', () => {
     // every hand-bump produce two errors for one mistake - and would blame the
     // lock, which is the one file that recorded the truth it was given.
     const cascade = evaluateReleaseDrift(
-      facts({ manifestVersion: '1.12.1', lockVersion: '1.12.1' }),
+      facts({ manifestVersion: '1.11.9', lockVersion: '1.11.9' }),
     );
     expect(cascade.errors).toHaveLength(1);
     expect(cascade.errors[0]).not.toContain('package-lock.json');
@@ -84,7 +98,7 @@ describe('evaluateReleaseDrift', () => {
     const stale = evaluateReleaseDrift(
       facts({ manifestVersion: '1.12.1', lockVersion: '1.12.0' }),
     );
-    expect(stale.errors).toHaveLength(2);
+    expect(stale.errors).toHaveLength(1);
     expect(stale.errors.filter((e) => e.includes('package-lock.json'))).toHaveLength(1);
   });
 
@@ -204,7 +218,8 @@ describe('evaluateReleaseDrift', () => {
   it('reports every drifted claim at once rather than the first', () => {
     const result = evaluateReleaseDrift(
       facts({
-        manifestVersion: '1.13.0',
+        // Behind the tarball: a manifest AHEAD of it only warns since DBT-299.
+        manifestVersion: '1.11.9',
         lockVersion: '1.11.5',
         releaseNotes: '# Release notes\n\n## 1.11.15\n',
         backlog: '**1.5.4 IS CURRENT (2026-08-06).**\n',

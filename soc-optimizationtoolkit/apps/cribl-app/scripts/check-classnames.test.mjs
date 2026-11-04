@@ -675,9 +675,12 @@ describe('DBT-38 - the add-column control renders with the app tokens', () => {
   const styles = read('styles.css');
   const panel = read('screens', 'dcr-automation', 'dcr-inventory-panel.tsx');
 
-  const addColumnRule = /\.dcr-add-column input,\s*\.dcr-add-column select\s*\{([^}]*)\}/.exec(styles);
+  // DBT-249: the type picker became a SearchableSelect, which styles itself,
+  // so the rule now covers only the bare input - as a direct child, so it never
+  // reaches the combobox's own filter input.
+  const addColumnRule = /\.dcr-add-column > input\s*\{([^}]*)\}/.exec(styles);
 
-  it('gives the input AND the select a border, a surface and a text color', () => {
+  it('gives the bare input a border, a surface and a text color', () => {
     expect(addColumnRule).not.toBeNull();
     const body = addColumnRule[1];
     expect(body).toMatch(/border:\s*1px solid var\(--border\)/);
@@ -685,13 +688,13 @@ describe('DBT-38 - the add-column control renders with the app tokens', () => {
     expect(body).toMatch(/color:\s*var\(--text\)/);
   });
 
-  it('gives them a focus border, which raw browser chrome does not', () => {
-    expect(styles).toMatch(
-      /\.dcr-add-column input:focus,\s*\.dcr-add-column select:focus\s*\{[^}]*border-color:\s*var\(--border-focus\)/,
-    );
+  it('gives it a focus border, which raw browser chrome does not', () => {
+    expect(styles).toMatch(/\.dcr-add-column > input:focus\s*\{[^}]*border-color:\s*var\(--border-focus\)/);
+    // No dead select half left behind once the select became a combobox.
+    expect(styles).not.toMatch(/\.dcr-add-column select/);
   });
 
-  it('applies that container to the row holding the bare input and select', () => {
+  it('applies that container to the row holding the bare input and the type combobox', () => {
     // The rule and the markup are two halves of one fix; either alone is the
     // defect. The input is asserted to be BARE on purpose - if it is ever
     // wrapped in a .field label instead, this whole rule should go, not be
@@ -699,7 +702,7 @@ describe('DBT-38 - the add-column control renders with the app tokens', () => {
     const row = /className="panel-controls dcr-add-column">([\s\S]{0,400})/.exec(panel);
     expect(row).not.toBeNull();
     expect(row[1]).toMatch(/<input\b/);
-    expect(row[1]).toMatch(/<select\b/);
+    expect(row[1]).toMatch(/<SearchableSelect\b/);
     expect(row[1]).not.toMatch(/<label[^>]*className="field["\s]/);
   });
 });

@@ -21,11 +21,13 @@ export {
   onboardingInputId,
   onboardingSecretId,
 } from "./input-bodies";
-export type { BlobInputSpec, EventHubInputSpec } from "./input-bodies";
+export type { BlobInputSpec, EventHubAuth, EventHubInputSpec } from "./input-bodies";
 
 export {
   checkPastedCredential,
   isInvalidConnection,
+  looksLikeConnectionString,
+  manageRefusalDetail,
   parseEventHubConnectionString,
   sameDescriptor,
 } from "./connection-string";

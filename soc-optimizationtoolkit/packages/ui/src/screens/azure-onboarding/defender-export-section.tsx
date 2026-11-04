@@ -14,9 +14,20 @@
  *   - a warning naming what differs when our export exists but is broken
  *     (repairing it is a follow-up, so Repair is disabled);
  *   - the note that this app never enables a paid plan;
- *   - the Azure actions it needs, per scope, as "needed, not yet measured" -
- *     no capability measures them yet, so Azure's own refusal at each step is
- *     what the operator will see.
+ *   - the Azure actions it needs: the subscription ones with what the CACHED
+ *     permission check measured for each (AZR-60), and the namespace listKeys
+ *     as "needed, not yet measured" - no capability measures it yet.
+ *
+ * WHAT IT SAYS ABOUT PERMISSIONS (AZR-60). At the top, a banner from core's
+ * automationPermissionView over the declaration for this source and the
+ * capability set the shell already holds (usePorts) - no Azure call on mount.
+ * The shell's audit key (`permissionsAuditKey`) keeps a set measured for
+ * another connection from being read as this one's while a new audit runs.
+ * A measured denial of a core capability is a CAUTION beside Deploy, never a
+ * block (operator decision 2026-11-03; capabilities.ts rule 3: the audit
+ * informs, never forbids): the caution is also the button's aria-describedby,
+ * and Deploy stays clickable because Azure's own answer at the write decides. Unknown or never checked is a soft note, never worded as
+ * denied, and never blocks.
  *
  * WHAT IT WRITES. One automation, create-only, after a TWO-STEP arm/confirm
  * that names the subscription, resource group, hub and automation name. The
@@ -35,12 +46,13 @@
  * into an EXISTING resource group the operator picks; nothing creates one.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   DEFENDER_ACTIONS_NOT_MEASURED,
+  DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
-  DEFENDER_NAMESPACE_ACTIONS,
-  DEFENDER_SUBSCRIPTION_ACTIONS,
+  automationPermissionView,
+  automationPermissionsFor,
   deployDefenderExport,
   eventHubResourceId,
   findSameTargetExports,
@@ -48,6 +60,8 @@ import {
   readDefenderState,
 } from "@soc/core";
 import type {
+  AutomationPermissionView,
+  AutomationPermissions,
   AzureResourceGroup,
   CoverageSelection,
   DefenderDeployOutcome,
@@ -56,6 +70,8 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
+import { InfoTip } from "../../components/info-tip";
 import {
   unmeasuredInventoryMessage,
   verifiedNoneInventoryMessage,
@@ -70,6 +86,7 @@ import {
 import type { PickerMessage } from "./azure-onboarding-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
+import { AutomationPermissionBanner } from "./automation-permission-banner";
 
 /** The extra Defender sources, shown disabled: only alerts are exported for now. */
 const EXTRA_SOURCES: readonly string[] = [
@@ -77,6 +94,13 @@ const EXTRA_SOURCES: readonly string[] = [
   "Secure score",
   "Regulatory compliance",
 ];
+
+/** The (i) over the permissions list. */
+export const PERMISSIONS_LIST_TIP =
+  "The Azure actions this section uses, by scope. The subscription ones show what the app's last permission " +
+  "check found; the namespace one is not measured, so a missing grant there shows as Azure's refusal at that step. " +
+  "Creating the export is a grant-only check: it sees only a role on the whole subscription, so a role on the " +
+  "export's resource group is invisible to it, and Azure answers at deploy.";
 
 const REMOVE_NOT_AVAILABLE =
   "Removing the export from here is not available yet. Unticking it does not remove it from Azure.";
@@ -89,6 +113,17 @@ export interface DefenderExportSectionProps {
   /** The last Defender state read, owned by the screen (its rows read it too). */
   state: DefenderState | null;
   onState: (state: DefenderState) => void;
+  /** The How-to section's number on the screen, so the banner can name it. */
+  howtoSection: number;
+  /** Scroll to and focus this source's How-to row. */
+  onShowHowto: () => void;
+  /** The shell's Re-check permissions; absent when the shell wires none. */
+  onRecheckPermissions?: () => void;
+  recheckingPermissions?: boolean;
+  /** The current connection's audit key; a set for another connection is not trusted. */
+  permissionsAuditKey?: string;
+  /** The shell's clock, so a denial says how old the check is. */
+  permissionsNow?: () => string;
 }
 
 /** One automation-name chip list, "none" for an empty list. */
@@ -101,9 +136,30 @@ export function DefenderExportSection({
   target,
   state,
   onState,
+  howtoSection,
+  onShowHowto,
+  onRecheckPermissions,
+  recheckingPermissions,
+  permissionsAuditKey,
+  permissionsNow,
 }: DefenderExportSectionProps) {
-  const { ports, config } = usePorts();
+  const { ports, config, capabilities, capabilityContext } = usePorts();
   const subscriptionId = config.subscriptionId;
+  // Read from the cached audit only: building this view makes no Azure call.
+  const permissions = automationPermissionsFor(DEFENDER_EXPORT_ITEM_ID);
+  const permissionView =
+    permissions === null
+      ? null
+      : automationPermissionView({
+          permissions,
+          capabilities,
+          context: capabilityContext,
+          howtoSection,
+          ...(permissionsAuditKey !== undefined ? { auditKey: permissionsAuditKey } : {}),
+          ...(permissionsNow !== undefined ? { nowIso: permissionsNow() } : {}),
+        });
+  const caution = permissionView?.deployCaution ?? null;
+  const cautionId = useId();
 
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState("");
@@ -180,7 +236,12 @@ export function DefenderExportSection({
   }, [armKey]);
 
   async function confirmDeploy(): Promise<void> {
-    if (reason !== null || namespace === null || target.rule === null || resourceGroup === null) {
+    if (
+      reason !== null ||
+      namespace === null ||
+      target.rule === null ||
+      resourceGroup === null
+    ) {
       return;
     }
     setArmedFor(null);
@@ -236,6 +297,15 @@ export function DefenderExportSection({
         Creates one continuous export that sends this subscription&apos;s Defender for Cloud
         security alerts to the chosen Event Hub. It never turns on or changes a Defender plan.
       </p>
+      {permissions !== null && permissionView !== null && (
+        <AutomationPermissionBanner
+          view={permissionView}
+          sourceTitle={permissions.sourceTitle}
+          onShowHowto={onShowHowto}
+          onRecheck={onRecheckPermissions}
+          rechecking={recheckingPermissions}
+        />
+      )}
 
       <div className="panel-controls">
         <button
@@ -368,12 +438,22 @@ export function DefenderExportSection({
         ))}
       </div>
 
-      <div className="azure-onboarding-subblock">
-        <span className="field-label">Azure permissions this needs</span>
-        <p className="field-hint">{DEFENDER_ACTIONS_NOT_MEASURED}</p>
-        <RequiredActionList title="On the subscription" actions={DEFENDER_SUBSCRIPTION_ACTIONS} />
-        <RequiredActionList title="On the Event Hub namespace" actions={DEFENDER_NAMESPACE_ACTIONS} />
-      </div>
+      {permissions !== null && permissionView !== null && (
+        <div className="azure-onboarding-subblock">
+          <span className="field-label">
+            Azure permissions this needs <InfoTip text={PERMISSIONS_LIST_TIP} />
+          </span>
+          <MeasuredActionList permissions={permissions} view={permissionView} />
+          {permissions.notMeasured.map((group) => (
+            <RequiredActionList
+              key={group.scope}
+              title={group.scope}
+              note={DEFENDER_ACTIONS_NOT_MEASURED}
+              actions={group.actions}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="form-grid">
         <div className="panel-controls">
@@ -389,19 +469,18 @@ export function DefenderExportSection({
         {groupsMessage !== null && <PickerLine message={groupsMessage} />}
         <label className="field">
           <span className="field-label">Existing resource group for the export</span>
-          <select
-            aria-label="Resource group"
+          <SearchableSelect
+            label="Resource group"
+            placeholder="Choose a resource group"
+            clearLabel="None"
             value={resourceGroup?.name ?? ""}
             disabled={groupRows.length === 0}
-            onChange={(e) => setResourceGroup(groupRows.find((g) => g.name === e.target.value) ?? null)}
-          >
-            <option value="">Choose a resource group</option>
-            {groupRows.map((g) => (
-              <option key={g.name} value={g.name}>
-                {g.location !== "" ? `${g.name} (${g.location})` : g.name}
-              </option>
-            ))}
-          </select>
+            options={groupRows.map((g) => ({
+              value: g.name,
+              label: g.location !== "" ? `${g.name} (${g.location})` : g.name,
+            }))}
+            onChange={(name) => setResourceGroup(groupRows.find((g) => g.name === name) ?? null)}
+          />
           <span className="field-hint">The export is created in this group, at its location.</span>
         </label>
       </div>
@@ -410,11 +489,19 @@ export function DefenderExportSection({
         <button
           type="button"
           className="next-action-button"
+          // A measured permission denial is described, never disabled: the
+          // caution is the button's description and Azure decides at the write.
           disabled={reason !== null || armed}
+          aria-describedby={caution !== null ? cautionId : undefined}
           onClick={() => setArmedFor(armKey)}
         >
           {running ? "Deploying..." : "Deploy alert export"}
         </button>
+        {caution !== null && (
+          <span className="field-hint" id={cautionId}>
+            {caution}
+          </span>
+        )}
         {reason !== null && <span className="field-hint">{reason}</span>}
       </div>
 
@@ -449,16 +536,43 @@ export function DefenderExportSection({
   );
 }
 
+/** The subscription actions, each with what the cached check found for it. */
+function MeasuredActionList({
+  permissions,
+  view,
+}: {
+  permissions: AutomationPermissions;
+  view: AutomationPermissionView;
+}) {
+  return (
+    <div className="azure-onboarding-actions">
+      <span className="field-hint">{permissions.measuredScope}</span>
+      <ul className="perm-list">
+        {view.rows.map((row) => (
+          <li key={row.need.action} data-permission-action={row.need.action} data-state={row.state}>
+            <strong>{row.need.does}</strong>
+            {` - ${row.need.action}: ${row.stateLabel}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function RequiredActionList({
   title,
+  note,
   actions,
 }: {
   title: string;
+  /** Shown under the scope heading, so it reads as about this list only. */
+  note?: string;
   actions: readonly RequiredAction[];
 }) {
   return (
     <div className="azure-onboarding-actions">
       <span className="field-hint">{title}</span>
+      {note !== undefined && <p className="field-hint">{note}</p>}
       <ul className="perm-list">
         {actions.map((a) => (
           <li key={a.action}>

@@ -29,6 +29,12 @@ export const CHECK_KINDS = [
   "eh-rule-listen",
   "eh-rule-manage",
   "eh-consumer-group",
+  // AZR-54: the group on each hub Azure created itself, read per hub after
+  // the hub listing; never the plan's named hub.
+  "eh-consumer-group-auto",
+  // AZR-59 (ADR 0008): the Cribl principal holds Azure Event Hubs Data
+  // Receiver on the hub, the namespace, or above; Data Owner differs.
+  "eh-role-receiver",
   "defender-plans",
   "defender-provider",
   "defender-export",

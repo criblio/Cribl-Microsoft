@@ -62,6 +62,7 @@ export function MappingCatalogScreen() {
             setFieldQuery("");
           }}
           placeholder="Select a vendor to view its suggested mappings..."
+          label="Vendor"
           ariaLabel="Filter vendors"
         />
       </label>

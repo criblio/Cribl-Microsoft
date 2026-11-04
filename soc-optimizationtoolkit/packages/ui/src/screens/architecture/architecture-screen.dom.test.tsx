@@ -58,9 +58,10 @@ describe("ArchitectureScreen - live views and an empty groups listing (DBT-134)"
     openTab("Live Workgroup View");
     fireEvent.click(screen.getByRole("button", { name: "Load worker groups" }));
     await waitFor(() =>
-      expect(container.querySelector<HTMLSelectElement>(".panel-controls select")?.value).toBe("prod"),
+      expect(screen.getByRole("button", { name: "Worker group" }).textContent).toBe("prod"),
     );
-    const ids = [...container.querySelectorAll(".panel-controls select option")].map(
+    fireEvent.click(screen.getByRole("button", { name: "Worker group" }));
+    const ids = [...container.querySelectorAll(".searchable-select-option")].map(
       (o) => o.textContent,
     );
     expect(ids).toEqual(["prod"]);

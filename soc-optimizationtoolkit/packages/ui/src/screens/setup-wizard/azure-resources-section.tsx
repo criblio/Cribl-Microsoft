@@ -487,6 +487,7 @@ export function AzureResourcesSection({
               value=""
               onChange={() => undefined}
               disabled
+              label="Subscription"
               placeholder="Click Discover / refresh from Azure above to load..."
             />
             <span className="field-hint">
@@ -502,6 +503,7 @@ export function AzureResourcesSection({
               value={subscriptionId}
               onChange={onSubscriptionSelect}
               placeholder="Select a subscription..."
+              label="Subscription"
               ariaLabel="Filter subscriptions"
             />
           </label>
@@ -554,6 +556,7 @@ export function AzureResourcesSection({
                     ? "No workspaces were readable - see the discovery note above"
                     : "Click Discover / refresh from Azure above"
             }
+            label="Log Analytics workspace (deployment target)"
             ariaLabel="Filter workspaces"
           />
           <span className="field-hint">
@@ -578,6 +581,7 @@ export function AzureResourcesSection({
                     ? "No resource groups were readable - see the discovery note above"
                     : "Click Discover / refresh from Azure above"
             }
+            label="Resource group (deployment target)"
             ariaLabel="Filter resource groups"
           />
           <span className="field-hint">

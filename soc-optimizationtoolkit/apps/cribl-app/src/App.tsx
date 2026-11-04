@@ -49,6 +49,7 @@ import {
   useCapabilityAudit,
   useConsolidatedPolling,
   useMergedPolls,
+  SearchableSelect,
 } from '@soc/ui';
 import type {
   AppFrameNav,
@@ -1644,16 +1645,12 @@ function App() {
                 }}
               />
             ) : (
-              <select
+              <SearchableSelect
+                label="Connection"
+                options={store.profiles.map((p) => ({ value: p.id, label: p.name }))}
                 value={store.activeProfileId ?? ''}
-                onChange={(e) => handleSelectProfile(e.target.value)}
-              >
-                {store.profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={handleSelectProfile}
+              />
             )}
           </label>
           <div className="connection-actions">
@@ -2125,7 +2122,17 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <AzureOnboardingScreen pacing={BATCH_PACING} />
+        {/* AZR-60: the Defender section's permission banner offers the
+            connection bar's own re-check rather than a second audit. The key
+            keeps the previous connection's set (held until the new audit
+            lands) from being read as this one's; the clock dates a denial. */}
+        <AzureOnboardingScreen
+          pacing={BATCH_PACING}
+          onRecheckPermissions={capabilityAudit.refresh}
+          recheckingPermissions={capabilityAudit.running}
+          permissionsAuditKey={capabilityAudit.key}
+          permissionsNow={nowIso}
+        />
       </PortsProvider>
     </>
   );

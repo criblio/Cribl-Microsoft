@@ -270,6 +270,15 @@ describe("eventhub-arm: Listen and Kafka checks (AZR-32, AZR-34)", () => {
     expect(arm.ruleCanManage(["Send", "Listen"])).toBe(false);
   });
 
+  it("ruleSafeForCriblSource (AZR-58): Listen without Manage only", () => {
+    expect(arm.ruleSafeForCriblSource(["Listen"])).toBe(true);
+    expect(arm.ruleSafeForCriblSource(["listen", "send"])).toBe(true);
+    expect(arm.ruleSafeForCriblSource(["Manage"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource(["Manage", "Listen", "Send"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource(["Send"])).toBe(false);
+    expect(arm.ruleSafeForCriblSource([])).toBe(false);
+  });
+
   it("namespaceSupportsKafka: Basic false, Standard/Premium true, unknown null", () => {
     expect(arm.namespaceSupportsKafka("Basic")).toBe(false);
     expect(arm.namespaceSupportsKafka("Standard")).toBe(true);
@@ -282,5 +291,59 @@ describe("eventhub-arm: Listen and Kafka checks (AZR-32, AZR-34)", () => {
     expect(typeof arm.ruleCanListen).toBe("function");
     expect(typeof arm.ruleCanManage).toBe("function");
     expect(typeof arm.namespaceSupportsKafka).toBe("function");
+  });
+});
+
+// AZR-59, ADR 0008 section 4: which role assignment lets the Cribl principal read a hub.
+describe("receiverRoleCovering", () => {
+  const HUB_ID = `${NS_ID}/eventhubs/h1`;
+  const RECEIVER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/a638d3c7-ab3a-418d-83e6-5f17a39d4fde";
+  const OWNER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/f526a384-b230-433a-b45c-95f59c4a2dec";
+  const SENDER = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/2b629674-e913-4c01-ae53-ef4638d8f975";
+  const ra = (roleDefinitionId: string, scope: string) => ({ properties: { roleDefinitionId, scope } });
+
+  it("names Data Receiver as the ONLY qualifying role, and Data Owner as over-privileged, by their Microsoft Learn GUIDs", () => {
+    // Verified 2026-11-03 on learn.microsoft.com built-in-roles/analytics.
+    expect(arm.EVENT_HUB_RECEIVER_ROLES).toEqual([
+      { guid: "a638d3c7-ab3a-418d-83e6-5f17a39d4fde", roleName: "Azure Event Hubs Data Receiver" },
+    ]);
+    expect(arm.EVENT_HUB_OVERPRIVILEGED_ROLES).toEqual([
+      { guid: "f526a384-b230-433a-b45c-95f59c4a2dec", roleName: "Azure Event Hubs Data Owner" },
+    ]);
+  });
+
+  it("accepts Data Receiver at the hub, the namespace, or above", () => {
+    expect(arm.receiverRoleCovering([ra(RECEIVER, HUB_ID)], HUB_ID)).toEqual({ roleName: "Azure Event Hubs Data Receiver", scope: HUB_ID });
+    expect(arm.receiverRoleCovering([ra(RECEIVER, NS_ID)], HUB_ID)?.roleName).toBe("Azure Event Hubs Data Receiver");
+    expect(arm.receiverRoleCovering([ra(RECEIVER, "/subscriptions/sub-1")], HUB_ID)).not.toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, "/providers/Microsoft.Management/managementGroups/mg1")], HUB_ID)).not.toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, "/")], HUB_ID)).not.toBeNull();
+    // Scope comparison ignores case, as ARM ids do.
+    expect(arm.receiverRoleCovering([ra(RECEIVER, NS_ID.toLowerCase())], HUB_ID)).not.toBeNull();
+  });
+
+  // Data Owner carries Microsoft.EventHub/* (listKeys on every rule): a
+  // principal holding it is Manage-equivalent, so it never qualifies.
+  it("Data Owner is not a receiver grant; overprivilegedRoleCovering finds it at or above the target", () => {
+    expect(arm.receiverRoleCovering([ra(OWNER, NS_ID)], HUB_ID)).toBeNull();
+    expect(arm.receiverRoleCovering([ra(OWNER, HUB_ID)], HUB_ID)).toBeNull();
+    expect(arm.overprivilegedRoleCovering([ra(OWNER, NS_ID)], HUB_ID)).toEqual({ roleName: "Azure Event Hubs Data Owner", scope: NS_ID });
+    expect(arm.overprivilegedRoleCovering([ra(OWNER, "/subscriptions/sub-1")], HUB_ID)).not.toBeNull();
+    expect(arm.overprivilegedRoleCovering([ra(RECEIVER, NS_ID)], HUB_ID)).toBeNull();
+    expect(arm.overprivilegedRoleCovering([ra(OWNER, `${NS_ID}/eventhubs/h2`)], HUB_ID)).toBeNull();
+  });
+
+  it("refuses a role that cannot receive, and one held on ANOTHER hub or a sibling namespace", () => {
+    expect(arm.receiverRoleCovering([ra(SENDER, HUB_ID)], HUB_ID)).toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, `${NS_ID}/eventhubs/h2`)], HUB_ID)).toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, `${NS_ID}/eventhubs/h10`)], `${NS_ID}/eventhubs/h1`)).toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, `${NS_ID}-other`)], HUB_ID)).toBeNull();
+    // The risky direction: a SHORTER scope that is a string prefix of a longer
+    // one. A bare startsWith would count these; the segment boundary must not.
+    expect(arm.receiverRoleCovering([ra(RECEIVER, `${NS_ID}/eventhubs/h1`)], `${NS_ID}/eventhubs/h10`)).toBeNull();
+    expect(arm.receiverRoleCovering([ra(RECEIVER, NS_ID)], `${NS_ID}0/eventhubs/h1`)).toBeNull();
+    // A hub-scoped grant does not cover the namespace (the auto-created hubs).
+    expect(arm.receiverRoleCovering([ra(RECEIVER, HUB_ID)], NS_ID)).toBeNull();
+    expect(arm.receiverRoleCovering([{ nonsense: true }, null, "x"], HUB_ID)).toBeNull();
   });
 });

@@ -152,7 +152,13 @@ describe("sectionAvailability", () => {
 
 describe("layering", () => {
   it("imports nothing from the ui package (findHistoryInCopy stays in the ui test)", () => {
-    for (const f of ["onboarding-sections.ts", "index.ts", "onboarding-sections.test.ts"]) {
+    for (const f of [
+      "onboarding-sections.ts",
+      "index.ts",
+      "onboarding-sections.test.ts",
+      "automation-permissions.ts",
+      "automation-permissions.test.ts",
+    ]) {
       const src = readFileSync(join(HERE, f), "utf8");
       // Split so this line does not match itself.
       expect(src.includes("@soc/" + "ui"), f).toBe(false);
