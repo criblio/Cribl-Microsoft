@@ -1,5 +1,5 @@
 // The ONE definition of "this change reaches the app" and of version order
-// (architecture audit 2026-11-04). Before it, check-version-bump (DBT-253) and
+// (architecture audit 2026-11-04). Before it, check-version-bump (DBT-299) and
 // check-release-drift each kept their own path list, and they disagreed: the
 // release check named a directory that no longer exists (apps/cribl-app/default)
 // and missed config/, public/, the Vite config and package.json. Two checks

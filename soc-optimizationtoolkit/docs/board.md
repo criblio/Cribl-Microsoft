@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**96 in the backlog, 41 in progress, 173 done.**
+**96 in the backlog, 41 in progress, 174 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 0 | 4 |
-| Sentinel Integration | 51 | 93 | 23 |
+| Sentinel Integration | 51 | 94 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -116,16 +116,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 60% (102/170)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (103/171)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 39/87 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 40/88 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 51/62 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-253 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -2689,7 +2689,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (173)
+## Done (174)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7258,7 +7258,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   elapsed, vsys) still overflow on both tables, and packets fuzzy-matches
   DstPackets where NetworkPackets is the session total.
 
-- **DBT-253** Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not
+- **DBT-253** PAN-OS TRAFFIC fields reach their ASim network-session columns
+  `DBT-F1` `story` `settled` `verified: pins`
+  DECIDED BY THE USER 2026-11-04 (follow-on to DBT-252): about 41 PAN-OS
+  TRAFFIC fields still overflow on CommonSecurityLog and
+  ASimNetworkSessionLogs. PLAN: point the existing non-CEF alias targets at
+  ASim (SourceZone/DestinationZone -> SrcZone/DstZone, SessionID ->
+  NetworkSessionId, StartTime -> EventStartTime) and add PAN-OS aliases
+  packets/bytes -> NetworkPackets/NetworkBytes, pkts_sent/pkts_received ->
+  SrcPackets/DstPackets, srcloc/dstloc -> SrcGeoCountry/DstGeoCountry.
+  DELIBERATELY NOT MAPPED: elapsed (PAN seconds, ASim NetworkDuration is
+  milliseconds - a rename would store the wrong value; needs a scaling eval),
+  vsys, logset, actionflags, seqno (no ASim column). DONE 2026-11-04 as
+  planned. Against the full PAN-OS TRAFFIC header list (first 60 named
+  columns) the bundled ASimNetworkSessionLogs schema now takes 36 fields to
+  real columns (was 28 under DBT-252); CommonSecurityLog unchanged at 27. The
+  ASim forward-alias check came back, scored by alias position, because
+  sessionid -> [SessionID, ExternalID] now reaches two ASim columns and a flat
+  score let schema order decide; pinned, and removing it fails the tie-break
+  pin. 4 new pins in asim-equivalents.test.ts. VERIFIED BY PINS ONLY: the Live
+  Preview had no tagged samples left (Loading tagged samples... never cleared)
+  and adding one would write to the operator's KV. NOTICED, NOT CHANGED
+  (pre-existing fuzzy matches): flags -> TcpFlagsAck and category ->
+  ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.
+
+- **DBT-299** Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not
   `DBT-F4` `enabler` `settled` `verified: pins`
   ASKED 2026-11-04 by the operator: 'as we merge new functions we should be
   bumping the version 1.13.x so the x changes everytime we push to main'.
@@ -7280,9 +7304,10 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   check-version-bump and a CI step on pull requests. This PR (#199) is its
   first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under "Version bump on
   every PR to main". Live check: the CI step on this PR. RENUMBERED 2026-11-04
-  twice: from DBT-250 (taken by #203) and DBT-251 (taken by #204, which also
-  took DBT-252), each merged to main first. Commits before the renames say
-  DBT-250 or DBT-251.
+  three times: DBT-250, DBT-251 and DBT-253 were each taken by a PR (#203,
+  #204, #205) that merged to main first, because parallel sessions number new
+  cards from the highest id on main. DBT-299 sits outside that sequence on
+  purpose. Commits before the renames name the older ids.
 
 - **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
   `AZR-F9` `bug` `settled` `verified: both`

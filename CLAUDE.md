@@ -579,7 +579,7 @@ git push origin feature/your-feature-name
 # Create Pull Request on GitHub
 ```
 
-### Version bump on every PR to main (DBT-253)
+### Version bump on every PR to main (DBT-299)
 
 Every PR to `main` that changes what the toolkit ships, or what Live Preview
 shows, raises the app's patch version (1.13.x): run `npm run bump` from

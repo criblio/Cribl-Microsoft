@@ -4132,7 +4132,22 @@
       "verified": "both"
     },
     {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "dependsOn": [
+        "DBT-252"
+      ],
+      "priority": "now",
       "id": "DBT-253",
+      "type": "story",
+      "title": "PAN-OS TRAFFIC fields reach their ASim network-session columns",
+      "detail": "DECIDED BY THE USER 2026-11-04 (follow-on to DBT-252): about 41 PAN-OS TRAFFIC fields still overflow on CommonSecurityLog and ASimNetworkSessionLogs. PLAN: point the existing non-CEF alias targets at ASim (SourceZone/DestinationZone -> SrcZone/DstZone, SessionID -> NetworkSessionId, StartTime -> EventStartTime) and add PAN-OS aliases packets/bytes -> NetworkPackets/NetworkBytes, pkts_sent/pkts_received -> SrcPackets/DstPackets, srcloc/dstloc -> SrcGeoCountry/DstGeoCountry. DELIBERATELY NOT MAPPED: elapsed (PAN seconds, ASim NetworkDuration is milliseconds - a rename would store the wrong value; needs a scaling eval), vsys, logset, actionflags, seqno (no ASim column). DONE 2026-11-04 as planned. Against the full PAN-OS TRAFFIC header list (first 60 named columns) the bundled ASimNetworkSessionLogs schema now takes 36 fields to real columns (was 28 under DBT-252); CommonSecurityLog unchanged at 27. The ASim forward-alias check came back, scored by alias position, because sessionid -> [SessionID, ExternalID] now reaches two ASim columns and a flat score let schema order decide; pinned, and removing it fails the tie-break pin. 4 new pins in asim-equivalents.test.ts. VERIFIED BY PINS ONLY: the Live Preview had no tagged samples left (Loading tagged samples... never cleared) and adding one would write to the operator's KV. NOTICED, NOT CHANGED (pre-existing fuzzy matches): flags -> TcpFlagsAck and category -> ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-299",
       "epic": "DBT",
       "feature": "DBT-F4",
       "type": "enabler",
@@ -4141,7 +4156,7 @@
       "settled": "settled",
       "dependsOn": [],
       "title": "Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not",
-      "detail": "ASKED 2026-11-04 by the operator: 'as we merge new functions we should be bumping the version 1.13.x so the x changes everytime we push to main'. Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main left at 1.13.0, because nothing asked for a bump and the rule lived only in conversation.\n\nDECIDED 2026-11-04 by the operator: (1) scope = anything that ships, and anything Live Preview shows (the footer reads package.json's version at runtime, so a bump is visible there); docs/board/backlog-only PRs need none. (2) Version number only: package.json and the lock move per PR; packaging the .tgz, the release-notes section and the backlog IS CURRENT line stay batched.\n\nBUILD: npm run bump (patch-bumps package.json and the lock, no packaging); check-version-bump (pure evaluate + IO main, pinned) run in CI on PRs to main; check-release-drift turns 'manifest ahead of the tarball' from an error into a warning that names the release command (package -- --version X.Y.Z, so the release does not bump twice), a manifest BEHIND the tarball stays an error.\n\nDONE 2026-11-04 (pins): bump-version.mjs, check-version-bump.mjs and the check-release-drift change, each rule mutation-checked (five mutations, all caught); wired as npm run bump / check-version-bump and a CI step on pull requests. This PR (#199) is its first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under \"Version bump on every PR to main\". Live check: the CI step on this PR.\n\nRENUMBERED 2026-11-04 twice: from DBT-250 (taken by #203) and DBT-251 (taken by #204, which also took DBT-252), each merged to main first. Commits before the renames say DBT-250 or DBT-251.",
+      "detail": "ASKED 2026-11-04 by the operator: 'as we merge new functions we should be bumping the version 1.13.x so the x changes everytime we push to main'. Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main left at 1.13.0, because nothing asked for a bump and the rule lived only in conversation.\n\nDECIDED 2026-11-04 by the operator: (1) scope = anything that ships, and anything Live Preview shows (the footer reads package.json's version at runtime, so a bump is visible there); docs/board/backlog-only PRs need none. (2) Version number only: package.json and the lock move per PR; packaging the .tgz, the release-notes section and the backlog IS CURRENT line stay batched.\n\nBUILD: npm run bump (patch-bumps package.json and the lock, no packaging); check-version-bump (pure evaluate + IO main, pinned) run in CI on PRs to main; check-release-drift turns 'manifest ahead of the tarball' from an error into a warning that names the release command (package -- --version X.Y.Z, so the release does not bump twice), a manifest BEHIND the tarball stays an error.\n\nDONE 2026-11-04 (pins): bump-version.mjs, check-version-bump.mjs and the check-release-drift change, each rule mutation-checked (five mutations, all caught); wired as npm run bump / check-version-bump and a CI step on pull requests. This PR (#199) is its first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under \"Version bump on every PR to main\". Live check: the CI step on this PR.\n\nRENUMBERED 2026-11-04 three times: DBT-250, DBT-251 and DBT-253 were each taken by a PR (#203, #204, #205) that merged to main first, because parallel sessions number new cards from the highest id on main. DBT-299 sits outside that sequence on purpose. Commits before the renames name the older ids.",
       "verified": "pins"
     },
     {

@@ -1,4 +1,4 @@
-// Pins for `npm run bump` (DBT-253): the patch number, and that package.json
+// Pins for `npm run bump` (DBT-299): the patch number, and that package.json
 // and the lock move together exactly as package.mjs moves them.
 
 import { describe, expect, it } from 'vitest';
