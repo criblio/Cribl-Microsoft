@@ -3929,6 +3929,19 @@
       "priority": "next",
       "title": "Finish the DBT-197 review follow-up: name what the sample store kept after a trim",
       "detail": "PARKED 2026-10-29 on local branch wip/dbt-197-review-leftover (DBT-197 itself is done, verified both). Adds storedTrimSentences (planned-samples.ts) so the Lake and capture headlines say what the STORE trimmed, not only what the panel fetched; 2 pins plus a DOM test. Does NOT apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture live."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-250",
+      "type": "bug",
+      "title": "Gap Analysis destination-table override offers only 4 tables when the workspace listing does not run",
+      "detail": "RAISED BY THE USER 2026-11-04: the per-log-type table override in DCR Gap Analysis regressed to four tables. CAUSE: candidateTables (mapping-review-section.tsx) unions the solution resolution, current reports, the four COMMON_NATIVE_TABLES and the live workspace listing. Since GEN-28 (62b674fc) the listing is gated on scopeCommitted && azureNeeds.scope, which is false on the existing-destination path, so the listing never runs and no note is shown - only the four natives remain. The schema repo (Azure-Sentinel KQL-validation CustomTables) was only ever a column-resolution tier, never a source of selectable names. FIX: the override also offers the KQL-validation repo table names and the bundled DCR-template table names, independent of Azure reachability; workspace tables still merge on top. EXTENDED BY THE USER 2026-11-04: \"If the table doesn't exist in the workspace we should highlight that as well... in the event we cannot read the workspace the user should still be allowed to override the analysis and create the pack with the mapping they want.\" BUILT: core listKqlValidationTableNames (throws on an unreadable repo, never resolves [] for it); ui destination-table-options.ts owns the options and a three-valued workspace presence (present / absent / unknown - unknown whenever the listing did not complete or came back empty, and nothing is flagged then); useWorkspaceTables exposes verified; an absent pick shows a warning under the card and is never a gate. Pins: 2 core, 7 decision, 3 hook, 3 component seam; seam pins mutation-checked (cutting the repo names and ignoring verified each fail them). Full gates green. DONE 2026-11-04. LIVE on the jpederson org Live Preview (PaloAlto-PAN-OS, TRAFFIC sample): the selector lists the schema-repo tables beside the workspace ones; 42CrunchAPIProtection carried \"not in workspace\", picking it showed the warning under the card and re-analysed against its repo schema (26 destination columns) with nothing gated; restored to CommonSecurityLog (156 columns, no warning). The unreadable-workspace branch was verified by pins only - the live workspace listing succeeded.",
+      "verified": "both"
     }
   ],
   "features": [

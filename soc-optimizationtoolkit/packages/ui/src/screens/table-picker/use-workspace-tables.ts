@@ -66,6 +66,12 @@ export interface WorkspaceTablesState {
    */
   note: WorkspaceTablesNote | null;
   loading: boolean;
+  /**
+   * True only once a listing COMPLETED without error (DBT-250). The selectors
+   * flag "not in workspace" only when this holds; before it, or after a
+   * failure, existence is unknown and nothing is flagged.
+   */
+  verified: boolean;
 }
 
 export interface UseWorkspaceTablesInput {
@@ -139,7 +145,8 @@ export function useWorkspaceTables({
     note = {
       text:
         `The workspace table listing failed, so the destination selectors below ` +
-        `offer only this solution's tables and the common natives: ${error}`,
+        `cannot say which tables exist in this workspace. Every table stays ` +
+        `selectable and the pack can still be built: ${error}`,
       onRetry: () => void load(),
     };
   } else if (loaded && tables.length === 0) {
@@ -156,5 +163,6 @@ export function useWorkspaceTables({
     tables,
     note,
     loading,
+    verified: loaded && error === null,
   };
 }
