@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**95 in the backlog, 41 in progress, 152 done.**
+**95 in the backlog, 41 in progress, 158 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 1 | 10 | 0 |
+| Data Volume Inventory | 1 | 16 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -137,14 +137,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 90% (18/20)
+### `MIG` SIEM migration analysis - 92% (24/26)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 10/11 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
 
 ---
 
@@ -2673,7 +2673,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (152)
+## Done (158)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6537,6 +6537,170 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   figure formats with formatMB (mbPerDay); the live 1.3 MB/day case is pinned
   and reads 'eligible 1.3 MB/day', '1.3 MB/day over' in Live Preview; GB
   figures now show two decimals.
+
+- **MIG-21** Allowance honesty edge cases: null benefit rows read as 0, seats double-counted, floors drawn as exact
+  `MIG-F2` `bug` `settled` `verified: both`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. Each item misleads an operator: (1)
+  benefit-usage.ts ~90: Number(null)/Number("") make a null or empty
+  BenefitUsedGB a definite 0 MB applied, and unparseable rows are dropped
+  uncounted - drop them and report the count as a gap; (2) granted.ts ~112:
+  assigned seats sum consumedUnits across qualifying SKUs regardless of
+  capabilityStatus - a suspended/locked-out SKU's seats and a user holding two
+  qualifying SKUs inflate Granted; count only Enabled/Warning SKUs and label
+  the double-licence overlap as an upper bound unless de-duplicated; (3) cards
+  ~57 / state ~333: "shared across N" shows an exact N when discovery was
+  incomplete - say "at least N"; (4) state ~243/268: the Servers
+  reporting-here arithmetic line reads as exact when grantedIsFloor; (5) state
+  ~141 / cards ~170: meterOf ignores grantedIsFloor (bar implies headroom the
+  text withholds; aria-label says "granted X" without "at least"); (6)
+  data-allowances.ts ~535: says "no reporting machines were found" when
+  machines were found but none carried a subscription id; (7) state ~454: the
+  overColumn tip says a free table's over is 0, but overCell now shows billed
+  volume for a Free-tagged table that Usage bills; (8) state ~428: CSV
+  AllowanceFigures says "exact" on rows whose Eligible/Over are blank because
+  eligible was not read; (9) data-allowances.ts ~66: the
+  machines-in-subscription Resource Graph query counts deallocated VMs and
+  omits Uniform scale-set instances. Pin each with a test that fails without
+  its fix. DONE 2026-11-03 (both, 39749f6..2828d3b): null/empty/unreadable
+  benefit amounts are counted (client-side and via the query's new Unreadable
+  = countif(isnull(...)) since sum() skips nulls) and make Used a floor; seats
+  count only Enabled/Warning SKUs and the Granted line says when a user may be
+  counted twice; shared-across-N says 'at least N' after incomplete discovery;
+  floored Servers arithmetic and meter no longer read as exact; unattributed
+  machines worded honestly; Over tip and CSV AllowanceFigures corrected;
+  machine count = running VMs + Arc + running Uniform scale-set instances.
+  Live: both queries answer on law-jpederson-eastus; a datatable probe
+  confirmed sum() skips the unreadable row and countif counts it.
+
+- **MIG-22** Allowance test pins that cannot fail today
+  `MIG-F2` `enabler` `settled` `verified: pins`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. Code paths are correct but nothing
+  fails if they regress: sentinelWorkspaceCount failures-non-empty branch
+  (state ~338); overCell with sumsAreFloors ("not known (partial read)", "at
+  least" share prefix) (state ~184); the panel Over-column assertion '3.0 MB'
+  also equals the Daily avg cell (workspace-inventory-panel.dom.test.tsx
+  ~280-300) so it passes vacuously; eligible-table lists pinned only by length
+  plus one member (allowance-catalog.test.ts ~44); only SPE_E5_USGOV_DOD
+  pinned as may-qualify - FLW/A5/F5/G5/E7 widening untested (granted.test.ts
+  ~117); no test for the "off" Defender plan (data-allowances.test.ts);
+  nothing asserts the chart's eligible line is absent when eligible was not
+  read (allowance-chart.tsx ~83). Mutation-check each new pin. DONE 2026-11-03
+  (pins, 3367184..ae32fa4): tests only, every pin mutation-checked -
+  sentinelWorkspaceCount with failed subscriptions, overCell floors (share of
+  at least / not known), the panel Over column no longer equal to Daily avg,
+  exact eligible-table lists, may-qualify for FLW/A5/F5/G5/E7 with a negative
+  control, Free Defender plan -> off, chart draws no eligible line when
+  eligible is not read, plus a panel test for an unreadable benefit row. No
+  bug exposed.
+
+- **MIG-23** Allowance code: duplicated arithmetic and query lists, dead parameter, unused exports, stale header
+  `MIG-F2` `enabler` `settled` `verified: pins`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. basisFigures (state ~243) redoes
+  core serversGranted arithmetic - consume core's figures; GrantCard and
+  AllowanceQueries keep two hand-written query lists (cards ~214 vs ~387) -
+  one helper; dead parameter _unattributedMachines (granted.ts ~154, passed at
+  data-allowances.ts ~542); domain/data-allowances/index.ts imported by
+  nothing and re-exporting internals ruling R10 keeps off the public surface;
+  usecases/data-allowances/index.ts ~19 exports ALLOWANCE_CATALOG_AS_OF,
+  ALLOWANCE_SOURCES, criblWritable, eligibleTables with no consumer outside
+  core - remove or use; workspace-inventory-panel.tsx header still describes
+  SiemMigrationScreen. DONE 2026-11-03 (pins, 0962f09..50b781f): the UI reads
+  core's Servers figures (serversGranted returns machines;
+  DataAllowances.servers.granted), one QueryBlocks helper for both query
+  lists, dead _unattributedMachines parameter and its one test removed
+  (behaviour still pinned at use-case level), unused domain index deleted,
+  four internals off the barrel, dead headroomApplies clause removed, gap
+  reworded to benefit amount(s), stale panel header fixed. Behaviour
+  unchanged; review clean.
+
+- **MIG-24** Allowance UI polish: tooltips, native title text, change-request link, chart readout and layout, tenant read cost
+  `MIG-F2` `story` `settled` `verified: pins`
+  Triaged 2026-11-03 from the deferred review minors of PR #198 against main
+  37f06a2 (10 already fixed, 2 not defects, 31 still real). Paths relative to
+  soc-optimizationtoolkit/; "state" =
+  packages/ui/src/screens/data-volume-inventory/allowance-state.ts, "cards" =
+  allowance-cards.tsx in the same folder. grantedServers tip says "this
+  workspace" also in the tenant comparison (state ~460); the pooled overage
+  line has no InfoTip (cards ~122); native title= hover text used (cards ~85,
+  workspace-inventory-panel.tsx ~493) which the info-affordances standard
+  forbids; the spec says the denied-licence state "offers the change request"
+  but it only names it in words - add a link to Setup's app-permissions change
+  request; chart max floored at 1 so the readout can say "Peak 1.0 MB" above
+  the real peak (allowance-chart.tsx ~34/43); chart date labels are fixed 10px
+  SVG units that shrink on narrow cards (styles.css ~3497); grid keeps
+  minmax(300px,1fr) (styles.css ~3380); the tenant read runs the full
+  inventoryWorkspace including per-table source breakdowns when only Usage
+  totals are needed (workspace-inventory-panel.tsx ~181) - slow on large
+  tenants. DONE 2026-11-03 (pins, ef330664..370e3991): tenant-scope granted
+  tip, pooled overage InfoTip, native title= hover text replaced by InfoTips,
+  real change-request link via an optional onOpenChangeRequest callback the
+  shell wires, chart readout shows the real peak and HTML date labels,
+  responsive grid, tenant compare reads Usage totals only (sources: false -
+  tables marked not requested, never empty), each grant names its Microsoft
+  source page and catalog date, test fixtures build servers.granted with core,
+  only Connected Arc machines counted (live: 2 of 26 Arc machines Connected).
+  Shell wiring of the change-request link to be seen in Live Preview with
+  MIG-25.
+
+- **MIG-25** Tenant comparison still says "machines reporting here"; change-request pass-through and pooled source link unpinned
+  `MIG-F2` `bug` `settled` `verified: both`
+  FOUND 2026-11-03 by the MIG-24 review (fix/dvi-review-followups at
+  370e3991). (1) In a tenant comparison the Servers table header "Machines
+  reporting here (daily average)" (allowance-cards.tsx ~346) and the
+  arithmetic label "machines reporting here" (allowance-state.ts ~204) still
+  say "here", though the count is across the workspaces read - the tip was
+  fixed in MIG-24 but the visible copy now disagrees with it; use tenant
+  wording ("machines reporting to the workspaces read") in tenant scope. (2)
+  The panel passes onOpenChangeRequest to both AllowanceCards (single and
+  tenant) with no pin - deleting either line type-checks and no test fails;
+  add a panel test with a Graph stub answering 403 that clicks the
+  change-request button and asserts the callback spy. (3) EligibleSource in
+  the pooled view's per-grant details has no pin; add one assertion to the
+  existing pooled test. Pin each with a test that fails without it. DONE
+  2026-11-04 (both, 54a18919..e446ac8a): tenant comparison says 'machines
+  reporting to the workspaces read' in the Servers header, arithmetic,
+  cross-check, other-basis note and tip; the panel's change-request
+  pass-through is pinned for both card sets (Graph 403 stub); the pooled
+  view's source link is pinned; serversGranted re-exported so UI fixtures no
+  longer deep-import core. Live Preview 2026-11-04 on law-jpederson-eastus:
+  Servers card shows 7 machines (Connected Arc only), the Microsoft source
+  link with its date, a Servers cross-check that runs (MIG-19) and the real
+  chart peak. The change-request button itself was not reachable live (no E5
+  card on this workspace) - pinned only.
+
+- **MIG-26** E5 benefit pattern misses the reported OperationKey "SentinelMicrosoft365"
+  `MIG-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 by checking published benefit-type strings against
+  BENEFIT_TYPE_PATTERNS (benefit-usage.ts). A community guide
+  (github.com/YourCybersecurityBestie/Sentinel-Projects, Defender For Servers,
+  unverified - asserted, not observed output) labels the E5 Sentinel benefit
+  "SentinelMicrosoft365"; the E5 pattern /M365|Microsoft 365|Defender XDR/i
+  needs a space after Microsoft, so that string is unmatched and every E5
+  workspace would fall back to one pooled figure. The Servers string the same
+  guide and Microsoft's meter name give ("Standard Data Included per Node")
+  already matches. Fix: E5 pattern also matches "Microsoft365" without the
+  space; "MicrosoftDefender" (also listed, ambiguous between the E5 Defender
+  XDR benefit and Defender for Servers) stays unmatched so it degrades to the
+  pooled figure instead of a guess. Pin all three strings. MIG-17 stays open:
+  none of these is observed output. DONE 2026-11-04 (pins): the E5 pattern
+  matches 'Microsoft365' without the space, so the reported
+  'SentinelMicrosoft365' reads as E5; 'Standard Data Included per Node' reads
+  as Servers P2; 'MicrosoftDefender' stays unattributed (pooled). Unmatched
+  types are now reported without the 'Benefit type used: ' prefix (they reach
+  the cross-check skip reason). Pinned and mutation-checked. Strings are
+  published, not observed - MIG-17 stays open.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

@@ -14,7 +14,7 @@
  */
 
 import type { ReactNode } from "react";
-import { allowanceFor } from "@soc/core";
+import { ALLOWANCE_CATALOG_AS_OF, ALLOWANCE_SOURCES, allowanceFor } from "@soc/core";
 import type { DataAllowances, GrantView } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { EligibleAppliedChart } from "./allowance-chart";
@@ -26,7 +26,9 @@ import {
   crossCheckLine,
   mbPerDay,
   grantCardText,
+  grantedTip,
   grantedUnknownReason,
+  isPermissionRefusal,
   licenceNote,
   countText,
   meterOf,
@@ -47,6 +49,11 @@ export interface AllowanceCardsProps {
   readAt: string;
   /** Room for an action beside the cards: the tenant comparison, or the way back from it. */
   actions?: ReactNode;
+  /**
+   * Opens Setup's app-permissions change request. The shell owns navigation;
+   * without it the refused-licence note names the change request in words only.
+   */
+  onOpenChangeRequest?: () => void;
 }
 
 /** Only the E5 grant is tenant-wide; Servers P2 is granted per workspace (MIG-19). */
@@ -54,10 +61,12 @@ function sharedLabel(view: GrantView, a: DataAllowances): string | null {
   if (view.grant !== "e5" || a.scope.kind !== "workspace") return null;
   const n = a.scope.sentinelWorkspaces;
   if (n === null) return "Tenant-wide; how many Sentinel workspaces share it is not known.";
+  // Incomplete discovery: the count is what was seen, and there may be more.
+  if (a.scope.sentinelWorkspacesAtLeast) return `Tenant-wide, shared across at least ${n} Sentinel workspaces.`;
   return n > 1 ? `Tenant-wide, shared across ${n} Sentinel workspaces.` : null;
 }
 
-export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCardsProps) {
+export function AllowanceCards({ allowances: a, readAt, actions, onOpenChangeRequest }: AllowanceCardsProps) {
   const tenant = a.scope.kind === "tenant" ? a.scope : null;
   return (
     <div className="allowance-cards">
@@ -74,7 +83,7 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
       ) : (
         <div className="allowance-card-grid">
           {a.grants.map((g) => (
-            <GrantCard key={g.grant} view={g} a={a} readAt={readAt} />
+            <GrantCard key={g.grant} view={g} a={a} readAt={readAt} onOpenChangeRequest={onOpenChangeRequest} />
           ))}
         </div>
       )}
@@ -82,8 +91,8 @@ export function AllowanceCards({ allowances: a, readAt, actions }: AllowanceCard
         <div className="match-warning">
           {tenant.notRead.length} workspace(s) not read, so every sum is a floor:
           {tenant.notRead.map((w) => (
-            <div key={w.id} className="allowance-not-read" title={w.id}>
-              {workspaceNameOf(w.id)}: not read - {w.error}
+            <div key={w.id} className="allowance-not-read">
+              {workspaceNameOf(w.id)}: not read - {w.error} <InfoTip text={`Workspace resource id: ${w.id}`} />
             </div>
           ))}
         </div>
@@ -124,7 +133,8 @@ function PooledSummary({ a }: { a: DataAllowances }) {
               ? "over: not read (eligible volume not read)"
               : a.usedIsFloor
                 ? "over: not known (partial benefit read)"
-                : `${floors}${mbPerDay(p.overDailyMB)} over, all grants together`}
+                : `${floors}${mbPerDay(p.overDailyMB)} over, all grants together`}{" "}
+            <InfoTip text={ALLOWANCE_TIPS.pooledOver} />
           </div>
         </>
       )}
@@ -132,7 +142,7 @@ function PooledSummary({ a }: { a: DataAllowances }) {
         Microsoft's benefit record could not be split by grant, so no per-grant meter or overage is
         drawn.
       </p>
-      {reason !== undefined && <p className="field-hint">{crossCheckLine(reason)}</p>}
+      {reason !== undefined && <p className="field-hint">{crossCheckLine(reason, a.scope.kind === "tenant")}</p>}
       {p !== null && (
         <EligibleAppliedChart eligibleByDay={p.eligibleByDay} usedByDay={p.usedByDay} eligibleKnown={eligibleKnown} />
       )}
@@ -141,6 +151,7 @@ function PooledSummary({ a }: { a: DataAllowances }) {
           <summary>{tagLabel({ kind: "grant", grant: g.grant, condition: null })}: eligible tables</summary>
           <div className="gap-handles-body">
             <EligibleTables view={g} />
+            <EligibleSource view={g} />
           </div>
         </details>
       ))}
@@ -148,7 +159,14 @@ function PooledSummary({ a }: { a: DataAllowances }) {
   );
 }
 
-function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; readAt: string }) {
+interface GrantCardProps {
+  view: GrantView;
+  a: DataAllowances;
+  readAt: string;
+  onOpenChangeRequest: (() => void) | undefined;
+}
+
+function GrantCard({ view, a, readAt, onOpenChangeRequest }: GrantCardProps) {
   const text = grantCardText(view, a);
   const meter = meterOf(view, a);
   const over = view.eligibleKnown && !a.usedIsFloor && view.usage.overDailyMB > 0;
@@ -157,8 +175,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
     <div className="allowance-card">
       <div className="allowance-card-title">{text.title}</div>
       <div className="allowance-card-line">
-        granted {text.granted}{" "}
-        <InfoTip text={view.grant === "e5" ? ALLOWANCE_TIPS.grantedE5 : ALLOWANCE_TIPS.grantedServers} />
+        granted {text.granted} <InfoTip text={grantedTip(view, a)} />
       </div>
       <div className="allowance-card-line">
         {text.eligibleUsed} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
@@ -167,7 +184,7 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
         <div
           className="allowance-meter"
           role="img"
-          aria-label={`Eligible ${mbPerDay(view.usage.eligibleDailyMB)} against granted ${mbPerDay(view.grantedMB!)}`}
+          aria-label={`Eligible ${mbPerDay(view.usage.eligibleDailyMB)} against granted ${text.granted}`}
         >
           <div
             className={over ? "allowance-meter-fill allowance-meter-fill-over" : "allowance-meter-fill"}
@@ -185,10 +202,14 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
         <div className="allowance-detail">
           <div className="field-hint">Read {readAt}.</div>
           <h4 className="allowance-detail-heading">Granted</h4>
-          {view.grant === "e5" ? <E5Granted view={view} a={a} /> : <ServersGranted view={view} a={a} />}
+          {view.grant === "e5" ? (
+            <E5Granted view={view} a={a} onOpenChangeRequest={onOpenChangeRequest} />
+          ) : (
+            <ServersGranted view={view} a={a} />
+          )}
           {basisFigures(view, a).map((f) => (
             <div key={f.basis} className="allowance-arithmetic">
-              {arithmeticLine(f)}
+              {arithmeticLine(f, a.scope.kind === "tenant")}
             </div>
           ))}
           {otherBasisNote(view, a) !== null && <p className="field-hint">{otherBasisNote(view, a)}</p>}
@@ -204,38 +225,45 @@ function GrantCard({ view, a, readAt }: { view: GrantView; a: DataAllowances; re
 
           <h4 className="allowance-detail-heading">Eligible</h4>
           <EligibleTables view={view} />
+          <EligibleSource view={view} />
 
           <h4 className="allowance-detail-heading">Cross-check</h4>
-          <p className="field-hint">{crossCheckLine(view.crossCheck)}</p>
+          <p className="field-hint">{crossCheckLine(view.crossCheck, a.scope.kind === "tenant")}</p>
           {view.grant === "e5" && a.licences.kind === "read" && (
             <p className="field-hint">Seat counts as of {a.licences.readAt}, compared with the last 30 days.</p>
           )}
 
           <h4 className="allowance-detail-heading">Queries and calls</h4>
-          <pre className="siem-inventory-query">{a.queries.benefit}</pre>
-          <pre className="siem-inventory-query">{a.queries.eligible}</pre>
-          {view.grant === "e5" ? (
-            <pre className="siem-inventory-query">{a.queries.graph}</pre>
-          ) : (
-            <>
-              <pre className="siem-inventory-query">{a.queries.heartbeat}</pre>
-              <pre className="siem-inventory-query">{a.queries.pricings}</pre>
-              <pre className="siem-inventory-query">{a.queries.machines}</pre>
-            </>
-          )}
-          {a.queries.tables !== null && <pre className="siem-inventory-query">GET {a.queries.tables}</pre>}
+          <QueryBlocks queries={a.queries} keys={view.grant === "e5" ? E5_QUERY_KEYS : SERVERS_QUERY_KEYS} />
         </div>
       </details>
     </div>
   );
 }
 
-function E5Granted({ view, a }: { view: GrantView; a: DataAllowances }) {
+function E5Granted({
+  view,
+  a,
+  onOpenChangeRequest,
+}: {
+  view: GrantView;
+  a: DataAllowances;
+  onOpenChangeRequest: (() => void) | undefined;
+}) {
   const note = licenceNote(a);
   if (a.licences.kind !== "read") {
+    // Only a permission refusal is fixed by the change request.
+    const offer = onOpenChangeRequest !== undefined && a.licences.kind === "denied" && isPermissionRefusal(a.licences.detail);
     return (
       <>
         <p className="match-warning">{note}</p>
+        {offer && (
+          <p className="field-hint">
+            <button type="button" className="link-button" onClick={onOpenChangeRequest}>
+              Open the app permissions change request on Setup
+            </button>
+          </p>
+        )}
         {view.grantedMB !== null && (
           <p className="field-hint">
             Granted is shown as at least {mbPerDay(view.grantedMB)}: the largest benefit Microsoft
@@ -311,11 +339,11 @@ function ServersGranted({ view, a }: { view: GrantView; a: DataAllowances }) {
             <thead>
               <tr>
                 <th>
-                  Subscription <InfoTip text={ALLOWANCE_TIPS.servers} />
+                  Subscription <InfoTip text={a.scope.kind === "tenant" ? ALLOWANCE_TIPS.serversTenant : ALLOWANCE_TIPS.servers} />
                 </th>
                 <th>Plan</th>
                 <th>Machines in subscription</th>
-                <th>Machines reporting here (daily average)</th>
+                <th>{a.scope.kind === "tenant" ? "Machines reporting to the workspaces read" : "Machines reporting here"} (daily average)</th>
               </tr>
             </thead>
             <tbody>
@@ -363,6 +391,20 @@ function EligibleTables({ view }: { view: GrantView }) {
   );
 }
 
+/** Which Microsoft page the grant's eligible-table list comes from, and when it was read. */
+function EligibleSource({ view }: { view: GrantView }) {
+  const source = ALLOWANCE_SOURCES[view.grant];
+  return (
+    <p className="field-hint">
+      Eligible tables from Microsoft's{" "}
+      <a href={source.url} target="_blank" rel="noreferrer">
+        {source.title}
+      </a>
+      , as of {ALLOWANCE_CATALOG_AS_OF}.
+    </p>
+  );
+}
+
 /** The table's Allowance cell: the tag, and a drill-down with its rule and the reroute warning. */
 export function AllowanceTagCell({ table, a }: { table: string; a: DataAllowances | null }) {
   const tag = allowanceFor(table);
@@ -385,16 +427,25 @@ export function AllowanceTagCell({ table, a }: { table: string; a: DataAllowance
 
 /** The allowance queries and calls, for the panel's "Queries that produced these numbers". */
 export function AllowanceQueries({ a }: { a: DataAllowances }) {
-  const q = a.queries;
+  return <QueryBlocks queries={a.queries} keys={ALL_QUERY_KEYS} />;
+}
+
+type QueryKey = Exclude<keyof DataAllowances["queries"], "tables">;
+
+const E5_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "graph"];
+const SERVERS_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "heartbeat", "pricings", "machines"];
+const ALL_QUERY_KEYS: readonly QueryKey[] = ["benefit", "eligible", "heartbeat", "machines", "graph", "pricings"];
+
+/** The named queries in the given order, then the tables call when this read made one. */
+function QueryBlocks({ queries, keys }: { queries: DataAllowances["queries"]; keys: readonly QueryKey[] }) {
   return (
     <>
-      <pre className="siem-inventory-query">{q.benefit}</pre>
-      <pre className="siem-inventory-query">{q.eligible}</pre>
-      <pre className="siem-inventory-query">{q.heartbeat}</pre>
-      <pre className="siem-inventory-query">{q.machines}</pre>
-      <pre className="siem-inventory-query">{q.graph}</pre>
-      <pre className="siem-inventory-query">{q.pricings}</pre>
-      {q.tables !== null && <pre className="siem-inventory-query">GET {q.tables}</pre>}
+      {keys.map((k) => (
+        <pre key={k} className="siem-inventory-query">
+          {queries[k]}
+        </pre>
+      ))}
+      {queries.tables !== null && <pre className="siem-inventory-query">GET {queries.tables}</pre>}
     </>
   );
 }

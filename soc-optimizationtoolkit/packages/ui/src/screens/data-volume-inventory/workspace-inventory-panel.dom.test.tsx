@@ -61,6 +61,11 @@ function armStub(usage: Answer, usage2?: Answer) {
     if (req.path === `${WS_ID}/query` || req.path === `${WS2_ID}/query`) {
       const query = (req.body as { query: string }).query;
       if (query.startsWith("Usage")) return req.path.startsWith(WS2_ID) ? usage2! : usage;
+      // No benefit applied. A row without a readable amount is counted as
+      // unreadable (MIG-21), so the benefit read gets its own, empty, answer.
+      if (query.startsWith("Operation")) {
+        return { status: 200, body: table(["Day", "BenefitType", "BenefitUsedGB"], []) };
+      }
       return {
         status: 200,
         body: table(
@@ -73,14 +78,18 @@ function armStub(usage: Answer, usage2?: Answer) {
   });
 }
 
-function renderPanel(request: ReturnType<typeof armStub>) {
+function renderPanel(
+  request: ReturnType<typeof armStub>,
+  extra: { graph?: unknown; onOpenChangeRequest?: () => void } = {},
+) {
   const ports = {
     azure: { request },
     artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    ...(extra.graph === undefined ? {} : { graph: extra.graph }),
   } as unknown as UiPorts;
   render(
     <PortsProvider ports={ports} config={CONFIG}>
-      <WorkspaceInventoryPanel />
+      <WorkspaceInventoryPanel onOpenChangeRequest={extra.onOpenChangeRequest} />
     </PortsProvider>,
   );
   return ports;
@@ -140,6 +149,8 @@ describe("WorkspaceInventoryPanel", () => {
     expect(screen.getByText("Heartbeat")).toBeTruthy();
     expect(screen.getByText(/Breakdown failed: .*although Usage billed it/)).toBeTruthy();
     expect(screen.getByText(/1 table\(s\) have no source breakdown/)).toBeTruthy();
+    // Explanations are InfoTips, never native title hover text.
+    expect(document.querySelector("[title]")).toBeNull();
   });
 
   it("says a REFUSED Usage read is a refusal, not an empty workspace", async () => {
@@ -291,14 +302,52 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
   });
 
   it("adds the Allowance and Over columns once the allowances are read", async () => {
-    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) }));
+    // Total 120 MB but billable 90 MB, so Daily avg (4.0 MB) differs from Over (3.0 MB).
+    renderPanel(armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 120, 90, 30, "[]"]]) }));
     await discoverAndInventory();
     await waitFor(() => expect(document.body.textContent).toContain("Over allowance / day"));
     const row = screen.getByText("Syslog").closest("tr")!;
     await waitFor(() => expect(row.textContent).toContain("Billable"));
+    const headers = [...document.querySelectorAll("th")].map((th) => th.textContent ?? "");
+    const cell = (header: string) =>
+      row.querySelectorAll("td")[headers.findIndex((h) => h.startsWith(header))]!.textContent;
+    expect(cell("Daily avg")).toBe("4.0 MB");
     // A billable table's overage is its own billable daily average: 90 / 30.
-    expect(row.textContent).toContain("3.0 MB");
+    expect(cell("Over allowance")).toBe("3.0 MB");
     await waitFor(() => expect(document.body.textContent).toContain("Operation"));
+  });
+});
+
+describe("WorkspaceInventoryPanel - an unreadable benefit row (MIG-22)", () => {
+  it("shows the gap line and reads Used as a floor, never as an exact figure", async () => {
+    const base = armStub({ status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) });
+    const request = vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.includes("Benefit amount used")) {
+        // One readable day (1 GB) and one whose amount did not extract.
+        return {
+          status: 200,
+          body: table(
+            ["Day", "BenefitType", "BenefitUsedGB"],
+            [
+              ["2026-10-20", "M365 E5", 1],
+              ["2026-10-21", "M365 E5", null],
+            ],
+          ),
+        };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 2000]]) };
+      }
+      return base(req);
+    });
+    renderPanel(request as unknown as ReturnType<typeof armStub>);
+    await discoverAndInventory();
+    await screen.findByText(/1 benefit amount\(s\) could not be read \(no day or no readable amount\), so Used is a lower bound\./);
+    const card = document.querySelector(".allowance-card")!.textContent!;
+    // 1 GB readable / 30 days = 33.3 MB a day, and only a floor.
+    expect(card).toContain("used at least 33.3 MB/day");
+    expect(card).toContain("over not known (partial benefit read)");
   });
 });
 
@@ -347,7 +396,8 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
   it("compares every Sentinel workspace, naming the one being read, then offers the way back", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    fireEvent.click(await inventoryLaw1(tenantStub(USAGE_OK, gate)));
+    const request = tenantStub(USAGE_OK, gate);
+    fireEvent.click(await inventoryLaw1(request));
     // Only the other workspace is read again; the shown inventory is reused.
     await screen.findByText(/law-2 \(1 of 1\)/);
     release();
@@ -358,6 +408,13 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
     expect(ids).toEqual([WS_ID, WS2_ID]);
     expect([...inventories.keys()].sort()).toEqual([WS_ID, WS2_ID]);
     expect(document.querySelector(".allowance-not-read")).toBeNull();
+    // Usage totals only for the other workspace: no per-table source breakdown.
+    const law2Queries = request.mock.calls
+      .map(([req]) => req as AzureManagementRequest)
+      .filter((req) => req.path === `${WS2_ID}/query`)
+      .map((req) => (req.body as { query: string }).query);
+    expect(law2Queries.some((q) => q.startsWith("Usage"))).toBe(true);
+    expect(law2Queries.filter((q) => q.startsWith("union isfuzzy=true withsource=SourceTable"))).toEqual([]);
 
     fireEvent.click(screen.getByText("Back to this workspace"));
     expect(screen.queryByText(/Compared across/)).toBeNull();
@@ -416,5 +473,70 @@ describe("WorkspaceInventoryPanel - tenant comparison (MIG-16)", () => {
     const cards = document.querySelector(".allowance-cards")!.textContent!;
     expect(cards).toContain("at least");
     expect(cards).toMatch(/may be missing workspaces discovery could not see/);
+  });
+});
+
+describe("WorkspaceInventoryPanel - change request pass-through (MIG-25)", () => {
+  const USAGE_OK: Answer = { status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) };
+  const COMPARE = "Compare against the whole tenant";
+  const CHANGE_REQUEST = { name: "Open the app permissions change request on Setup" };
+
+  /** An E5 benefit and eligible volume on top of `base`, so the E5 card renders. */
+  function withE5Card(base: ReturnType<typeof vi.fn>) {
+    return vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.includes("Benefit amount used")) {
+        return { status: 200, body: table(["Day", "BenefitType", "BenefitUsedGB"], [["2026-10-20", "M365 E5", 1]]) };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 2000]]) };
+      }
+      return base(req);
+    });
+  }
+
+  /** A Graph port whose licence read is refused with a 403. */
+  const graph403 = () => ({
+    readSubscribedSkus: vi.fn().mockResolvedValue({ kind: "denied", detail: "Graph subscribedSkus: HTTP 403 - consent needed" }),
+  });
+
+  it("hands the shell's callback to the single-workspace cards", async () => {
+    const open = vi.fn();
+    renderPanel(withE5Card(armStub(USAGE_OK)) as unknown as ReturnType<typeof armStub>, {
+      graph: graph403(),
+      onOpenChangeRequest: open,
+    });
+    await discoverAndInventory();
+    fireEvent.click(await screen.findByRole("button", CHANGE_REQUEST));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the shell's callback to the tenant comparison cards", async () => {
+    const open = vi.fn();
+    const base = armStub(USAGE_OK, USAGE_OK);
+    const request = withE5Card(
+      vi.fn(async (req: AzureManagementRequest) => {
+        if (req.path.endsWith("/Microsoft.OperationsManagement/solutions")) {
+          return {
+            status: 200,
+            body: {
+              value: [
+                { name: "SecurityInsights(law-1)", properties: { workspaceResourceId: WS_ID } },
+                { name: "SecurityInsights(law-2)", properties: { workspaceResourceId: WS2_ID } },
+              ],
+            },
+          };
+        }
+        return base(req);
+      }),
+    );
+    renderPanel(request as unknown as ReturnType<typeof armStub>, { graph: graph403(), onOpenChangeRequest: open });
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\) across 1 subscription\(s\), 2 with Sentinel/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    fireEvent.click(await screen.findByText(COMPARE));
+    await screen.findByText("Compared across 2 Sentinel workspaces, 2 read.");
+    fireEvent.click(await screen.findByRole("button", CHANGE_REQUEST));
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });

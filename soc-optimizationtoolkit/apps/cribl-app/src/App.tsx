@@ -179,12 +179,16 @@ const ONBOARD_REQUIRED_FIELDS = [
 // entry lives in the App registration and connect section of the Setup page.
 // Cross-links are DATA passed to the shared screens; shared prose never
 // names shell-specific UI.
+// The Setup page's App registration and connect section, which holds the
+// app-permissions change request.
+const SETUP_CONNECT_ANCHOR = 'setup-connect-section';
+
 const SHELL_LINK_OVERRIDES: JourneyLinks = {
   connect: {
     routeId: 'home',
     // Same-route action: the anchor scrolls Setup down to the section so the
     // button visibly lands somewhere (user report 2026-07-28).
-    anchorId: 'setup-connect-section',
+    anchorId: SETUP_CONNECT_ANCHOR,
     hint:
       'Identity entry lives in the App registration and connect section of the Setup ' +
       'page: Save and connect stores the secret and verifies it by acquiring an ARM token.',
@@ -1747,7 +1751,7 @@ function App() {
   const setupSections = (
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
-      <div id="setup-connect-section" />
+      <div id={SETUP_CONNECT_ANCHOR} />
       {azureConnectElement}
       {azureResourcesElement}
       <RepositoriesScreen platform="cloud" />
@@ -2193,7 +2197,7 @@ function App() {
   // Data Volume Inventory (MIG-10): what an existing workspace ingests. Moved
   // out of SIEM Migration, which is an export analysis; this one reads a live
   // workspace and needs no upload.
-  const renderDataVolumeInventory = () => (
+  const renderDataVolumeInventory = (nav: AppFrameNav) => (
     <>
       <header className="harness-header">
         <h1 className="harness-title">Data Volume Inventory</h1>
@@ -2204,7 +2208,19 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <WorkspaceInventoryPanel />
+        {/* A refused licence read links to the change request on Setup: open
+            Setup, then scroll to its section once navigation settles, as the
+            Setup page's own same-route actions do. */}
+        <WorkspaceInventoryPanel
+          onOpenChangeRequest={() => {
+            nav.navigate('home');
+            window.setTimeout(() => {
+              document
+                .getElementById(SETUP_CONNECT_ANCHOR)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 60);
+          }}
+        />
       </PortsProvider>
     </>
   );

@@ -4,8 +4,8 @@
  * tenant, pick one, and inventory its tables, the sources feeding each, and the
  * daily average volume over the last 30 complete days.
  *
- * Its own component rather than more of SiemMigrationScreen: it shares no
- * state with the export analysis above it, and the screen was 554 lines.
+ * The body of the Data Volume Inventory page (route data-volume-inventory);
+ * the allowance cards and their state live beside it in this folder.
  *
  * Every read here is on-demand behind a button - discovery is one ARM list per
  * subscription plus a solutions list, and an inventory is one query per ten
@@ -35,6 +35,7 @@ import {
   afterAllowancesText,
   overCell,
   sentinelWorkspaceCount,
+  sentinelWorkspaceCountIsFloor,
   sentinelWorkspaceIds,
   tenantDiscoveryNote,
 } from "./allowance-state";
@@ -64,7 +65,15 @@ const SOURCES_TIP =
   "one row. _BilledSize and Usage are separate measurements and can differ by a few " +
   "percent, so a table's sources need not add up exactly to its Usage total.";
 
-export function WorkspaceInventoryPanel() {
+export interface WorkspaceInventoryPanelProps {
+  /**
+   * Opens Setup's app-permissions change request, for a refused licence read.
+   * The shell owns navigation; omitted, the cards name it in words only.
+   */
+  onOpenChangeRequest?: () => void;
+}
+
+export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInventoryPanelProps = {}) {
   const { ports } = usePorts();
   const [discovery, setDiscovery] = useState<WorkspaceDiscovery | null>(null);
   const [discoveryError, setDiscoveryError] = useState("");
@@ -149,6 +158,7 @@ export function WorkspaceInventoryPanel() {
         onProgress: setProgress,
         readAt,
         sentinelWorkspaces: sentinelWorkspaceCount(discovery),
+        sentinelWorkspacesAtLeast: sentinelWorkspaceCountIsFloor(discovery),
       });
       setAllowances({ result, readAt });
     } catch (err) {
@@ -178,9 +188,12 @@ export function WorkspaceInventoryPanel() {
       try {
         inventories.set(
           id,
+          // Usage totals are all the comparison sums: skip the per-table
+          // source breakdown, one query per ten tables on a large tenant.
           await inventoryWorkspace(ports.azure, id, {
             logger: ports.logger,
             onProgress: (message) => setProgress(`Reading ${step}: ${message}`),
+            sources: false,
           }),
         );
       } catch (err) {
@@ -394,6 +407,7 @@ export function WorkspaceInventoryPanel() {
               <AllowanceCards
                 allowances={tenant.result}
                 readAt={tenant.readAt}
+                onOpenChangeRequest={onOpenChangeRequest}
                 actions={
                   <button className="run-button" disabled={busy !== null} onClick={() => setTenant(null)}>
                     Back to this workspace
@@ -406,6 +420,7 @@ export function WorkspaceInventoryPanel() {
               <AllowanceCards
                 allowances={allowances.result}
                 readAt={allowances.readAt}
+                onOpenChangeRequest={onOpenChangeRequest}
                 actions={
                   sentinelWorkspaceIds(discovery).length > 1 ? (
                     <>
@@ -491,9 +506,16 @@ export function WorkspaceInventoryPanel() {
                               {t.sources.sources.map((s, i) => {
                                 const label = sourceLabel(s);
                                 return (
-                                  <div key={`${s.source}-${s.attribution}-${i}`} title={label.title}>
+                                  <div key={`${s.source}-${s.attribution}-${i}`}>
                                     {label.text} ({label.kind}) - {formatMB(s.dailyAverageMB)}/day,{" "}
                                     {s.events.toLocaleString()} events
+                                    {/* The full id, or what a remainder row means: only when the text does not already say it. */}
+                                    {label.tip !== label.text && (
+                                      <>
+                                        {" "}
+                                        <InfoTip text={label.tip} />
+                                      </>
+                                    )}
                                   </div>
                                 );
                               })}
