@@ -3795,7 +3795,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-27"
       ],
@@ -3803,13 +3803,14 @@
       "type": "story",
       "priority": "next",
       "title": "By table: Sources drill-down names product sources via their collector, shows billed vs free and the reconciliation line; CSV columns",
-      "detail": "Existing CSV columns unchanged; SourceIdentity, Collector, BillableDailyMB, FreeDailyMB appended. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-29)."
+      "detail": "Existing CSV columns unchanged; SourceIdentity, Collector, BillableDailyMB, FreeDailyMB appended. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-29).\n\nDONE 2026-11-04 (pins, b0a9e447..7b08b05e): By table drill-down names product sources 'Cisco ASA via localhost', shows billed and free per source with units, a per-table reconciliation line (partial breakdowns say so), and a billed-above-total note with an InfoTip; CSV appends SourceIdentity, Collector, BillableDailyMB, FreeDailyMB (FreeDailyMB empty when billed exceeds total). One fix round (units).",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-28",
         "MIG-29"
