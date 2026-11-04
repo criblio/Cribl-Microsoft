@@ -248,3 +248,17 @@ describe("PAN-OS TRAFFIC counters, zones and locations on ASim (DBT-253)", () =>
     expect(result.matched).toHaveLength(0);
   });
 });
+
+describe("isAsimTableName - one answer for overflow and identity (architecture audit)", () => {
+  it("is case-insensitive and trims, so the two callers cannot disagree", async () => {
+    const { isAsimTableName } = await import("./table-family");
+    const { requiredIdentityFields } = await import("../vendor-identity/vendor-identity");
+    for (const name of ["ASimNetworkSessionLogs", "asimnetworksessionlogs", "  ASimDnsActivityLogs "]) {
+      expect(isAsimTableName(name)).toBe(true);
+      expect(getOverflowConfig(name.trim()).fieldName).toBe("AdditionalFields");
+      expect(requiredIdentityFields(name)).toEqual(["EventVendor", "EventProduct"]);
+    }
+    expect(isAsimTableName("CommonSecurityLog")).toBe(false);
+    expect(requiredIdentityFields("CommonSecurityLog")).toEqual(["DeviceVendor", "DeviceProduct"]);
+  });
+});

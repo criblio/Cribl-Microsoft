@@ -4145,6 +4145,19 @@
       "title": "PAN-OS TRAFFIC fields reach their ASim network-session columns",
       "detail": "DECIDED BY THE USER 2026-11-04 (follow-on to DBT-252): about 41 PAN-OS TRAFFIC fields still overflow on CommonSecurityLog and ASimNetworkSessionLogs. PLAN: point the existing non-CEF alias targets at ASim (SourceZone/DestinationZone -> SrcZone/DstZone, SessionID -> NetworkSessionId, StartTime -> EventStartTime) and add PAN-OS aliases packets/bytes -> NetworkPackets/NetworkBytes, pkts_sent/pkts_received -> SrcPackets/DstPackets, srcloc/dstloc -> SrcGeoCountry/DstGeoCountry. DELIBERATELY NOT MAPPED: elapsed (PAN seconds, ASim NetworkDuration is milliseconds - a rename would store the wrong value; needs a scaling eval), vsys, logset, actionflags, seqno (no ASim column). DONE 2026-11-04 as planned. Against the full PAN-OS TRAFFIC header list (first 60 named columns) the bundled ASimNetworkSessionLogs schema now takes 36 fields to real columns (was 28 under DBT-252); CommonSecurityLog unchanged at 27. The ASim forward-alias check came back, scored by alias position, because sessionid -> [SessionID, ExternalID] now reaches two ASim columns and a flat score let schema order decide; pinned, and removing it fails the tie-break pin. 4 new pins in asim-equivalents.test.ts. VERIFIED BY PINS ONLY: the Live Preview had no tagged samples left (Loading tagged samples... never cleared) and adding one would write to the operator's KV. NOTICED, NOT CHANGED (pre-existing fuzzy matches): flags -> TcpFlagsAck and category -> ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.",
       "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "verified": "pins",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-254",
+      "type": "bug",
+      "title": "Two copies of \"is this an ASim table?\" disagreed on case",
+      "detail": "FOUND by the architecture audit 2026-11-04 (e446ac8..4543ca6). getOverflowConfig (overflow.ts, added by DBT-252) matched /^ASim/i while requiredIdentityFields (vendor-identity.ts) used a case-sensitive startsWith(\"ASim\"), so a lowercase asimnetworksessionlogs got the ASim AdditionalFields catch-all but none of the EventVendor/EventProduct requirement. FIXED: one isAsimTableName (field-matcher/table-family.ts, trims, case-insensitive) used by both; pinned in asim-equivalents.test.ts across three spellings. Same pass corrected two stale headers: getOverflowConfig no longer claims the verbatim legacy order, and knowledge-bases lists ASIM_COLUMN_EQUIVALENTS and where its entries are pinned."
     }
   ],
   "features": [
