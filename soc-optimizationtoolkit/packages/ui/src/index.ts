@@ -765,6 +765,9 @@ export type {
 } from "./screens/setup-wizard/azure-connect-section";
 export { AzureResourcesSection } from "./screens/setup-wizard/azure-resources-section";
 export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-resources-section";
+// AZR-64: which worker group receives each tenant (ADR 0009 decision 5).
+export { TenantCriblMappingSection } from "./screens/setup-wizard/tenant-cribl-mapping-section";
+export type { TenantCriblMappingSectionProps } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 export { ChangeRequestBlock } from "./screens/setup-wizard/change-request-block";
 export type { ChangeRequestBlockProps } from "./screens/setup-wizard/change-request-block";
 export {

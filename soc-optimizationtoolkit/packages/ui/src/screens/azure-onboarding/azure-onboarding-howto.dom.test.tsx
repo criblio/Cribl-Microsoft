@@ -28,6 +28,9 @@ import {
   tenantDocumentKey,
   ONBOARDING_PROGRESS_KIND,
   ONBOARDING_PROGRESS_VERSION,
+  TENANT_CRIBL_MAPPING_KEY,
+  TENANT_CRIBL_MAPPING_KIND,
+  TENANT_CRIBL_MAPPING_VERSION,
 } from "@soc/core";
 import type {
   AzureConfig,
@@ -132,7 +135,13 @@ class RoutingAzure implements AzureManagement {
  */
 class RoutingCribl implements CriblClient {
   readonly calls: CriblRequest[] = [];
-  groups: CriblGroupSummary[] = [{ id: G, product: "stream" }];
+  groups: CriblGroupSummary[];
+  /** The one worker group this fake answers for; every other group is unrouted. */
+  private readonly group: string;
+  constructor(group: string = G) {
+    this.group = group;
+    this.groups = [{ id: group, product: "stream" }];
+  }
   listGroupsCalls = 0;
   private inputs: Record<string, unknown>[] = [];
   private secrets: string[] = [];
@@ -148,7 +157,7 @@ class RoutingCribl implements CriblClient {
   async request(r: CriblRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
     const p = r.path;
-    if (r.groupId === G) {
+    if (r.groupId === this.group) {
       if (r.method === "GET" && p === "/system/inputs") return ok({ items: this.inputs });
       if (r.method === "GET" && p.startsWith("/system/inputs/")) {
         const id = decodeURIComponent(p.slice("/system/inputs/".length));
@@ -174,7 +183,7 @@ class RoutingCribl implements CriblClient {
       if (r.method === "GET" && p === "/version/status") {
         return ok(
           this.dirty
-            ? { items: [{ modified: [`groups/${G}/local/cribl/inputs.yml`, `groups/${G}/local/cribl/secrets.yml`] }] }
+            ? { items: [{ modified: [`groups/${this.group}/local/cribl/inputs.yml`, `groups/${this.group}/local/cribl/secrets.yml`] }] }
             : { items: [] },
         );
       }
@@ -184,9 +193,9 @@ class RoutingCribl implements CriblClient {
       }
       if (r.method === "GET" && p === "/version") return ok({ items: [{ hash: HASH }] });
     }
-    if (r.groupId === undefined && r.method === "PATCH" && p === `/products/stream/groups/${G}/deploy`) return ok({});
-    if (r.groupId === undefined && r.method === "GET" && p === `/products/stream/groups/${G}`) {
-      return ok({ items: [{ id: G, configVersion: "a1b2c3d" }] });
+    if (r.groupId === undefined && r.method === "PATCH" && p === `/products/stream/groups/${this.group}/deploy`) return ok({});
+    if (r.groupId === undefined && r.method === "GET" && p === `/products/stream/groups/${this.group}`) {
+      return ok({ items: [{ id: this.group, configVersion: "a1b2c3d" }] });
     }
     throw new Error(`RoutingCribl: unrouted ${r.method} ${r.groupId ?? ""} ${p}`);
   }
@@ -249,12 +258,13 @@ function progressSaves(store: FakeKvDocumentStore) {
 }
 
 describe("AzureOnboardingScreen - the How-to composition at mount", () => {
-  it("loads exactly the selection and the progress document, and makes no Azure or Cribl call", async () => {
+  it("loads exactly the selection, the progress document and the tenant to Cribl mapping, and makes no Azure or Cribl call", async () => {
     const { store, azure, cribl } = mount();
     await loaded();
     // First run: each tenant document absent, so its legacy copy is looked at once.
+    // The mapping is one app-wide document (AZR-64), read once.
     expect([...store.loads].sort()).toEqual(
-      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY].sort(),
+      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY, TENANT_CRIBL_MAPPING_KEY].sort(),
     );
     expect(azure.calls).toEqual([]);
     expect(cribl.calls).toEqual([]);
@@ -479,5 +489,188 @@ describe("AzureOnboardingScreen - the Cribl source create", () => {
     for (const c of others) expect(JSON.stringify(c)).not.toContain(KEY);
     expect(view.container.innerHTML).not.toContain(KEY);
     expect(paste.value).toBe("");
+  });
+});
+
+/** A stored tenant to Cribl mapping (AZR-64). */
+function mappingDoc(over: Record<string, unknown> = {}): unknown {
+  return {
+    kind: TENANT_CRIBL_MAPPING_KIND,
+    version: TENANT_CRIBL_MAPPING_VERSION,
+    mode: "per-tenant",
+    sharedGroup: null,
+    groups: {},
+    ...over,
+  };
+}
+
+/** Read the rules, paste a Listen key, and click Create then Confirm. */
+async function createThroughConfirm(store: FakeKvDocumentStore, azure: RoutingAzure): Promise<void> {
+  fireEvent.click(button("Read the namespace's rules"));
+  await waitFor(() => expect(azure.calls.map((c) => c.path)).toContain(`${NS_PATH}/authorizationRules`));
+  fireEvent.change(screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`), { target: { value: LISTEN_CS } });
+  const create = await waitFor(() => {
+    const b = button("Create the Cribl source");
+    expect(b.disabled).toBe(false);
+    return b;
+  });
+  const savesBefore = progressSaves(store).length;
+  fireEvent.click(create);
+  fireEvent.click(await waitFor(() => button("Confirm: create the source")));
+  await waitFor(() => expect(progressSaves(store).length).toBe(savesBefore + 1));
+}
+
+describe("AzureOnboardingScreen - the tenant to Cribl mapping (AZR-64)", () => {
+  const MAPPED = "g-mapped";
+
+  it("creates in the TENANT'S mapped group, not the group saved on the screen, and records that group", async () => {
+    // The screen's own saved group is G; the mapping says this tenant uses MAPPED.
+    // The fake answers only for MAPPED, so a create aimed at G fails loudly.
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ groups: { tenant: MAPPED } }),
+    });
+    const azure = new RoutingAzure();
+    const cribl = new RoutingCribl(MAPPED);
+    mount({ store, azure, cribl });
+    await loaded();
+    expect(
+      await screen.findByText(
+        `Worker group ${MAPPED}: this tenant's own group, from the tenant to Cribl mapping on Setup.`,
+      ),
+    ).toBeTruthy();
+    // One answer to "which group": the screen's picker is not offered.
+    expect(screen.queryByRole("button", { name: "Load worker groups" })).toBeNull();
+
+    await createThroughConfirm(store, azure);
+    expect(cribl.calls.filter((c) => c.groupId !== undefined).every((c) => c.groupId === MAPPED)).toBe(true);
+    expect(cribl.labels()).toContain(`PATCH /products/stream/groups/${MAPPED}/deploy`);
+    const saved = progressSaves(store).at(-1)?.value as {
+      criblSources: Record<string, { groupId: string }>;
+      workerGroup: string | null;
+    };
+    expect(saved.criblSources["defenderExport"]?.groupId).toBe(MAPPED);
+  });
+
+  it("one group for every tenant: Read Cribl side reads the shared group", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ mode: "shared", sharedGroup: MAPPED, groups: { tenant: "elsewhere" } }),
+    });
+    const cribl = new RoutingCribl(MAPPED);
+    mount({ store, cribl });
+    await loaded();
+    await screen.findByText(
+      `Worker group ${MAPPED}: the one group for every tenant, from the tenant to Cribl mapping on Setup.`,
+    );
+    fireEvent.click(button("Read Cribl side"));
+    await waitFor(() => expect(cribl.calls.length).toBeGreaterThan(0));
+    const groups = cribl.calls.filter((c) => c.groupId !== undefined).map((c) => c.groupId);
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups.every((g) => g === MAPPED)).toBe(true);
+  });
+
+  it("the live flow watches the mapped group even when the screen chose none", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc({
+        workerGroup: null,
+        criblSources: { defenderExport: { groupId: MAPPED, inputId: "in-1", inputType: "eventhub", secretId: "s-1" } },
+      }),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ groups: { tenant: MAPPED } }),
+    });
+    mount({ store });
+    await loaded();
+    await screen.findByText(`Worker group ${MAPPED}: this tenant's own group, from the tenant to Cribl mapping on Setup.`);
+    const watch = screen.getByRole("checkbox", { name: "Watch for data" }) as HTMLInputElement;
+    expect(watch.disabled).toBe(false);
+    expect(screen.queryByText("Choose a worker group under Cribl Stream source first.")).toBeNull();
+  });
+
+  it("the live flow watches the mapped group, not the group saved on the screen", async () => {
+    // The lane's source is in MAPPED; the screen's saved group is G. The Watch
+    // (i) spells out the literal metrics request, which names the group asked.
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc({
+        criblSources: { defenderExport: { groupId: MAPPED, inputId: "in-1", inputType: "eventhub", secretId: "s-1" } },
+      }),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ groups: { tenant: MAPPED } }),
+    });
+    const { view } = mount({ store });
+    await loaded();
+    await screen.findByText(`Worker group ${MAPPED}: this tenant's own group, from the tenant to Cribl mapping on Setup.`);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Watch for data" }));
+    await waitFor(() => expect((screen.getByRole("checkbox", { name: "Watch for data" }) as HTMLInputElement).checked).toBe(true));
+    const tip = view.container.querySelector(".azo-flow-watch .info-tip-pop")?.textContent ?? "";
+    expect(tip).toContain(`/m/${MAPPED}/system/metrics/query`);
+    expect(tip).not.toContain(`/m/${G}/`);
+  });
+
+  it("UNSET falls back to the group chosen on the screen, and says so as information, not a fault", async () => {
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
+    mount({ store });
+    await loaded();
+    const line = await screen.findByText(
+      "No tenant to Cribl mapping is set up yet. The worker group chosen here is used; the mapping on Setup can set one per tenant.",
+    );
+    expect(line.className).toContain("azure-onboarding-banner-info");
+    expect(line.getAttribute("role")).toBeNull();
+    expect(button("Load worker groups")).toBeTruthy();
+    expect(button("Read Cribl side").disabled).toBe(false);
+  });
+
+  it("a per-tenant mapping with no row for THIS tenant is unset, never another tenant's group", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ groups: { "other-tenant": "g-other" } }),
+    });
+    mount({ store });
+    await loaded();
+    expect(
+      await screen.findByText(/none is chosen for this tenant yet\. The worker group chosen here is used/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Worker group g-other/)).toBeNull();
+  });
+
+  it("an UNREADABLE mapping never falls back: Create, Read Cribl side and Watch are all unavailable, and nothing reaches Cribl", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc({
+        criblSources: { defenderExport: { groupId: G, inputId: "in-1", inputType: "eventhub", secretId: "s-1" } },
+      }),
+    }).scriptLoad(TENANT_CRIBL_MAPPING_KEY, { kind: "unknown", reason: "HTTP 503", status: 503 });
+    const { cribl } = mount({ store });
+    await loaded();
+    expect(await screen.findByText(/Which worker group this tenant uses is unknown: HTTP 503/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load worker groups" })).toBeNull();
+    expect(button("Read Cribl side").disabled).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "Watch for data" }) as HTMLInputElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`), { target: { value: LISTEN_CS } });
+    await waitFor(() => expect(button("Create the Cribl source").disabled).toBe(true));
+    fireEvent.click(button("Create the Cribl source"));
+    fireEvent.click(button("Read Cribl side"));
+    await Promise.resolve();
+    expect(cribl.calls).toEqual([]);
+    expect(cribl.listGroupsCalls).toBe(0);
+  });
+
+  it("our own mapping with a mode this release cannot read is unknown, never a fall back to the screen's group", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [TENANT_CRIBL_MAPPING_KEY]: mappingDoc({ mode: "Shared", sharedGroup: "hub" }),
+    });
+    const { cribl } = mount({ store });
+    await loaded();
+    expect(await screen.findByText(/Which worker group this tenant uses is unknown: .*mode/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load worker groups" })).toBeNull();
+    expect(button("Read Cribl side").disabled).toBe(true);
+    expect(cribl.listGroupsCalls).toBe(0);
+  });
+
+  it("a mapping document this app did not write is unknown too, and is never overwritten", async () => {
+    const foreign = { kind: "someone-else", mode: "shared", sharedGroup: MAPPED };
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc(), [TENANT_CRIBL_MAPPING_KEY]: foreign });
+    mount({ store });
+    await loaded();
+    expect(await screen.findByText(/Which worker group this tenant uses is unknown/)).toBeTruthy();
+    expect(store.saves.filter((s) => s.key === TENANT_CRIBL_MAPPING_KEY)).toEqual([]);
   });
 });

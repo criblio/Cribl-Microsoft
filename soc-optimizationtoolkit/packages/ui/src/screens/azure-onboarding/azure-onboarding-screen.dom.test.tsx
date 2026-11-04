@@ -42,6 +42,7 @@ import {
   FakeLogger,
   ONBOARDING_PROGRESS_KEY,
   tenantDocumentKey,
+  TENANT_CRIBL_MAPPING_KEY,
   UNSUPPORTED_SOURCES,
 } from "@soc/core";
 import type {
@@ -365,13 +366,14 @@ async function readyToDeployFrom(target: () => Promise<void>): Promise<void> {
 }
 
 describe("AzureOnboardingScreen - mount and the saved selection", () => {
-  it("mounts reading only the tenant's two documents (and, on a first run, their legacy copies) and zero Azure calls", async () => {
+  it("mounts reading only the tenant's two documents (and, on a first run, their legacy copies), the tenant to Cribl mapping, and zero Azure calls", async () => {
     // Both tenant documents are absent here, so each read also looks once at
-    // the legacy single-tenant key for something to move (ADR 0009).
+    // the legacy single-tenant key for something to move (ADR 0009). The
+    // mapping is one app-wide document (AZR-64), read once.
     const { azure, store } = mount();
     await loaded();
     expect([...(store?.loads ?? [])].sort()).toEqual(
-      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY].sort(),
+      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY, TENANT_CRIBL_MAPPING_KEY].sort(),
     );
     expect(azure.calls).toEqual([]);
   });

@@ -28,6 +28,8 @@ export * from "./domain/role-plan";
 export * from "./domain/least-privilege";
 // ADR 0009: tenant-scoped keys and ids, the credential lease, the tenant proof.
 export * from "./domain/tenancy";
+// ADR 0009 decision 5 (AZR-64): which worker group receives each tenant.
+export * from "./domain/tenant-cribl-mapping";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

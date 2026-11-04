@@ -11,9 +11,10 @@
  * howto/, validate/, cribl-source/ and dataflow/ state modules (pure,
  * unit-tested) and in @soc/core; this file wires them to the ports:
  *
- *   - MOUNT makes exactly TWO kvDocuments loads - the saved selection and the
- *     How-to progress document (ADR 0007 D1), each guarded by a cancelled
- *     flag - and ZERO Azure or Cribl calls. Nothing is read from Azure or
+ *   - MOUNT makes exactly THREE kvDocuments loads - the saved selection and
+ *     the How-to progress document (ADR 0007 D1), each guarded by a cancelled
+ *     flag, and the app-wide tenant to Cribl mapping (AZR-64) - and ZERO
+ *     Azure or Cribl calls. Nothing is read from Azure or
  *     Cribl until the operator asks (Find namespaces, Read Defender state,
  *     Load resource groups, Validate, Load worker groups, Read the namespace's
  *     rules, Read Cribl side, Watch for data), because each read spends the
@@ -33,6 +34,11 @@
  *   - VALIDATE never runs unpaced: without a `pacing` prop it is disabled with
  *     its reason; with one, the Azure port is wrapped in paceAzureManagement at
  *     the Validate rate. The budget is per run.
+ *   - THE WORKER GROUP the Cribl source is created in, and the live flow and
+ *     Cribl side are read from, is the TENANT'S mapped group (ADR 0009
+ *     decision 5). Only when the mapping names none for this tenant does the
+ *     screen's own picker decide, and the screen says so; an unreadable
+ *     mapping blocks all three rather than falling back (group-choice.ts).
  *   - THE CRIBL SOURCE is planned read-only, confirmed, then created by core's
  *     applyCriblSource. A pasted credential never reaches React state or the
  *     progress document: the panel holds it and hands the apply a closure.
@@ -61,7 +67,9 @@ import {
   planValidation,
   readAllPages,
   readOnboardingCriblSide,
+  readTenantCriblMapping,
   stepsFor,
+  TENANT_CRIBL_MAPPING_KEY,
   tenantDocumentKey,
   validateAzureOnboarding,
   withCriblSource,
@@ -89,6 +97,7 @@ import type {
   ReadyCriblSource,
   SectionStatus,
   SourceMode,
+  TenantCriblMappingRead,
   ValidationPlan,
   ValidationResult,
 } from "@soc/core";
@@ -137,6 +146,7 @@ import {
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
+import { onboardingGroupChoice, onboardingGroupResolution } from "./cribl-source/group-choice";
 import { OnboardingDataflow } from "./dataflow/onboarding-dataflow";
 import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
 
@@ -260,7 +270,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
   // Cribl source (D7-D10) and the Cribl side (D17).
   const workerGroups = useStreamWorkerGroups(ports.cribl, { auto: false, logger });
+  // The group chosen on THIS screen: used only when the tenant to Cribl
+  // mapping names none for this tenant (groupChoice below).
   const [groupId, setGroupId] = useState("");
+  const [mappingRead, setMappingRead] = useState<TenantCriblMappingRead | "loading">(
+    store === undefined ? { kind: "unknown", reason: PROGRESS_SHELL_GAP_REASON } : "loading",
+  );
   const [rules, setRules] = useState<{ readonly ns: string; readonly read: ListRead<NamespaceAuthRule> } | null>(null);
   const [rulesMessage, setRulesMessage] = useState<PickerMessage | null>(null);
   const [readSeq, setReadSeq] = useState(0);
@@ -317,6 +332,30 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     // config is read once, at load, for the first-run defaults only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, logger, activeTenant]);
+
+  // The tenant to Cribl mapping (AZR-64): one app-wide document. Not read
+  // without a tenant id - there is no tenant to look up, and
+  // onboardingGroupResolution says so instead of reporting a read in flight.
+  const hasTenant = activeTenant.trim() !== "";
+  useEffect(() => {
+    if (store === undefined || !hasTenant) return;
+    let cancelled = false;
+    setMappingRead("loading");
+    void store
+      .load(TENANT_CRIBL_MAPPING_KEY)
+      .then(readTenantCriblMapping, (error: unknown): TenantCriblMappingRead => ({
+        kind: "unknown",
+        reason: errorText(error),
+      }))
+      .then((next) => {
+        if (cancelled) return;
+        setMappingRead(next);
+        logger?.info(`${LOG} tenant mapping loaded`, { load: next.kind });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, logger, hasTenant]);
 
   useEffect(
     () => () => {
@@ -601,6 +640,10 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     }
   }
 
+  // The group every Cribl write and read on this screen uses (AZR-64).
+  const groupChoice = onboardingGroupChoice(onboardingGroupResolution(mappingRead, activeTenant), groupId);
+  const effectiveGroup = groupChoice.groupId;
+
   const criblPorts = { cribl: ports.cribl, azure: ports.azure, ...(logger === undefined ? {} : { logger }) };
 
   async function onPlan(sourceId: OnboardingSourceId, credential: PlanCredential): Promise<PlanCriblSourceResult> {
@@ -609,8 +652,11 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     if (source === undefined || p === null) {
       throw new Error("the source or the saved progress is not available");
     }
+    if (effectiveGroup === "") {
+      throw new Error(groupChoice.blockedReason ?? "no worker group is chosen");
+    }
     const result = await planCriblSource(criblPorts, {
-      groupId,
+      groupId: effectiveGroup,
       lane: { source, subSelection: subSelectionOf(sourceId), otherLanes: otherLanesFor(sourceId) },
       values: p.planValues,
       measuredHubs,
@@ -642,7 +688,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   }
 
   async function onReadCriblSide(): Promise<void> {
-    const g = groupId.trim();
+    const g = effectiveGroup.trim();
     if (g === "" || progress === null) return;
     const inputs = Object.values(progress.criblSources)
       .filter((r): r is NonNullable<typeof r> => r !== undefined && r.groupId === g)
@@ -672,9 +718,16 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   // -------------------------------------------------------------------------
 
   const liveLanes = useMemo(() => (progress === null ? [] : liveFlowLanes(progress)), [progress]);
-  const live = useLiveFlow({ cribl: ports.cribl, groupId: groupId === "" ? null : groupId, lanes: liveLanes, watching });
+  const live = useLiveFlow({
+    cribl: ports.cribl,
+    groupId: effectiveGroup === "" ? null : effectiveGroup,
+    lanes: liveLanes,
+    watching,
+  });
   const watchBlockedReason =
-    groupId === ""
+    groupChoice.blockedReason !== null
+      ? groupChoice.blockedReason
+      : effectiveGroup === ""
       ? "Choose a worker group under Cribl Stream source first."
       : liveLanes.length === 0
         ? "No Cribl source has been created yet, so there is nothing to watch."
@@ -810,8 +863,9 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
             readSeq={readSeq}
             workerGroups={workerGroups.state}
             onLoadGroups={workerGroups.reload}
-            groupId={groupId}
+            groupId={effectiveGroup}
             onGroupChange={onGroupChange}
+            groupChoice={groupChoice}
             rules={rulesForPlan}
             onReadRules={() => void onReadRules()}
             topicsFor={topicsFor}

@@ -26,6 +26,7 @@ import {
   RbacPreflightPanel,
   RepositoriesScreen,
   SettingsScreen,
+  TenantCriblMappingSection,
   SetupWizard,
   SiemMigrationScreen,
   capabilitiesForRoute,
@@ -1841,6 +1842,8 @@ function App() {
       <div id="setup-connect-section" />
       {azureConnectElement}
       {azureResourcesElement}
+      {/* AZR-64: each tenant (connection) to its Cribl worker group. */}
+      <TenantCriblMappingSection profiles={store.profiles} />
       <RepositoriesScreen platform="cloud" />
     </>
   );
