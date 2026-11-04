@@ -35,5 +35,5 @@ export {
   SOURCE_IDENTITY_RULES,
 } from "./source-identity";
 export type { SourceIdentityRule } from "./source-identity";
-export { bySource } from "./by-source";
+export { billableTableMeasuredFree, bySource } from "./by-source";
 export type { SourceViewReconciliation, SourceViewRow } from "./by-source";

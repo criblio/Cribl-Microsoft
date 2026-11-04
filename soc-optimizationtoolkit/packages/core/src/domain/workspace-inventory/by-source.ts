@@ -76,6 +76,21 @@ interface Accumulator {
   billedExceedsTotal: boolean;
 }
 
+/**
+ * The one rule for "the catalog says Billable, but the rows billed none of it"
+ * (architecture audit 2026-11-04). The By source rows and the By table flag
+ * both ask it; they used to restate it, and a change to one would have made
+ * the two views disagree about the same table. Callers own the partial check:
+ * a partial breakdown is a floor, so "all free" is never established from it.
+ */
+export function billableTableMeasuredFree(
+  table: string,
+  measuredDailyMB: number,
+  billedDailyMB: number,
+): boolean {
+  return measuredDailyMB > 0 && billedDailyMB === 0 && allowanceFor(table).kind === "billable";
+}
+
 export function bySource(inventory: { tables: Listing<InventoryTable> }): {
   /** `none` (verified) and `empty` (unverified) pass through from the tables listing. */
   rows: Listing<SourceViewRow>;
@@ -222,10 +237,8 @@ function toRow(acc: Accumulator): SourceViewRow {
     billableTaggedTablesFree: [...acc.measuredByTable]
       .filter(
         ([table, measured]) =>
-          measured > 0 &&
-          acc.billedByTable.get(table) === 0 &&
           !acc.partialTables.has(table) &&
-          allowanceFor(table).kind === "billable",
+          billableTableMeasuredFree(table, measured, acc.billedByTable.get(table) ?? 0),
       )
       .map(([table]) => table),
     partialTables: [...acc.partialTables],

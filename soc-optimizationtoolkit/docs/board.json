@@ -4692,6 +4692,19 @@
     },
     {
       "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "verified": "pins",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-255",
+      "type": "enabler",
+      "title": "One rule for \"Billable table measured all free\" in By source and By table",
+      "detail": "FOUND by the architecture audit 2026-11-04 (74f0049..8ec2f89). MIG-32 stated the rule twice: bySource (core) per source row, and tableBillableFreeFlag (ui) per table, with different arithmetic (sums vs every/some). They agreed today, so this is drift risk rather than a defect. FIXED: billableTableMeasuredFree(table, measured, billed) in workspace-inventory/by-source.ts, used by both; callers keep the partial-breakdown check. Pinned directly; a mutation dropping the Billable check fails six tests across core, the By source view and the By table panel."
+    },
+    {
+      "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
       "status": "done",

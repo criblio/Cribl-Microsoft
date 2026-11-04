@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { listingRows, toListing } from "../inventory-listing";
-import { bySource } from "./by-source";
+import { billableTableMeasuredFree, bySource } from "./by-source";
 import { BYTES_PER_MB, INVENTORY_WINDOW_DAYS } from "./workspace-inventory";
 import type { InventorySource, InventoryTable, TableSources } from "./workspace-inventory";
 
@@ -362,5 +362,15 @@ describe("bySource", () => {
       ["product", "Cisco ASA", 3],
       ["table", "CommonSecurityLog (other sources)", 2],
     ]);
+  });
+});
+
+describe("billableTableMeasuredFree - one rule for both views (architecture audit 2026-11-04)", () => {
+  it("is true only for a Billable-tagged table with measured volume and nothing billed", () => {
+    expect(billableTableMeasuredFree("Syslog", 3, 0)).toBe(true);
+    expect(billableTableMeasuredFree("Syslog", 3, 0.5)).toBe(false);
+    expect(billableTableMeasuredFree("Syslog", 0, 0)).toBe(false);
+    // SecurityAlert is catalog-Free: measuring it free is no disagreement.
+    expect(billableTableMeasuredFree("SecurityAlert", 3, 0)).toBe(false);
   });
 });
