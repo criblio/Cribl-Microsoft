@@ -27,6 +27,7 @@ import {
   approvalBarText,
   autoDropPlan,
   columnSuggestions,
+  destFieldOptions,
   deriveMappingReviewGate,
   destClaim,
   droppedEditsNotice,
@@ -1799,5 +1800,31 @@ describe("columnSuggestions (DBT-202)", () => {
     );
     expect(sharedMove!.moveFrom).toBe("SourceMACAddress");
     expect(sharedMove!.moveWarning).toBeNull();
+  });
+});
+
+describe("destFieldOptions (DBT-251)", () => {
+  const schema = [
+    { name: "DstIpAddr", type: "string" },
+    { name: "SrcIpAddr", type: "string" },
+    { name: "DstPortNumber", type: "int" },
+  ];
+
+  it("offers every column in schema order with its type as the hint", () => {
+    expect(destFieldOptions(schema, "SrcIpAddr")).toEqual([
+      { value: "DstIpAddr", label: "DstIpAddr", hint: "string" },
+      { value: "SrcIpAddr", label: "SrcIpAddr", hint: "string" },
+      { value: "DstPortNumber", label: "DstPortNumber", hint: "int" },
+    ]);
+  });
+
+  it("puts a current dest the schema lacks FIRST, so the control can show it", () => {
+    const options = destFieldOptions(schema, "AdditionalExtensions");
+    expect(options).toHaveLength(4);
+    expect(options[0]).toEqual({ value: "AdditionalExtensions", label: "AdditionalExtensions" });
+  });
+
+  it("adds nothing for an empty current dest", () => {
+    expect(destFieldOptions(schema, "")).toHaveLength(3);
   });
 });

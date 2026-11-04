@@ -3848,6 +3848,15 @@ button.readiness-pill:focus-visible {
   background: var(--surface);
   color: var(--text-strong);
 }
+/* DBT-251: the Dest Field combobox, sized like the .mapping-select beside it. */
+.mapping-dest-select {
+  max-width: 220px;
+}
+.mapping-dest-select .searchable-select-control {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 2px 4px;
+}
 
 .match-conf-exact {
   color: var(--ok-strong);

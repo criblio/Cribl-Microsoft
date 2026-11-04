@@ -173,9 +173,16 @@ export function SearchableSelect({
   emptyText = NO_OPTIONS_TEXT,
 }: SearchableSelectProps) {
   const c = useCombo(options);
+  const controlRef = useRef<HTMLButtonElement>(null);
 
+  // Focus goes BACK TO THE CONTROL before onChange runs (DBT-251). The filter
+  // box that held focus unmounts on close, which would drop focus to <body>;
+  // and a host that opens a panel in response to the change (the Dest Field
+  // claim, DBT-208) records document.activeElement as the control to return
+  // to, so it must be the control by then.
   const pick = useCallback(
     (v: string) => {
+      controlRef.current?.focus();
       onChange(v);
       c.close();
     },
@@ -193,6 +200,8 @@ export function SearchableSelect({
       e.preventDefault();
       const o = c.filtered[c.highlight];
       if (o !== undefined) pick(o.value);
+    } else if (e.key === "Escape") {
+      controlRef.current?.focus();
     }
   };
 
@@ -203,6 +212,7 @@ export function SearchableSelect({
     >
       <LabelDecoy />
       <button
+        ref={controlRef}
         type="button"
         className="searchable-select-control"
         disabled={disabled}
