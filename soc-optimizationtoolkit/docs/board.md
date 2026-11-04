@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 36 in progress, 152 done.**
+**104 in the backlog, 35 in progress, 153 done.**
 
 ## By menu item
 
@@ -35,13 +35,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 32 | 11 |
+| Azure Native Source Onboarding | 30 | 33 | 10 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 140.
+Open work totals 139.
 
 ## Epics and features
 
@@ -50,7 +50,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 47% (37/79)
+### `AZR` Azure native source onboarding - 48% (38/79)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 23/38 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 12/23 | AZR-61*, AZR-62*, AZR-63*, AZR-90*, AZR-91*, AZR-92, AZR-64, AZR-65, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-90*, AZR-91*, AZR-92, AZR-64, AZR-65, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -147,7 +147,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1116,38 +1116,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
-
-- **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
-  `AZR-F10` `bug` `settled`
-  FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects
-  every Azure credential from fixed KV keys (azureBasic, azureArmToken,
-  azureGraphToken), and the app KV store is shared by every tab AND every user
-  of the app. runTenantSession swaps those keys to tenant N, and its lease
-  plus the before-and-after tenant proof protect ITS OWN batch only.
-  apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock
-  admits one tenant at a time, and 'Other TABS are not covered by the lock'.
-  Only Save and connect and the secret probe read the lease; ordinary reads in
-  another tab (the onboarding screen, Validate, the Logging Map, the
-  dashboard) do not. FAILURE: user B has the onboarding screen open on tenant
-  A while user C runs Read all on the gap dashboard. B's tenant-wide reads
-  (Graph directory, the subscription list, management groups, /tenants) answer
-  for tenant N and are shown as tenant A's. Subscription-scoped reads mostly
-  refuse (another tenant's subscription ids), which reads as a permission
-  problem that does not exist. Writes (Deploy, Create Cribl source) would
-  carry tenant N's token for tenant A's targets. OPTIONS (undecided): (a)
-  every ordinary batch reads the lease first and refuses while another holder
-  has it - one KV read per batch from the 100 req/min budget; (b) the slot
-  records its owner tenant beside the token, and every ordinary batch checks
-  it is its own tenant before sending and again after, as the session does;
-  (c) multi-tenant reads run only when no other tab or user is active -
-  unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a
-  pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009
-  must say this risk exists until it is fixed. DECIDED 2026-11-03 by the
-  operator: option (b), an owner check per batch. The slot records the tenant
-  that owns it; every ordinary Azure batch (reads AND writes) checks the owner
-  is its own tenant before sending and again after, and a mismatch or an
-  unreadable owner makes the batch unknown (writes are refused before
-  sending), never red or absent.
 
 ---
 
@@ -2711,7 +2679,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (152)
+## Done (153)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6966,6 +6934,48 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-run green by the operator's session after the last commit. Live check
   outstanding: the lab has one Azure tenant, so multi-tenant behaviour is
   proven with fakes until a second test tenant exists (ADR 0009).
+
+- **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects
+  every Azure credential from fixed KV keys (azureBasic, azureArmToken,
+  azureGraphToken), and the app KV store is shared by every tab AND every user
+  of the app. runTenantSession swaps those keys to tenant N, and its lease
+  plus the before-and-after tenant proof protect ITS OWN batch only.
+  apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock
+  admits one tenant at a time, and 'Other TABS are not covered by the lock'.
+  Only Save and connect and the secret probe read the lease; ordinary reads in
+  another tab (the onboarding screen, Validate, the Logging Map, the
+  dashboard) do not. FAILURE: user B has the onboarding screen open on tenant
+  A while user C runs Read all on the gap dashboard. B's tenant-wide reads
+  (Graph directory, the subscription list, management groups, /tenants) answer
+  for tenant N and are shown as tenant A's. Subscription-scoped reads mostly
+  refuse (another tenant's subscription ids), which reads as a permission
+  problem that does not exist. Writes (Deploy, Create Cribl source) would
+  carry tenant N's token for tenant A's targets. OPTIONS (undecided): (a)
+  every ordinary batch reads the lease first and refuses while another holder
+  has it - one KV read per batch from the 100 req/min budget; (b) the slot
+  records its owner tenant beside the token, and every ordinary batch checks
+  it is its own tenant before sending and again after, as the session does;
+  (c) multi-tenant reads run only when no other tab or user is active -
+  unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a
+  pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009
+  must say this risk exists until it is fixed. DECIDED 2026-11-03 by the
+  operator: option (b), an owner check per batch. The slot records the tenant
+  that owns it; every ordinary Azure batch (reads AND writes) checks the owner
+  is its own tenant before sending and again after, and a mismatch or an
+  unreadable owner makes the batch unknown (writes are refused before
+  sending), never red or absent. DONE 2026-11-03 (pins), 1739de9a on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (ten
+  findings, eight distinct, all confirmed and fixed, each new pin
+  mutation-checked), and every CI gate re-run green by the operator's session
+  after the commit. The owner record now carries tenant AND client; a
+  switching marker is written before every slot change; write resends after a
+  429 and 401 re-mints re-check the owner; the Diagnostics panels go through
+  the slot. Cost and the remaining unproven cases (no compare-and-swap, a read
+  admitted just before a swap is sent but discarded, KV reads vs the 100
+  req/min budget unmeasured, pre-AZR-92 bundles in other tabs) are in ADR 0009
+  decision 2. Live check outstanding: the lab has one Azure tenant.
 
 - **AZR-64** Tenant to Cribl mapping: one workspace for every tenant, or a worker group per tenant, chosen by the operator
   `AZR-F10` `story` `settled` `verified: pins`
