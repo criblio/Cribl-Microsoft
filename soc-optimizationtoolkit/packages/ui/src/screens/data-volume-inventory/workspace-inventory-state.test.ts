@@ -351,7 +351,7 @@ describe("MIG-32 copy and flags", () => {
 
   it("names the Billable-tagged tables measured free", () => {
     expect(catalogBillableFlagText(["SecurityCaseEvent", "Foo"])).toBe(
-      "measured free; the catalog tags SecurityCaseEvent, Foo Billable",
+      "measured free; not in the catalog's free list (SecurityCaseEvent, Foo)",
     );
     expect(catalogBillableFlagText([])).toBeNull();
   });
@@ -359,7 +359,7 @@ describe("MIG-32 copy and flags", () => {
   it("flags a By table row only when a Billable table's read sources are all free", () => {
     expect(
       tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(0)] })),
-    ).toBe("measured free; the catalog tags SecurityCaseEvent Billable");
+    ).toBe("measured free; not in the catalog's free list (SecurityCaseEvent)");
     expect(
       tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(1)] })),
     ).toBeNull();
@@ -370,5 +370,8 @@ describe("MIG-32 copy and flags", () => {
     ).toBeNull();
     expect(tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "failed", error: "x" }))).toBeNull();
     expect(tableBillableFreeFlag(tbl("SecurityAlert", { kind: "read", sources: [src(0)] }))).toBeNull();
+    // Azure Monitor's never-billed tables are free, not "unlisted".
+    expect(tableBillableFreeFlag(tbl("Heartbeat", { kind: "read", sources: [src(0)] }))).toBeNull();
+    expect(tableBillableFreeFlag(tbl("Usage", { kind: "read", sources: [src(0)] }))).toBeNull();
   });
 });

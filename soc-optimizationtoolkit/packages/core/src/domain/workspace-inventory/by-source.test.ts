@@ -228,6 +228,17 @@ describe("bySource", () => {
     expect(rows.find((r) => r.label === "Defender")!.billableTaggedTablesFree).toEqual([]);
   });
 
+  it("never flags Azure Monitor's free tables measured free (Heartbeat, Operation) (MIG-32)", () => {
+    const { rows } = run(
+      inv(
+        table("Heartbeat", 2, read(src("vm-1", "computer", 2, { billedMb: 0 }))),
+        table("Operation", 1, read(src("", "none", 1, { billedMb: 0 }))),
+        table("SecurityCaseEvent", 1, read(src("", "none", 1, { billedMb: 0 }))),
+      ),
+    );
+    expect(rows.flatMap((r) => r.billableTaggedTablesFree)).toEqual(["SecurityCaseEvent"]);
+  });
+
   it("does not flag a Billable table that is partial, not read, or measured zero (MIG-32)", () => {
     const { rows } = run(
       inv(

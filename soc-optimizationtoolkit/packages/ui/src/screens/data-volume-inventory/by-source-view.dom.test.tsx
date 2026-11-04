@@ -138,10 +138,23 @@ describe("BySourceView", () => {
     };
     render(<BySourceView inventory={{ tables }} />);
     expect(
-      within(rowFor("SecurityCaseEvent (no product columns)")).getByText("measured free; the catalog tags SecurityCaseEvent Billable"),
+      within(rowFor("SecurityCaseEvent (no product columns)")).getByText("measured free; not in the catalog's free list (SecurityCaseEvent)"),
     ).toBeTruthy();
     expect(rowFor("Cisco ASA").textContent).not.toContain("measured free");
     expect(within(rowFor("Cisco ASA")).getByText('":" - 6.0 MB/day')).toBeTruthy();
+    // Heartbeat is on Microsoft's never-billed list: measured free is expected, not a flag.
+    const withHeartbeat: Listing<InventoryTable> = {
+      kind: "rows",
+      rows: [
+        tableOf("Heartbeat", 1, {
+          kind: "read",
+          sources: [source({ source: "vm-1", attribution: "computer", dailyAverageMB: 1, freeDailyMB: 1 })],
+        }),
+      ],
+    };
+    cleanup();
+    render(<BySourceView inventory={{ tables: withHeartbeat }} />);
+    expect(screen.queryByText(/measured free/)).toBeNull();
   });
 
   it("draws the billed and free bar in proportion", () => {

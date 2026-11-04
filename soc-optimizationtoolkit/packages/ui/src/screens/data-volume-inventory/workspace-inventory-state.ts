@@ -312,7 +312,7 @@ export const BY_SOURCE_COLLECTORS_TIP =
 export const BY_SOURCE_ALLOWANCE_TIP =
   "The allowance catalog's tag for each table this source lands in. The flag appears when " +
   "the rows say this source was billed (_IsBillable true) in a table the catalog tags " +
-  "Free, or measured entirely free in a table the catalog tags Billable: the catalog and " +
+  "Free, or measured entirely free in a table the catalog does not list as free: the catalog and " +
   "the bill disagree, so check that table's billing before relying on the tag.";
 
 /** The note on a source whose figure includes a partial breakdown. */
@@ -339,14 +339,18 @@ export function catalogFlagText(freeTaggedTablesBilled: readonly string[]): stri
   return `billed in a table the catalog tags Free (${freeTaggedTablesBilled.join(", ")})`;
 }
 
-/** The reverse flag on a By source row; null when no Billable-tagged table measured all free. */
+/**
+ * The reverse flag on a By source row; null when no table outside the catalog's
+ * free list measured all free. "Not in the free list" is all the catalog knows:
+ * it tags every unlisted table Billable, which is not a claim Microsoft bills it.
+ */
 export function catalogBillableFlagText(billableTaggedTablesFree: readonly string[]): string | null {
   if (billableTaggedTablesFree.length === 0) return null;
-  return `measured free; the catalog tags ${billableTaggedTablesFree.join(", ")} Billable`;
+  return `measured free; not in the catalog's free list (${billableTaggedTablesFree.join(", ")})`;
 }
 
 /**
- * The same flag on a By table row: set when the catalog tags the table Billable
+ * The same flag on a By table row: set when the catalog does not list the table as free
  * and every source read in it measured free. A partial or failed breakdown is
  * never flagged (a floor, or nothing measured).
  */

@@ -217,20 +217,24 @@ describe("WorkspaceInventoryPanel - MIG-32", () => {
         body: table(USAGE_COLS, [
           ["CommonSecurityLog", 1500, 1500, 30, "[]"],
           ["SecurityCaseEvent", 30, 0, 30, "[]"],
+          ["Heartbeat", 30, 0, 30, "[]"],
         ]),
       },
       undefined,
       [
         ["CommonSecurityLog", "Cisco ASA", "product", ":", 1356 * MB, 1356 * MB, 100, 1],
         ["SecurityCaseEvent", "Case Mgmt", "product", "", 30 * MB, 0, 5, 1],
+        ["Heartbeat", "vm-1", "computer", "", 30 * MB, 0, 5, 1],
       ],
     );
     renderPanel(request);
     await discoverAndInventory();
     await screen.findByText(/Cisco ASA via ":" - 45\.2 MB\/day/);
     expect(
-      screen.getByText("measured free; the catalog tags SecurityCaseEvent Billable"),
+      screen.getByText("measured free; not in the catalog's free list (SecurityCaseEvent)"),
     ).toBeTruthy();
+    // Heartbeat is measured free too, but it is on the catalog's free list: no flag.
+    expect(screen.getAllByText(/measured free/)).toHaveLength(1);
   });
 });
 

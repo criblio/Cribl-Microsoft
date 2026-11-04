@@ -56,9 +56,11 @@ the allowance cards keep doing that.
    volume from `_IsBillable`. A table the catalog tags Free whose sources are
    billed is flagged in both views ("catalog says free; 2 sources billed"), with
    the reason one click down. The reverse is flagged too (MIG-32): a table the
-   catalog tags Billable whose measured volume is all free reads "measured free;
-   the catalog tags <tables> Billable" (never for a partial or not-read table). Allowance arithmetic keeps using `Usage` per table
-   as today.
+   catalog does not list as free whose measured volume is all free reads
+   "measured free; not in the catalog's free list (<tables>)" (never for a
+   partial or not-read table, nor for a table the catalog lists Free, which
+   includes Azure Monitor's never-billed Heartbeat, Usage and Operation).
+   Allowance arithmetic keeps using `Usage` per table as today.
 5. **Tables with no product columns** appear in By source as one row each,
    named for the table ("AWSCloudTrail (no product columns)"), so every MB is on
    the page and the By source total reconciles to `Usage`.
@@ -131,8 +133,8 @@ Designer's calls, not the user's; each is cheap to reverse.
    original casing.
 5. **The catalog flag is per table.** By table shows it on the table row; on a
    By source row it reads "billed in a table the catalog tags Free
-   (SecurityAlert)" listing those tables. The reverse flag (a Billable-tagged table
-   measured all free) is per table the same way: on the By table row when every
+   (SecurityAlert)" listing those tables. The reverse flag (a table
+   outside the free list, measured all free) is per table the same way: on the By table row when every
    read source of the table is free, and on a By source row listing the tables
    where that row measured volume and none of it billed.
 6. **Sources not read.** Per table, exactly as the existing breakdown decides
