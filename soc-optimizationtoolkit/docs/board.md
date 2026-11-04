@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**98 in the backlog, 35 in progress, 150 done.**
+**97 in the backlog, 36 in progress, 150 done.**
 
 ## By menu item
 
@@ -148,7 +148,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1051,6 +1051,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **MIG-27** Core: per-table source identity map, collector and billed bytes in the source breakdown query
+  `MIG-F3` `enabler` `settled`
+  USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog
+  vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others
+  unchanged), collector kept as via for product identities, billed vs free per
+  source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco
+  ASA through three collectors, which today reads as three collector-named
+  sources. Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-27).
+
 ---
 
 ## Backlog - now (11)
@@ -1264,7 +1274,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (51)
+## Backlog - next (50)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1916,16 +1926,6 @@ Settled and unblocked, sequenced behind now.
   SubscriptionNotRegistered on 2, reported as not read), Resource Graph
   machine count answers. USER DECISION 2026-11-03: ship without the rest; this
   card stays open until a benefit-receiving workspace is available.
-
-- **MIG-27** Core: per-table source identity map, collector and billed bytes in the source breakdown query
-  `MIG-F3` `enabler` `settled`
-  USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog
-  vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others
-  unchanged), collector kept as via for product identities, billed vs free per
-  source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco
-  ASA through three collectors, which today reads as three collector-named
-  sources. Design: docs/features/inventory-by-source.md. Plan:
-  docs/inventory-by-source-implementation-plan.md (task MIG-27).
 
 - **MIG-28** Core: fold the inventory into By source rows with reconciliation and the per-table catalog flag
   `MIG-F3` `enabler` `settled` `blocked by MIG-27`
