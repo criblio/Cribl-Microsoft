@@ -126,6 +126,12 @@ Azure call. Every tile carries an (i).
 
 ## What this breaks or constrains
 
+- **Open defect AZR-92 (2026-11-03): other tabs are not protected.** The lease
+  and the tenant proof guard the session's own batch. Another tab's, or another
+  user's, ordinary Azure reads and writes during a session go out under the
+  session's tenant credential and are attributed to their own tenant. Until
+  AZR-92 is fixed, run a multi-tenant read only when no one else is using the
+  app.
 - The 7 high-severity single-tenant assumptions in the audit become defects
   to fix (AZR-65 and its sweep), not notes.
 - Every KV key named in decision 3 changes shape; old documents are migrated
