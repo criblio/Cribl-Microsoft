@@ -52,6 +52,8 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // Lab provisioning goes through ARM template deployments.
     labs: ["arm.deploy"],
     logs: [],
+    // Reads a live workspace through ARM query; no write, nothing to deploy.
+    "data-volume-inventory": ["workspace.read"],
     settings: [],
     // Analysis over an uploaded export; touches nothing live.
     "siem-migration": [],

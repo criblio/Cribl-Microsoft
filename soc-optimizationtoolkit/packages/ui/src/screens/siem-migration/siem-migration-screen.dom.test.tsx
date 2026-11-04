@@ -269,3 +269,20 @@ describe("SiemMigrationScreen - a refused plan-cache read (DBT-175)", () => {
     expect(unread()).toHaveLength(0);
   });
 });
+
+describe("SIEM Migration and the workspace inventory (MIG-10)", () => {
+  it("SIEM Migration no longer renders the workspace inventory", async () => {
+    // The inventory moved to its own Data Volume Inventory page. It reads a live
+    // workspace and needs no upload, so it never belonged under an export analysis.
+    render(
+      <PortsProvider ports={portsWith(null)} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    // Wait for the screen to settle so the absence is not a pre-render artefact.
+    await waitFor(() => {
+      expect(screen.getByText(/Upload detection rules/i)).toBeTruthy();
+    });
+    expect(screen.queryByText("Existing Sentinel workspace inventory")).toBeNull();
+  });
+});

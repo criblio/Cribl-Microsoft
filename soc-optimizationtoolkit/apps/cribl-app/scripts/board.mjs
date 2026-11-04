@@ -58,7 +58,7 @@ const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
  * in `apps/cribl-app/src/App.tsx`, so the vocabulary cannot describe a menu the
  * app does not have. Their order here is the nav's order, by section.
  *
- * One id is NOT a route and is marked so below, because conflating it with
+ * The ids below are NOT routes and are marked so, because conflating them with
  * shipped menus is how a rollup starts overstating what exists:
  *
  *   windows-events    PLANNED. backlog.md#5's Windows Event analysis screen
@@ -85,6 +85,7 @@ export const MENUS = [
   'repositories',
   'labs',
   'logs',
+  'data-volume-inventory',
   'settings',
   // development
   'siem-migration',
@@ -120,10 +121,11 @@ export const MENU_LABELS = {
   harness: 'Diagnostics',
   'azure-onboarding': 'Azure Native Source Onboarding',
   'windows-events': 'Windows Event analysis (planned)',
+  'data-volume-inventory': 'Data Volume Inventory',
   none: 'Cross-cutting',
 };
 
-/** The one that names a screen nobody can open yet. */
+/** The menus that name a screen nobody can open yet. */
 export const PLANNED_MENUS = ['windows-events'];
 
 /**

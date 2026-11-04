@@ -849,6 +849,7 @@ describe("planCriblSource with Entra ID", () => {
   function graphOf(sps: ServicePrincipalRef[] | Error): GraphDirectory & { calls: number } {
     const g = {
       calls: 0,
+      readSubscribedSkus: async () => ({ kind: "denied" as const, status: 403, detail: "unused" }),
       listServicePrincipals: () => {
         g.calls += 1;
         return sps instanceof Error ? Promise.reject(sps) : Promise.resolve(sps);

@@ -63,7 +63,9 @@ management.azure.com:
 # proxy. Only Content-Type/Accept are forwarded so the browser's Origin cannot
 # reach Graph. Reading the directory REQUIRES the app registration to have
 # Application.Read.All (or Directory.Read.All) consented; without it Graph returns
-# 403 and the picker falls back to manual object-id entry.
+# 403 and the picker falls back to manual object-id entry. The data-allowances
+# licence read (GET /v1.0/subscribedSkus: SKUs and seat counts only) needs
+# LicenseAssignment.Read.All; without it the E5 granted figure shows as a floor.
 graph.microsoft.com:
   timeout: 30000
   headers:

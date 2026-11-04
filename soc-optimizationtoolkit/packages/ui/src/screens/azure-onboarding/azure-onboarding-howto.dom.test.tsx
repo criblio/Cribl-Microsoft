@@ -502,6 +502,7 @@ describe("AzureOnboardingScreen - the Cribl source create", () => {
     });
     let listed = 0;
     const graph: GraphDirectory = {
+      readSubscribedSkus: async () => ({ kind: "denied", status: 403, detail: "unused" }),
       listServicePrincipals: async () => {
         listed++;
         return [{ id: "object-real", appId: CRIBL_CLIENT, displayName: "cribl-reader" }];

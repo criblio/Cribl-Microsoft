@@ -23,6 +23,7 @@ export * from "./permission-preflight";
 export * from "./capability-audit";
 export * from "./workspace-tables";
 export * from "./workspace-inventory";
+export * from "./data-allowances";
 export * from "./install-pack";
 export * from "./dcr-inventory";
 export * from "./update-dcr";
