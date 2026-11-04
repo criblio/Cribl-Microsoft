@@ -6,6 +6,10 @@
  * lines. Series colors are the dataviz reference slots 1 and 2 (blue, orange),
  * validated for CVD separation against both theme surfaces, held in the
  * --chart-series-* tokens so the dark theme selects its own steps.
+ *
+ * The SVG scales with its card, so nothing that must stay legible lives in it:
+ * the first and last dates are HTML below the plot (fixed CSS px, never shrunk
+ * with the viewBox), and the lines keep 2px with non-scaling-stroke.
  */
 
 import { useState } from "react";
@@ -21,7 +25,7 @@ export interface EligibleAppliedChartProps {
 
 const W = 600;
 const H = 150;
-const PAD = { left: 8, right: 8, top: 10, bottom: 20 };
+const PAD = { left: 8, right: 8, top: 10, bottom: 6 };
 
 export function EligibleAppliedChart({ eligibleByDay, usedByDay, eligibleKnown }: EligibleAppliedChartProps) {
   const [hover, setHover] = useState<number | null>(null);
@@ -31,7 +35,10 @@ export function EligibleAppliedChart({ eligibleByDay, usedByDay, eligibleKnown }
   }
   const eligible = days.map((d) => eligibleByDay.get(d) ?? 0);
   const used = days.map((d) => usedByDay?.get(d) ?? 0);
-  const max = Math.max(1, ...(eligibleKnown ? eligible : []), ...(usedByDay !== null ? used : []));
+  // The readout names the real peak; only the scale needs a non-zero top, so
+  // an all-zero window draws flat lines instead of dividing by zero.
+  const peak = Math.max(0, ...(eligibleKnown ? eligible : []), ...(usedByDay !== null ? used : []));
+  const max = peak > 0 ? peak : 1;
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
   const x = (i: number) => PAD.left + (days.length === 1 ? plotW / 2 : (i / (days.length - 1)) * plotW);
@@ -40,7 +47,7 @@ export function EligibleAppliedChart({ eligibleByDay, usedByDay, eligibleKnown }
   const step = days.length === 1 ? plotW : plotW / (days.length - 1);
   const readout =
     hover === null
-      ? `Peak ${formatMB(max)} a day. Hover a day for its values.`
+      ? `Peak ${formatMB(peak)} a day. Hover a day for its values.`
       : `${days[hover]}: eligible ${eligibleKnown ? formatMB(eligible[hover]!) : "not read"}, applied ${
           usedByDay === null ? "pooled only" : formatMB(used[hover]!)
         }`;
@@ -71,17 +78,11 @@ export function EligibleAppliedChart({ eligibleByDay, usedByDay, eligibleKnown }
       >
         <line className="allowance-chart-grid" x1={PAD.left} x2={W - PAD.right} y1={y(max)} y2={y(max)} />
         <line className="allowance-chart-axis" x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} />
-        <text className="allowance-chart-label" x={PAD.left} y={H - 4}>
-          {days[0]}
-        </text>
-        <text className="allowance-chart-label" x={W - PAD.right} y={H - 4} textAnchor="end">
-          {days[days.length - 1]}
-        </text>
         {hover !== null && (
           <line className="allowance-chart-grid" x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={y(0)} />
         )}
-        {eligibleKnown && <path className="allowance-line-eligible" d={path(eligible)} />}
-        {usedByDay !== null && <path className="allowance-line-applied" d={path(used)} />}
+        {eligibleKnown && <path className="allowance-line-eligible" d={path(eligible)} vectorEffect="non-scaling-stroke" />}
+        {usedByDay !== null && <path className="allowance-line-applied" d={path(used)} vectorEffect="non-scaling-stroke" />}
         {days.map((d, i) => (
           <rect
             key={d}
@@ -94,6 +95,10 @@ export function EligibleAppliedChart({ eligibleByDay, usedByDay, eligibleKnown }
           />
         ))}
       </svg>
+      <div className="allowance-chart-dates">
+        <span>{days[0]}</span>
+        {days.length > 1 && <span>{days[days.length - 1]}</span>}
+      </div>
       <details className="gap-handles">
         <summary>Per-day values</summary>
         <div className="gap-handles-body">

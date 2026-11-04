@@ -9,6 +9,7 @@ import {
   discoverWorkspaces,
   inventoryWorkspace,
   SOURCE_BATCH_SIZE,
+  SOURCES_NOT_REQUESTED,
   WORKSPACE_QUERY_API_VERSION,
   workspaceArmId,
 } from "./workspace-inventory";
@@ -191,6 +192,26 @@ describe("inventoryWorkspace", () => {
     expect(rows.filter((t) => t.sources.kind === "failed").map((t) => t.table)).toEqual(["T3"]);
     // The failed table keeps its Usage volume.
     expect(rows[3]!.dailyAverageMB).toBe(1);
+  });
+
+  it("with sources: false reads Usage only, and marks every breakdown not read rather than empty", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(usage(["Syslog", 30], ["AWSCloudTrail", 60]));
+    const inv = await inventoryWorkspace(azure, WS, { sources: false });
+    expect(azure.calls).toHaveLength(1);
+    expect(inv.totals.dailyAverageMB).toBe(3);
+    expect(listingRows(inv.tables).map((t) => [t.table, t.sources])).toEqual([
+      ["Syslog", { kind: "failed", error: SOURCES_NOT_REQUESTED }],
+      ["AWSCloudTrail", { kind: "failed", error: SOURCES_NOT_REQUESTED }],
+    ]);
+    expect(inv.queries.sourcesExample).toBeNull();
+  });
+
+  it("reads the source breakdown by default", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(usage(["Syslog", 30]), sources(["Syslog", "h", 1]));
+    await inventoryWorkspace(azure, WS);
+    expect(azure.calls).toHaveLength(2);
   });
 
   it("exposes the queries that produced the numbers", async () => {

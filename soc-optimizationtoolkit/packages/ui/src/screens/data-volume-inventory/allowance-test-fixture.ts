@@ -3,7 +3,8 @@
  * every field set, overridable per test. Test-only; never imported by the app.
  */
 
-import type { DataAllowances, GrantUsage, GrantView } from "@soc/core";
+import { serversGranted } from "@soc/core";
+import type { DataAllowances, GrantUsage, GrantView, ServersSubscriptionRow } from "@soc/core";
 
 export function usage(partial: Partial<GrantUsage> = {}): GrantUsage {
   return {
@@ -31,6 +32,14 @@ export function grantView(partial: Partial<GrantView> = {}): GrantView {
   };
 }
 
+/** The servers block for `rows`, with `granted` computed from them as core does. */
+export function servers(
+  rows: ServersSubscriptionRow[] = [],
+  partial: Partial<Omit<DataAllowances["servers"], "rows" | "granted">> = {},
+): DataAllowances["servers"] {
+  return { rows, unattributedMachines: 0, heartbeatComplete: true, ...partial, granted: serversGranted(rows) };
+}
+
 export function allowances(partial: Partial<DataAllowances> = {}): DataAllowances {
   return {
     attribution: "per-grant",
@@ -41,8 +50,8 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     sumsAreFloors: false,
     usedIsFloor: false,
     licences: { kind: "not-bound" },
-    servers: { rows: [], unattributedMachines: 0, heartbeatComplete: true },
-    scope: { kind: "workspace", sentinelWorkspaces: 1 },
+    servers: servers(),
+    scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: false },
     queries: {
       benefit: "Operation | benefit",
       eligible: "Usage | eligible",

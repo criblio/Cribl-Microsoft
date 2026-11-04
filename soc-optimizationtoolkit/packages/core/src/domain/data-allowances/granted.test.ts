@@ -129,6 +129,56 @@ describe("e5Granted", () => {
   });
 });
 
+describe("e5Granted - the may-qualify pattern (MIG-22)", () => {
+  const id = "11111111-0000-0000-0000-000000000000";
+
+  it.each(["M365_FLW_ODD", "ODD_A5_X", "ODD_F5_X", "ODD_G5_X", "ODD_E7_X", "odd_flw_lowercase"])(
+    "%s looks like the offer and is flagged may-qualify, not granted",
+    (part) => {
+      const r = e5Granted([sku({ skuId: id, skuPartNumber: part, consumed: 10 })]);
+      expect(r.rows[0]!.qualifies).toBe(false);
+      expect(r.rows[0]!.reason.startsWith("may qualify")).toBe(true);
+      expect(r.possiblyMissing).toBe(10);
+      expect(r.assigned).toBe(0);
+    },
+  );
+
+  it("a part number with none of those markers is plainly not in the offer", () => {
+    const r = e5Granted([sku({ skuId: id, skuPartNumber: "SPE_E3_X", consumed: 10 })]);
+    expect(r.rows[0]!.reason).toContain("not in the Microsoft 365 E5/A5/F5/G5/E7 offer");
+    expect(r.possiblyMissing).toBe(0);
+  });
+});
+
+describe("e5Granted - SKU status and overlap (MIG-21)", () => {
+  it("counts seats only on Enabled or Warning SKUs; a dead SKU stays in the table but grants nothing", () => {
+    for (const status of ["Suspended", "LockedOut", "Deleted"]) {
+      const r = e5Granted([E5, { ...SEC, capabilityStatus: status }]);
+      expect(r.assigned).toBe(1940);
+      expect(r.purchased).toBe(2000);
+      expect(r.grantedMB).toEqual({ assigned: 9700, purchased: 10000 });
+      const dead = r.rows.find((x) => x.skuPartNumber === "IDENTITY_THREAT_PROTECTION");
+      expect(dead?.capabilityStatus).toBe(status);
+      expect(dead?.qualifies).toBe(true);
+      expect(dead?.reason).toBe(
+        `Qualifies: Microsoft 365 E5 Security family, but the SKU is ${status}, so its seats are not counted`,
+      );
+    }
+    const grace = e5Granted([{ ...E5, capabilityStatus: "Warning" }]);
+    expect(grace.assigned).toBe(1940);
+    expect(grace.purchased).toBe(2000);
+  });
+
+  it("flags assigned as possibly double-counted only when two live qualifying SKUs have seats", () => {
+    expect(e5Granted([E5, SEC]).assignedMayDoubleCount).toBe(true);
+    expect(e5Granted([E5]).assignedMayDoubleCount).toBe(false);
+    expect(e5Granted([E5, { ...SEC, consumed: 0 }]).assignedMayDoubleCount).toBe(false);
+    expect(e5Granted([E5, { ...SEC, capabilityStatus: "Suspended" }]).assignedMayDoubleCount).toBe(false);
+    // A non-qualifying SKU with seats is not an overlap.
+    expect(e5Granted([E5, E3]).assignedMayDoubleCount).toBe(false);
+  });
+});
+
 describe("serversGranted", () => {
   const row = (
     plan: ServersSubscriptionRow["plan"],
@@ -141,20 +191,17 @@ describe("serversGranted", () => {
     machinesReportingHere: here,
   });
   it("grants only P2 subscriptions, by machines reporting here", () => {
-    const r = serversGranted([row("P2", 46, 80), row("P2", 14, 20), row("P1", 9, 9)], 0);
+    const r = serversGranted([row("P2", 46, 80), row("P2", 14, 20), row("P1", 9, 9)]);
     expect(r.grantedMB.reportingHere).toBe(30000);
     expect(r.grantedMB.inSubscription).toBe(50000);
     expect(r.atLeast).toBe(false);
+    expect(r.machines).toEqual({ reportingHere: 60, inSubscription: 100 });
   });
   it("is a lower bound when a subscription was not read", () => {
-    expect(serversGranted([row("P2", 46), row("not-read", 5)], 0).atLeast).toBe(true);
+    expect(serversGranted([row("P2", 46), row("not-read", 5)]).atLeast).toBe(true);
   });
   it("is null for in-subscription when a P2 count is unknown", () => {
-    expect(serversGranted([row("P2", 46, null)], 0).grantedMB.inSubscription).toBeNull();
-  });
-  it("never lets unattributed machines change the granted figure", () => {
-    const rows = [row("P2", 46), row("P2", 14)];
-    expect(serversGranted(rows, 0)).toEqual(serversGranted(rows, 500));
+    expect(serversGranted([row("P2", 46, null)]).grantedMB.inSubscription).toBeNull();
   });
 });
 

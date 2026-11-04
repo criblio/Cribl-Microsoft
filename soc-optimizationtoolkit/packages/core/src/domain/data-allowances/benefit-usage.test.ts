@@ -41,6 +41,38 @@ describe("parseBenefitRows", () => {
   });
 });
 
+describe("parseBenefitRows - unreadable amounts (MIG-21)", () => {
+  it("drops a null, empty or non-numeric amount and counts it, never reading it as 0 MB", () => {
+    const r = parseBenefitRows([
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: null },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "" },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "  " },
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: "n/a" },
+      { Day: "d1", BenefitType: "M365 E5" },
+      { Day: "", BenefitType: "M365 E5", BenefitUsedGB: 1 },
+      { Day: "d2", BenefitType: "M365 E5", BenefitUsedGB: "1.5" },
+      { Day: "d3", BenefitType: "M365 E5", BenefitUsedGB: 0 },
+    ]);
+    expect(r.unreadableRows).toBe(6);
+    expect(r.days).toEqual([
+      { day: "d2", grant: "e5", usedMB: 1500 },
+      { day: "d3", grant: "e5", usedMB: 0 },
+    ]);
+  });
+  it("adds the events the server-side sum() skipped (Unreadable) to the count", () => {
+    const r = parseBenefitRows([
+      { Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: 2, Unreadable: 3 },
+      { Day: "d2", BenefitType: "M365 E5", BenefitUsedGB: null, Unreadable: 4 },
+      { Day: "d3", BenefitType: "M365 E5", BenefitUsedGB: 1, Unreadable: 0 },
+    ]);
+    expect(r.unreadableRows).toBe(7);
+    expect(r.days.map((d) => d.usedMB)).toEqual([2000, 1000]);
+  });
+  it("counts nothing unreadable when every row reads", () => {
+    expect(parseBenefitRows([{ Day: "d1", BenefitType: "M365 E5", BenefitUsedGB: 2 }]).unreadableRows).toBe(0);
+  });
+});
+
 describe("foldGrantUsage", () => {
   it("computes over, capped days and max used", () => {
     const g = foldGrantUsage(
@@ -97,7 +129,7 @@ describe("queries", () => {
 });
 
 describe("query column contracts (a renamed column must fail here, not read as 'no benefit')", () => {
-  it("freezes BENEFIT_QUERY: it outputs Day, BenefitType and BenefitUsedGB, what parseBenefitRows reads", () => {
+  it("freezes BENEFIT_QUERY: it outputs Day, BenefitType, BenefitUsedGB and Unreadable, what parseBenefitRows reads", () => {
     expect(BENEFIT_QUERY).toBe(
       [
         "Operation",
@@ -105,7 +137,7 @@ describe("query column contracts (a renamed column must fail here, not read as '
         '| where Detail startswith "Benefit amount used"',
         "| extend BenefitType = replace_string(OperationKey, 'Benefit type used: ', ''),",
         "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+(?:[eE][-+]?[0-9]+)?)', 1, Detail))",
-        "| summarize BenefitUsedGB = sum(BenefitUsedGB)",
+        "| summarize BenefitUsedGB = sum(BenefitUsedGB), Unreadable = countif(isnull(BenefitUsedGB))",
         "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), BenefitType",
         "| order by Day asc",
       ].join("\n"),
