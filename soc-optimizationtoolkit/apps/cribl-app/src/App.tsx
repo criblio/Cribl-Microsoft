@@ -33,6 +33,7 @@ import {
   SettingsScreen,
   SetupWizard,
   SiemMigrationScreen,
+  WorkspaceInventoryPanel,
   capabilitiesForRoute,
   commitNoticeText,
   formatScopeChip,
@@ -2193,6 +2194,37 @@ function App() {
     </>
   );
 
+  // Data Volume Inventory (MIG-10): what an existing workspace ingests. Moved
+  // out of SIEM Migration, which is an export analysis; this one reads a live
+  // workspace and needs no upload.
+  const renderDataVolumeInventory = (nav: AppFrameNav) => (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Data Volume Inventory</h1>
+        <p className="harness-subtitle">
+          What an existing Log Analytics or Sentinel workspace ingests: every
+          table, the sources feeding it, the daily volume, and the data
+          allowances that make some of it free.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        {/* A refused licence read links to the change request on Setup: open
+            Setup, then scroll to its section once navigation settles, as the
+            Setup page's own same-route actions do. */}
+        <WorkspaceInventoryPanel
+          onOpenChangeRequest={() => {
+            nav.navigate('home');
+            window.setTimeout(() => {
+              document
+                .getElementById(SETUP_CONNECT_ANCHOR)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 60);
+          }}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // Vendor Mapping Catalog: the documented source-field -> Sentinel-column
   // suggestions the analysis applies (hand-verified vendor-doc citations +
   // Elastic-mined entries). Pure bundled data; no ports, no IO.
@@ -2393,6 +2425,7 @@ function App() {
     { id: 'repositories', label: 'Repositories', requires: capabilitiesForRoute('repositories'), section: 'tools', render: () => repositoriesView },
     { id: 'labs', label: 'Labs', requires: capabilitiesForRoute('labs'), section: 'tools', render: () => labsView },
     { id: 'logs', label: 'Logs', requires: capabilitiesForRoute('logs'), section: 'tools', render: () => logsView },
+    { id: 'data-volume-inventory', label: 'Data Volume Inventory', requires: capabilitiesForRoute('data-volume-inventory'), section: 'tools', render: renderDataVolumeInventory },
     { id: 'settings', label: 'Settings', requires: capabilitiesForRoute('settings'), section: 'tools', render: () => settingsView },
     { id: 'siem-migration', label: 'SIEM Migration', requires: capabilitiesForRoute('siem-migration'), section: 'development', render: renderSiemMigration },
     { id: 'preflight', label: 'Permission Verification', requires: capabilitiesForRoute('preflight'), section: 'development', render: renderPreflight },

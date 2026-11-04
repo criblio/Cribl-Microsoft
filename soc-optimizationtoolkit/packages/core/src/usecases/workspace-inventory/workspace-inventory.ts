@@ -223,7 +223,7 @@ export interface WorkspaceInventory {
 }
 
 /** One query through the ARM passthrough. Throws with greppable text on non-2xx. */
-async function runWorkspaceQuery(
+export async function runWorkspaceQuery(
   azure: AzureManagement,
   workspaceId: string,
   query: string,
@@ -265,14 +265,22 @@ async function readSources(
   }
 }
 
+/** Why a table has no breakdown when the caller asked for Usage totals only. */
+export const SOURCES_NOT_REQUESTED = "source breakdown not requested (Usage totals only)";
+
 /**
  * Inventory one workspace. Throws when Usage cannot be read; every later
  * failure is carried on the table it affects.
+ *
+ * `sources: false` reads Usage only - one query instead of one per ten tables
+ * - for a caller that needs the totals (the tenant comparison). Each table's
+ * breakdown is then `failed` with SOURCES_NOT_REQUESTED: not read, never "no
+ * sources".
  */
 export async function inventoryWorkspace(
   azure: AzureManagement,
   workspaceId: string,
-  options: { logger?: Logger; onProgress?: (message: string) => void } = {},
+  options: { logger?: Logger; onProgress?: (message: string) => void; sources?: boolean } = {},
 ): Promise<WorkspaceInventory> {
   options.onProgress?.("Reading 30 days of billed volume from the Usage table");
   const usage = await runWorkspaceQuery(azure, workspaceId, USAGE_QUERY, "read Usage");
@@ -285,6 +293,19 @@ export async function inventoryWorkspace(
       windowDays: INVENTORY_WINDOW_DAYS,
       // A Usage answer with rows dropped as nameless is still not a verified zero.
       tables: usage.rows.length === 0 && usage.warning === null ? { kind: "none" } : { kind: "empty" },
+      totals,
+      usageWarning: usage.warning,
+      queries: { usage: USAGE_QUERY, sourcesExample: null },
+    };
+  }
+
+  if (options.sources === false) {
+    return {
+      workspaceId,
+      windowDays: INVENTORY_WINDOW_DAYS,
+      tables: toListing(
+        usageRows.map((r) => toInventoryTable(r, { kind: "failed", error: SOURCES_NOT_REQUESTED })),
+      ),
       totals,
       usageWarning: usage.warning,
       queries: { usage: USAGE_QUERY, sourcesExample: null },

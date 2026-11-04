@@ -46,7 +46,7 @@ export const BYTES_PER_MB = 1_000_000;
 /** ISO-8601 timespan sent with every query; wider than the KQL filter, which is the real bound. */
 export const INVENTORY_TIMESPAN = `P${INVENTORY_WINDOW_DAYS + 1}D`;
 
-const WINDOW_FILTER =
+export const WINDOW_FILTER =
   `TimeGenerated >= startofday(now()) - ${INVENTORY_WINDOW_DAYS}d ` +
   "and TimeGenerated < startofday(now())";
 

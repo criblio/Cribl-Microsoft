@@ -561,6 +561,8 @@ export type {
   SelectableWorkbook,
 } from "./screens/content-install/content-install-state";
 
+export { WorkspaceInventoryPanel } from "./screens/data-volume-inventory/workspace-inventory-panel";
+
 // SIEM Migration (porting-plan Unit 26, ENG-40 + GUI-22): the rebuilt
 // migration analyzer - upload a Splunk/QRadar export, map its data sources
 // to Sentinel solutions, enrich with the solutions' analytics rules, pivot

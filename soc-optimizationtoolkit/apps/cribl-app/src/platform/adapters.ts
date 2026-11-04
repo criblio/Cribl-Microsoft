@@ -402,6 +402,9 @@ const GRAPH_MAX_PAGES = 20;
 const GRAPH_SP_URL =
   `${GRAPH_BASE_URL}/v1.0/servicePrincipals?$select=id,appId,displayName&$top=100`;
 
+const GRAPH_SKUS_URL =
+  `${GRAPH_BASE_URL}/v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo`;
+
 /** Map one Graph servicePrincipals `value[]` body into ServicePrincipalRefs. */
 function mapServicePrincipals(body: unknown): ServicePrincipalRef[] {
   const value = prop(body, 'value');
@@ -493,6 +496,33 @@ export class PlatformGraphDirectory implements GraphDirectory {
       body = page.body;
     }
     return out;
+  }
+
+  async readSubscribedSkus(): Promise<
+    { kind: 'read'; body: unknown } | { kind: 'denied'; status: number; detail: string }
+  > {
+    if (!this.tokenEnsured) {
+      await this.ensureGraphToken();
+    }
+    let res = await this.page(GRAPH_SKUS_URL);
+    if (res.status === 401 || res.status === 403) {
+      // Same single re-acquire as listServicePrincipals: a token minted before
+      // the LicenseAssignment.Read.All consent keeps answering 403.
+      await this.ensureGraphToken();
+      res = await this.page(GRAPH_SKUS_URL);
+    }
+    if (res.status === 200) {
+      return { kind: 'read', body: res.body };
+    }
+    const hint =
+      res.status === 403
+        ? ' - the app registration needs LicenseAssignment.Read.All consented to read license SKUs and seat counts'
+        : '';
+    return {
+      kind: 'denied',
+      status: res.status,
+      detail: `Graph subscribedSkus: HTTP ${res.status}${hint}`,
+    };
   }
 }
 

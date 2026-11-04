@@ -105,6 +105,18 @@ export const GRAPH_PERMISSIONS: readonly AppPermission[] = Object.freeze([
     necessity: "feature" as const,
     assignViaPortal: true,
   }),
+  Object.freeze({
+    kind: "graph-api" as const,
+    name: "LicenseAssignment.Read.All",
+    scopeLevel: "tenant" as const,
+    feature: "Show how much of the E5 data allowance is granted",
+    justification:
+      "Microsoft 365 E5-family licences grant free Sentinel ingestion of 5 MB per licensed seat per day, so the granted figure is a seat count times 5 MB. The app reads the tenant's license SKUs and their seat counts (GET /v1.0/subscribedSkus: SKU id, part number, purchased and assigned seats) - not who holds them. Organization.Read.All and Directory.Read.All also satisfy this call but read far more of the directory; LicenseAssignment.Read.All is the least-privilege choice.",
+    withoutIt:
+      "Used and over-allowance figures still come from the workspace; the granted figure shows as at least the largest benefit Microsoft applied on one day, and headroom is not shown.",
+    necessity: "feature" as const,
+    assignViaPortal: true,
+  }),
 ]);
 
 /**

@@ -8,6 +8,7 @@
 
 import { listingRows, parseResourceId } from "@soc/core";
 import type {
+  DataAllowances,
   DiscoveredWorkspace,
   InventorySource,
   InventoryTable,
@@ -15,20 +16,14 @@ import type {
   WorkspaceInventory,
 } from "@soc/core";
 import type { SelectOption } from "../../components/searchable-select";
+import { allowanceCsvCells } from "./allowance-state";
 
-/** Decimal units, matching Usage's MB (10^6 bytes) and the Azure portal. */
-export function formatMB(mb: number): string {
-  if (mb >= 1_000_000) return `${(mb / 1_000_000).toFixed(2)} TB`;
-  if (mb >= 1_000) return `${(mb / 1_000).toFixed(2)} GB`;
-  if (mb >= 1) return `${mb.toFixed(1)} MB`;
-  if (mb > 0) return `${(mb * 1_000).toFixed(1)} KB`;
-  return "0 MB";
-}
+export { formatMB } from "./format-mb";
 
-/** What the source cell says, and the full value for its title. */
+/** What the source cell says, and the full value or meaning for its InfoTip. */
 export interface SourceLabel {
   text: string;
-  title: string;
+  tip: string;
   kind: string;
 }
 
@@ -39,24 +34,24 @@ export function sourceLabel(source: InventorySource): SourceLabel {
       const parsed = parseResourceId(source.source);
       return {
         text: parsed.name || source.source,
-        title: source.source,
+        tip: source.source,
         kind: parsed.resourceType || "Azure resource",
       };
     }
     case "computer":
-      return { text: source.source, title: source.source, kind: "Computer" };
+      return { text: source.source, tip: source.source, kind: "Computer" };
     case "device":
-      return { text: source.source, title: source.source, kind: "CEF device" };
+      return { text: source.source, tip: source.source, kind: "CEF device" };
     case "other":
       return {
         text: `${source.sourceCount} other sources`,
-        title: "Every source past the largest 25 of this table, summed",
+        tip: "Every source past the largest 25 of this table, summed",
         kind: "Remainder",
       };
     default:
       return {
         text: "Unattributed",
-        title:
+        tip:
           "These rows carry no _ResourceId, Computer or DeviceVendor/DeviceProduct, " +
           "so nothing in the row says where it came from (typical of SaaS and AWS connectors)",
         kind: "None",
@@ -153,8 +148,13 @@ export function sourceCount(table: InventoryTable): number | null {
   return table.sources.sources.reduce((sum, s) => sum + s.sourceCount, 0);
 }
 
-/** A CSV of the inventory, one row per table source, for the migration ticket. */
-export function inventoryCsv(inventory: WorkspaceInventory): string {
+/**
+ * A CSV of the inventory, one row per table source, for the migration ticket.
+ * The allowance columns repeat the grant-level figures per row; with no
+ * allowance result (or an unknown figure) those cells are empty, never 0.
+ * AllowanceFigures says whether they are exact or lower bounds.
+ */
+export function inventoryCsv(inventory: WorkspaceInventory, allowances: DataAllowances | null): string {
   const esc = (v: string | number) => {
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -163,6 +163,8 @@ export function inventoryCsv(inventory: WorkspaceInventory): string {
     [
       "Table", "TableDailyAvgMB", "TableBillableMB", "DaysWithData", "Solutions",
       "Source", "SourceKind", "SourceDailyAvgMB", "SourceEvents", "SourceStatus",
+      "Allowance", "AllowanceEligibleDailyMB", "AllowanceUsedDailyMB", "AllowanceOverDailyMB",
+      "AllowanceFigures",
     ].join(","),
   ];
   for (const t of listingRows(inventory.tables)) {
@@ -170,15 +172,16 @@ export function inventoryCsv(inventory: WorkspaceInventory): string {
       t.table, t.dailyAverageMB.toFixed(3), t.billableMB.toFixed(3), t.daysWithData,
       t.solutions.join(" "),
     ];
+    const allowance = allowanceCsvCells(t.table, allowances);
     if (t.sources.kind === "failed") {
-      lines.push([...head, "", "", "", "", `failed: ${t.sources.error}`].map(esc).join(","));
+      lines.push([...head, "", "", "", "", `failed: ${t.sources.error}`, ...allowance].map(esc).join(","));
       continue;
     }
     const status = t.sources.kind === "partial" ? `partial: ${t.sources.warning}` : "read";
     for (const s of t.sources.sources) {
       const label = sourceLabel(s);
       lines.push(
-        [...head, s.source || label.text, label.kind, s.dailyAverageMB.toFixed(3), s.events, status]
+        [...head, s.source || label.text, label.kind, s.dailyAverageMB.toFixed(3), s.events, status, ...allowance]
           .map(esc)
           .join(","),
       );
