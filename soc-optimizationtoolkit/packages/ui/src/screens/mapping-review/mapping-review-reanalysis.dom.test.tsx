@@ -47,7 +47,9 @@ function chooseOption(control: HTMLElement, text: string): void {
   const option = [
     ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
       []),
-  ].find((o) => o.textContent === text);
+  ]// The option label, not its text: Dest Field options carry the column type
+    // as a hint (DBT-251), so the row text is "Name" + "type".
+    .find((o) => (o.querySelector(".searchable-select-option-label")?.textContent ?? o.textContent) === text);
   if (option === undefined) throw new Error(`no option "${text}"`);
   fireEvent.click(option);
 }

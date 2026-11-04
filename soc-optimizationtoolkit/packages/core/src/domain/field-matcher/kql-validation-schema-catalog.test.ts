@@ -20,6 +20,7 @@ import type { SchemaCatalog } from "../../ports/schema-catalog";
 import {
   KQL_VALIDATION_TABLES_DIR,
   createKqlValidationSchemaCatalog,
+  listKqlValidationTableNames,
   mapValidationColumnType,
   parseKqlValidationTable,
 } from "./kql-validation-schema-catalog";
@@ -106,5 +107,34 @@ describe("createKqlValidationSchemaCatalog", () => {
     first![0].name = "MUTATED";
     const second = await catalog.resolveSchema("Cloudflare_CL");
     expect(second?.[0].name).toBe("TimeGenerated");
+  });
+});
+
+describe("listKqlValidationTableNames (DBT-250)", () => {
+  it("lists every defined table by name, .json stripped, deduped by case, sorted", async () => {
+    const content = new FakeSentinelContent({
+      files: {
+        [`${KQL_VALIDATION_TABLES_DIR}/Cloudflare_CL.json`]: CLOUDFLARE_FIXTURE,
+        [`${KQL_VALIDATION_TABLES_DIR}/ASimDnsActivityLogs.json`]: "{}",
+        [`${KQL_VALIDATION_TABLES_DIR}/cloudflare_cl.JSON`]: "{}",
+        [`${KQL_VALIDATION_TABLES_DIR}/README.md`]: "not a table",
+        [`${KQL_VALIDATION_TABLES_DIR}/nested/Other.json`]: "{}",
+      },
+    });
+    const names = await listKqlValidationTableNames(content);
+    // Two casings of one table are ONE option; which spelling survives is the
+    // listing's order, so assert the identity rather than the casing.
+    expect(names.map((n) => n.toLowerCase())).toEqual([
+      "asimdnsactivitylogs",
+      "cloudflare_cl",
+    ]);
+  });
+
+  it("throws when the repo cannot be listed, so unreachable never reads as empty", async () => {
+    const content = new FakeSentinelContent({ files: {} });
+    content.listRepoFiles = async () => {
+      throw new Error("403 rate limited");
+    };
+    await expect(listKqlValidationTableNames(content)).rejects.toThrow("403");
   });
 });

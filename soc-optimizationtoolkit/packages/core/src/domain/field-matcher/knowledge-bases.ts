@@ -446,7 +446,99 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   http_code: ["EventOutcome"],
   reqaction: ["DeviceAction"],
   error: ["Reason"],
+
+  // PAN-OS TRAFFIC counters and locations -> ASim network session (DBT-253).
+  // Field meanings per PAN's TRAFFIC log field descriptions: packets/bytes are
+  // the session TOTALS, pkts_sent/pkts_received the client->server and
+  // server->client halves, srcloc/dstloc the country (or "internal region"
+  // range for private addresses). No CommonSecurityLog column has these
+  // names, so CEF matching is unchanged.
+  //
+  // NOT HERE ON PURPOSE: elapsed. PAN reports seconds; ASim NetworkDuration is
+  // milliseconds. A rename would store a value 1000x too small - it needs a
+  // scaling eval in the pipeline, not an alias.
+  packets: ["NetworkPackets"],
+  bytes: ["NetworkBytes"],
+  pkts_sent: ["SrcPackets"],
+  pkts_received: ["DstPackets"],
+  srcloc: ["SrcGeoCountry"],
+  dstloc: ["DstGeoCountry"],
 };
+
+/**
+ * Alias target -> its ASim normalized-schema equivalent (DBT-252, DBT-253).
+ * Mostly CommonSecurityLog columns, plus a few targets the PAN-OS entries name
+ * that no CEF table has (SourceZone, SessionID).
+ *
+ * ALIAS_TABLE and the vendor packs name CEF / CommonSecurityLog columns
+ * (dst -> DestinationIP). Pointed at an ASim table, none of those columns
+ * exist, so src/dst/ports/bytes all fell to the catch-all. Rather than edit the
+ * characterization-pinned alias entries, the matcher treats a column as an
+ * alias target when it is the ASim equivalent of one. A schema only ever has
+ * one of the pair, so CommonSecurityLog matching cannot change.
+ *
+ * Every right-hand side is a real column of at least one bundled ASim table
+ * (checked 2026-11-04). Directions follow the ASim convention: Src is the
+ * session initiator, so CEF SentBytes (initiator -> responder) is SrcBytes.
+ */
+export const ASIM_COLUMN_EQUIVALENTS: Readonly<Record<string, string>> = {
+  SourceIP: "SrcIpAddr",
+  DestinationIP: "DstIpAddr",
+  SourcePort: "SrcPortNumber",
+  DestinationPort: "DstPortNumber",
+  SourceTranslatedAddress: "SrcNatIpAddr",
+  SourceTranslatedPort: "SrcNatPortNumber",
+  DestinationTranslatedAddress: "DstNatIpAddr",
+  DestinationTranslatedPort: "DstNatPortNumber",
+  SentBytes: "SrcBytes",
+  ReceivedBytes: "DstBytes",
+  SourceUserName: "SrcUsername",
+  DestinationUserName: "DstUsername",
+  SourceHostName: "SrcHostname",
+  DestinationHostName: "DstHostname",
+  SourceMACAddress: "SrcMacAddr",
+  DestinationMACAddress: "DstMacAddr",
+  DeviceAction: "DvcAction",
+  Protocol: "NetworkProtocol",
+  ApplicationProtocol: "NetworkApplicationProtocol",
+  DeviceInboundInterface: "DvcInboundInterface",
+  DeviceOutboundInterface: "DvcOutboundInterface",
+  DeviceName: "DvcHostname",
+  DeviceAddress: "DvcIpAddr",
+  RequestURL: "Url",
+  RequestMethod: "HttpRequestMethod",
+  RequestClientApplication: "HttpUserAgent",
+  DestinationDnsDomain: "DnsQuery",
+  FileName: "FileName",
+  FileSize: "FileSize",
+  Message: "EventMessage",
+  ExternalID: "EventOriginalUid",
+  // DBT-253: alias targets that are not CommonSecurityLog columns at all - the
+  // PAN-OS entries above name them (from -> SourceZone) and on CEF they never
+  // matched anything. On an ASim table they now land.
+  SourceZone: "SrcZone",
+  DestinationZone: "DstZone",
+  SessionID: "NetworkSessionId",
+  StartTime: "EventStartTime",
+};
+
+/** Lowercased CEF column -> ASim column, and the reverse. */
+const ASIM_BY_CEF_LOWER = new Map<string, string>(
+  Object.entries(ASIM_COLUMN_EQUIVALENTS).map(([cef, asim]) => [cef.toLowerCase(), asim]),
+);
+const CEF_BY_ASIM_LOWER = new Map<string, string>(
+  Object.entries(ASIM_COLUMN_EQUIVALENTS).map(([cef, asim]) => [asim.toLowerCase(), cef]),
+);
+
+/** The ASim equivalent of a CommonSecurityLog column, or undefined. */
+export function asimEquivalentOf(cefColumn: string): string | undefined {
+  return ASIM_BY_CEF_LOWER.get(cefColumn.toLowerCase());
+}
+
+/** The CommonSecurityLog column an ASim column stands in for, or undefined. */
+export function cefEquivalentOf(asimColumn: string): string | undefined {
+  return CEF_BY_ASIM_LOWER.get(asimColumn.toLowerCase());
+}
 
 /** Reverse lookup: destName (lowercased) -> sourceNames (lowercased). */
 export const REVERSE_ALIAS: Map<string, Set<string>> = new Map();

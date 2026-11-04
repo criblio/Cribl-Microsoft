@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 36 in progress, 183 done.**
+**106 in the backlog, 36 in progress, 187 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 51 | 90 | 23 |
+| Sentinel Integration | 51 | 94 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -117,16 +117,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 59% (99/167)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (103/171)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 49/60 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-249 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 40/88 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 51/62 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-250 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -2762,7 +2762,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (183)
+## Done (187)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7241,6 +7241,147 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   repositories-screen.tsx:352 says only public_repo is needed;
   pat-policy.ts:39-43 says a classic token needs no scopes.
 
+- **DBT-250** Gap Analysis destination-table override offers only 4 tables when the workspace listing does not run
+  `DBT-F2` `bug` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-04: the per-log-type table override in DCR Gap
+  Analysis regressed to four tables. CAUSE: candidateTables
+  (mapping-review-section.tsx) unions the solution resolution, current
+  reports, the four COMMON_NATIVE_TABLES and the live workspace listing. Since
+  GEN-28 (62b674fc) the listing is gated on scopeCommitted &&
+  azureNeeds.scope, which is false on the existing-destination path, so the
+  listing never runs and no note is shown - only the four natives remain. The
+  schema repo (Azure-Sentinel KQL-validation CustomTables) was only ever a
+  column-resolution tier, never a source of selectable names. FIX: the
+  override also offers the KQL-validation repo table names and the bundled
+  DCR-template table names, independent of Azure reachability; workspace
+  tables still merge on top. EXTENDED BY THE USER 2026-11-04: "If the table
+  doesn't exist in the workspace we should highlight that as well... in the
+  event we cannot read the workspace the user should still be allowed to
+  override the analysis and create the pack with the mapping they want."
+  BUILT: core listKqlValidationTableNames (throws on an unreadable repo, never
+  resolves [] for it); ui destination-table-options.ts owns the options and a
+  three-valued workspace presence (present / absent / unknown - unknown
+  whenever the listing did not complete or came back empty, and nothing is
+  flagged then); useWorkspaceTables exposes verified; an absent pick shows a
+  warning under the card and is never a gate. Pins: 2 core, 7 decision, 3
+  hook, 3 component seam; seam pins mutation-checked (cutting the repo names
+  and ignoring verified each fail them). Full gates green. DONE 2026-11-04.
+  LIVE on the jpederson org Live Preview (PaloAlto-PAN-OS, TRAFFIC sample):
+  the selector lists the schema-repo tables beside the workspace ones;
+  42CrunchAPIProtection carried "not in workspace", picking it showed the
+  warning under the card and re-analysed against its repo schema (26
+  destination columns) with nothing gated; restored to CommonSecurityLog (156
+  columns, no warning). The unreadable-workspace branch was verified by pins
+  only - the live workspace listing succeeded.
+
+- **DBT-251** Dest Field in the Gap Analysis field mappings gets a filter box
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-04: "The Dest Field drop down in the field
+  mapping of the DCR Gap analysis section should have a filter box so I don't
+  have to scroll through the whole list of destination fields when changing
+  the mapping." The Dest Field cell is a native <select> over the whole
+  destination schema (156 columns for CommonSecurityLog). PLAN: render it as
+  the shared SearchableSelect (filter box, bounded list, keyboard), and have
+  SearchableSelect return focus to its control after a pick so the Dest Field
+  claim panel (DBT-208) still returns focus to the control that opened it.
+  DONE 2026-11-04. Dest Field is the shared SearchableSelect
+  (destFieldOptions: schema order, type as the hint, an off-schema current
+  dest such as the catch-all listed first); SearchableSelect now returns focus
+  to its control on a pick (before onChange) and on Escape, which keeps the
+  DBT-208 claim panel's focus contract. Pins: 2 SearchableSelect focus, 3
+  destFieldOptions, 1 row filter, and the existing remap / dest-claim /
+  reanalysis / coverage-apply DOM tests moved onto a shared
+  dest-field-test-driver; removing the focus call fails 3 of them. LIVE on the
+  jpederson org Live Preview: typing geo in dstloc's Dest Field narrowed 149
+  columns to the Src/Dst geo columns with their types; Escape closed it with
+  nothing chosen.
+
+- **DBT-252** Re-pointing a log type at an ASim table leaves its fields in AdditionalExtensions instead of mapping them
+  `DBT-F1` `bug` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-04: switching the PaloAlto TRAFFIC sample from
+  CommonSecurityLog to ASimNetworkSessionLogs left "a bunch of left overs that
+  are still trying to map to the AdditionalExtension field which doesn't exist
+  in that table... simple Dst should be the field the destination IP maps to".
+  The analysis DOES re-run against the new schema; three defects spoil it.
+  REPRODUCED against the bundled ASimNetworkSessionLogs schema (139 columns)
+  with the PaloAlto vendor packs: (1) getOverflowConfig (overflow.ts) falls
+  back to the CEF column AdditionalExtensions for any table not in its map, so
+  every ASim table overflows into a column it does not have - ASim tables
+  carry AdditionalFields (dynamic); (2) the alias knowledge
+  (knowledge-bases.ts) is CEF-only - dst aliases
+  DestinationIP/DestinationAddress/DstAddr - so src, dst, sport, dport,
+  natsrc, bytes_sent, bytes_received all overflow instead of reaching
+  SrcIpAddr, DstIpAddr, SrcPortNumber, DstPortNumber, SrcNatIpAddr, SrcBytes,
+  DstBytes; (3) the fuzzy tier ignores src/dst polarity: srcuser matched
+  DstUserId. FIXED 2026-11-04: (1) getOverflowConfig sends ASim* tables to
+  AdditionalFields (dynamic); (2) knowledge-bases ASIM_COLUMN_EQUIVALENTS maps
+  31 CommonSecurityLog columns to their ASim columns (every one checked
+  against the bundled ASim schemas), the alias tier accepts a column that is
+  the ASim equivalent of a known alias, and analyze-samples re-aims a
+  learned/pack mapping at the equivalent instead of filtering it out; (3) a
+  polarity guard stops the fuzzy rungs crossing source/destination prefixes.
+  CommonSecurityLog matching is pinned unchanged. 10 pins in
+  asim-equivalents.test.ts; each of the four fixes fails them when removed.
+  LIVE on the jpederson org Live Preview, PaloAlto TRAFFIC ->
+  ASimNetworkSessionLogs: 28 mapped by the Cribl pipeline, leftovers in
+  AdditionalFields (dynamic); dst -> DstIpAddr, dport -> DstPortNumber,
+  dstuser -> DstUsername, natdst -> DstNatIpAddr, bytes_received -> DstBytes,
+  all alias. Restored to CommonSecurityLog (27 mapped, 44 overflow, as
+  before). LEFT OPEN: PAN-specific fields (from/to zones, srcloc/dstloc,
+  elapsed, vsys) still overflow on both tables, and packets fuzzy-matches
+  DstPackets where NetworkPackets is the session total.
+
+- **DBT-253** PAN-OS TRAFFIC fields reach their ASim network-session columns
+  `DBT-F1` `story` `settled` `verified: pins`
+  DECIDED BY THE USER 2026-11-04 (follow-on to DBT-252): about 41 PAN-OS
+  TRAFFIC fields still overflow on CommonSecurityLog and
+  ASimNetworkSessionLogs. PLAN: point the existing non-CEF alias targets at
+  ASim (SourceZone/DestinationZone -> SrcZone/DstZone, SessionID ->
+  NetworkSessionId, StartTime -> EventStartTime) and add PAN-OS aliases
+  packets/bytes -> NetworkPackets/NetworkBytes, pkts_sent/pkts_received ->
+  SrcPackets/DstPackets, srcloc/dstloc -> SrcGeoCountry/DstGeoCountry.
+  DELIBERATELY NOT MAPPED: elapsed (PAN seconds, ASim NetworkDuration is
+  milliseconds - a rename would store the wrong value; needs a scaling eval),
+  vsys, logset, actionflags, seqno (no ASim column). DONE 2026-11-04 as
+  planned. Against the full PAN-OS TRAFFIC header list (first 60 named
+  columns) the bundled ASimNetworkSessionLogs schema now takes 36 fields to
+  real columns (was 28 under DBT-252); CommonSecurityLog unchanged at 27. The
+  ASim forward-alias check came back, scored by alias position, because
+  sessionid -> [SessionID, ExternalID] now reaches two ASim columns and a flat
+  score let schema order decide; pinned, and removing it fails the tie-break
+  pin. 4 new pins in asim-equivalents.test.ts. VERIFIED BY PINS ONLY: the Live
+  Preview had no tagged samples left (Loading tagged samples... never cleared)
+  and adding one would write to the operator's KV. NOTICED, NOT CHANGED
+  (pre-existing fuzzy matches): flags -> TcpFlagsAck and category ->
+  ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.
+
+- **DBT-299** Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not
+  `DBT-F4` `enabler` `settled` `verified: pins`
+  ASKED 2026-11-04 by the operator: 'as we merge new functions we should be
+  bumping the version 1.13.x so the x changes everytime we push to main'.
+  Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main
+  left at 1.13.0, because nothing asked for a bump and the rule lived only in
+  conversation. DECIDED 2026-11-04 by the operator: (1) scope = anything that
+  ships, and anything Live Preview shows (the footer reads package.json's
+  version at runtime, so a bump is visible there); docs/board/backlog-only PRs
+  need none. (2) Version number only: package.json and the lock move per PR;
+  packaging the .tgz, the release-notes section and the backlog IS CURRENT
+  line stay batched. BUILD: npm run bump (patch-bumps package.json and the
+  lock, no packaging); check-version-bump (pure evaluate + IO main, pinned)
+  run in CI on PRs to main; check-release-drift turns 'manifest ahead of the
+  tarball' from an error into a warning that names the release command
+  (package -- --version X.Y.Z, so the release does not bump twice), a manifest
+  BEHIND the tarball stays an error. DONE 2026-11-04 (pins): bump-version.mjs,
+  check-version-bump.mjs and the check-release-drift change, each rule
+  mutation-checked (five mutations, all caught); wired as npm run bump /
+  check-version-bump and a CI step on pull requests. This PR (#199) is its
+  first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under "Version bump on
+  every PR to main". Live check: the CI step on this PR. RENUMBERED 2026-11-04
+  three times: DBT-250, DBT-251 and DBT-253 were each taken by a PR (#203,
+  #204, #205) that merged to main first, because parallel sessions number new
+  cards from the highest id on main. DBT-299 sits outside that sequence on
+  purpose. Commits before the renames name the older ids.
+
 - **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
   `AZR-F9` `bug` `settled` `verified: both`
   FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
@@ -7440,29 +7581,6 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   ehnsjpedersoneastus): the namespace, Event Hub, authorization-rule,
   worker-group and Listen-rule dropdowns all opened with a filter box;
   filtering 'jpedersoneastus' narrowed the namespace list to one.
-
-- **DBT-250** Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not
-  `DBT-F4` `enabler` `settled` `verified: pins`
-  ASKED 2026-11-04 by the operator: 'as we merge new functions we should be
-  bumping the version 1.13.x so the x changes everytime we push to main'.
-  Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main
-  left at 1.13.0, because nothing asked for a bump and the rule lived only in
-  conversation. DECIDED 2026-11-04 by the operator: (1) scope = anything that
-  ships, and anything Live Preview shows (the footer reads package.json's
-  version at runtime, so a bump is visible there); docs/board/backlog-only PRs
-  need none. (2) Version number only: package.json and the lock move per PR;
-  packaging the .tgz, the release-notes section and the backlog IS CURRENT
-  line stay batched. BUILD: npm run bump (patch-bumps package.json and the
-  lock, no packaging); check-version-bump (pure evaluate + IO main, pinned)
-  run in CI on PRs to main; check-release-drift turns 'manifest ahead of the
-  tarball' from an error into a warning that names the release command
-  (package -- --version X.Y.Z, so the release does not bump twice), a manifest
-  BEHIND the tarball stays an error. DONE 2026-11-04 (pins): bump-version.mjs,
-  check-version-bump.mjs and the check-release-drift change, each rule
-  mutation-checked (five mutations, all caught); wired as npm run bump /
-  check-version-bump and a CI step on pull requests. This PR (#199) is its
-  first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under "Version bump on
-  every PR to main". Live check: the CI step on this PR.
 
 - **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
   `AZR-F9` `story` `settled` `verified: both`

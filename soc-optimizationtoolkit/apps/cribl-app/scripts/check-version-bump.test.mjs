@@ -1,4 +1,4 @@
-// Pins for the version-bump gate (DBT-250). The pure half is stated as facts:
+// Pins for the version-bump gate (DBT-299). The pure half is stated as facts:
 // main's version, this branch's version, and the paths the PR changed.
 
 import { describe, expect, it } from 'vitest';

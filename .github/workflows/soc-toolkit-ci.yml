@@ -85,7 +85,7 @@ jobs:
       - name: Check release drift
         run: npm run check-release --workspace apps/cribl-app
 
-      # DBT-250: a PR to main that changes what the app ships, or what Live
+      # DBT-299: a PR to main that changes what the app ships, or what Live
       # Preview shows, must raise the app version above main's ("npm run bump",
       # version only; packaging stays batched). Docs, board, test and release
       # tooling changes need no bump, and the step says so. Runs on pull

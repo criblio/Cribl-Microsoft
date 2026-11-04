@@ -29,7 +29,7 @@ describe('evaluateReleaseDrift', () => {
     expect(result.packagedVersion).toBe('1.12.0');
   });
 
-  it('WARNS, not errors, while the manifest is ahead of the tarball, and names the release command (DBT-250)', () => {
+  it('WARNS, not errors, while the manifest is ahead of the tarball, and names the release command (DBT-299)', () => {
     // The operator's rule (2026-11-04): every PR to main runs "npm run bump",
     // version only; packaging stays batched. So a manifest ahead of the last
     // package is the normal state between releases. The warning names the
@@ -218,7 +218,7 @@ describe('evaluateReleaseDrift', () => {
   it('reports every drifted claim at once rather than the first', () => {
     const result = evaluateReleaseDrift(
       facts({
-        // Behind the tarball: a manifest AHEAD of it only warns since DBT-250.
+        // Behind the tarball: a manifest AHEAD of it only warns since DBT-299.
         manifestVersion: '1.11.9',
         lockVersion: '1.11.5',
         releaseNotes: '# Release notes\n\n## 1.11.15\n',

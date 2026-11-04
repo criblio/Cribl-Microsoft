@@ -3695,6 +3695,16 @@ button.readiness-pill:focus-visible {
   color: var(--text-muted);
   white-space: nowrap;
 }
+/* DBT-250: the chosen destination table is not in the (read) workspace. */
+.mapping-review-table-absent {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+}
 
 .gap-handles {
   font-size: 12px;
@@ -3827,6 +3837,15 @@ button.readiness-pill:focus-visible {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-strong);
+}
+/* DBT-251: the Dest Field combobox, sized like the .mapping-select beside it. */
+.mapping-dest-select {
+  max-width: 220px;
+}
+.mapping-dest-select .searchable-select-control {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 2px 4px;
 }
 
 .match-conf-exact {

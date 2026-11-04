@@ -217,9 +217,17 @@ export function SearchableSelect({
   );
   const c = useCombo(listed);
 
+  // Focus goes BACK TO THE CONTROL before onChange runs (DBT-251). The filter
+  // box that held focus unmounts on close, which would drop focus to <body>;
+  // and a host that opens a panel in response to the change (the Dest Field
+  // claim, DBT-208) records document.activeElement as the control to return
+  // to, so it must be the control by then.
   const pick = useCallback(
     (v: string) => {
       if (options.find((o) => o.value === v)?.disabled === true) return;
+      // Focus the trigger BEFORE onChange (DBT-251): a host that opens a panel
+      // on change records document.activeElement as the control to return to.
+      c.triggerRef.current?.focus();
       onChange(v);
       c.closeToTrigger();
     },
