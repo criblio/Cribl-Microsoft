@@ -136,7 +136,7 @@ export function evaluateReleaseDrift(facts) {
   if (order > 0) {
     warnings.push(
       `package.json is at ${facts.manifestVersion}, ahead of the packaged tarball ${packagedVersion} (bumped per PR, DBT-299). ` +
-        `To release it, run "npm run package -- --version ${facts.manifestVersion}" and add its release-notes section and backlog line.`,
+        `To release it, run "npm run package --workspace apps/cribl-app -- --version ${facts.manifestVersion}" and add its release-notes section and backlog line.`,
     );
   } else if (order < 0) {
     errors.push(

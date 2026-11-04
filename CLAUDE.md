@@ -590,7 +590,9 @@ CI's `check-version-bump` fails a PR to `main` that skips it.
 
 Version only: packaging the `.tgz`, its release-notes section and the backlog
 "IS CURRENT" line stay batched. Release the version the manifest already names
-with `npm run package -- --version X.Y.Z`; a bare `npm run package` bumps again.
+with `npm run package --workspace apps/cribl-app -- --version X.Y.Z` from
+`soc-optimizationtoolkit/` (the root `npm run package` re-invokes npm, which
+swallows `--version`); a bare `npm run package` bumps again.
 `check-release` warns while the manifest is ahead of the last package.
 
 ### Commit Message Guidelines
