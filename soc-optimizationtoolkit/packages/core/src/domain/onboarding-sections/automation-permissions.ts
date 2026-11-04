@@ -76,6 +76,7 @@ import type {
   CapabilityVerdict,
 } from "../capabilities/capabilities";
 import type { RequiredAction } from "../azure-permissions/azure-permissions";
+import { leastRoleFor } from "../least-privilege";
 import {
   DEFENDER_AUTOMATIONS_READ,
   DEFENDER_AUTOMATIONS_WRITE,
@@ -101,8 +102,8 @@ export interface AutomationCapabilityNeed {
   /** What it lets the app do, as a verb phrase after "cannot": "create the continuous export". */
   readonly does: string;
   /**
-   * The built-in role an administrator would grant. Inferred from Azure's
-   * built-in role definitions, not measured here (verify live).
+   * The built-in role an administrator would grant: the least-privilege
+   * registry's least role for `action` (AZR-61), never restated here.
    */
   readonly role: string;
   readonly necessity: AutomationNecessity;
@@ -135,7 +136,7 @@ const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
       capability: "defender-plans.read",
       action: DEFENDER_PRICINGS_READ,
       does: "read which Defender plans are enabled",
-      role: "Security Reader",
+      role: leastRoleFor("defender.pricings.read"),
       // ADR 0005 section 5: deploy is allowed with no plan read at all.
       necessity: "informational",
       grantOnly: false,
@@ -144,7 +145,7 @@ const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
       capability: "defender-automation.read",
       action: DEFENDER_AUTOMATIONS_READ,
       does: "list the subscription's continuous exports",
-      role: "Security Reader",
+      role: leastRoleFor("defender.automations.list"),
       // The deploy re-lists and refuses before it writes (create-only).
       necessity: "core",
       grantOnly: false,
@@ -153,7 +154,7 @@ const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
       capability: "defender-automation.write",
       action: DEFENDER_AUTOMATIONS_WRITE,
       does: "create the continuous export",
-      role: "Security Admin",
+      role: leastRoleFor("defender.automation.write"),
       necessity: "core",
       // capability-mapping GRANT_ONLY_AZURE_ACTIONS; pinned equal there.
       grantOnly: true,

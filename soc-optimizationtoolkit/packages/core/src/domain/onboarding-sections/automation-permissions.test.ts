@@ -31,6 +31,27 @@ import {
   undeclaredAutomatableItems,
 } from "./index";
 import type { AutomationPermissions } from "./index";
+import { LEAST_PRIVILEGE_OPERATIONS } from "../least-privilege";
+
+describe("AUTOMATION_PERMISSIONS reads its roles from the least-privilege registry (architecture audit 2026-11-04)", () => {
+  // AZR-60 and AZR-61 were built on parallel branches: the section table named
+  // its own roles while AZR-61 made the registry the one source of them. Each
+  // measured action must be a registry operation, and its role that operation's
+  // least role, so the banner and the change requests cannot ask for different roles.
+  it("names, for every measured action, the registry's least role for that action", () => {
+    const wrong: string[] = [];
+    for (const [item, p] of Object.entries(AUTOMATION_PERMISSIONS)) {
+      for (const need of p?.measured ?? []) {
+        const ops = Object.values(LEAST_PRIVILEGE_OPERATIONS).filter((op) => op.operation === need.action);
+        if (ops.length === 0) wrong.push(`${item}: ${need.action} is not a registry operation`);
+        else if (!ops.some((op) => op.leastRole === need.role)) {
+          wrong.push(`${item}: ${need.action} names ${need.role}, the registry ${ops.map((op) => op.leastRole).join(" / ")}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+});
 
 const CONNECTED: CapabilityContext = { azureIdentityPresent: true, criblReachable: true };
 const NO_IDENTITY: CapabilityContext = { azureIdentityPresent: false, criblReachable: true };
