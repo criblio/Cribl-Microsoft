@@ -4147,6 +4147,18 @@
       "verified": "pins"
     },
     {
+      "id": "DBT-254",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "type": "bug",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "setup-fold.dom.test.tsx fails intermittently: it queries Sentinel content's Refresh button before it renders",
+      "detail": "FOUND 2026-11-04 merging #199 and #200 (feature DBT-248, merged in #197). 'the Next action button opens its folded target' failed in full-suite runs on both branches and once in three isolated runs (Unable to find an accessible element with the role \"button\" and name \"Refresh\"); CI passed the same commits. The section bodies stay mounted when folded, so the Refresh button is missing only because it renders after Sentinel content's data load. Four tests query it synchronously (getByRole) right after expanding.\n\nFIX (settled): await findByRole at all four sites. Pin: the file passes repeatedly in isolation and in the full suite.\n\nPARTIAL 2026-11-04: findByRole at the four sites cut the isolated failure rate from about 1 in 3 to 1 in 30 (measured: 1 failure in 30 runs, the same test, \"Refresh\" still absent after the 1 s default wait). Only that test mounts with no GitHub token (hasPat: false), so the remaining delay is in the component path for that state; not yet pinned. Stays in-progress."
+    },
+    {
       "id": "DBT-299",
       "epic": "DBT",
       "feature": "DBT-F4",
