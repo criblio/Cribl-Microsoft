@@ -3780,7 +3780,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-27"
       ],
@@ -3788,13 +3788,14 @@
       "type": "enabler",
       "priority": "next",
       "title": "Core: fold the inventory into By source rows with reconciliation and the per-table catalog flag",
-      "detail": "Merge across tables by identity kind + case-folded value; one row per table with no product columns and per table whose sources were not read; the reconciliation compares row-measured and Usage totals, never subtracts. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-28)."
+      "detail": "Merge across tables by identity kind + case-folded value; one row per table with no product columns and per table whose sources were not read; the reconciliation compares row-measured and Usage totals, never subtracts. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-28).\n\nDONE 2026-11-04 (pins, 26d9a33e..3d53cd35): bySource folds the inventory into By source rows (Listing, so unverified empty never reads as zero): product/computer identity rows merged by kind + case-folded value, one row per unmapped table, '(sources not read)' rows with Usage volume, '(other sources)' for a mapped table's remainder, partialTables and billedExceedsTotal markers, per-table catalog flag, reconciliation that compares (never subtracts). Identity hardened: one shared CEF join, Syslog-only first-column guard, dcount for the other row. One fix round.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-27"
       ],
