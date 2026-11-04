@@ -3741,13 +3741,14 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F2",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-25",
       "type": "bug",
       "priority": "now",
       "title": "Tenant comparison still says \"machines reporting here\"; change-request pass-through and pooled source link unpinned",
-      "detail": "FOUND 2026-11-03 by the MIG-24 review (fix/dvi-review-followups at 370e3991). (1) In a tenant comparison the Servers table header \"Machines reporting here (daily average)\" (allowance-cards.tsx ~346) and the arithmetic label \"machines reporting here\" (allowance-state.ts ~204) still say \"here\", though the count is across the workspaces read - the tip was fixed in MIG-24 but the visible copy now disagrees with it; use tenant wording (\"machines reporting to the workspaces read\") in tenant scope. (2) The panel passes onOpenChangeRequest to both AllowanceCards (single and tenant) with no pin - deleting either line type-checks and no test fails; add a panel test with a Graph stub answering 403 that clicks the change-request button and asserts the callback spy. (3) EligibleSource in the pooled view's per-grant details has no pin; add one assertion to the existing pooled test. Pin each with a test that fails without it."
+      "detail": "FOUND 2026-11-03 by the MIG-24 review (fix/dvi-review-followups at 370e3991). (1) In a tenant comparison the Servers table header \"Machines reporting here (daily average)\" (allowance-cards.tsx ~346) and the arithmetic label \"machines reporting here\" (allowance-state.ts ~204) still say \"here\", though the count is across the workspaces read - the tip was fixed in MIG-24 but the visible copy now disagrees with it; use tenant wording (\"machines reporting to the workspaces read\") in tenant scope. (2) The panel passes onOpenChangeRequest to both AllowanceCards (single and tenant) with no pin - deleting either line type-checks and no test fails; add a panel test with a Graph stub answering 403 that clicks the change-request button and asserts the callback spy. (3) EligibleSource in the pooled view's per-grant details has no pin; add one assertion to the existing pooled test. Pin each with a test that fails without it.\n\nDONE 2026-11-04 (both, 54a18919..e446ac8a): tenant comparison says 'machines reporting to the workspaces read' in the Servers header, arithmetic, cross-check, other-basis note and tip; the panel's change-request pass-through is pinned for both card sets (Graph 403 stub); the pooled view's source link is pinned; serversGranted re-exported so UI fixtures no longer deep-import core. Live Preview 2026-11-04 on law-jpederson-eastus: Servers card shows 7 machines (Connected Arc only), the Microsoft source link with its date, a Servers cross-check that runs (MIG-19) and the real chart peak. The change-request button itself was not reachable live (no E5 card on this workspace) - pinned only.",
+      "verified": "both"
     },
     {
       "settled": "settled",
