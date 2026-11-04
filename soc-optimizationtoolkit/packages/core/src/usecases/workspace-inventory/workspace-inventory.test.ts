@@ -196,6 +196,19 @@ describe("inventoryWorkspace", () => {
     expect(rows[3]!.dailyAverageMB).toBe(1);
   });
 
+  it("marks a table FAILED when the breakdown answer lacks BillableBytes - never all free", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      usage(["Syslog", 30]),
+      result(
+        ["SourceTable", "Source", "Attribution", "Collector", "Bytes", "Events", "Sources"],
+        [["Syslog", "host-a", "computer", "", 3_000_000, 1, 1]],
+      ),
+    );
+    const [syslog] = listingRows((await inventoryWorkspace(azure, WS)).tables);
+    expect(syslog!.sources).toMatchObject({ kind: "failed", error: expect.stringMatching(/BillableBytes/) });
+  });
+
   it("with sources: false reads Usage only, and marks every breakdown not read rather than empty", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(usage(["Syslog", 30], ["AWSCloudTrail", 60]));

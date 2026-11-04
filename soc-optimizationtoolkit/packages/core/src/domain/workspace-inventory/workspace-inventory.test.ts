@@ -224,6 +224,24 @@ describe("parseSourceRows and sourcesFor", () => {
     expect(asa!.billableDailyMB).toBeCloseTo(45.23, 2);
   });
 
+  it("FLAGS a source billed above its total instead of letting the clamp hide it", () => {
+    const rows = [
+      { SourceTable: "T", Source: "a", Attribution: "computer", Bytes: 30_000_000, BillableBytes: 60_000_000, Events: 1, Sources: 1 },
+      { SourceTable: "T", Source: "b", Attribution: "computer", Bytes: 60_000_000, BillableBytes: 60_000_000, Events: 1, Sources: 1 },
+    ];
+    const [b, a] = parseSourceRows(rows).get("t")!;
+    expect(a).toMatchObject({ source: "a", freeDailyMB: 0, billedExceedsTotal: true });
+    expect(b).toMatchObject({ source: "b", freeDailyMB: 0, billedExceedsTotal: false });
+  });
+
+  it("counts distinct Sources for the `other` row, from the pre-rollup source name", () => {
+    const kql = sourceBreakdownQuery(["T"]);
+    expect(kql).toContain("| extend _origSource = Source");
+    expect(kql).toContain("Sources = dcount(_origSource)");
+    expect(kql).not.toContain("Sources = count()");
+    expect(kql.indexOf("_origSource = Source")).toBeLessThan(kql.indexOf("Rank > "));
+  });
+
   it("never yields a nameless product: it is unattributed", () => {
     const rows = [
       { SourceTable: "T", Source: "", Attribution: "product", Collector: "c", Bytes: 1, BillableBytes: 1, Events: 1, Sources: 1 },

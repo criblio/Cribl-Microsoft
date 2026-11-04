@@ -49,3 +49,23 @@ describe("identityKql", () => {
     expect(kql).toMatch(/case\(isnotempty\(tostring\(column_ifexists\('ProductName', ''\)\)\)/);
   });
 });
+
+describe("identityKql - hardening", () => {
+  const kql = identityKql();
+  const vendorProduct =
+    "iff(isnotempty(tostring(column_ifexists('DeviceVendor', ''))), trim(' ', strcat(" +
+    "tostring(column_ifexists('DeviceVendor', '')), ' ', tostring(column_ifexists('DeviceProduct', '')))), '')";
+
+  it("builds the default _dev and the CommonSecurityLog rule from ONE definition", () => {
+    expect(kql).toContain(`_dev = ${vendorProduct}`);
+    expect(kql).toContain(`_id0 = ${vendorProduct}`);
+    expect(kql.split(vendorProduct)).toHaveLength(3);
+  });
+
+  it("requires a join rule's FIRST column to be non-empty - a facility alone is not a machine", () => {
+    expect(kql).toContain(
+      "_id2 = iff(isnotempty(tostring(column_ifexists('Computer', ''))), trim(' ', strcat(" +
+        "tostring(column_ifexists('Computer', '')), ' ', tostring(column_ifexists('Facility', '')))), '')",
+    );
+  });
+});

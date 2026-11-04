@@ -108,12 +108,13 @@ export function sourceBreakdownQuery(tables: readonly string[]): string {
     "| summarize Bytes = sum(_BilledSize), BillableBytes = sumif(_BilledSize, _IsBillable == true),",
     "    Events = count() by SourceTable, Source, Attribution, Collector",
     "| order by SourceTable asc, Bytes desc",
+    "| extend _origSource = Source",
     "| extend Rank = row_number(1, prev(SourceTable) != SourceTable)",
     `| extend Source = iff(Rank > ${SOURCES_PER_TABLE}, '', Source),`,
     `    Attribution = iff(Rank > ${SOURCES_PER_TABLE}, 'other', Attribution),`,
     `    Collector = iff(Rank > ${SOURCES_PER_TABLE}, '', Collector)`,
     "| summarize Bytes = sum(Bytes), BillableBytes = sum(BillableBytes), Events = sum(Events),",
-    "    Sources = count() by SourceTable, Source, Attribution, Collector",
+    "    Sources = dcount(_origSource) by SourceTable, Source, Attribution, Collector",
   ].join("\n");
 }
 
@@ -212,12 +213,21 @@ export interface InventorySource {
   /** `_BilledSize` of the rows with `_IsBillable == true`; part of `bytes`. */
   billableBytes: number;
   events: number;
-  /** How many distinct sources this row stands for (more than 1 only for `other`). */
+  /**
+   * How many distinct sources (not source + collector pairs) this row stands
+   * for; more than 1 only for `other`. The KQL counts the pre-rollup Source.
+   */
   sourceCount: number;
   dailyAverageMB: number;
   billableDailyMB: number;
   /** `dailyAverageMB - billableDailyMB`: the part the rows say is not billed. */
   freeDailyMB: number;
+  /**
+   * True when the rows report more billable bytes than total bytes. Impossible
+   * by construction (billable is a subset), so it flags a broken answer;
+   * `freeDailyMB` is clamped to 0 for display and this keeps the clamp visible.
+   */
+  billedExceedsTotal: boolean;
 }
 
 /**
@@ -314,6 +324,7 @@ export function parseSourceRows(
       dailyAverageMB,
       billableDailyMB,
       freeDailyMB: Math.max(0, dailyAverageMB - billableDailyMB),
+      billedExceedsTotal: billableBytes > bytes,
     };
     const key = table.toLowerCase();
     const list = byTable.get(key) ?? [];

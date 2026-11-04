@@ -21,6 +21,7 @@ function source(partial: Partial<InventorySource>): InventorySource {
     dailyAverageMB: 0,
     billableDailyMB: 0,
     freeDailyMB: 0,
+    billedExceedsTotal: false,
     ...partial,
   };
 }

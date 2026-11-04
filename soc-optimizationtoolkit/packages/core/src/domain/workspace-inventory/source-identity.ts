@@ -30,17 +30,21 @@ export interface SourceIdentityRule {
    */
   keepsCollector: boolean;
   /**
-   * `join`: all columns, space-separated (vendor + product). `first`: the first
-   * non-empty column (a fallback chain).
+   * `join`: all columns, space-separated (vendor + product), and only when the
+   * FIRST column is non-empty - a row naming a facility but no machine is not
+   * a machine. `first`: the first non-empty column (a fallback chain).
    */
   combine: "join" | "first";
 }
+
+/** The CEF device columns: the default order's last step and CommonSecurityLog's rule. */
+const CEF_DEVICE_COLUMNS = ["DeviceVendor", "DeviceProduct"] as const;
 
 export const SOURCE_IDENTITY_RULES: readonly SourceIdentityRule[] = [
   {
     table: "CommonSecurityLog",
     attribution: "product",
-    columns: ["DeviceVendor", "DeviceProduct"],
+    columns: CEF_DEVICE_COLUMNS,
     keepsCollector: true,
     combine: "join",
   },
@@ -70,8 +74,13 @@ function identityExpression(rule: SourceIdentityRule): string {
     const arms = rule.columns.map((c) => `isnotempty(${col(c)}), ${col(c)}`);
     return `case(${arms.join(", ")}, '')`;
   }
-  const parts = rule.columns.map(col).join(", ' ', ");
-  return `trim(' ', strcat(${parts}))`;
+  return joinExpression(rule.columns);
+}
+
+/** `a b` from columns, empty unless the first column has a value. */
+function joinExpression(columns: readonly string[]): string {
+  const parts = columns.map(col).join(", ' ', ");
+  return `iff(isnotempty(${col(columns[0]!)}), trim(' ', strcat(${parts})), '')`;
 }
 
 /**
@@ -89,8 +98,7 @@ export function identityKql(): string {
   const lines = [
     "| extend _rid = tostring(column_ifexists('_ResourceId', '')),",
     "    _comp = tostring(column_ifexists('Computer', '')),",
-    "    _dev = trim(' ', strcat(tostring(column_ifexists('DeviceVendor', '')), ' ',",
-    "        tostring(column_ifexists('DeviceProduct', ''))))",
+    `    _dev = ${joinExpression(CEF_DEVICE_COLUMNS)}`,
     ...mapped.map(
       ({ rule, id }, i) =>
         `${i === 0 ? "| extend " : "    "}${id} = ${identityExpression(rule)}${
