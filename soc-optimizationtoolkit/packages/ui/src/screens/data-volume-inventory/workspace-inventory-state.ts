@@ -6,7 +6,7 @@
  * Pure: no IO, no React.
  */
 
-import { allowanceFor, listingRows, parseResourceId } from "@soc/core";
+import { billableTableMeasuredFree, listingRows, parseResourceId } from "@soc/core";
 import type {
   DataAllowances,
   SourceViewReconciliation,
@@ -356,11 +356,12 @@ export function catalogBillableFlagText(billableTaggedTablesFree: readonly strin
  */
 export function tableBillableFreeFlag(table: InventoryTable): string | null {
   if (table.sources.kind !== "read" || table.sources.sources.length === 0) return null;
-  if (allowanceFor(table.table).kind !== "billable") return null;
   const { sources } = table.sources;
-  const allFree =
-    sources.every((s) => s.billableDailyMB === 0) && sources.some((s) => s.dailyAverageMB > 0);
-  return allFree ? catalogBillableFlagText([table.table]) : null;
+  const measured = sources.reduce((sum, s) => sum + s.dailyAverageMB, 0);
+  const billed = sources.reduce((sum, s) => sum + s.billableDailyMB, 0);
+  return billableTableMeasuredFree(table.table, measured, billed)
+    ? catalogBillableFlagText([table.table])
+    : null;
 }
 
 /**
