@@ -21,10 +21,15 @@ import {
   decodeLease,
   encodeCredentialOwner,
   isTenantMigrationMarker,
+  classifyCredentialOwner,
+  judgeSlotOwner,
   leaseHeldByOther,
+  switchingMarkerStale,
   normalizeTenantId,
   proveTenant,
   releasedLease,
+  slotOwnerChanged,
+  switchingCredentialOwner,
   takenLease,
   tenantDocumentKey,
   tenantMigrationMarker,
@@ -174,6 +179,97 @@ describe("credential owner record", () => {
   it("decodes anything else as null", () => {
     expect(decodeCredentialOwner({ profileId: "p1" })).toBeNull();
     expect(decodeCredentialOwner(null)).toBeNull();
+  });
+});
+
+describe("slot owner check (AZR-92: an owner check per batch)", () => {
+  const mine = encodeCredentialOwner({ profileId: "p1", tenantId: TENANT, clientId: "c1" }, "tab-1:1:1");
+  const value = (v: unknown) => ({ kind: "value" as const, value: v });
+
+  it("admits the tenant the record names, case-blind, and stamps the record it read", () => {
+    const check = judgeSlotOwner(value(mine), TENANT.toLowerCase());
+    expect(check).toEqual({ kind: "admit", stamp: JSON.stringify(mine) });
+  });
+
+  it("REFUSES another tenant, naming that another tab is reading a different tenant", () => {
+    const check = judgeSlotOwner(value(mine), OTHER);
+    expect(check.kind).toBe("refuse");
+    expect(check.kind === "refuse" ? check.reason : "").toMatch(/another tab .* reading a different tenant/);
+    expect(check.kind === "refuse" ? check.reason : "").toContain(normalizeTenantId(TENANT));
+  });
+
+  it("REFUSES while a swap is in progress (the switching marker)", () => {
+    const check = judgeSlotOwner(value(switchingCredentialOwner("tab-2:5:1")), TENANT);
+    expect(check.kind).toBe("refuse");
+    expect(check.kind === "refuse" ? check.reason : "").toMatch(/another tab .* switching/);
+  });
+
+  it("REFUSES an unreadable, corrupt, cleared or foreign record - never admits on a read it cannot decode", () => {
+    for (const read of [
+      { kind: "unknown" as const, reason: "HTTP 502", status: 502 },
+      { kind: "absent" as const, why: "corrupt" as const },
+      value(clearedCredentialOwner()),
+      value({ kind: "something-else", tenantId: TENANT }),
+      value({ kind: "soc-credential-owner", tenantId: 7 }),
+      value(null),
+    ]) {
+      expect(judgeSlotOwner(read, TENANT).kind).toBe("refuse");
+    }
+  });
+
+  it("admits a record that was NEVER written (an install from before the record existed)", () => {
+    // Every tenant session writes the switching marker before its first slot
+    // write, so an absent record means no session has ever swapped the slot.
+    expect(judgeSlotOwner({ kind: "absent", why: "not-found" }, TENANT)).toEqual({ kind: "admit", stamp: "absent" });
+    expect(judgeSlotOwner({ kind: "absent", why: "empty" }, TENANT)).toEqual({ kind: "admit", stamp: "absent" });
+  });
+
+  it("the switching marker decodes as NO owner, so the secret probe and connect read it as nobody's", () => {
+    expect(decodeCredentialOwner(switchingCredentialOwner("w"))).toBeNull();
+  });
+
+  it("a write id makes two writes of the same owner different records (no ABA)", () => {
+    const again = encodeCredentialOwner({ profileId: "p1", tenantId: TENANT, clientId: "c1" }, "tab-1:9:1");
+    expect(decodeCredentialOwner(again)).toEqual(decodeCredentialOwner(mine));
+    const before = judgeSlotOwner(value(mine), TENANT);
+    const after = judgeSlotOwner(value(again), TENANT);
+    expect(before.kind === "admit" && slotOwnerChanged(before, after)).toMatch(/rewritten/);
+  });
+
+  // Review finding: admitting on tenant alone let tab A's batches run under
+  // ANOTHER app registration of the same tenant (a session for P2 in tab B).
+  it("REFUSES the same tenant under a DIFFERENT client when the caller names its client", () => {
+    const check = judgeSlotOwner(value(mine), { tenantId: TENANT, clientId: "c2" });
+    expect(check.kind).toBe("refuse");
+    expect(check.kind === "refuse" ? check.reason : "").toMatch(/another app registration/);
+    expect(judgeSlotOwner(value(mine), { tenantId: TENANT, clientId: " C1 " }).kind).toBe("admit");
+  });
+
+  it("classifies the record: owner, switching (with when), cleared, foreign", () => {
+    expect(classifyCredentialOwner(mine)).toEqual({ kind: "owner", owner: { profileId: "p1", tenantId: normalizeTenantId(TENANT), clientId: "c1" } });
+    expect(classifyCredentialOwner(switchingCredentialOwner("w", 500))).toEqual({ kind: "switching", at: 500 });
+    expect(classifyCredentialOwner(switchingCredentialOwner("w"))).toEqual({ kind: "switching", at: null });
+    expect(classifyCredentialOwner(clearedCredentialOwner())).toEqual({ kind: "cleared" });
+    expect(classifyCredentialOwner({ kind: "soc-credential-owner", tenantId: 7 })).toEqual({ kind: "foreign" });
+    expect(classifyCredentialOwner(null)).toEqual({ kind: "foreign" });
+  });
+
+  it("a switching marker is stale only when its time is known and older than the stale window", () => {
+    expect(switchingMarkerStale(null, 10 ** 12)).toBe(false);
+    expect(switchingMarkerStale(1000, 1000 + 10 * 60 * 1000 - 1)).toBe(false);
+    expect(switchingMarkerStale(1000, 1000 + 10 * 60 * 1000)).toBe(true);
+  });
+
+  it("is unchanged only when the record after is the very record before", () => {
+    const before = judgeSlotOwner(value(mine), TENANT);
+    if (before.kind !== "admit") throw new Error("expected admit");
+    expect(slotOwnerChanged(before, judgeSlotOwner(value(mine), TENANT))).toBeNull();
+    expect(slotOwnerChanged(before, judgeSlotOwner(value(mine), OTHER))).toMatch(/another tab/);
+    expect(slotOwnerChanged(before, judgeSlotOwner({ kind: "unknown", reason: "timeout" }, TENANT))).toMatch(/timeout/);
+    const absent = judgeSlotOwner({ kind: "absent", why: "not-found" }, TENANT);
+    if (absent.kind !== "admit") throw new Error("expected admit");
+    expect(slotOwnerChanged(absent, judgeSlotOwner({ kind: "absent", why: "not-found" }, TENANT))).toBeNull();
+    expect(slotOwnerChanged(absent, before)).toMatch(/rewritten/);
   });
 });
 

@@ -78,6 +78,20 @@ user of the app and has no compare-and-swap:
 - **Within one tab**, the credential slot admits ordinary requests for one
   tenant at a time: a request for another tenant waits until those drain,
   so no tenant can mint into the slot between another's token check and send.
+- **Across tabs (added 2026-11-03, AZR-92, operator decision: an owner check
+  per batch).** The lease and the proof guard only the session's own batch,
+  so every OTHER Azure request in every tab checks the credential-owner
+  record (`azure-credential-owner`) before it is sent and again after it
+  settles. The record names a tenant AND an app registration, and a
+  request is admitted only when both match the active connection. The
+  session marks the record "switching" before its first slot write and
+  names the new owner only after both tokens are in; Save and connect does
+  the same, and names no owner at all when its token step failed. The
+  restore never installs a credential under a record naming another
+  tenant: if neither the marker (retried once) nor the cleared record can
+  be written, it does not restore. The session's own requests are exempt -
+  they never read the record. What this costs and what it still does not
+  prove are under "What this breaks or constrains".
 
 A multi-tenant read is therefore sequential and slower than single-tenant;
 results are cached per tenant so the dashboard does not re-read on every view.
@@ -126,12 +140,61 @@ Azure call. Every tile carries an (i).
 
 ## What this breaks or constrains
 
-- **Open defect AZR-92 (2026-11-03): other tabs are not protected.** The lease
-  and the tenant proof guard the session's own batch. Another tab's, or another
-  user's, ordinary Azure reads and writes during a session go out under the
-  session's tenant credential and are attributed to their own tenant. Until
-  AZR-92 is fixed, run a multi-tenant read only when no one else is using the
-  app.
+- **Other tabs are protected by an owner check per batch (AZR-92, built
+  2026-11-03; proven with fakes only, the lab has one tenant).**
+  - *What is checked.* Every ordinary ARM and Graph request (reads and
+    writes) passes through the shell's credential slot
+    (`apps/cribl-app/src/platform/credential-slot.ts`, `shared`), which
+    reads the owner record before anything is sent, token mint included.
+    The Diagnostics panels go through it too: the raw ARM call rides the
+    same check, and the token panel uses the guarded secret-probe path. A
+    record naming another tenant, or the same tenant under another app
+    registration, a "switching" marker, a cleared record, or a read that
+    failed or does not decode refuses the request: a read rejects (the
+    port's could-not-reach path, so a screen shows unknown - never red,
+    never an empty list) with a message saying another tab is reading a
+    different tenant through the shared credential, and a write (any
+    non-GET) is never sent. Anything sent later on that verdict reads the
+    record again first and is refused if it changed: every resend of a
+    write after a 429, and the re-mint after a 401 (ARM) or 401/403 (Graph).
+    After the requests settle the record is read again; unless it is the
+    very record read before (every write carries its own write id, so an
+    A -> N -> A session in between is caught), the answers are discarded
+    as unknown and a write's outcome is reported as unknown. A batch
+    admitted on a record other than the one this tab last saw drops the
+    tab's token caches, so the next request mints its own token instead of
+    trusting a slot another tab rewrote. A record that was never written
+    (an install from before it existed) admits, because every session
+    writes the marker before it swaps. A live secret probe over a record
+    naming nobody (absent or cleared) records its connection; it treats a
+    switching marker as left behind only when it is older than ten minutes
+    and the lease, read after the record, is free, and it re-reads both
+    inside its exclusive section before it mints.
+  - *What it costs.* A batch is one tab's reads for one connection admitted
+    while it is open - until its first member settles, and for at most two
+    seconds after its before-read - and a write always opens its own. Each
+    batch costs 2 KV reads of the record (1 when the before-read refuses or
+    every member fails), so N reads issued together cost 2, not 2N. A read
+    batch opened within two seconds of the previous batch's after-read
+    reuses it as its before-read, so a sequential chain (nextLink paging)
+    costs about 1 per request. Each write resend after a 429 and each
+    re-mint costs 1 more. A record rewritten by another tab costs each tab
+    one extra token mint. These are app KV store reads, like the lease
+    reads, not proxied Azure requests; whether the platform counts KV reads
+    against the 100 requests a minute is NOT measured, and the session's
+    pacer does not see them. Building adapters or mounting a screen reads
+    nothing.
+  - *What it still does not prove.* That the slot holds what the record
+    says: the record is plain KV with no compare-and-swap, written only by
+    this app, so it is evidence of the last write, not of the slot. A write
+    is refused only when the swap had begun before its own owner read (or
+    re-check); one that started just before a swap still goes out and is
+    reported as unknown, not undone. The same holds for a read: it is sent,
+    and only its answer is discarded. A write landing between the probe's
+    re-read and its mint is not caught. A tab still running a bundle from
+    before AZR-92 writes no marker and no write id, so mixed versions are
+    not covered. A screen that builds its adapters without the active
+    connection's client id is checked on tenant alone.
 - The 7 high-severity single-tenant assumptions in the audit become defects
   to fix (AZR-65 and its sweep), not notes.
 - Every KV key named in decision 3 changes shape; old documents are migrated

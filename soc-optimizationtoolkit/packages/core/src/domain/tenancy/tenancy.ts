@@ -7,7 +7,10 @@
  *   lease               the best-effort KV lease taken before the shared
  *                       credential slot is swapped to another tenant
  *   credential owner    a plain, NON-secret record of whose client secret was
- *                       last written to the shared `azureBasic` slot
+ *                       last written to the shared `azureBasic` slot - and,
+ *                       since AZR-92, the record every ordinary Azure batch
+ *                       in every tab checks before it sends and after it
+ *                       settles (judgeSlotOwner, slotOwnerChanged)
  *   tenant proof        the read that proves a batch was answered by the
  *                       tenant it was meant for
  *
@@ -208,14 +211,76 @@ export interface CredentialOwner {
   readonly clientId: string;
 }
 
-/** The document to write after a secret lands in `azureBasic`. */
-export function encodeCredentialOwner(owner: CredentialOwner): unknown {
+/**
+ * The document to write after a secret lands in `azureBasic` (and, for the
+ * shared token slots, after the tokens are minted).
+ *
+ * `writeId` (AZR-92) makes every write a different record even when it names
+ * the same owner, so a batch that read "tenant A" before and "tenant A" after
+ * can tell that a whole A -> N -> A session ran in between. Callers build it
+ * from their holder id, clock and a counter; core takes no randomness.
+ */
+export function encodeCredentialOwner(owner: CredentialOwner, writeId?: string): unknown {
   return {
     kind: OWNER_KIND,
     profileId: owner.profileId,
     tenantId: normalizeTenantId(owner.tenantId),
     clientId: owner.clientId.trim().toLowerCase(),
+    ...(writeId !== undefined ? { writeId } : {}),
   };
+}
+
+/**
+ * The document written BEFORE the shared slot is changed (a tenant session's
+ * swap and restore, Save and connect), replaced by the new owner only once
+ * the secret AND the tokens are in (AZR-92). While it stands, every other
+ * tab's ordinary batch is refused: the slot is in no known tenant's hands.
+ * It decodes as no owner, so the secret probe reads it as nobody's.
+ */
+export function switchingCredentialOwner(writeId: string, at?: number): unknown {
+  return {
+    kind: OWNER_KIND,
+    switching: true,
+    profileId: null,
+    tenantId: null,
+    clientId: null,
+    writeId,
+    ...(at !== undefined ? { at } : {}),
+  };
+}
+
+/**
+ * How long a switching marker may stand before it is presumed left behind by
+ * a tab that closed mid-swap: the default tenant-session lease TTL. A live
+ * session holds its lease for the whole swap, and Save and connect's swap is
+ * a secret write and one mint - seconds. The secret probe recovers a marker
+ * only past this age AND with no live lease (secret-connect.ts).
+ */
+export const SWITCHING_MARKER_STALE_MS = 10 * 60 * 1000;
+
+/** Whether a switching marker written at `at` (null: unknown) is stale at `now`. */
+export function switchingMarkerStale(at: number | null, now: number): boolean {
+  return at !== null && now - at >= SWITCHING_MARKER_STALE_MS;
+}
+
+/** What one owner record says, told apart (AZR-92: a marker is NOT "nobody"). */
+export type CredentialOwnerReading =
+  | { readonly kind: "owner"; readonly owner: CredentialOwner }
+  | { readonly kind: "switching"; readonly at: number | null }
+  | { readonly kind: "cleared" }
+  | { readonly kind: "foreign" };
+
+/** Classify a stored owner record. */
+export function classifyCredentialOwner(value: unknown): CredentialOwnerReading {
+  const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+  if (record === null || record.kind !== OWNER_KIND) return { kind: "foreign" };
+  if (record.switching === true) {
+    const at = typeof record.at === "number" && Number.isFinite(record.at) ? record.at : null;
+    return { kind: "switching", at };
+  }
+  if (record.profileId === null && record.tenantId === null) return { kind: "cleared" };
+  const owner = decodeCredentialOwner(value);
+  return owner === null ? { kind: "foreign" } : { kind: "owner", owner };
 }
 
 /**
@@ -251,6 +316,102 @@ export function credentialOwnerMatches(
     owner.tenantId === normalizeTenantId(identity.tenantId) &&
     owner.clientId === identity.clientId.trim().toLowerCase()
   );
+}
+
+// ---------------------------------------------------------------------------
+// Slot owner check (AZR-92: an owner check per batch)
+// ---------------------------------------------------------------------------
+
+/**
+ * What one read of the owner record says about sending a request for a
+ * tenant. `stamp` is the record as read, compared with the read after the
+ * batch: equal stamps mean nobody wrote the record in between (every write
+ * carries its own write id).
+ */
+export type SlotOwnerCheck =
+  | { readonly kind: "admit"; readonly stamp: string }
+  | { readonly kind: "refuse"; readonly reason: string };
+
+const UNKNOWN_SUFFIX = "so whether another tab is reading a different tenant through the shared credential is unknown";
+
+/**
+ * Judge one read of {@link CREDENTIAL_OWNER_KEY} for an ordinary request of
+ * `who`'s - a tenant, or a tenant AND client: given a client id, a record
+ * naming the same tenant under another app registration is refused. Admits
+ * only a record naming that identity - or no record at all:
+ * a never-written record (404 or empty) is an install from before the record
+ * existed, and every tenant session writes the switching marker before its
+ * first slot write, so no session has ever swapped that slot.
+ *
+ * Refuses - the batch is unknown, never red - a record naming another tenant,
+ * a swap in progress, a cleared record, and any read that failed or does not
+ * decode: admitting on a read it cannot decode is the interleave this check
+ * exists to stop.
+ */
+export function judgeSlotOwner(
+  read: KvDocumentLoad,
+  who: string | { readonly tenantId: string; readonly clientId?: string },
+): SlotOwnerCheck {
+  const tenantId = typeof who === "string" ? who : who.tenantId;
+  const clientId = typeof who === "string" ? undefined : who.clientId;
+  if (read.kind === "unknown") {
+    return { kind: "refuse", reason: `the record of whose Azure credential is in the shared slot could not be read (${read.reason}), ${UNKNOWN_SUFFIX}` };
+  }
+  if (read.kind === "absent") {
+    if (read.why === "corrupt") {
+      return { kind: "refuse", reason: `the record of whose Azure credential is in the shared slot is not JSON, ${UNKNOWN_SUFFIX}` };
+    }
+    return { kind: "admit", stamp: "absent" };
+  }
+  const reading = classifyCredentialOwner(read.value);
+  if (reading.kind === "switching") {
+    return {
+      kind: "refuse",
+      reason: "another tab of this app is switching the shared Azure credential to a different tenant right now (it is reading a different tenant through it)",
+    };
+  }
+  if (reading.kind === "cleared") {
+    return {
+      kind: "refuse",
+      reason: "no connection's credential is recorded in the shared Azure slot (it was cleared, or a Save and connect did not finish) - Save and connect on Setup",
+    };
+  }
+  if (reading.kind === "foreign") {
+    return { kind: "refuse", reason: `the record of whose Azure credential is in the shared slot is not one this app wrote, ${UNKNOWN_SUFFIX}` };
+  }
+  const { owner } = reading;
+  const wanted = normalizeTenantId(tenantId);
+  if (owner.tenantId !== wanted) {
+    return {
+      kind: "refuse",
+      reason: `the shared Azure credential is tenant ${owner.tenantId}'s right now, not ${wanted}'s - another tab of this app is reading a different tenant through it`,
+    };
+  }
+  // Same tenant, another app registration (review finding): its grants are
+  // not this connection's, so its answers are not this connection's either.
+  if (clientId !== undefined && owner.clientId !== clientId.trim().toLowerCase()) {
+    return {
+      kind: "refuse",
+      reason: `the shared Azure credential is another app registration's in tenant ${wanted} right now (client ${owner.clientId}) - another tab of this app is reading through it`,
+    };
+  }
+  return { kind: "admit", stamp: JSON.stringify(read.value) };
+}
+
+/**
+ * Null when the owner record read after a batch is the very record read
+ * before it - nobody touched the slot in between - otherwise why the batch's
+ * answers cannot be trusted.
+ */
+export function slotOwnerChanged(
+  before: Extract<SlotOwnerCheck, { kind: "admit" }>,
+  after: SlotOwnerCheck,
+): string | null {
+  if (after.kind === "refuse") return after.reason;
+  if (after.stamp !== before.stamp) {
+    return "the record of whose Azure credential is in the shared slot was rewritten - another tab of this app may have read a different tenant through it in between";
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

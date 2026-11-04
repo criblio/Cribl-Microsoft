@@ -107,6 +107,7 @@ import type {
 // flow) live in platform/http.ts as the single source of truth, shared with
 // the port adapters in platform/adapters.ts.
 import { acquireArmToken, fetchWithTimeout, kvDelete, kvUrl } from './platform/http';
+import type { ArmTokenResult } from './platform/http';
 // Cloud-shell port adapters for the shared @soc/ui screens: the @soc/core
 // ports bound to the platform primitives (KV, proxy-injected auth, downloads).
 import { azureCredentialSlot, makeCloudPorts, PlatformSecretsStore } from './platform/adapters';
@@ -536,30 +537,49 @@ const defaultPreflightPath = preflightPathForSetupPath;
 // proxies.yml injects Basic ${kv.azureBasic} server-side (the proxy strips
 // any Authorization header the client sends). The tenant is the ACTIVE
 // connection's tenant ID.
-function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
+//
+// It writes the SHARED token slot, so it goes through the same guarded path
+// as the secret probe (AZR-92 review finding): the lease, the owner record
+// (refused while it names another connection or another tab is switching),
+// this tab's exclusive section, a re-read of both just before the mint, and
+// the slot's note of whose token is now in it.
+function TokenAcquisitionPanel({
+  profileId,
+  tenantId,
+  clientId,
+}: {
+  profileId: string | null;
+  tenantId: string;
+  clientId: string;
+}) {
   const [status, output, run] = useRunner();
   const acquire = () =>
     run(async () => {
-      // Shared with the Setup page's connect action so the token flow lives
-      // in one place.
-      const token = await acquireArmToken(tenantId);
-      // fetchWithTimeout, never raw fetch: a detached platform bridge leaves
-      // a raw fetch pending forever (the platform/http.ts contract).
-      const putRes = await fetchWithTimeout(kvUrl('azureArmToken?encrypted=true'), {
-        method: 'PUT',
-        body: token.access_token,
-      });
-      const lines = [
+      if (profileId === null) throw new Error('No active connection: pick or create one above.');
+      const captured: { token?: ArmTokenResult } = {};
+      const out = await probeStoredSecret(
+        {
+          ...SECRET_PATH_DEPS,
+          listKeys: () => appStateStore.list('azure'),
+          mintArmToken: async (t: string) => {
+            const token = await acquireArmToken(t);
+            captured.token = token;
+            return token;
+          },
+        },
+        { id: profileId, config: { tenantId, clientId, subscriptionId: '' } },
+        () => undefined,
+      );
+      if (out.state === 'missing') throw new Error('No client secret is stored (azureBasic): Save and connect on Setup first.');
+      if (out.state !== 'live') throw new Error(`Not acquired: ${out.detail}`);
+      const token = captured.token;
+      return [
         'token endpoint: ok',
-        `token_type: ${token.token_type ?? '(missing)'}`,
-        `expires_in: ${token.expires_in ?? '(missing)'}`,
-        `access_token (first 12 chars): ${token.access_token.slice(0, 12)}`,
-        `PUT azureArmToken?encrypted=true: HTTP ${putRes.status}`,
-      ];
-      if (!putRes.ok) {
-        throw new Error([...lines, `body: ${await putRes.text()}`].join('\n'));
-      }
-      return lines.join('\n');
+        `token_type: ${token?.token_type ?? '(missing)'}`,
+        `expires_in: ${token?.expires_in ?? '(missing)'}`,
+        `access_token (first 12 chars): ${token?.access_token.slice(0, 12) ?? '(missing)'}`,
+        'stored encrypted under azureArmToken',
+      ].join('\n');
     });
 
   return (
@@ -576,7 +596,8 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
         explicit re-acquire and diagnostic. Uses the active connection&apos;s tenant ID, then POSTs
         grant_type=client_credentials with the ARM scope to login.microsoftonline.com. No Authorization
         header is set by the app - the proxy injects Basic auth from kv.azureBasic per proxies.yml. On
-        success the access token is stored encrypted under azureArmToken.
+        success the access token is stored encrypted under azureArmToken. Refused while another tab
+        is reading a different tenant through the shared credential.
       </p>
     </Panel>
   );
@@ -584,7 +605,7 @@ function TokenAcquisitionPanel({ tenantId }: { tenantId: string }) {
 
 // Panel 4: ARM subscriptions list. Bearer token is injected server-side from
 // kv.azureArmToken; the app sends no Authorization header.
-function ArmCallPanel() {
+function ArmCallPanel({ tenantId, clientId }: { tenantId: string; clientId: string }) {
   const [status, output, run] = useRunner();
   const call = () =>
     run(async () => {
@@ -592,22 +613,28 @@ function ArmCallPanel() {
       // DELIBERATELY the raw proxy path, not the AzureManagement port: this
       // panel diagnoses the proxies.yml Bearer injection itself, so it must
       // not ride the adapter's token-ensure/401-retry. Still bridge-safe:
-      // fetchWithTimeout at 25s (matching the adapter's ARM timeout).
-      const res = await fetchWithTimeout(
-        'https://management.azure.com/subscriptions?api-version=2022-12-01',
-        undefined,
-        25000
-      );
+      // fetchWithTimeout at 25s (matching the adapter's ARM timeout). It DOES
+      // ride the slot's owner check (AZR-92 review finding): the injected
+      // Bearer is whatever tenant's token is in the shared slot, so while
+      // another tab reads a different tenant through it this read is refused,
+      // and an answer from a slot that changed under it is discarded.
+      const raw = await azureCredentialSlot.shared({ tenantId, clientId }, 'read', async () => {
+        const res = await fetchWithTimeout(
+          'https://management.azure.com/subscriptions?api-version=2022-12-01',
+          undefined,
+          25000
+        );
+        return { status: res.status, ok: res.ok, text: await res.text() };
+      });
       const elapsed = Date.now() - started;
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} in ${elapsed} ms\n${text}`);
+      if (!raw.ok) {
+        throw new Error(`HTTP ${raw.status} in ${elapsed} ms\n${raw.text}`);
       }
-      const parsed = JSON.parse(text) as {
+      const parsed = JSON.parse(raw.text) as {
         value?: Array<{ displayName?: string; subscriptionId?: string }>;
       };
       const subs = parsed.value ?? [];
-      const lines = [`HTTP ${res.status} in ${elapsed} ms`, `subscriptions: ${subs.length}`];
+      const lines = [`HTTP ${raw.status} in ${elapsed} ms`, `subscriptions: ${subs.length}`];
       for (const sub of subs) {
         lines.push(`  ${sub.displayName ?? '(no displayName)'} (${sub.subscriptionId ?? 'no subscriptionId'})`);
       }
@@ -626,7 +653,8 @@ function ArmCallPanel() {
       <p className="panel-desc">
         GETs management.azure.com/subscriptions with no Authorization header - the proxy injects
         Bearer from kv.azureArmToken per proxies.yml. Shows subscription names, IDs, and elapsed
-        milliseconds.
+        milliseconds. Refused while another tab is reading a different tenant through the shared
+        credential.
       </p>
     </Panel>
   );
@@ -1015,8 +1043,7 @@ function App() {
   // along BY REFERENCE (module-scoped), so its ring survives the rebuild and
   // every usecase invoked with this bundle logs for free.
   const cloudPorts = useMemo(
-    () => makeCloudPorts(activeConfig.tenantId, appLogger),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- clientId is the identity half the factory does not read
+    () => makeCloudPorts(activeConfig.tenantId, appLogger, activeConfig.clientId),
     [activeConfig.tenantId, activeConfig.clientId]
   );
 
@@ -1867,8 +1894,12 @@ function App() {
       </header>
       <PlatformGlobalsPanel />
       <KvStorePanel />
-      <TokenAcquisitionPanel tenantId={activeConfig.tenantId} />
-      <ArmCallPanel />
+      <TokenAcquisitionPanel
+        profileId={store.activeProfileId}
+        tenantId={activeConfig.tenantId}
+        clientId={activeConfig.clientId}
+      />
+      <ArmCallPanel tenantId={activeConfig.tenantId} clientId={activeConfig.clientId} />
       <ArtifactDownloadPanel />
     </>
   );

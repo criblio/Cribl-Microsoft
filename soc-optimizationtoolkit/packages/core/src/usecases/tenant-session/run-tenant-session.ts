@@ -9,9 +9,10 @@
  *      operator's own connection could not be put back.
  *   2. Take the KV lease (best effort, no compare-and-swap): refuse while
  *      another holder's lease is unexpired, and refuse on an unreadable lease.
- *   3. Inside the slot's exclusive section: write the target's credential
- *      (only when it is not already the active one), record the owner, mint ARM
- *      and Graph tokens for the target tenant.
+ *   3. Inside the slot's exclusive section: mark the owner record SWITCHING,
+ *      write the target's credential (only when it is not already the active
+ *      one), mint ARM and Graph tokens for the target tenant, and only then
+ *      record the target as the owner.
  *   4. PROVE: GET /subscriptions/{sub} must answer with the target's tenantId.
  *      A mismatch or a refusal makes the batch unknown and the work never runs.
  *   5. Run the work with the slot's session ports.
@@ -21,12 +22,25 @@
  *      second proof also answers as the target and the lease is still this
  *      holder's and unexpired. Otherwise it is unknown - its answers may be
  *      another tenant's.
- *   6. Restore the ACTIVE connection's credential and tokens, whatever happened.
+ *   6. Restore the ACTIVE connection's credential and tokens, whatever happened
+ *      - the same order: switching, credential, tokens, owner.
  *   7. Release the lease, unless it has already expired (it may be someone
  *      else's by then).
  *
  * What the proof cannot prove is written down in domain/tenancy (a delegated
  * subscription is unknown; the Graph token is not proven).
+ *
+ * THE OWNER RECORD (AZR-92) is what protects OTHER tabs: every ordinary Azure
+ * batch in every tab reads it before sending and after settling (the shell's
+ * credential slot). So it must never name a tenant the slot does not hold:
+ * the switching marker goes in before the first slot write and the new owner
+ * only after both tokens, every write carries its own write id, and a swap
+ * whose switching marker cannot be written does not happen. A restore whose
+ * marker (retried once) and cleared record both fail to land does not happen
+ * either: the record still names the target, which the slot still holds. A
+ * restore that fails later leaves the marker standing - the slot is then in
+ * no known tenant's hands.
+ * The session's own requests go through session ports and never read it.
  *
  * PACING (AZR-63): with `pacer`, every proxied request the session sends
  * itself - each proof read, and two per token mint (ARM and Graph) - spends
@@ -57,6 +71,8 @@ import {
   normalizeTenantId,
   proveTenant,
   releasedLease,
+  clearedCredentialOwner,
+  switchingCredentialOwner,
   takenLease,
   tenantProofRequest,
 } from "../../domain/tenancy";
@@ -159,16 +175,25 @@ export async function runTenantSession<T>(
     return unknown("lease", `The credential lease could not be taken (${errText(err)}).`);
   }
 
+  let ownerWrites = 0;
+  const writeId = (): string => `${deps.holderId}:${takenAt}:${++ownerWrites}`;
   const recordOwner = async (owner: TenantProfile): Promise<void> => {
     try {
       await documents.save(
         CREDENTIAL_OWNER_KEY,
-        encodeCredentialOwner({ profileId: owner.id, tenantId: owner.config.tenantId, clientId: owner.config.clientId }),
+        encodeCredentialOwner(
+          { profileId: owner.id, tenantId: owner.config.tenantId, clientId: owner.config.clientId },
+          writeId(),
+        ),
       );
     } catch (err) {
       logger?.warn("tenant-session: credential owner record not written", { error: errText(err) });
     }
   };
+  const markCleared = (): Promise<void> => documents.save(CREDENTIAL_OWNER_KEY, clearedCredentialOwner());
+  /** Rejects when the marker could not be written. */
+  const markSwitching = (): Promise<void> =>
+    documents.save(CREDENTIAL_OWNER_KEY, switchingCredentialOwner(writeId(), takenAt));
 
   let outcome: TenantRun<T>;
   try {
@@ -197,11 +222,14 @@ export async function runTenantSession<T>(
     // 3. Swap.
     try {
       if (swap) {
+        // Before the slot changes, so no other tab's batch is admitted by a
+        // record naming the tenant whose credential is leaving.
+        await markSwitching();
         await slot.installCredential(profile);
-        await recordOwner(profile);
       }
       await spend(REQUESTS_PER_MINT, deps.signal);
       await slot.mintTokens(tenantId);
+      if (swap) await recordOwner(profile);
     } catch (err) {
       return unknown("swap", `Switching the shared credential to ${label(profile)} failed: ${errText(err)}`);
     }
@@ -265,13 +293,43 @@ export async function runTenantSession<T>(
     return null;
   }
 
+  /** Null once one of `writes` lands; otherwise the last failure. */
+  async function firstLanded(writes: ReadonlyArray<() => Promise<void>>): Promise<string | null> {
+    let last = "no write tried";
+    for (const write of writes) {
+      try {
+        await write();
+        return null;
+      } catch (err) {
+        last = errText(err);
+        logger?.warn("tenant-session: owner record not marked before the restore", { error: last });
+      }
+    }
+    return last;
+  }
+
   async function restore(to: TenantProfile): Promise<TenantRestore> {
     try {
+      // Never install a credential under a record naming another tenant: a
+      // record still naming the target ADMITS every other tab whose screens
+      // are for the target while the slot moves back (review finding). So the
+      // marker, retried once; failing that the cleared record (refused by
+      // every tab too); failing both, no restore at all - the record then
+      // still names the target, which is what the slot still holds.
+      const unmarked = await firstLanded([markSwitching, markSwitching, markCleared]);
+      if (unmarked !== null) {
+        return {
+          kind: "failed",
+          reason:
+            `the record other tabs check before using the shared Azure credential could not be marked (${unmarked}), ` +
+            "so the active connection's credential was not put back; it still names the tenant just read",
+        };
+      }
       await slot.installCredential(to);
-      await recordOwner(to);
       // Paced, but never handed the signal: the restore is not cancellable.
       await spend(REQUESTS_PER_MINT, undefined);
       await slot.mintTokens(normalizeTenantId(to.config.tenantId));
+      await recordOwner(to);
       return { kind: "restored" };
     } catch (err) {
       logger?.error("tenant-session: the active connection's credential was not restored", { error: errText(err) });

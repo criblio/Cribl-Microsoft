@@ -65,6 +65,7 @@ import type {
 } from '@soc/ui';
 import { fetchWithTimeout, kvDelete, kvUrl } from './http';
 import { AzureCredentialSlot } from './credential-slot';
+import type { SlotAccess, SlotIdentity, SlotRecheck } from './credential-slot';
 import { PlatformKvDocumentStore } from './kv-document-store';
 
 // ---------------------------------------------------------------------------
@@ -266,11 +267,24 @@ export class PlatformAzureManagement implements AzureManagement {
   private readonly tenantId: string;
   private readonly slot: AzureCredentialSlot;
   private readonly mode: SlotMode;
+  /** Whose requests these are, for the owner check: tenant, and client when known. */
+  private readonly identity: SlotIdentity;
 
-  constructor(tenantId: string, slot: AzureCredentialSlot = azureCredentialSlot, mode: SlotMode = 'shared') {
+  /**
+   * `clientId` is the active connection's app registration: given, the owner
+   * check (AZR-92) refuses a slot holding the same tenant's credential under
+   * ANOTHER registration, whose grants are not this connection's.
+   */
+  constructor(
+    tenantId: string,
+    slot: AzureCredentialSlot = azureCredentialSlot,
+    mode: SlotMode = 'shared',
+    clientId?: string,
+  ) {
     this.tenantId = tenantId;
     this.slot = slot;
     this.mode = mode;
+    this.identity = clientId === undefined ? { tenantId } : { tenantId, clientId };
   }
 
   /** Acquire a fresh ARM token for the constructed tenant into the slot. */
@@ -279,25 +293,39 @@ export class PlatformAzureManagement implements AzureManagement {
   }
 
   async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
-    return this.withSlot(() => this.send(opts));
+    return this.withSlot(accessOf(opts.method), () => this.send(opts));
   }
 
-  /** Ensure this tenant's token, send, and on a 401 re-mint once and retry once. */
-  private withSlot(send: () => Promise<ArmResponse>): Promise<PortHttpResponse> {
-    const run = async (): Promise<PortHttpResponse> => {
+  /**
+   * Ensure this tenant's token, send, and on a 401 re-mint once and retry once.
+   * An ordinary ('shared') adapter runs it all as one member of the slot's
+   * owner-check batch (AZR-92): refused before anything - mint included - is
+   * sent when another tenant owns the slot, discarded when the owner changed.
+   * Anything sent later on that batch's verdict re-checks the owner first
+   * (review finding): the 401 re-mint, for any request, and every resend of a
+   * WRITE after a 429 - a throttle wait can be 30s, long enough for another
+   * tab's whole swap. A read's resend is not re-checked: its answer is
+   * discarded by the after-read anyway.
+   */
+  private withSlot(access: SlotAccess, send: () => Promise<ArmResponse>): Promise<PortHttpResponse> {
+    const run = async (recheck: SlotRecheck): Promise<PortHttpResponse> => {
       if (this.mode === 'shared') {
         await this.slot.ensureArm(this.tenantId);
       }
-      const first = await this.throttleAware(send);
+      const beforeResend = access === 'write' ? recheck : undefined;
+      const first = await this.throttleAware(send, beforeResend);
       if (first.status !== 401) {
         return first;
       }
       // 401: the stored token was rejected (expired or evicted). Re-acquire
       // ONCE and retry the request once; whatever comes back is the answer.
+      await recheck();
       await this.slot.mintArm(this.tenantId);
-      return this.throttleAware(send);
+      return this.throttleAware(send, beforeResend);
     };
-    return this.mode === 'session' ? run() : this.slot.shared(this.tenantId, run);
+    return this.mode === 'session'
+      ? run(async () => undefined)
+      : this.slot.shared(this.identity, access, run);
   }
 
   /**
@@ -310,6 +338,7 @@ export class PlatformAzureManagement implements AzureManagement {
    */
   private async throttleAware(
     send: () => Promise<ArmResponse>,
+    beforeResend?: SlotRecheck,
   ): Promise<ArmResponse> {
     let response = await send();
     for (let attempt = 1; attempt <= 3 && response.status === 429; attempt++) {
@@ -319,6 +348,7 @@ export class PlatformAzureManagement implements AzureManagement {
         30000,
       );
       await new Promise((resolve) => setTimeout(resolve, waitMs));
+      if (beforeResend !== undefined) await beforeResend();
       response = await send();
     }
     return response;
@@ -340,7 +370,7 @@ export class PlatformAzureManagement implements AzureManagement {
           '(ARM nextLink pagination) - refusing to request any other host',
       );
     }
-    return this.withSlot(() => this.sendUrl(opts));
+    return this.withSlot(accessOf(opts.method), () => this.sendUrl(opts));
   }
 
   private async sendUrl(
@@ -372,6 +402,11 @@ export class PlatformAzureManagement implements AzureManagement {
       retryAfterSeconds: retryAfterSecondsOf(res),
     };
   }
+}
+
+/** GET only reads; every other verb may change something and is a write (AZR-92). */
+function accessOf(method: string): SlotAccess {
+  return method.toUpperCase() === 'GET' ? 'read' : 'write';
 }
 
 /** A PortHttpResponse plus the throttle hint the retry loop consumes. */
@@ -431,11 +466,19 @@ export class PlatformGraphDirectory implements GraphDirectory {
   private readonly tenantId: string;
   private readonly slot: AzureCredentialSlot;
   private readonly mode: SlotMode;
+  private readonly identity: SlotIdentity;
 
-  constructor(tenantId: string, slot: AzureCredentialSlot = azureCredentialSlot, mode: SlotMode = 'shared') {
+  /** `clientId`: as for {@link PlatformAzureManagement}. */
+  constructor(
+    tenantId: string,
+    slot: AzureCredentialSlot = azureCredentialSlot,
+    mode: SlotMode = 'shared',
+    clientId?: string,
+  ) {
     this.tenantId = tenantId;
     this.slot = slot;
     this.mode = mode;
+    this.identity = clientId === undefined ? { tenantId } : { tenantId, clientId };
   }
 
   private async page(url: string): Promise<PortHttpResponse> {
@@ -446,10 +489,12 @@ export class PlatformGraphDirectory implements GraphDirectory {
   }
 
   async listServicePrincipals(): Promise<ServicePrincipalRef[]> {
-    return this.mode === 'session' ? this.list() : this.slot.shared(this.tenantId, () => this.list());
+    return this.mode === 'session'
+      ? this.list(async () => undefined)
+      : this.slot.shared(this.identity, 'read', (recheck) => this.list(recheck));
   }
 
-  private async list(): Promise<ServicePrincipalRef[]> {
+  private async list(recheck: SlotRecheck): Promise<ServicePrincipalRef[]> {
     if (this.mode === 'shared') {
       await this.slot.ensureGraph(this.tenantId);
     }
@@ -460,7 +505,9 @@ export class PlatformGraphDirectory implements GraphDirectory {
       // into the token at issuance, so a token minted before consent will 403
       // forever. Re-acquire ONCE (a fresh redemption reflects current consent)
       // and retry; a genuine missing-permission 403 simply repeats and is
-      // surfaced with the hint below.
+      // surfaced with the hint below. The re-mint is sent on the batch's
+      // verdict, so the owner is re-checked first (AZR-92).
+      await recheck();
       await this.slot.mintGraph(this.tenantId);
       res = await this.page(GRAPH_SP_URL);
     }
@@ -1836,13 +1883,22 @@ export interface CloudPorts {
 
 /**
  * A credential slot whose sessions run with session-mode Azure and Graph
- * adapters. Tests build their own; the app uses {@link azureCredentialSlot}.
+ * adapters, checking the owner record (AZR-92) in `ownerDocuments` - the app KV
+ * store. Tests build their own over a fake; the app uses
+ * {@link azureCredentialSlot}.
  */
-export function makeAzureCredentialSlot(): AzureCredentialSlot {
-  return new AzureCredentialSlot((tenantId, slot) => ({
-    azure: new PlatformAzureManagement(tenantId, slot, 'session'),
-    graph: new PlatformGraphDirectory(tenantId, slot, 'session'),
-  }));
+export function makeAzureCredentialSlot(
+  ownerDocuments: KvDocumentStore = new PlatformKvDocumentStore(),
+  now: () => number = () => Date.now(),
+): AzureCredentialSlot {
+  return new AzureCredentialSlot(
+    (tenantId, slot) => ({
+      azure: new PlatformAzureManagement(tenantId, slot, 'session'),
+      graph: new PlatformGraphDirectory(tenantId, slot, 'session'),
+    }),
+    ownerDocuments,
+    now,
+  );
 }
 
 /**
@@ -1855,20 +1911,22 @@ export const azureCredentialSlot: AzureCredentialSlot = makeAzureCredentialSlot(
 /**
  * Build the cloud-shell adapter bundle. `tenantId` is the ACTIVE
  * connection's Entra tenant, baked into the AzureManagement adapter's token
- * flow - build a fresh set when the active connection changes. `logger` is
+ * flow - build a fresh set when the active connection changes. `clientId` is
+ * its app registration: the owner check (AZR-92) refuses a slot holding the
+ * same tenant under another registration. `logger` is
  * the app-lifetime PlatformLogger instance (passed BY REFERENCE so its ring
  * survives connection switches; construction here would reset it). The
  * azure/cribl/jobs/logger fields satisfy usecase port bundles (e.g.
  * OnboardTablePorts) structurally, so usecases invoked with this bundle log
  * for free.
  */
-export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
+export function makeCloudPorts(tenantId: string, logger: Logger, clientId?: string): CloudPorts {
   // One CriblClient shared with the pack installer (it reuses request() for the
   // JSON install/list/delete ops; only the binary upload is done directly).
   const cribl = new PlatformCriblClient();
   return {
     secrets: new PlatformSecretsStore(),
-    azure: new PlatformAzureManagement(tenantId),
+    azure: new PlatformAzureManagement(tenantId, azureCredentialSlot, 'shared', clientId),
     cribl,
     jobs: new PlatformJobStore(),
     user: new PlatformUserContext(),
@@ -1879,7 +1937,7 @@ export function makeCloudPorts(tenantId: string, logger: Logger): CloudPorts {
     githubPat: new PlatformGithubPat(),
     packs: new PlatformPackStore(),
     packInstall: new PlatformPackInstall(cribl, logger),
-    graph: new PlatformGraphDirectory(tenantId),
+    graph: new PlatformGraphDirectory(tenantId, azureCredentialSlot, 'shared', clientId),
     kvDocuments: new PlatformKvDocumentStore(),
     mintAssignmentName: () => crypto.randomUUID(),
     logger,
