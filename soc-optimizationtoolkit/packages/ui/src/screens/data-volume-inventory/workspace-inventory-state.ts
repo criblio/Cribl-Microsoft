@@ -9,6 +9,7 @@
 import { listingRows, parseResourceId } from "@soc/core";
 import type {
   DataAllowances,
+  SourceViewReconciliation,
   DiscoveredWorkspace,
   InventorySource,
   InventoryTable,
@@ -167,7 +168,9 @@ export function sourceCount(table: InventoryTable): number | null {
 
 /**
  * One source's drill-down line: "Cisco ASA via localhost - 45.2 MB/day (billed
- * 45.2, free 0), 1,200 events". Non-product kinds keep their kind in brackets.
+ * 45.2 MB, free 0 MB), 1,200 events". Non-product kinds keep their kind in
+ * brackets. A source billed above its total reads "free not known", matching
+ * the CSV's empty cell: the clamped 0 is not a measurement.
  */
 export function sourceLineText(source: InventorySource): string {
   const label = sourceLabel(source);
@@ -177,9 +180,13 @@ export function sourceLineText(source: InventorySource): string {
       : `${label.text} (${label.kind})`;
   return (
     `${who} - ${formatMB(source.dailyAverageMB)}/day ` +
-    `(billed ${formatMB(source.billableDailyMB)}, free ${formatMB(source.freeDailyMB)}), ` +
+    `(billed ${formatMB(source.billableDailyMB)}, ${freeText(source)}), ` +
     `${source.events.toLocaleString()} events`
   );
+}
+
+function freeText(source: InventorySource): string {
+  return source.billedExceedsTotal ? "free not known" : `free ${formatMB(source.freeDailyMB)}`;
 }
 
 /** What the per-table reconciliation line compares; the InfoTip on that line. */
@@ -191,8 +198,8 @@ export const RECONCILE_TIP =
 /** Why a source's billed figure is shown with a flag; the InfoTip on the note. */
 export const BILLED_EXCEEDS_TIP =
   "The rows report more billable bytes than total bytes, which cannot happen " +
-  "(billable is a subset of total). Free is shown as 0; treat this source's " +
-  "billed and free split as unreliable.";
+  "(billable is a subset of total). Free cannot be worked out from such rows, so " +
+  "it reads not known; treat this source's billed and free split as unreliable.";
 
 /**
  * The line under a table's sources: what its named sources add up to against
@@ -255,4 +262,99 @@ export function inventoryCsv(inventory: WorkspaceInventory, allowances: DataAllo
     }
   }
   return `${lines.join("\n")}\n`;
+}
+
+/*
+ * By source (MIG-30): the tips on each figure name the lens it comes from -
+ * the rows' _BilledSize, or the Usage table - and the sentence under the view
+ * compares the two lenses rather than subtracting one from the other.
+ */
+
+/** The Source column header. */
+export const BY_SOURCE_SOURCE_TIP =
+  "Products are named by the fields the rows carry: DeviceVendor and DeviceProduct in " +
+  "CommonSecurityLog, ProductName (else ProviderName) in SecurityAlert; Syslog by " +
+  "Computer and Facility. Every other table is one row, \"(no product columns)\" - its " +
+  "resource and computer detail is under By table. Rows past a table's largest 25 " +
+  "sources, or with no identity, are \"(other sources)\".";
+
+/** The Daily avg column header. */
+export const BY_SOURCE_DAILY_TIP =
+  "From the rows: sum(_BilledSize) of this source's rows over the last 30 complete UTC " +
+  "days, divided by 30, summed across the tables it lands in. A \"(sources not read)\" " +
+  "row has no rows to measure, so it shows that table's daily average from the Usage " +
+  "table instead.";
+
+/** The Billed / Free column header. */
+export const BY_SOURCE_SPLIT_TIP =
+  "From the rows: billed is sum(_BilledSize) where _IsBillable is true; free is the rest " +
+  "of the same rows. The bar shows billed (first segment) against free. \"not read\" means " +
+  "the table's source breakdown failed or was not requested, so the split is unknown, " +
+  "not zero.";
+
+/** The Collectors column header. */
+export const BY_SOURCE_COLLECTORS_TIP =
+  "Product sources only: the machine or Azure resource that carried the product's rows " +
+  "(the _ResourceId name, else Computer), with the daily _BilledSize it carried. Other " +
+  "sources have no separate collector and read \"-\".";
+
+/** The Allowance column header and the catalog flag. */
+export const BY_SOURCE_ALLOWANCE_TIP =
+  "The allowance catalog's tag for each table this source lands in. The flag appears when " +
+  "the rows say this source was billed (_IsBillable true) in a table the catalog tags " +
+  "Free: the catalog and the bill disagree, so check that table's billing before relying " +
+  "on the tag.";
+
+/** The note on a source whose figure includes a partial breakdown. */
+export const BY_SOURCE_PARTIAL_TIP =
+  "At least one table this source lands in returned only part of its source breakdown, " +
+  "so this figure is a floor: the true volume is at least this much.";
+
+/** The reconciliation sentence under the view. */
+export const BY_SOURCE_RECONCILE_TIP =
+  "Compares two separate measurements of the same tables: _BilledSize summed from the " +
+  "rows, and the Usage table's daily average. A small gap is expected. Tables whose " +
+  "sources were not read have only the Usage figure, so they are named separately and " +
+  "left out of the comparison.";
+
+/** A source's free figure in words: "not known" when its billed figure exceeds its total. */
+export function bySourceFreeText(row: { freeDailyMB: number | null; billedExceedsTotal: boolean }): string {
+  if (row.freeDailyMB === null) return "not read";
+  return row.billedExceedsTotal ? "not known" : formatMB(row.freeDailyMB);
+}
+
+/** The catalog flag on a By source row; null when no Free-tagged table was billed. */
+export function catalogFlagText(freeTaggedTablesBilled: readonly string[]): string | null {
+  if (freeTaggedTablesBilled.length === 0) return null;
+  return `billed in a table the catalog tags Free (${freeTaggedTablesBilled.join(", ")})`;
+}
+
+/**
+ * The sentence under By source. It COMPARES the two lenses ("agree within
+ * Z%", rounded up so it never overstates the agreement); Usage volume of the
+ * tables whose sources were not read is named on its own, never subtracted.
+ */
+export function bySourceReconciliationText(r: SourceViewReconciliation): string {
+  const tables = (n: number) => `${n} ${n === 1 ? "table" : "tables"}`;
+  const notRead =
+    r.notReadTables > 0
+      ? `${formatMB(r.notReadDailyMB)}/day from ${tables(r.notReadTables)} whose sources were not read`
+      : null;
+  const partial =
+    r.partialTables.length > 0
+      ? ` ${tables(r.partialTables.length)} returned a partial breakdown ` +
+        `(${r.partialTables.join(", ")}), so the measured total is a floor.`
+      : "";
+  if (r.agreementPct === null) {
+    return notRead === null
+      ? "Sources (measured from the rows) total 0 MB/day; Usage reports 0 MB/day for the same tables."
+      : `No table's sources were read, so there is nothing to compare. Usage reports ${notRead}.`;
+  }
+  // toFixed(6) first: float noise (100 - 99.99999999) must not round up to 0.1%.
+  const within = (Math.ceil(Number(((100 - r.agreementPct) * 10).toFixed(6))) / 10).toFixed(1);
+  const compared =
+    `Sources (measured from the rows) total ${formatMB(r.measuredDailyMB)}/day; ` +
+    `Usage reports ${formatMB(r.usageDailyMB)}/day for the same tables; ` +
+    `they agree within ${within}%.`;
+  return `${compared}${notRead === null ? "" : ` Usage also reports ${notRead}, left out of that comparison.`}${partial}`;
 }

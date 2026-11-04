@@ -30,6 +30,7 @@ import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { AllowanceCards, AllowanceQueries, AllowanceTagCell } from "./allowance-cards";
+import { BySourceView } from "./by-source-view";
 import {
   ALLOWANCE_TIPS,
   afterAllowancesText,
@@ -95,6 +96,8 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
   const [tenantError, setTenantError] = useState("");
   const [progress, setProgress] = useState("");
   const [saveNote, setSaveNote] = useState("");
+  // MIG-30: By table is the default lens; By source folds the same inventory by source.
+  const [view, setView] = useState<"table" | "source">("table");
 
   const discover = async () => {
     setBusy("discover");
@@ -451,6 +454,31 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
           )}
 
           {tableRows !== null && (
+            <div className="dcr-mode-toggle" role="tablist" aria-label="Inventory view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "table"}
+                className={`dcr-mode-tab${view === "table" ? " dcr-mode-tab-active" : ""}`}
+                onClick={() => setView("table")}
+              >
+                By table
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "source"}
+                className={`dcr-mode-tab${view === "source" ? " dcr-mode-tab-active" : ""}`}
+                onClick={() => setView("source")}
+              >
+                By source
+              </button>
+            </div>
+          )}
+
+          {tableRows !== null && view === "source" && <BySourceView inventory={inventory} />}
+
+          {tableRows !== null && view === "table" && (
             <div className="siem-inventory-table-wrap">
               <table className="siem-inventory-table">
                 <thead>

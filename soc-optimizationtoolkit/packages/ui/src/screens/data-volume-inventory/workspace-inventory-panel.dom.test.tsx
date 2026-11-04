@@ -200,10 +200,43 @@ describe("WorkspaceInventoryPanel - MIG-29", () => {
     renderPanel(request);
     await discoverAndInventory();
     await screen.findByText(/Cisco ASA via localhost - 45\.2 MB\/day \(billed 45\.2 MB, free 0 MB\)/);
-    expect(screen.getByText(/Palo Alto via edge-1/)).toBeTruthy();
+    // Billed above total: free is not knowable, so it reads not known (the CSV's empty cell), never 0.
+    expect(screen.getByText(/Palo Alto via edge-1 - 3\.0 MB\/day \(billed 4\.0 MB, free not known\)/)).toBeTruthy();
     expect(screen.getAllByText("billed figure exceeds total - see tip")).toHaveLength(1);
     expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB of the 50\.0 MB\/day Usage reports/)).toBeTruthy();
     expect(document.querySelector("[title]")).toBeNull();
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-30", () => {
+  it("opens on By table and switches to By source over the same inventory", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      { status: 200, body: table(USAGE_COLS, [["CommonSecurityLog", 1500, 1500, 30, "[]"]]) },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", "fw-a", 900 * MB, 900 * MB, 100, 1],
+        ["CommonSecurityLog", "Cisco ASA", "product", "fw-b", 450 * MB, 450 * MB, 50, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via fw-a/);
+    expect(screen.getByRole("tab", { name: "By table" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "By source" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.queryByText("2 collectors")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "By source" }));
+    expect(screen.getByRole("tab", { name: "By source" }).getAttribute("aria-selected")).toBe("true");
+    // One row for the product across both collectors; the By table drill-down is gone.
+    expect(screen.getAllByText("Cisco ASA")).toHaveLength(1);
+    expect(screen.getByText("2 collectors")).toBeTruthy();
+    expect(screen.queryByText(/Cisco ASA via fw-a/)).toBeNull();
+    expect(screen.getByText(/they agree within 10\.0%/)).toBeTruthy();
+    expect(document.querySelector("[title]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "By table" }));
+    expect(screen.getByText(/Cisco ASA via fw-a/)).toBeTruthy();
   });
 });
 

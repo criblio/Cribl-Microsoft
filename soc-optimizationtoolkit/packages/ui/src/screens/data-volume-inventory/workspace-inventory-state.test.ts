@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { listingRows } from "@soc/core";
 import type { InventorySource, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import {
+  bySourceReconciliationText,
+  catalogFlagText,
   discoveryHeadline,
   formatMB,
   inventoryCsv,
@@ -171,6 +173,13 @@ describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
     );
   });
 
+  it("reads free as not known when billed exceeds total, never as 0 MB", () => {
+    const broken = source({ ...cisco, billedExceedsTotal: true, billableDailyMB: 50, freeDailyMB: 0 });
+    expect(sourceLineText(broken)).toBe(
+      "Cisco ASA via localhost - 45.2 MB/day (billed 50.0 MB, free not known), 10 events",
+    );
+  });
+
   it("reconciles a table's own sources against its Usage average", () => {
     expect(tableReconciliation(listingRows(inv([cisco, other]).tables)[0]!)).toBe(
       "Sources (measured from the rows) total 55.2 MB of the 60.0 MB/day Usage reports for this table.",
@@ -236,5 +245,71 @@ describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", 
         "/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-1",
       ),
     ).toBe("law-1");
+  });
+});
+
+describe("bySourceReconciliationText (MIG-30)", () => {
+  const base = {
+    measuredDailyMB: 14,
+    usageDailyMB: 14.5,
+    notReadDailyMB: 0,
+    notReadTables: 0,
+    partialTables: [] as string[],
+    agreementPct: (100 * 14) / 14.5,
+  };
+
+  it("compares the two lenses, rounding the gap up", () => {
+    // 96.55% agreement: a 3.45% gap reads as within 3.5%, never 3.4%.
+    expect(bySourceReconciliationText(base)).toBe(
+      "Sources (measured from the rows) total 14.0 MB/day; Usage reports 14.5 MB/day for " +
+        "the same tables; they agree within 3.5%.",
+    );
+  });
+
+  it("reads exact agreement as 0.0%, not float noise", () => {
+    expect(
+      bySourceReconciliationText({ ...base, usageDailyMB: 14, agreementPct: 100 - 1e-12 }),
+    ).toContain("they agree within 0.0%.");
+  });
+
+  it("names not-read volume separately and says when the measured total is a floor", () => {
+    expect(
+      bySourceReconciliationText({
+        ...base,
+        notReadDailyMB: 3,
+        notReadTables: 2,
+        partialTables: ["Syslog"],
+      }),
+    ).toBe(
+      "Sources (measured from the rows) total 14.0 MB/day; Usage reports 14.5 MB/day for " +
+        "the same tables; they agree within 3.5%. Usage also reports 3.0 MB/day from 2 " +
+        "tables whose sources were not read, left out of that comparison. 1 table returned " +
+        "a partial breakdown (Syslog), so the measured total is a floor.",
+    );
+  });
+
+  it("says there is nothing to compare when no table's sources were read", () => {
+    expect(
+      bySourceReconciliationText({
+        ...base,
+        measuredDailyMB: 0,
+        usageDailyMB: 0,
+        notReadDailyMB: 3,
+        notReadTables: 1,
+        agreementPct: null,
+      }),
+    ).toBe(
+      "No table's sources were read, so there is nothing to compare. Usage reports " +
+        "3.0 MB/day from 1 table whose sources were not read.",
+    );
+  });
+});
+
+describe("catalogFlagText (MIG-30)", () => {
+  it("names every Free-tagged table billed, and is absent otherwise", () => {
+    expect(catalogFlagText(["SecurityAlert", "AzureActivity"])).toBe(
+      "billed in a table the catalog tags Free (SecurityAlert, AzureActivity)",
+    );
+    expect(catalogFlagText([])).toBeNull();
   });
 });

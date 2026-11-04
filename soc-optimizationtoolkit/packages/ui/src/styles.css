@@ -3363,6 +3363,29 @@ button.readiness-pill:focus-visible {
   min-width: 380px;
 }
 
+/* MIG-30: By source - billed against free in one small bar. Two chart series
+   tokens (validated as a pair in both themes); the 2px gap is the surface
+   between segments, and the words beside the bar carry the figures. */
+.by-source-split-bar {
+  display: flex;
+  gap: 2px;
+  width: 120px;
+  height: 8px;
+  margin: 2px 0 4px;
+}
+.by-source-split-billed,
+.by-source-split-free {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: var(--radius-pill);
+}
+.by-source-split-billed {
+  background: var(--chart-series-1);
+}
+.by-source-split-free {
+  background: var(--chart-series-2);
+}
+
 .siem-inventory-query {
   font-size: 11px;
   white-space: pre-wrap;
