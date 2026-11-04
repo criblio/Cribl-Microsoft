@@ -238,13 +238,8 @@ describe("Setup page folding (DBT-248)", () => {
     mount({ store: new Map() }, factsWith({ secretLive: "missing" }));
     await settle();
     expect(openTitles()).toEqual(["App registration and connect"]);
+    // Opening from the header is a move (DBT-257): it folds the open section.
     fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
-    // Opening is not a move; working inside the section is.
-    expect(openTitles()).toEqual(["App registration and connect", "Sentinel content"]);
-    // findBy: Refresh renders after the section loads its data (DBT-298).
-    fireEvent.pointerDown(
-      await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
-    );
     await waitFor(() => expect(openTitles()).toEqual(["Sentinel content"]));
   });
 
@@ -252,14 +247,11 @@ describe("Setup page folding (DBT-248)", () => {
     mount({ store: new Map() }, factsWith({ secretLive: "missing" }));
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Pin App registration and connect open" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
     // An unpinned open section that the move MUST fold, so this cannot pass vacuously.
     fireEvent.click(screen.getByRole("button", { name: "Expand Recent runs" }));
     expect(isFolded("Recent runs")).toBe(false);
-    // findBy: Refresh renders after the section loads its data (DBT-298).
-    fireEvent.pointerDown(
-      await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
-    );
+    // Opening from the header is the move (DBT-257).
+    fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
     await waitFor(() =>
       expect(openTitles()).toEqual(["App registration and connect", "Sentinel content"]),
     );

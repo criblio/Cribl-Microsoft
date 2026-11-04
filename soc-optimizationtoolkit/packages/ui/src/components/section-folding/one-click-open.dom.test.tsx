@@ -7,9 +7,9 @@
  * fired the move on pointer DOWN, the move folded the open section above at
  * once, the clicked header shifted up before the pointer came up, and the
  * click landed elsewhere. happy-dom has no layout, so the shift cannot be
- * replayed here; what is pinned is the contract that removes it: nothing in
- * the header folds anything (opening is not a move, DBT-248), one click opens,
- * and the others fold once the operator works in the opened section.
+ * replayed here; what is pinned is the contract that removes it: pointer
+ * down or focus in a header folds nothing, and the header's CLICK both opens
+ * the section and folds the others (DBT-257, user direction 2026-11-04).
  */
 
 import type { ReactElement } from "react";
@@ -84,12 +84,10 @@ describe("NumberedSection under useSectionFolding - one click opens (DBT-256)", 
     expect([isOpen("first"), isOpen("second")]).toEqual([true, false]);
   });
 
-  it("one header click opens the clicked section; working in it folds the other", () => {
+  it("one header click opens the clicked section and folds the open one", () => {
     mount();
     fireEvent.pointerDown(head("second"));
     fireEvent.click(head("second"));
-    expect([isOpen("first"), isOpen("second")]).toEqual([true, true]);
-    fireEvent.pointerDown(screen.getByLabelText("field in second"));
     expect([isOpen("first"), isOpen("second")]).toEqual([false, true]);
   });
 
@@ -98,8 +96,9 @@ describe("NumberedSection under useSectionFolding - one click opens (DBT-256)", 
     const expand = screen.getByRole("button", { name: "Expand Section second" });
     fireEvent.pointerDown(expand);
     fireEvent.focus(expand);
+    expect([isOpen("first"), isOpen("second")]).toEqual([true, false]);
     fireEvent.click(expand);
-    expect([isOpen("first"), isOpen("second")]).toEqual([true, true]);
+    expect([isOpen("first"), isOpen("second")]).toEqual([false, true]);
   });
 
   it("a header click on the open section only closes it", () => {
@@ -136,14 +135,23 @@ describe("NumberedSection - when it reports a move (DBT-256)", () => {
     expect(onActivate).toHaveBeenCalledTimes(2);
   });
 
-  it("nothing in the header reports a move: pointer down, focus or click", () => {
+  it("the header reports a move only on the click that opens the section", () => {
     const folded = one(true);
     fireEvent.pointerDown(folded.h);
-    fireEvent.click(folded.h);
     const expand = screen.getByRole("button", { name: "Expand Solo" });
     fireEvent.pointerDown(expand);
     fireEvent.focus(expand);
-    fireEvent.click(expand);
     expect(folded.onActivate).not.toHaveBeenCalled();
+    fireEvent.click(expand);
+    expect(folded.onActivate).toHaveBeenCalledTimes(1);
+    cleanup();
+    const folded2 = one(true);
+    fireEvent.click(folded2.h);
+    expect(folded2.onActivate).toHaveBeenCalledTimes(1);
+    cleanup();
+    // Clicking the header of an OPEN section only closes it: no move.
+    const open = one(false);
+    fireEvent.click(open.h);
+    expect(open.onActivate).not.toHaveBeenCalled();
   });
 });
