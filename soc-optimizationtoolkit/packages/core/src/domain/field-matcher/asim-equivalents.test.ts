@@ -185,6 +185,7 @@ describe("vendor/learned mappings follow a log type onto an ASim table (DBT-252)
             sourceType: "string",
             destName: "DestinationIP",
             destType: "string",
+            action: "rename",
           },
         ],
       },
