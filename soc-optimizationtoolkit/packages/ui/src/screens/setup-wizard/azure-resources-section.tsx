@@ -27,11 +27,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RBAC_PERMISSIONS_API_VERSION,
   deriveResourceGroup,
+  effectiveSetupPath,
   renderRoleAssignmentCli,
+  requestedRoleNames,
   resourceCreationRequest,
   roleAssignmentRequest,
 } from "@soc/core";
 import type { AzureSetupPath, ChangeRequestContext } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { usePorts } from "../../ports-context";
 import { ChangeRequestBlock } from "./change-request-block";
@@ -49,6 +52,7 @@ import {
   parseWorkspaceOptions,
   permissionScopeChecks,
   resourceGroupSelectOptions,
+  resourcesSummary,
   scriptCopyFeedback,
   scriptDownloadFeedback,
   storedCredentialReport,
@@ -62,6 +66,19 @@ import type {
   WorkspaceOption,
 } from "./azure-setup-state";
 import { useRunner } from "./use-runner";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
+
+/** The section's description: behind the (i) on the Setup page, the intro line alone. */
+const RESOURCES_DESCRIPTION =
+  "Discover the subscriptions this app registration can see, select the subscription and the " +
+  "target workspace and resource group, then generate and run the role assignment script and " +
+  "validate the effective permissions.";
+const DISCOVERY_NOTE =
+  "Discovery runs automatically once after you Save and connect above; use Discover / refresh from Azure to re-run it after granting roles.";
+
+/** The id the Setup page and the wizard give this section in their fold scope. */
+export const RESOURCES_SECTION_ID = "azure-resources";
 
 export interface AzureResourcesSectionProps {
   clientId: string;
@@ -94,7 +111,7 @@ function is2xx(status: number): boolean {
 export function AzureResourcesSection({
   clientId,
   tenantId,
-  setupPath,
+  setupPath: savedSetupPath,
   subscriptionId,
   onSubscriptionIdChange,
   rgName,
@@ -106,10 +123,25 @@ export function AzureResourcesSection({
   storageContextLabel = "Stored credentials:",
 }: AzureResourcesSectionProps) {
   const { ports } = usePorts();
+  const fold = useSectionFold(RESOURCES_SECTION_ID);
+  // Everything below reads the EFFECTIVE path: a Partially Connected install is
+  // always "existing", so a saved lab path never reaches the script, the
+  // discovery note or the permission checks (C1).
+  const { connectivity, allowedPermissions } = ctx.config;
+  const setupPath = effectiveSetupPath(connectivity, savedSetupPath);
   const [stored, setStored] = useState("checking stored credentials...");
   const [validating, setValidating] = useState(false);
+  // Failure flags for the two operations that report into text areas: a folded
+  // section reopens on their false -> true edge (DBT-248).
+  const [recheckFailed, setRecheckFailed] = useState(false);
+  const [dependentFailed, setDependentFailed] = useState(false);
   const [scriptFeedback, setScriptFeedback] = useState("");
   const [discoverStatus, discoverOutput, runDiscover] = useRunner();
+  useSectionRunState(RESOURCES_SECTION_ID, {
+    busy: discoverStatus === "running" || validating,
+    // One flag per operation: each failure is its own edge.
+    failed: [discoverStatus === "failed", recheckFailed, dependentFailed],
+  });
 
   // Resource discovery state. Each list is null until its query has run; an
   // empty array means the query succeeded but returned nothing. For
@@ -130,6 +162,7 @@ export function AzureResourcesSection({
     async (sub: string, path: AzureSetupPath) => {
       setWorkspaces(null);
       setResourceGroups(null);
+      setDependentFailed(false);
       if (sub === "") {
         setDependentStatus("");
         return;
@@ -169,6 +202,12 @@ export function AzureResourcesSection({
       ]);
 
       const notes: string[] = [];
+      setDependentFailed(
+        wsOutcome.status === "rejected" ||
+          !is2xx(wsOutcome.value.status) ||
+          rgOutcome.status === "rejected" ||
+          !is2xx(rgOutcome.value.status),
+      );
 
       if (wsOutcome.status === "rejected") {
         notes.push(`Workspace discovery error: ${String(wsOutcome.reason)}`);
@@ -298,14 +337,17 @@ export function AzureResourcesSection({
   );
 
   // Auto-run on mount and after a save: report stored state only (no ARM calls).
+  const disconnected = connectivity === "disconnected";
   const checkStored = useCallback(async () => {
+    // Disconnected renders nothing, so it must not read the secret store either.
+    if (disconnected) return;
     try {
       const { lines } = await buildKvReport();
       setStored(lines.join("\n"));
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
     }
-  }, [buildKvReport]);
+  }, [buildKvReport, disconnected]);
 
   useEffect(() => {
     void checkStored();
@@ -332,6 +374,7 @@ export function AzureResourcesSection({
   // selected setup path uses. Token freshness is the adapter's job.
   const recheckAndValidate = useCallback(async () => {
     setValidating(true);
+    setRecheckFailed(false);
     try {
       const report = await buildKvReport();
       const baseLines = report.lines;
@@ -358,10 +401,12 @@ export function AzureResourcesSection({
         }
       } catch (err) {
         validationLines.push(`Permission validation error: ${String(err)}`);
+        setRecheckFailed(true);
       }
       setStored([...baseLines, "", "Permission validation:", ...validationLines].join("\n"));
     } catch (err) {
       setStored(`stored-credentials check failed: ${String(err)}`);
+      setRecheckFailed(true);
     } finally {
       setValidating(false);
     }
@@ -371,11 +416,13 @@ export function AzureResourcesSection({
   // SELECTED (or bootstrap-typed) subscription and the derived/selected resource
   // group. Blank fields stay as <placeholders> so a partial copy is visibly
   // incomplete. Copy/download report via a small feedback line (no runner).
-  const script = renderRoleAssignmentCli(setupPath, {
-    clientId,
-    subscriptionId,
-    resourceGroup: rgName,
-  });
+  // Only the roles the connectivity choice requests: a Partially Connected
+  // script never assigns a role the operator did not tick.
+  const script = renderRoleAssignmentCli(
+    setupPath,
+    { clientId, subscriptionId, resourceGroup: rgName },
+    requestedRoleNames(connectivity, allowedPermissions, savedSetupPath),
+  );
   const copyScript = async () => {
     try {
       await navigator.clipboard.writeText(script);
@@ -395,19 +442,14 @@ export function AzureResourcesSection({
     }
   };
 
-  return (
-    <section className="panel">
-      <h2 className="panel-title">Select resources and grant permissions</h2>
-      <p className="panel-desc">
-        Discover the subscriptions this app registration can see, select the subscription and (for the
-        existing and bring-your-own-RG paths) the target resource, then generate and run the role
-        assignment script and validate the effective permissions. Discovery runs automatically once
-        after you Save and connect above; use Discover / refresh from Azure to re-run it after
-        granting roles.
-      </p>
+  // Disconnected requests nothing, so there is nothing to select or grant.
+  if (disconnected) return null;
+
+  const body = (
+    <>
       <ChangeRequestBlock
         title="Cannot assign roles yourself? Generate a change request"
-        description={
+        titleTip={
           'The human-readable companion to the az CLI script below: a paste-ready ticket asking a team ' +
           'with RBAC rights to assign exactly the roles this setup path requires, at the named scopes, ' +
           'with a justification per role. Blank fields appear as clear placeholders.'
@@ -417,7 +459,7 @@ export function AzureResourcesSection({
       />
       <ChangeRequestBlock
         title="Need a resource group or Event Hub created? Generate a change request"
-        description={
+        titleTip={
           'A paste-ready ticket asking for the Azure resources this app needs but you may lack rights ' +
           'to create: for the new-lab-RG path a resource group with a mandatory TTL auto-delete, plus ' +
           'an Event Hub namespace for the diagnostic-settings export path.'
@@ -551,11 +593,7 @@ export function AzureResourcesSection({
       {dependentStatus !== "" && (
         <div className="discovery-result">
           <span className="field-label">
-            {setupPath === "existing"
-              ? "Workspace discovery"
-              : setupPath === "lab-byo-rg"
-                ? "Resource group discovery"
-                : "Setup path"}
+            Workspace and resource group discovery
           </span>
           <pre className="result">{dependentStatus}</pre>
         </div>
@@ -573,12 +611,14 @@ export function AzureResourcesSection({
         </button>
       </div>
       {scriptFeedback !== "" && <p className="panel-desc">{scriptFeedback}</p>}
-      <p className="panel-desc">
-        The script is generated from the selected (or bootstrap) subscription and the derived resource
-        group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you
-        review it first. If you paste, choose Paste (not Paste as one line, which would join the
-        commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from
-        Azure again afterward.
+      <p className="field-hint">
+        About the role script
+        <InfoTip
+          label="About the role script"
+          text={
+            "The script is generated from the selected (or bootstrap) subscription and the derived resource group. Copy or download it - download avoids the terminal multi-line paste prompt and lets you review it first. If you paste, choose Paste (not Paste as one line, which would join the commands). Role assignments can take a couple of minutes to propagate; Discover / refresh from Azure again afterward."
+          }
+        />
       </p>
       <pre className="result">{stored}</pre>
       <div className="panel-controls">
@@ -590,12 +630,43 @@ export function AzureResourcesSection({
           Re-check and validate permissions
         </button>
       </div>
-      <p className="panel-desc">
-        Re-check and validate permissions reports the stored credential state and then, if the
-        connection is made, checks the caller&apos;s EFFECTIVE Azure permissions for the selected
-        setup path and resources - it evaluates the actions actually allowed (via the RBAC
-        permissions API), not role names, so custom or lookalike roles are handled correctly.
+      <p className="field-hint">
+        About re-checking permissions
+        <InfoTip
+          label="About re-checking permissions"
+          text={
+            "Re-check and validate permissions reports the stored credential state and then, if the connection is made, checks the caller's EFFECTIVE Azure permissions for the selected setup path and resources - it evaluates the actions actually allowed (via the RBAC permissions API), not role names, so custom or lookalike roles are handled correctly."
+          }
+        />
       </p>
+    </>
+  );
+
+  if (fold !== undefined) {
+    const { number, ...foldRest } = fold;
+    const hasTarget = workspaceName.trim() !== "" && rgName.trim() !== "";
+    return (
+      <NumberedSection
+        {...foldRest}
+        number={number ?? 2}
+        title="Select resources and grant permissions"
+        status={hasTarget ? "complete" : fold.current ? "current" : "available"}
+        infoTip={`${RESOURCES_DESCRIPTION}
+${DISCOVERY_NOTE}`}
+        summary={resourcesSummary(workspaceName, rgName)}
+      >
+        {body}
+      </NumberedSection>
+    );
+  }
+  return (
+    <section className="panel">
+      <h2 className="panel-title">Select resources and grant permissions</h2>
+      <p className="panel-desc">
+        {RESOURCES_DESCRIPTION}
+        <InfoTip label="About discovery" text={DISCOVERY_NOTE} />
+      </p>
+      {body}
     </section>
   );
 }

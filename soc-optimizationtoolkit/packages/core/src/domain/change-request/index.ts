@@ -1,5 +1,6 @@
 export {
   appRegistrationRequest,
+  requestSummary,
   resourceCreationRequest,
   roleAssignmentRequest,
 } from "./change-request";

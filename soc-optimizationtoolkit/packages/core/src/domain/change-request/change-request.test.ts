@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appRegistrationRequest,
+  requestSummary,
   resourceCreationRequest,
   roleAssignmentRequest,
 } from "./index";
@@ -32,6 +33,8 @@ function ctxFor(
       resourceGroup: "rg-soc-lab",
       workspaceName: "law-soc-lab",
       setupPath,
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
       ...overrides,
     },
   };
@@ -47,6 +50,8 @@ function emptyCtx(setupPath: AzureSetupPath): ChangeRequestContext {
       resourceGroup: "",
       workspaceName: "",
       setupPath,
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
     },
   };
 }
@@ -144,7 +149,9 @@ describe("appRegistrationRequest", () => {
 
   it("separates Graph consent from RBAC assignment - different approvers", () => {
     const out = appRegistrationRequest(ctxFor("existing"));
-    expect(out).toContain("Microsoft Graph API permissions (admin consent required)");
+    expect(out).toContain(
+      "Microsoft Graph API permissions (admin consent required)",
+    );
     expect(out).toContain("Azure RBAC roles (setup path: existing)");
     // APPLICATION, not delegated: the app runs headless, and a delegated grant
     // would consent cleanly and then fail at runtime with no user to act as.
@@ -163,7 +170,9 @@ describe("appRegistrationRequest", () => {
 
   it("resolves each RBAC scope so the approver need not look anything up", () => {
     const out = appRegistrationRequest(ctxFor("existing"));
-    expect(out).toContain("Scope:          /subscriptions/33333333-3333-3333-3333-333333333333");
+    expect(out).toContain(
+      "Scope:          /subscriptions/33333333-3333-3333-3333-333333333333",
+    );
     expect(out).toContain(
       "Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab",
     );
@@ -186,7 +195,9 @@ describe("appRegistrationRequest", () => {
     // Caught in the live preview: unwrapped 300-character justifications reflowed
     // to column 0 and destroyed the block alignment, beside a document that hard
     // -wraps everything else. Ticketing systems do not reflow this back.
-    const out = appRegistrationRequest(ctxFor("existing"), { includeDiagram: false });
+    const out = appRegistrationRequest(ctxFor("existing"), {
+      includeDiagram: false,
+    });
     // Only the permission blocks: a field line (4 spaces + label) or one of its
     // continuations (the 20-column hanging indent).
     const blockLines = out
@@ -197,7 +208,12 @@ describe("appRegistrationRequest", () => {
       // The wrapper never BREAKS a word, so a line may only exceed the limit
       // when one token is itself too long to fit - a resource id, say, which is
       // far more useful whole than split across two lines.
-      const longest = Math.max(...line.trim().split(" ").map((w) => w.length));
+      const longest = Math.max(
+        ...line
+          .trim()
+          .split(" ")
+          .map((w) => w.length),
+      );
       if (longest <= 58) {
         expect(line.length, line).toBeLessThanOrEqual(78);
       }
@@ -288,9 +304,7 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain("Microsoft Sentinel");
 
     const blank = roleAssignmentRequest(emptyCtx("existing"));
-    expect(blank).toContain(
-      "Reader at /subscriptions/<subscription id>",
-    );
+    expect(blank).toContain("Reader at /subscriptions/<subscription id>");
     expect(blank).toContain("<client id>");
   });
 });
@@ -301,7 +315,9 @@ describe("resourceCreationRequest", () => {
     expect(out).toContain("Create a lab resource group named rg-soc-lab");
     expect(out).toContain("time-to-live (TTL)");
     expect(out).toContain("self-destructs");
-    expect(out).toContain("Create an Event Hub namespace in resource group rg-soc-lab");
+    expect(out).toContain(
+      "Create an Event Hub namespace in resource group rg-soc-lab",
+    );
     // Embedded data export flow.
     expect(out).toContain("Why (data export flow)");
     expect(out).toContain("Event Hub");
@@ -344,6 +360,86 @@ describe("diagram options", () => {
     const out = appRegistrationRequest(ctxFor("existing"));
     expect(out).toContain("```mermaid");
     expect(out).toContain("flowchart");
+  });
+});
+
+describe("appRegistrationRequest follows the connectivity choice", () => {
+  // Snapshots were captured from the output BEFORE connectivity existed, so a
+  // full config must keep rendering byte-for-byte what it always did.
+  it("is unchanged for full connectivity (existing, with diagram)", () => {
+    expect(appRegistrationRequest(ctxFor("existing"))).toMatchSnapshot();
+  });
+
+  it("is unchanged for full connectivity (lab-new-rg, no diagram)", () => {
+    expect(
+      appRegistrationRequest(ctxFor("lab-new-rg"), { includeDiagram: false }),
+    ).toMatchSnapshot();
+  });
+
+  it("partial with Reader asks for Reader only", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain("Reader");
+    expect(out).not.toContain("Monitoring Contributor");
+    expect(out).not.toContain("Application.Read.All");
+  });
+
+  it("partial with a saved lab path never asks for lab roles", () => {
+    const out = appRegistrationRequest(
+      ctxFor("lab-new-rg", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain("setup path: existing");
+    expect(out).not.toContain("RBAC Administrator");
+    expect(out).not.toContain("Contributor on");
+  });
+
+  it("partial with nothing allowed asks for the registration with no roles", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: [] }),
+    );
+    expect(out).toContain("with no roles");
+    expect(out).not.toContain("Azure RBAC roles");
+    expect(out).not.toContain("Microsoft Graph API permissions");
+    expect(out).not.toContain("Assign the Azure RBAC roles");
+  });
+});
+
+describe("requestSummary", () => {
+  const partial = (allowed: string[]) =>
+    ctxFor("existing", { connectivity: "partial", allowedPermissions: allowed })
+      .config;
+
+  it("says nothing selected when nothing is allowed", () => {
+    expect(requestSummary(partial([]))).toBe("nothing selected");
+  });
+
+  it("counts one role", () => {
+    expect(requestSummary(partial(["Reader"]))).toBe("1 role - Reader");
+  });
+
+  it("pluralises roles", () => {
+    expect(requestSummary(partial(["Reader", "Monitoring Contributor"]))).toBe(
+      "2 roles - Reader, Monitoring Contributor",
+    );
+  });
+
+  it("counts Graph permissions separately", () => {
+    expect(requestSummary(partial(["Reader", "Application.Read.All"]))).toBe(
+      "1 role - Reader; 1 Graph permission",
+    );
+  });
+
+  it("counts Graph alone", () => {
+    expect(requestSummary(partial(["Application.Read.All"]))).toBe(
+      "1 Graph permission",
+    );
   });
 });
 
@@ -390,5 +486,98 @@ describe("AZR-61 - the app-registration ticket asks for what the audit found mis
     expect(out).not.toContain("Azure Event Hubs Data Owner");
     expect(out).not.toContain("Security Admin");
     expect(out).not.toContain("Security Reader");
+  });
+});
+
+describe("roleAssignmentRequest follows the connectivity choice (C1)", () => {
+  // Captured from the output BEFORE the role ticket read connectivity, so a
+  // full config keeps rendering byte-for-byte what it always did.
+  it.each(["existing", "lab-new-rg", "lab-byo-rg"] as const)(
+    "is unchanged for full connectivity (%s)",
+    (path) => {
+      expect(roleAssignmentRequest(ctxFor(path))).toMatchSnapshot();
+    },
+  );
+
+  it("partial with Reader only asks for Reader only", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain(
+      "- Reader at /subscriptions/33333333-3333-3333-3333-333333333333",
+    );
+    expect(out).not.toContain("Monitoring Contributor");
+    expect(out).not.toContain("Log Analytics Contributor");
+  });
+
+  it("partial with a saved lab path never asks for lab roles", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("lab-new-rg", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    expect(out).toContain("(setup path: existing)");
+    expect(out).toContain("- Reader at");
+    expect(out).not.toContain("RBAC Administrator");
+    expect(out).not.toContain("- Contributor at");
+    expect(out).not.toContain("lab-new-rg");
+  });
+
+  it("partial with no role ticked asks for no role", () => {
+    const out = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Application.Read.All"],
+      }),
+    );
+    expect(out).not.toMatch(/^- .* at \/subscriptions/m);
+    expect(out).toContain("No roles are requested");
+  });
+});
+
+describe("resourceCreationRequest follows the connectivity choice (C1)", () => {
+  it("partial with a saved lab-new-rg path asks for no lab resource group", () => {
+    const out = resourceCreationRequest(
+      ctxFor("lab-new-rg", { connectivity: "partial" }),
+    );
+    expect(out).not.toContain("Create a lab resource group");
+    expect(out).toContain("Setup path:     existing");
+  });
+});
+
+describe("appRegistrationRequest justification follows the request (C1)", () => {
+  const FULL_JUSTIFICATION =
+    "using the OAuth2 client_credentials grant to deploy Data Collection Rules";
+
+  it("full keeps the deploy-and-read justification", () => {
+    expect(appRegistrationRequest(ctxFor("existing"))).toContain(
+      FULL_JUSTIFICATION,
+    );
+  });
+
+  it("partial Reader-only does not claim it deploys DCRs", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader"],
+      }),
+    );
+    const justification = out.split("Justification\n-------------\n")[1]!.split("\n\n")[0]!;
+    expect(justification).not.toMatch(/deploy Data Collection Rules/);
+    expect(justification).toContain("Discovery and gap analysis");
+    expect(justification).toContain("headless");
+  });
+
+  it("partial with nothing allowed says it reads nothing", () => {
+    const out = appRegistrationRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: [] }),
+    );
+    const justification = out.split("Justification\n-------------\n")[1]!.split("\n\n")[0]!;
+    expect(justification).not.toMatch(/deploy Data Collection Rules/);
+    expect(justification).toMatch(/no Azure permissions/);
   });
 });

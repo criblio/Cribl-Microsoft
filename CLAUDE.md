@@ -579,6 +579,20 @@ git push origin feature/your-feature-name
 # Create Pull Request on GitHub
 ```
 
+### Version bump on every PR to main (DBT-250)
+
+Every PR to `main` that changes what the toolkit ships, or what Live Preview
+shows, raises the app's patch version (1.13.x): run `npm run bump` from
+`soc-optimizationtoolkit/` once per PR and commit `apps/cribl-app/package.json`
+and `package-lock.json`. The footer shows that version, so the bump is visible
+in Live Preview. Docs, board, test and release-tooling-only PRs need none.
+CI's `check-version-bump` fails a PR to `main` that skips it.
+
+Version only: packaging the `.tgz`, its release-notes section and the backlog
+"IS CURRENT" line stay batched. Release the version the manifest already names
+with `npm run package -- --version X.Y.Z`; a bare `npm run package` bumps again.
+`check-release` warns while the manifest is ahead of the last package.
+
 ### Commit Message Guidelines
 
 - Use present tense verbs ("Add" not "Added")
@@ -622,7 +636,8 @@ The pre-merge gates for the toolkit are the CI jobs in
 3. `npm run check-listings`, `npm run check-schema-asset`, `npm run check-classnames`
 4. `npm test` and `npm run build`
 5. `npm run check-release`, `npm run check-docs`, `npm run check-board`,
-   `npm run check-board-freshness`
+   `npm run check-board-freshness`, and on a PR to `main`
+   `npm run check-version-bump` (see "Version bump on every PR to main")
 
 Passing pins is not the same as working in the product: confirm a behaviour
 change in Cribl Live Preview (`/apps/a/__local__` on the leader runs the

@@ -244,3 +244,26 @@ describe("renderRoleAssignmentCli - characterization", () => {
     }
   });
 });
+
+describe("renderRoleAssignmentCli limited to the requested roles (C1)", () => {
+  it("with every plan role named, the output is unchanged", () => {
+    const all = rolePlanForSetupPath("existing").map((r) => r.role);
+    expect(renderRoleAssignmentCli("existing", FILLED, all)).toBe(
+      renderRoleAssignmentCli("existing", FILLED),
+    );
+  });
+
+  it("Reader only -> only the Reader command", () => {
+    const out = renderRoleAssignmentCli("existing", FILLED, ["Reader"]);
+    const commands = out.split("\n").filter((l) => l.startsWith("az "));
+    expect(commands).toEqual([
+      'az role assignment create --assignee CID --role "Reader" --scope /subscriptions/SUB',
+    ]);
+  });
+
+  it("no plan role named -> no command, and says so", () => {
+    const out = renderRoleAssignmentCli("existing", FILLED, ["Application.Read.All"]);
+    expect(out.split("\n").filter((l) => l.startsWith("az "))).toEqual([]);
+    expect(out).toContain("# No roles are requested");
+  });
+});

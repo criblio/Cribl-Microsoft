@@ -143,6 +143,7 @@ export {
 export { JourneyStepper } from "./frame/journey-stepper";
 export type { JourneyStepperProps } from "./frame/journey-stepper";
 export {
+  NOT_NEEDED_HINT,
   SHARED_JOURNEY_LINKS,
   buildStepperItems,
   mergeJourneyLinks,
@@ -765,6 +766,8 @@ export type {
   AzureConnectResult,
   AzureConnectSectionProps,
 } from "./screens/setup-wizard/azure-connect-section";
+export { AzureConnectivitySection } from "./screens/setup-wizard/azure-connectivity-section";
+export type { AzureConnectivitySectionProps } from "./screens/setup-wizard/azure-connectivity-section";
 export { AzureResourcesSection } from "./screens/setup-wizard/azure-resources-section";
 export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-resources-section";
 // AZR-64: which worker group receives each tenant (ADR 0009 decision 5).

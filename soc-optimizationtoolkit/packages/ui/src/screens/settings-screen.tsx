@@ -176,10 +176,6 @@ export function SettingsScreen(props: SettingsScreenProps) {
             </button>
           </div>
         </div>
-        <p className="panel-desc settings-note">
-          Reconfigure reopens the first-run wizard. Connections and their
-          configurations are kept.
-        </p>
       </div>
 
       <div className="settings-section">

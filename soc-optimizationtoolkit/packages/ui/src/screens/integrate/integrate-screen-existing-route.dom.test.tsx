@@ -88,6 +88,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 /** A hand-built Sentinel destination whose custom stream names no table. */

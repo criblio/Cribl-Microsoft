@@ -85,6 +85,16 @@ jobs:
       - name: Check release drift
         run: npm run check-release --workspace apps/cribl-app
 
+      # DBT-250: a PR to main that changes what the app ships, or what Live
+      # Preview shows, must raise the app version above main's ("npm run bump",
+      # version only; packaging stays batched). Docs, board, test and release
+      # tooling changes need no bump, and the step says so. Runs on pull
+      # requests only: GITHUB_BASE_REF names the base, and a PR into a branch
+      # other than main is reported, not enforced.
+      - name: Check version bump
+        if: github.event_name == 'pull_request'
+        run: npm run check-version-bump --workspace apps/cribl-app
+
       # DOCS AS CODE. Fails when a Living or Proposed document names a path that
       # was deleted, points at a file that is not there, or is a plan nobody has
       # re-read inside the window - and when an accepted ADR does not say which

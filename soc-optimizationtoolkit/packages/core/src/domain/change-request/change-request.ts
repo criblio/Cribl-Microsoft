@@ -39,6 +39,11 @@
 
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
 import { appPermissionPlan, graphPermissions, rbacPermissions } from "../app-permissions";
+import {
+  effectiveSetupPath,
+  requestedPermissions,
+  requestedRoleNames,
+} from "../azure-connectivity";
 import type { AppPermission } from "../app-permissions";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
@@ -117,19 +122,24 @@ function resourceGroupScope(n: ResolvedNames): string {
 function rolesForSetupPath(
   path: AzureSetupPath,
   n: ResolvedNames,
+  onlyRoles: readonly string[],
 ): RoleRequest[] {
-  return rbacPermissions(appPermissionPlan(path)).map((permission) => {
-    const request: RoleRequest = {
-      role: permission.name,
-      scope: permissionScope(permission, n),
-      justification: permission.justification,
-      necessity: permission.necessity,
-    };
-    if (permission.condition !== undefined) {
-      request.condition = permission.condition;
-    }
-    return request;
-  });
+  // The registry plan (AZR-61), kept to the roles the connectivity choice
+  // ticked (DBT-246).
+  return rbacPermissions(appPermissionPlan(path))
+    .filter((permission) => onlyRoles.includes(permission.name))
+    .map((permission) => {
+      const request: RoleRequest = {
+        role: permission.name,
+        scope: permissionScope(permission, n),
+        justification: permission.justification,
+        necessity: permission.necessity,
+      };
+      if (permission.condition !== undefined) {
+        request.condition = permission.condition;
+      }
+      return request;
+    });
 }
 
 /**
@@ -204,7 +214,9 @@ function field(label: string, value: string): string {
   }
   lines.push(current);
   return lines
-    .map((line, index) => (index === 0 ? head : " ".repeat(FIELD_INDENT)) + line)
+    .map(
+      (line, index) => (index === 0 ? head : " ".repeat(FIELD_INDENT)) + line,
+    )
     .join("\n");
 }
 
@@ -247,6 +259,52 @@ function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
 }
 
 /**
+ * The app-registration Justification, describing only what the requested
+ * entries enable. Full connectivity keeps its original wording byte-for-byte;
+ * a narrower request names the features its entries unlock, so a Reader-only
+ * ticket never claims the app deploys Data Collection Rules.
+ */
+function registrationJustification(
+  n: ResolvedNames,
+  connectivity: AzureConfig["connectivity"],
+  plan: readonly AppPermission[],
+): string {
+  if (connectivity === "full") {
+    return [
+      n.appName +
+        " authenticates to Azure Resource Manager as a confidential client",
+      "using the OAuth2 client_credentials grant to deploy Data Collection Rules",
+      "and read Microsoft Sentinel content. It runs headless (no interactive user",
+      "sign-in), so it needs its own app registration and client secret rather",
+      "than delegated user permissions.",
+    ].join("\n");
+  }
+  const intro = [
+    n.appName + " authenticates to Azure Resource Manager as a confidential",
+    "client using the OAuth2 client_credentials grant.",
+  ];
+  const headless = [
+    "It runs headless (no interactive user sign-in), so it needs its own app",
+    "registration and client secret rather than delegated user permissions.",
+  ];
+  if (plan.length === 0) {
+    return [
+      ...intro,
+      "It is requested with no Azure permissions, so it can authenticate but",
+      "reads nothing from Azure until some are granted.",
+      ...headless,
+    ].join("\n");
+  }
+  const features = [...new Set(plan.map((p) => p.feature))];
+  return [
+    ...intro,
+    "The permissions requested below are used only for:",
+    ...features.map((f) => "- " + f),
+    ...headless,
+  ].join("\n");
+}
+
+/**
  * Request that another team create an Entra app registration (single-tenant,
  * daemon confidential client - no redirect URI, no interactive sign-in), create
  * a client secret, securely share the credentials, AND grant every permission
@@ -270,12 +328,78 @@ export function appRegistrationRequest(
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
-  const plan = appPermissionPlan(ctx.config.setupPath);
+  const { connectivity, allowedPermissions } = ctx.config;
+  const plan = requestedPermissions(
+    connectivity,
+    allowedPermissions,
+    ctx.config.setupPath,
+  );
   const graph = graphPermissions(plan);
   const rbac = rbacPermissions(plan);
+  // A partial request always names the "existing" path, so a saved lab path
+  // never reads as a request for lab roles.
+  const setupPath = effectiveSetupPath(connectivity, ctx.config.setupPath);
+
+  // Numbered from what is actually asked for, so a request with no Graph
+  // permissions or no roles does not point at a section that is not there.
+  const steps: string[][] = [
+    [
+      "Create a single-tenant Entra app registration (daemon / confidential",
+      "   client) in tenant " + n.tenantId + ".",
+      "   Sign-in audience this directory only, no redirect URI, no interactive",
+      "   user sign-in.",
+    ],
+    ["Create a client secret on that app registration."],
+  ];
+  if (graph.length > 0) {
+    steps.push([
+      "Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT",
+      "   them.",
+    ]);
+  }
+  if (rbac.length > 0) {
+    steps.push([
+      "Assign the Azure RBAC roles listed below to this app's service principal.",
+    ]);
+  }
+  steps.push([
+    "Securely share the tenant id, application (client) id, and the client",
+    "   secret with the requester (use a secrets manager or vault, not email or",
+    "   chat) - see Hand back below.",
+  ]);
+  const requestedLines = steps.flatMap((lines, index) =>
+    lines.map((line, i) => (i === 0 ? String(index + 1) + ". " + line : line)),
+  );
+  const closing: string[] = [];
+  if (graph.length > 0 && rbac.length > 0) {
+    closing.push(
+      "",
+      "Steps 3 and 4 are usually different approvers. Every permission below says",
+      "what needs it and what stops working without it, so each can be granted or",
+      "refused on its own - a partial grant leaves a working app with fewer",
+      "features, never a broken one.",
+    );
+  } else if (graph.length === 0 && rbac.length === 0) {
+    closing.push(
+      "",
+      "The app is being asked for with no roles and no Graph permissions: it can",
+      "authenticate but reads nothing from Azure until some are granted.",
+    );
+  }
+  // Everything is per tenant (AZR-62): a registration and its grants in one
+  // tenant reach no other, so each tenant gets its own request.
+  closing.push(
+    "",
+    "Everything here is for this one tenant. A registration, its consent and its",
+    "role assignments in one tenant grant nothing in any other, so each tenant",
+    "gets its own request.",
+  );
+
+  // Core and feature roles are separate sections (AZR-62): an approver who
+  // grants only what the app cannot work without reads one section and stops.
   const coreRoles = rbac.filter((permission) => permission.necessity === "core");
   const featureRoles = rbac.filter((permission) => permission.necessity === "feature");
-  const rbacHeading = "Azure RBAC roles (setup path: " + ctx.config.setupPath + ")";
+  const rbacHeading = "Azure RBAC roles (setup path: " + setupPath + ")";
 
   const parts: string[] = [
     "Change request: create Entra app registration for " +
@@ -283,42 +407,8 @@ export function appRegistrationRequest(
       " in tenant " +
       n.tenantId,
     requestHeader(n),
-    section(
-      "What is requested",
-      [
-        "1. Create a single-tenant Entra app registration (daemon / confidential",
-        "   client) in tenant " + n.tenantId + ".",
-        "   Sign-in audience this directory only, no redirect URI, no interactive",
-        "   user sign-in.",
-        "2. Create a client secret on that app registration.",
-        "3. Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT",
-        "   them.",
-        "4. Assign the Azure RBAC roles listed below to this app's service principal.",
-        "5. Securely share the tenant id, application (client) id, and the client",
-        "   secret with the requester (use a secrets manager or vault, not email or",
-        "   chat) - see Hand back below.",
-        "",
-        "Steps 3 and 4 are usually different approvers. Every permission below says",
-        "what needs it and what stops working without it, so each can be granted or",
-        "refused on its own - a partial grant leaves a working app with fewer",
-        "features, never a broken one.",
-        "",
-        "Everything here is for this one tenant. A registration, its consent and its",
-        "role assignments in one tenant grant nothing in any other, so each tenant",
-        "gets its own request.",
-      ].join("\n"),
-    ),
-    section(
-      "Justification",
-      [
-        n.appName +
-          " authenticates to Azure Resource Manager as a confidential client",
-        "using the OAuth2 client_credentials grant to deploy Data Collection Rules",
-        "and read Microsoft Sentinel content. It runs headless (no interactive user",
-        "sign-in), so it needs its own app registration and client secret rather",
-        "than delegated user permissions.",
-      ].join("\n"),
-    ),
+    section("What is requested", [...requestedLines, ...closing].join("\n")),
+    section("Justification", registrationJustification(n, connectivity, plan)),
   ];
 
   if (graph.length > 0) {
@@ -338,23 +428,25 @@ export function appRegistrationRequest(
     );
   }
 
-  // Core and feature roles are separate sections (AZR-62): an approver who
-  // grants only what the app cannot work without reads one section and stops.
-  parts.push(
-    section(
-      rbacHeading + " - core",
-      [
-        "Assign each role to the service principal for " +
-          n.appName +
-          " (client id:",
-        n.clientId + ") at the scope given.",
-        "",
-        "[core] roles are what this setup path needs to function at all.",
-        "",
-        ...coreRoles.map((permission) => permissionBlock(permission, n)),
-      ].join("\n"),
-    ),
-  );
+  // A section with no roles is not printed (DBT-246: the request numbers and
+  // names only what it actually asks for).
+  if (coreRoles.length > 0) {
+    parts.push(
+      section(
+        rbacHeading + " - core",
+        [
+          "Assign each role to the service principal for " +
+            n.appName +
+            " (client id:",
+          n.clientId + ") at the scope given.",
+          "",
+          "[core] roles are what this setup path needs to function at all.",
+          "",
+          ...coreRoles.map((permission) => permissionBlock(permission, n)),
+        ].join("\n"),
+      ),
+    );
+  }
   if (featureRoles.length > 0) {
     parts.push(
       section(
@@ -394,7 +486,7 @@ export function appRegistrationRequest(
         "Credential:              client secret",
         "Tenant id:               " + n.tenantId,
         "Application (client) id: " + n.clientId + " (if already created)",
-        "Setup path:              " + ctx.config.setupPath,
+        "Setup path:              " + setupPath,
         "Subscription:            " + n.subscriptionId,
         "Resource group:          " + n.resourceGroup,
       ].join("\n"),
@@ -419,7 +511,16 @@ export function roleAssignmentRequest(
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
-  const roles = rolesForSetupPath(ctx.config.setupPath, n);
+  const { connectivity, allowedPermissions } = ctx.config;
+  // Only the roles the connectivity choice requests: full is the whole
+  // setup-path plan (unchanged), partial is the ticked subset of the "existing"
+  // plan, so neither a saved lab path nor an unticked role reaches the ticket.
+  const setupPath = effectiveSetupPath(connectivity, ctx.config.setupPath);
+  const roles = rolesForSetupPath(
+    setupPath,
+    n,
+    requestedRoleNames(connectivity, allowedPermissions, ctx.config.setupPath),
+  );
 
   const requested: string[] = [
     "Assign the following roles to the service principal for " +
@@ -436,7 +537,9 @@ export function roleAssignmentRequest(
       requested.push("    Condition: " + r.condition);
     }
   }
-  if (roles.some((r) => r.necessity === "feature")) {
+  if (roles.length === 0) {
+    requested.push("- No roles are requested under the saved connectivity choice.");
+  } else if (roles.some((r) => r.necessity === "feature")) {
     requested.push(
       "",
       "[feature] roles each unlock one named capability and can be refused on",
@@ -444,15 +547,18 @@ export function roleAssignmentRequest(
     );
   }
 
-  const justifications = roles.map(
-    (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
-  );
+  const justifications =
+    roles.length === 0
+      ? ["No roles are requested, so there is nothing to justify."]
+      : roles.map(
+          (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
+        );
 
   const parts: string[] = [
     "Change request: assign Azure RBAC roles for " +
       n.appName +
       " (setup path: " +
-      ctx.config.setupPath +
+      setupPath +
       ")",
     requestHeader(n),
     section("What is requested", requested.join("\n")),
@@ -462,7 +568,7 @@ export function roleAssignmentRequest(
       [
         "Service principal (client id): " + n.clientId,
         "Tenant id:                     " + n.tenantId,
-        "Setup path:                    " + ctx.config.setupPath,
+        "Setup path:                    " + setupPath,
         "Subscription:                  " + n.subscriptionId,
         "Resource group:                " + n.resourceGroup,
       ].join("\n"),
@@ -490,9 +596,13 @@ export function resourceCreationRequest(
   options?: ChangeRequestOptions,
 ): string {
   const n = resolveNames(ctx);
+  const setupPath = effectiveSetupPath(
+    ctx.config.connectivity,
+    ctx.config.setupPath,
+  );
 
   const requested: string[] = [];
-  if (ctx.config.setupPath === "lab-new-rg") {
+  if (setupPath === "lab-new-rg") {
     requested.push(
       "- Create a lab resource group named " +
         n.resourceGroup +
@@ -528,7 +638,7 @@ export function resourceCreationRequest(
       [
         "Subscription:   " + n.subscriptionId,
         "Resource group: " + n.resourceGroup,
-        "Setup path:     " + ctx.config.setupPath,
+        "Setup path:     " + setupPath,
       ].join("\n"),
     ),
   ];
@@ -538,4 +648,38 @@ export function resourceCreationRequest(
     parts.push(section("Why (data export flow)", diagram));
   }
   return parts.join("\n\n");
+}
+
+/**
+ * The count line beside the request button: how many roles and Graph
+ * permissions the saved connectivity choice would ask for, for example
+ * `"2 roles - Reader, Monitoring Contributor"`. Built from the same
+ * {@link requestedPermissions} the ticket renders, so the line and the ticket
+ * cannot disagree.
+ */
+export function requestSummary(config: AzureConfig): string {
+  const plan = requestedPermissions(
+    config.connectivity,
+    config.allowedPermissions,
+    config.setupPath,
+  );
+  const roles = rbacPermissions(plan);
+  const graph = graphPermissions(plan);
+  if (roles.length === 0 && graph.length === 0) return "nothing selected";
+  const parts: string[] = [];
+  if (roles.length > 0) {
+    parts.push(
+      String(roles.length) +
+        (roles.length === 1 ? " role" : " roles") +
+        " - " +
+        roles.map((r) => r.name).join(", "),
+    );
+  }
+  if (graph.length > 0) {
+    parts.push(
+      String(graph.length) +
+        (graph.length === 1 ? " Graph permission" : " Graph permissions"),
+    );
+  }
+  return parts.join("; ");
 }
