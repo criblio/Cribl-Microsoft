@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**105 in the backlog, 35 in progress, 152 done.**
+**104 in the backlog, 36 in progress, 152 done.**
 
 ## By menu item
 
@@ -147,7 +147,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1117,9 +1117,41 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
+- **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
+  `AZR-F10` `bug` `settled`
+  FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects
+  every Azure credential from fixed KV keys (azureBasic, azureArmToken,
+  azureGraphToken), and the app KV store is shared by every tab AND every user
+  of the app. runTenantSession swaps those keys to tenant N, and its lease
+  plus the before-and-after tenant proof protect ITS OWN batch only.
+  apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock
+  admits one tenant at a time, and 'Other TABS are not covered by the lock'.
+  Only Save and connect and the secret probe read the lease; ordinary reads in
+  another tab (the onboarding screen, Validate, the Logging Map, the
+  dashboard) do not. FAILURE: user B has the onboarding screen open on tenant
+  A while user C runs Read all on the gap dashboard. B's tenant-wide reads
+  (Graph directory, the subscription list, management groups, /tenants) answer
+  for tenant N and are shown as tenant A's. Subscription-scoped reads mostly
+  refuse (another tenant's subscription ids), which reads as a permission
+  problem that does not exist. Writes (Deploy, Create Cribl source) would
+  carry tenant N's token for tenant A's targets. OPTIONS (undecided): (a)
+  every ordinary batch reads the lease first and refuses while another holder
+  has it - one KV read per batch from the 100 req/min budget; (b) the slot
+  records its owner tenant beside the token, and every ordinary batch checks
+  it is its own tenant before sending and again after, as the session does;
+  (c) multi-tenant reads run only when no other tab or user is active -
+  unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a
+  pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009
+  must say this risk exists until it is fixed. DECIDED 2026-11-03 by the
+  operator: option (b), an owner check per batch. The slot records the tenant
+  that owns it; every ordinary Azure batch (reads AND writes) checks the owner
+  is its own tenant before sending and again after, and a mismatch or an
+  unreadable owner makes the batch unknown (writes are refused before
+  sending), never red or absent.
+
 ---
 
-## Backlog - now (18)
+## Backlog - now (17)
 
 Next to pick up. Nothing blocks these.
 
@@ -1388,33 +1420,6 @@ Next to pick up. Nothing blocks these.
   what is needed. Pins: denied, granted, unknown, never-checked and grant-only
   rows for the Defender section; no Azure call on mount. Live check in Live
   Preview with an identity that lacks Microsoft.Security/automations/write.
-
-- **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
-  `AZR-F10` `bug` `undecided`
-  FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects
-  every Azure credential from fixed KV keys (azureBasic, azureArmToken,
-  azureGraphToken), and the app KV store is shared by every tab AND every user
-  of the app. runTenantSession swaps those keys to tenant N, and its lease
-  plus the before-and-after tenant proof protect ITS OWN batch only.
-  apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock
-  admits one tenant at a time, and 'Other TABS are not covered by the lock'.
-  Only Save and connect and the secret probe read the lease; ordinary reads in
-  another tab (the onboarding screen, Validate, the Logging Map, the
-  dashboard) do not. FAILURE: user B has the onboarding screen open on tenant
-  A while user C runs Read all on the gap dashboard. B's tenant-wide reads
-  (Graph directory, the subscription list, management groups, /tenants) answer
-  for tenant N and are shown as tenant A's. Subscription-scoped reads mostly
-  refuse (another tenant's subscription ids), which reads as a permission
-  problem that does not exist. Writes (Deploy, Create Cribl source) would
-  carry tenant N's token for tenant A's targets. OPTIONS (undecided): (a)
-  every ordinary batch reads the lease first and refuses while another holder
-  has it - one KV read per batch from the 100 req/min budget; (b) the slot
-  records its owner tenant beside the token, and every ordinary batch checks
-  it is its own tenant before sending and again after, as the session does;
-  (c) multi-tenant reads run only when no other tab or user is active -
-  unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a
-  pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009
-  must say this risk exists until it is fixed.
 
 - **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
   `AZR-F10` `bug` `settled`
