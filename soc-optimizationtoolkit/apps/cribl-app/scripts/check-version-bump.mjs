@@ -1,4 +1,4 @@
-// The version-bump gate (DBT-251): a PR to main that changes what the app ships,
+// The version-bump gate (DBT-253): a PR to main that changes what the app ships,
 // or what Live Preview shows, must raise the app version above main's.
 //
 // Why it exists: the operator's rule (2026-11-04) is that the 1.13.x patch

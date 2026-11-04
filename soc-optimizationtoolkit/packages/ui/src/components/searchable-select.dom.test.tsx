@@ -326,3 +326,54 @@ describe("SearchableSelect clearLabel", () => {
     cleanup();
   });
 });
+
+describe("SearchableSelect - focus returns to the control (DBT-251)", () => {
+  function Single() {
+    const [value, setValue] = useState("o11yDemo");
+    const [focusedAtChange, setFocusedAtChange] = useState("");
+    return (
+      <div>
+        <output data-testid="focused-at-change">{focusedAtChange}</output>
+        <SearchableSelect
+          label="Group"
+          options={OPTIONS}
+          value={value}
+          onChange={(v) => {
+            // What a host that opens a panel on change would record as its opener.
+            setFocusedAtChange(document.activeElement?.className ?? "");
+            setValue(v);
+          }}
+        />
+      </div>
+    );
+  }
+
+  it("focuses the control BEFORE onChange runs, on a click pick", () => {
+    const { container, getByTestId } = render(<Single />);
+    const control = container.querySelector<HTMLButtonElement>(".searchable-select-control")!;
+    fireEvent.click(control);
+    const option = [...container.querySelectorAll(".searchable-select-option")].find(
+      (o) => o.textContent === "DatacenterEast",
+    )!;
+    fireEvent.click(option);
+    expect(getByTestId("focused-at-change").textContent).toBe("searchable-select-control");
+    expect(document.activeElement).toBe(control);
+    cleanup();
+  });
+
+  it("focuses the control on an Enter pick and on Escape", () => {
+    const { container } = render(<Single />);
+    const control = container.querySelector<HTMLButtonElement>(".searchable-select-control")!;
+    fireEvent.click(control);
+    const search = container.querySelector<HTMLInputElement>(".searchable-select-search")!;
+    fireEvent.change(search, { target: { value: "east" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(document.activeElement).toBe(control);
+    expect(control.textContent).toBe("DatacenterEast");
+
+    fireEvent.click(control);
+    fireEvent.keyDown(container.querySelector(".searchable-select-search")!, { key: "Escape" });
+    expect(document.activeElement).toBe(control);
+    cleanup();
+  });
+});

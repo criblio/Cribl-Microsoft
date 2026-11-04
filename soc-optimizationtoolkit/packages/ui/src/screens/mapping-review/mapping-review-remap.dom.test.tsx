@@ -84,7 +84,9 @@ function chooseOption(control: HTMLElement, text: string): void {
   const option = [
     ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
       []),
-  ].find((o) => o.textContent === text);
+  ]// The option label, not its text: Dest Field options carry the column type
+    // as a hint (DBT-251), so the row text is "Name" + "type".
+    .find((o) => (o.querySelector(".searchable-select-option-label")?.textContent ?? o.textContent) === text);
   if (option === undefined) throw new Error(`no option "${text}"`);
   fireEvent.click(option);
 }
@@ -240,5 +242,24 @@ describe("mapping review - the Action select on an overflow row (DBT-209)", () =
       );
     });
     expect(effective().PanOS?.find((m) => m.source === "qqvendorfield")).toEqual(before);
+  });
+});
+
+describe("mapping review - Dest Field filters (DBT-251)", () => {
+  it("narrows the row's destination columns to the typed text", async () => {
+    const { container } = await renderAnalyzed();
+    const row = rowFor(container, "qqvendorfield");
+    fireEvent.click(row.querySelector(".mapping-dest-select .searchable-select-control")!);
+    const all = row.querySelectorAll(".mapping-dest-select .searchable-select-option").length;
+    const search = row.querySelector<HTMLInputElement>(
+      ".mapping-dest-select .searchable-select-search",
+    )!;
+    expect(search).not.toBeNull();
+    fireEvent.change(search, { target: { value: "macaddr" } });
+    const shown = [
+      ...row.querySelectorAll(".mapping-dest-select .searchable-select-option-label"),
+    ].map((o) => o.textContent);
+    expect(shown).toEqual(["SourceMACAddress"]);
+    expect(all).toBeGreaterThan(shown.length);
   });
 });

@@ -70,6 +70,14 @@ export function getOverflowConfig(tableName: string): {
 } {
   // Exact match
   if (TABLE_OVERFLOW_FIELDS[tableName]) return TABLE_OVERFLOW_FIELDS[tableName];
+  // ASim normalized tables (DBT-252): every ASim*Logs table carries a dynamic
+  // AdditionalFields column and none carries the CEF AdditionalExtensions, so
+  // the CEF fallback below sent every overflowed field of an ASim pick into a
+  // column the table does not have. Checked against the bundled schemas: all
+  // ten ASim tables declare AdditionalFields as dynamic.
+  if (/^ASim/i.test(tableName)) {
+    return { fieldName: "AdditionalFields", fieldType: "dynamic" };
+  }
   // Custom table default
   if (tableName.endsWith("_CL")) return TABLE_OVERFLOW_FIELDS["_default_custom"];
   // Fallback

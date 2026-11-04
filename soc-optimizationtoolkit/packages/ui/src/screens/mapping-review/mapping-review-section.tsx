@@ -151,6 +151,7 @@ import {
   deriveLiveStats,
   deriveMappingReviewGate,
   destClaim,
+  destFieldOptions,
   droppedEditsNotice,
   effectiveMappings,
   fieldMappingsLabel,
@@ -1755,26 +1756,19 @@ export function MappingReviewSection({
                               {example.text}
                             </td>
                             <td>
+                              {/* DBT-251: a filterable combobox, not a
+                                  native select - a destination schema runs
+                                  to 150+ columns. */}
                               <SearchableSelect
-                                className="mapping-select"
+                                className="mapping-select mapping-dest-select"
                                 label={`Dest Field for ${m.source}`}
-                                options={[
-                                  { value: m.dest, label: m.dest },
-                                  ...report.destSchema
-                                    .filter((d) => d.name !== m.dest)
-                                    .map((d) => ({ value: d.name, label: d.name })),
-                                ]}
+                                options={destFieldOptions(report.destSchema, m.dest)}
                                 value={m.dest}
-                                placeholder=""
-                                onChange={(next) =>
-                                  chooseDest(
-                                    report,
-                                    effective,
-                                    m.source,
-                                    next,
-                                    approved,
-                                  )
-                                }
+                                onChange={(next) => {
+                                  if (next === m.dest) return;
+                                  chooseDest(report, effective, m.source, next, approved);
+                                }}
+                                ariaLabel={`Filter destination fields for ${m.source}`}
                               />
                             </td>
                             <td className="match-field-type">{m.destType}</td>

@@ -448,6 +448,72 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   error: ["Reason"],
 };
 
+/**
+ * CommonSecurityLog column -> its ASim normalized-schema equivalent (DBT-252).
+ *
+ * ALIAS_TABLE and the vendor packs name CEF / CommonSecurityLog columns
+ * (dst -> DestinationIP). Pointed at an ASim table, none of those columns
+ * exist, so src/dst/ports/bytes all fell to the catch-all. Rather than edit the
+ * characterization-pinned alias entries, the matcher treats a column as an
+ * alias target when it is the ASim equivalent of one. A schema only ever has
+ * one of the pair, so CommonSecurityLog matching cannot change.
+ *
+ * Every right-hand side is a real column of at least one bundled ASim table
+ * (checked 2026-11-04). Directions follow the ASim convention: Src is the
+ * session initiator, so CEF SentBytes (initiator -> responder) is SrcBytes.
+ */
+export const ASIM_COLUMN_EQUIVALENTS: Readonly<Record<string, string>> = {
+  SourceIP: "SrcIpAddr",
+  DestinationIP: "DstIpAddr",
+  SourcePort: "SrcPortNumber",
+  DestinationPort: "DstPortNumber",
+  SourceTranslatedAddress: "SrcNatIpAddr",
+  SourceTranslatedPort: "SrcNatPortNumber",
+  DestinationTranslatedAddress: "DstNatIpAddr",
+  DestinationTranslatedPort: "DstNatPortNumber",
+  SentBytes: "SrcBytes",
+  ReceivedBytes: "DstBytes",
+  SourceUserName: "SrcUsername",
+  DestinationUserName: "DstUsername",
+  SourceHostName: "SrcHostname",
+  DestinationHostName: "DstHostname",
+  SourceMACAddress: "SrcMacAddr",
+  DestinationMACAddress: "DstMacAddr",
+  DeviceAction: "DvcAction",
+  Protocol: "NetworkProtocol",
+  ApplicationProtocol: "NetworkApplicationProtocol",
+  DeviceInboundInterface: "DvcInboundInterface",
+  DeviceOutboundInterface: "DvcOutboundInterface",
+  DeviceName: "DvcHostname",
+  DeviceAddress: "DvcIpAddr",
+  RequestURL: "Url",
+  RequestMethod: "HttpRequestMethod",
+  RequestClientApplication: "HttpUserAgent",
+  DestinationDnsDomain: "DnsQuery",
+  FileName: "FileName",
+  FileSize: "FileSize",
+  Message: "EventMessage",
+  ExternalID: "EventOriginalUid",
+};
+
+/** Lowercased CEF column -> ASim column, and the reverse. */
+const ASIM_BY_CEF_LOWER = new Map<string, string>(
+  Object.entries(ASIM_COLUMN_EQUIVALENTS).map(([cef, asim]) => [cef.toLowerCase(), asim]),
+);
+const CEF_BY_ASIM_LOWER = new Map<string, string>(
+  Object.entries(ASIM_COLUMN_EQUIVALENTS).map(([cef, asim]) => [asim.toLowerCase(), cef]),
+);
+
+/** The ASim equivalent of a CommonSecurityLog column, or undefined. */
+export function asimEquivalentOf(cefColumn: string): string | undefined {
+  return ASIM_BY_CEF_LOWER.get(cefColumn.toLowerCase());
+}
+
+/** The CommonSecurityLog column an ASim column stands in for, or undefined. */
+export function cefEquivalentOf(asimColumn: string): string | undefined {
+  return CEF_BY_ASIM_LOWER.get(asimColumn.toLowerCase());
+}
+
 /** Reverse lookup: destName (lowercased) -> sourceNames (lowercased). */
 export const REVERSE_ALIAS: Map<string, Set<string>> = new Map();
 for (const [source, dests] of Object.entries(ALIAS_TABLE)) {

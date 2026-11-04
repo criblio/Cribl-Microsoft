@@ -63,6 +63,7 @@ import {
   suggestForDestColumn,
 } from "@soc/core";
 import { reKeyByLogType } from "../samples/sample-intake-state";
+import type { SelectOption } from "../../components/searchable-select-filter";
 
 // ---------------------------------------------------------------------------
 // State + actions
@@ -1414,4 +1415,25 @@ export function deriveLiveStats(
     tone: dropped > 0 ? "info" : "neutral",
   });
   return live;
+}
+
+/**
+ * The Dest Field options for one row (DBT-251): every destination column in
+ * schema order, each with its type as the hint, plus the row's current dest
+ * when the schema lacks it (the catch-all, or a column a re-analysis removed),
+ * so the control never renders a value it cannot show.
+ */
+export function destFieldOptions(
+  destSchema: readonly { name: string; type: string }[],
+  current: string,
+): SelectOption[] {
+  const options: SelectOption[] = destSchema.map((d) => ({
+    value: d.name,
+    label: d.name,
+    hint: d.type,
+  }));
+  if (current !== "" && !destSchema.some((d) => d.name === current)) {
+    options.unshift({ value: current, label: current });
+  }
+  return options;
 }

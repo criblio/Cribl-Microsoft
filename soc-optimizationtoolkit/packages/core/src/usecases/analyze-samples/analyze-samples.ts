@@ -31,6 +31,7 @@
 import { parseSampleContent } from "../../domain/sample-parsing/index";
 import { matchSolutionName } from "../../domain/sentinel-content/index";
 import {
+  asimEquivalentOf,
   deriveCustomTableSchema,
   matchParsedSampleToColumns,
   parsedSampleToSourceFields,
@@ -286,10 +287,22 @@ export async function* analyzeSamples(
     // documented vendor-pack entry both still outrank this. An operator who
     // has explicitly said where `requestID` goes should not be overruled by
     // bundled content, and no pack maps a source we claim today.
+    // DBT-252: a learned/pack entry names a CommonSecurityLog column. On a
+    // table without that column but with its ASim equivalent, it aims at the
+    // equivalent instead of being filtered out below - otherwise every
+    // documented PAN-OS / CEF mapping is lost the moment a log type is
+    // pointed at an ASim table.
     const mappingsForSample = [
       ...(input.vendorMappings ?? []),
       ...guidSuccessorMappings(sample.tableName),
-    ];
+    ].map((vm) => {
+      if (vm.action === "drop") return vm;
+      if (schemaColumnNames.has(vm.destName.toLowerCase())) return vm;
+      const asim = asimEquivalentOf(vm.destName);
+      return asim !== undefined && schemaColumnNames.has(asim.toLowerCase())
+        ? { ...vm, destName: asim }
+        : vm;
+    });
     const applicableMappings = mappingsForSample.filter((vm) => {
       const sourceKey = vm.sourceName.toLowerCase();
       if (!sampleFieldNames.has(sourceKey)) return false;
