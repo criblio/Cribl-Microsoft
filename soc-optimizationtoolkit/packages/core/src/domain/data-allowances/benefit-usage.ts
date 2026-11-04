@@ -63,12 +63,18 @@ export interface BenefitDay {
  * replaces them with the literal strings it records.
  */
 export const BENEFIT_TYPE_PATTERNS: ReadonlyArray<{ pattern: RegExp; grant: GrantId }> = [
-  { pattern: /M365|Microsoft 365|Defender XDR/i, grant: "e5" },
+  // "Microsoft ?365" also matches the reported "SentinelMicrosoft365" (MIG-26).
+  // "MicrosoftDefender" is deliberately unmatched: it could be either grant.
+  { pattern: /M365|Microsoft ?365|Defender XDR/i, grant: "e5" },
   { pattern: /Defender for Servers|per Node|Security/i, grant: "servers-p2" },
 ];
 
-function grantForType(type: string): GrantId | null {
-  const bare = type.startsWith(BENEFIT_TYPE_PREFIX) ? type.slice(BENEFIT_TYPE_PREFIX.length) : type;
+/** The benefit type without the "Benefit type used: " prefix a failed parse leaves on it. */
+function bareType(type: string): string {
+  return type.startsWith(BENEFIT_TYPE_PREFIX) ? type.slice(BENEFIT_TYPE_PREFIX.length) : type;
+}
+
+function grantForType(bare: string): GrantId | null {
   for (const { pattern, grant } of BENEFIT_TYPE_PATTERNS) {
     if (pattern.test(bare)) return grant;
   }
@@ -112,7 +118,8 @@ export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): 
       continue;
     }
     unreadableRows += skipped;
-    const type = String(row.BenefitType ?? "");
+    // Unmatched types are reported bare: they reach the cross-check's skip reason.
+    const type = bareType(String(row.BenefitType ?? ""));
     const grant = grantForType(type);
     if (grant === null) unmatched.add(type);
     parsed.push({ day, grant, usedMB: gb * MB_PER_GB });

@@ -39,6 +39,26 @@ describe("parseBenefitRows", () => {
     ]);
     expect(r.days[0].grant).toBe("e5");
   });
+
+  // MIG-26: strings published for these rows (a community guide and
+  // Microsoft's meter name) - asserted, not observed output, so MIG-17 stays
+  // open. The ambiguous one must degrade to the pooled figure, not be guessed.
+  it.each([
+    ["Benefit type used: SentinelMicrosoft365", "e5"],
+    ["Benefit type used: Standard Data Included per Node", "servers-p2"],
+  ])("attributes the published benefit type %s to %s", (type, grant) => {
+    const r = parseBenefitRows([{ Day: "d1", BenefitType: type, BenefitUsedGB: 1 }]);
+    expect(r.attribution).toBe("per-grant");
+    expect(r.days[0].grant).toBe(grant);
+  });
+
+  it("leaves the ambiguous MicrosoftDefender unattributed, so the read is pooled", () => {
+    const r = parseBenefitRows([
+      { Day: "d1", BenefitType: "Benefit type used: MicrosoftDefender", BenefitUsedGB: 1 },
+    ]);
+    expect(r.attribution).toBe("pooled");
+    expect(r.unmatchedTypes).toEqual(["MicrosoftDefender"]);
+  });
 });
 
 describe("parseBenefitRows - unreadable amounts (MIG-21)", () => {

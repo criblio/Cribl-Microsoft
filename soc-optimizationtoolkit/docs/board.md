@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 35 in progress, 149 done.**
+**93 in the backlog, 35 in progress, 150 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 1 | 15 | 0 |
+| Data Volume Inventory | 1 | 16 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -136,14 +136,14 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 92% (23/25)
+### `MIG` SIEM migration analysis - 92% (24/26)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
-| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 15/16 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25 |
+| `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
 
 ---
 
@@ -2429,7 +2429,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (149)
+## Done (150)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6429,6 +6429,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   link with its date, a Servers cross-check that runs (MIG-19) and the real
   chart peak. The change-request button itself was not reachable live (no E5
   card on this workspace) - pinned only.
+
+- **MIG-26** E5 benefit pattern misses the reported OperationKey "SentinelMicrosoft365"
+  `MIG-F2` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 by checking published benefit-type strings against
+  BENEFIT_TYPE_PATTERNS (benefit-usage.ts). A community guide
+  (github.com/YourCybersecurityBestie/Sentinel-Projects, Defender For Servers,
+  unverified - asserted, not observed output) labels the E5 Sentinel benefit
+  "SentinelMicrosoft365"; the E5 pattern /M365|Microsoft 365|Defender XDR/i
+  needs a space after Microsoft, so that string is unmatched and every E5
+  workspace would fall back to one pooled figure. The Servers string the same
+  guide and Microsoft's meter name give ("Standard Data Included per Node")
+  already matches. Fix: E5 pattern also matches "Microsoft365" without the
+  space; "MicrosoftDefender" (also listed, ambiguous between the E5 Defender
+  XDR benefit and Defender for Servers) stays unmatched so it degrades to the
+  pooled figure instead of a guess. Pin all three strings. MIG-17 stays open:
+  none of these is observed output. DONE 2026-11-04 (pins): the E5 pattern
+  matches 'Microsoft365' without the space, so the reported
+  'SentinelMicrosoft365' reads as E5; 'Standard Data Included per Node' reads
+  as Servers P2; 'MicrosoftDefender' stays unattributed (pooled). Unmatched
+  types are now reported without the 'Benefit type used: ' prefix (they reach
+  the cross-check skip reason). Pinned and mutation-checked. Strings are
+  published, not observed - MIG-17 stays open.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

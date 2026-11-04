@@ -3752,6 +3752,19 @@
     },
     {
       "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-26",
+      "type": "bug",
+      "priority": "now",
+      "title": "E5 benefit pattern misses the reported OperationKey \"SentinelMicrosoft365\"",
+      "detail": "FOUND 2026-11-04 by checking published benefit-type strings against BENEFIT_TYPE_PATTERNS (benefit-usage.ts). A community guide (github.com/YourCybersecurityBestie/Sentinel-Projects, Defender For Servers, unverified - asserted, not observed output) labels the E5 Sentinel benefit \"SentinelMicrosoft365\"; the E5 pattern /M365|Microsoft 365|Defender XDR/i needs a space after Microsoft, so that string is unmatched and every E5 workspace would fall back to one pooled figure. The Servers string the same guide and Microsoft's meter name give (\"Standard Data Included per Node\") already matches. Fix: E5 pattern also matches \"Microsoft365\" without the space; \"MicrosoftDefender\" (also listed, ambiguous between the E5 Defender XDR benefit and Defender for Servers) stays unmatched so it degrades to the pooled figure instead of a guess. Pin all three strings. MIG-17 stays open: none of these is observed output.\n\nDONE 2026-11-04 (pins): the E5 pattern matches 'Microsoft365' without the space, so the reported 'SentinelMicrosoft365' reads as E5; 'Standard Data Included per Node' reads as Servers P2; 'MicrosoftDefender' stays unattributed (pooled). Unmatched types are now reported without the 'Benefit type used: ' prefix (they reach the cross-check skip reason). Pinned and mutation-checked. Strings are published, not observed - MIG-17 stays open.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
       "status": "done",
