@@ -4689,6 +4689,93 @@
       "type": "bug",
       "title": "Two copies of \"is this an ASim table?\" disagreed on case",
       "detail": "FOUND by the architecture audit 2026-11-04 (e446ac8..4543ca6). getOverflowConfig (overflow.ts, added by DBT-252) matched /^ASim/i while requiredIdentityFields (vendor-identity.ts) used a case-sensitive startsWith(\"ASim\"), so a lowercase asimnetworksessionlogs got the ASim AdditionalFields catch-all but none of the EventVendor/EventProduct requirement. FIXED: one isAsimTableName (field-matcher/table-family.ts, trims, case-insensitive) used by both; pinned in asim-equivalents.test.ts across three spellings. Same pass corrected two stale headers: getOverflowConfig no longer claims the verbatim legacy order, and knowledge-bases lists ASIM_COLUMN_EQUIVALENTS and where its entries are pinned."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-27",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: per-table source identity map, collector and billed bytes in the source breakdown query",
+      "detail": "USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others unchanged), collector kept as via for product identities, billed vs free per source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco ASA through three collectors, which today reads as three collector-named sources. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-27).\n\nDONE 2026-11-04 (both, 3f2a1e51): source-identity.ts (dated per-table rules: CommonSecurityLog vendor+product, SecurityAlert ProductName then ProviderName, Syslog Computer+Facility), the breakdown query groups by Source/Attribution/Collector and sums BillableBytes; a missing BillableBytes column fails the breakdown rather than reading as all free. Live on sentinel-new: three Cisco ASA rows via localhost, ':' and SNL-ASA-VPN-A01, all billable.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [
+        "MIG-27"
+      ],
+      "id": "MIG-28",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: fold the inventory into By source rows with reconciliation and the per-table catalog flag",
+      "detail": "Merge across tables by identity kind + case-folded value; one row per table with no product columns and per table whose sources were not read; the reconciliation compares row-measured and Usage totals, never subtracts. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-28).\n\nDONE 2026-11-04 (pins, 26d9a33e..3d53cd35): bySource folds the inventory into By source rows (Listing, so unverified empty never reads as zero): product/computer identity rows merged by kind + case-folded value, one row per unmapped table, '(sources not read)' rows with Usage volume, '(other sources)' for a mapped table's remainder, partialTables and billedExceedsTotal markers, per-table catalog flag, reconciliation that compares (never subtracts). Identity hardened: one shared CEF join, Syslog-only first-column guard, dcount for the other row. One fix round.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [
+        "MIG-27"
+      ],
+      "id": "MIG-29",
+      "type": "story",
+      "priority": "next",
+      "title": "By table: Sources drill-down names product sources via their collector, shows billed vs free and the reconciliation line; CSV columns",
+      "detail": "Existing CSV columns unchanged; SourceIdentity, Collector, BillableDailyMB, FreeDailyMB appended. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-29).\n\nDONE 2026-11-04 (pins, b0a9e447..7b08b05e): By table drill-down names product sources 'Cisco ASA via localhost', shows billed and free per source with units, a per-table reconciliation line (partial breakdowns say so), and a billed-above-total note with an InfoTip; CSV appends SourceIdentity, Collector, BillableDailyMB, FreeDailyMB (FreeDailyMB empty when billed exceeds total). One fix round (units).",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [
+        "MIG-28",
+        "MIG-29"
+      ],
+      "id": "MIG-30",
+      "type": "story",
+      "priority": "next",
+      "title": "By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence",
+      "detail": "USER DECISION 2026-11-04: option B - two views of one inventory, By table stays the default. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-30).\n\nDONE 2026-11-04 (pins, 732ad57c + 16a55f14): By source view beside By table (default): one row per product across tables with Lands in, Daily avg, billed/free bar and figures, collectors drill-down (native details), allowance tags and the catalog-Free flag; verified-none vs unverified-empty render differently; not-read rows keep their Usage volume; reconciliation compares the two lenses and states not-read volume separately; every figure has an InfoTip. Stale source docs fixed. Live check is MIG-31.",
+      "verified": "pins"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [
+        "MIG-30"
+      ],
+      "id": "MIG-31",
+      "type": "spike",
+      "priority": "next",
+      "title": "Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement",
+      "detail": "Confirms the identity columns read well on real rows and records the Syslog Facility decision (design open item 1). Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-31).\n\nDONE 2026-11-04 (live, Live Preview on jpederson org): sentinel-new - By table names 'Cisco ASA via localhost / : / SNL-ASA-VPN-A01' with billed/free; By source shows one Cisco ASA row, 54.8 MB/day all billed, 3 collectors by volume, agreeing with Usage within 2.2%. andy-june - Syslog 'CriblStreamWorker local4' (computer + facility) plus 'Syslog (other sources)' for 6,556 rows with no Computer; agree within 0.1%. DECISION (design open item 1): Facility stays part of the Syslog identity - it reads well and separates streams. Borg-LA - SecurityAlert 'Azure Active Directory Identity Protection' free and tagged Free; SecurityIncident one row; Watchlist '(sources not read)' with its Usage volume and the reconciliation stating it separately. BuzzardStream - verified zero reads 'Usage answered and reports no ingested data'. Three findings filed as MIG-32.",
+      "verified": "live"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "done",
+      "dependsOn": [],
+      "id": "MIG-32",
+      "type": "bug",
+      "priority": "now",
+      "title": "By source live findings: a catalog-Billable table measured free is unexplained; \"/day\" missing; odd collector names unquoted",
+      "detail": "FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source. (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every row measures free (billed 0 MB, free 1.1 KB) - the page shows \"Billable\" beside \"billed 0 MB\" with nothing explaining it, which contradicts the design's \"measured wins, catalog explains\" (only the opposite direction - catalog Free but billed - is flagged today). Flag the reverse case in both views too: \"measured free; the catalog tags this table Billable (<tables>)\". (2) sentinel-new: the By table reconciliation line reads \"total 54.8 MB of the 56.0 MB/day\" - the first figure lacks \"/day\" (the By source sentence has it). (3) A collector whose name is punctuation or whitespace (sentinel-new's \":\") reads \"Cisco ASA via : - 6.5 MB/day\"; quote collector names that are not plain names (e.g. via \":\"). Pin each.\n\nDONE 2026-11-04 (pins, e362bf12..e89ca1f5): measured-free tables the catalog does not list as free are flagged in both views ('measured free; not in the catalog's free list'); Azure Monitor's never-billed tables named on Microsoft's cost-logs page (Heartbeat, Usage, Operation) join the Free list so they are not flagged; By table line reads 'total X MB/day of the Y MB/day'; collector names that are punctuation or padded are quoted. One fix round.",
+      "verified": "pins"
     }
   ],
   "features": [
@@ -4868,6 +4955,12 @@
       "menu": "azure-onboarding",
       "title": "Multi-tenant Azure customers",
       "anchor": "6i"
+    },
+    {
+      "id": "MIG-F3",
+      "epic": "MIG",
+      "menu": "data-volume-inventory",
+      "title": "Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source)"
     }
   ]
 }

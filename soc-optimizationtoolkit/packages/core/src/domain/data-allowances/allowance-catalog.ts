@@ -30,12 +30,16 @@ export const E5_MB_PER_SEAT_PER_DAY = 5;
 export const SERVERS_MB_PER_MACHINE_PER_DAY = 500;
 
 export const ALLOWANCE_SOURCES: Record<
-  "free" | GrantId,
+  "free" | "monitor-free" | GrantId,
   { url: string; title: string }
 > = {
   free: {
     url: "https://learn.microsoft.com/en-us/azure/sentinel/billing",
     title: "Sentinel billing - Free data sources",
+  },
+  "monitor-free": {
+    url: "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/cost-logs",
+    title: "Azure Monitor Logs cost - Excluded tables",
   },
   e5: {
     url: "https://azure.microsoft.com/en-us/pricing/offers/sentinel-microsoft-365-offer",
@@ -47,12 +51,22 @@ export const ALLOWANCE_SOURCES: Record<
   },
 };
 
+/**
+ * Tables Azure Monitor never bills for ingestion or retention, from the
+ * "Excluded tables" section of ALLOWANCE_SOURCES["monitor-free"] (page dated
+ * 2026-09-02, read 2026-11-04). The page names these as examples ("for example
+ * AzureActivity, Heartbeat, Usage and Operation"); AzureActivity is in
+ * FREE_TABLES already. Only names the page prints are listed here.
+ */
+const AZURE_MONITOR_FREE_TABLES: readonly string[] = ["Heartbeat", "Usage", "Operation"];
+
 const FREE_TABLES: readonly string[] = [
   "AzureActivity",
   "SentinelHealth",
   "OfficeActivity",
   "SecurityIncident",
   "SecurityAlert",
+  ...AZURE_MONITOR_FREE_TABLES,
 ];
 
 const E5_TABLES: readonly string[] = [

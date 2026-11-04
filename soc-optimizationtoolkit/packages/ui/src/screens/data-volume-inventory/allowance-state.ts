@@ -42,7 +42,7 @@ export function tagLabel(tag: AllowanceTag): string {
 
 /** The rule behind a tag, for the per-row drill-down. */
 export function tagRule(tag: AllowanceTag): string {
-  if (tag.kind === "free") return "A Sentinel free data source: never billed.";
+  if (tag.kind === "free") return "A table Microsoft never bills for ingestion (a Sentinel free data source or an Azure Monitor excluded table).";
   if (tag.kind === "billable") return "No Microsoft data grant covers this table.";
   const rule =
     tag.grant === "e5"

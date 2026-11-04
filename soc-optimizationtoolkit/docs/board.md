@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 37 in progress, 188 done.**
+**106 in the backlog, 37 in progress, 194 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 3 | 2 | 2 |
-| Data Volume Inventory | 1 | 16 | 0 |
+| Data Volume Inventory | 1 | 22 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -138,7 +138,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 92% (24/26)
+### `MIG` SIEM migration analysis - 94% (30/32)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
@@ -146,6 +146,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
+| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 6/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
 
 ---
 
@@ -2781,7 +2782,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (188)
+## Done (194)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7929,3 +7930,101 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   getOverflowConfig no longer claims the verbatim legacy order, and
   knowledge-bases lists ASIM_COLUMN_EQUIVALENTS and where its entries are
   pinned.
+
+- **MIG-27** Core: per-table source identity map, collector and billed bytes in the source breakdown query
+  `MIG-F3` `enabler` `settled` `verified: both`
+  USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog
+  vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others
+  unchanged), collector kept as via for product identities, billed vs free per
+  source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco
+  ASA through three collectors, which today reads as three collector-named
+  sources. Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-27). DONE
+  2026-11-04 (both, 3f2a1e51): source-identity.ts (dated per-table rules:
+  CommonSecurityLog vendor+product, SecurityAlert ProductName then
+  ProviderName, Syslog Computer+Facility), the breakdown query groups by
+  Source/Attribution/Collector and sums BillableBytes; a missing BillableBytes
+  column fails the breakdown rather than reading as all free. Live on
+  sentinel-new: three Cisco ASA rows via localhost, ':' and SNL-ASA-VPN-A01,
+  all billable.
+
+- **MIG-28** Core: fold the inventory into By source rows with reconciliation and the per-table catalog flag
+  `MIG-F3` `enabler` `settled` `verified: pins`
+  Merge across tables by identity kind + case-folded value; one row per table
+  with no product columns and per table whose sources were not read; the
+  reconciliation compares row-measured and Usage totals, never subtracts.
+  Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-28). DONE
+  2026-11-04 (pins, 26d9a33e..3d53cd35): bySource folds the inventory into By
+  source rows (Listing, so unverified empty never reads as zero):
+  product/computer identity rows merged by kind + case-folded value, one row
+  per unmapped table, '(sources not read)' rows with Usage volume, '(other
+  sources)' for a mapped table's remainder, partialTables and
+  billedExceedsTotal markers, per-table catalog flag, reconciliation that
+  compares (never subtracts). Identity hardened: one shared CEF join,
+  Syslog-only first-column guard, dcount for the other row. One fix round.
+
+- **MIG-29** By table: Sources drill-down names product sources via their collector, shows billed vs free and the reconciliation line; CSV columns
+  `MIG-F3` `story` `settled` `verified: pins`
+  Existing CSV columns unchanged; SourceIdentity, Collector, BillableDailyMB,
+  FreeDailyMB appended. Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-29). DONE
+  2026-11-04 (pins, b0a9e447..7b08b05e): By table drill-down names product
+  sources 'Cisco ASA via localhost', shows billed and free per source with
+  units, a per-table reconciliation line (partial breakdowns say so), and a
+  billed-above-total note with an InfoTip; CSV appends SourceIdentity,
+  Collector, BillableDailyMB, FreeDailyMB (FreeDailyMB empty when billed
+  exceeds total). One fix round (units).
+
+- **MIG-30** By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence
+  `MIG-F3` `story` `settled` `verified: pins`
+  USER DECISION 2026-11-04: option B - two views of one inventory, By table
+  stays the default. Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-30). DONE
+  2026-11-04 (pins, 732ad57c + 16a55f14): By source view beside By table
+  (default): one row per product across tables with Lands in, Daily avg,
+  billed/free bar and figures, collectors drill-down (native details),
+  allowance tags and the catalog-Free flag; verified-none vs unverified-empty
+  render differently; not-read rows keep their Usage volume; reconciliation
+  compares the two lenses and states not-read volume separately; every figure
+  has an InfoTip. Stale source docs fixed. Live check is MIG-31.
+
+- **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
+  `MIG-F3` `spike` `settled` `verified: live`
+  Confirms the identity columns read well on real rows and records the Syslog
+  Facility decision (design open item 1). Design:
+  docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-31). DONE
+  2026-11-04 (live, Live Preview on jpederson org): sentinel-new - By table
+  names 'Cisco ASA via localhost / : / SNL-ASA-VPN-A01' with billed/free; By
+  source shows one Cisco ASA row, 54.8 MB/day all billed, 3 collectors by
+  volume, agreeing with Usage within 2.2%. andy-june - Syslog
+  'CriblStreamWorker local4' (computer + facility) plus 'Syslog (other
+  sources)' for 6,556 rows with no Computer; agree within 0.1%. DECISION
+  (design open item 1): Facility stays part of the Syslog identity - it reads
+  well and separates streams. Borg-LA - SecurityAlert 'Azure Active Directory
+  Identity Protection' free and tagged Free; SecurityIncident one row;
+  Watchlist '(sources not read)' with its Usage volume and the reconciliation
+  stating it separately. BuzzardStream - verified zero reads 'Usage answered
+  and reports no ingested data'. Three findings filed as MIG-32.
+
+- **MIG-32** By source live findings: a catalog-Billable table measured free is unexplained; "/day" missing; odd collector names unquoted
+  `MIG-F3` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source.
+  (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every
+  row measures free (billed 0 MB, free 1.1 KB) - the page shows "Billable"
+  beside "billed 0 MB" with nothing explaining it, which contradicts the
+  design's "measured wins, catalog explains" (only the opposite direction -
+  catalog Free but billed - is flagged today). Flag the reverse case in both
+  views too: "measured free; the catalog tags this table Billable (<tables>)".
+  (2) sentinel-new: the By table reconciliation line reads "total 54.8 MB of
+  the 56.0 MB/day" - the first figure lacks "/day" (the By source sentence has
+  it). (3) A collector whose name is punctuation or whitespace (sentinel-new's
+  ":") reads "Cisco ASA via : - 6.5 MB/day"; quote collector names that are
+  not plain names (e.g. via ":"). Pin each. DONE 2026-11-04 (pins,
+  e362bf12..e89ca1f5): measured-free tables the catalog does not list as free
+  are flagged in both views ('measured free; not in the catalog's free list');
+  Azure Monitor's never-billed tables named on Microsoft's cost-logs page
+  (Heartbeat, Usage, Operation) join the Free list so they are not flagged; By
+  table line reads 'total X MB/day of the Y MB/day'; collector names that are
+  punctuation or padded are quoted. One fix round.

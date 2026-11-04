@@ -34,6 +34,11 @@ describe("allowanceFor", () => {
       /Microsoft-SecurityEvent/,
     );
   });
+  it("tags Azure Monitor's never-billed tables Free (cost-logs Excluded tables)", () => {
+    for (const t of ["AzureActivity", "Heartbeat", "Usage", "Operation", "heartbeat"]) {
+      expect(allowanceFor(t)).toEqual({ kind: "free" });
+    }
+  });
   it("treats unlisted tables as billable", () => {
     expect(allowanceFor("CommonSecurityLog")).toEqual({ kind: "billable" });
     expect(allowanceFor("Zscaler_CL")).toEqual({ kind: "billable" });

@@ -30,6 +30,7 @@ import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { AllowanceCards, AllowanceQueries, AllowanceTagCell } from "./allowance-cards";
+import { BySourceView } from "./by-source-view";
 import {
   ALLOWANCE_TIPS,
   afterAllowancesText,
@@ -40,14 +41,19 @@ import {
   tenantDiscoveryNote,
 } from "./allowance-state";
 import {
+  BILLED_EXCEEDS_TIP,
   discoveryHeadline,
   formatMB,
   inventoryCsv,
   inventoryEmptyText,
+  RECONCILE_TIP,
   sourceCount,
   sourceGaps,
   sourceLabel,
+  sourceLineText,
   staleInventoryNote,
+  tableBillableFreeFlag,
+  tableReconciliation,
   workspaceNameOf,
   workspaceSelectOption,
 } from "./workspace-inventory-state";
@@ -60,8 +66,11 @@ const USAGE_TIP =
 
 const SOURCES_TIP =
   "From the rows themselves: sum(_BilledSize) per table over the same 30 days, " +
-  "grouped by the first of _ResourceId, Computer, or DeviceVendor DeviceProduct the " +
-  "row carries. The 25 largest sources per table are listed and the rest summed into " +
+  "billed from each row's _IsBillable. CommonSecurityLog, SecurityAlert and Syslog " +
+  "name a source by product (vendor and product, product name, or computer and " +
+  "facility), with the collector as 'via'; other tables use the first of " +
+  "_ResourceId, Computer, or DeviceVendor DeviceProduct the row carries. The 25 " +
+  "largest sources per table are listed and the rest summed into " +
   "one row. _BilledSize and Usage are separate measurements and can differ by a few " +
   "percent, so a table's sources need not add up exactly to its Usage total.";
 
@@ -91,6 +100,8 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
   const [tenantError, setTenantError] = useState("");
   const [progress, setProgress] = useState("");
   const [saveNote, setSaveNote] = useState("");
+  // MIG-30: By table is the default lens; By source folds the same inventory by source.
+  const [view, setView] = useState<"table" | "source">("table");
 
   const discover = async () => {
     setBusy("discover");
@@ -448,6 +459,31 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
           )}
 
           {tableRows !== null && (
+            <div className="dcr-mode-toggle" role="tablist" aria-label="Inventory view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "table"}
+                className={`dcr-mode-tab${view === "table" ? " dcr-mode-tab-active" : ""}`}
+                onClick={() => setView("table")}
+              >
+                By table
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "source"}
+                className={`dcr-mode-tab${view === "source" ? " dcr-mode-tab-active" : ""}`}
+                onClick={() => setView("source")}
+              >
+                By source
+              </button>
+            </div>
+          )}
+
+          {tableRows !== null && view === "source" && <BySourceView inventory={inventory} />}
+
+          {tableRows !== null && view === "table" && (
             <div className="siem-inventory-table-wrap">
               <table className="siem-inventory-table">
                 <thead>
@@ -474,6 +510,9 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
                         <code className="code-chip">{t.table}</code>
                         {t.solutions.length > 0 && (
                           <div className="field-hint">{t.solutions.join(", ")}</div>
+                        )}
+                        {tableBillableFreeFlag(t) !== null && (
+                          <div className="match-warning">{tableBillableFreeFlag(t)}</div>
                         )}
                       </td>
                       <td>{formatMB(t.dailyAverageMB)}</td>
@@ -506,9 +545,8 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
                               {t.sources.sources.map((s, i) => {
                                 const label = sourceLabel(s);
                                 return (
-                                  <div key={`${s.source}-${s.attribution}-${i}`}>
-                                    {label.text} ({label.kind}) - {formatMB(s.dailyAverageMB)}/day,{" "}
-                                    {s.events.toLocaleString()} events
+                                  <div key={`${s.source}-${s.attribution}-${s.collector}-${i}`}>
+                                    {sourceLineText(s)}
                                     {/* The full id, or what a remainder row means: only when the text does not already say it. */}
                                     {label.tip !== label.text && (
                                       <>
@@ -516,9 +554,21 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
                                         <InfoTip text={label.tip} />
                                       </>
                                     )}
+                                    {s.billedExceedsTotal && (
+                                      <>
+                                        {" "}
+                                        <span className="field-hint">
+                                          billed figure exceeds total - see tip
+                                        </span>{" "}
+                                        <InfoTip text={BILLED_EXCEEDS_TIP} />
+                                      </>
+                                    )}
                                   </div>
                                 );
                               })}
+                              <div className="field-hint">
+                                {tableReconciliation(t)} <InfoTip text={RECONCILE_TIP} />
+                              </div>
                             </div>
                           </details>
                         )}

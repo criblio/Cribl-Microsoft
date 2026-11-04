@@ -35,7 +35,9 @@ function result(columns: string[], rows: unknown[][], error?: unknown): PortHttp
 }
 
 const USAGE_COLS = ["DataType", "TotalMB", "BillableMB", "DaysWithData", "Solutions"];
-const SOURCE_COLS = ["SourceTable", "Source", "Attribution", "Bytes", "Events", "Sources"];
+const SOURCE_COLS = [
+  "SourceTable", "Source", "Attribution", "Collector", "Bytes", "BillableBytes", "Events", "Sources",
+];
 
 function usage(...tables: Array<[string, number]>): PortHttpResponse {
   return result(
@@ -47,7 +49,7 @@ function usage(...tables: Array<[string, number]>): PortHttpResponse {
 function sources(...rows: Array<[string, string, number]>): PortHttpResponse {
   return result(
     SOURCE_COLS,
-    rows.map(([t, s, bytes]) => [t, s, s === "" ? "none" : "computer", bytes, 1, 1]),
+    rows.map(([t, s, bytes]) => [t, s, s === "" ? "none" : "computer", "", bytes, bytes, 1, 1]),
   );
 }
 
@@ -192,6 +194,19 @@ describe("inventoryWorkspace", () => {
     expect(rows.filter((t) => t.sources.kind === "failed").map((t) => t.table)).toEqual(["T3"]);
     // The failed table keeps its Usage volume.
     expect(rows[3]!.dailyAverageMB).toBe(1);
+  });
+
+  it("marks a table FAILED when the breakdown answer lacks BillableBytes - never all free", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      usage(["Syslog", 30]),
+      result(
+        ["SourceTable", "Source", "Attribution", "Collector", "Bytes", "Events", "Sources"],
+        [["Syslog", "host-a", "computer", "", 3_000_000, 1, 1]],
+      ),
+    );
+    const [syslog] = listingRows((await inventoryWorkspace(azure, WS)).tables);
+    expect(syslog!.sources).toMatchObject({ kind: "failed", error: expect.stringMatching(/BillableBytes/) });
   });
 
   it("with sources: false reads Usage only, and marks every breakdown not read rather than empty", async () => {
