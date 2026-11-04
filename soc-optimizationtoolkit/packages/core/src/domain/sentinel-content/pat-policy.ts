@@ -38,7 +38,7 @@ export const PAT_MIN_LENGTH = 10;
 /** Minimal scope guidance surfaced in onboarding (public-read only). */
 export const PAT_SCOPE_GUIDANCE =
   "Read-only access to public repositories is sufficient. Classic token: no " +
-  "scopes are required to read public repos (or select 'public_repo'). " +
+  "scopes are required to read public repos. " +
   "Fine-grained token: grant 'Public Repositories (read-only)'. The token is " +
   "used only to raise GitHub's anonymous rate limit; it needs no write access.";
 

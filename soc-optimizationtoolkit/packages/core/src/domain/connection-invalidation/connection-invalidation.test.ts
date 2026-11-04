@@ -17,6 +17,8 @@ const BASE: AzureConfig = {
   resourceGroup: "rg-soc",
   workspaceName: "law-soc",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 const CLEAR_ALL = {

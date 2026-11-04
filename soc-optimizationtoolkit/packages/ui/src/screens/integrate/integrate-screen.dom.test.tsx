@@ -96,7 +96,19 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
+
+/**
+ * DBT-237: the page opens collapsed, so a pin that reads a section's body
+ * opens it first, the way an operator would. Expanding an already-open
+ * section is a no-op (it has no Expand button).
+ */
+function expandSection(title: string): void {
+  const button = screen.queryByRole("button", { name: `Expand ${title}` });
+  if (button !== null) fireEvent.click(button);
+}
 
 function renderScreen(props: Record<string, unknown> = {}) {
   return render(
@@ -646,6 +658,7 @@ describe("IntegrateScreen - a trimmed capture says what the store kept", () => {
  */
 describe("IntegrateScreen - export instead of deploy", () => {
   function exportButton(): HTMLButtonElement {
+    expandSection("Deploy");
     const found = screen
       .getAllByRole("button")
       .find((b) => /export instead of deploy/i.test(b.textContent ?? ""));
@@ -730,6 +743,8 @@ const SCOPED_CONFIG: AzureConfig = {
   resourceGroup: "rg-soc-prod",
   workspaceName: "law-soc",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () => {
@@ -759,6 +774,7 @@ describe("IntegrateScreen - the blocked deploy offers an artifact (HON-7)", () =
 
   /** The offer's control, by the label the artifact catalog gives its kind. */
   function offerButton(): HTMLButtonElement | undefined {
+    expandSection("Deploy");
     return screen
       .getAllByRole("button")
       .find((b) =>
@@ -986,6 +1002,7 @@ describe("IntegrateScreen - the solution handoff deletes samples (DBT-102)", () 
     expect(
       (screen.getByDisplayValue(/^MS-Sentinel/) as HTMLInputElement).value,
     ).toBe("MS-Sentinel-Cisco-ASA");
+    expandSection("Select Sentinel Solution");
     fireEvent.click(await screen.findByRole("button", { name: "Browse all" }));
     fireEvent.click(screen.getByText("Zscaler"));
     await waitFor(() => {
@@ -1762,6 +1779,7 @@ describe("IntegrateScreen - one sample method at a time (DBT-224)", () => {
 
     fireEvent.click(screen.getByText("Upload files"));
     expect(view.paste()).toBeNull();
+    expandSection("Add Sample Data");
     expect(view.upload()).not.toBeNull();
   });
 
@@ -1838,6 +1856,7 @@ describe("IntegrateScreen - one coverage step with a switch (DBT-226)", () => {
     const visible = () => panels.map((p) => !p.parentElement!.hidden);
     expect(visible()).toEqual([true, false]);
 
+    expandSection("Review Coverage");
     fireEvent.click(screen.getByRole("tab", { name: "Workbooks" }));
     expect(visible()).toEqual([false, true]);
     // Still both mounted - hidden, not unmounted.
@@ -1903,24 +1922,47 @@ describe("IntegrateScreen - folds the sections you are not using (DBT-232)", () 
     );
     const section = (id: string) => view.container.querySelector(`#integrate-section-${id}`)!;
     const folded = (id: string) => section(id).classList.contains("numbered-section-collapsed");
-    return { ...view, cache, section, folded };
+    const current = () => view.container.querySelector(".numbered-section-current");
+    const openIds = () =>
+      [...view.container.querySelectorAll(".numbered-section:not(.numbered-section-collapsed)")]
+        .map((s) => s.id)
+        .filter((id) => id !== "");
+    // The restored state lands over several renders and the load fold follows
+    // it in an effect, so wait for the settled page, not an in-between frame.
+    const settled = (pinned: string[]) =>
+      waitFor(() => {
+        expect(cache.get).toHaveBeenCalledWith("integrate-pinned-sections:u-7");
+        const c = current();
+        expect(c).not.toBeNull();
+        expect(openIds().sort()).toEqual([c!.id, ...pinned.map((id) => `integrate-section-${id}`)].sort());
+      });
+    return { ...view, cache, section, folded, current, openIds, settled };
   }
 
-  it("folds the other sections when you act inside one, leaving pinned and current ones open", async () => {
+  it("folds every other unpinned section when you act inside one - the current one too (DBT-237)", async () => {
     const view = mount('["deploy"]');
-    await waitFor(() => {
-      expect(view.section("deploy").querySelector(".numbered-section-pin-on")).not.toBeNull();
-    });
+    await view.settled(["deploy"]);
+    const current = view.current();
+    expect(current!.id).not.toBe("integrate-section-cribl-config");
+    // Open the section to act in, then act inside it.
+    fireEvent.click(screen.getByRole("button", { name: "Expand Configure Cribl" }));
     fireEvent.pointerDown(view.section("cribl-config"));
-    await waitFor(() => expect(view.folded("gap-analysis")).toBe(true));
+    await waitFor(() => expect(current!.classList.contains("numbered-section-collapsed")).toBe(true));
     expect(view.folded("cribl-config")).toBe(false);
     // Pinned stays open.
     expect(view.folded("deploy")).toBe(false);
-    // The arc's current section stays open (it is asking for action).
-    const current = view.container.querySelector(".numbered-section-current");
-    if (current !== null) {
-      expect(current.classList.contains("numbered-section-collapsed")).toBe(false);
-    }
+  });
+
+  it("opens collapsed: only the current section and pinned ones are open (DBT-237)", async () => {
+    const view = mount('["deploy"]');
+    await view.settled(["deploy"]);
+    expect(view.openIds()).toHaveLength(2);
+  });
+
+  it("opens with only the current section open when nothing is pinned (DBT-237)", async () => {
+    const view = mount();
+    await view.settled([]);
+    expect(view.openIds()).toHaveLength(1);
   });
 
   it("saves a pin under the user's own key", async () => {

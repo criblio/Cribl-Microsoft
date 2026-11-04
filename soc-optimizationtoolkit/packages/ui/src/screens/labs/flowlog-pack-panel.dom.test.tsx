@@ -24,6 +24,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 function renderWith(listGroups: ReturnType<typeof vi.fn>) {

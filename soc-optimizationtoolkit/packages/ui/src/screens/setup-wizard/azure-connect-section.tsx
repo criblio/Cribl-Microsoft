@@ -15,10 +15,13 @@
  */
 
 import { useState } from "react";
-import { appRegistrationRequest } from "@soc/core";
+import { appRegistrationRequest, requestSummary } from "@soc/core";
 import type { AzureSetupPath, ChangeRequestContext } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
 import { ChangeRequestBlock } from "./change-request-block";
-import { connectInputIssue } from "./azure-setup-state";
+import { connectInputIssue, connectSummary } from "./azure-setup-state";
 import type { AzureConnectInput } from "./azure-setup-state";
 import { useRunner } from "./use-runner";
 
@@ -62,6 +65,55 @@ export interface AzureConnectSectionProps {
   storageNote: string;
 }
 
+/** The setup-path notes, shown behind an InfoTip (moved verbatim from inline prose). */
+const SETUP_PATH_NOTES: Readonly<Record<AzureSetupPath, string>> = {
+  existing:
+    "Least privilege for an existing environment: Monitoring Contributor and Log Analytics " +
+    "Contributor scoped to the workspace resource group, plus Reader on the subscription. " +
+    "Nothing is granted subscription-wide beyond read.",
+  "lab-new-rg":
+    "Requires Contributor at the subscription scope (resource group creation is a " +
+    "subscription-level action, and it covers all workspace and DCR operations inside the lab, " +
+    "so no workspace resource group is needed) and RBAC Administrator at the subscription scope " +
+    "for the lab TTL self-destruct. Assign RBAC Administrator in the portal with the condition " +
+    '"Constrain roles and principal types": only Contributor and Monitoring Metrics Publisher, ' +
+    "only to service principals.",
+  "lab-byo-rg":
+    "Least privilege for labs: an admin pre-creates an empty lab resource group and grants " +
+    "Contributor on it - the lab deploys its workspace there with no subscription-scope rights. " +
+    "The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.",
+};
+
+/** The manual app-registration steps, shown behind an InfoTip (moved verbatim). */
+const REGISTRATION_STEPS =
+  "1. In Entra ID, open App registrations and select New registration. Single tenant; no redirect URI is needed (this is a daemon-style confidential client).\n" +
+  "2. Record the Directory (tenant) ID and Application (client) ID from the Overview page.\n" +
+  "3. Under Certificates and secrets, create a New client secret and copy its value immediately - it is shown only once.\n" +
+  "4. Enter the tenant ID, client ID, and client secret below, choose your setup path, then Save and connect.";
+
+/**
+ * The one visible line above the generator. It FOLLOWS the connectivity choice:
+ * the ticket asks for the registration and secret plus what requestSummary says
+ * the saved choice requests, so it never claims to cover "everything" (DBT-240).
+ */
+function ticketLine(ctx: ChangeRequestContext): string {
+  const summary = requestSummary(ctx.config);
+  const asks =
+    summary === "nothing selected"
+      ? "the app registration and a client secret"
+      : `the app registration and a client secret, plus ${summary}`;
+  return `A paste-ready ticket for the team that manages Entra ID, asking for ${asks}.`;
+}
+
+/** The id the Setup page and the wizard give this section in their fold scope. */
+export const CONNECT_SECTION_ID = "azure-connect";
+
+/** The section's description: on the Setup page it sits behind the (i), alone it is the intro line. */
+const CONNECT_DESCRIPTION =
+  "Create the Entra app registration, then connect this app to it with the tenant ID, client ID, " +
+  "and a client secret. Azure roles are granted in the Select resources and grant permissions " +
+  "section below, after you discover your subscription.";
+
 export function AzureConnectSection({
   tenantId,
   onTenantIdChange,
@@ -76,6 +128,12 @@ export function AzureConnectSection({
 }: AzureConnectSectionProps) {
   const [clientSecret, setClientSecret] = useState("");
   const [status, output, run] = useRunner();
+  const fold = useSectionFold(CONNECT_SECTION_ID);
+  useSectionRunState(CONNECT_SECTION_ID, { busy: status === "running", failed: status === "failed" });
+  // Disconnected asks for no identity at all; read the same config the ticket reads.
+  if (ctx.config.connectivity === "disconnected") return null;
+  // The setup-path radios and their notes belong to Fully Connected only.
+  const full = (ctx.config.connectivity ?? "full") === "full";
 
   const saveAndConnect = () =>
     run(async () => {
@@ -94,44 +152,26 @@ export function AzureConnectSection({
       return result.message;
     });
 
-  return (
-    <section className="panel">
-      <h2 className="panel-title">App registration and connect</h2>
-      <p className="panel-desc">
-        Create the Entra app registration, then connect this app to it with the tenant ID, client ID,
-        and a client secret. Azure roles are granted in the Select resources and grant permissions
-        section below, after you discover your subscription.
-      </p>
+  const body = (
+    <>
       <ChangeRequestBlock
         title="Cannot create the app registration yourself? Generate a change request"
-        description={
-          'Produce a paste-ready ticket covering EVERYTHING this app needs to be fully functional: ' +
-          'a single-tenant daemon confidential client (no redirect URI), a client secret, the ' +
-          'Microsoft Graph permission to admin-consent, and every Azure RBAC role for the setup ' +
-          'path selected below. Each line names the feature that needs it, why, and what stops ' +
-          'working without it, so any single permission can be approved or refused on its own. ' +
-          'The current tenant/client ids are included; blank fields appear as clear placeholders.'
+        description={ticketLine(ctx)}
+        detail={
+          "The ticket is for a single-tenant daemon confidential client (no redirect URI) and a client " +
+          "secret, plus what the connectivity choice above asks for. Each line names the feature that " +
+          "needs it, why, and what stops working without it, so any single permission can be approved " +
+          "or refused on its own. The current tenant/client ids are included; blank fields appear as " +
+          "clear placeholders."
         }
         filename="app-registration-request.txt"
         generate={() => appRegistrationRequest(ctx)}
       />
-      <ol className="setup-steps">
-        <li>
-          In Entra ID, open App registrations and select New registration. Single tenant;
-          no redirect URI is needed (this is a daemon-style confidential client).
-        </li>
-        <li>
-          Record the Directory (tenant) ID and Application (client) ID from the Overview page.
-        </li>
-        <li>
-          Under Certificates and secrets, create a New client secret and copy its value
-          immediately - it is shown only once.
-        </li>
-        <li>
-          Enter the tenant ID, client ID, and client secret below, choose your setup path,
-          then Save and connect.
-        </li>
-      </ol>
+      <p className="field-hint">
+        How to create the app registration
+        <InfoTip label="How to create the app registration" text={REGISTRATION_STEPS} />
+      </p>
+      {full && (
       <div className="path-options">
         <label className="path-option">
           <input
@@ -161,29 +201,11 @@ export function AzureConnectSection({
           <span>No workspace yet - deploy a lab into a pre-created resource group</span>
         </label>
       </div>
-      {setupPath === "existing" && (
-        <p className="panel-desc">
-          Least privilege for an existing environment: Monitoring Contributor and Log Analytics
-          Contributor scoped to the workspace resource group, plus Reader on the subscription.
-          Nothing is granted subscription-wide beyond read.
-        </p>
       )}
-      {setupPath === "lab-new-rg" && (
-        <p className="panel-desc">
-          Requires <strong>Contributor at the subscription scope</strong> (resource group creation is
-          a subscription-level action, and it covers all workspace and DCR operations inside the lab,
-          so no workspace resource group is needed) and{" "}
-          <strong>RBAC Administrator at the subscription scope</strong> for the lab TTL self-destruct.
-          Assign RBAC Administrator in the portal with the condition &quot;Constrain roles and
-          principal types&quot;: only Contributor and Monitoring Metrics Publisher, only to service
-          principals.
-        </p>
-      )}
-      {setupPath === "lab-byo-rg" && (
-        <p className="panel-desc">
-          Least privilege for labs: an admin pre-creates an empty lab resource group and grants
-          Contributor on it - the lab deploys its workspace there with no subscription-scope rights.
-          The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.
+      {full && (
+        <p className="field-hint">
+          About this setup path
+          <InfoTip label="About this setup path" text={SETUP_PATH_NOTES[setupPath]} />
         </p>
       )}
       <div className="form-grid">
@@ -229,7 +251,33 @@ export function AzureConnectSection({
         <span className={`status status-${status}`}>{status}</span>
       </div>
       {output !== "" && <pre className="result">{output}</pre>}
-      <p className="panel-desc">{storageNote}</p>
+      <p className="field-hint">
+        Where the secret and token are stored
+        <InfoTip label="Where the secret and token are stored" text={storageNote} />
+      </p>
+    </>
+  );
+
+  if (fold !== undefined) {
+    const { number, ...foldRest } = fold;
+    return (
+      <NumberedSection
+        {...foldRest}
+        number={number ?? 1}
+        title="App registration and connect"
+        status={secretLive && clientId.trim() !== "" ? "complete" : fold.current ? "current" : "available"}
+        infoTip={CONNECT_DESCRIPTION}
+        summary={connectSummary(clientId, secretLive)}
+      >
+        {body}
+      </NumberedSection>
+    );
+  }
+  return (
+    <section className="panel">
+      <h2 className="panel-title">App registration and connect</h2>
+      <p className="panel-desc">{CONNECT_DESCRIPTION}</p>
+      {body}
     </section>
   );
 }

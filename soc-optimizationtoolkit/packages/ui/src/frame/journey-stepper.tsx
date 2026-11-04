@@ -25,6 +25,11 @@ export interface JourneyStepperProps {
   links?: JourneyLinks;
   /** Navigate to a route id (AppFrameNav.navigate). */
   onNavigate: (routeId: string) => void;
+  /**
+   * Told which stage was clicked, alongside onNavigate - lets a page that
+   * folds its sections open the one the stage points at (DBT-248).
+   */
+  onStage?: (stageId: JourneyStage["id"]) => void;
   /** Rail direction; vertical is Home's, horizontal the compact strip. */
   orientation?: "vertical" | "horizontal";
 }
@@ -34,6 +39,10 @@ function StepBody({ item }: { item: StepperItem }) {
     <>
       <span className="journey-step-circle">{item.index}</span>
       <span className="journey-step-label">{item.label}</span>
+      {/* DBT-246: the same tag a not-needed section header carries. */}
+      {item.status === "not-needed" && (
+        <span className="numbered-section-info-tag">Not needed</span>
+      )}
     </>
   );
 }
@@ -42,6 +51,7 @@ export function JourneyStepper({
   stages,
   links,
   onNavigate,
+  onStage,
   orientation = "vertical",
 }: JourneyStepperProps) {
   const items = buildStepperItems(stages, links);
@@ -63,7 +73,10 @@ export function JourneyStepper({
               <button
                 className="journey-step-main"
                 title={item.hint ?? undefined}
-                onClick={() => onNavigate(routeId)}
+                onClick={() => {
+                  onNavigate(routeId);
+                  onStage?.(item.id);
+                }}
               >
                 <StepBody item={item} />
               </button>

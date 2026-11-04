@@ -50,6 +50,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 /** Offline ports: every network read fails; the sample store holds one CEF sample. */
