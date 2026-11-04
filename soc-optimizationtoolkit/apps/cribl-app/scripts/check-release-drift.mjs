@@ -8,7 +8,9 @@
 // instead - so this is it. A hand-maintained version claim decays exactly as
 // fast as the automated one it warns about, and nothing tells anyone.
 //
-// FIVE ERRORS and ONE WARNING, and the split is deliberate. The errors are all
+// FIVE ERRORS and TWO WARNINGS, and the split is deliberate. (Until DBT-250 the
+// manifest running ahead of the tarball was an error; since every PR to main now
+// bumps the version and packaging is batched, it is the second warning.) The errors are all
 // facts that are free to keep true at packaging time and that read as confident
 // answers when they are wrong - a doc naming the wrong version is worse than a
 // doc naming none. The warning is the one thing that CANNOT be an error: the app
@@ -129,13 +131,21 @@ export function evaluateReleaseDrift(facts) {
   // for the same reason; it cannot be imported here because it packages on load.
   const packagedVersion = versions.slice().sort(compareVersions).at(-1) ?? versions[0];
 
-  // A manifest ahead of the tarball is the double-bump this repo has already hit:
-  // editing package.json and THEN packaging bumps twice, and the tgz name is the
-  // only place the doubled number shows. A manifest behind it should be
-  // impossible, since package.mjs writes both.
-  if (facts.manifestVersion !== packagedVersion) {
+  // A manifest AHEAD of the tarball is the normal state between releases since
+  // DBT-250 (2026-11-04): every PR to main runs "npm run bump", version only,
+  // and packaging stays batched. It warns, and names the command that packages
+  // THIS version - a bare "npm run package" would bump a second time, which is
+  // the double-bump this rule used to guard as an error. A manifest BEHIND the
+  // tarball is still an error: no bump and no package produces it.
+  const order = compareVersions(facts.manifestVersion, packagedVersion);
+  if (order > 0) {
+    warnings.push(
+      `package.json is at ${facts.manifestVersion}, ahead of the packaged tarball ${packagedVersion} (bumped per PR, DBT-250). ` +
+        `To release it, run "npm run package -- --version ${facts.manifestVersion}" and add its release-notes section and backlog line.`,
+    );
+  } else if (order < 0) {
     errors.push(
-      `package.json says ${facts.manifestVersion} but the packaged tarball is ${packagedVersion}. Do not hand-bump: scripts/package.mjs IS the bump.`,
+      `package.json says ${facts.manifestVersion} but the packaged tarball is ${packagedVersion}, which is newer. No bump or package produces that; restore package.json from the release commit.`,
     );
   }
 
@@ -328,8 +338,14 @@ async function main() {
       ? 'unreleased source not measured'
       : `${facts.sourceCommitsSinceRelease} source commit(s) since it was packaged`;
 
+  // Since DBT-250 package.json may be ahead of the package; then it is NOT one
+  // of the files that agree, and the line must not say it is.
+  const agreeing =
+    facts.manifestVersion === packagedVersion
+      ? 'package.json, package-lock.json, release/, release-notes.md and backlog.md'
+      : `release/, release-notes.md and backlog.md (package.json and package-lock.json are at ${facts.manifestVersion}, not yet packaged)`;
   console.log(
-    `Release ${packagedVersion} is consistent across package.json, package-lock.json, release/, release-notes.md and backlog.md (${unreleased}).`,
+    `Release ${packagedVersion} is consistent across ${agreeing} (${unreleased}).`,
   );
 }
 

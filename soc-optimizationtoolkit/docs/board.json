@@ -4043,6 +4043,19 @@
       "verified": "both"
     },
     {
+      "id": "DBT-250",
+      "epic": "DBT",
+      "feature": "DBT-F4",
+      "type": "enabler",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not",
+      "detail": "ASKED 2026-11-04 by the operator: 'as we merge new functions we should be bumping the version 1.13.x so the x changes everytime we push to main'. Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main left at 1.13.0, because nothing asked for a bump and the rule lived only in conversation.\n\nDECIDED 2026-11-04 by the operator: (1) scope = anything that ships, and anything Live Preview shows (the footer reads package.json's version at runtime, so a bump is visible there); docs/board/backlog-only PRs need none. (2) Version number only: package.json and the lock move per PR; packaging the .tgz, the release-notes section and the backlog IS CURRENT line stay batched.\n\nBUILD: npm run bump (patch-bumps package.json and the lock, no packaging); check-version-bump (pure evaluate + IO main, pinned) run in CI on PRs to main; check-release-drift turns 'manifest ahead of the tarball' from an error into a warning that names the release command (package -- --version X.Y.Z, so the release does not bump twice), a manifest BEHIND the tarball stays an error.\n\nDONE 2026-11-04 (pins): bump-version.mjs, check-version-bump.mjs and the check-release-drift change, each rule mutation-checked (five mutations, all caught); wired as npm run bump / check-version-bump and a CI step on pull requests. This PR (#199) is its first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under \"Version bump on every PR to main\". Live check: the CI step on this PR.",
+      "verified": "pins"
+    },
+    {
       "id": "AZR-60",
       "epic": "AZR",
       "feature": "AZR-F9",
