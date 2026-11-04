@@ -4117,6 +4117,21 @@
       "title": "Re-pointing a log type at an ASim table leaves its fields in AdditionalExtensions instead of mapping them",
       "detail": "RAISED BY THE USER 2026-11-04: switching the PaloAlto TRAFFIC sample from CommonSecurityLog to ASimNetworkSessionLogs left \"a bunch of left overs that are still trying to map to the AdditionalExtension field which doesn't exist in that table... simple Dst should be the field the destination IP maps to\". The analysis DOES re-run against the new schema; three defects spoil it. REPRODUCED against the bundled ASimNetworkSessionLogs schema (139 columns) with the PaloAlto vendor packs: (1) getOverflowConfig (overflow.ts) falls back to the CEF column AdditionalExtensions for any table not in its map, so every ASim table overflows into a column it does not have - ASim tables carry AdditionalFields (dynamic); (2) the alias knowledge (knowledge-bases.ts) is CEF-only - dst aliases DestinationIP/DestinationAddress/DstAddr - so src, dst, sport, dport, natsrc, bytes_sent, bytes_received all overflow instead of reaching SrcIpAddr, DstIpAddr, SrcPortNumber, DstPortNumber, SrcNatIpAddr, SrcBytes, DstBytes; (3) the fuzzy tier ignores src/dst polarity: srcuser matched DstUserId. FIXED 2026-11-04: (1) getOverflowConfig sends ASim* tables to AdditionalFields (dynamic); (2) knowledge-bases ASIM_COLUMN_EQUIVALENTS maps 31 CommonSecurityLog columns to their ASim columns (every one checked against the bundled ASim schemas), the alias tier accepts a column that is the ASim equivalent of a known alias, and analyze-samples re-aims a learned/pack mapping at the equivalent instead of filtering it out; (3) a polarity guard stops the fuzzy rungs crossing source/destination prefixes. CommonSecurityLog matching is pinned unchanged. 10 pins in asim-equivalents.test.ts; each of the four fixes fails them when removed. LIVE on the jpederson org Live Preview, PaloAlto TRAFFIC -> ASimNetworkSessionLogs: 28 mapped by the Cribl pipeline, leftovers in AdditionalFields (dynamic); dst -> DstIpAddr, dport -> DstPortNumber, dstuser -> DstUsername, natdst -> DstNatIpAddr, bytes_received -> DstBytes, all alias. Restored to CommonSecurityLog (27 mapped, 44 overflow, as before). LEFT OPEN: PAN-specific fields (from/to zones, srcloc/dstloc, elapsed, vsys) still overflow on both tables, and packets fuzzy-matches DstPackets where NetworkPackets is the session total.",
       "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "dependsOn": [
+        "DBT-252"
+      ],
+      "priority": "now",
+      "id": "DBT-253",
+      "type": "story",
+      "title": "PAN-OS TRAFFIC fields reach their ASim network-session columns",
+      "detail": "DECIDED BY THE USER 2026-11-04 (follow-on to DBT-252): about 41 PAN-OS TRAFFIC fields still overflow on CommonSecurityLog and ASimNetworkSessionLogs. PLAN: point the existing non-CEF alias targets at ASim (SourceZone/DestinationZone -> SrcZone/DstZone, SessionID -> NetworkSessionId, StartTime -> EventStartTime) and add PAN-OS aliases packets/bytes -> NetworkPackets/NetworkBytes, pkts_sent/pkts_received -> SrcPackets/DstPackets, srcloc/dstloc -> SrcGeoCountry/DstGeoCountry. DELIBERATELY NOT MAPPED: elapsed (PAN seconds, ASim NetworkDuration is milliseconds - a rename would store the wrong value; needs a scaling eval), vsys, logset, actionflags, seqno (no ASim column). DONE 2026-11-04 as planned. Against the full PAN-OS TRAFFIC header list (first 60 named columns) the bundled ASimNetworkSessionLogs schema now takes 36 fields to real columns (was 28 under DBT-252); CommonSecurityLog unchanged at 27. The ASim forward-alias check came back, scored by alias position, because sessionid -> [SessionID, ExternalID] now reaches two ASim columns and a flat score let schema order decide; pinned, and removing it fails the tie-break pin. 4 new pins in asim-equivalents.test.ts. VERIFIED BY PINS ONLY: the Live Preview had no tagged samples left (Loading tagged samples... never cleared) and adding one would write to the operator's KV. NOTICED, NOT CHANGED (pre-existing fuzzy matches): flags -> TcpFlagsAck and category -> ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.",
+      "verified": "pins"
     }
   ],
   "features": [

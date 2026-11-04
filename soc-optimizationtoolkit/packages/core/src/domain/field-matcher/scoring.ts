@@ -168,11 +168,25 @@ export function scoreMatch(
   }
 
   // ASim equivalents (DBT-252): the same alias knowledge, aimed at an ASim
-  // column that stands in for the CEF one the alias names. One lookup covers
-  // both directions of the alias table, because REVERSE_ALIAS is built from
-  // every forward entry. Same score as a reverse alias - a schema never holds
-  // both columns of a pair, so nothing it competes with changes.
+  // column that stands in for the alias target it names. A schema never holds
+  // both columns of a pair, so nothing CommonSecurityLog matches changes.
+  //
+  // FORWARD FIRST, SCORED BY POSITION (DBT-253). One source can alias to two
+  // targets that both have ASim columns - sessionid -> [SessionID, ExternalID]
+  // reaches NetworkSessionId and EventOriginalUid. A flat score tied them and
+  // the schema order decided; the alias list's order is the stated preference,
+  // so the first-listed target wins, exactly as it does on a CEF table.
   const cef = cefEquivalentOf(destName);
+  if (aliases && cef !== undefined) {
+    const i = aliases.findIndex((a) => a.toLowerCase() === cef.toLowerCase());
+    if (i >= 0) {
+      return {
+        score: Math.max(86, 90 - i),
+        confidence: "alias",
+        reason: `Known alias: ${sourceName} -> ${aliases[i]} (ASim ${destName})`,
+      };
+    }
+  }
   if (cef !== undefined && REVERSE_ALIAS.get(cef.toLowerCase())?.has(sourceName.toLowerCase())) {
     return {
       score: 88,
