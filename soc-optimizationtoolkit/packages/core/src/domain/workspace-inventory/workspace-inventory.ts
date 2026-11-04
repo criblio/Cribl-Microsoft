@@ -1,3 +1,5 @@
+import { identityKql } from "./source-identity";
+
 /**
  * workspace-inventory - what an EXISTING Log Analytics / Sentinel workspace
  * ingests: every table with data in the window, the sources feeding each
@@ -61,11 +63,18 @@ export const USAGE_QUERY = [
 ].join("\n");
 
 /** How a row's source was identified. `other` is the rolled-up remainder row. */
-export type SourceAttribution = "resource" | "computer" | "device" | "none" | "other";
+export type SourceAttribution =
+  | "resource"
+  | "computer"
+  | "product"
+  | "device"
+  | "none"
+  | "other";
 
 const ATTRIBUTIONS: readonly SourceAttribution[] = [
   "resource",
   "computer",
+  "product",
   "device",
   "none",
   "other",
@@ -95,21 +104,16 @@ export function sourceBreakdownQuery(tables: readonly string[]): string {
   return [
     `union isfuzzy=true withsource=SourceTable ${tables.map(kqlTableRef).join(", ")}`,
     `| where ${WINDOW_FILTER}`,
-    "| extend _rid = tostring(column_ifexists('_ResourceId', '')),",
-    "    _comp = tostring(column_ifexists('Computer', '')),",
-    "    _dev = trim(' ', strcat(tostring(column_ifexists('DeviceVendor', '')), ' ',",
-    "        tostring(column_ifexists('DeviceProduct', ''))))",
-    "| extend Source = case(isnotempty(_rid), _rid, isnotempty(_comp), _comp,",
-    "        isnotempty(_dev), _dev, ''),",
-    "    Attribution = case(isnotempty(_rid), 'resource', isnotempty(_comp), 'computer',",
-    "        isnotempty(_dev), 'device', 'none')",
-    "| summarize Bytes = sum(_BilledSize), Events = count() by SourceTable, Source, Attribution",
+    identityKql(),
+    "| summarize Bytes = sum(_BilledSize), BillableBytes = sumif(_BilledSize, _IsBillable == true),",
+    "    Events = count() by SourceTable, Source, Attribution, Collector",
     "| order by SourceTable asc, Bytes desc",
     "| extend Rank = row_number(1, prev(SourceTable) != SourceTable)",
     `| extend Source = iff(Rank > ${SOURCES_PER_TABLE}, '', Source),`,
-    `    Attribution = iff(Rank > ${SOURCES_PER_TABLE}, 'other', Attribution)`,
-    "| summarize Bytes = sum(Bytes), Events = sum(Events), Sources = count()",
-    "    by SourceTable, Source, Attribution",
+    `    Attribution = iff(Rank > ${SOURCES_PER_TABLE}, 'other', Attribution),`,
+    `    Collector = iff(Rank > ${SOURCES_PER_TABLE}, '', Collector)`,
+    "| summarize Bytes = sum(Bytes), BillableBytes = sum(BillableBytes), Events = sum(Events),",
+    "    Sources = count() by SourceTable, Source, Attribution, Collector",
   ].join("\n");
 }
 
@@ -199,14 +203,21 @@ export interface UsageRow {
 
 /** One source of one table, from `_BilledSize`. */
 export interface InventorySource {
-  /** The resource id, computer or device; '' for unattributed and `other`. */
+  /** The resource id, computer, product or device; '' for unattributed and `other`. */
   source: string;
   attribution: SourceAttribution;
+  /** The collector that carried a product's rows; '' when none (see source-identity). */
+  collector: string;
   bytes: number;
+  /** `_BilledSize` of the rows with `_IsBillable == true`; part of `bytes`. */
+  billableBytes: number;
   events: number;
   /** How many distinct sources this row stands for (more than 1 only for `other`). */
   sourceCount: number;
   dailyAverageMB: number;
+  billableDailyMB: number;
+  /** `dailyAverageMB - billableDailyMB`: the part the rows say is not billed. */
+  freeDailyMB: number;
 }
 
 /**
@@ -268,7 +279,11 @@ function splitSolutions(value: unknown): string[] {
   return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
-/** Parse source-breakdown rows into a map keyed by lower-cased table name. */
+/**
+ * Parse source-breakdown rows into a map keyed by lower-cased table name.
+ * Throws on a row with no `BillableBytes` column: a breakdown that lost it is a
+ * contract break, and reading it as zero would present every source as free.
+ */
 export function parseSourceRows(
   rows: ReadonlyArray<Record<string, unknown>>,
 ): Map<string, InventorySource[]> {
@@ -276,16 +291,29 @@ export function parseSourceRows(
   for (const row of rows) {
     const table = text(row.SourceTable);
     if (table === "") continue;
+    if (!("BillableBytes" in row)) {
+      throw new Error("source breakdown has no BillableBytes column");
+    }
     const raw = text(row.Attribution) as SourceAttribution;
-    const attribution: SourceAttribution = ATTRIBUTIONS.includes(raw) ? raw : "none";
+    const known: SourceAttribution = ATTRIBUTIONS.includes(raw) ? raw : "none";
+    const source = text(row.Source);
+    // A product with no name is nothing to show; the KQL never emits one.
+    const attribution: SourceAttribution = known === "product" && source === "" ? "none" : known;
     const bytes = num(row.Bytes);
+    const billableBytes = num(row.BillableBytes);
+    const dailyAverageMB = bytes / BYTES_PER_MB / INVENTORY_WINDOW_DAYS;
+    const billableDailyMB = billableBytes / BYTES_PER_MB / INVENTORY_WINDOW_DAYS;
     const entry: InventorySource = {
-      source: text(row.Source),
+      source,
       attribution,
+      collector: text(row.Collector),
       bytes,
+      billableBytes,
       events: num(row.Events),
       sourceCount: Math.max(1, num(row.Sources)),
-      dailyAverageMB: bytes / BYTES_PER_MB / INVENTORY_WINDOW_DAYS,
+      dailyAverageMB,
+      billableDailyMB,
+      freeDailyMB: Math.max(0, dailyAverageMB - billableDailyMB),
     };
     const key = table.toLowerCase();
     const list = byTable.get(key) ?? [];

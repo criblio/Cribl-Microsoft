@@ -35,7 +35,9 @@ function result(columns: string[], rows: unknown[][], error?: unknown): PortHttp
 }
 
 const USAGE_COLS = ["DataType", "TotalMB", "BillableMB", "DaysWithData", "Solutions"];
-const SOURCE_COLS = ["SourceTable", "Source", "Attribution", "Bytes", "Events", "Sources"];
+const SOURCE_COLS = [
+  "SourceTable", "Source", "Attribution", "Collector", "Bytes", "BillableBytes", "Events", "Sources",
+];
 
 function usage(...tables: Array<[string, number]>): PortHttpResponse {
   return result(
@@ -47,7 +49,7 @@ function usage(...tables: Array<[string, number]>): PortHttpResponse {
 function sources(...rows: Array<[string, string, number]>): PortHttpResponse {
   return result(
     SOURCE_COLS,
-    rows.map(([t, s, bytes]) => [t, s, s === "" ? "none" : "computer", bytes, 1, 1]),
+    rows.map(([t, s, bytes]) => [t, s, s === "" ? "none" : "computer", "", bytes, bytes, 1, 1]),
   );
 }
 

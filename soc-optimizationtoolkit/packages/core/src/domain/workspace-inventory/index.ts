@@ -29,3 +29,9 @@ export type {
   TableSources,
   UsageRow,
 } from "./workspace-inventory";
+export {
+  identityKql,
+  SOURCE_IDENTITY_AS_OF,
+  SOURCE_IDENTITY_RULES,
+} from "./source-identity";
+export type { SourceIdentityRule } from "./source-identity";

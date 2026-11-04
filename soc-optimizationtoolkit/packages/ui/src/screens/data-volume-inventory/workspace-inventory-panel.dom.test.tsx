@@ -69,8 +69,8 @@ function armStub(usage: Answer, usage2?: Answer) {
       return {
         status: 200,
         body: table(
-          ["SourceTable", "Source", "Attribution", "Bytes", "Events", "Sources"],
-          [["Syslog", "fw-01", "computer", 3_000_000, 1200, 1]],
+          ["SourceTable", "Source", "Attribution", "Collector", "Bytes", "BillableBytes", "Events", "Sources"],
+          [["Syslog", "fw-01", "computer", "", 3_000_000, 3_000_000, 1200, 1]],
         ),
       };
     }

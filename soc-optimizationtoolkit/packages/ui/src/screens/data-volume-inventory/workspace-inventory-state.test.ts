@@ -13,10 +13,14 @@ function source(partial: Partial<InventorySource>): InventorySource {
   return {
     source: "",
     attribution: "none",
+    collector: "",
     bytes: 0,
+    billableBytes: 0,
     events: 0,
     sourceCount: 1,
     dailyAverageMB: 0,
+    billableDailyMB: 0,
+    freeDailyMB: 0,
     ...partial,
   };
 }
