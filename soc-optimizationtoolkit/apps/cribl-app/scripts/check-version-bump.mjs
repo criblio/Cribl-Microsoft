@@ -23,42 +23,15 @@ import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SHIPPED_PATH_PREFIXES, XYZ, compareVersions, isShippedPath } from './shipped-paths.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, '..');
 const APP_MANIFEST = 'soc-optimizationtoolkit/apps/cribl-app/package.json';
 
-/** Repo-root paths whose change reaches the shipped app or Live Preview. */
-export const SHIPPED_PATH_PREFIXES = Object.freeze([
-  'soc-optimizationtoolkit/packages/',
-  'soc-optimizationtoolkit/apps/cribl-app/src/',
-  'soc-optimizationtoolkit/apps/cribl-app/config/',
-  'soc-optimizationtoolkit/apps/cribl-app/public/',
-  'soc-optimizationtoolkit/apps/cribl-app/index.html',
-  'soc-optimizationtoolkit/apps/cribl-app/vite.config.ts',
-  'soc-optimizationtoolkit/apps/cribl-app/package.json',
-  'soc-optimizationtoolkit/package.json',
-  'soc-optimizationtoolkit/package-lock.json',
-]);
+export { SHIPPED_PATH_PREFIXES, isShippedPath };
 
-/** A test file changes neither the bundle nor what Live Preview renders. */
-const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
-/** Workspace docs (CONTEXT.md, README.md) inside packages/ do not ship. */
-const MARKDOWN = /\.md$/;
-
-export function isShippedPath(path) {
-  if (TEST_FILE.test(path) || MARKDOWN.test(path)) return false;
-  return SHIPPED_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix));
-}
-
-const XYZ = /^(\d+)\.(\d+)\.(\d+)$/;
 const MAX_LISTED = 10;
-
-function compareVersions(a, b) {
-  const [, a1, a2, a3] = XYZ.exec(a).map(Number);
-  const [, b1, b2, b3] = XYZ.exec(b).map(Number);
-  return a1 - b1 || a2 - b2 || a3 - b3;
-}
 
 /**
  * @param {{ baseVersion: string, headVersion: string, changedPaths: string[] }} facts

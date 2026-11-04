@@ -51,6 +51,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockWorkspaceKey } from './lock-version.mjs';
+import { compareVersions, shippedPathspecs } from './shipped-paths.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, '..');
@@ -74,16 +75,10 @@ const TGZ_VERSION = /^soc-optimizationtoolkit-(\d+\.\d+\.\d+)\.tgz$/;
 // test, keeps the guard and the check on one definition.
 export const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
 
-// Source that changes what the packaged app DOES. Docs are excluded: a doc-only
-// commit landing after a release is not a stale release, and warning about it
-// would train people to ignore the warning.
-const SOURCE_PATHS = [
-  'soc-optimizationtoolkit/packages',
-  'soc-optimizationtoolkit/apps/cribl-app/src',
-  'soc-optimizationtoolkit/apps/cribl-app/default',
-  'soc-optimizationtoolkit/apps/cribl-app/index.html',
-  'soc-optimizationtoolkit/scripts',
-];
+// Source that changes what the packaged app DOES: shipped-paths.mjs, the same
+// definition the version-bump gate reads (architecture audit 2026-11-04). Docs
+// are excluded there: a doc-only commit landing after a release is not a stale
+// release, and warning about it would train people to ignore the warning.
 
 /**
  * @param {{
@@ -215,12 +210,6 @@ export function evaluateReleaseDrift(facts) {
   return { errors, warnings, notes, packagedVersion };
 }
 
-/** Compares X.Y.Z by component, so 1.12.0 sorts above 1.9.0. */
-function compareVersions(a, b) {
-  const left = a.split('.').map(Number);
-  const right = b.split('.').map(Number);
-  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
-}
 
 /**
  * Matches the heading for one version and not the versions it prefixes: "## 1.1.2"
@@ -281,7 +270,7 @@ export function readLockVersion(lockJson) {
  */
 function countSourceCommitsSinceRelease() {
   try {
-    // Pathspecs resolve against the CWD, and SOURCE_PATHS are written from the
+    // Pathspecs resolve against the CWD, and shippedPathspecs() are written from the
     // REPO root - the toolkit is one directory down. Running git here rather
     // than in the toolkit is what makes them match anything at all: with the
     // wrong cwd every path matches nothing, the count is zero, and the check
@@ -298,7 +287,7 @@ function countSourceCommitsSinceRelease() {
     if (!releaseCommit) return null;
 
     const count = git(repoRoot, [
-      'rev-list', '--count', `${releaseCommit}..HEAD`, '--', ...SOURCE_PATHS,
+      'rev-list', '--count', `${releaseCommit}..HEAD`, '--', ...shippedPathspecs(),
     ]);
     return count === '' ? null : Number(count);
   } catch {

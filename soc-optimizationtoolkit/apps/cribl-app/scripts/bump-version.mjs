@@ -16,8 +16,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockWorkspaceKey, syncLockVersion } from './lock-version.mjs';
-
-const XYZ = /^(\d+)\.(\d+)\.(\d+)$/;
+import { XYZ } from './shipped-paths.mjs';
 
 export function nextPatch(version) {
   const m = XYZ.exec(version ?? '');
