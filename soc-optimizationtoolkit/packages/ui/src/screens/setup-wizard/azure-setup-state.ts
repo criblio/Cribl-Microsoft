@@ -474,3 +474,25 @@ export function scriptDownloadFeedback(script: string): string {
 export function wrapRoleScript(script: string): string {
   return `#!/usr/bin/env bash\nset -euo pipefail\n\n${script}\n`;
 }
+
+// Folded one-line summaries (DBT-248).
+
+/** First four and last four characters of a client id, "abcd...wxyz" (short ids shown whole). */
+export function shortClientId(clientId: string): string {
+  const id = clientId.trim();
+  return id.length <= 8 ? id : `${id.slice(0, 4)}...${id.slice(-4)}`;
+}
+
+/** The folded one-liner: whether a connection is live and which client it is. */
+export function connectSummary(clientId: string, secretLive: boolean): string {
+  return clientId.trim() !== "" && secretLive
+    ? `Connected - client ${shortClientId(clientId)}`
+    : "Not connected";
+}
+
+/** The folded one-liner: the target this install deploys into. */
+export function resourcesSummary(workspaceName: string, rgName: string): string {
+  return workspaceName.trim() !== "" && rgName.trim() !== ""
+    ? `${workspaceName.trim()} in ${rgName.trim()}`
+    : "No target yet";
+}

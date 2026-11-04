@@ -12,6 +12,7 @@
  *   - next-action derivation follows the single-next-action hint cascade
  */
 import { describe, expect, it } from "vitest";
+import type { AzureConnectivity, ScopeNeed } from "../azure-connectivity";
 import {
   FIRST_RUN_ARC,
   INTEGRATE_ARC,
@@ -62,22 +63,57 @@ const SECRET_STATES: readonly SecretLiveness[] = ["live", "unknown", "missing"];
 const CRIBL_STATES: readonly (boolean | undefined)[] = [true, false, undefined];
 const BOOLS: readonly boolean[] = [true, false];
 
-/** Every fact combination: 2 x 2 x 3 x 2 x 3 = 72 records. */
+const CONNECTIVITIES: readonly (AzureConnectivity | undefined)[] = [
+  undefined,
+  "full",
+  "partial",
+  "disconnected",
+];
+const SCOPE_NEEDS: readonly (ScopeNeed | undefined)[] = [
+  undefined,
+  "none",
+  "subscription",
+  "full",
+];
+// The optional facts include undefined: absent is a real input (an older
+// caller, or a token status still loading) and has its own meaning.
+const OPTIONAL_BOOLS: readonly (boolean | undefined)[] = [true, false, undefined];
+
+/**
+ * Every fact combination: the base facts (2 accepted x 2 identity x 3 secret x
+ * 2 scopeCommitted x 3 Cribl = 72) crossed with the FULL product of the
+ * connectivity facts (4 connectivity x 4 scopeNeed x 3 subscriptionChosen x
+ * 3 tokenRequired x 3 tokenPresent = 432) = 31104 records. The product is
+ * cheap (pure derivation), so no pairwise subset is taken.
+ */
 function everyFactCombination(): JourneyFacts[] {
   const combos: JourneyFacts[] = [];
-  {
-    for (const accepted of BOOLS) {
-      for (const identityPresent of BOOLS) {
-        for (const secretLive of SECRET_STATES) {
-          for (const scopeCommitted of BOOLS) {
-            for (const criblReachable of CRIBL_STATES) {
-              combos.push({
-                accepted,
-                identityPresent,
-                secretLive,
-                scopeCommitted,
-                criblReachable,
-              });
+  for (const accepted of BOOLS) {
+    for (const identityPresent of BOOLS) {
+      for (const secretLive of SECRET_STATES) {
+        for (const scopeCommitted of BOOLS) {
+          for (const criblReachable of CRIBL_STATES) {
+            for (const connectivity of CONNECTIVITIES) {
+              for (const scopeNeed of SCOPE_NEEDS) {
+                for (const subscriptionChosen of OPTIONAL_BOOLS) {
+                  for (const tokenRequired of OPTIONAL_BOOLS) {
+                    for (const tokenPresent of OPTIONAL_BOOLS) {
+                      combos.push({
+                        accepted,
+                        identityPresent,
+                        secretLive,
+                        scopeCommitted,
+                        criblReachable,
+                        connectivity,
+                        scopeNeed,
+                        subscriptionChosen,
+                        tokenRequired,
+                        tokenPresent,
+                      });
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -91,6 +127,7 @@ describe("arc constants", () => {
   it("fixes the first-run arc order", () => {
     expect(FIRST_RUN_ARC).toEqual([
       "accept",
+      "github",
       "connect",
       "target",
       "ready",
@@ -128,11 +165,21 @@ describe("firstRunStageIds", () => {
 
   it("no longer carries a mode-selection stage", () => {
     expect(FIRST_RUN_ARC).not.toContain("choose-mode");
-    expect(firstRunStageIds()).toEqual(["accept", "connect", "target", "ready"]);
+    expect(firstRunStageIds()).toEqual([
+      "accept",
+      "github",
+      "connect",
+      "target",
+      "ready",
+    ]);
   });
 });
 
-describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
+// The matrix is 31104 fact records (DBT-246 crossed the connectivity facts
+// into it). Each test walks all of them, which takes ~8-15 s on a slow Windows
+// dev machine against vitest's 5 s default, so the timeout is stated here
+// rather than letting a CPU-bound pin fail as if it had found something.
+describe("deriveJourney invariants (full fact matrix)", { timeout: 60_000 }, () => {
   it("emits CONSTANT stage lists - facts change statuses, never which stages exist", () => {
     for (const f of everyFactCombination()) {
       const journey = deriveJourney(f);
@@ -191,7 +238,15 @@ describe("deriveJourney invariants (full 360-combination fact matrix)", () => {
         continue;
       }
       for (const earlier of journey.firstRun.slice(0, currentIndex)) {
-        expect(earlier.status).toBe("complete");
+        // A required token whose status is not yet known is the one stage
+        // that may sit open before current: it is pending, not missing (M1).
+        const pendingGithub =
+          earlier.id === "github" &&
+          f.tokenRequired === true &&
+          f.tokenPresent === undefined;
+        expect(
+          pendingGithub ? ["available"] : ["complete", "not-needed"],
+        ).toContain(earlier.status);
       }
     }
   });
@@ -230,6 +285,12 @@ describe("acceptance wall", () => {
     expect(statusOf(journey, "accept")).toBe("current");
     for (const s of allStages(journey)) {
       if (s.id === "accept") {
+        continue;
+      }
+      if (s.id === "github") {
+        // No token is required in these facts, so the stage is satisfied
+        // independently of the wall (completion is never undone by it).
+        expect(s.status).toBe("complete");
         continue;
       }
       if (s.status === "blocked") {
@@ -523,7 +584,7 @@ describe("readinessChips", () => {
       "missing",
     ]);
     expect(chips[0]?.hint).toContain("Connect");
-    expect(chips[2]?.hint).toContain("Azure Targeting");
+    expect(chips[2]?.hint).toContain("Setup");
   });
 
   it("ALWAYS renders the three chips, whatever the connection state", () => {
@@ -557,7 +618,9 @@ describe("nextAction hint cascade", () => {
     const action = nextAction(facts({ scopeCommitted: false }));
     expect(action?.stageId).toBe("target");
     expect(action?.label).toBe("Commit an Azure target");
-    expect(action?.description).toContain("Use this target");
+    expect(action?.description).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
   });
 
   it("hands over to the integrate arc when the first-run arc is green", () => {
@@ -570,5 +633,245 @@ describe("nextAction hint cascade", () => {
     const action = nextAction(facts({ secretLive: "unknown" }));
     expect(action?.description).toContain("may exist");
     expect(action?.description).toContain("session");
+  });
+});
+
+describe("the journey follows the saved connectivity choice", () => {
+  const disconnected = (o: Partial<JourneyFacts> = {}) =>
+    facts({
+      connectivity: "disconnected",
+      identityPresent: false,
+      secretLive: "missing",
+      scopeCommitted: false,
+      tokenPresent: true,
+      ...o,
+    });
+
+  it("disconnected: skips connect and target and goes straight to content", () => {
+    const f = disconnected();
+    expect(nextAction(f)?.stageId).toBe("choose-content");
+    const j = deriveJourney(f);
+    expect(statusOf(j, "connect")).toBe("not-needed");
+    expect(statusOf(j, "target")).toBe("not-needed");
+    expect(statusOf(j, "ready")).toBe("complete");
+    const current = allStages(j).filter((s) => s.status === "current");
+    expect(current.map((s) => s.id)).toEqual(["choose-content"]);
+    for (const s of allStages(j)) {
+      expect(s.blockedReason !== undefined).toBe(
+        s.status === "blocked" || s.status === "not-yet-available",
+      );
+    }
+  });
+
+  it("disconnected: identity, secret and scope chips are not-used", () => {
+    expect(readinessChips(disconnected()).map((c) => c.state)).toEqual([
+      "not-used",
+      "not-used",
+      "not-used",
+    ]);
+  });
+
+  it("disconnected: Deploy points at the export, not the tenant", () => {
+    const reason = stageOf(deriveJourney(disconnected()), "deploy").blockedReason;
+    expect(reason).toContain("export");
+    expect(reason).not.toContain("tenant");
+  });
+
+  it("partial with a subscription-level need: a chosen subscription completes target", () => {
+    const j = deriveJourney(
+      facts({
+        connectivity: "partial",
+        scopeNeed: "subscription",
+        subscriptionChosen: true,
+        scopeCommitted: false,
+      }),
+    );
+    expect(statusOf(j, "target")).toBe("complete");
+  });
+
+  it("partial with no scope need: target is not-needed", () => {
+    const j = deriveJourney(
+      facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false }),
+    );
+    expect(statusOf(j, "target")).toBe("not-needed");
+  });
+
+  it("asks for a GitHub token when one is required and missing", () => {
+    expect(
+      nextAction(facts({ tokenRequired: true, tokenPresent: false })),
+    ).toEqual({
+      stageId: "github",
+      label: "Save a GitHub token",
+      description: expect.any(String),
+    });
+  });
+
+  it("never names the retired Azure Targeting route", () => {
+    const all: JourneyFacts[] = [
+      facts({ scopeCommitted: false }),
+      facts({ identityPresent: false }),
+      disconnected(),
+      facts({ tokenRequired: true, tokenPresent: false }),
+    ];
+    for (const f of all) {
+      const texts = [
+        nextAction(f)?.description ?? "",
+        ...readinessChips(f).map((c) => c.hint),
+        ...allStages(deriveJourney(f)).map((s) => s.blockedReason ?? ""),
+      ];
+      for (const t of texts) {
+        expect(t).not.toContain("Azure Targeting");
+        expect(t).not.toContain("Use this target");
+      }
+    }
+  });
+});
+
+describe("scope chip follows the target stage", () => {
+  it("is not-used whenever the target stage is not needed", () => {
+    for (const f of [
+      facts({ connectivity: "disconnected", scopeCommitted: false }),
+      facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false }),
+    ]) {
+      expect(statusOf(deriveJourney(f), "target")).toBe("not-needed");
+      const scope = readinessChips(f).find((c) => c.id === "scope");
+      expect(scope?.state).toBe("not-used");
+    }
+  });
+
+  it("says a subscription is chosen, not that a scope is committed", () => {
+    const scope = readinessChips(
+      facts({
+        connectivity: "partial",
+        scopeNeed: "subscription",
+        subscriptionChosen: true,
+        scopeCommitted: false,
+      }),
+    ).find((c) => c.id === "scope");
+    expect(scope?.state).toBe("ok");
+    expect(scope?.hint).toContain("subscription is chosen");
+    expect(scope?.hint).not.toContain("committed");
+  });
+});
+
+describe("scopeNeed shapes the journey only under partial (I2)", () => {
+  // lab-new-rg's full plan has no resource-group entry, so scopeNeed is
+  // "subscription" there - that must not relax a Fully Connected install.
+  const fullLab = facts({
+    connectivity: "full",
+    scopeNeed: "subscription",
+    subscriptionChosen: true,
+    scopeCommitted: false,
+  });
+
+  it("full + subscription-only need + subscription chosen: target is not complete", () => {
+    const j = deriveJourney(fullLab);
+    expect(statusOf(j, "target")).toBe("current");
+    expect(nextAction(fullLab)?.stageId).toBe("target");
+  });
+
+  it("full + subscription-only need: deploy is still scope-gated", () => {
+    expect(stageOf(deriveJourney(fullLab), "deploy").blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("full + a none need: target is still needed", () => {
+    const f = facts({ connectivity: "full", scopeNeed: "none", scopeCommitted: false });
+    expect(statusOf(deriveJourney(f), "target")).toBe("current");
+    expect(readinessChips(f).find((c) => c.id === "scope")?.state).toBe("missing");
+  });
+
+  it("full: the scope chip asks for the whole target", () => {
+    const scope = readinessChips(fullLab).find((c) => c.id === "scope");
+    expect(scope?.state).toBe("missing");
+    expect(scope?.hint).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
+  });
+});
+
+describe("Deploy always needs the committed scope (I3)", () => {
+  it("partial Reader + subscription only: deploy blocked with the scope reason", () => {
+    const f = facts({
+      connectivity: "partial",
+      scopeNeed: "subscription",
+      subscriptionChosen: true,
+      scopeCommitted: false,
+    });
+    const deploy = stageOf(deriveJourney(f), "deploy");
+    expect(deploy.status).toBe("blocked");
+    expect(deploy.blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("partial with no scope need: deploy still blocked until scope is committed", () => {
+    const f = facts({ connectivity: "partial", scopeNeed: "none", scopeCommitted: false });
+    expect(stageOf(deriveJourney(f), "deploy").blockedReason).toBe(
+      "Commit an Azure target (subscription, resource group, and workspace) first.",
+    );
+  });
+
+  it("disconnected keeps its export reason", () => {
+    const f = facts({ connectivity: "disconnected", scopeCommitted: false });
+    expect(stageOf(deriveJourney(f), "deploy").blockedReason).toBe(
+      "Disconnected: export the ARM templates instead.",
+    );
+  });
+});
+
+describe("the subscription-only target asks only for a subscription (I5)", () => {
+  const f = facts({
+    connectivity: "partial",
+    scopeNeed: "subscription",
+    subscriptionChosen: false,
+    scopeCommitted: false,
+  });
+
+  it("next action says pick a subscription", () => {
+    expect(nextAction(f)?.description).toBe("Pick a subscription on Setup.");
+  });
+
+  it("the scope chip hint says pick a subscription", () => {
+    expect(readinessChips(f).find((c) => c.id === "scope")?.hint).toBe(
+      "Pick a subscription on Setup.",
+    );
+  });
+
+  it("a full need keeps the whole-target copy", () => {
+    const g = facts({ connectivity: "partial", scopeNeed: "full", scopeCommitted: false });
+    expect(nextAction(g)?.description).toBe(
+      "Pick a subscription, resource group and workspace on Setup.",
+    );
+  });
+});
+
+describe("an unknown token status is not-yet-known, not missing (M1)", () => {
+  const pending = facts({ tokenRequired: true, tokenPresent: undefined });
+
+  it("does not make github the next action", () => {
+    expect(nextAction(pending)?.stageId).not.toBe("github");
+    expect(nextAction(pending)?.stageId).toBe("choose-content");
+  });
+
+  it("shows the github stage available, not complete and not current", () => {
+    expect(statusOf(deriveJourney(pending), "github")).toBe("available");
+  });
+
+  it("lets the next stage proceed", () => {
+    const f = facts({
+      tokenRequired: true,
+      tokenPresent: undefined,
+      secretLive: "missing",
+    });
+    expect(nextAction(f)?.stageId).toBe("connect");
+    expect(statusOf(deriveJourney(f), "connect")).toBe("current");
+  });
+
+  it("a known-missing token still asks for one", () => {
+    expect(
+      nextAction(facts({ tokenRequired: true, tokenPresent: false }))?.stageId,
+    ).toBe("github");
   });
 });
