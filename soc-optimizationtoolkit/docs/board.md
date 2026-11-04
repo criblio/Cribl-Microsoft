@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 35 in progress, 154 done.**
+**93 in the backlog, 36 in progress, 154 done.**
 
 ## By menu item
 
@@ -148,7 +148,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1051,6 +1051,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
+- **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
+  `MIG-F3` `spike` `settled`
+  Confirms the identity columns read well on real rows and records the Syslog
+  Facility decision (design open item 1). Design:
+  docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-31).
+
 ---
 
 ## Backlog - now (11)
@@ -1264,7 +1271,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (47)
+## Backlog - next (46)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1916,13 +1923,6 @@ Settled and unblocked, sequenced behind now.
   SubscriptionNotRegistered on 2, reported as not read), Resource Graph
   machine count answers. USER DECISION 2026-11-03: ship without the rest; this
   card stays open until a benefit-receiving workspace is available.
-
-- **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
-  `MIG-F3` `spike` `settled`
-  Confirms the identity columns read well on real rows and records the Syslog
-  Facility decision (design open item 1). Design:
-  docs/features/inventory-by-source.md. Plan:
-  docs/inventory-by-source-implementation-plan.md (task MIG-31).
 
 - **DBT-235** Finish the DBT-195 review follow-up: scope documented close-match sources to the solution's vendor
   `DBT-F2` `story` `settled`

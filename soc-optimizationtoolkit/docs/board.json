@@ -3826,7 +3826,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-30"
       ],
