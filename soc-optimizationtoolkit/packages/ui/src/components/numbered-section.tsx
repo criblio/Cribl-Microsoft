@@ -94,8 +94,10 @@ export interface NumberedSectionProps {
   pinned?: boolean;
   onPinnedChange?: (pinned: boolean) => void;
   /**
-   * DBT-232: called when the operator acts INSIDE the section (pointer down or
-   * keyboard focus) - the page's cue that this is the section being used.
+   * DBT-232: called when the operator acts in the section - pointer down or
+   * keyboard focus in the BODY, or the header click that opens it (DBT-257;
+   * never pointer down or focus in the header, DBT-256) - the page's cue that
+   * this is the section being used.
    */
   onActivate?: () => void;
 }

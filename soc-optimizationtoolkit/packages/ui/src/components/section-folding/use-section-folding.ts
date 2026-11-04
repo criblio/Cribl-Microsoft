@@ -7,8 +7,9 @@
  *   - Until the operator's first move or explicit open/fold, the load fold re-derives when
  *     `currentId` changes or the stored pins arrive (restored state lands
  *     after the first render).
- *   - A move ({@link SectionFolding.moveTo}: pointer-down or focus inside a
- *     section, Done - next, a next-action link) folds every other open,
+ *   - A move ({@link SectionFolding.moveTo}: pointer-down or focus in a
+ *     section's body, the header click that opens it, Done - next, a
+ *     next-action link) folds every other open,
  *     unpinned section, except those in `keepOpen` (a running operation). The
  *     FIRST move ends the load fold. The section moved to stays where it was
  *     on screen (scroll is compensated a frame later).
@@ -78,10 +79,11 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
   const [collapsed, setCollapsedSet] = useState<ReadonlySet<string>>(() =>
     initialCollapsed(ids, currentId),
   );
-  // DBT-256: an explicit open or fold (a header, Expand, Collapse, Done) ends
-  // the load fold just as a move does. Opening is not a move, so without this
-  // a section opened during load was shut again when `currentId` advanced or
-  // the stored pins arrived.
+  // DBT-256: an explicit open or fold (Collapse, Done, a page calling
+  // setCollapsed) ends the load fold just as a move does. setCollapsed alone
+  // is not a move - a header's opening click moves as well (DBT-257) - so
+  // without this a section folded or opened by the page during load was reset
+  // when `currentId` advanced or the stored pins arrived.
   const touchedRef = useRef(false);
   const setCollapsed = useCallback((id: string, fold: boolean) => {
     touchedRef.current = true;
