@@ -74,11 +74,13 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // Event Hub rule's listKeys. CAP-7a added the three Defender capabilities
     // (defender-plans.read, defender-automation.read/.write), measured only by
     // an existing-subscription audit; listKeys is still unmeasured (CAP-7b).
-    // The entry stays [] because the screen still renders both lists itself as
-    // "needed, not yet measured" and reads no verdict, and because the route
-    // is several sources: gating all of it on the Defender export would flag
-    // the Event Hub and Entra paths for an operator who never touches Defender.
-    // It changes together with that screen copy, under CAP-7.
+    // The entry stays [] because the route is several sources: gating all of
+    // it on the Defender export would flag the Event Hub and Entra paths for an
+    // operator who never touches Defender. Since AZR-60 the verdicts ARE read,
+    // at the right grain - per automatable section, from the declarations in
+    // core onboarding-sections/automation-permissions - and the Defender
+    // section banners them there; listKeys stays "needed, not yet measured"
+    // until CAP-7b.
     "azure-onboarding": [],
     "mapping-catalog": [],
     // Same kind of gap eventhub-discovery had before CAP-1. The logging map
@@ -89,6 +91,11 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // route is unconstrained and the screen reports every refused read itself
     // as UNKNOWN, counted. A dedicated capability is filed as its own card.
     "azure-logging-map": [],
+    // EXPLICITLY EMPTY. The tenant gap dashboard reads several tenants, each
+    // through its own connection; the audit measures only the ACTIVE one, so
+    // its verdicts say nothing about the others. Every refused read is shown
+    // as unknown in its own cell instead.
+    "tenant-gaps": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.
     harness: [],

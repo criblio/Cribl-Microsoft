@@ -30,7 +30,10 @@ import type {
 import { usePorts } from "../../ports-context";
 import type { DeployedGroupPacks,
   StoredPack } from "../../ports-context";
-import { SearchableMultiSelect } from "../../components/searchable-select";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "../../components/searchable-select";
 import { WorkerGroupField } from "../../components/worker-group-field";
 import {
   streamGroupRows,
@@ -61,6 +64,23 @@ const NO_GROUP_IDS: readonly string[] = [];
 const DEPLOYED_PENDING: DeployedRead = { kind: "pending" };
 const DEPLOYED_FAILED: DeployedRead = { kind: "failed" };
 const NO_SNAPSHOT: readonly DeployedGroupPacks[] = [];
+
+/** The maintenance-table action choices, in display order. */
+const MAINTENANCE_ACTIONS: readonly PipelineFieldMapping["action"][] = [
+  "rename",
+  "keep",
+  "coerce",
+  "decode",
+  "overflow",
+  "drop",
+];
+const MAINTENANCE_ACTION_OPTIONS = MAINTENANCE_ACTIONS.map((a) => ({
+  value: a,
+  label: a,
+}));
+function isMaintenanceAction(v: string): v is PipelineFieldMapping["action"] {
+  return (MAINTENANCE_ACTIONS as readonly string[]).includes(v);
+}
 
 /** Decode base64 cached bytes to a fresh Uint8Array (browser atob). */
 function decodeBase64(base64: string): Uint8Array {
@@ -465,6 +485,7 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                   values={selectedGroups}
                   onChange={setSelectedGroups}
                   placeholder="Select worker groups..."
+                  label="Deploy target"
                   ariaLabel="Filter worker groups"
                 />
               )}
@@ -588,23 +609,16 @@ export function PackInventoryScreen({ refreshToken = 0 }: PackInventoryScreenPro
                               <td>{m.logType}</td>
                               <td>{m.source}</td>
                               <td>
-                                <select
-                                  aria-label={`Action for ${m.source}`}
+                                <SearchableSelect
+                                  label={`Action for ${m.source}`}
+                                  options={MAINTENANCE_ACTION_OPTIONS}
                                   value={action}
-                                  onChange={(e) =>
-                                    setEdit(m.logType, m.source, {
-                                      action: e.target
-                                        .value as PipelineFieldMapping["action"],
-                                    })
-                                  }
-                                >
-                                  <option value="rename">rename</option>
-                                  <option value="keep">keep</option>
-                                  <option value="coerce">coerce</option>
-                                  <option value="decode">decode</option>
-                                  <option value="overflow">overflow</option>
-                                  <option value="drop">drop</option>
-                                </select>
+                                  onChange={(v) => {
+                                    if (isMaintenanceAction(v)) {
+                                      setEdit(m.logType, m.source, { action: v });
+                                    }
+                                  }}
+                                />
                               </td>
                               <td>
                                 <input

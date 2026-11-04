@@ -21,6 +21,7 @@ import {
   buildDirectDcrRequest,
 } from "../../domain/dcr-request";
 import { hasEffectiveAction } from "../../domain/azure-permissions";
+import { operationAction } from "../../domain/least-privilege";
 import type { PermissionsResponse } from "../../domain/azure-permissions";
 import { RBAC_PERMISSIONS_API_VERSION } from "../permission-preflight";
 import { GUID_LIKE_TYPES, selectSchemaColumns } from "../../domain/schema-mapping";
@@ -491,11 +492,10 @@ export async function addDcrField(
 // Permission check: verify the write actions BEFORE attempting an update
 // ---------------------------------------------------------------------------
 
-/** The write action a DCR update PUTs with. */
-export const DCR_WRITE_ACTION = "Microsoft.Insights/dataCollectionRules/write";
-/** The write action a table schema edit PATCHes with. */
-export const TABLE_WRITE_ACTION =
-  "Microsoft.OperationalInsights/workspaces/tables/write";
+/** The write action a DCR update PUTs with (read from the least-privilege registry). */
+export const DCR_WRITE_ACTION = operationAction("dcr.write");
+/** The write action a table schema edit PATCHes with (read from the least-privilege registry). */
+export const TABLE_WRITE_ACTION = operationAction("table.write");
 
 /** Result of the pre-update permission check. */
 export interface DcrUpdatePermissionCheck {

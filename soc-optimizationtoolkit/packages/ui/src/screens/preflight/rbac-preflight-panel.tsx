@@ -45,6 +45,7 @@ import type {
   SetupPath,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { FallbackNotice } from "../../capabilities/fallback-notice";
 import {
   type AzureSideState,
@@ -272,7 +273,7 @@ export function RbacPreflightPanel({
     });
     // Fire-and-forget: saveCapabilityAudit swallows backend failures, and a
     // missed write only costs a re-audit later.
-    void saveCapabilityAudit(ports.contentCache, set, ports.logger);
+    void saveCapabilityAudit(ports.contentCache, set, config.tenantId, ports.logger);
   }, [azure, cribl, config.tenantId, config.clientId, target, setupPath, workerGroup, ports]);
 
   // The artifacts for whatever the identity was MEASURED to lack
@@ -314,16 +315,15 @@ export function RbacPreflightPanel({
       <div className="preflight-controls">
         <label className="field">
           <span className="field-label">Setup path (what will be checked)</span>
-          <select
+          <SearchableSelect
+            label="Setup path (what will be checked)"
+            options={SETUP_PATH_OPTIONS}
             value={setupPath}
-            onChange={(e) => setSetupPath(e.target.value as SetupPath)}
-          >
-            {SETUP_PATH_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => {
+              const opt = SETUP_PATH_OPTIONS.find((o) => o.value === v);
+              if (opt !== undefined) setSetupPath(opt.value);
+            }}
+          />
         </label>
       </div>
 

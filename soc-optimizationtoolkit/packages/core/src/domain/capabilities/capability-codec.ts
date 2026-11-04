@@ -23,12 +23,30 @@ import { AZURE_CAPABILITIES, CRIBL_CAPABILITIES, emptyCapabilitySet } from "./ca
 import type { Capability, CapabilitySet, CapabilityVerdict } from "./capabilities";
 
 /**
- * The ContentCache key the audit is stored under. ONE entry: the set carries the
- * connection it was measured against, and isSetForConnection is what decides
- * whether it applies - so a per-connection key here would duplicate that rule in
- * a second place, and the two could disagree.
+ * The LEGACY single-slot ContentCache key: until ADR 0009 every connection's
+ * audit was stored here, so measuring tenant B overwrote tenant A. Now read only
+ * to move its one audit to the tenant it was measured for.
  */
 export const CAPABILITY_AUDIT_CACHE_KEY = "capability-audit~v1";
+
+/**
+ * The ContentCache key one TENANT's audit is stored under (ADR 0009 decision 3;
+ * audit tenancy MEDIUM, capability-codec.ts:31). Per tenant and not per full
+ * audit key: within a tenant the set still carries the connection it was
+ * measured against, and isSetForConnection still decides whether it applies -
+ * the per-tenant key only stops one tenant's audit evicting another's.
+ */
+export function capabilityAuditCacheKey(tenantId: string): string {
+  const tenant = tenantId.trim().toLowerCase();
+  return `${CAPABILITY_AUDIT_CACHE_KEY}~${tenant === "" ? "none" : tenant}`;
+}
+
+/** Whether a stored audit key (capabilityAuditKey) was measured for `tenantId`. */
+export function auditKeyNamesTenant(connectionId: string | null, tenantId: string): boolean {
+  if (connectionId === null) return false;
+  const want = `tenant=${tenantId.trim().toLowerCase()}`;
+  return connectionId.split("|").some((part) => part.toLowerCase() === want);
+}
 
 /** The stored shape. Plain JSON; no methods, no undefined. */
 export interface CachedCapabilitySet {

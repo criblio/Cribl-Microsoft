@@ -29,6 +29,12 @@ export const CHECK_KINDS = [
   "eh-rule-listen",
   "eh-rule-manage",
   "eh-consumer-group",
+  // AZR-54: the group on each hub Azure created itself, read per hub after
+  // the hub listing; never the plan's named hub.
+  "eh-consumer-group-auto",
+  // AZR-59 (ADR 0008): the Cribl principal holds Azure Event Hubs Data
+  // Receiver on the hub, the namespace, or above; Data Owner differs.
+  "eh-role-receiver",
   "defender-plans",
   "defender-provider",
   "defender-export",
@@ -125,6 +131,37 @@ export function otherNameAlsoFound(alsoFound: number | undefined, kind?: CheckKi
   const [one, many] = (kind === undefined ? undefined : OTHER_NAME_UNIT[kind]) ?? ["object like it", "objects like it"];
   return n === 1 ? `1 other ${one} was also found` : `${n} other ${many} were also found`;
 }
+
+/** What each check kind reads, as the operator would say it (AZR-55). */
+export const CHECK_SUBJECT: Readonly<Record<CheckKind, string>> = {
+  "eh-namespace": "the namespace",
+  "eh-hub": "the hubs",
+  "eh-rule-send": "the Send rule",
+  "eh-rule-listen": "the Listen rule",
+  "eh-rule-manage": "the Manage rule",
+  "eh-consumer-group": "the consumer group on the hub",
+  "eh-consumer-group-auto": "the consumer group on each hub Azure created",
+  "eh-role-receiver": "the Cribl principal's Event Hubs receive role",
+  "defender-plans": "the Defender plans",
+  "defender-provider": "the Microsoft.Security provider",
+  "defender-export": "the continuous export",
+  "entra-setting": "the Entra diagnostic setting",
+  "activity-log-setting": "the Activity Log diagnostic setting",
+  "policy-assignment": "the policy assignment",
+  "policy-set-definition": "the initiative definition",
+  "policy-definition": "the custom policy definitions",
+  "policy-identity-roles": "the assignment identity's roles",
+  "policy-remediation": "the remediation tasks",
+  "xdr-streaming": "the XDR streaming settings",
+  "network-watcher": "the Network Watcher",
+  "storage-account": "the storage account",
+  "storage-container": "the blob container",
+  "storage-queue": "the storage queue",
+  "eventgrid-topic": "the Event Grid system topic",
+  "eventgrid-subscription": "the Event Grid subscription",
+  "flow-log": "the flow log",
+  "storage-rbac": "the storage role assignment",
+};
 
 /**
  * A hub arrival measurement (Azure Monitor IncomingMessages).

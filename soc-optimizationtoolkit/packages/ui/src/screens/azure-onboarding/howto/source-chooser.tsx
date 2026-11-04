@@ -21,6 +21,7 @@
 import type { OnboardingSourceId, SourceMode } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import type { ChooserRow } from "./howto-state";
+import { howtoModeRadioId, howtoRowAnchorId } from "./howto-state";
 
 export interface SourceChooserProps {
   readonly rows: readonly ChooserRow[];
@@ -59,6 +60,8 @@ export function SourceChooser({
         return (
         <li
           key={row.id}
+          id={howtoRowAnchorId(row.id)}
+          tabIndex={-1}
           className="azo-howto-row"
           data-source={row.id}
           data-mode={row.mode}
@@ -97,6 +100,7 @@ export function SourceChooser({
             <label>
               <input
                 type="radio"
+                id={howtoModeRadioId(row.id)}
                 name={`azo-mode-${row.id}`}
                 aria-label={`How-to ${row.title}`}
                 checked={row.mode === "manual"}

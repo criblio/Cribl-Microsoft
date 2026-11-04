@@ -41,6 +41,10 @@ export const PLAN_VALUE_KEYS = [
   "networkWatcher",
   "flowLogName",
   "criblPrincipalObjectId",
+  // AZR-59, ADR 0008 section 2: the DEDICATED Cribl principal the Event Hub
+  // source signs in as. Ids only; its client secret is never a plan value.
+  "criblTenantId",
+  "criblClientId",
 ] as const;
 
 export type PlanValueKey = (typeof PLAN_VALUE_KEYS)[number];
@@ -201,6 +205,14 @@ export const PLAN_VALUE_LABELS: Readonly<Record<PlanValueKey, PlanValueLabel>> =
   },
   criblPrincipalObjectId: {
     label: "Cribl service principal object ID",
-    info: "The object ID (not the client ID) of the service principal Cribl authenticates as. It is granted read access to the storage account and queue.",
+    info: "The object ID (not the client ID) of the service principal Cribl authenticates as. It is granted read access to the storage account and queue, and Azure Event Hubs Data Receiver on the hub.",
+  },
+  criblTenantId: {
+    label: "Cribl service principal tenant ID",
+    info: "The Entra tenant (directory) ID the Cribl service principal belongs to. The Event Hub source signs in to this tenant.",
+  },
+  criblClientId: {
+    label: "Cribl service principal client ID",
+    info: "The application (client) ID of a service principal dedicated to Cribl, not this app's own registration: anyone who can read the worker group's secrets can use its secret.",
   },
 };

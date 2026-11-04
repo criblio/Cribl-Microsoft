@@ -10,6 +10,7 @@
  */
 
 import { InfoTip } from "../../components/info-tip";
+import { SearchableSelect } from "../../components/searchable-select";
 import { formatCount, type LoggingMapUiState, type ToolbarCounts, type UiMapAssignment } from "./logging-map-state";
 import { LEGEND, TIPS } from "./logging-map-copy";
 
@@ -67,17 +68,18 @@ export function LoggingMapToolbar({
       <span className="lm-ctl">
         <label className="lm-ctl-label">
         Trace an assignment
-        <select
+        <SearchableSelect
+          label="Trace an assignment"
+          placeholder="None"
           value={state.tracedAssignment ?? ""}
-          onChange={(e) => onTrace(e.target.value === "" ? null : e.target.value)}
-        >
-          <option value="">None</option>
-          {traceOptions.map((a) => (
-            <option key={a.assignmentKey} value={a.assignmentKey}>
-              {optionLabel(a)}
-            </option>
-          ))}
-        </select>
+          options={[
+            // "None" stays a choice so a trace can be cleared, as the native
+            // select's empty option allowed.
+            { value: "", label: "None" },
+            ...traceOptions.map((a) => ({ value: a.assignmentKey, label: optionLabel(a) })),
+          ]}
+          onChange={(v) => onTrace(v === "" ? null : v)}
+        />
         </label>
         <InfoTip text={TIPS.trace} />
       </span>

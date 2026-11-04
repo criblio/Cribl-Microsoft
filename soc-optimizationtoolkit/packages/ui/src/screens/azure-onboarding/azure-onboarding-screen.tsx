@@ -11,9 +11,10 @@
  * howto/, validate/, cribl-source/ and dataflow/ state modules (pure,
  * unit-tested) and in @soc/core; this file wires them to the ports:
  *
- *   - MOUNT makes exactly TWO kvDocuments loads - the saved selection and the
- *     How-to progress document (ADR 0007 D1), each guarded by a cancelled
- *     flag - and ZERO Azure or Cribl calls. Nothing is read from Azure or
+ *   - MOUNT makes exactly THREE kvDocuments loads - the saved selection and
+ *     the How-to progress document (ADR 0007 D1), each guarded by a cancelled
+ *     flag, and the app-wide tenant to Cribl mapping (AZR-64) - and ZERO
+ *     Azure or Cribl calls. Nothing is read from Azure or
  *     Cribl until the operator asks (Find namespaces, Read Defender state,
  *     Load resource groups, Validate, Load worker groups, Read the namespace's
  *     rules, Read Cribl side, Watch for data), because each read spends the
@@ -33,9 +34,24 @@
  *   - VALIDATE never runs unpaced: without a `pacing` prop it is disabled with
  *     its reason; with one, the Azure port is wrapped in paceAzureManagement at
  *     the Validate rate. The budget is per run.
+ *   - THE WORKER GROUP the Cribl source is created in, and the live flow and
+ *     Cribl side are read from, is the TENANT'S mapped group (ADR 0009
+ *     decision 5). Only when the mapping names none for this tenant does the
+ *     screen's own picker decide, and the screen says so; an unreadable
+ *     mapping blocks all three rather than falling back (group-choice.ts).
  *   - THE CRIBL SOURCE is planned read-only, confirmed, then created by core's
  *     applyCriblSource. A pasted credential never reaches React state or the
  *     progress document: the panel holds it and hands the apply a closure.
+ *
+ * PERMISSIONS TO AUTOMATE (AZR-60). The Defender section reads the CACHED
+ * capability audit from the ports context and renders a banner over it; that
+ * adds no load and no Azure call on mount. Its How-to button focuses the
+ * source's How-to radio in the How-to section (the row is in Automate mode
+ * while the section renders, and steps appear only once it is switched), and
+ * its Re-check permissions is the shell's (the `onRecheckPermissions` prop) -
+ * this screen never re-audits. The shell also passes its audit key, so a set
+ * measured for another connection never blocks Deploy, and its clock, so a
+ * blocking denial says how old it is.
  *
  * Logging goes through ports.logger with the `azure-onboarding:` prefix and
  * never carries a secret.
@@ -52,6 +68,7 @@ import {
   encodeProgress,
   encodeSelection,
   laneTopics,
+  loadTenantDocument,
   listingRows,
   onboardingSource,
   paceAzureManagement,
@@ -60,7 +77,10 @@ import {
   planValidation,
   readAllPages,
   readOnboardingCriblSide,
+  readTenantCriblMapping,
   stepsFor,
+  TENANT_CRIBL_MAPPING_KEY,
+  tenantDocumentKey,
   validateAzureOnboarding,
   withCriblSource,
   withWorkerGroup,
@@ -87,6 +107,7 @@ import type {
   ReadyCriblSource,
   SectionStatus,
   SourceMode,
+  TenantCriblMappingRead,
   ValidationPlan,
   ValidationResult,
 } from "@soc/core";
@@ -118,6 +139,8 @@ import {
   canWriteProgress,
   chosenSourceIds,
   effectiveMode,
+  howtoModeRadioId,
+  howtoRowAnchorId,
   loadedProgress,
   progressLoadStateFrom,
   setChosen,
@@ -135,6 +158,7 @@ import {
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
+import { onboardingGroupChoice, onboardingGroupResolution } from "./cribl-source/group-choice";
 import { OnboardingDataflow } from "./dataflow/onboarding-dataflow";
 import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
 
@@ -208,12 +232,63 @@ export interface AzureOnboardingScreenProps {
    * disabled: it never runs unpaced.
    */
   readonly pacing?: BatchPacing;
+  /**
+   * The shell's Re-check permissions (the connection bar's audit refresh).
+   * Absent = the permission banner points at the connection bar instead.
+   */
+  readonly onRecheckPermissions?: () => void;
+  /** True while that re-check is in flight. */
+  readonly recheckingPermissions?: boolean;
+  /**
+   * The shell's CURRENT audit key. The audit hook keeps the previous
+   * connection's set until a new audit lands; with the key, that set is read
+   * as not checked rather than as this connection's verdict.
+   */
+  readonly permissionsAuditKey?: string;
+  /** The shell's clock, so a blocking denial says how old the check is. */
+  readonly permissionsNow?: () => string;
 }
 
-export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {}) {
+/** The How-to section's wrapper, focused when the source's own row is not rendered. */
+const HOWTO_ANCHOR_ID = "azo-howto-section";
+
+/**
+ * Bring a source's How-to switch into view and focus it - the control the
+ * banner tells the operator to use. Falls back to the row when the radio is
+ * disabled (progress cannot be written), and to the How-to section itself when
+ * the row is not rendered (the progress document has not loaded or could not
+ * be read). DOM only - no state, no IO.
+ */
+function showHowto(id: OnboardingSourceId): void {
+  const radio = document.getElementById(howtoModeRadioId(id));
+  const usableRadio = radio instanceof HTMLInputElement && !radio.disabled ? radio : null;
+  const el =
+    usableRadio ?? document.getElementById(howtoRowAnchorId(id)) ?? document.getElementById(HOWTO_ANCHOR_ID);
+  if (el === null) return;
+  if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.focus({ preventScroll: true });
+}
+
+export function AzureOnboardingScreen({
+  pacing,
+  onRecheckPermissions,
+  recheckingPermissions,
+  permissionsAuditKey,
+  permissionsNow,
+}: AzureOnboardingScreenProps = {}) {
   const { ports, config } = usePorts();
   const store = ports.kvDocuments;
   const logger = ports.logger;
+  // Every document this screen keeps is ONE TENANT'S (ADR 0009 decision 3):
+  // the selection, and the How-to progress with its plan values and the
+  // records of the Cribl sources this app created. They live under
+  // `{key}.{tenantId}`; the legacy single-tenant document is moved under the
+  // active tenant the first time it is read (loadTenantDocument), and is never
+  // read as a document again. Null when the connection has no tenant id, which
+  // reads as an unknown load and blocks every save.
+  const activeTenant = config.tenantId;
+  const selectionKey = tenantDocumentKey(COVERAGE_SELECTION_KEY, activeTenant);
+  const progressKey = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, activeTenant);
 
   const [load, setLoad] = useState<OnboardingLoadState>({ status: "loading" });
   const [selection, setSelection] = useState<CoverageSelection | null>(null);
@@ -248,7 +323,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
   // Cribl source (D7-D10) and the Cribl side (D17).
   const workerGroups = useStreamWorkerGroups(ports.cribl, { auto: false, logger });
+  // The group chosen on THIS screen: used only when the tenant to Cribl
+  // mapping names none for this tenant (groupChoice below).
   const [groupId, setGroupId] = useState("");
+  const [mappingRead, setMappingRead] = useState<TenantCriblMappingRead | "loading">(
+    store === undefined ? { kind: "unknown", reason: PROGRESS_SHELL_GAP_REASON } : "loading",
+  );
   const [rules, setRules] = useState<{ readonly ns: string; readonly read: ListRead<NamespaceAuthRule> } | null>(null);
   const [rulesMessage, setRulesMessage] = useState<PickerMessage | null>(null);
   const [readSeq, setReadSeq] = useState(0);
@@ -259,8 +339,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   useEffect(() => {
     if (store === undefined) return;
     let cancelled = false;
-    void store
-      .load(COVERAGE_SELECTION_KEY)
+    void loadTenantDocument(store, COVERAGE_SELECTION_KEY, activeTenant)
       .then(loadStateFrom, (error: unknown): OnboardingLoadState => ({
         // The port promises never to reject; if one does, it is a failed read,
         // and a failed read must block Save, never pass as a first run.
@@ -279,13 +358,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     return () => {
       cancelled = true;
     };
-  }, [store, logger]);
+  }, [store, logger, activeTenant]);
 
   useEffect(() => {
     if (store === undefined) return;
     let cancelled = false;
-    void store
-      .load(ONBOARDING_PROGRESS_KEY)
+    void loadTenantDocument(store, ONBOARDING_PROGRESS_KEY, activeTenant)
       .then(
         (answer: KvDocumentLoad): ProgressLoadState => progressLoadStateFrom(answer),
         (error: unknown): ProgressLoadState => ({ status: "read-unknown", reason: errorText(error) }),
@@ -306,7 +384,31 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     };
     // config is read once, at load, for the first-run defaults only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, logger]);
+  }, [store, logger, activeTenant]);
+
+  // The tenant to Cribl mapping (AZR-64): one app-wide document. Not read
+  // without a tenant id - there is no tenant to look up, and
+  // onboardingGroupResolution says so instead of reporting a read in flight.
+  const hasTenant = activeTenant.trim() !== "";
+  useEffect(() => {
+    if (store === undefined || !hasTenant) return;
+    let cancelled = false;
+    setMappingRead("loading");
+    void store
+      .load(TENANT_CRIBL_MAPPING_KEY)
+      .then(readTenantCriblMapping, (error: unknown): TenantCriblMappingRead => ({
+        kind: "unknown",
+        reason: errorText(error),
+      }))
+      .then((next) => {
+        if (cancelled) return;
+        setMappingRead(next);
+        logger?.info(`${LOG} tenant mapping loaded`, { load: next.kind });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, logger, hasTenant]);
 
   useEffect(
     () => () => {
@@ -369,11 +471,11 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   }
 
   async function save(): Promise<void> {
-    if (!saveAllowed || store === undefined || selection === null) return;
+    if (!saveAllowed || store === undefined || selection === null || selectionKey === null) return;
     const written = selection;
     setSaving(true);
     try {
-      await store.save(COVERAGE_SELECTION_KEY, JSON.parse(encodeSelection(written)) as unknown);
+      await store.save(selectionKey, JSON.parse(encodeSelection(written)) as unknown);
       setLoad({ status: "ready", decoded: { selection: written, dropped: [], usedDefaults: false } });
       // A row toggled while the save was in flight is NOT in the stored
       // document, so the screen stays dirty and Save stays enabled for it.
@@ -411,14 +513,14 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
    */
   function commitProgress(next: OnboardingProgress, what: string): boolean {
     const state = latestProgressLoad.current;
-    if (store === undefined || !canWriteProgress(state)) return false;
+    if (store === undefined || progressKey === null || !canWriteProgress(state)) return false;
     const shown = withSavedProgress(state, next);
     latestProgressLoad.current = shown;
     setProgressLoad(shown);
     const body = JSON.parse(encodeProgress(next)) as unknown;
     progressChain.current = progressChain.current.then(async () => {
       try {
-        await store.save(ONBOARDING_PROGRESS_KEY, body);
+        await store.save(progressKey, body);
         // A save clears only its own earlier failure. Any other message - a
         // notice set by the click that queued this write, such as a choice not
         // carried over between modes - must outlive the write it explains.
@@ -591,7 +693,18 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     }
   }
 
-  const criblPorts = { cribl: ports.cribl, azure: ports.azure, ...(logger === undefined ? {} : { logger }) };
+  // The group every Cribl write and read on this screen uses (AZR-64).
+  const groupChoice = onboardingGroupChoice(onboardingGroupResolution(mappingRead, activeTenant), groupId);
+  const effectiveGroup = groupChoice.groupId;
+
+  // ports.graph lets an Entra ID plan tie the client id to the object id whose
+  // role it reads (AZR-59 review); without it the confirm says "not cross-checked".
+  const criblPorts = {
+    cribl: ports.cribl,
+    azure: ports.azure,
+    ...(logger === undefined ? {} : { logger }),
+    ...(ports.graph === undefined ? {} : { graph: ports.graph }),
+  };
 
   async function onPlan(sourceId: OnboardingSourceId, credential: PlanCredential): Promise<PlanCriblSourceResult> {
     const source = onboardingSource(sourceId);
@@ -599,13 +712,19 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
     if (source === undefined || p === null) {
       throw new Error("the source or the saved progress is not available");
     }
+    if (effectiveGroup === "") {
+      throw new Error(groupChoice.blockedReason ?? "no worker group is chosen");
+    }
     const result = await planCriblSource(criblPorts, {
-      groupId,
+      groupId: effectiveGroup,
       lane: { source, subSelection: subSelectionOf(sourceId), otherLanes: otherLanesFor(sourceId) },
       values: p.planValues,
       measuredHubs,
       kvRecord: p.criblSources[sourceId] ?? null,
       credential,
+      tenantId: config.tenantId,
+      // ADR 0008 section 2: the app's own registration is never the Cribl principal.
+      ...(clientId === "" ? {} : { appClientId: clientId }),
     });
     if (result.kind === "already-applied" && p.criblSources[sourceId] === undefined) {
       commitProgress(withCriblSource(p, sourceId, result.record), "cribl source found");
@@ -631,7 +750,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   }
 
   async function onReadCriblSide(): Promise<void> {
-    const g = groupId.trim();
+    const g = effectiveGroup.trim();
     if (g === "" || progress === null) return;
     const inputs = Object.values(progress.criblSources)
       .filter((r): r is NonNullable<typeof r> => r !== undefined && r.groupId === g)
@@ -661,9 +780,16 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
   // -------------------------------------------------------------------------
 
   const liveLanes = useMemo(() => (progress === null ? [] : liveFlowLanes(progress)), [progress]);
-  const live = useLiveFlow({ cribl: ports.cribl, groupId: groupId === "" ? null : groupId, lanes: liveLanes, watching });
+  const live = useLiveFlow({
+    cribl: ports.cribl,
+    groupId: effectiveGroup === "" ? null : effectiveGroup,
+    lanes: liveLanes,
+    watching,
+  });
   const watchBlockedReason =
-    groupId === ""
+    groupChoice.blockedReason !== null
+      ? groupChoice.blockedReason
+      : effectiveGroup === ""
       ? "Choose a worker group under Cribl Stream source first."
       : liveLanes.length === 0
         ? "No Cribl source has been created yet, so there is nothing to watch."
@@ -679,8 +805,9 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
       verdicts: lastResult?.verdicts ?? null,
       arrival: lastResult?.arrival ?? null,
       criblSide: criblSideReading,
+      tenantId: config.tenantId,
     };
-  }, [selection, progress, lastResult, criblSideReading]);
+  }, [selection, progress, lastResult, criblSideReading, config.tenantId]);
 
   const banners = store === undefined ? [] : loadBanners(load);
   const firstExtra = sections.length + 2;
@@ -742,6 +869,12 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
                   target={target}
                   state={defenderState}
                   onState={setDefenderState}
+                  howtoSection={firstExtra + 1}
+                  onShowHowto={() => showHowto(DEFENDER_EXPORT_ITEM_ID)}
+                  onRecheckPermissions={onRecheckPermissions}
+                  recheckingPermissions={recheckingPermissions}
+                  permissionsAuditKey={permissionsAuditKey}
+                  permissionsNow={permissionsNow}
                 />
               ))}
           </NumberedSection>
@@ -764,6 +897,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
 
       <NumberedSection number={firstExtra + 1} title={HOWTO_SECTION_TITLES.howto} status="available" infoTip={HOWTO_TIP}>
         {progressMessage !== null && <PickerLine message={progressMessage} />}
+        <div id={HOWTO_ANCHOR_ID} tabIndex={-1}>
         <HowToPanel
           load={progressLoad}
           selection={selection}
@@ -774,6 +908,7 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
           onSetChosen={onSetChosen}
           onApplyPlanValues={onApplyPlanValues}
         />
+        </div>
       </NumberedSection>
 
       <NumberedSection number={firstExtra + 2} title={HOWTO_SECTION_TITLES.validate} status="available" infoTip={VALIDATE_TIP}>
@@ -798,8 +933,9 @@ export function AzureOnboardingScreen({ pacing }: AzureOnboardingScreenProps = {
             readSeq={readSeq}
             workerGroups={workerGroups.state}
             onLoadGroups={workerGroups.reload}
-            groupId={groupId}
+            groupId={effectiveGroup}
             onGroupChange={onGroupChange}
+            groupChoice={groupChoice}
             rules={rulesForPlan}
             onReadRules={() => void onReadRules()}
             topicsFor={topicsFor}

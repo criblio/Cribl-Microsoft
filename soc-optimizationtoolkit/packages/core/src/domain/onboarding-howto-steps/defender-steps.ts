@@ -6,7 +6,9 @@
  * come from defender-automation (DEFENDER_EXPORT_NAME,
  * SECURITY_AUTOMATIONS_API_VERSION, expectedExportFor); the whole export body
  * comes from its buildAutomationPutRequest; the rights come
- * from defender-permissions' two lists; the plan read from defender-plans.
+ * from defender-permissions' two lists, and the scope each is granted at from
+ * the least-privilege registry operation behind it; the plan read from
+ * defender-plans.
  * The connection string is never shown - the body names where it comes from.
  *
  * Pure: data and string building only.
@@ -22,15 +24,30 @@ import {
   expectedExportFor,
 } from "../defender-export/defender-automation";
 import {
-  DEFENDER_NAMESPACE_ACTIONS,
-  DEFENDER_SUBSCRIPTION_ACTIONS,
+  DEFENDER_NAMESPACE_OPERATIONS,
+  DEFENDER_SUBSCRIPTION_OPERATIONS,
 } from "../defender-export/defender-permissions";
 import { STANDARD_TIER } from "../defender-export/defender-plans";
+import { privilegeOperation } from "../least-privilege";
+import type { OperationId } from "../least-privilege";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 import { planNamespace } from "./eventhub-steps";
 import type { HowToStep } from "./steps";
 
 /** What the export body carries where the connection string goes. Never a value. */
+
+/**
+ * Where a Defender action is granted, from its registry operation's narrowest
+ * scope. The automation write lands on the resource group that holds
+ * CriblDefenderExport, not on the subscription the export watches (AZR-61
+ * audit, low: every line used to say "on the subscription").
+ */
+function grantedOn(operationId: OperationId): string {
+  return privilegeOperation(operationId).scope === "subscription"
+    ? "on the subscription"
+    : "on resource group {{resourceGroup}}";
+}
+
 export const CONNECTION_STRING_STAND_IN = "<connection string of the Send rule, primary key>";
 
 /**
@@ -116,10 +133,11 @@ export const DEFENDER_STEPS: readonly HowToStep[] = [
       ];
     },
     rbac: [
-      ...DEFENDER_SUBSCRIPTION_ACTIONS.filter((a) => a.action !== "Microsoft.Security/pricings/read").map(
-        (a) => `${a.action} on the subscription: ${a.label}.`,
+      // pricings/read has its own step (the plan check) above.
+      ...DEFENDER_SUBSCRIPTION_OPERATIONS.filter((a) => a.operationId !== "defender.pricings.read").map(
+        (a) => `${a.action} ${grantedOn(a.operationId)}: ${a.label}.`,
       ),
-      ...DEFENDER_NAMESPACE_ACTIONS.map((a) => `${a.action} on the namespace: ${a.label}.`),
+      ...DEFENDER_NAMESPACE_OPERATIONS.map((a) => `${a.action} on the namespace: ${a.label}.`),
     ],
     confirmHow: `Continuous export for {{subscriptionId}} shows the Event hub export on, Security alerts selected and target {{hubName}}; a resource named ${DEFENDER_EXPORT_NAME} exists in {{resourceGroup}}.`,
     dependsOnValues: ["subscriptionId", "resourceGroup", "region", "namespace", "hubName", "sendRule"],

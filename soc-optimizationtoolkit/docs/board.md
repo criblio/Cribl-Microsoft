@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 35 in progress, 166 done.**
+**106 in the backlog, 36 in progress, 188 done.**
 
 ## By menu item
 
@@ -26,22 +26,23 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Menu | Open | Done | Now |
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
-| Setup | 3 | 0 | 2 |
-| Sentinel Integration | 51 | 94 | 23 |
+| Setup | 5 | 5 | 2 |
+| Sentinel Integration | 51 | 95 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
-| Labs | 1 | 0 | 1 |
+| Labs | 3 | 2 | 2 |
 | Data Volume Inventory | 1 | 16 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 9 | 3 | 0 |
+| Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 27 | 23 | 7 |
-| Azure Logging Map | 3 | 1 | 1 |
+| Azure Native Source Onboarding | 31 | 35 | 11 |
+| Azure Logging Map | 4 | 1 | 2 |
+| Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 17 | 17 | 6 |
+| Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 129.
+Open work totals 142.
 
 ## Epics and features
 
@@ -50,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 41% (20/49)
+### `AZR` Azure native source onboarding - 49% (40/82)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -63,7 +64,8 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 18/31 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 25/41 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -115,16 +117,16 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 60% (102/170)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (104/172)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 41/89 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 50/61 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 51/62 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
-| `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
+| `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
 | `DBT-F7` Export instead of deploy - the offline path | DCR Automation | 0/1 | DBT-37 |
 
@@ -147,7 +149,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (35)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -173,7 +175,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   listKeys only after confirm; GET back and compare non-secret fields. Never
   enables a plan, never re-PUTs, never deletes. Recommendations, Secure Score,
   Regulatory Compliance, multi-subscription, repair and Remove are follow-up
-  cards. Done after Live Preview against a real subscription.
+  cards. Done after Live Preview against a real subscription. LIVE 2026-11-04
+  (Live Preview): the Defender section deployed CriblDefenderExport (Alerts
+  only) to hub ehjpedersoneastus in rg-jpederson-QuickstartLab after its
+  two-step confirm, and read it back; az security automation list agreed
+  (enabled, Alerts, that hub). Before the deploy the app said honestly that it
+  could not confirm there were no existing exports (no permission check covers
+  that list); az read 0. DELIVERY NOT VERIFIED: four Defender App Service
+  [SAMPLE ALERT]s raised at 13:13:24Z (about 2 minutes after the export was
+  created) did not reach the hub in 27 minutes (IncomingMessages 0). Unproven
+  whether a new export needs time before it forwards.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -201,7 +212,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   operator's admin account, lab subscription): item (1) of the ADR 0007 list
   passed: mount reads two KV keys and nothing else. The Defender deploy itself
   was not exercised (it writes Microsoft.Security/automations). Section 6 copy
-  names repository paths to operators (AZR-43).
+  names repository paths to operators (AZR-43). LIVE 2026-11-03 (Live Preview
+  on the working tree, operator's admin account, lab subscription, namespace
+  ehnsjpedersoneastus / hub ehjpedersoneastus, rule RootManageSharedAccessKey
+  only): ADR 0007 item 1 passed again: opening the screen read
+  azure-coverage-selection (404, no saved selection) and
+  azure-onboarding-progress (200) and made no ARM or Cribl call. Each key was
+  read twice because main.tsx wraps App in StrictMode and the dev server
+  double-runs effects; a production build reads each once. The Defender deploy
+  was not exercised.
 
 - **AZR-19** Azure Logging Map - where each logging setting is applied in the management group tree
   `AZR-F8` `story` `settled`
@@ -318,7 +337,29 @@ Started. Anything here with an unfinished dependency is called out on its card.
   defects carded: the arrival check can never succeed (AZR-40), result rows
   print raw {{placeholders}} (AZR-41), and results from previous plan values
   stay on screen unmarked after Apply (AZR-42); raw Azure error bodies do not
-  wrap (AZR-44).
+  wrap (AZR-44). LIVE 2026-11-03 (Live Preview on the working tree, operator's
+  admin account, lab subscription, namespace ehnsjpedersoneastus / hub
+  ehjpedersoneastus, rule RootManageSharedAccessKey only): ADR 0007 item 3,
+  partly. Two runs, 14 and 18 requests (with Entra, then Entra plus Defender),
+  every one a GET; the budget stayed far under 40 a minute, so the pacer
+  itself was not stressed. Recorded api-versions: namespace,
+  authorizationRules, eventhubs and consumergroups 2021-11-01;
+  providers/microsoft.aadiam/diagnosticSettings 2017-04-01 (403
+  AuthorizationFailed for microsoft.aadiam/diagnosticSettings/read, rendered
+  'could not be read' with the body, not absent); Microsoft.Security/pricings
+  2024-01-01, the Microsoft.Security provider 2021-04-01,
+  Microsoft.Security/automations 2019-01-01-preview (all 200);
+  IncomingMessages via the namespace's microsoft.insights/metrics with $filter
+  EntityName eq '<hub>', 2018-01-01. Verdicts matched the CLI's ground truth:
+  namespace, rules and Defender plan/provider 'as expected', consumer group
+  cribl 'not found' (404) and then 'as expected' after it was created,
+  CriblDefenderExport 'not found', the nine insights-logs-* hubs 'does not
+  exist yet', and the real quiet hub 'no messages in the window'. NOT
+  exercised: a Basic namespace, a renamed Defender export, the storage queue,
+  Event Grid and flow log reads (no Blob plan values). Two defects carded:
+  [[AZR-54]] (the auto-hub consumer-group check reads the named hub, a false
+  'as expected') and [[AZR-55]] (two checks of one step render as the same
+  sentence).
 
 - **AZR-33** Diagram shows a new live flow when data arrives in Cribl
   `AZR-F9` `story` `settled`
@@ -361,7 +402,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   2026-10-28 (Live Preview, branch feature/azure-onboarding-screen, operator's
   admin account, lab subscription): not exercised: no Cribl source exists to
   watch, and the toggle says so instead of polling. The metrics label form is
-  still unmeasured.
+  still unmeasured. LIVE 2026-11-03 (Live Preview on the working tree,
+  operator's admin account, lab subscription, namespace ehnsjpedersoneastus /
+  hub ehjpedersoneastus, rule RootManageSharedAccessKey only): ADR 0007 item 6
+  not exercised: no Cribl source exists to watch. The lane drew 'not measured'
+  on the namespace-to-Cribl hop and 'not created yet' on the source, with no
+  metrics call.
 
 - **AZR-34** Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)
   `AZR-F9` `story` `settled`
@@ -387,22 +433,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   INPUT type is `eventhub`; `azure_eventhub` is the DESTINATION type
   (live-architecture.ts and the vendored OpenAPI InputEventhub). Storage
   transports use the queue-driven `azure_blob` input. The source needs a
-  LISTEN-capable rule (Listen or Manage); the AZR-18 prerequisite picks a
-  SEND-capable rule for the Defender export, so its key is not reused unless
-  that rule also has Listen. This slice uses an EXISTING Listen-capable rule
-  chosen in a picker, or a pasted connection string whose host, key name and
-  EntityPath are checked against the namespace and its rules before any write.
-  Creating a Listen rule and a dedicated consumer group is [[AZR-36]]. Commit
-  and deploy go through the adopted claude-kit cribl-config-writes code:
-  deploy on /products/stream/groups/:g, falling back to /master/groups/:g only
-  on a 404, then configVersion compared with the commit. The secret body uses
-  `secretType`, not `type` (the existing writers' mistake is [[DBT-151]]).
-  Routing the new input to the Sentinel destination is [[AZR-35]], not this
-  card. NOTE 2026-10-26 (implementation, AZR-30..34 build): BUILT, not
-  verified live, and NOTHING has been written to a real worker group. Input
-  and secret bodies, the non-secret connection-string descriptor with
-  checkPastedCredential, the existing-object classifiers, laneTopics and
-  COMMIT_MARKERS are in `domain/cribl-onboarding-source/`. The usecase
+  LISTEN-capable rule (Listen without Manage since AZR-58 on 2026-11-03, which
+  refuses a Manage-capable key; ADR 0008 makes Entra ID the default); the
+  AZR-18 prerequisite picks a SEND-capable rule for the Defender export, so
+  its key is not reused unless that rule also has Listen. This slice uses an
+  EXISTING Listen-capable rule chosen in a picker, or a pasted connection
+  string whose host, key name and EntityPath are checked against the namespace
+  and its rules before any write. Creating a Listen rule and a dedicated
+  consumer group is [[AZR-36]]. Commit and deploy go through the adopted
+  claude-kit cribl-config-writes code: deploy on /products/stream/groups/:g,
+  falling back to /master/groups/:g only on a 404, then configVersion compared
+  with the commit. The secret body uses `secretType`, not `type` (the existing
+  writers' mistake is [[DBT-151]]). Routing the new input to the Sentinel
+  destination is [[AZR-35]], not this card. NOTE 2026-10-26 (implementation,
+  AZR-30..34 build): BUILT, not verified live, and NOTHING has been written to
+  a real worker group. Input and secret bodies, the non-secret
+  connection-string descriptor with checkPastedCredential, the existing-object
+  classifiers, laneTopics and COMMIT_MARKERS are in
+  `domain/cribl-onboarding-source/`. The usecase
   `usecases/create-cribl-source/`: planCriblSource makes GETs only;
   applyCriblSource re-checks the commit scope, secret and input, then runs
   listKeys or re-parses the paste, POSTs the secret with secretType text (a
@@ -438,7 +486,36 @@ Started. Anything here with an unfinished dependency is called out on its card.
   in a complete hub list; run Validate (read only) first" because the chosen
   namespace has no hubs. Every guess listed above is still a guess. Note: this
   section uses a native select for the worker group, not the shared
-  WorkerGroupField that DBT-134 made every other picker use.
+  WorkerGroupField that DBT-134 made every other picker use. LIVE 2026-11-03
+  (Live Preview on the working tree, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus / hub ehjpedersoneastus, rule
+  RootManageSharedAccessKey only): ADR 0007 items 4 and 5, read half. Through
+  the app proxy, all 200: GET master/groups (default, defaultHybrid,
+  AzureManaged, DatacenterEast, o11yDemo), /m/<g>/system/inputs, /m/<g>/routes
+  and /m/<g>/version/status for default and for DatacenterEast; GET
+  /m/<g>/system/secrets/<id> answered 404 for an absent secret. The plan for
+  the Defender lane (group DatacenterEast, hub ehjpedersoneastus, Root rule)
+  made only those GETs and armed a confirm naming the group, input id
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus, secret id ..._secret,
+  the key name and the three commit files. Create was NOT confirmed and
+  nothing was written to Cribl: the plan armed while the consumer group was
+  missing ([[AZR-56]]), the only Listen rule is Manage-capable and would have
+  been stored as the secret ([[AZR-58]]), and the operator chose Entra ID
+  OAuth as the default credential ([[AZR-59]]). Still unmeasured:
+  /products/stream/groups/<g> and /deploy through the proxy (reached only
+  inside apply; a top-level fetch without the app's token is 401), the files
+  the create dirties against COMMIT_MARKERS, secretType, the deploy route and
+  configVersion matching. LIVE 2026-11-04 (Live Preview, DatacenterEast,
+  namespace ehnsjpedersoneastus): the Event Hub lane created end to end with
+  the listKeys credential: input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus with its secret,
+  committed and deployed (DatacenterEast runs 7857821e). Read Cribl side then
+  read it as present (eventhub), and planning again reported 'Already created
+  ... matches the plan' with nothing armed. NOT yet live: the Entra ID
+  credential (AZR-59, no Cribl principal in the lab), the paste credential,
+  the Blob lane, and data arriving (nothing is exported to the hub yet). LIVE
+  2026-11-04 (Live Preview): no event has reached the created input yet; see
+  AZR-3 for why the hub is still empty.
 
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18`
@@ -449,7 +526,14 @@ Started. Anything here with an unfinished dependency is called out on its card.
   RootManageSharedAccessKey allowed but NOT preselected, with a note that a
   Send-only rule is safer), then an existing hub. Creating a namespace, hub or
   rule renders as visible, disabled controls and is a follow-up card. The
-  choice is held in screen state and not persisted.
+  choice is held in screen state and not persisted. LIVE 2026-11-03 (Live
+  Preview on the working tree, operator's admin account, lab subscription,
+  namespace ehnsjpedersoneastus / hub ehjpedersoneastus, rule
+  RootManageSharedAccessKey only): The picker took a pasted namespace resource
+  id; RootManageSharedAccessKey was offered but not preselected, and choosing
+  it showed the 'a dedicated rule with only Send rights is safer' warning. The
+  choice is screen state only and was lost on each dev-server reload, as
+  scoped (AZR-24 persists it).
 
 - **DBT-133** Make the package submittable to the Cribl Marketplace
   `DBT-F4` `story` `settled`
@@ -1048,11 +1132,71 @@ Started. Anything here with an unfinished dependency is called out on its card.
   policyDefinitions listing must accept $filter=policyType eq 'Custom' at
   api-version 2023-04-01 and return full ids. Second, a Send-only rule named
   as sendRule should read 'present but different' on the Manage rule step in
-  Live Preview.
+  Live Preview. LIVE 2026-11-03 (Live Preview on the working tree, operator's
+  admin account, lab subscription, namespace ehnsjpedersoneastus / hub
+  ehjpedersoneastus, rule RootManageSharedAccessKey only): Partly. The Manage
+  rule step (eh-rule-manage) read 'as expected' for RootManageSharedAccessKey,
+  which does carry Manage. NOT exercised: a Send-only rule reading 'present
+  but different' (the namespace has no such rule) and the policy-definition
+  listing (no management group id in the plan).
+
+- **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
+  `AZR-F9` `story` `settled`
+  OPERATOR DECISION 2026-11-03, asked during the ADR 0007 live pass when the
+  create was about to store RootManageSharedAccessKey: 'Offer both'. The
+  vendored Cribl OpenAPI InputEventhub sasl block supports mechanism
+  oauthbearer with clientId, tenantId, clientSecretAuthType (secret or
+  certificate), clientTextSecret / certificateName, oauthEndpoint and scope,
+  so the input can authenticate as an Entra service principal with RBAC 'Azure
+  Event Hubs Data Receiver' scoped to the hub, and no SAS key leaves Azure.
+  The Blob lane already uses tenant + client + secret. SCOPE: the credential
+  choice gains 'Entra ID (recommended)' as the default for Event Hub lanes;
+  the body builder emits the oauthbearer sasl block referencing a Cribl text
+  secret for the client secret; Validate gains a read of the principal's role
+  assignment on the hub (Data Receiver, or Data Owner), a refused read
+  unknown; the How-to gains the role-assignment step; Listen-only SAS stays as
+  the fallback per [[AZR-58]]. ADR 0007 (credential section) is amended BEFORE
+  code, and the amendment names what it falsifies. OPEN: which Cribl version
+  first ships eventhub oauthbearer (this leader's spec has it), the exact
+  oauthEndpoint and scope for Event Hubs (expected
+  https://<ns>.servicebus.windows.net/.default), and whether the identity is
+  the app's own Azure principal or a separate Cribl principal (the plan values
+  already carry 'Cribl service principal object ID'). Live check in Live
+  Preview before done. Reasoning in backlog.md section 6h-i. BUILT 2026-11-03
+  (pins; stays in progress until the ADR 0008 Unverified list is measured
+  live): Entra ID is the default credential for every Event Hub lane. The
+  input body uses sasl oauthbearer with login.microsoftonline.com, the tenant,
+  the client, clientTextSecret and the scope
+  https://<ns>.servicebus.windows.net/.default; it carries no SAS fields. Two
+  new plan values hold ids, criblTenantId and criblClientId. The plan reads
+  the consumer group and then the role assignments for criblPrincipalObjectId
+  (assignedTo, namespace then hub). Only Azure Event Hubs Data Receiver
+  qualifies. It refuses receiver-role-missing or receiver-role-unreadable,
+  receiver-role-overprivileged when the grant is Data Owner, app-principal
+  when the principal is the app's own client id or object id, and
+  principal-mismatch when Graph ties the client id to a different object id.
+  When Graph cannot check, the confirm says the principal was not
+  cross-checked. The apply stores only the client secret, never calls
+  listKeys, and refuses a pasted connection string. Validate gains
+  eh-role-receiver; How-to gains a receive-role step per Event Hub source (hub
+  or namespace scope). Built by one implementer; a correctness reviewer and a
+  security reviewer raised 8 findings, all confirmed and fixed with
+  mutation-checked pins; the gates were re-run by the orchestrator (7878 tests
+  green, build green). ADR 0008 corrected: the Blob lane signs in as the app's
+  own registration today, which is AZR-66. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): the credential choice offers
+  Entra ID first and selected by default on both Event Hub lanes, with tenant
+  id, client id and client secret fields. The create itself was NOT run in
+  Entra ID mode: the lab has no dedicated Cribl service principal yet, so ADR
+  0008's Unverified list is still unmeasured.
+  DECISION: How should the Cribl Event Hub source authenticate?
+    [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
+    [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
+    [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (18)
 
 Next to pick up. Nothing blocks these.
 
@@ -1277,9 +1421,97 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
+- **AZR-66** The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx
+  passes { kind: "client-secret", ...principal } where principal is
+  config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx),
+  i.e. the APP'S OWN app registration, and the operator pastes that
+  registration's secret, which is then stored as the Cribl text secret. That
+  registration holds ARM write rights (DCRs, role assignments, Defender
+  export), so anyone who can read the worker group's secrets gets them - the
+  class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's
+  Manage key. ADR 0008 section 2 claimed the Blob lane already used a
+  dedicated Cribl principal; it does not, and the ADR is corrected under
+  AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the
+  Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable),
+  refuse the app's own client id (reason app-principal, as AZR-59 does for
+  Event Hub), and update the Blob How-to steps; existing Blob inputs created
+  with the app's identity are reported, not silently rewritten.
+
+- **AZR-93** After a deploy reads the Defender export back, Validate and the dataflow diagram still show it 'not found' until Validate is re-run by hand
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-04 in the live pass (Live Preview, DatacenterEast). Validate
+  ran at 12:22 and read CriblDefenderExport as absent (true then). The
+  Defender section then deployed it and said 'CriblDefenderExport was created
+  and read back from Azure'. The Validate results and the dataflow diagram's
+  Defender node kept showing 'not found' in red on the same screen, with no
+  sign the verdict predated the deploy; re-running Validate (7:14 local) read
+  it 'as expected'. FAILURE: an operator who deploys and then looks at the
+  diagram is told the thing they just created does not exist. FIX (settled,
+  small): a deploy's successful read-back replaces that check's verdict
+  (defender-export) in the Validate result the diagram draws from, or marks
+  the whole Validate result as older than a write made since, naming the
+  write. Pin: deploy after an absent verdict -> the Defender node no longer
+  reads 'not found'. Never upgrade a verdict without a read; the read-back IS
+  a read. NOTE: id AZR-93 skips 68-92 on purpose: feature/multi-tenant-azure
+  (PR #200) holds AZR-61..65 and AZR-81..92.
+
+- **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
+  `AZR-F10` `bug` `settled`
+  FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
+  Labs GET and PUT the Event Grid provider registration at the subscription
+  (Microsoft.EventGrid/register/action), read NetworkWatcherRG and may write
+  the flow log on the watcher there, and the byo plan asked for Contributor on
+  the lab RG only while saying 'no subscription-scope rights are needed'.
+  AZR-61 review corrected the claim (role-plan justification, CLI header, and
+  a pin that no plan says it while asking for a subscription-scope role).
+  STILL OPEN: the ticket must either ask for register/action at the
+  subscription and Reader or Network Contributor on NetworkWatcherRG, or tell
+  the admin to pre-register the provider and create the watcher; the lab
+  preflight should check both.
+
+- **AZR-82** Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads
+  `AZR-F10` `bug` `settled`
+  FOUND by the AZR-61 audit (discrepancies 10 and 11, medium,
+  missing-from-plan). Policy assignments, definitions, exemptions and
+  remediations, and managementGroups/descendants, are read at the customer's
+  management group (logging-map-requests.ts,
+  onboarding-validation/requests.ts, read-logging-map.ts); the Entra
+  diagnostic settings read (GET
+  /providers/microsoft.aadiam/diagnosticSettings) is tenant-level. No plan
+  asks for Management Group Reader or the aadiam read, whose least privilege
+  for a service principal is undocumented (low confidence). FIX: per-tenant
+  feature rows for both, the aadiam one marked unverified and optional, and
+  Validate reporting a 403 there as unknown, never red.
+
+- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
+  `AZR-F10` `bug` `settled`
+  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
+  medium). A GET 2xx proves read only; the writes the features need (outputs,
+  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
+  user-based mode they are granted by policies.yml. With no worker group
+  chosen the probes hit undeclared leader paths and a non-admin's 403 is
+  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
+  measured manage right; skip the probes until a group is chosen (unknown, not
+  denied); state in the change requests that the Cribl-side least privilege is
+  'App user plus Org-admin install-time approval of policies.yml', with every
+  group in scope.
+
+- **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
+  `AZR-F10` `bug` `settled`
+  FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
+  onboard-batch associates the DCE with an AMPLS at its own subscription and
+  RG (Monitoring Contributor there); deployment-preview reads the DCE a DCR
+  names, which may sit elsewhere; Validate, Create Cribl source and Defender
+  read the Event Hub namespace, its rules and consumer groups, which may sit
+  in another subscription. FIX: name each as a resource-scoped feature row in
+  words (as listKeys is), and have the preflight report those scopes as
+  unknown rather than denied.
+
 ---
 
-## Backlog - next (46)
+## Backlog - next (50)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1954,9 +2186,75 @@ Settled and unblocked, sequenced behind now.
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
 
+- **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
+  `AZR-F10` `bug` `settled`
+  Not now because: Over-asking, not under-asking: an approver who grants it as
+  written gets a working app with broader rights than needed, so nothing fails
+  and no data is lost. It outranks features because it is the first thing a
+  security reviewer reading the existing-path ticket will push back on, but it
+  ranks below the open defects where a granted ticket still leaves a feature
+  failing (AZR-81, AZR-82, AZR-84).
+  FOUND by the AZR-61 audit (discrepancy 16, low, wrong-scope). Every
+  tables/write and savedSearches call addresses the workspace by full id, and
+  the registry's table.write scope is the workspace; Log Analytics Contributor
+  at the RG also carries VM-extension, storage listKeys and deployments rights
+  over everything in it. FIX: ask at the workspace (a resource-scoped row, as
+  the feature roles now derive), or offer a custom role with tables/read+write
+  and workspaces/read on the workspace.
+
+- **AZR-86** Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked
+  `AZR-F10` `bug` `settled`
+  Not now because: Each gap leaves a capability reading unknown where it could
+  read granted or denied, and unknown is honest: no screen claims a permission
+  it has not measured. The fixes need a live Graph measurement first (the
+  refusal shape is disputed in the repo), so ordering them before AZR-81..84,
+  where a granted ticket still fails at run time, would spend the live session
+  on the smaller cost.
+  FOUND by the AZR-61 audit (discrepancies 17, 18 and 21, low). Content
+  install also PUTs and DELETEs contentPackages and savedSearches
+  (content-install.ts), and a 403 on the DELETE is swallowed and resurfaces as
+  the original 400; Application.Read.All is asked but never probed, and the
+  repo disagrees with itself on whether Graph refuses with a 403 or an empty
+  200 (adapters.ts and proxies.yml vs list-service-principals.ts); the
+  background capability audit never measures the defender-* capabilities for
+  the existing setup path. FIX: add contentPackages/write and
+  savedSearches/write as feature checks; settle the Graph refusal shape live,
+  then probe it per tenant; run the subscription-scope evaluation in the
+  background audit, per tenant.
+
+- **AZR-88** The resource-creation change request omits the Event Hub tier and the Cribl principal's Event Hub data-plane grant
+  `AZR-F10` `bug` `settled`
+  Not now because: The failure is loud and early: plan-cribl-source refuses
+  the Basic namespace with a message that names the tier, so nobody loses data
+  or time beyond one recreate. The data-plane half depends on ADR 0008
+  reaching this branch, so it cannot be finished before that merge anyway.
+  FOUND by the AZR-61 audit (discrepancy 23, low, change-request-gap).
+  plan-cribl-source refuses a Basic namespace, but the ticket never says
+  Standard or higher, so an admin can create the one tier the app then
+  rejects. Once ADR 0008 (Entra ID default credential) lands here, the ticket
+  should also ask for Azure Event Hubs Data Receiver for the Cribl service
+  principal on the namespace or hub, which replaces listKeys for that
+  credential kind.
+
+- **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
+  `AZR-F10` `bug` `settled`
+  Not now because: Over-granting to an identity that lives only as long as the
+  lab and whose sole code path deletes the group: the excess is real but its
+  exposure window is the lab's TTL. Changing it touches the ABAC condition
+  analysis that keeps live lab deploys from failing halfway, so it should be
+  done with a live lab run, not ahead of the defects that fail today.
+  FOUND by the AZR-61 audit (discrepancy 24, low, excess-in-plan).
+  lab-foundation.ts only GETs and DELETEs the RG; resourceGroups/delete needs
+  no more than a custom role with resourceGroups/read and delete (or a
+  narrower built-in), and the RBAC Administrator condition
+  (LAB_RBAC_CONDITION) would then name that role instead of Contributor. FIX:
+  pick the role, change foundation-phase's role definition id and the
+  condition together, and re-pin the TTL grant analysis that looks for the
+  Contributor GUID.
+
 ---
 
-## Backlog - later (36)
+## Backlog - later (38)
 
 Settled, gated on something above.
 
@@ -2443,9 +2741,28 @@ Settled, gated on something above.
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
 
+- **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
+  `AZR-F10` `story` `settled`
+  AZR-63 review follow-up. runTenantSession restores the active connection
+  after EVERY tenant, so a Read all mints the active tenant's ARM and Graph
+  tokens once per tenant for no gain (two proxied requests each). AZR-63 made
+  every session request spend the run's pacer, so this costs budget time, not
+  429s. Fix: a batch form of the session that holds one lease and one
+  exclusive section across the run, swaps A to B to C with a proof before and
+  after each, and restores once. Reasoning in backlog.md section 6i.
+
+- **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
+  `AZR-F10` `story` `settled`
+  AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user
+  passes about 28 stops per tenant row to reach the next row's Read button.
+  AZR-63 named every tip (tenant, source, side) so a screen reader can tell
+  them apart; the remaining fix is a roving tabindex over the grid (arrow keys
+  between cells, Enter opens the reason) so the Read buttons are a few
+  keystrokes away. Reasoning in backlog.md section 6i.
+
 ---
 
-## Done (166)
+## Done (188)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4887,7 +5204,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   were not watched to the end.
 
 - **AZR-47** Arrival reads "no messages in the window" for a hub that does not exist
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   Not now because: The same panel already says the hubs are missing (the
   consumer-group rows read "not found" from a complete hub list), so an
   operator is not left believing the hubs exist; the arrival lines only fail
@@ -4917,6 +5234,12 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   review. Still to confirm in Live Preview against namespace AndyEH (hubs t1,
   t2, t3): with Entra selected, the nine insights-logs-* hubs should read
   "does not exist yet" and t2 should still read "no messages in the window".
+  LIVE 2026-11-03 (Live Preview on the working tree, operator's admin account,
+  lab subscription, namespace ehnsjpedersoneastus / hub ehjpedersoneastus,
+  rule RootManageSharedAccessKey only): Confirmed: with Entra selected the
+  nine insights-logs-* hubs read 'the hub does not exist yet, so nothing has
+  been sent to it' and the real quiet hub ehjpedersoneastus read 'no messages
+  in the window'.
 
 - **AZR-48** NOT_ONBOARDABLE still carries the repository-path wording AZR-43 removed, and the screen row calls its operator text `alternative`
   `AZR-F9` `bug` `settled` `verified: pins`
@@ -7031,6 +7354,548 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   and adding one would write to the operator's KV. NOTICED, NOT CHANGED
   (pre-existing fuzzy matches): flags -> TcpFlagsAck and category ->
   ThreatCategory on ASim, bytes -> ReceivedBytes alone on CommonSecurityLog.
+
+- **DBT-299** Every PR to main that changes what the app ships or Live Preview shows raises the 1.13.x patch version, and CI fails one that does not
+  `DBT-F4` `enabler` `settled` `verified: pins`
+  ASKED 2026-11-04 by the operator: 'as we merge new functions we should be
+  bumping the version 1.13.x so the x changes everytime we push to main'.
+  Measured: PRs #188, #192, #193, #198, #201 and #202 all merged with main
+  left at 1.13.0, because nothing asked for a bump and the rule lived only in
+  conversation. DECIDED 2026-11-04 by the operator: (1) scope = anything that
+  ships, and anything Live Preview shows (the footer reads package.json's
+  version at runtime, so a bump is visible there); docs/board/backlog-only PRs
+  need none. (2) Version number only: package.json and the lock move per PR;
+  packaging the .tgz, the release-notes section and the backlog IS CURRENT
+  line stay batched. BUILD: npm run bump (patch-bumps package.json and the
+  lock, no packaging); check-version-bump (pure evaluate + IO main, pinned)
+  run in CI on PRs to main; check-release-drift turns 'manifest ahead of the
+  tarball' from an error into a warning that names the release command
+  (package -- --version X.Y.Z, so the release does not bump twice), a manifest
+  BEHIND the tarball stays an error. DONE 2026-11-04 (pins): bump-version.mjs,
+  check-version-bump.mjs and the check-release-drift change, each rule
+  mutation-checked (five mutations, all caught); wired as npm run bump /
+  check-version-bump and a CI step on pull requests. This PR (#199) is its
+  first use: 1.13.0 -> 1.13.1. The rule is in CLAUDE.md under "Version bump on
+  every PR to main". Live check: the CI step on this PR. RENUMBERED 2026-11-04
+  three times: DBT-250, DBT-251 and DBT-253 were each taken by a PR (#203,
+  #204, #205) that merged to main first, because parallel sessions number new
+  cards from the highest id on main. DBT-299 sits outside that sequence on
+  purpose. Commits before the renames name the older ids.
+
+- **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. Step eh-consumer-group-auto
+  (eventhub-steps.ts, 'Create the consumer group {{consumerGroup}} on each hub
+  Azure creates') carries checkKinds ['eh-hub','eh-consumer-group'], and
+  requestsFor('eh-consumer-group') (onboarding-validation/requests.ts) GETs
+  consumergroups/{{consumerGroup}} on v.hubName, the plan's NAMED hub. For
+  Entra the hubs are the insights-logs-* hubs Azure creates, so the row
+  answers a different question. Reproduced: with no insights-logs-* hub in the
+  namespace, creating consumer group cribl on ehjpedersoneastus turned that
+  Entra row from 'not found' to 'as expected'. A false 'as expected' on a step
+  that is not done. FIX: for the auto-hub step, check the consumer group on
+  each auto-created hub present in a complete hub listing; with none present
+  the row says no hub exists yet (as the arrival lines do since AZR-47); a
+  refused or incomplete listing is unknown. Pin: a cribl group on the named
+  hub never satisfies the auto-hub step; mutation-check. DONE 2026-11-03
+  (pins): new check kind eh-consumer-group-auto replaces eh-consumer-group on
+  the auto-created-hub step. It plans the hub listing (shared with eh-hub) and
+  the usecase reads the group by name on each expected hub the COMPLETE
+  listing shows, in a second phase like arrival. No such hub yet is unknown
+  "unmeasurable" (Azure has not created them), never as expected or absent; a
+  refused or incomplete listing is unknown; a 404 on some hubs is
+  present-differs naming them, on all is absent; any other refusal is unknown
+  with its reason. maxReads counts the extra reads (capped at 20 hubs,
+  truncated beyond). The kind joined the lane transport set, which an early
+  run of the lanes pin caught. Mutation-checked: targeting every listed hub
+  fails 2 pins; losing the missing-hub bookkeeping fails 1. Live check
+  outstanding: against ehnsjpedersoneastus the Entra row should now read
+  unmeasurable while cribl exists only on ehjpedersoneastus. LIVE 2026-11-04
+  (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus): Validate read
+  'consumer group cribl on ehjpedersoneastus: as expected' on the plan's named
+  hub (Defender lane).
+
+- **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. validate-panel.tsx renders every result
+  row as `${stepTitle(row.stepId)}: ${verdict}`; the check kind is only inside
+  the (i) tip. A step with two checkKinds (eh-consumer-group-auto: eh-hub and
+  eh-consumer-group) therefore shows two identical sentences, one red 'not
+  found' and one green 'as expected', with nothing on screen to say which is
+  which. FIX: when a step has more than one check kind, each row says in words
+  what it checked (for example 'the hubs Azure creates' vs 'the consumer
+  group'), never the raw kind id. Lands with or after [[AZR-54]], which
+  changes what the second row checks. Pin: no two rows of one run render the
+  same visible text. DONE 2026-11-03 (pins): a Validate row names what it
+  checked (CHECK_SUBJECT, one phrase per check kind, exhaustive and distinct)
+  whenever its step has more than one check for the source, e.g. "... - the
+  hubs: not found" beside "... - the consumer group on each hub Azure created:
+  ..."; single-check rows are unchanged. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): the Entra lane printed the
+  two checks of the auto-created-hub step under different words ('the hubs:
+  not found' and 'the consumer group on each hub Azure created: cannot be
+  checked from Azure').
+
+- **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. With consumer group cribl absent on
+  ehjpedersoneastus (Validate 'not found', GET .../consumergroups/cribl 404),
+  the Defender lane's Create planned and armed, and the confirm did not
+  mention the consumer group. buildEventHubInputBody sets groupId to the
+  plan's consumerGroup (input-bodies.ts:147), so the created eventhub input
+  would fail to read. The plan already refuses until Validate has seen a hub
+  in a complete listing; the consumer group deserves the same gate. FIX: the
+  plan reads the consumer group by name and refuses on a 404, pointing at the
+  How-to step (or [[AZR-36]] once it exists); a refused read is unknown and
+  also refuses; the confirm names the consumer group. Pin both refusals and
+  the confirm line. DONE 2026-11-03 (pins): after the credential checks, the
+  plan GETs the consumer group by name on every hub the source will read
+  (buildHubConsumerGroupGetRequest). A 404 on any hub refuses
+  consumer-group-missing, naming the group and those hubs; any other refused
+  read refuses consumer-group-unreadable and is never taken as present. The
+  ready plan carries readsFrom (hubs and consumer group, null for Blob), and
+  the confirm says "Reads hub h1 with consumer group cribl." The plan GET
+  count went from 5 to 6 in the GET-only pin, and the screen fake gained the
+  consumer-group route. Mutation-checked: treating a 404 as present fails 1
+  pin. Live check outstanding with the resumed pass. LIVE 2026-11-04 (Live
+  Preview, DatacenterEast, namespace ehnsjpedersoneastus): the Entra lane's
+  Create stayed disabled ('No hub has appeared yet') while its hubs read not
+  found; the Defender lane armed only after Validate read its group as
+  expected.
+
+- **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
+  `AZR-F9` `bug` `settled` `verified: both`
+  Not now because: The sentence is still understood and names the right source
+  type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
+  fixed in that pass rather than ahead of the defects that would write a bad
+  source.
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The confirm's first line reads 'Create
+  a Azure Event Hubs source (eventhub) with id ...'; the article is fixed, so
+  the Blob lane reads 'a Azure Blob' too. FIX: choose the article from the
+  label, or reword so no article depends on it. Pin the exact confirm lines
+  for both transports. DONE 2026-11-03 (pins): the confirm now opens "New
+  Cribl source <id>, an Azure Event Hubs source (eventhub), in worker group
+  <g>." Both type labels start with Azure, and the pins fix the exact first
+  line for both transports and forbid " a A" anywhere in the confirm. LIVE
+  2026-11-04 (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus):
+  the confirm read 'an Azure Event Hubs source (eventhub)'.
+
+- **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
+  subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
+  the ADR 0007 live-verification pass. The Listen rule picker offers every
+  rule that can Listen, including RootManageSharedAccessKey (Listen, Manage,
+  Send), with no warning; on a namespace whose only rule is Root it is the
+  only choice. listKeys then stores that key as a Cribl text secret, so anyone
+  who can read secrets in the worker group holds MANAGE on the whole namespace
+  (reconfigure, delete, mint keys), not read on one hub. The Send picker for
+  the Defender export already warns that a dedicated rule is safer; the Listen
+  side does not. OPERATOR DECISION 2026-11-03: offer both Entra ID OAuth
+  (default, [[AZR-59]]) and a Listen-only SAS rule (fallback); a
+  Manage-capable rule is REFUSED for the Cribl source in both modes. FIX (this
+  card, the quick half): the Listen picker lists only rules that can Listen
+  without Manage (Send-and-Listen allowed but warned), and the plan refuses a
+  Manage-capable rule or pasted connection string by key name, naming the
+  safer rule to create. Pin with ruleCanManage. Nothing was written: the armed
+  confirm was cancelled. Reasoning in backlog.md section 6h-i. DONE 2026-11-03
+  (pins): one core predicate, ruleSafeForCriblSource (Listen and not Manage,
+  eventhub-arm.ts), now decides all three ways a key reaches the Cribl source.
+  The Listen picker offers only those rules, and when none qualifies it names
+  the Manage rules it left out and says to create a Listen-only rule. The
+  listKeys plan refuses a Manage rule (reason rule-can-manage) before any
+  Cribl call. The paste check refuses a Manage rule it can read, and refuses
+  RootManageSharedAccessKey BY NAME even when the rules could not be read and
+  the operator attested. All three share one sentence (manageRefusalDetail).
+  Two old pins that asserted Manage was accepted (connection-string.test.ts,
+  create-cribl-source.test.ts) and the DOM picker pin were changed
+  deliberately. Mutation-checked: dropping the plan refusal fails 1 pin;
+  dropping the by-name check fails 1 pin. Gap noticed, not fixed here: a
+  pasted HUB-scoped rule reads unknown-rule because hub-level rules are not
+  read, so the safest SAS rule cannot be pasted yet; that belongs with
+  [[AZR-36]] and [[AZR-59]]. Live check outstanding: in Live Preview against
+  ehnsjpedersoneastus (Root only), the picker should be empty with the Manage
+  message. LIVE 2026-11-04 (Live Preview, DatacenterEast, namespace
+  ehnsjpedersoneastus): the confirm said the source names the Cribl secret and
+  never holds the key; the create used a Listen-only rule (cribl-listen) and
+  the Manage-capable RootManageSharedAccessKey was never offered.
+
+- **DBT-249** 36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard
+  `DBT-F2` `bug` `settled` `verified: both`
+  REPORTED 2026-11-03 by the operator during the ADR 0007 live pass: "The
+  eventhub namespace drop down still doesn't have a filter box, this is the
+  standard for dropdowns. makes sure they all have it and update the claude
+  kit if needed or determine why we didn't follow the standard." The Event Hub
+  namespace picker listed dozens of shared-lab namespaces with no way to type
+  to find one. WHY THE STANDARD WAS NOT FOLLOWED: SearchableSelect
+  (components/searchable-select.tsx) arrived on 2026-07-07 (831f1a6, "adopt it
+  for long lists") and its rule - the default control for any list that can
+  grow - was written ONLY in that file's header comment. It never reached
+  packages/ui/CONTEXT.md, an ADR, CLAUDE.md, claude-kit or a check, and it was
+  scoped to lists that can grow, which left short lists native on purpose.
+  Every screen built since (the whole Azure onboarding screen among them) used
+  a native <select> because nothing an author reads said otherwise. Count on
+  2026-11-03: 36 native <select> in 22 non-test files under packages/ui/src
+  and apps/cribl-app/src. OPERATOR DIRECTION: every dropdown has the filter
+  box, not only long ones. SCOPE: (1) write the standard into claude-kit
+  standards/capra-ui.md and point packages/ui/CONTEXT.md at it; (2) a gate
+  test that fails on any native <select> in non-test .tsx outside
+  components/searchable-select.tsx, so the rule stops depending on memory; (3)
+  convert all 36, keeping each control's accessible name, its disabled reasons
+  and any disabled options (SelectOption gains disabled if needed), and update
+  the DOM tests that drove the native element. Live check in Live Preview on
+  the onboarding namespace picker. DONE 2026-11-03 (pins): (1) claude-kit
+  standards/capra-ui.md gained "Dropdowns have a filter box" plus the
+  ui-testing nativeSelects gate (kit 90deb9c); packages/ui/CONTEXT.md points
+  at it. (2) The gate is adopted at apps/cribl-app/src/platform/ui-testing
+  (recorded in .claude-kit.json) and scans packages/ui/src and the app shell;
+  ALLOW is empty. (3) All 35 native selects in 21 files are SearchableSelect
+  (three agents in parallel over disjoint files, then reviewed);
+  SearchableSelect is exported from @soc/ui for the app shell. (4)
+  SearchableSelect: `label` is REQUIRED and names the trigger (the label decoy
+  left it an unnamed button), so typecheck named 25 older unnamed call sites,
+  all now labelled; `title`; a pick or Escape returns focus to the trigger
+  (the conversions dropped focus to body, which broke DBT-208's focus return);
+  options take `disabled` (DBT-209's refused Action choices had become
+  clickable) and are restored as disabled. DBT-38's add-column CSS rule lost
+  its now-dead select half and became a child-combinator input rule, with its
+  pin updated. Mutation-checked: trigger name, filter name, focus return
+  (fails the DBT-208 pin too) and the disabled guard. FOLLOW-UP (operator
+  chose 2026-11-03): SearchableSelect gained clearLabel (a leading choice that
+  sends "" once something is chosen) and hasValue (chosen even when not in the
+  options, e.g. a pasted namespace id); the six onboarding pickers (namespace,
+  hub, rule, resource group, worker group, Listen rule) offer None. None on
+  the namespace resets hub and rule and drops a read in flight, and the
+  namespace picker stays enabled while a pasted namespace is set.
+  Mutation-checked: dropping the reset or ignoring hasValue each fails a pin.
+  Live check outstanding: the onboarding namespace picker in Live Preview.
+  LIVE 2026-11-04 (Live Preview, DatacenterEast, namespace
+  ehnsjpedersoneastus): the namespace, Event Hub, authorization-rule,
+  worker-group and Listen-rule dropdowns all opened with a filter box;
+  filtering 'jpedersoneastus' narrowed the namespace list to one.
+
+- **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
+  `AZR-F9` `story` `settled` `verified: both`
+  OPERATOR REQUEST 2026-11-03, during the ADR 0007 live pass: "We should also
+  detect if the user has granted the correct permissions for each Native
+  logging source configuration in Azure and if not put a banner on the section
+  that would automate it and tell the users to reference the How To section."
+  WHAT EXISTS: CAP-7a (merged) measures defender-plans.read,
+  defender-automation.read and defender-automation.write through the app-wide
+  permission check, whose results are cached (the connection bar's
+  "permissions: checked N days ago"). The Defender section ignores them and
+  still lists DEFENDER_SUBSCRIPTION_ACTIONS and DEFENDER_NAMESPACE_ACTIONS as
+  "needed, not yet measured" (ADR 0005 section 7, written before CAP-7a). The
+  How-to steps already carry per-step rbac lists. SCOPE: (1) one declaration
+  per automatable source of the capabilities its automation needs (Defender
+  today: plans.read, automation.read, automation.write; namespace listKeys is
+  CAP-7b, still unmeasured, and stays shown as unmeasured), kept beside
+  ITEM_AVAILABILITY so a source that becomes automatable must declare them;
+  (2) the section reads the CACHED capability results - no new ARM call on
+  mount, preserving ADR 0007 item 1 - and renders a banner: denied -> "Your
+  Azure identity cannot <action>, so this section cannot set <source> up.
+  Follow the How-to steps for it in section 8, or ask an administrator for
+  <role>." with a link to the source's How-to; unknown or never checked -> a
+  softer note saying it was not measured, with Re-check permissions, never
+  worded as denied (inventory-honesty: unknown is not denied); a grant-only
+  check (automations/write at subscription scope reads unknown on a miss, per
+  CAP-7a review) is never shown as denied; (3) a denied core capability
+  disables the section's deploy with that reason (cribl-app-permissions:
+  aria-disabled plus visible reason); (4) sources that are How-to only today
+  get no banner (nothing to automate) - their How-to rbac lists already say
+  what is needed. Pins: denied, granted, unknown, never-checked and grant-only
+  rows for the Defender section; no Azure call on mount. Live check in Live
+  Preview with an identity that lacks Microsoft.Security/automations/write.
+  SCOPE ITEM (3) WITHDRAWN 2026-11-03 by the operator: it was the card
+  author's addition, not the request, and it contradicted capabilities.ts rule
+  3 (the audit informs, never forbids). The first build disabled Deploy on a
+  measured core denial; the operator chose advisory, so nothing disables
+  Deploy. DONE 2026-11-03 (pins), 8068fc4 plus the advisory follow-up: core
+  domain/onboarding-sections/automation-permissions.ts holds
+  AUTOMATION_PERMISSIONS (one entry per available item; Defender: plans.read
+  informational, automation.read and automation.write core, the write
+  grant-only; listKeys listed as not measured) and the pure
+  automationPermissionView, which reads the CACHED capability set only for the
+  current audit key. A measured core denial is an error banner naming the
+  action, the role and the How-to row (with the check's age and Re-check
+  first) plus a caution beside Deploy as its aria-describedby; Deploy stays
+  clickable behind its two-step confirm. Unknown, never-checked, another
+  connection's set and a grant-only miss read as not measured, never as
+  denied. The banner's How-to button focuses the source's How-to switch. Mount
+  still makes two KV loads and no Azure call. ADR 0005 addendum records it.
+  Mutation-checked: removing the grant-only rule fails a core and a UI pin;
+  disabling Deploy on a caution fails two UI pins. Live check outstanding: an
+  identity without Microsoft.Security/automations/read in Live Preview. LIVE
+  2026-11-04 (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus):
+  the Defender section showed the not-measured note naming the unmeasured
+  actions, with 'Go to the How-to steps' and 'Re-check permissions', and
+  Deploy stayed available. The DENIED kind was not seen live (nothing measured
+  as denied in this lab).
+
+- **AZR-61** Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope
+  `AZR-F10` `enabler` `settled` `verified: pins`
+  OPERATOR REQUEST 2026-11-03: "an audit of what the app does and what the
+  least privileges are for each function it needs to ensure the change
+  requests are accurate." SCOPE: inventory every function the app performs
+  (setup, DCR automation, Sentinel integration, packs, onboarding, validate,
+  logging map, labs, discovery...), every Azure ARM, Microsoft Graph and Cribl
+  API call behind each (method, path, scope), and the least built-in role or
+  specific action at the narrowest scope that permits it, with Microsoft Learn
+  citations. Lands as ONE registry in @soc/core that app-permissions, the
+  change-request generators, the permission preflight and AZR-60 all read -
+  never a second list - with a pin that every Azure call site in the code maps
+  to a registry row (a call with no row fails). Discrepancies with today's
+  app-permissions plan are reported, not silently fixed. Reasoning in
+  backlog.md section 6i. DONE 2026-11-03 (pins), a296663 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit. Live check
+  outstanding: the lab has one Azure tenant, so multi-tenant behaviour is
+  proven with fakes until a second test tenant exists (ADR 0009).
+
+- **AZR-62** Setup: paste a comma-delimited list of tenant ids, get one connection per tenant and a downloadable change request for each
+  `AZR-F10` `story` `settled` `verified: pins`
+  OPERATOR REQUEST 2026-11-03. Decision 1: one app registration per tenant,
+  one connection profile per tenant (azure-profiles). SCOPE: Setup accepts a
+  comma (and newline) delimited list of tenant ids, validates each as a GUID
+  (invalid ones named, duplicates collapsed), creates or reuses a connection
+  profile per tenant without overwriting an existing one's secret, and offers
+  a change request per tenant to download (and all as one archive or a
+  combined file): create the app registration in THAT tenant, the audited
+  least privileges from AZR-61 with their scopes, and the secret hand-back.
+  Built on domain/change-request; every placeholder visible when a value is
+  unknown. Reasoning in backlog.md section 6i. DONE 2026-11-03 (pins),
+  d5dacd77 on feature/multi-tenant-azure: built test-first, adversarially
+  reviewed (every confirmed finding fixed and its pin mutation-checked), and
+  every CI gate re-run green by the operator's session after the last commit.
+  Live check outstanding: the lab has one Azure tenant, so multi-tenant
+  behaviour is proven with fakes until a second test tenant exists (ADR 0009).
+
+- **AZR-63** Multi-tenant native logging gap dashboard: per tenant, configured in Azure vs not, onboarded to Cribl vs not
+  `AZR-F10` `story` `settled` `verified: pins`
+  OPERATOR REQUEST 2026-11-03: "a dashboard that shows each tenant and a green
+  or red indicator for what is being collected vs what is already produced and
+  onboarded to cribl." SCOPE: a screen listing each connected tenant against
+  each Azure native logging source (the onboarding catalog: Defender export,
+  Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...),
+  with two indicators per cell - configured in Azure, onboarded to Cribl -
+  each green, red or UNKNOWN (inventory-honesty: a refused or unread check is
+  never red). Reuses the Validate classifiers per tenant through that tenant's
+  connection; Cribl side through AZR-64's mapping. Reads only on request,
+  paced per tenant within the shared budget; mount makes no Azure call. Per
+  the house dashboard standards, every tile has an (i). Reasoning in
+  backlog.md section 6i. DONE 2026-11-03 (pins), ff9e1313 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit. Live check
+  outstanding: the lab has one Azure tenant, so multi-tenant behaviour is
+  proven with fakes until a second test tenant exists (ADR 0009).
+
+- **AZR-64** Tenant to Cribl mapping: one workspace for every tenant, or a worker group per tenant, chosen by the operator
+  `AZR-F10` `story` `settled` `verified: pins`
+  Decision 2 (operator 2026-11-03): build for both. SCOPE: a persisted mapping
+  (KV) from tenant to Cribl destination (the shared group, or a group per
+  tenant), defaulting to unset rather than guessing; Cribl source ids carry
+  the tenant so two tenants' sources never collide in one group; the gap
+  dashboard and the onboarding create read the mapping. Reasoning in
+  backlog.md section 6i. DONE 2026-11-03 (pins), 713abf7f on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit. Live check
+  outstanding: the lab has one Azure tenant, so multi-tenant behaviour is
+  proven with fakes until a second test tenant exists (ADR 0009).
+
+- **AZR-65** Changing the Azure tenant keeps showing the previous tenant's worker groups
+  `AZR-F10` `bug` `settled` `verified: pins`
+  KNOWN since the 2026-08-20 architecture audit and left unfixed because the
+  product was single-tenant (project memory, now reversed):
+  use-sample-sources.ts's started ref is never cleared, and cloudPorts is
+  memoized on activeConfig.tenantId, so a tenant change rebuilds ports,
+  re-fires the effect, and the guard swallows it. With multi-tenant customers
+  this is a live defect. FIX: reset on the tenant key; pin a tenant switch
+  re-reads. Then sweep for the same single-tenant assumption elsewhere (refs
+  or caches keyed on nothing, or on the first config). Reasoning in backlog.md
+  section 6i. DONE 2026-11-03 (pins), 8cb9f896 on feature/multi-tenant-azure:
+  built test-first, adversarially reviewed (every confirmed finding fixed and
+  its pin mutation-checked), and every CI gate re-run green by the operator's
+  session after the last commit. Live check outstanding: the lab has one Azure
+  tenant, so multi-tenant behaviour is proven with fakes until a second test
+  tenant exists (ADR 0009).
+
+- **AZR-67** Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND 2026-11-03 by the architecture audit (duplicated decision).
+  classify.ts judges the eh-rule-listen check with ruleCanListen ("Listen or
+  Manage"), while planCriblSource and the Listen picker use
+  ruleSafeForCriblSource since AZR-58. Seen live the same morning: "Create the
+  rule RootManageSharedAccessKey that Cribl reads with: as expected" for a
+  rule the create now refuses. FIX: eh-rule-listen uses
+  ruleSafeForCriblSource; a Manage-capable rule is present-differs naming the
+  rights; pin it; update the stale connection-string.ts header. DONE
+  2026-11-03 (pins): eh-rule-listen now uses ruleSafeForCriblSource, the same
+  rule the create applies. A Manage-capable rule reads present-differs
+  (expected "Listen, without Manage"), and Listen-only or Listen-and-Send
+  reads as expected. The pin failed before the fix and passes after. The stale
+  connection-string.ts header is corrected. Live check outstanding: against
+  the lab namespace (only RootManageSharedAccessKey), the Cribl-reads-with
+  step should now read present but different. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): Validate showed
+  RootManageSharedAccessKey as 'present but different' (plan Listen without
+  Manage, Azure Listen, Manage, Send), and the Listen-rule picker offered only
+  cribl-listen.
+
+- **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects
+  every Azure credential from fixed KV keys (azureBasic, azureArmToken,
+  azureGraphToken), and the app KV store is shared by every tab AND every user
+  of the app. runTenantSession swaps those keys to tenant N, and its lease
+  plus the before-and-after tenant proof protect ITS OWN batch only.
+  apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock
+  admits one tenant at a time, and 'Other TABS are not covered by the lock'.
+  Only Save and connect and the secret probe read the lease; ordinary reads in
+  another tab (the onboarding screen, Validate, the Logging Map, the
+  dashboard) do not. FAILURE: user B has the onboarding screen open on tenant
+  A while user C runs Read all on the gap dashboard. B's tenant-wide reads
+  (Graph directory, the subscription list, management groups, /tenants) answer
+  for tenant N and are shown as tenant A's. Subscription-scoped reads mostly
+  refuse (another tenant's subscription ids), which reads as a permission
+  problem that does not exist. Writes (Deploy, Create Cribl source) would
+  carry tenant N's token for tenant A's targets. OPTIONS (undecided): (a)
+  every ordinary batch reads the lease first and refuses while another holder
+  has it - one KV read per batch from the 100 req/min budget; (b) the slot
+  records its owner tenant beside the token, and every ordinary batch checks
+  it is its own tenant before sending and again after, as the session does;
+  (c) multi-tenant reads run only when no other tab or user is active -
+  unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a
+  pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009
+  must say this risk exists until it is fixed. DECIDED 2026-11-03 by the
+  operator: option (b), an owner check per batch. The slot records the tenant
+  that owns it; every ordinary Azure batch (reads AND writes) checks the owner
+  is its own tenant before sending and again after, and a mismatch or an
+  unreadable owner makes the batch unknown (writes are refused before
+  sending), never red or absent. DONE 2026-11-03 (pins), 1739de9a on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (ten
+  findings, eight distinct, all confirmed and fixed, each new pin
+  mutation-checked), and every CI gate re-run green by the operator's session
+  after the commit. The owner record now carries tenant AND client; a
+  switching marker is written before every slot change; write resends after a
+  429 and 401 re-mints re-check the owner; the Diagnostics panels go through
+  the slot. Cost and the remaining unproven cases (no compare-and-swap, a read
+  admitted just before a swap is sent but discarded, KV reads vs the 100
+  req/min budget unmeasured, pre-AZR-92 bundles in other tabs) are in ADR 0009
+  decision 2. Live check outstanding: the lab has one Azure tenant.
+
+- **AZR-75** No change request asks for Event Hub listKeys, which Create Cribl source (listKeys credential) and the Defender export both call
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 least-privilege audit (comparison discrepancy, severity
+  high). POST .../authorizationRules/{rule}/listKeys is an /action Reader does
+  not grant, so Validate's eh-rule checks pass under Reader while listKeys
+  returns 403; no role plan, FEATURE_ROLES or ticket asked for any role that
+  grants it. FIX (AZR-61 branch): a feature role read from the registry -
+  Azure Event Hubs Data Owner on the namespace (scope level 'resource', named
+  in words because the namespace may sit in any resource group) - suppressed
+  only where subscription Contributor/Owner already covers it; the
+  justification states the Reader-passes-Validate trap. Unmeasured by design
+  (CAP-7b: never probed, a probe returns a key), which the ask-equals-measure
+  pin now records instead of hiding. DONE 2026-11-03 (pins), a296663 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit.
+
+- **AZR-76** The preflight measures the Defender export's actions but no change request asks for a role that grants them
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (severity high).
+  REQUIRED_ACTIONS['existing-subscription'] checks pricings/read,
+  automations/read and automations/write, and no plan asked for Security Admin
+  or any role holding automations/write. FIX (AZR-61 branch): two feature
+  roles read from the registry - Security Admin on the resource group that
+  holds CriblDefenderExport, and Security Reader on the subscription
+  (suppressed wherever subscription Reader already covers it). DONE 2026-11-03
+  (pins), a296663 on feature/multi-tenant-azure: built test-first,
+  adversarially reviewed (every confirmed finding fixed and its pin
+  mutation-checked), and every CI gate re-run green by the operator's session
+  after the last commit.
+
+- **AZR-77** The role-assignment change request leaves out the feature roles the app-registration ticket and the preflight both cover
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (severity medium). roleAssignmentRequest was built
+  from the setup path's roles only, and Setup offers only that ticket to the
+  subscription owner, so the feature gaps the preflight reported (Sentinel
+  content, the DCR grant) were gaps no ticket the owner saw asked to close.
+  FIX (AZR-61 branch): the ticket lists the RBAC half of appPermissionPlan -
+  the path's own roles unchanged, then each feature role tagged [feature] with
+  its condition and justification. DONE 2026-11-03 (pins), a296663 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit.
+
+- **AZR-78** Bring-your-own lab: the plan says the app cannot assign roles, but every lab deploy assigns its TTL identity Contributor and aborts when it cannot
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (severity medium), confirmed in
+  foundation-phase.ts: the ttl-role-assignment step runs in both
+  resource-group modes. rolePlanForSetupPath('lab-byo-rg') asked for
+  Contributor only, its CLI comment said 'the app cannot assign roles on this
+  path', and REQUIRED_ACTIONS['lab-byo-rg'] checked roleAssignments/write as a
+  non-gating DCR-grant feature. FIX (AZR-61 branch): RBAC Administrator on the
+  lab resource group, conditioned to Contributor and Monitoring Metrics
+  Publisher for service principals (the lab-new-rg condition), assigned in the
+  portal; the preflight check is CORE with the TTL label; the CLI comment
+  block says so. Contributor alone now reads as not deploy-ready for a byo
+  lab, which is true. DONE 2026-11-03 (pins), a296663 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit.
+
+- **AZR-79** Bring-your-own lab preflight does not check resourceGroups/write, which the deploy needs to tag the group
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (severity medium), confirmed in
+  foundation-phase.ts: an existing group's TTL tags are PATCHed in both modes,
+  and labRequiredActions checked resourceGroups/write only in create-new mode,
+  so a principal without it passed the preflight and failed at the first step.
+  FIX (AZR-61 branch): bring-your-own checks it as 'Tag the lab resource group
+  with its TTL', action read from the registry. DONE 2026-11-03 (pins),
+  a296663 on feature/multi-tenant-azure: built test-first, adversarially
+  reviewed (every confirmed finding fixed and its pin mutation-checked), and
+  every CI gate re-run green by the operator's session after the last commit.
+
+- **AZR-80** How-to rbac lines put the Defender automation write on the subscription and name Contributor where Azure Event Hubs Data Owner is the least role
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (two severity-low discrepancies cited by file and
+  line). The Defender export step rendered automations/write 'on the
+  subscription' though the automation lives in a resource group; the Event Hub
+  namespace and hub steps said '(Contributor includes it)'. FIX (AZR-61
+  branch): both read the least-privilege registry - the Defender line takes
+  its scope from the operation (on resource group {{resourceGroup}}), the
+  Event Hub lines take the operation's least role. DONE 2026-11-03 (pins),
+  a296663 on feature/multi-tenant-azure: built test-first, adversarially
+  reviewed (every confirmed finding fixed and its pin mutation-checked), and
+  every CI gate re-run green by the operator's session after the last commit.
+
+- **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (discrepancy 22, low, wrong-role) and by AZR-61
+  review. blob-rbac said 'User Access Administrator or Owner' where RBAC
+  Administrator conditioned to the two blob roles is least; the flow-log line
+  named Network Contributor alone though the PUT also needs
+  networkWatchers/configureFlowLog/action and storage listKeys; the
+  storage-account line said 'Contributor includes it' where Storage Account
+  Contributor is least; the Event Grid line spelled the subscription action
+  without its systemTopics segment. FIX (AZR-61 branch): every one of these
+  lines reads operationAction / leastRoleFor / extraActions from the registry,
+  and a pin holds any '(X includes it)' line that names a registry action to
+  that action's least role. DONE 2026-11-03 (pins), a296663 on
+  feature/multi-tenant-azure: built test-first, adversarially reviewed (every
+  confirmed finding fixed and its pin mutation-checked), and every CI gate
+  re-run green by the operator's session after the last commit.
 
 - **DBT-254** Two copies of "is this an ASim table?" disagreed on case
   `DBT-F1` `bug` `settled` `verified: pins`

@@ -45,6 +45,7 @@ function Harness({ cribl, auto = true }: { cribl: CriblClient; auto?: boolean })
             options={groups.map((g) => ({ value: g.id, label: g.id }))}
             value=""
             onChange={() => {}}
+            label="Cribl worker group"
             ariaLabel="Filter worker groups"
           />
         )}

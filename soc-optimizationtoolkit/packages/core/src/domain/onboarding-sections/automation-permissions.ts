@@ -1,0 +1,411 @@
+/**
+ * Automation permissions - WHAT EACH AUTOMATABLE SOURCE NEEDS FROM AZURE, AND
+ * WHAT THE CACHED AUDIT SAYS ABOUT IT (AZR-60).
+ *
+ * The operator asked for each section that automates a source to say when the
+ * Azure identity lacks the permissions to automate it, and to point at the
+ * How-to steps instead. This module is both halves: the DECLARATION per
+ * automatable source ({@link AUTOMATION_PERMISSIONS}), and the pure function
+ * from that declaration plus the capability set the shell already holds to a
+ * banner model ({@link automationPermissionView}).
+ *
+ * KEPT BESIDE ITEM_AVAILABILITY ON PURPOSE. A source that becomes automatable
+ * (status "available") without a declaration here would render no banner, and
+ * silence reads as "you have what this needs". The pin "declares every
+ * automatable item and no other" fails until it has one, and
+ * {@link undeclaredAutomatableItems} is that check as a function so the pin can
+ * be shown to fail. A not-built source has no declaration and no banner: there
+ * is nothing to automate, and its How-to rbac lists already say what it needs.
+ *
+ * NO AZURE CALL. The view reads the CACHED CapabilitySet (the connection bar's
+ * "permissions: checked N ago"), so mounting the screen still costs nothing
+ * (ADR 0007 item 1). Re-measuring is the operator's Re-check permissions.
+ *
+ * ONLY THIS CONNECTION'S SET. The audit hook keeps the previous connection's
+ * set until the new audit lands, so a caller passes the audit key and a set
+ * measured for another connection is read as never checked here
+ * (usableCapabilitySet). Without that guard a connection switch would warn
+ * against Deploy on verdicts nobody measured for the new identity.
+ *
+ * THE CHECK'S AGE IS IN THE DENIAL COPY. The set comes from a one-slot cache
+ * that is re-measured only on a key change or a manual re-check, so a denial
+ * can be days old. Given `nowIso`, the denied banner and deploy caution say
+ * when the check ran ("the permission check 3 days ago found ...") and offer
+ * Re-check permissions first.
+ *
+ * FIVE STATES, AND ONLY ONE OF THEM IS A DENIAL:
+ *
+ *   granted        measured, and the identity can do it
+ *   denied         measured, and it cannot
+ *   unknown        an audit ran but did not measure this capability - the setup
+ *                  path does not check it, or it is GRANT-ONLY and was not
+ *                  granted at the subscription
+ *   never-checked  no audit has run for this connection
+ *   unreachable    no Azure identity is configured at all
+ *
+ * unknown and never-checked are never worded as denied
+ * (claude-kit standards/inventory-honesty.md: an audit that has not run is not
+ * evidence of a denial). GRANT-ONLY: automations/write is evaluated at the
+ * subscription while the automation lives in a resource group the operator
+ * picks later, so a miss there says nothing about a role on that group.
+ * capability-mapping records nothing for it, and this view also turns a cached
+ * `denied` for it into unknown, so a set written before that rule cannot
+ * resurrect the claim.
+ *
+ * NOTHING HERE DISABLES DEPLOY. capabilities.ts rule 3 holds: the audit
+ * informs and offers, never forbids (operator decision 2026-11-03, which
+ * withdrew a block the first build put on a measured core denial). A measured
+ * denial of a core capability is an error banner plus a caution beside Deploy
+ * that Azure will likely refuse it; Deploy stays clickable, its two-step confirm
+ * is unchanged, and Azure's own answer at the write is reported as it comes. A
+ * capability deploy does not need (plans.read) is `informational`: its denial
+ * only warns.
+ *
+ * VISIBLE COPY. Every string here reaches the screen: no card ids, dates or
+ * phases (the copy-history gate in the ui package reads them).
+ *
+ * Pure: no IO, no fetch, no React, no clock (the caller passes `nowIso`).
+ */
+
+import { verdictFor } from "../capabilities/capabilities";
+import { auditAgeMs, describeAuditAge, usableCapabilitySet } from "../capabilities/audit-lifecycle";
+import type {
+  AzureCapability,
+  CapabilityContext,
+  CapabilitySet,
+  CapabilityVerdict,
+} from "../capabilities/capabilities";
+import type { RequiredAction } from "../azure-permissions/azure-permissions";
+import { leastRoleFor } from "../least-privilege";
+import {
+  DEFENDER_AUTOMATIONS_READ,
+  DEFENDER_AUTOMATIONS_WRITE,
+  DEFENDER_NAMESPACE_ACTIONS,
+  DEFENDER_PRICINGS_READ,
+} from "../defender-export/defender-permissions";
+import type { OnboardingItemId } from "../onboarding-selection";
+import type { ItemAvailability } from "./onboarding-sections";
+
+/**
+ * Whether automating the source depends on the capability.
+ *
+ *   core           the deploy cannot work without it; a measured denial cautions
+ *   informational  the section reads something with it, deploy works without
+ */
+export type AutomationNecessity = "core" | "informational";
+
+/** One capability an automatable source's automation needs, as the audit measures it. */
+export interface AutomationCapabilityNeed {
+  readonly capability: AzureCapability;
+  /** The Azure action the preflight checks for it (the capability-mapping key). */
+  readonly action: string;
+  /** What it lets the app do, as a verb phrase after "cannot": "create the continuous export". */
+  readonly does: string;
+  /**
+   * The built-in role an administrator would grant: the least-privilege
+   * registry's least role for `action` (AZR-61), never restated here.
+   */
+  readonly role: string;
+  readonly necessity: AutomationNecessity;
+  /** Evaluated above its resource's scope: a miss is unknown, never denied. */
+  readonly grantOnly: boolean;
+}
+
+/** Actions the source needs that no capability measures yet, grouped by scope. */
+export interface UnmeasuredActionGroup {
+  /** Visible scope heading: "On the Event Hub namespace". */
+  readonly scope: string;
+  readonly actions: readonly RequiredAction[];
+}
+
+/** Everything one automatable source needs from Azure to be automated. */
+export interface AutomationPermissions {
+  /** The source's visible name, as the banner says it. */
+  readonly sourceTitle: string;
+  /** Visible heading over the measured list: "On the subscription". */
+  readonly measuredScope: string;
+  readonly measured: readonly AutomationCapabilityNeed[];
+  readonly notMeasured: readonly UnmeasuredActionGroup[];
+}
+
+const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
+  sourceTitle: "Defender for Cloud alert export",
+  measuredScope: "On the subscription",
+  measured: [
+    {
+      capability: "defender-plans.read",
+      action: DEFENDER_PRICINGS_READ,
+      does: "read which Defender plans are enabled",
+      role: leastRoleFor("defender.pricings.read"),
+      // ADR 0005 section 5: deploy is allowed with no plan read at all.
+      necessity: "informational",
+      grantOnly: false,
+    },
+    {
+      capability: "defender-automation.read",
+      action: DEFENDER_AUTOMATIONS_READ,
+      does: "list the subscription's continuous exports",
+      role: leastRoleFor("defender.automations.list"),
+      // The deploy re-lists and refuses before it writes (create-only).
+      necessity: "core",
+      grantOnly: false,
+    },
+    {
+      capability: "defender-automation.write",
+      action: DEFENDER_AUTOMATIONS_WRITE,
+      does: "create the continuous export",
+      role: leastRoleFor("defender.automation.write"),
+      necessity: "core",
+      // capability-mapping GRANT_ONLY_AZURE_ACTIONS; pinned equal there.
+      grantOnly: true,
+    },
+  ],
+  // CAP-7b: listKeys can be granted on the namespace itself, so it stays
+  // unmeasured and is listed as such.
+  notMeasured: [{ scope: "On the Event Hub namespace", actions: DEFENDER_NAMESPACE_ACTIONS }],
+};
+
+/**
+ * The declaration per AUTOMATABLE item. Keyed like ITEM_AVAILABILITY and
+ * covering exactly its "available" ids - the pin holds both directions.
+ */
+export const AUTOMATION_PERMISSIONS: Readonly<Record<OnboardingItemId, AutomationPermissions>> = {
+  defenderExport: DEFENDER_EXPORT_PERMISSIONS,
+};
+
+/** The declaration for one item, or null when it has none (nothing to automate). */
+export function automationPermissionsFor(id: OnboardingItemId): AutomationPermissions | null {
+  return Object.prototype.hasOwnProperty.call(AUTOMATION_PERMISSIONS, id)
+    ? (AUTOMATION_PERMISSIONS[id] ?? null)
+    : null;
+}
+
+/**
+ * Ids an availability map marks available that a permissions map does not
+ * declare, sorted. Empty is the only acceptable answer for the shipped maps; a
+ * function so the coverage pin can be planted and shown to fail.
+ */
+export function undeclaredAutomatableItems(
+  availability: Readonly<Record<string, ItemAvailability>>,
+  permissions: Readonly<Record<string, AutomationPermissions>>,
+): string[] {
+  return Object.entries(availability)
+    .filter(([id, a]) => a.status === "available" && !Object.prototype.hasOwnProperty.call(permissions, id))
+    .map(([id]) => id)
+    .sort();
+}
+
+/** What is known about one need. Only `denied` is a denial. */
+export type AutomationNeedState = "granted" | "denied" | "unknown" | "never-checked" | "unreachable";
+
+export interface AutomationNeedRow {
+  readonly need: AutomationCapabilityNeed;
+  readonly state: AutomationNeedState;
+  /** Visible state text beside the action. */
+  readonly stateLabel: string;
+}
+
+/**
+ * The banner over the section.
+ *
+ *   denied        a core capability was measured denied: Azure will likely
+ *                 refuse the deploy, which stays offered (the audit informs,
+ *                 never forbids - capabilities.ts rule 3)
+ *   not-measured  a core capability is unknown, never checked or unreachable
+ *   partial       only an informational capability is denied: deploy works
+ */
+export interface AutomationBanner {
+  readonly kind: "denied" | "not-measured" | "partial";
+  readonly tone: "info" | "warning" | "error";
+  readonly text: string;
+  /** Whether Re-check permissions is offered (not without an identity to check). */
+  readonly offerRecheck: boolean;
+}
+
+export interface AutomationPermissionView {
+  readonly rows: readonly AutomationNeedRow[];
+  readonly banner: AutomationBanner | null;
+  /**
+   * Shown beside Deploy for a measured denial of a core capability; null
+   * otherwise. A caution, never a block: Deploy stays clickable and Azure's
+   * own answer at the write is what decides (operator decision 2026-11-03).
+   */
+  readonly deployCaution: string | null;
+}
+
+export interface AutomationPermissionInput {
+  readonly permissions: AutomationPermissions;
+  /** The shell's cached set, or undefined when the shell wired no audit. */
+  readonly capabilities: CapabilitySet | undefined;
+  /** Connection facts; undefined is read as "an identity is configured". */
+  readonly context: CapabilityContext | undefined;
+  /** The number of the How-to section on the screen, so the copy names it. */
+  readonly howtoSection: number;
+  /**
+   * The CURRENT connection's audit key. When given, a set whose connectionId
+   * differs is another connection's and is read as never checked. Absent =
+   * the set is trusted as this connection's (a shell that wires no key).
+   */
+  readonly auditKey?: string;
+  /** The shell's clock, so the denial copy can say how old the check is. */
+  readonly nowIso?: string;
+}
+
+const ASSUME_CONNECTED: CapabilityContext = { azureIdentityPresent: true, criblReachable: true };
+
+function needState(
+  need: AutomationCapabilityNeed,
+  set: CapabilitySet | undefined,
+  context: CapabilityContext,
+): AutomationNeedState {
+  let verdict: CapabilityVerdict =
+    set === undefined
+      ? context.azureIdentityPresent
+        ? "unknown"
+        : "unreachable"
+      : verdictFor(need.capability, set, context);
+  if (verdict === "denied" && need.grantOnly) verdict = "unknown";
+  if (verdict === "unknown" && (set === undefined || set.auditedAt === null)) return "never-checked";
+  return verdict;
+}
+
+function stateLabel(need: AutomationCapabilityNeed, state: AutomationNeedState): string {
+  switch (state) {
+    case "granted":
+      return "Granted";
+    case "denied":
+      return "Denied";
+    case "unknown":
+      return need.grantOnly ? "Not measured (grant-only check)" : "Not measured by the last permission check";
+    case "never-checked":
+      return "Not checked yet";
+    case "unreachable":
+      return "Not checked - no Azure identity is connected";
+  }
+}
+
+/** "a", "a and b", "a, b and c". */
+function phrase(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1] ?? ""}`;
+}
+
+function rolesOf(needs: readonly AutomationCapabilityNeed[]): string {
+  return phrase([...new Set(needs.map((n) => n.role))]);
+}
+
+/**
+ * The banner and per-capability rows for one automatable source, from the
+ * cached audit alone. Precedence: a core denial comes first; otherwise any core
+ * capability not known to be granted gets the soft note; otherwise an
+ * informational denial warns; otherwise there is nothing to say.
+ */
+export function automationPermissionView(input: AutomationPermissionInput): AutomationPermissionView {
+  const { permissions, howtoSection } = input;
+  const capabilities =
+    input.capabilities !== undefined && input.auditKey !== undefined
+      ? usableCapabilitySet(input.capabilities, input.auditKey)
+      : input.capabilities;
+  const context = input.context ?? ASSUME_CONNECTED;
+  const source = permissions.sourceTitle;
+  const rows: AutomationNeedRow[] = permissions.measured.map((need) => {
+    const state = needState(need, capabilities, context);
+    return { need, state, stateLabel: stateLabel(need, state) };
+  });
+  const core = rows.filter((r) => r.need.necessity === "core");
+
+  const denied = core.filter((r) => r.state === "denied").map((r) => r.need);
+  if (denied.length > 0) {
+    const does = phrase(denied.map((n) => n.does));
+    const actions = denied.map((n) => n.action).join(", ");
+    // A denial can be days old (one-slot cache), so the copy says when it was measured.
+    const check =
+      input.nowIso !== undefined && capabilities !== undefined && auditAgeMs(capabilities, input.nowIso) !== null
+        ? `the permission check ${describeAuditAge(capabilities, input.nowIso)}`
+        : "the last permission check";
+    return {
+      rows,
+      banner: {
+        kind: "denied",
+        tone: "error",
+        text:
+          `${check.charAt(0).toUpperCase()}${check.slice(1)} found your Azure identity cannot ${does} ` +
+          `(${actions}), so Azure will likely refuse this section's deploy of ${source}. If the role was granted since, ` +
+          `Re-check permissions. Otherwise switch ${source} to How-to in section ${howtoSection} to see its ` +
+          `steps, or ask an administrator for ${rolesOf(denied)} on the subscription.`,
+        offerRecheck: true,
+      },
+      deployCaution:
+        `Azure will likely refuse this deploy: ${check} found your Azure identity cannot ${does} (${actions}). ` +
+        `Deploy stays available because Azure's answer decides. Re-check permissions if the role was ` +
+        `granted since, or switch it to How-to in section ${howtoSection}.`,
+    };
+  }
+
+  const open = core.filter((r) => r.state !== "granted");
+  if (open.length > 0) {
+    if (open.some((r) => r.state === "unreachable")) {
+      return {
+        rows,
+        banner: {
+          kind: "not-measured",
+          tone: "info",
+          text: `No Azure identity is connected, so whether it can set ${source} up has not been checked.`,
+          offerRecheck: false,
+        },
+        deployCaution: null,
+      };
+    }
+    if (open.some((r) => r.state === "never-checked")) {
+      return {
+        rows,
+        banner: {
+          kind: "not-measured",
+          tone: "info",
+          text:
+            `Permissions have not been checked for this connection yet, so whether your Azure identity ` +
+            `can set ${source} up is not known. Re-check permissions to measure them; Azure's own answer ` +
+            `at each step is what decides.`,
+          offerRecheck: true,
+        },
+        deployCaution: null,
+      };
+    }
+    const grantOnly = open.some((r) => r.need.grantOnly);
+    return {
+      rows,
+      banner: {
+        kind: "not-measured",
+        tone: "info",
+        text:
+          `The last permission check did not measure whether your Azure identity can ` +
+          `${phrase(open.map((r) => r.need.does))}, so whether it can set ${source} up is not known.` +
+          (grantOnly
+            ? " The check sees only roles on the whole subscription; a role on the export's resource group is checked by Azure at deploy."
+            : " Re-check permissions to measure it; Azure's own answer at each step is what decides."),
+        offerRecheck: true,
+      },
+      deployCaution: null,
+    };
+  }
+
+  const informational = rows
+    .filter((r) => r.need.necessity === "informational" && r.state === "denied")
+    .map((r) => r.need);
+  if (informational.length > 0) {
+    return {
+      rows,
+      banner: {
+        kind: "partial",
+        tone: "warning",
+        text:
+          `Your Azure identity cannot ${phrase(informational.map((n) => n.does))}. Deploy does not need it ` +
+          `and still works; ask an administrator for ${rolesOf(informational)} to see it.`,
+        offerRecheck: true,
+      },
+      deployCaution: null,
+    };
+  }
+
+  return { rows, banner: null, deployCaution: null };
+}

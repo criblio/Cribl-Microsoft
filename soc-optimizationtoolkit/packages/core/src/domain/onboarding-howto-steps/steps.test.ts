@@ -19,7 +19,8 @@ import {
   managementGroupDefinitionsPath,
 } from "./policy-steps";
 import { API_VERSION_MASK, copyCheckTexts, renderStep, renderedTexts } from "./render-instruction";
-import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders } from "./steps";
+import { ALL_HOWTO_STEPS, howToStep, stepsFor, stepsForSelection, templatePlaceholders, templateTexts } from "./steps";
+import { LEAST_PRIVILEGE_OPERATIONS, leastRoleFor, operationAction, privilegeOperation } from "../least-privilege";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -106,6 +107,7 @@ describe("how-to step catalog", () => {
       "eh-rule-send",
       "eh-rule-listen",
       "eh-consumer-group",
+      "eh-role-receiver",
       "eh-network",
       "defender-plans",
       "defender-provider",
@@ -125,6 +127,8 @@ describe("how-to step catalog", () => {
     // 'eh-rule-send' is classified as Send OR Manage, so it would pass a
     // Send-only rule for the step whose whole point is Manage (AZR-39).
     expect(howToStep("eh-rule-diagnostic")!.checkKinds).toEqual(["eh-rule-manage"]);
+    // AZR-54: the named-hub consumer-group check never answers for the hubs Azure creates.
+    expect(howToStep("eh-consumer-group-auto")!.checkKinds).toEqual(["eh-hub", "eh-consumer-group-auto"]);
     expect(howToStep("eh-rule-send")!.checkKinds).toEqual(["eh-rule-send"]);
     const sendChecked = ALL_HOWTO_STEPS.filter((s) => s.checkKinds.includes("eh-rule-send")).map((s) => s.id);
     expect(sendChecked).toEqual(["eh-rule-send"]);
@@ -383,6 +387,8 @@ describe("how-to step catalog", () => {
     expect(ALL_HOWTO_STEPS.filter((s) => s.provenance === "inferred").map((s) => s.id)).toEqual([
       "eh-rule-diagnostic",
       "eh-consumer-group-auto",
+      "eh-role-receiver",
+      "eh-role-receiver-auto",
       "eh-network",
       "policy-audit-remediate",
       "policy-community-remediate",
@@ -392,5 +398,116 @@ describe("how-to step catalog", () => {
       "blob-flow-log-nsg",
       "blob-rbac",
     ]);
+  });
+});
+
+describe("AZR-61 - rbac lines read the least-privilege registry", () => {
+  it("names the registry's least role for creating the namespace and the hub", () => {
+    // Audit (low): the lines said "Contributor includes it"; Azure Event Hubs
+    // Data Owner holds Microsoft.EventHub/* and is the narrower built-in role.
+    expect(howToStep("eh-namespace")?.rbac.join(" ")).toContain(
+      `(${leastRoleFor("eventhub.namespace.write")} includes it)`,
+    );
+    expect(howToStep("eh-hub")?.rbac.join(" ")).toContain(
+      `(${leastRoleFor("eventhub.hub.write")} includes it)`,
+    );
+    expect(howToStep("eh-namespace")?.rbac.join(" ")).not.toContain("(Contributor includes it)");
+  });
+
+  it("names, wherever a line says which role includes a registry action, that action's least role", () => {
+    // Found by review: only the Event Hub and Defender lines read the
+    // registry; the flow-log, storage and Event Grid lines restated roles
+    // ("Contributor includes it" where Storage Account Contributor is least).
+    const wrong: string[] = [];
+    for (const step of ALL_HOWTO_STEPS) {
+      for (const line of step.rbac) {
+        const role = /\(([^()]+?) includes (?:it|them)\)/.exec(line)?.[1];
+        if (role === undefined) {
+          continue;
+        }
+        const named = Object.values(LEAST_PRIVILEGE_OPERATIONS).filter((op) =>
+          new RegExp(`(^|[ ,])${op.operation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`, "i").test(line),
+        );
+        if (named.length > 0 && !named.some((op) => op.leastRole === role)) {
+          wrong.push(`${step.id}: (${role}) for ${named.map((op) => op.id).join(", ")}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("states the flow log's extra actions and least role, and the Event Grid writes by the registry's action", () => {
+    for (const id of ["blob-flow-log-vnet", "blob-flow-log-nsg"]) {
+      const flow = (howToStep(id)?.rbac ?? []).join(" ");
+      expect(flow, id).toContain(operationAction("flowLog.write"));
+      expect(flow, id).toContain(leastRoleFor("flowLog.write"));
+      for (const extra of privilegeOperation("flowLog.write").extraActions ?? []) {
+        expect(flow, id).toContain(extra);
+      }
+    }
+    const grid = (howToStep("blob-event-grid")?.rbac ?? []).join(" ");
+    expect(grid).toContain(operationAction("eventGrid.systemTopic.write"));
+    expect(grid).toContain(operationAction("eventGrid.subscription.write"));
+    expect((howToStep("blob-storage-account")?.rbac ?? []).join(" ")).toContain(
+      `(${leastRoleFor("storageAccount.write")} includes it)`,
+    );
+  });
+
+  it("asks for the conditioned RBAC Administrator, not User Access Administrator, to grant the blob roles", () => {
+    // Audit discrepancy 22 (low).
+    const line = (howToStep("blob-rbac")?.rbac ?? []).join(" ");
+    expect(line).toContain(leastRoleFor("dcr.roleAssignment.write"));
+    expect(line).toContain("Storage Blob Data Reader");
+    expect(line).not.toContain("User Access Administrator");
+  });
+
+  it("puts the Defender export's automation write on the resource group, the list on the subscription", () => {
+    // Audit (low): every subscription action rendered "on the subscription",
+    // and the automation the PUT writes lives in a resource group.
+    const rbac = howToStep("defender-export")?.rbac ?? [];
+    const write = rbac.find((line) => line.startsWith(`${operationAction("defender.automation.write")} `));
+    const list = rbac.find((line) => line.startsWith(`${operationAction("defender.automations.list")} `));
+    expect(write).toContain("on resource group {{resourceGroup}}");
+    expect(list).toContain("on the subscription");
+  });
+});
+
+// AZR-59, ADR 0008 section 4: the Cribl principal's receive role, per hub family.
+describe("the Cribl principal's Event Hubs receive role", () => {
+  it("gives every Event Hub source exactly one receive-role step, checked by eh-role-receiver", () => {
+    for (const source of ONBOARDING_SOURCES) {
+      const ids = stepsFor(source.id).map((s) => s.id).filter((id) => id.startsWith("eh-role-receiver"));
+      if (source.transport === "eventhub") {
+        expect(ids, source.id).toEqual([source.hubNaming === "auto-created" ? "eh-role-receiver-auto" : "eh-role-receiver"]);
+      } else {
+        expect(ids, source.id).toEqual([]);
+      }
+    }
+    expect(howToStep("eh-role-receiver")!.checkKinds).toEqual(["eh-role-receiver"]);
+    expect(howToStep("eh-role-receiver-auto")!.checkKinds).toEqual(["eh-role-receiver"]);
+  });
+
+  it("names the exact az command, the role, the principal and the hub scope", () => {
+    const step = howToStep("eh-role-receiver")!;
+    expect(step.title).toBe("Give the Cribl principal Azure Event Hubs Data Receiver on the hub {{hubName}}");
+    expect(step.cli).toBe(
+      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
+    );
+    expect(step.rbac.join(" ")).toContain("Microsoft.Authorization/roleAssignments/write on the hub");
+    expect(step.rbac.join(" ")).toMatch(/User Access Administrator/);
+    expect(step.rbac.join(" ")).toMatch(/Role Based Access Control Administrator/);
+    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
+    expect(howToStep("eh-role-receiver-auto")!.cli).not.toContain("eventhubs/");
+  });
+
+  it("never instructs Data Owner, Manage or a SAS key", () => {
+    for (const id of ["eh-role-receiver", "eh-role-receiver-auto"]) {
+      const text = templateTexts(howToStep(id)!).join("\n");
+      expect(text, id).not.toMatch(/Data Owner|RootManageSharedAccessKey|listKeys/);
+    }
+  });
+
+  it("marks the SAS Listen rule as the fallback to Entra ID", () => {
+    expect(howToStep("eh-rule-listen")!.warning).toMatch(/Entra ID/);
   });
 });

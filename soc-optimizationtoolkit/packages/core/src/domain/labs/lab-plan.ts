@@ -42,6 +42,7 @@ import {
   validateLabSubnetLayout,
 } from "./lab-validation";
 import type { LabTtlSettings } from "./lab-foundation";
+import { rolePlanForSetupPath } from "../role-plan";
 
 /**
  * How the lab resource group is obtained (feature-catalog permission design):
@@ -100,39 +101,24 @@ export interface LabPlan {
   permissions: LabPermissionRequirement[];
 }
 
-/** The permission rows for one resource-group mode (feature-catalog, verbatim intent). */
+/**
+ * The permission rows for one resource-group mode, read from Setup's role plan
+ * for the matching lab path, so the Labs screen and Setup can never name
+ * different roles (AZR-61 review: this card once asked bring-your-own for
+ * Contributor alone, while Setup and the preflight required the TTL grant).
+ * A conditioned role is marked "(constrained)" and its reason ends with the
+ * condition, since the card is all an admin may read before granting.
+ */
 export function labPermissionRequirements(
   rgMode: LabResourceGroupMode,
   resourceGroupName: string,
 ): LabPermissionRequirement[] {
-  if (rgMode === "create-new") {
-    return [
-      {
-        scope: "Subscription",
-        role: "Contributor",
-        reason: "Resource-group creation is subscription-scoped.",
-      },
-      {
-        scope: "Subscription",
-        role: "Role Based Access Control Administrator (constrained)",
-        reason:
-          "The TTL self-destruct Logic App identity receives its resource-group-delete " +
-          "Contributor role at deploy time (roleAssignments/write). Constrain the grant " +
-          "to assigning only Contributor and Monitoring Metrics Publisher, only to " +
-          "service principals.",
-      },
-    ];
-  }
-  return [
-    {
-      scope: `Resource group '${resourceGroupName}'`,
-      role: "Contributor",
-      reason:
-        "Least-privilege path: an admin pre-creates the lab resource group. The TTL " +
-        "identity's delete rights must be granted by the admin after the foundation " +
-        "deploy reports the identity's principal id.",
-    },
-  ];
+  const path = rgMode === "create-new" ? "lab-new-rg" : "lab-byo-rg";
+  return rolePlanForSetupPath(path).map((req) => ({
+    scope: req.scopeLevel === "subscription" ? "Subscription" : `Resource group '${resourceGroupName}'`,
+    role: req.condition === undefined ? req.role : `${req.role} (constrained)`,
+    reason: req.condition === undefined ? req.justification : `${req.justification} ${req.condition}`,
+  }));
 }
 
 /**

@@ -14,7 +14,10 @@ const unknown: StepVerdict = { kind: "unknown", reason: "denied", detail: "403" 
 describe("CHECK_KINDS", () => {
   it("has no arrival kind: arrival is a reading, not a verdict", () => {
     expect(CHECK_KINDS as readonly string[]).not.toContain("eh-hub-arrival");
-    expect(CHECK_KINDS.length).toBe(25);
+    // Was 26 once AZR-54 added eh-consumer-group-auto.
+    // 27 since AZR-59 (2026-11-03) added eh-role-receiver: the Cribl
+    // principal's receive role on the hub (ADR 0008).
+    expect(CHECK_KINDS.length).toBe(27);
     expect(new Set(CHECK_KINDS).size).toBe(CHECK_KINDS.length);
   });
 });

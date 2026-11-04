@@ -2170,6 +2170,19 @@ button.readiness-pill:focus-visible {
   border-color: var(--border-focus);
 }
 
+/* Setup: one row per tenant with its change-request download. */
+.tenant-request-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .sample-chip-list {
   display: flex;
   flex-direction: column;
@@ -4946,6 +4959,14 @@ button.readiness-pill:focus-visible {
   color: var(--accent-strong);
   font-weight: 600;
 }
+/* DBT-249: shown, not choosable; the label or hint carries the reason. */
+.searchable-select-option.is-disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.searchable-select-option.is-disabled.is-highlighted {
+  background: transparent;
+}
 .searchable-select-option-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -5899,8 +5920,9 @@ details[open] > summary::before {
    generic controls row and also holds a file input and several .field-wrapped
    controls that already have these tokens. Same shape as `.enrich-add input`,
    which exists for this reason and solves it this way. */
-.dcr-add-column input,
-.dcr-add-column select {
+/* DBT-249: the type picker is now a SearchableSelect, which styles itself;
+   the child combinator keeps this rule off the combobox's own filter input. */
+.dcr-add-column > input {
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -5911,8 +5933,7 @@ details[open] > summary::before {
   color: var(--text);
 }
 
-.dcr-add-column input:focus,
-.dcr-add-column select:focus {
+.dcr-add-column > input:focus {
   outline: none;
   border-color: var(--border-focus);
 }
@@ -8331,6 +8352,94 @@ details[open] > summary::before {
 .numbered-section-pin-on {
   border-color: var(--accent, #4aa3df);
   color: var(--accent, #4aa3df);
+}
+
+/* Native logging gaps by tenant: tenants down, sources across, two indicators per cell. */
+.tgap-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.tgap-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.tgap-tile-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tgap-tile-value {
+  font-size: 14px;
+  color: var(--text-strong);
+}
+.tgap-scroll {
+  overflow-x: auto;
+}
+.tgap-grid {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tgap-grid th,
+.tgap-grid td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+  text-align: left;
+  color: var(--text);
+}
+.tgap-tenant {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+}
+.tgap-tenant-name {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.tgap-tenant-id,
+.tgap-tenant-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.tgap-warning {
+  font-size: 11px;
+  color: var(--warn);
+}
+.tgap-cell {
+  min-width: 150px;
+}
+.tgap-ind {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.tgap-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--text-faint);
+  background: transparent;
+}
+.tgap-green .tgap-dot {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.tgap-red .tgap-dot {
+  background: var(--error);
+  border-color: var(--error);
+}
+.tgap-unknown .tgap-word {
+  color: var(--text-muted);
 }
 
 /* Azure connectivity section (setup pages): a segmented three-way choice, the

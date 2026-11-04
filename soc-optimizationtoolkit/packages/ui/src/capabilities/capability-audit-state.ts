@@ -87,8 +87,9 @@ export function auditChipText(status: AuditStatus, age: string): string {
  * launch reuses the cached audit when it was measured against the same key
  * (shouldRunAudit), so a reload shows an earlier measurement, and nothing
  * re-measures on a timer. It deliberately does NOT promise that switching back
- * to a connection reuses its result: the cache is ONE slot
- * (CAPABILITY_AUDIT_CACHE_KEY), so switching away overwrote it.
+ * to a connection reuses its result: the cache holds one audit per TENANT
+ * (capabilityAuditCacheKey, ADR 0009), so two connections on the same tenant
+ * still overwrite each other.
  */
 export const AUDIT_CHIP_HINT =
   "When this connection's Azure and Cribl permissions were last measured. " +

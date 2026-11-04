@@ -7,8 +7,23 @@ import {
   parseLabPermissionsResponse,
 } from "./index";
 import { labDeploymentConfig } from "./lab-profiles";
+import { LEAST_PRIVILEGE_OPERATIONS, operationAction } from "../least-privilege";
 
 describe("labRequiredActions", () => {
+  it("checks only actions the least-privilege registry names (none restated by hand)", () => {
+    // Found by review (AZR-61): some 18 actions here were literals, so a
+    // registry correction would have left the lab preflight checking the old
+    // string. CompleteLab in private mode turns every component on.
+    const registry = new Set(Object.values(LEAST_PRIVILEGE_OPERATIONS).map((op) => op.operation));
+    const flags = labDeploymentConfig("CompleteLab", "private");
+    for (const mode of ["create-new", "bring-your-own"] as const) {
+      const strays = labRequiredActions(flags, mode)
+        .map((a) => a.action)
+        .filter((action) => !registry.has(action));
+      expect(strays, mode).toEqual([]);
+    }
+  });
+
   it("always includes the foundation actions; RG create only in create-new mode", () => {
     const flags = labDeploymentConfig("SentinelLab", "public");
     const createNew = labRequiredActions(flags, "create-new").map((a) => a.action);
@@ -16,9 +31,22 @@ describe("labRequiredActions", () => {
     expect(createNew).toContain("Microsoft.Logic/workflows/write");
     expect(createNew).toContain("Microsoft.Authorization/roleAssignments/write");
 
-    const byo = labRequiredActions(flags, "bring-your-own").map((a) => a.action);
-    expect(byo).not.toContain("Microsoft.Resources/subscriptions/resourceGroups/write");
-    expect(byo).toContain("Microsoft.Authorization/roleAssignments/write");
+    const byo = labRequiredActions(flags, "bring-your-own");
+    expect(byo.map((a) => a.action)).toContain("Microsoft.Authorization/roleAssignments/write");
+    // RE-PINNED (AZR-61 audit, medium): bring-your-own PATCHes the existing
+    // group's TTL tags (foundation-phase.ts), which needs resourceGroups/write
+    // too. The preflight used to check it only in create-new mode, so a
+    // principal without it passed and then failed at the first step.
+    const tag = byo.find((a) => a.action === operationAction("resourceGroup.tag"));
+    expect(tag?.label).toBe("Tag the lab resource group with its TTL");
+    expect(byo.filter((a) => a.action === operationAction("resourceGroup.tag"))).toHaveLength(1);
+  });
+
+  it("checks resourceGroups/write once in create-new mode, where one grant covers create and tag", () => {
+    const flags = labDeploymentConfig("SentinelLab", "public");
+    const createNew = labRequiredActions(flags, "create-new").map((a) => a.action);
+    expect(createNew.filter((a) => a === operationAction("resourceGroup.create"))).toHaveLength(1);
+    expect(operationAction("resourceGroup.create")).toBe(operationAction("resourceGroup.tag"));
   });
 
   it("derives the action list from the profile's phases (no drift from the deploy)", () => {

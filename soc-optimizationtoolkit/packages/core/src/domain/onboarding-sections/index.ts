@@ -20,3 +20,23 @@ export type {
   OnboardingSection,
   SectionAvailability,
 } from "./onboarding-sections";
+
+// AZR-60: what each automatable source needs from Azure, and the banner the
+// section shows from the cached capability audit.
+export {
+  AUTOMATION_PERMISSIONS,
+  automationPermissionView,
+  automationPermissionsFor,
+  undeclaredAutomatableItems,
+} from "./automation-permissions";
+export type {
+  AutomationBanner,
+  AutomationCapabilityNeed,
+  AutomationNecessity,
+  AutomationNeedRow,
+  AutomationNeedState,
+  AutomationPermissionInput,
+  AutomationPermissionView,
+  AutomationPermissions,
+  UnmeasuredActionGroup,
+} from "./automation-permissions";

@@ -731,20 +731,26 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               value={browseSub}
               onChange={onSubscriptionSelect}
               placeholder="Select a subscription..."
+              label="Subscription"
               ariaLabel="Filter subscriptions"
             />
           ) : (
-            <select disabled value="">
-              <option value="">
-                {subsLoad.status === "loading"
+            <SearchableSelect
+              options={[]}
+              value=""
+              onChange={() => {}}
+              disabled
+              label="Subscription"
+              placeholder={
+                subsLoad.status === "loading"
                   ? "Loading subscriptions..."
                   : subsLoad.status === "error"
                     ? "Subscription discovery failed - fix the connection, then Refresh"
                     : subsLoad.status === "loaded"
                       ? emptySubscriptions.text
-                      : "Connect first, then Refresh from Azure"}
-              </option>
-            </select>
+                      : "Connect first, then Refresh from Azure"
+              }
+            />
           )}
         </label>
         <label className="field">
@@ -767,12 +773,18 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               value={browseWs}
               onChange={onWorkspaceSelect}
               placeholder="Select a workspace..."
+              label="Log Analytics workspace"
               ariaLabel="Filter workspaces"
             />
           ) : (
-            <select disabled value="">
-              <option value="">
-                {browseSub === ""
+            <SearchableSelect
+              options={[]}
+              value=""
+              onChange={() => {}}
+              disabled
+              label="Log Analytics workspace"
+              placeholder={
+                browseSub === ""
                   ? "Select a subscription first..."
                   : depLoad.status === "loading"
                     ? "Loading workspaces..."
@@ -781,9 +793,9 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                       : depLoad.status === "loaded" &&
                           depLoad.workspaceError !== null
                         ? "Workspace discovery failed - see the error below"
-                        : emptyWorkspaces.text}
-              </option>
-            </select>
+                        : emptyWorkspaces.text
+              }
+            />
           )}
         </label>
         <label className="field">
@@ -798,25 +810,31 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
               value={browseRg}
               onChange={onResourceGroupSelect}
               placeholder="Select a resource group..."
+              label="Resource group (for DCRs)"
               ariaLabel="Filter resource groups"
             />
           ) : (
-            <select disabled value="">
-              <option value="">
-                {/* A MEASURED FAILURE MUST NOT READ AS AN UNMEASURED ABSENCE
-                    (AZR-15). This fell through to emptyResourceGroups.text -
-                    "cannot confirm there are no resource groups, no permission
-                    check covers this list" - for EVERY non-loading state,
-                    including one where the call had demonstrably failed and its
-                    reason was in hand. The workspace picker directly above said
-                    "discovery failed" for the same condition, so one screen gave
-                    two accounts of one failure.
-                    docs/inventory-standard.md is about not reporting an
-                    unverified empty list as a verified zero; this was the mirror
-                    image, and the direction nobody checks for - a KNOWN failure
-                    reported as an unknown. The hedge is correct only when the
-                    list genuinely returned nothing and no error was seen. */}
-                {browseSub === ""
+            <SearchableSelect
+              options={[]}
+              value=""
+              onChange={() => {}}
+              disabled
+              label="Resource group (for DCRs)"
+              // A MEASURED FAILURE MUST NOT READ AS AN UNMEASURED ABSENCE
+              // (AZR-15). This fell through to emptyResourceGroups.text -
+              // "cannot confirm there are no resource groups, no permission
+              // check covers this list" - for EVERY non-loading state,
+              // including one where the call had demonstrably failed and its
+              // reason was in hand. The workspace picker directly above said
+              // "discovery failed" for the same condition, so one screen gave
+              // two accounts of one failure.
+              // docs/inventory-standard.md is about not reporting an
+              // unverified empty list as a verified zero; this was the mirror
+              // image, and the direction nobody checks for - a KNOWN failure
+              // reported as an unknown. The hedge is correct only when the
+              // list genuinely returned nothing and no error was seen.
+              placeholder={
+                browseSub === ""
                   ? "Select a subscription first..."
                   : depLoad.status === "loading"
                     ? "Loading resource groups..."
@@ -825,9 +843,9 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
                       : depLoad.status === "loaded" &&
                           depLoad.choices.listError !== null
                         ? "Resource group discovery failed - see the reason below"
-                        : emptyResourceGroups.text}
-              </option>
-            </select>
+                        : emptyResourceGroups.text
+              }
+            />
           )}
           {/* SURFACED WHENEVER IT EXISTS, not only on the fallback path. This
               was gated on source === "workspaces", i.e. only when the derived

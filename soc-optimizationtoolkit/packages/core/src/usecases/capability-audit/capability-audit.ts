@@ -29,6 +29,8 @@ import type { Logger } from "../../ports/logger";
 import type { SetupPath } from "../../domain/azure-permissions";
 import {
   CAPABILITY_AUDIT_CACHE_KEY,
+  auditKeyNamesTenant,
+  capabilityAuditCacheKey,
   capabilityAuditKey,
   emptyCapabilitySet,
   parseCapabilitySet,
@@ -106,19 +108,31 @@ function errText(err: unknown): string {
 }
 
 /**
- * Read the cached set, or the empty set when there is no cache, the entry is
- * absent, or the backend failed. A read failure must never look like a cache
- * HIT, since that is the path that skips measuring.
+ * Read `tenantId`'s cached set, or the empty set when there is no cache, the
+ * entry is absent, or the backend failed. A read failure must never look like a
+ * cache HIT, since that is the path that skips measuring.
+ *
+ * ONE-TIME MOVE (ADR 0009 decision 3): when the tenant has no entry yet, the
+ * legacy single-slot audit is adopted only if it was measured for THIS tenant -
+ * the set names its tenant, so unlike the How-to documents it does not need the
+ * "whoever is active" rule - and the legacy slot is then emptied.
  */
 export async function loadCachedCapabilities(
   cache: ContentCache | undefined,
+  tenantId: string,
   logger?: Logger,
 ): Promise<CapabilitySet> {
   if (cache === undefined) {
     return emptyCapabilitySet();
   }
   try {
-    return parseCapabilitySet(await cache.get(CAPABILITY_AUDIT_CACHE_KEY));
+    const own = await cache.get(capabilityAuditCacheKey(tenantId));
+    if (own !== null) return parseCapabilitySet(own);
+    const legacy = parseCapabilitySet(await cache.get(CAPABILITY_AUDIT_CACHE_KEY));
+    if (!auditKeyNamesTenant(legacy.connectionId, tenantId)) return emptyCapabilitySet();
+    await cache.set(capabilityAuditCacheKey(tenantId), serializeCapabilitySet(legacy));
+    await cache.set(CAPABILITY_AUDIT_CACHE_KEY, null);
+    return legacy;
   } catch (err) {
     logger?.info("capability-audit: cache read failed", { error: errText(err) });
     return emptyCapabilitySet();
@@ -126,23 +140,26 @@ export async function loadCachedCapabilities(
 }
 
 /**
- * Persist a set; a write failure only costs a re-audit next launch.
+ * Persist a set under `tenantId`'s key; a write failure only costs a re-audit
+ * next launch.
  *
  * Exported because the RBAC preflight panel measures the same thing on demand
  * and should feed the same cache rather than run a competing audit beside it.
  * Safe for either writer: the set carries the connection it was measured
- * against, so a set stored for one connection can never be read AS another's.
+ * against, so a set stored for one connection can never be read AS another's,
+ * and the per-tenant key means it never evicts another tenant's audit.
  */
 export async function saveCapabilityAudit(
   cache: ContentCache | undefined,
   set: CapabilitySet,
+  tenantId: string,
   logger?: Logger,
 ): Promise<void> {
   if (cache === undefined) {
     return;
   }
   try {
-    await cache.set(CAPABILITY_AUDIT_CACHE_KEY, serializeCapabilitySet(set));
+    await cache.set(capabilityAuditCacheKey(tenantId), serializeCapabilitySet(set));
   } catch (err) {
     logger?.info("capability-audit: cache write failed", { error: errText(err) });
   }
@@ -172,7 +189,7 @@ export async function runCapabilityAudit(
     criblWorkerGroup: workerGroup,
   });
 
-  const cached = await loadCachedCapabilities(ports.cache, logger);
+  const cached = await loadCachedCapabilities(ports.cache, input.identity.tenantId, logger);
   const decision = shouldRunAudit(input.trigger, cached, key);
 
   if (!decision.run) {
@@ -218,7 +235,7 @@ export async function runCapabilityAudit(
     auditedAt: input.nowIso,
     connectionId: key,
   });
-  await saveCapabilityAudit(ports.cache, set, logger);
+  await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger);
 
   logger?.info("capability-audit: audited", {
     trigger: input.trigger,

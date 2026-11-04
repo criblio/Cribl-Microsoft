@@ -99,7 +99,7 @@ export function ValidatePanel({ plan, hasPacing, run, onValidate, onCancel }: Va
           <ul>
             {group.rows.map((row) => (
               <li key={row.key} className="azo-verdict" data-tone={row.view.tone}>
-                <span>{`${stepTitle(row.stepId)}: `}</span>
+                <span>{`${stepTitle(row.stepId)}${row.subject === null ? "" : ` - ${row.subject}`}: `}</span>
                 <strong>{row.view.word}</strong>
                 {row.view.detail !== "" && <span>{` - ${row.view.detail}`}</span>}{" "}
                 <InfoTip text={`What was checked: ${row.kind}, for the step "${stepTitle(row.stepId)}". Result: ${row.view.word}.`} />

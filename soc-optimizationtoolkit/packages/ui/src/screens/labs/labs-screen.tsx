@@ -24,6 +24,7 @@ import {
   type ProvisionLabResult,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   defaultLabFormState,
   labPlanFromForm,
@@ -94,20 +95,23 @@ export function LabsScreen() {
         <label className="field">
           <span className="field-label">Subscription</span>
           {subscriptions !== null && subscriptions.length > 0 ? (
-            <select
+            <SearchableSelect
+              label="Subscription"
+              options={[
+                ...subscriptions.map((sub) => ({
+                  value: sub.subscriptionId,
+                  label: `${sub.displayName} (${sub.subscriptionId})`,
+                })),
+                // An id typed or saved earlier that the listing does not
+                // contain stays selectable, as the native control kept it.
+                ...(!subscriptions.some((s) => s.subscriptionId === subscriptionId) &&
+                subscriptionId !== ""
+                  ? [{ value: subscriptionId, label: subscriptionId }]
+                  : []),
+              ]}
               value={subscriptionId}
-              onChange={(e) => setSubscriptionId(e.target.value)}
-            >
-              {subscriptions.map((sub) => (
-                <option key={sub.subscriptionId} value={sub.subscriptionId}>
-                  {sub.displayName} ({sub.subscriptionId})
-                </option>
-              ))}
-              {!subscriptions.some((s) => s.subscriptionId === subscriptionId) &&
-                subscriptionId !== "" && (
-                  <option value={subscriptionId}>{subscriptionId}</option>
-                )}
-            </select>
+              onChange={setSubscriptionId}
+            />
           ) : (
             <input
               type="text"

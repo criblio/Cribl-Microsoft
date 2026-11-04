@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildLabPlan, labPermissionRequirements, type LabPlanInput } from "./lab-plan";
+import { leastRoleFor } from "../least-privilege";
+import { LAB_RBAC_CONDITION, rolePlanForSetupPath } from "../role-plan";
 
 const VALID: LabPlanInput = {
   labType: "SentinelLab",
@@ -84,13 +86,33 @@ describe("labPermissionRequirements", () => {
     const rows = labPermissionRequirements("create-new", "rg-x");
     expect(rows).toHaveLength(2);
     expect(rows[0].scope).toBe("Subscription");
-    expect(rows[1].role).toContain("Role Based Access Control Administrator");
+    expect(rows[1].scope).toBe("Subscription");
+    expect(rows[1].role).toContain(leastRoleFor("lab.roleAssignment.write"));
+    expect(rows[1].reason).toContain(LAB_RBAC_CONDITION);
   });
 
-  it("bring-your-own needs only Contributor on the named group", () => {
+  it("bring-your-own needs Contributor AND the constrained RBAC Administrator on the named group", () => {
+    // Found by review (AZR-61): this card still said Contributor only and
+    // that the admin grants the TTL identity's rights after the deploy,
+    // while Setup's plan and preflight require the RBAC Administrator grant
+    // up front - the foundation phase aborts at ttl-role-assignment without it.
     const rows = labPermissionRequirements("bring-your-own", "rg-preapproved");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].scope).toContain("rg-preapproved");
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.scope.includes("rg-preapproved"))).toBe(true);
     expect(rows[0].role).toBe("Contributor");
+    expect(rows[1].role).toContain(leastRoleFor("lab.roleAssignment.write"));
+    expect(rows[1].reason).toContain(LAB_RBAC_CONDITION);
+    expect(rows.map((r) => r.reason).join(" ")).not.toContain("after the foundation deploy");
+  });
+
+  it("states the same roles as Setup's role plan for each lab path, so the two screens cannot disagree", () => {
+    const roles = (path: "lab-new-rg" | "lab-byo-rg"): string[] =>
+      rolePlanForSetupPath(path).map((r) => r.role);
+    expect(labPermissionRequirements("create-new", "rg-x").map((r) => r.role.replace(" (constrained)", ""))).toEqual(
+      roles("lab-new-rg"),
+    );
+    expect(
+      labPermissionRequirements("bring-your-own", "rg-x").map((r) => r.role.replace(" (constrained)", "")),
+    ).toEqual(roles("lab-byo-rg"));
   });
 });

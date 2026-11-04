@@ -29,6 +29,7 @@
 
 import type { AzureSetupPath } from "../azure-config";
 import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../defender-export/defender-permissions";
+import { leastRoleFor, operationAction } from "../least-privilege";
 
 /**
  * One element of the RBAC permissions API response - the effective permission
@@ -209,15 +210,26 @@ export type SetupPath =
  * entries are measured and reported without gating. Every action listed is one
  * the app actually calls - the list is not aspirational, and an action nothing
  * calls does not belong here.
+ *
+ * Action strings and the role names in labels are READ from the least-privilege
+ * registry (AZR-61), never restated. Two exceptions, each reported by the
+ * audit and pinned in azure-permissions.test.ts:
+ *   - `Microsoft.Resources/deployments/write` is called by nothing (audit,
+ *     medium); it stays until the `arm.deploy` capability the Labs route is
+ *     gated on is measured some other way.
+ *   - onboardingStates/write names Microsoft Sentinel Contributor, the role the
+ *     ticket asks for, where the audit names subscription Contributor
+ *     (Microsoft's documented prerequisite) and calls the narrower grant
+ *     untested; it changes when that is measured live, not before.
  */
 export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
   "existing-subscription": [
     {
-      action: "Microsoft.Insights/dataCollectionRules/read",
+      action: operationAction("dcr.read"),
       label: "Read DCRs",
     },
     {
-      action: "Microsoft.OperationalInsights/workspaces/read",
+      action: operationAction("workspace.read"),
       label: "Read workspaces",
     },
     // CAP-7a. Spread from the Defender domain rather than restated, so the
@@ -228,11 +240,11 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
   ],
   "existing-rg": [
     {
-      action: "Microsoft.Insights/dataCollectionRules/write",
+      action: operationAction("dcr.write"),
       label: "Create/update DCRs",
     },
     {
-      action: "Microsoft.OperationalInsights/workspaces/tables/write",
+      action: operationAction("table.write"),
       label: "Create custom tables",
     },
     {
@@ -245,24 +257,25 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     // holding neither passed the preflight clean and then failed at content
     // install and at the DCR grant. Ask and audit now cover the same ground.
     {
-      action: "Microsoft.SecurityInsights/alertRules/write",
-      label: "Install Sentinel analytic rules (Microsoft Sentinel Contributor)",
+      action: operationAction("sentinel.alertRule.write"),
+      label: `Install Sentinel analytic rules (${leastRoleFor("sentinel.alertRule.write")})`,
       necessity: "feature",
     },
     {
-      action: "Microsoft.SecurityInsights/onboardingStates/write",
-      label: "Onboard the workspace to Sentinel (Microsoft Sentinel Contributor)",
+      action: operationAction("sentinel.onboardingState.write"),
+      // The ticket's role, not the audit's - see the exception above.
+      label: `Onboard the workspace to Sentinel (${leastRoleFor("sentinel.alertRule.write")})`,
       necessity: "feature",
     },
     {
-      action: "Microsoft.Authorization/roleAssignments/write",
-      label: "Grant Cribl's identity access to each DCR (RBAC Administrator)",
+      action: operationAction("dcr.roleAssignment.write"),
+      label: `Grant Cribl's identity access to each DCR (${leastRoleFor("dcr.roleAssignment.write")})`,
       necessity: "feature",
     },
   ],
   "lab-new-rg-subscription": [
     {
-      action: "Microsoft.Resources/subscriptions/resourceGroups/write",
+      action: operationAction("resourceGroup.create"),
       label: "Create resource groups",
     },
     {
@@ -270,8 +283,8 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       label: "Deploy ARM templates",
     },
     {
-      action: "Microsoft.Authorization/roleAssignments/write",
-      label: "Assign roles (RBAC Administrator, for the lab TTL identity)",
+      action: operationAction("lab.roleAssignment.write"),
+      label: `Assign roles (${leastRoleFor("lab.roleAssignment.write")}, for the lab TTL identity)`,
       // Stays CORE on this path: without it the lab has no TTL self-destruct
       // and becomes orphaned cost, which is a reason not to deploy at all.
     },
@@ -282,16 +295,18 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       label: "Deploy ARM templates",
     },
     {
-      action: "Microsoft.OperationalInsights/workspaces/write",
+      action: operationAction("workspace.write"),
       label: "Create workspace",
     },
-    // Contributor on the lab RG cannot assign roles at any scope, which is why
-    // this path's own role plan says the app cannot do it. Checked so the
-    // operator learns that before deploying, not after data fails to flow.
+    // CORE since AZR-61 (audit, medium). It used to be a `feature` check
+    // labelled as the DCR grant, on the belief that the app cannot assign roles
+    // on this path; the foundation phase assigns the TTL identity Contributor
+    // in both resource-group modes and aborts the deploy when it cannot, which
+    // is the lab-new-rg reason exactly. Contributor on the lab RG cannot assign
+    // roles at any scope, so the operator now learns that before deploying.
     {
-      action: "Microsoft.Authorization/roleAssignments/write",
-      label: "Grant Cribl's identity access to each DCR (RBAC Administrator)",
-      necessity: "feature",
+      action: operationAction("lab.roleAssignment.write"),
+      label: `Assign roles (${leastRoleFor("lab.roleAssignment.write")}, for the lab TTL identity)`,
     },
   ],
 };

@@ -26,6 +26,15 @@ export * from "./domain/dataflow-diagram";
 export * from "./domain/log-model";
 export * from "./domain/change-request";
 export * from "./domain/role-plan";
+export * from "./domain/least-privilege";
+// ADR 0009: tenant-scoped keys and ids, the credential lease, the tenant proof.
+export * from "./domain/tenancy";
+// ADR 0009 decision 5 (AZR-64): which worker group receives each tenant.
+export * from "./domain/tenant-cribl-mapping";
+// ADR 0009 decision 1 (AZR-62): the Setup tenant list, a connection per tenant.
+export * from "./domain/tenant-intake";
+// ADR 0009 decision 6 (AZR-63): the multi-tenant logging gap dashboard cells.
+export * from "./domain/tenant-gap";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

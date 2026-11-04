@@ -13,6 +13,7 @@
  *     from connection context instead of the projection guessing.
  */
 import { describe, expect, it } from "vitest";
+import { LEAST_PRIVILEGE_OPERATIONS } from "../../domain/least-privilege";
 
 import {
   AZURE_ACTION_CAPABILITIES,
@@ -46,6 +47,7 @@ import {
   DEFENDER_SUBSCRIPTION_ACTIONS,
 } from "../../domain/defender-export/defender-permissions";
 import type { PermissionSet, SetupPath } from "../../domain/azure-permissions";
+import { AUTOMATION_PERMISSIONS } from "../../domain/onboarding-sections";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import type { PortHttpResponse } from "../../ports/http";
@@ -127,6 +129,20 @@ function report(
 // ---------------------------------------------------------------------------
 // Mapping tables
 // ---------------------------------------------------------------------------
+
+describe("AZURE_ACTION_CAPABILITIES keys", () => {
+  it("are actions the least-privilege registry names, bar the one the audit says nothing calls", () => {
+    // Found by review (AZR-61): the keys were literals, and an unmapped action
+    // is "never an error" here - so a registry correction to dcr.write or
+    // table.write would have silently turned that capability to unknown.
+    // deployments/write is the documented exception (audit discrepancy 5;
+    // azure-permissions.ts REQUIRED_ACTIONS header): nothing calls it, so no
+    // registry operation names it.
+    const registry = new Set(Object.values(LEAST_PRIVILEGE_OPERATIONS).map((op) => op.operation));
+    const strays = Object.keys(AZURE_ACTION_CAPABILITIES).filter((action) => !registry.has(action));
+    expect(strays).toEqual(["Microsoft.Resources/deployments/write"]);
+  });
+});
 
 describe("mapping tables", () => {
   it("maps every action to a capability of the right side", () => {
@@ -693,5 +709,24 @@ describe("over a real preflight report", () => {
     expect(set.verdicts["dcr.read"]).toBe("denied");
     expect(set.verdicts["workspace.read"]).toBe("granted");
     expect(set.verdicts["dcr.write"]).toBe("granted");
+  });
+});
+
+describe("the onboarding automation declarations agree with this mapping (AZR-60)", () => {
+  // The section banner reads the cached set through these declarations. A
+  // declared action this table does not map would never be measured, and a
+  // grantOnly flag out of step with GRANT_ONLY_AZURE_ACTIONS would let the
+  // banner call an unmeasured miss a denial (or the reverse).
+  it("every declared need maps to its own capability, and grantOnly is exactly GRANT_ONLY_AZURE_ACTIONS", () => {
+    const needs = Object.values(AUTOMATION_PERMISSIONS).flatMap((p) => p.measured);
+    expect(needs.length).toBeGreaterThan(0);
+    for (const n of needs) {
+      expect(AZURE_ACTION_CAPABILITIES[n.action], n.action).toBe(n.capability);
+      expect(GRANT_ONLY_AZURE_ACTIONS.has(n.action), n.action).toBe(n.grantOnly);
+    }
+    // Both directions: every grant-only action is declared somewhere.
+    for (const action of GRANT_ONLY_AZURE_ACTIONS) {
+      expect(needs.some((n) => n.action === action && n.grantOnly), action).toBe(true);
+    }
   });
 });

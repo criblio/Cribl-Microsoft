@@ -231,18 +231,29 @@ describe("IntegrateScreen - the existing path's source connection (GEN-28)", () 
     // The picks reset on a group change, so pick only once the capture group
     // has become the pack's group and its destinations are listed.
     const select = await waitFor(() => {
-      const found = screen.getByLabelText(
-        "Existing destination for CommonSecurityLog",
-      ) as HTMLSelectElement;
-      expect([...found.options].map((o) => o.value)).toContain("PAN-CSL");
+      const found = view.container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Existing destination for CommonSecurityLog"]',
+      );
+      if (found === null) throw new Error("no destination picker for CommonSecurityLog");
+      if (found.getAttribute("aria-expanded") !== "true") fireEvent.click(found);
+      const ids = [
+        ...(found.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+          []),
+      ].map((o) => o.textContent?.split(" - ")[0]);
+      expect(ids).toContain("PAN-CSL");
       return found;
     });
-    fireEvent.change(select, { target: { value: "PAN-CSL" } });
+    const panCsl = [
+      ...(select.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+        []),
+    ].find((o) => o.textContent?.split(" - ")[0] === "PAN-CSL");
+    fireEvent.click(panCsl!);
+    expect(select.textContent?.split(" - ")[0]).toBe("PAN-CSL");
     // A custom stream names no table, so the pick asks for a confirmation.
     const confirm = await waitFor(() => {
       const box = select
         .closest("label")
-        ?.parentElement?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        ?.parentElement?.querySelector('.integrate-check input[type="checkbox"]') as HTMLInputElement | null;
       expect(box).toBeTruthy();
       return box as HTMLInputElement;
     });

@@ -155,3 +155,73 @@ describe("ensureTextSecret (DBT-152)", () => {
     expect(cribl.calls.every((r) => !("groupId" in r))).toBe(true);
   });
 });
+
+// ADR 0009; audit tenancy HIGH secret-provisioning.ts:36. The Sentinel client
+// secret has ONE fixed name, so two tenants wiring into one worker group meet
+// the same secret - and the stamped-ours PATCH replaced tenant A's value with
+// tenant B's, silently breaking every A destination that references it.
+describe("ensureTextSecret - one tenant never overwrites another's secret", () => {
+  const A = "aaaaaaaa-0000-0000-0000-00000000000a";
+  const B = "bbbbbbbb-0000-0000-0000-00000000000b";
+
+  it("names the tenant in the description it writes", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith({ status: 200, body: {} });
+    await ensureTextSecret(cribl, { ...SPEC, tenantId: A.toUpperCase() });
+    expect((cribl.calls[0]!.body as { description: string }).description).toBe(
+      `What it is for (tenant ${A}) ${stampFor(APP_ID)}`,
+    );
+  });
+
+  it("409 on a secret ours but written for ANOTHER tenant: refused, no PATCH", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: ID, description: `What it is for (tenant ${A}) ${stampFor(APP_ID)}` }] } },
+    );
+    const outcome = await ensureTextSecret(cribl, { ...SPEC, tenantId: B });
+    expect(outcome.kind === "refused" && outcome.reason).toBe("other-tenant");
+    expect(outcome.kind === "refused" ? outcome.message : "").toContain(A);
+    expect(cribl.calls.map((r) => r.method)).toEqual(["POST", "GET"]);
+  });
+
+  it("409 on a secret ours for the SAME tenant: updated", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: ID, description: `Old (tenant ${A}) ${stampFor(APP_ID)}` }] } },
+      { status: 200, body: {} },
+    );
+    const outcome = await ensureTextSecret(cribl, { ...SPEC, tenantId: A });
+    expect(outcome.kind).toBe("updated");
+  });
+
+  it("409 on a secret ours from before tenants were named: REFUSED as owner-unknown, no PATCH", async () => {
+    // Review finding (HIGH): every Sentinel client secret written before
+    // tenant naming is stamped but names no tenant. Updating it let the FIRST
+    // other tenant to wire into the group take it over - the very audit HIGH
+    // this change closes. Whose it is cannot be read, so it is not ours to
+    // replace until the operator says so.
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: ID, description: `Old ${stampFor(APP_ID)}` }] } },
+    );
+    const outcome = await ensureTextSecret(cribl, { ...SPEC, tenantId: B });
+    expect(outcome.kind === "refused" && outcome.reason).toBe("untagged-legacy");
+    // The message tells the operator exactly how to claim it for this tenant.
+    expect(outcome.kind === "refused" ? outcome.message : "").toContain(`(tenant ${B})`);
+    expect(cribl.calls.map((r) => r.method)).toEqual(["POST", "GET"]);
+  });
+
+  it("409 on an untagged stamped secret with NO tenant given: still updated (single-tenant callers)", async () => {
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 409, body: {} },
+      { status: 200, body: { items: [{ id: ID, description: `Old ${stampFor(APP_ID)}` }] } },
+      { status: 200, body: {} },
+    );
+    const outcome = await ensureTextSecret(cribl, SPEC);
+    expect(outcome.kind).toBe("updated");
+  });
+});
