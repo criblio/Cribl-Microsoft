@@ -35,9 +35,11 @@ export type {
   TenantProfile,
   TenantRestore,
   TenantRun,
+  TenantRunOptions,
   TenantRunStage,
   TenantSession,
 } from './tenant-session';
+export type { PacingSignal, RequestPacer } from './request-pacer';
 export type { TaggedSampleStore } from './tagged-sample-store';
 export type { KvDocumentStore, KvDocumentLoad } from './kv-document-store';
 export { isKvDocumentKey } from './kv-document-store';

@@ -768,6 +768,11 @@ export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-re
 // AZR-64: which worker group receives each tenant (ADR 0009 decision 5).
 export { TenantCriblMappingSection } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 export type { TenantCriblMappingSectionProps } from "./screens/setup-wizard/tenant-cribl-mapping-section";
+// ADR 0009 decision 6: the multi-tenant native logging gap dashboard.
+export { TenantGapScreen } from "./screens/tenant-gap/tenant-gap-screen";
+export type { TenantGapScreenProps } from "./screens/tenant-gap/tenant-gap-screen";
+export { TenantGapCache } from "./screens/tenant-gap/tenant-gap-state";
+export type { TenantGapEntry } from "./screens/tenant-gap/tenant-gap-state";
 export { TenantListSection } from "./screens/setup-wizard/tenant-list-section";
 export type { TenantListSectionProps } from "./screens/setup-wizard/tenant-list-section";
 export { ChangeRequestBlock } from "./screens/setup-wizard/change-request-block";

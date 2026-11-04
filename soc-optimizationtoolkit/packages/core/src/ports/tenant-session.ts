@@ -27,6 +27,7 @@
 
 import type { AzureManagement } from "./azure-management";
 import type { GraphDirectory } from "./graph-directory";
+import type { PacingSignal, RequestPacer } from "./request-pacer";
 
 /** The parts of a connection profile a tenant session needs (ConnectionProfile satisfies it). */
 export interface TenantProfile {
@@ -85,6 +86,19 @@ export type TenantRun<T> =
       readonly restore: TenantRestore;
     };
 
+/**
+ * How a run spends the caller's request budget. The session's own proxied
+ * requests - each proof read, and each token minted (ARM and Graph: two per
+ * mint) for the swap and for the restore - acquire from `pacer` first, so a
+ * scan of many tenants stays inside the one proxy budget. Once `signal`
+ * aborts, no further proof or swap request is sent; the restore still runs,
+ * paced but never cancelled, because the active connection must go back.
+ */
+export interface TenantRunOptions {
+  readonly pacer?: RequestPacer;
+  readonly signal?: PacingSignal;
+}
+
 /** Read one tenant through the shared credential slot. */
 export interface TenantSession {
   /**
@@ -92,7 +106,11 @@ export interface TenantSession {
    * `unknown` result naming the stage, and the active connection's credential
    * is put back whatever happened (the result says whether that worked).
    */
-  runForTenant<T>(profile: TenantProfile, work: (ports: TenantPorts) => Promise<T>): Promise<TenantRun<T>>;
+  runForTenant<T>(
+    profile: TenantProfile,
+    work: (ports: TenantPorts) => Promise<T>,
+    options?: TenantRunOptions,
+  ): Promise<TenantRun<T>>;
 }
 
 /**
@@ -118,7 +136,10 @@ export interface CredentialSlot {
    * was entered for another identity. Call only inside {@link exclusive}.
    */
   installCredential(profile: TenantProfile): Promise<void>;
-  /** Mint ARM and Graph tokens for `tenantId` into their slots. Call only inside {@link exclusive}. */
+  /**
+   * Mint ARM and Graph tokens for `tenantId` into their slots: two proxied
+   * requests. Call only inside {@link exclusive}.
+   */
   mintTokens(tenantId: string): Promise<void>;
   /**
    * Ports that send through the slot as it now stands, for use inside

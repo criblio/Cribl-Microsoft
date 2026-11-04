@@ -15,6 +15,9 @@ import {
   onboardBatch,
   paceAzureManagement,
   createPacingBudget,
+  createRequestPacer,
+  pacedThrough,
+  PACING_CANCELLED,
   DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE,
 } from "./onboard-batch";
 import type {
@@ -193,6 +196,75 @@ describe("paceAzureManagement", () => {
       expect(createPacingBudget().maxPerMinute).toBe(DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE);
       expect(() => createPacingBudget(0)).toThrow(RangeError);
     });
+  });
+});
+
+// AZR-63 review: a scan made one wrapper (so one fresh 40/min cap) per tenant,
+// and Cancel could not stop a request that was already waiting for room.
+describe("createRequestPacer", () => {
+  const req = { method: "GET" as const, path: "/x", apiVersion: "v" };
+
+  it("ONE pacer's cap spans every port paced through it", async () => {
+    const { state, sleeps, pacing } = fakeClock(2);
+    const issuedAt: number[] = [];
+    const counting: AzureManagement = {
+      request: async () => {
+        issuedAt.push(state.t);
+        return { status: 200, body: {} };
+      },
+    };
+    const pacer = createRequestPacer(pacing);
+    const tenantA = pacedThrough(counting, pacer);
+    const tenantB = pacedThrough(counting, pacer);
+    await tenantA.request(req);
+    await tenantB.request(req);
+    await tenantB.request(req);
+    expect(issuedAt).toEqual([0, 0, 60_000]);
+    expect(sleeps).toEqual([60_000]);
+  });
+
+  it("acquire also spends the shared budget", async () => {
+    const { pacing } = fakeClock(10);
+    const shared = createPacingBudget(5);
+    const pacer = createRequestPacer({ ...pacing, shared });
+    await pacer.acquire();
+    await pacer.acquire();
+    expect(shared.current.recentRunTimestamps.length).toBe(2);
+  });
+
+  it("an aborted signal rejects before sending, and spends nothing", async () => {
+    const { pacing } = fakeClock(10);
+    const pacer = createRequestPacer(pacing);
+    let sent = 0;
+    const paced = pacedThrough(
+      { request: async () => ((sent += 1), { status: 200, body: {} }) },
+      pacer,
+      { aborted: true },
+    );
+    await expect(paced.request(req)).rejects.toThrow(PACING_CANCELLED);
+    expect(sent).toBe(0);
+  });
+
+  it("a request waiting for room is NOT sent when the signal aborts during the wait", async () => {
+    const state = { t: 0 };
+    const signal = { aborted: false };
+    const sleepSignals: unknown[] = [];
+    const pacer = createRequestPacer({
+      maxRequestsPerMinute: 1,
+      now: () => state.t,
+      sleep: async (ms, s) => {
+        sleepSignals.push(s);
+        signal.aborted = true; // Cancel lands while it waits.
+        state.t += ms;
+      },
+    });
+    let sent = 0;
+    const paced = pacedThrough({ request: async () => ((sent += 1), { status: 200, body: {} }) }, pacer, signal);
+    await paced.request(req);
+    await expect(paced.request(req)).rejects.toThrow(PACING_CANCELLED);
+    expect(sent).toBe(1);
+    // The sleep is handed the signal, so the shell can cut it short.
+    expect(sleepSignals).toEqual([signal]);
   });
 });
 

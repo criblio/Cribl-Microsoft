@@ -28,11 +28,18 @@
  * What the proof cannot prove is written down in domain/tenancy (a delegated
  * subscription is unknown; the Graph token is not proven).
  *
+ * PACING (AZR-63): with `pacer`, every proxied request the session sends
+ * itself - each proof read, and two per token mint (ARM and Graph) - spends
+ * the caller's budget first. With `signal`, the swap and the proofs stop once
+ * it aborts (the run is then unknown); the restore is paced but never handed
+ * the signal, so the active credential goes back whatever happened.
+ *
  * Never rejects. The clock is injected; core reads no clock of its own.
  */
 
 import type { KvDocumentStore } from "../../ports/kv-document-store";
 import type { Logger } from "../../ports/logger";
+import type { PacingSignal, RequestPacer } from "../../ports/request-pacer";
 import type {
   CredentialSlot,
   TenantPorts,
@@ -69,7 +76,14 @@ export interface TenantSessionDeps {
   /** The connection the operator has active, whose credential is put back afterwards. */
   readonly activeProfile: TenantProfile | null;
   readonly logger?: Logger;
+  /** The caller's budget for the session's own requests (proof reads, mints). */
+  readonly pacer?: RequestPacer;
+  /** Once aborted, no further proof or swap request is sent. */
+  readonly signal?: PacingSignal;
 }
+
+/** Proxied requests one {@link CredentialSlot.mintTokens} sends: ARM and Graph. */
+const REQUESTS_PER_MINT = 2;
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -95,6 +109,9 @@ export async function runTenantSession<T>(
     restore,
   });
   const { slot, documents, logger } = deps;
+  const spend = async (count: number, signal: PacingSignal | undefined): Promise<void> => {
+    for (let i = 0; i < count; i++) await deps.pacer?.acquire(signal);
+  };
 
   // 1. Refusals that touch nothing.
   if (tenantId === "") return unknown("identity", `${label(profile)} has no tenant id.`);
@@ -183,6 +200,7 @@ export async function runTenantSession<T>(
         await slot.installCredential(profile);
         await recordOwner(profile);
       }
+      await spend(REQUESTS_PER_MINT, deps.signal);
       await slot.mintTokens(tenantId);
     } catch (err) {
       return unknown("swap", `Switching the shared credential to ${label(profile)} failed: ${errText(err)}`);
@@ -211,6 +229,7 @@ export async function runTenantSession<T>(
     const which = when === "before" ? "The tenant proof read" : "The tenant proof read after the work";
     let answer;
     try {
+      await spend(1, deps.signal);
       answer = await ports.azure.request(proofRequest);
     } catch (err) {
       return unknown("proof", `${which} failed: ${errText(err)}`);
@@ -250,6 +269,8 @@ export async function runTenantSession<T>(
     try {
       await slot.installCredential(to);
       await recordOwner(to);
+      // Paced, but never handed the signal: the restore is not cancellable.
+      await spend(REQUESTS_PER_MINT, undefined);
       await slot.mintTokens(normalizeTenantId(to.config.tenantId));
       return { kind: "restored" };
     } catch (err) {

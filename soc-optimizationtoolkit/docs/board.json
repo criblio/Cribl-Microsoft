@@ -3857,8 +3857,39 @@
       "id": "AZR-63",
       "type": "story",
       "priority": "now",
+      "menu": "tenant-gaps",
       "title": "Multi-tenant native logging gap dashboard: per tenant, configured in Azure vs not, onboarded to Cribl vs not",
       "detail": "OPERATOR REQUEST 2026-11-03: \"a dashboard that shows each tenant and a green or red indicator for what is being collected vs what is already produced and onboarded to cribl.\" SCOPE: a screen listing each connected tenant against each Azure native logging source (the onboarding catalog: Defender export, Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...), with two indicators per cell - configured in Azure, onboarded to Cribl - each green, red or UNKNOWN (inventory-honesty: a refused or unread check is never red). Reuses the Validate classifiers per tenant through that tenant's connection; Cribl side through AZR-64's mapping. Reads only on request, paced per tenant within the shared budget; mount makes no Azure call. Per the house dashboard standards, every tile has an (i). Reasoning in backlog.md section 6i."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-63"
+      ],
+      "id": "AZR-90",
+      "type": "story",
+      "priority": "later",
+      "menu": "tenant-gaps",
+      "title": "Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end",
+      "detail": "AZR-63 review follow-up. runTenantSession restores the active connection after EVERY tenant, so a Read all mints the active tenant's ARM and Graph tokens once per tenant for no gain (two proxied requests each). AZR-63 made every session request spend the run's pacer, so this costs budget time, not 429s. Fix: a batch form of the session that holds one lease and one exclusive section across the run, swaps A to B to C with a proof before and after each, and restores once. Reasoning in backlog.md section 6i."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-63"
+      ],
+      "id": "AZR-91",
+      "type": "story",
+      "priority": "later",
+      "menu": "tenant-gaps",
+      "title": "Tenant gap grid: one tab stop with arrow-key navigation between cells",
+      "detail": "AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user passes about 28 stops per tenant row to reach the next row's Read button. AZR-63 named every tip (tenant, source, side) so a screen reader can tell them apart; the remaining fix is a roving tabindex over the grid (arrow keys between cells, Enter opens the reason) so the Read buttons are a few keystrokes away. Reasoning in backlog.md section 6i."
     },
     {
       "epic": "AZR",

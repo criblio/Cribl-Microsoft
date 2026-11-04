@@ -33,13 +33,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 export interface InfoTipProps {
   /** Tip content. Embedded "\n" characters render as line breaks. */
   text: string;
+  /**
+   * The icon's accessible name; "More information" by default. Name what the
+   * tip explains wherever many tips sit side by side (a grid of cells), so a
+   * keyboard or screen-reader user can tell one stop from the next.
+   */
+  label?: string;
 }
 
 /** Gap between the icon and the tip, and the minimum margin to any edge. */
 const GAP = 6;
 const EDGE = 8;
 
-export function InfoTip({ text }: InfoTipProps) {
+export function InfoTip({ text, label = "More information" }: InfoTipProps) {
   // TWO reasons to be open (DBT-126, claude-kit standards/info-affordances.md):
   // hovered, or pinned by focus / click / keyboard. One shared flag let a
   // pointer press open the tip on focus and shut it on the click that followed
@@ -149,7 +155,7 @@ export function InfoTip({ text }: InfoTipProps) {
         className="info-tip-icon"
         role="button"
         tabIndex={0}
-        aria-label="More information"
+        aria-label={label}
         aria-expanded={open}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}

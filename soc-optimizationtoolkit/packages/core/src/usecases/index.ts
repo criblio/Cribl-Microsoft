@@ -25,6 +25,8 @@ export * from "./capability-audit";
 // one-time move of legacy unscoped KV documents under the active tenant.
 export * from "./tenant-session";
 export * from "./tenant-documents";
+// ADR 0009 decision 6: one tenant's row of the logging gap dashboard.
+export * from "./scan-tenant-gap";
 export * from "./workspace-tables";
 export * from "./workspace-inventory";
 export * from "./install-pack";

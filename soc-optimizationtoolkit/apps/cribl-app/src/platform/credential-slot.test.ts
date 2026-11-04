@@ -386,6 +386,21 @@ describe("PlatformTenantSession - end to end over the transport", () => {
     ]);
   });
 
+  // AZR-63 review: the session's own proxied requests went out unpaced.
+  it("spends the caller's pacer once per proxied request the session itself sends", async () => {
+    const slot = makeAzureCredentialSlot();
+    slot.remember("pa", "basic-a", ACTIVE.config);
+    slot.remember("pb", "basic-b", TARGET.config);
+    armAnswers["/subscriptions/sb"] = { status: 200, body: { subscriptionId: "sb", tenantId: B } };
+    let acquired = 0;
+    const pacer = { acquire: async () => void (acquired += 1) };
+    await session(slot).runForTenant(TARGET, async () => 1, { pacer });
+    // Two mints of two tokens (swap and restore) and two proof reads.
+    const proxied = events.filter((e) => e.startsWith("token:") || e.startsWith("ARM GET")).length;
+    expect(proxied).toBe(6);
+    expect(acquired).toBe(proxied);
+  });
+
   it("records whose secret is in the slot, and releases the lease", async () => {
     const slot = makeAzureCredentialSlot();
     slot.remember("pa", "basic-a", ACTIVE.config);

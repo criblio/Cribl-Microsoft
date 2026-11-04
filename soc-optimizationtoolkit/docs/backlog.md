@@ -1324,6 +1324,17 @@ the preflight (the only measure of `arm.deploy` today) and the
 live). AZR-75..80 were filed as AZR-67..72 and renumbered before merging,
 because feature/azure-onboarding-live-pass already uses AZR-66 and AZR-67.
 
+**The gap dashboard's request budget (AZR-63 review).** A Read all makes ONE
+request pacer for the run (`createRequestPacer`), so Validate's 40 a minute
+holds across every tenant instead of restarting per tenant, and the tenant
+session's own proxied requests - each proof read, and two per token mint -
+spend it too. A cancelled read sends nothing more (the pacer re-checks the
+signal after every wait), and never replaces a tenant's earlier complete
+answer. Two follow-ups are left on purpose: AZR-90 (restore the active
+credential once per Read all, not once per tenant - budget time, not
+correctness, now that the mints are paced) and AZR-91 (a roving tabindex
+over the grid; every tip is already named for its tenant, source and side).
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked

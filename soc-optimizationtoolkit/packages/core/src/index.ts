@@ -32,6 +32,8 @@ export * from "./domain/tenancy";
 export * from "./domain/tenant-cribl-mapping";
 // ADR 0009 decision 1 (AZR-62): the Setup tenant list, a connection per tenant.
 export * from "./domain/tenant-intake";
+// ADR 0009 decision 6 (AZR-63): the multi-tenant logging gap dashboard cells.
+export * from "./domain/tenant-gap";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

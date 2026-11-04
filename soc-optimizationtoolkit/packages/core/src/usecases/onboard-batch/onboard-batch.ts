@@ -81,6 +81,7 @@ import type {
   AzureManagementUrlRequest,
 } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
+import type { PacingSignal, RequestPacer } from "../../ports/request-pacer";
 import type { JobRecord, JobStatus, JobStep } from "../../ports/job-store";
 import { httpErrorText, is2xx, prop, safeAzureManagement } from "../arm-http";
 import type { ArmAttempt, SafeAzureManagement } from "../arm-http";
@@ -191,8 +192,12 @@ export interface BatchPacing {
   maxRequestsPerMinute?: number;
   /** Epoch-ms clock (shell-owned). */
   now: () => number;
-  /** Delay hook (shell-owned; fake ticks in tests). */
-  sleep: (ms: number) => Promise<void>;
+  /**
+   * Delay hook (shell-owned; fake ticks in tests). A pacer waiting for room
+   * hands it the caller's signal, so the shell may end the wait early on
+   * abort; the pacer re-checks the signal afterwards either way.
+   */
+  sleep: (ms: number, signal?: PacingSignal) => Promise<void>;
   /**
    * The APP-WIDE budget every paced wrapper also spends (audit tenancy MEDIUM,
    * App.tsx:163). Without it each wrapper - one per tenant in a scan, Validate
@@ -351,19 +356,20 @@ export function onboardBatchStepsFor(
   return steps;
 }
 
+/** The message a paced request rejects with once its signal has aborted. */
+export const PACING_CANCELLED = "cancelled";
+
 /**
- * Wrap an {@link AzureManagement} port so every request first acquires a slot
- * in a rolling-minute budget (poll-scheduler math over the INJECTED clock).
- * When the window is full, the wrapper sleeps until the oldest in-window
- * request expires, then re-checks. Exposed for shells that want to pace other
- * ARM flows with the same discipline.
+ * A {@link RequestPacer} over a rolling-minute budget of its own
+ * (`maxRequestsPerMinute`, poll-scheduler math over the INJECTED clock) and
+ * the app-wide `shared` one. When a window is full it sleeps until the oldest
+ * in-window request expires, then re-checks. ONE pacer's own cap spans every
+ * port paced through it, so a flow that reads many tenants makes one pacer per
+ * run, not one per tenant.
  *
  * @throws RangeError when maxRequestsPerMinute is not a positive integer.
  */
-export function paceAzureManagement(
-  azure: AzureManagement,
-  pacing: BatchPacing,
-): AzureManagement {
+export function createRequestPacer(pacing: BatchPacing): RequestPacer {
   const maxPerMinute =
     pacing.maxRequestsPerMinute ?? DEFAULT_BATCH_MAX_REQUESTS_PER_MINUTE;
   if (!Number.isInteger(maxPerMinute) || maxPerMinute < 1) {
@@ -382,28 +388,44 @@ export function paceAzureManagement(
     return BUDGET_WINDOW_MS - (now - Math.min(...inWindow));
   };
 
-  const acquire = async (): Promise<void> => {
-    for (;;) {
-      const now = pacing.now();
-      const localRoom = remainingBudget(budget, now) > 0;
-      const sharedRoom = shared === undefined || remainingBudget(shared.current, now) > 0;
-      if (localRoom && sharedRoom) {
-        budget = recordRun(budget, now);
-        if (shared !== undefined) shared.current = recordRun(shared.current, now);
-        return;
+  return {
+    acquire: async (signal?: PacingSignal): Promise<void> => {
+      for (;;) {
+        // Checked on every pass, so a cancel that landed during the sleep
+        // sends nothing and spends nothing.
+        if (signal?.aborted === true) throw new Error(PACING_CANCELLED);
+        const now = pacing.now();
+        const localRoom = remainingBudget(budget, now) > 0;
+        const sharedRoom = shared === undefined || remainingBudget(shared.current, now) > 0;
+        if (localRoom && sharedRoom) {
+          budget = recordRun(budget, now);
+          if (shared !== undefined) shared.current = recordRun(shared.current, now);
+          return;
+        }
+        // A window is full: wait until its oldest issue leaves the minute, then
+        // re-check both.
+        const waits: number[] = [];
+        if (!localRoom) waits.push(waitFor(budget, now));
+        if (!sharedRoom && shared !== undefined) waits.push(waitFor(shared.current, now));
+        await pacing.sleep(Math.max(1, ...waits), signal);
       }
-      // A window is full: wait until its oldest issue leaves the minute, then
-      // re-check both.
-      const waits: number[] = [];
-      if (!localRoom) waits.push(waitFor(budget, now));
-      if (!sharedRoom && shared !== undefined) waits.push(waitFor(shared.current, now));
-      await pacing.sleep(Math.max(1, ...waits));
-    }
+    },
   };
+}
 
+/**
+ * Wrap an {@link AzureManagement} port so every request first acquires a slot
+ * from `pacer`. With a signal, a request that has not been sent when it aborts
+ * is never sent: it rejects with {@link PACING_CANCELLED}.
+ */
+export function pacedThrough(
+  azure: AzureManagement,
+  pacer: RequestPacer,
+  signal?: PacingSignal,
+): AzureManagement {
   const paced: AzureManagement = {
     request: async (opts: AzureManagementRequest): Promise<PortHttpResponse> => {
-      await acquire();
+      await pacer.acquire(signal);
       return azure.request(opts);
     },
   };
@@ -412,11 +434,25 @@ export function paceAzureManagement(
     paced.requestUrl = async (
       opts: AzureManagementUrlRequest,
     ): Promise<PortHttpResponse> => {
-      await acquire();
+      await pacer.acquire(signal);
       return requestUrl(opts);
     };
   }
   return paced;
+}
+
+/**
+ * Wrap an {@link AzureManagement} port in a pacer of its own (see
+ * {@link createRequestPacer}). Exposed for shells that want to pace other ARM
+ * flows with the same discipline.
+ *
+ * @throws RangeError when maxRequestsPerMinute is not a positive integer.
+ */
+export function paceAzureManagement(
+  azure: AzureManagement,
+  pacing: BatchPacing,
+): AzureManagement {
+  return pacedThrough(azure, createRequestPacer(pacing));
 }
 
 // ArmAttempt / SafeAzureManagement moved to ../arm-http (DBT-74) so

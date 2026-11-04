@@ -93,6 +93,7 @@ export const MENUS = [
   'azure-onboarding',
   'mapping-catalog',
   'azure-logging-map',
+  'tenant-gaps',
   // diagnostics
   'harness',
   // planned - no route exists yet
@@ -117,6 +118,7 @@ export const MENU_LABELS = {
   'eventhub-discovery': 'Event Hub Discovery',
   'mapping-catalog': 'Mapping Catalog',
   'azure-logging-map': 'Azure Logging Map',
+  'tenant-gaps': 'Tenant Logging Gaps',
   harness: 'Diagnostics',
   'azure-onboarding': 'Azure Native Source Onboarding',
   'windows-events': 'Windows Event analysis (planned)',

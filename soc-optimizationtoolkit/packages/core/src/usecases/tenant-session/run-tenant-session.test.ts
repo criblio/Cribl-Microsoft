@@ -349,3 +349,66 @@ describe("runTenantSession - failures still restore", () => {
     expect(log.filter((l) => l.startsWith("install:"))).toEqual(["install:pb"]);
   });
 });
+
+// AZR-63 review: the session's own proxied requests (proof reads, token
+// mints) went out unpaced, and a cancelled scan still sent them.
+describe("runTenantSession - the caller's pacer and signal", () => {
+  function pacerInto(log: string[]) {
+    const signals: unknown[] = [];
+    return {
+      signals,
+      pacer: {
+        acquire: async (signal?: { readonly aborted: boolean }) => {
+          signals.push(signal);
+          if (signal?.aborted === true) throw new Error("cancelled");
+          log.push("acquire");
+        },
+      },
+    };
+  }
+
+  it("spends one request before every proof read and two before every mint (ARM and Graph), restore included", async () => {
+    const { log, slot, deps } = setup();
+    slot.azure.respondWith(...provenTwice(B));
+    const { pacer } = pacerInto(log);
+    const out = await runTenantSession({ ...deps, pacer }, TARGET, async () => {
+      log.push("work");
+      return 1;
+    });
+    expect(out.kind).toBe("done");
+    expect(log.filter((l) => l !== "owner:pb" && l !== "owner:pa")).toEqual([
+      "lease:take",
+      "exclusive:enter",
+      "install:pb",
+      "acquire",
+      "acquire",
+      `mint:${B}`,
+      `ports:${B}`,
+      "acquire",
+      "work",
+      "acquire",
+      "install:pa",
+      "acquire",
+      "acquire",
+      `mint:${A}`,
+      "exclusive:exit",
+      "lease:release",
+    ]);
+  });
+
+  it("once the signal aborts, the after-proof is not sent, the run is unknown, and the restore STILL runs", async () => {
+    const { log, slot, deps } = setup();
+    slot.azure.respondWith(...provenTwice(B));
+    const signal = { aborted: false };
+    const { pacer, signals } = pacerInto(log);
+    const out = await runTenantSession({ ...deps, pacer, signal }, TARGET, async () => {
+      signal.aborted = true;
+      return 1;
+    });
+    expect(out).toMatchObject({ kind: "unknown", stage: "proof", restore: { kind: "restored" } });
+    expect(slot.azure.calls.length).toBe(1);
+    expect(log).toContain(`mint:${A}`);
+    // The restore's acquires are never handed the signal: it must not be cancellable.
+    expect(signals.slice(-2)).toEqual([undefined, undefined]);
+  });
+});

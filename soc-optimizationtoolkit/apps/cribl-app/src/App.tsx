@@ -27,6 +27,8 @@ import {
   RepositoriesScreen,
   SettingsScreen,
   TenantCriblMappingSection,
+  TenantGapCache,
+  TenantGapScreen,
   TenantListSection,
   SetupWizard,
   SiemMigrationScreen,
@@ -114,6 +116,7 @@ import { connectThroughSlot, probeStoredSecret } from './platform/secret-connect
 // warn/error mirrored to one rolling plain KV entry. Module scope so the
 // ring survives connection switches and ports-bundle rebuilds.
 import { PlatformLogger } from './platform/logger';
+import { PlatformTenantSession } from './platform/tenant-session';
 import {
   PLATFORM_LINK_CHECKING,
   criblReachability,
@@ -199,9 +202,25 @@ const SECRET_PATH_DEPS = {
 // `shared` is ONE budget for the whole app (audit tenancy MEDIUM, App.tsx:163):
 // every paced wrapper - Validate, the batch, one per tenant in a scan - spends
 // it, instead of each spending a full allowance of its own.
+// The tenant gap dashboard's answers, per connection with their time (ADR 0009
+// decision 6). Module scope so leaving the screen and coming back shows the
+// last answers instead of reading every tenant again.
+const TENANT_GAP_CACHE = new TenantGapCache();
+
 const BATCH_PACING: BatchPacing = {
   now: () => Date.now(),
-  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  // A paced wait ends early when its caller's signal aborts (the tenant gap
+  // dashboard's Cancel); the pacer then re-checks the signal and sends nothing.
+  sleep: (ms: number, signal?: { readonly aborted: boolean }) =>
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      if (signal instanceof AbortSignal) {
+        signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          resolve();
+        }, { once: true });
+      }
+    }),
   shared: createPacingBudget(),
 };
 
@@ -970,6 +989,22 @@ function App() {
   useEffect(() => {
     storeRef.current = store;
   }, [store]);
+
+  // Reads one tenant at a time through the tab's credential slot (ADR 0009
+  // decision 2). The active connection is looked up when each run starts, so
+  // a switch made while the dashboard is open puts back the right credential.
+  const tenantSession = useMemo(
+    () =>
+      new PlatformTenantSession({
+        slot: azureCredentialSlot,
+        documents: appDocuments,
+        holderId: TAB_HOLDER_ID,
+        now: () => Date.now(),
+        getActiveProfile: () => getActiveProfile(storeRef.current) ?? null,
+        logger: appLogger,
+      }),
+    [],
+  );
 
   // The cloud port adapters for the @soc/ui screens, rebuilt when the
   // ACTIVE connection's identity changes - tenant AND client (audit tenancy
@@ -2248,6 +2283,34 @@ function App() {
     </>
   );
 
+  // Tenant Logging Gaps (AZR-63, ADR 0009 decision 6, READ-ONLY): every
+  // connection against every Azure native logging source, configured in Azure
+  // (Validate through that tenant's own connection, via the tenant session)
+  // and onboarded to Cribl. Mount reads nothing; reads are paced on the shared
+  // budget. requires: [] - see route-capabilities.ts. No policies.yml or
+  // proxies.yml change: its Azure reads are Validate's (already proxied) and
+  // its one Cribl read, GET /m/:gid/system/inputs, is already declared.
+  const tenantGapsView = (
+    <>
+      <header className="harness-header">
+        <h1 className="harness-title">Tenant Logging Gaps</h1>
+        <p className="harness-subtitle">
+          See, for every Azure tenant you connect, which native logging sources
+          are set up in Azure and onboarded to Cribl. Nothing here changes Azure
+          or Cribl.
+        </p>
+      </header>
+      <PortsProvider {...portsProviderProps}>
+        <TenantGapScreen
+          profiles={store.profiles}
+          cache={TENANT_GAP_CACHE}
+          session={tenantSession}
+          pacing={BATCH_PACING}
+        />
+      </PortsProvider>
+    </>
+  );
+
   // Labs (roadmap Phase 5, LAB-01/02/13/14): provision disposable Azure lab
   // environments - the 8 UnifiedLab profiles as a planning surface (naming,
   // validation, phases, permissions, plan download) plus the live foundation
@@ -2499,6 +2562,7 @@ function App() {
     { id: 'azure-onboarding', label: 'Azure Native Source Onboarding', requires: capabilitiesForRoute('azure-onboarding'), section: 'development', render: () => azureOnboardingView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
     { id: 'azure-logging-map', label: 'Azure Logging Map', requires: capabilitiesForRoute('azure-logging-map'), section: 'development', render: () => azureLoggingMapView },
+    { id: 'tenant-gaps', label: 'Tenant Logging Gaps', requires: capabilitiesForRoute('tenant-gaps'), section: 'development', render: () => tenantGapsView },
     { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 

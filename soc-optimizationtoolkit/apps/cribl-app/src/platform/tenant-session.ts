@@ -13,6 +13,7 @@ import type {
   TenantPorts,
   TenantProfile,
   TenantRun,
+  TenantRunOptions,
   TenantSession,
 } from '@soc/core';
 import type { AzureCredentialSlot } from './credential-slot';
@@ -37,7 +38,11 @@ export class PlatformTenantSession implements TenantSession {
     this.options = options;
   }
 
-  runForTenant<T>(profile: TenantProfile, work: (ports: TenantPorts) => Promise<T>): Promise<TenantRun<T>> {
+  runForTenant<T>(
+    profile: TenantProfile,
+    work: (ports: TenantPorts) => Promise<T>,
+    options: TenantRunOptions = {},
+  ): Promise<TenantRun<T>> {
     const { slot, documents, holderId, now, leaseTtlMs, logger } = this.options;
     return runTenantSession(
       {
@@ -48,6 +53,8 @@ export class PlatformTenantSession implements TenantSession {
         activeProfile: this.options.getActiveProfile(),
         ...(leaseTtlMs !== undefined ? { leaseTtlMs } : {}),
         ...(logger !== undefined ? { logger } : {}),
+        ...(options.pacer !== undefined ? { pacer: options.pacer } : {}),
+        ...(options.signal !== undefined ? { signal: options.signal } : {}),
       },
       profile,
       work,
