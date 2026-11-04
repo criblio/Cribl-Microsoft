@@ -25,6 +25,9 @@ import {
   patPolicyFor,
 } from "@soc/core";
 import type { ContentPlatform } from "@soc/core";
+import { InfoTip } from "../../components/info-tip";
+import { NumberedSection } from "../../components/numbered-section";
+import { useSectionFold, useSectionRunState } from "../../components/section-folding/section-fold-context";
 import { usePorts } from "../../ports-context";
 import {
   derivePatFormView,
@@ -36,6 +39,14 @@ import {
 export interface RepositoriesScreenProps {
   /** Which shell is asking - governs whether a PAT is required (cloud) or advised (local). */
   platform: ContentPlatform;
+  /**
+   * DBT-246: told after a SUCCESSFUL save (true) or clear (false) so the shell's
+   * journey sees the change without a reload. After a FAILED save the stored
+   * status is re-read and reported, because a rejected replacement rolls the
+   * previous token back. Not called on a failed clear or when a status read
+   * fails.
+   */
+  onTokenStatusChange?: (present: boolean) => void;
 }
 
 // The 13-step PAT creation walkthrough, kept from the legacy RepoSetup page
@@ -57,7 +68,18 @@ const PAT_WALKTHROUGH_STEPS: readonly string[] = [
   "Click Generate token, then copy the token (it starts with github_pat_...).",
 ];
 
-export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
+/** Fold-scope ids of this screen's three sections (Setup page and wizard). */
+export const GITHUB_TOKEN_SECTION_ID = "github-token";
+export const SENTINEL_CONTENT_SECTION_ID = "sentinel-content";
+export const SCHEMA_TABLES_SECTION_ID = "schema-tables";
+
+const SCHEMA_TABLES_DESCRIPTION =
+  `The table schemas Microsoft's own CI validates every solution's KQL against (${KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). ` +
+  "When a destination table is defined there, the DCR Gap Analysis and the coverage sections resolve its schema from here FIRST - ahead of the " +
+  "solution's connector definitions, the bundled snapshot, and sample-derived schemas. The check lists the directory and reads one " +
+  "definition end to end.";
+
+export function RepositoriesScreen({ platform, onTokenStatusChange }: RepositoriesScreenProps) {
   const { ports } = usePorts();
   const githubPat = ports.githubPat;
   const content = ports.content;
@@ -65,6 +87,9 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const policy = patPolicyFor(platform);
   const [form, dispatch] = useReducer(patFormReducer, undefined, initialPatFormState);
   const view = derivePatFormView(form);
+  const tokenFold = useSectionFold(GITHUB_TOKEN_SECTION_ID);
+  const contentFold = useSectionFold(SENTINEL_CONTENT_SECTION_ID);
+  const schemaFold = useSectionFold(SCHEMA_TABLES_SECTION_ID);
 
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [solutionCount, setSolutionCount] = useState<number | null>(null);
@@ -77,6 +102,11 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
   const [schemaProbe, setSchemaProbe] = useState("");
   const [schemaError, setSchemaError] = useState("");
   const [schemaChecking, setSchemaChecking] = useState(false);
+
+  // DBT-248: a running check keeps its section open; a failure reopens it.
+  useSectionRunState(GITHUB_TOKEN_SECTION_ID, { busy: view.busy, failed: view.error !== "" });
+  useSectionRunState(SENTINEL_CONTENT_SECTION_ID, { busy: checking, failed: reachError !== "" });
+  useSectionRunState(SCHEMA_TABLES_SECTION_ID, { busy: schemaChecking, failed: schemaError !== "" });
 
   // Load the stored status once on mount (hasPat + login; never the token).
   useEffect(() => {
@@ -113,10 +143,26 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     try {
       const status = await githubPat.validateAndStore(form.value);
       dispatch({ type: "submit-result", status });
+      if (status.hasPat) {
+        onTokenStatusChange?.(true);
+        return;
+      }
     } catch (err) {
       dispatch({ type: "submit-error", message: String(err) });
     }
-  }, [githubPat, form.value]);
+    // A failed attempt may still have changed what is stored: the adapter
+    // stores BEFORE validating and rolls back on a rejection or a transport
+    // failure, which deletes a previously valid token too. So re-read the
+    // stored status and report THAT - a rejection that returned before storing
+    // (a bad format) leaves the old token, and the re-read says so (I7).
+    try {
+      const after = await githubPat.status();
+      dispatch({ type: "hydrate", status: after });
+      onTokenStatusChange?.(after.hasPat);
+    } catch {
+      // Unknown: report nothing rather than a guess.
+    }
+  }, [githubPat, form.value, onTokenStatusChange]);
 
   const clear = useCallback(async () => {
     if (githubPat === undefined) {
@@ -127,10 +173,11 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
       await githubPat.clear();
       dispatch({ type: "clear-result" });
       setSolutionCount(null);
+      onTokenStatusChange?.(false);
     } catch (err) {
       dispatch({ type: "clear-error", message: String(err) });
     }
-  }, [githubPat]);
+  }, [githubPat, onTokenStatusChange]);
 
   // Reachability + PAT-valid check: read the lightweight index count on demand
   // (NEVER a bulk mirror). One commit-resolve + one contents call.
@@ -209,17 +256,28 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
     error: reachError,
   });
 
-  const patBadgeClass = view.hasPat
-    ? "numbered-section-badge-complete"
-    : "numbered-section-badge-current";
-  const connBadgeClass =
-    solutionCount !== null
-      ? "numbered-section-badge-complete"
-      : "numbered-section-badge-current";
-  const schemaBadgeClass =
-    schemaTables !== null
-      ? "numbered-section-badge-complete"
-      : "numbered-section-badge-current";
+  // A scope above this screen (Setup page, wizard) numbers and folds the
+  // sections; alone (the Repositories route) they number 1..3 and keep their
+  // own open state.
+  // An unfinished section wears the "current" tone: alone on the Repositories
+  // route every one does; on Setup only the one the journey points at.
+  const incomplete = (fold: ReturnType<typeof useSectionFold>) =>
+    fold === undefined || fold.current ? ("current" as const) : ("available" as const);
+  const foldOf = (
+    fold: ReturnType<typeof useSectionFold>,
+    fallbackNumber: number,
+  ) => {
+    if (fold === undefined) return { number: fallbackNumber };
+    const { number, ...rest } = fold;
+    return { ...rest, number: number ?? fallbackNumber };
+  };
+  const tokenSummary = view.hasPat
+    ? `Token saved${view.login !== "" ? ` (${view.login})` : ""}`
+    : view.statusUnknown !== ""
+      ? "Token status unknown"
+      : policy.required
+        ? "No token saved - required on this hosted app"
+        : "No token saved";
   const schemaStatus =
     schemaError !== ""
       ? {
@@ -245,15 +303,24 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
 
   return (
     <div className="repositories-screen">
-      <section className="numbered-section">
-        <div className="numbered-section-head">
-          <span className={`numbered-section-badge ${patBadgeClass}`}>1</span>
-          <h2 className="numbered-section-title">
-            GitHub personal access token
-          </h2>
-        </div>
-        <p className="panel-desc">{policy.rationale}</p>
-        <p className="panel-desc">{policy.scopeGuidance}</p>
+      <NumberedSection
+        {...foldOf(tokenFold, 1)}
+        title="GitHub personal access token"
+        status={view.hasPat ? "complete" : incomplete(tokenFold)}
+        infoTip="The token that lets this app read Microsoft Sentinel content from GitHub. Fine-grained and read-only on public repositories is enough."
+        summary={tokenSummary}
+      >
+        {/* One requirement line on screen; the WHY (rationale and scope
+            guidance) moves verbatim behind the (i) - live check 2026-11-02. */}
+        <p className="panel-desc">
+          {policy.required
+            ? "A GitHub token is required to browse solutions and fetch content."
+            : "A GitHub token is recommended to avoid GitHub's anonymous rate limit."}
+          <InfoTip
+            label="About the GitHub token"
+            text={`${policy.rationale}\n${policy.scopeGuidance}`}
+          />
+        </p>
         {view.statusUnknown !== "" && (
           <div className="status-bar status-bar-error repositories-pat-unknown">
             <span className="status-bar-dot" aria-hidden="true" />
@@ -347,19 +414,20 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
               ))}
             </ol>
             <p className="panel-desc">
-              Paste it into the field above and click {view.submitLabel}. Classic
-              tokens (ghp_...) also work - only public_repo scope is needed. The
+              Paste it into the field above and click {view.submitLabel}. The
               token is never written to disk in plaintext.
             </p>
           </div>
         )}
-      </section>
+      </NumberedSection>
 
-      <section className="numbered-section">
-        <div className="numbered-section-head">
-          <span className={`numbered-section-badge ${connBadgeClass}`}>2</span>
-          <h2 className="numbered-section-title">Sentinel content</h2>
-        </div>
+      <NumberedSection
+        {...foldOf(contentFold, 2)}
+        title="Sentinel content"
+        status={solutionCount !== null ? "complete" : incomplete(contentFold)}
+        infoTip="Checks that the Sentinel content repository is reachable with your token."
+        summary={reachability.label}
+      >
         <p className="panel-desc">
           Fetches Solution definitions and analytic content from GitHub over the
           REST API - no git install or clone. The count is a live reachability +
@@ -381,27 +449,16 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
             {checking ? "Checking..." : "Refresh"}
           </button>
         </div>
-      </section>
+      </NumberedSection>
 
       {content !== undefined && (
-        <section className="numbered-section">
-          <div className="numbered-section-head">
-            <span className={`numbered-section-badge ${schemaBadgeClass}`}>
-              3
-            </span>
-            <h2 className="numbered-section-title">
-              Schema tables (KQL validation)
-            </h2>
-          </div>
-          <p className="panel-desc">
-            The table schemas Microsoft&apos;s own CI validates every solution&apos;s
-            KQL against ({KQL_VALIDATION_TABLES_DIR} in the Sentinel repo). When a
-            destination table is defined there, the DCR Gap Analysis and the
-            coverage sections resolve its schema from here FIRST - ahead of the
-            solution&apos;s connector definitions, the bundled snapshot, and
-            sample-derived schemas. The check lists the directory and reads one
-            definition end to end.
-          </p>
+        <NumberedSection
+          {...foldOf(schemaFold, 3)}
+          title="Schema tables (KQL validation)"
+          status={schemaTables !== null ? "complete" : incomplete(schemaFold)}
+          infoTip={SCHEMA_TABLES_DESCRIPTION}
+          summary={schemaStatus.label}
+        >
           <div className={`reachability reachability-${schemaStatus.tone}`}>
             <span className="reachability-dot" aria-hidden="true" />
             <div>
@@ -418,7 +475,7 @@ export function RepositoriesScreen({ platform }: RepositoriesScreenProps) {
               {schemaChecking ? "Checking..." : "Refresh"}
             </button>
           </div>
-        </section>
+        </NumberedSection>
       )}
     </div>
   );

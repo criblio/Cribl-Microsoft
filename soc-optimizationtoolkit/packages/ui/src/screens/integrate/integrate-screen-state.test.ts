@@ -15,11 +15,7 @@ import {
   deployDisabledReason,
   deploySettingsSummary,
   deriveSectionInputs,
-  foldableWithoutShift,
-  parsePinnedSections,
-  pinnedSectionsKey,
   sectionSummary,
-  sectionsToCollapseOnMove,
 } from "./integrate-screen-state";
 import type { SectionSummaryFacts } from "./integrate-screen-state";
 
@@ -282,41 +278,5 @@ describe("deploySettingsSummary (DBT-231)", () => {
     expect(deploySettingsSummary("", "", true)).toBe(
       "Deploy settings: no table yet - no client id - secret given (change)",
     );
-  });
-});
-
-describe("auto-collapse on move (DBT-232)", () => {
-  it("folds every other open section except pinned, kept-open and already-folded ones", () => {
-    const all = ["solution", "sample-data", "gap-analysis", "rule-coverage", "deploy"] as const;
-    expect(
-      sectionsToCollapseOnMove(
-        "sample-data",
-        all,
-        new Set(["solution"]),
-        new Set(["rule-coverage"]),
-        new Set(["deploy"]),
-      ),
-    ).toEqual(["gap-analysis"]);
-  });
-
-  it("reads a stored pin list, dropping ids the page no longer has", () => {
-    expect(pinnedSectionsKey("u-1")).toBe("integrate-pinned-sections:u-1");
-    expect(parsePinnedSections('["deploy","workbook-coverage"]', ["solution", "deploy"])).toEqual(["deploy"]);
-    expect(parsePinnedSections("not json", ["deploy"])).toEqual([]);
-    expect(parsePinnedSections(null, ["deploy"])).toEqual([]);
-  });
-});
-
-describe("folds above the active section only when the shift can be absorbed (DBT-234)", () => {
-  const order = ["solution", "sample-data", "gap-analysis", "deploy"] as const;
-  it("keeps the sections above open at the top of the page, still folding those below", () => {
-    expect(
-      foldableWithoutShift(["solution", "gap-analysis", "deploy"], order, "sample-data", { solution: 180 }, 0),
-    ).toEqual(["gap-analysis", "deploy"]);
-  });
-  it("folds them once the page is scrolled far enough to compensate", () => {
-    expect(
-      foldableWithoutShift(["solution", "gap-analysis"], order, "sample-data", { solution: 180 }, 400),
-    ).toEqual(["solution", "gap-analysis"]);
   });
 });

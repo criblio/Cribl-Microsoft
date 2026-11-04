@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { deriveJourney } from "@soc/core";
 import type { JourneyFacts, JourneyStage } from "@soc/core";
 import {
+  NOT_NEEDED_HINT,
   SHARED_JOURNEY_LINKS,
   buildStepperItems,
   mergeJourneyLinks,
@@ -151,5 +152,27 @@ describe("SHARED_JOURNEY_LINKS", () => {
 
   it("does not bind connect (shell-specific by design - props, not prose)", () => {
     expect(SHARED_JOURNEY_LINKS.connect).toBeUndefined();
+  });
+});
+
+describe("not-needed stages (I4)", () => {
+  const disconnected = facts({
+    connectivity: "disconnected",
+    identityPresent: false,
+    secretLive: "missing",
+    scopeCommitted: false,
+  });
+  const links: JourneyLinks = mergeJourneyLinks({
+    connect: { routeId: "home", anchorId: "x", hint: "Identity entry lives in the hidden section" },
+  });
+
+  it("drops the route and the link hint, and says why", () => {
+    const items = buildStepperItems(deriveJourney(disconnected).firstRun, links);
+    for (const id of ["connect", "target"]) {
+      const item = items.find((i) => i.id === id);
+      expect(item?.status).toBe("not-needed");
+      expect(item?.routeId).toBeNull();
+      expect(item?.hint).toBe(NOT_NEEDED_HINT);
+    }
   });
 });

@@ -3,12 +3,12 @@
  * (mode matrix, tradeoff table, base-URL derivation, dual-profile reconnect,
  * abstract step list + progress) are pinned in @soc/core's first-run-wizard
  * tests; these pin the BINDING layer this assembly adds: the concrete screen
- * list (with the injected preflight + repositories panels), Back/Next
+ * list (with the injected repositories panel), Back/Next
  * navigation over it, the 3-segment progress mapping, the footer status
  * derivation, the Get Started gate, and the leader base-URL dispatch.
  */
 import { describe, expect, it } from "vitest";
-import type { WizardShape } from "@soc/core";
+import type { JourneyFacts, WizardShape } from "@soc/core";
 import {
   GET_STARTED_NOT_FINAL_REASON,
   deriveFooterStatus,
@@ -19,24 +19,24 @@ import {
   nextViewId,
   previousViewId,
   resolveCurrentViewId,
+  wizardStepSections,
   wizardViewIds,
   wizardViewProgress,
   wizardViews,
 } from "./setup-wizard-state";
 
 describe("wizardViews", () => {
-  it("leads the Connect phase with repositories and trails Azure with preflight (local, mode undecided)", () => {
+  it("leads the Connect phase with repositories and ends on Azure (local, mode undecided); there is no separate permission-check view", () => {
     // ORDER CONTRACT (user direction 2026-08-03): GitHub first, because it is
-    // the connection a customer can make without a change request; the
-    // preflight must still follow connect-azure, since it verifies the
-    // identity that step configures.
+    // the connection a customer can make without a change request; Azure
+    // is last: the separate Check permissions step went (setup-pages plan, it
+    // says it gates nothing and the Permission Verification page covers it).
     const shape: WizardShape = { target: "local" };
     expect(wizardViewIds(shape)).toEqual([
       "target",
       "repositories",
       "leader-connect",
       "connect-azure",
-      "preflight",
     ]);
   });
 
@@ -47,7 +47,6 @@ describe("wizardViews", () => {
       "repositories",
       "upload-walkthrough",
       "connect-azure",
-      "preflight",
     ]);
   });
 
@@ -77,7 +76,6 @@ describe("wizardViews", () => {
       "repositories",
       "leader-connect",
       "connect-azure",
-      "preflight",
     ]);
   });
 
@@ -87,15 +85,13 @@ describe("wizardViews", () => {
     expect(byId["target"]).toBe(false);
     expect(byId["leader-connect"]).toBe(true);
     expect(byId["connect-azure"]).toBe(true);
-    expect(byId["preflight"]).toBe(true);
+    expect(byId["preflight"]).toBeUndefined();
     expect(byId["repositories"]).toBe(true);
   });
 
-  it("puts the injected panels in the connect phase", () => {
+  it("puts the injected panel in the connect phase", () => {
     const views = wizardViews({ target: "local" });
-    const preflight = views.find((v) => v.id === "preflight");
     const repositories = views.find((v) => v.id === "repositories");
-    expect(preflight?.phase).toBe("connect");
     expect(repositories?.phase).toBe("connect");
   });
 });
@@ -106,16 +102,16 @@ describe("navigation", () => {
   it("advances through the concrete list in order", () => {
     expect(nextViewId(shape, "target")).toBe("repositories");
     expect(nextViewId(shape, "repositories")).toBe("leader-connect");
-    expect(nextViewId(shape, "connect-azure")).toBe("preflight");
+    expect(nextViewId(shape, "leader-connect")).toBe("connect-azure");
   });
 
   it("returns null past the final view and before the first", () => {
-    expect(nextViewId(shape, "preflight")).toBeNull();
+    expect(nextViewId(shape, "connect-azure")).toBeNull();
     expect(previousViewId(shape, "target")).toBeNull();
   });
 
   it("steps backward through the list", () => {
-    expect(previousViewId(shape, "preflight")).toBe("connect-azure");
+    expect(previousViewId(shape, "connect-azure")).toBe("leader-connect");
     expect(previousViewId(shape, "leader-connect")).toBe("repositories");
     expect(previousViewId(shape, "repositories")).toBe("target");
   });
@@ -129,7 +125,7 @@ describe("navigation", () => {
   it("marks the first and last views", () => {
     expect(isFirstView(shape, "target")).toBe(true);
     expect(isFirstView(shape, "leader-connect")).toBe(false);
-    expect(isFinalView(shape, "preflight")).toBe(true);
+    expect(isFinalView(shape, "connect-azure")).toBe(true);
     expect(isFinalView(shape, "repositories")).toBe(false);
   });
 });
@@ -137,7 +133,7 @@ describe("navigation", () => {
 describe("resolveCurrentViewId", () => {
   it("keeps a still-present view id", () => {
     const shape: WizardShape = { target: "local" };
-    expect(resolveCurrentViewId(shape, "preflight")).toBe("preflight");
+    expect(resolveCurrentViewId(shape, "connect-azure")).toBe("connect-azure");
   });
 
   it("falls back to the first view when a target switch drops the current view", () => {
@@ -157,7 +153,7 @@ describe("wizardViewProgress", () => {
     // (capability-model-plan step 5).
     expect(at("target")).toEqual(["target:current", "connect:upcoming"]);
     expect(at("repositories")).toEqual(["target:complete", "connect:current"]);
-    expect(at("preflight")).toEqual(["target:complete", "connect:current"]);
+    expect(at("connect-azure")).toEqual(["target:complete", "connect:current"]);
   });
 
   it("drops the Target segment entirely when already installed in the leader", () => {
@@ -170,7 +166,7 @@ describe("wizardViewProgress", () => {
     const at = (id: Parameters<typeof wizardViewProgress>[1]) =>
       wizardViewProgress(shape, id).map((seg) => `${seg.phase}:${seg.status}`);
     expect(at("repositories")).toEqual(["connect:current"]);
-    expect(at("preflight")).toEqual(["connect:current"]);
+    expect(at("connect-azure")).toEqual(["connect:current"]);
   });
 });
 
@@ -186,7 +182,6 @@ describe("installed-in-leader shape", () => {
     expect(wizardViewIds(shape)).toEqual([
       "repositories",
       "connect-azure",
-      "preflight",
     ]);
   });
 
@@ -196,7 +191,7 @@ describe("installed-in-leader shape", () => {
       installedInLeader: true,
     };
     expect(isFirstView(shape, "repositories")).toBe(true);
-    expect(isFinalView(shape, "preflight")).toBe(true);
+    expect(isFinalView(shape, "connect-azure")).toBe(true);
     // A cursor left on the dropped target view clamps to the first real view
     // instead of stranding the wizard on a blank screen.
     expect(resolveCurrentViewId(shape, "target")).toBe("repositories");
@@ -316,5 +311,49 @@ describe("deriveLeaderBaseUrl", () => {
     if (!result.ok) {
       expect(result.error).toContain("/api/v1");
     }
+  });
+});
+
+describe("the cloud first run (installed in the leader)", () => {
+  const cloud: WizardShape = { target: "cribl-hosted", installedInLeader: true };
+
+  it("is exactly GitHub then Azure", () => {
+    expect(wizardViewIds(cloud)).toEqual(["repositories", "connect-azure"]);
+  });
+
+  it("makes the GitHub view not skippable when the token is required", () => {
+    const views = wizardViews(cloud, { repositoriesRequired: true });
+    expect(views.find((v) => v.id === "repositories")?.skippable).toBe(false);
+    // Azure stays skippable: nothing but deploys needs it.
+    expect(views.find((v) => v.id === "connect-azure")?.skippable).toBe(true);
+  });
+
+  it("keeps the GitHub view skippable when the token is optional", () => {
+    const views = wizardViews(cloud, { repositoriesRequired: false });
+    expect(views.find((v) => v.id === "repositories")?.skippable).toBe(true);
+  });
+});
+
+describe("wizardStepSections (the ids a step actually renders, in order)", () => {
+  const facts = (connectivity: JourneyFacts["connectivity"]) => ({ connectivity }) as JourneyFacts;
+  it("the GitHub step is always its three sections", () => {
+    expect(wizardStepSections("github", facts("full"))).toEqual([
+      "github-token",
+      "sentinel-content",
+      "schema-tables",
+    ]);
+  });
+  it("Fully Connected: connect then resources, no checklist", () => {
+    expect(wizardStepSections("azure", facts("full"))).toEqual(["azure-connect", "azure-resources"]);
+  });
+  it("Partially Connected: the checklist comes first", () => {
+    expect(wizardStepSections("azure", facts("partial"))).toEqual([
+      "azure-connectivity",
+      "azure-connect",
+      "azure-resources",
+    ]);
+  });
+  it("Disconnected: neither connect nor resources", () => {
+    expect(wizardStepSections("azure", facts("disconnected"))).toEqual([]);
   });
 });

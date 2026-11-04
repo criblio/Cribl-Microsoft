@@ -29,6 +29,8 @@ const FULL_CONFIG: AzureConfig = {
   resourceGroup: "rg-soc-lab",
   workspaceName: "law-soc-lab",
   setupPath: "lab-byo-rg",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 describe("serializeAzureConfig / parseAzureConfig round-trip", () => {
@@ -51,10 +53,12 @@ describe("serializeAzureConfig / parseAzureConfig round-trip", () => {
     }
   });
 
-  it("serializes exactly the six known fields and nothing else", () => {
+  it("serializes exactly the eight known fields and nothing else", () => {
     const json = serializeAzureConfig(FULL_CONFIG);
     expect(Object.keys(JSON.parse(json)).sort()).toEqual([
+      "allowedPermissions",
       "clientId",
+      "connectivity",
       "resourceGroup",
       "setupPath",
       "subscriptionId",
@@ -176,6 +180,8 @@ describe("parseAzureConfig field-level coercion", () => {
       resourceGroup: "",
       workspaceName: "",
       setupPath: "existing",
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
     });
   });
 
@@ -190,6 +196,8 @@ describe("parseAzureConfig field-level coercion", () => {
       resourceGroup: "",
       workspaceName: "",
       setupPath: "lab-new-rg",
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
     });
   });
 });
@@ -215,7 +223,9 @@ describe("parseAzureConfig never surfaces secrets or unknown keys", () => {
     );
     expect(parsed).toEqual(FULL_CONFIG);
     expect(Object.keys(parsed).sort()).toEqual([
+      "allowedPermissions",
       "clientId",
+      "connectivity",
       "resourceGroup",
       "setupPath",
       "subscriptionId",
@@ -254,5 +264,64 @@ describe("isAzureConfigComplete", () => {
     };
     expect(isAzureConfigComplete(tokenOnly, false)).toBe(false);
     expect(isAzureConfigComplete(FULL_CONFIG, false)).toBe(true);
+  });
+});
+
+describe("connectivity and allowedPermissions", () => {
+  it("defaults a stored config with neither field to full + Reader", () => {
+    const parsed = parseAzureConfig(JSON.stringify({ clientId: "c" }));
+    expect(parsed.connectivity).toBe("full");
+    expect(parsed.allowedPermissions).toEqual(["Reader"]);
+  });
+
+  it("parses an unknown connectivity string as full", () => {
+    const parsed = parseAzureConfig(JSON.stringify({ connectivity: "bogus" }));
+    expect(parsed.connectivity).toBe("full");
+  });
+
+  it("drops non-string allowedPermissions entries", () => {
+    const parsed = parseAzureConfig(
+      JSON.stringify({ allowedPermissions: ["Reader", 5, null, {}, "Owner"] }),
+    );
+    expect(parsed.allowedPermissions).toEqual(["Reader", "Owner"]);
+  });
+
+  it("falls back to Reader when allowedPermissions is not an array", () => {
+    const parsed = parseAzureConfig(
+      JSON.stringify({ allowedPermissions: "Owner" }),
+    );
+    expect(parsed.allowedPermissions).toEqual(["Reader"]);
+  });
+
+  it("round-trips partial connectivity with its permissions exactly", () => {
+    const config: AzureConfig = {
+      ...FULL_CONFIG,
+      setupPath: "existing",
+      connectivity: "partial",
+      allowedPermissions: ["Reader", "Log Analytics Contributor"],
+    };
+    expect(parseAzureConfig(serializeAzureConfig(config))).toEqual(config);
+  });
+
+  it.each(["lab-new-rg", "lab-byo-rg"] as const)(
+    "normalises partial connectivity with a saved %s path to existing (C1)",
+    (setupPath) => {
+      const parsed = parseAzureConfig(
+        JSON.stringify({ ...FULL_CONFIG, setupPath, connectivity: "partial" }),
+      );
+      expect(parsed.setupPath).toBe("existing");
+    },
+  );
+
+  it("keeps a lab path under full connectivity", () => {
+    const parsed = parseAzureConfig(serializeAzureConfig(FULL_CONFIG));
+    expect(parsed.setupPath).toBe("lab-byo-rg");
+  });
+
+  it("round-trips disconnected connectivity", () => {
+    const config: AzureConfig = { ...FULL_CONFIG, connectivity: "disconnected" };
+    expect(parseAzureConfig(serializeAzureConfig(config)).connectivity).toBe(
+      "disconnected",
+    );
   });
 });

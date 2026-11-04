@@ -1250,6 +1250,15 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--text-faint);
 }
 
+.journey-step-not-needed .journey-step-circle {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.journey-step-not-needed .journey-step-label {
+  color: var(--text-faint);
+}
+
 .journey-step-hint {
   font-size: 11px;
   line-height: 16px;
@@ -1348,6 +1357,11 @@ button.journey-step-main:hover .journey-step-label {
   color: var(--error-strong);
   border-color: var(--error-border);
   background: var(--error-bg);
+}
+
+.readiness-chip-not-used {
+  color: var(--text-faint);
+  border-color: var(--border-subtle);
 }
 
 .readiness-chip-unknown {
@@ -3172,10 +3186,11 @@ button.readiness-pill:focus-visible {
  * Repositories / PAT settings (porting-plan Unit 14): the reachability status
  * line (a state, never "downloaded N files") with a tone-coloured dot.
  * ------------------------------------------------------------------------- */
+/* The sections space themselves (.numbered-section margin-bottom): a flex gap on top
+ * of it doubled the space around the token and content sections on Setup. */
 .repositories-screen {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 .reachability {
   display: flex;
@@ -8297,4 +8312,101 @@ details[open] > summary::before {
 .numbered-section-pin-on {
   border-color: var(--accent, #4aa3df);
   color: var(--accent, #4aa3df);
+}
+
+/* Azure connectivity section (setup pages): a segmented three-way choice, the
+ * featured read-only block and the optional-permission checklist. */
+.connectivity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.connectivity-choice {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.connectivity-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.connectivity-choice label + label {
+  border-left: 1px solid var(--border);
+}
+
+.connectivity-choice label:has(input:checked) {
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.connectivity-choice input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.connectivity-partial {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.connectivity-featured {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-control);
+  background: var(--accent-bg);
+}
+
+.connectivity-featured .field-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.connectivity-badge {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 2px 10px;
+  border: 1px solid var(--ok-border);
+  border-radius: var(--radius-pill);
+  color: var(--ok-strong);
+  background: var(--ok-bg);
+}
+
+.connectivity-others {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.connectivity-row,
+.connectivity-disconnected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.connectivity-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
 }

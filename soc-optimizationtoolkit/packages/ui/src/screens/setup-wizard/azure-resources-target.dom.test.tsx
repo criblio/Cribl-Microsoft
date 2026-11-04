@@ -24,7 +24,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { AzureConfig, AzureSetupPath, ChangeRequestContext } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -43,14 +43,16 @@ const PENDING_PORTS = {
   azure: { request: () => new Promise(() => undefined) },
 } as unknown as UiPorts;
 
-const CONFIG = {
+const CONFIG: AzureConfig = {
   clientId: "00000000-0000-0000-0000-000000000000",
   tenantId: "11111111-1111-1111-1111-111111111111",
   subscriptionId: "22222222-2222-2222-2222-222222222222",
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
-} as AzureConfig;
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
+};
 
 const CTX: ChangeRequestContext = { appName: "test", config: CONFIG };
 
@@ -111,5 +113,168 @@ describe("the deployment target is reachable from every setup path", () => {
     expect(
       screen.getByText(/every screen that names a workspace uses this one/i),
     ).toBeTruthy();
+  });
+});
+
+describe("connectivity gates the section", () => {
+  it("renders nothing when disconnected", () => {
+    const { container } = render(
+      <PortsProvider ports={PENDING_PORTS} config={CONFIG}>
+        <AzureResourcesSection
+          clientId=""
+          tenantId=""
+          setupPath="existing"
+          subscriptionId=""
+          onSubscriptionIdChange={vi.fn()}
+          rgName=""
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config: { ...CONFIG, connectivity: "disconnected" } }}
+        />
+      </PortsProvider>,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("does not read the stored-credentials port when disconnected", () => {
+    const list = vi.fn(() => Promise.resolve([]));
+    const ports = { ...PENDING_PORTS, secrets: { list } } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <AzureResourcesSection
+          clientId=""
+          tenantId=""
+          setupPath="existing"
+          subscriptionId=""
+          onSubscriptionIdChange={vi.fn()}
+          rgName=""
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config: { ...CONFIG, connectivity: "disconnected" } }}
+        />
+      </PortsProvider>,
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
+});
+
+describe("the resource intro does not tie the pickers to setup paths (DBT-241)", () => {
+  it.each(ALL_PATHS)("the intro on %s names no setup path", (path) => {
+    const { container } = renderAt(path);
+    const intro = container.querySelector(".panel-desc")?.textContent ?? "";
+    expect(intro).toMatch(/select the subscription/i);
+    expect(intro).not.toMatch(/existing and bring-your-own/i);
+    expect(intro).not.toMatch(/setup path/i);
+  });
+
+  it("the discovery label does not switch on the setup path", async () => {
+    const labels: string[] = [];
+    for (const path of ALL_PATHS) {
+      const { container, unmount } = render(
+        <PortsProvider
+          ports={
+            {
+              azure: {
+                request: async (req: { path: string }) => ({
+                  status: 200,
+                  body: {
+                    value:
+                      req.path === "/subscriptions"
+                        ? [{ subscriptionId: CONFIG.subscriptionId, displayName: "sub", state: "Enabled" }]
+                        : [],
+                  },
+                }),
+              },
+            } as unknown as UiPorts
+          }
+          config={{ ...CONFIG, setupPath: path }}
+        >
+          <AzureResourcesSection
+            clientId={CONFIG.clientId}
+            tenantId={CONFIG.tenantId}
+            setupPath={path}
+            subscriptionId={CONFIG.subscriptionId}
+            onSubscriptionIdChange={vi.fn()}
+            rgName=""
+            onRgNameChange={vi.fn()}
+            workspaceName=""
+            onWorkspaceNameChange={vi.fn()}
+            connectNonce={0}
+            ctx={CTX}
+            storageContextLabel="test"
+          />
+        </PortsProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /discover \/ refresh from azure/i }));
+      const discoveryLabel = () =>
+        Array.from(container.querySelectorAll(".discovery-result .field-label"))
+          .map((el) => el.textContent ?? "")
+          .find((t) => t !== "Role assignment script");
+      await waitFor(() => {
+        expect(discoveryLabel()).toBeDefined();
+      });
+      labels.push(discoveryLabel() ?? "");
+      unmount();
+    }
+    expect(new Set(labels).size).toBe(1);
+    expect(labels[0]).not.toMatch(/^Setup path$/);
+  });
+});
+
+describe("the role script follows the connectivity choice (C1)", () => {
+  function scriptFor(setupPath: AzureSetupPath, config: AzureConfig): string {
+    const { container } = render(
+      <PortsProvider ports={PENDING_PORTS} config={config}>
+        <AzureResourcesSection
+          clientId={CONFIG.clientId}
+          tenantId={CONFIG.tenantId}
+          setupPath={setupPath}
+          subscriptionId={CONFIG.subscriptionId}
+          onSubscriptionIdChange={vi.fn()}
+          rgName="rg"
+          onRgNameChange={vi.fn()}
+          workspaceName=""
+          onWorkspaceNameChange={vi.fn()}
+          connectNonce={0}
+          ctx={{ appName: "test", config }}
+          storageContextLabel="test"
+        />
+      </PortsProvider>,
+    );
+    const pres = [...container.querySelectorAll("pre.result")].map((p) => p.textContent ?? "");
+    const script = pres.find((t) => t.includes("az role assignment") || t.includes("No roles are requested"));
+    if (script === undefined) throw new Error("role script not rendered");
+    return script;
+  }
+  const commands = (script: string) =>
+    script.split("\n").filter((l) => l.startsWith("az "));
+
+  it("partial + Reader only -> the script assigns only Reader", () => {
+    const config: AzureConfig = { ...CONFIG, connectivity: "partial", allowedPermissions: ["Reader"] };
+    const out = commands(scriptFor("existing", config));
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('--role "Reader"');
+  });
+
+  it("partial + a saved lab path -> no lab roles in the script", () => {
+    const config: AzureConfig = {
+      ...CONFIG,
+      setupPath: "lab-new-rg",
+      connectivity: "partial",
+      allowedPermissions: ["Reader"],
+    };
+    const script = scriptFor("lab-new-rg", config);
+    expect(script).not.toMatch(/--role "Contributor"/);
+    expect(script).not.toMatch(/RBAC Administrator/);
+    expect(commands(script)).toHaveLength(1);
+  });
+
+  it("full keeps the whole setup-path script", () => {
+    const out = commands(scriptFor("existing", CONFIG));
+    expect(out).toHaveLength(3);
   });
 });
