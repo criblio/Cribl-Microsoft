@@ -185,7 +185,14 @@ Started. Anything here with an unfinished dependency is called out on its card.
   that list); az read 0. DELIVERY NOT VERIFIED: four Defender App Service
   [SAMPLE ALERT]s raised at 13:13:24Z (about 2 minutes after the export was
   created) did not reach the hub in 27 minutes (IncomingMessages 0). Unproven
-  whether a new export needs time before it forwards.
+  whether a new export needs time before it forwards. NOTE 2026-11-04 21:20Z:
+  still 0 IncomingMessages on ehjpedersoneastus across 13:20-20:20Z (8 hours)
+  with CriblDefenderExport enabled. The Cribl half is proven by another
+  producer (see AZR-34), so the gap is on the Defender side. Unofficial
+  community report (not Microsoft docs): sample alerts are not streamed by
+  continuous export to Event Hub; test with a real alert. Microsoft
+  continuous-export docs are silent. Delivery stays UNVERIFIED until a real
+  alert is exported.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -408,7 +415,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   hub ehjpedersoneastus, rule RootManageSharedAccessKey only): ADR 0007 item 6
   not exercised: no Cribl source exists to watch. The lane drew 'not measured'
   on the namespace-to-Cribl hop and 'not created yet' on the source, with no
-  metrics call.
+  metrics call. NOTE 2026-11-04 (Live Preview): with data now arriving at the
+  named-hub input (AZR-34), the section 7 diagram still drew only the default
+  Microsoft Audit lane (insights-logs-* hubs, input azure_onb_eh_fa882ef2...),
+  even after ticking Defender for Cloud alert export on screen; the named-hub
+  input that received the event was not drawn, so Watch for data had nothing
+  to watch. Not yet diagnosed whether this is a defect or the Defender lane
+  needing Automate mode plus a Cribl side read.
 
 - **AZR-34** Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)
   `AZR-F9` `story` `settled`
@@ -516,7 +529,17 @@ Started. Anything here with an unfinished dependency is called out on its card.
   credential (AZR-59, no Cribl principal in the lab), the paste credential,
   the Blob lane, and data arriving (nothing is exported to the hub yet). LIVE
   2026-11-04 (Live Preview): no event has reached the created input yet; see
-  AZR-3 for why the hub is still empty.
+  AZR-3 for why the hub is still empty. LIVE 2026-11-04 21:34Z (Cribl Stream
+  UI, DatacenterEast): DATA ARRIVED. With a test producer on the hub
+  (subscription Activity Log diagnostic setting cribl-activitylog-test ->
+  ehjpedersoneastus, RootManageSharedAccessKey), the hub counted 1
+  IncomingMessage at 21:36Z and input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus charted 1 event / 7.96 KB
+  in at 21:34Z on consumer group cribl, both workers healthy. Azure -> Event
+  Hub -> Cribl source is proven for the listKeys SAS credential. Still NOT
+  live: Entra ID credential (AZR-59), paste credential, Blob lane. One 8 KB
+  message is a diagnostic records[] envelope, which is what AZR-35 must
+  unroll.
 
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18`
