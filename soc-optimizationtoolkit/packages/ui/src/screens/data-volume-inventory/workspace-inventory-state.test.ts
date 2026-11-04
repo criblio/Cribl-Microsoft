@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
-import type { InventorySource, WorkspaceDiscovery } from "@soc/core";
+import { listingRows } from "@soc/core";
+import type { InventorySource, InventoryTable, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import {
+  bySourceReconciliationText,
+  catalogBillableFlagText,
+  catalogFlagText,
+  collectorDisplay,
+  tableBillableFreeFlag,
   discoveryHeadline,
   formatMB,
   inventoryCsv,
   sourceLabel,
+  sourceLineText,
+  tableReconciliation,
   staleInventoryNote,
   workspaceNameOf,
 } from "./workspace-inventory-state";
@@ -13,10 +21,15 @@ function source(partial: Partial<InventorySource>): InventorySource {
   return {
     source: "",
     attribution: "none",
+    collector: "",
     bytes: 0,
+    billableBytes: 0,
     events: 0,
     sourceCount: 1,
     dailyAverageMB: 0,
+    billableDailyMB: 0,
+    freeDailyMB: 0,
+    billedExceedsTotal: false,
     ...partial,
   };
 }
@@ -39,6 +52,7 @@ describe("sourceLabel", () => {
       text: "lab-wks-01",
       tip: id,
       kind: "machines",
+      via: "",
     });
   });
 
@@ -98,8 +112,103 @@ describe("inventoryCsv", () => {
     }, null);
     // MIG-15: a Billable table's allowance figures are empty, never 0.
     expect(csv.split("\n")[1]).toBe(
-      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,,',
+      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,,,,,,',
     );
+  });
+});
+
+describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
+  const cisco = source({
+    source: "Cisco ASA",
+    attribution: "product",
+    collector: "localhost",
+    bytes: 45.2e6 * 30,
+    billableBytes: 45.2e6 * 30,
+    dailyAverageMB: 45.2,
+    billableDailyMB: 45.2,
+    freeDailyMB: 0,
+    events: 10,
+  });
+  const other = source({
+    source: "",
+    attribution: "other",
+    sourceCount: 40,
+    dailyAverageMB: 10,
+    billableDailyMB: 4,
+    freeDailyMB: 6,
+  });
+  const inv = (sources: InventorySource[], kind: "read" | "partial" | "failed" = "read") => ({
+    workspaceId: "/w",
+    windowDays: 30,
+    tables: {
+      kind: "rows" as const,
+      rows: [
+        {
+          table: "CommonSecurityLog",
+          totalMB: 1,
+          billableMB: 1,
+          daysWithData: 30,
+          solutions: [],
+          dailyAverageMB: 60,
+          sources:
+            kind === "failed"
+              ? { kind: "failed" as const, error: "x" }
+              : kind === "partial"
+                ? { kind: "partial" as const, sources, warning: "one batch timed out" }
+                : { kind: "read" as const, sources },
+        },
+      ],
+    },
+    totals: { totalMB: 1, billableMB: 1, dailyAverageMB: 1, billableDailyAverageMB: 1 },
+    usageWarning: null,
+    queries: { usage: "", sourcesExample: null },
+  }) as unknown as WorkspaceInventory;
+
+  it("labels a product with its collector and kind", () => {
+    const label = sourceLabel(cisco);
+    expect(label).toMatchObject({ text: "Cisco ASA", kind: "Product", via: "localhost" });
+    expect(label.tip).toContain("localhost");
+  });
+
+  it("reads Cisco ASA via localhost with billed and free", () => {
+    expect(sourceLineText(cisco)).toBe(
+      "Cisco ASA via localhost - 45.2 MB/day (billed 45.2 MB, free 0 MB), 10 events",
+    );
+  });
+
+  it("reads free as not known when billed exceeds total, never as 0 MB", () => {
+    const broken = source({ ...cisco, billedExceedsTotal: true, billableDailyMB: 50, freeDailyMB: 0 });
+    expect(sourceLineText(broken)).toBe(
+      "Cisco ASA via localhost - 45.2 MB/day (billed 50.0 MB, free not known), 10 events",
+    );
+  });
+
+  it("reconciles a table's own sources against its Usage average", () => {
+    expect(tableReconciliation(listingRows(inv([cisco, other]).tables)[0]!)).toBe(
+      "Sources (measured from the rows) total 55.2 MB/day of the 60.0 MB/day Usage reports for this table.",
+    );
+  });
+
+  it("says a partial breakdown is partial and a failed one has no line", () => {
+    expect(tableReconciliation(listingRows(inv([cisco], "partial").tables)[0]!)).toContain(
+      "partial (one batch timed out)",
+    );
+    expect(tableReconciliation(listingRows(inv([], "failed").tables)[0]!)).toBeNull();
+  });
+
+  it("appends the four columns to the old header in order, with other's billed and free", () => {
+    const lines = inventoryCsv(inv([cisco, other]), null).split("\n");
+    expect(lines[0]).toBe(
+      "Table,TableDailyAvgMB,TableBillableMB,DaysWithData,Solutions,Source,SourceKind," +
+        "SourceDailyAvgMB,SourceEvents,SourceStatus,Allowance,AllowanceEligibleDailyMB," +
+        "AllowanceUsedDailyMB,AllowanceOverDailyMB,AllowanceFigures," +
+        "SourceIdentity,Collector,BillableDailyMB,FreeDailyMB",
+    );
+    expect(lines[1]!.endsWith(",Cisco ASA,localhost,45.200,0.000")).toBe(true);
+    expect(lines[2]!.endsWith(",,,4.000,6.000")).toBe(true);
+    // Billed above total: the free figure is not knowable, so it is empty, never 0.
+    const broken = source({ ...cisco, billedExceedsTotal: true, billableDailyMB: 50, freeDailyMB: 0 });
+    expect(inventoryCsv(inv([broken]), null).split("\n")[1]!.endsWith(",Cisco ASA,localhost,50.000,")).toBe(true);
   });
 });
 
@@ -129,6 +238,7 @@ describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", 
       text: "rg-lab",
       tip: "/subscriptions/s/resourceGroups/rg-lab",
       kind: "Azure resource",
+      via: "",
     });
   });
 
@@ -138,5 +248,130 @@ describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", 
         "/subscriptions/s/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law-1",
       ),
     ).toBe("law-1");
+  });
+});
+
+describe("bySourceReconciliationText (MIG-30)", () => {
+  const base = {
+    measuredDailyMB: 14,
+    usageDailyMB: 14.5,
+    notReadDailyMB: 0,
+    notReadTables: 0,
+    partialTables: [] as string[],
+    agreementPct: (100 * 14) / 14.5,
+  };
+
+  it("compares the two lenses, rounding the gap up", () => {
+    // 96.55% agreement: a 3.45% gap reads as within 3.5%, never 3.4%.
+    expect(bySourceReconciliationText(base)).toBe(
+      "Sources (measured from the rows) total 14.0 MB/day; Usage reports 14.5 MB/day for " +
+        "the same tables; they agree within 3.5%.",
+    );
+  });
+
+  it("reads exact agreement as 0.0%, not float noise", () => {
+    expect(
+      bySourceReconciliationText({ ...base, usageDailyMB: 14, agreementPct: 100 - 1e-12 }),
+    ).toContain("they agree within 0.0%.");
+  });
+
+  it("names not-read volume separately and says when the measured total is a floor", () => {
+    expect(
+      bySourceReconciliationText({
+        ...base,
+        notReadDailyMB: 3,
+        notReadTables: 2,
+        partialTables: ["Syslog"],
+      }),
+    ).toBe(
+      "Sources (measured from the rows) total 14.0 MB/day; Usage reports 14.5 MB/day for " +
+        "the same tables; they agree within 3.5%. Usage also reports 3.0 MB/day from 2 " +
+        "tables whose sources were not read, left out of that comparison. 1 table returned " +
+        "a partial breakdown (Syslog), so the measured total is a floor.",
+    );
+  });
+
+  it("says there is nothing to compare when no table's sources were read", () => {
+    expect(
+      bySourceReconciliationText({
+        ...base,
+        measuredDailyMB: 0,
+        usageDailyMB: 0,
+        notReadDailyMB: 3,
+        notReadTables: 1,
+        agreementPct: null,
+      }),
+    ).toBe(
+      "No table's sources were read, so there is nothing to compare. Usage reports " +
+        "3.0 MB/day from 1 table whose sources were not read.",
+    );
+  });
+});
+
+describe("catalogFlagText (MIG-30)", () => {
+  it("names every Free-tagged table billed, and is absent otherwise", () => {
+    expect(catalogFlagText(["SecurityAlert", "AzureActivity"])).toBe(
+      "billed in a table the catalog tags Free (SecurityAlert, AzureActivity)",
+    );
+    expect(catalogFlagText([])).toBeNull();
+  });
+});
+
+describe("MIG-32 copy and flags", () => {
+  const src = (billable: number, total = 1) => ({
+    source: "x",
+    attribution: "none" as const,
+    collector: "",
+    bytes: 0,
+    billableBytes: 0,
+    events: 1,
+    sourceCount: 1,
+    dailyAverageMB: total,
+    billableDailyMB: billable,
+    freeDailyMB: total - billable,
+    billedExceedsTotal: false,
+  });
+  const tbl = (name: string, sources: InventoryTable["sources"]): InventoryTable => ({
+    table: name,
+    totalMB: 30,
+    billableMB: 30,
+    daysWithData: 30,
+    solutions: [],
+    dailyAverageMB: 1,
+    sources,
+  });
+
+  it("quotes collector names that are punctuation or padded, leaves plain names", () => {
+    expect(collectorDisplay(":")).toBe('":"');
+    expect(collectorDisplay("-")).toBe('"-"');
+    expect(collectorDisplay(" fw-a")).toBe('" fw-a"');
+    expect(collectorDisplay("fw-a")).toBe("fw-a");
+    expect(collectorDisplay("10.0.0.1")).toBe("10.0.0.1");
+  });
+
+  it("names the Billable-tagged tables measured free", () => {
+    expect(catalogBillableFlagText(["SecurityCaseEvent", "Foo"])).toBe(
+      "measured free; not in the catalog's free list (SecurityCaseEvent, Foo)",
+    );
+    expect(catalogBillableFlagText([])).toBeNull();
+  });
+
+  it("flags a By table row only when a Billable table's read sources are all free", () => {
+    expect(
+      tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(0)] })),
+    ).toBe("measured free; not in the catalog's free list (SecurityCaseEvent)");
+    expect(
+      tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(1)] })),
+    ).toBeNull();
+    expect(
+      tableBillableFreeFlag(
+        tbl("SecurityCaseEvent", { kind: "partial", warning: "w", sources: [src(0)] }),
+      ),
+    ).toBeNull();
+    expect(tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "failed", error: "x" }))).toBeNull();
+    expect(tableBillableFreeFlag(tbl("SecurityAlert", { kind: "read", sources: [src(0)] }))).toBeNull();
+    // Azure Monitor's never-billed tables are free, not "unlisted".
+    expect(tableBillableFreeFlag(tbl("Heartbeat", { kind: "read", sources: [src(0)] }))).toBeNull();
+    expect(tableBillableFreeFlag(tbl("Usage", { kind: "read", sources: [src(0)] }))).toBeNull();
   });
 });

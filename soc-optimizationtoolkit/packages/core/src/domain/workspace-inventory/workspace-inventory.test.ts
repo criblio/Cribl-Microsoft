@@ -71,14 +71,16 @@ const LIVE_SOURCES = {
         { name: "SourceTable", type: "string" },
         { name: "Source", type: "string" },
         { name: "Attribution", type: "string" },
+        { name: "Collector", type: "string" },
         { name: "Bytes", type: "real" },
+        { name: "BillableBytes", type: "real" },
         { name: "Events", type: "long" },
         { name: "Sources", type: "long" },
       ],
       rows: [
-        ["AWSVPCFlow", "", "none", 1990908670, 14863708, 1],
-        ["Heartbeat", "/subscriptions/s/resourcegroups/rg/providers/microsoft.hybridcompute/machines/ti-cef-collector", "resource", 959928, 1702, 1],
-        ["Heartbeat", "/subscriptions/s/resourcegroups/rg/providers/microsoft.hybridcompute/machines/lab-wks-01", "resource", 26245466, 43238, 1],
+        ["AWSVPCFlow", "", "none", "", 1990908670, 1990908670, 14863708, 1],
+        ["Heartbeat", "/subscriptions/s/resourcegroups/rg/providers/microsoft.hybridcompute/machines/ti-cef-collector", "resource", "", 959928, 959928, 1702, 1],
+        ["Heartbeat", "/subscriptions/s/resourcegroups/rg/providers/microsoft.hybridcompute/machines/lab-wks-01", "resource", "", 26245466, 26245466, 43238, 1],
       ],
     },
   ],
@@ -90,6 +92,13 @@ describe("the queries", () => {
     const window = "TimeGenerated >= startofday(now()) - 30d and TimeGenerated < startofday(now())";
     expect(USAGE_QUERY).toContain(window);
     expect(sourceBreakdownQuery(["A"])).toContain(window);
+  });
+
+  it("sums billed bytes by _IsBillable and groups by Collector", () => {
+    const q = sourceBreakdownQuery(["CommonSecurityLog"]);
+    expect(q).toContain("sumif(_BilledSize, _IsBillable == true)");
+    expect(q).toContain("by SourceTable, Source, Attribution, Collector");
+    expect(q).toContain("SourceTable =~ 'CommonSecurityLog'");
   });
 
   it("never references _ResourceId or Computer bare - a table without one fails the query (SEM0100)", () => {
@@ -187,12 +196,62 @@ describe("parseSourceRows and sourcesFor", () => {
 
   it("puts the rolled-up `other` row last even when it is the biggest", () => {
     const rows = [
-      { SourceTable: "T", Source: "a", Attribution: "computer", Bytes: 5, Events: 1, Sources: 1 },
-      { SourceTable: "T", Source: "", Attribution: "other", Bytes: 50, Events: 9, Sources: 40 },
+      { SourceTable: "T", Source: "a", Attribution: "computer", Bytes: 5, BillableBytes: 5, Events: 1, Sources: 1 },
+      { SourceTable: "T", Source: "", Attribution: "other", Bytes: 50, BillableBytes: 30, Events: 9, Sources: 40 },
     ];
     const list = parseSourceRows(rows).get("t")!;
     expect(list.map((s) => s.attribution)).toEqual(["computer", "other"]);
     expect(list[1]!.sourceCount).toBe(40);
+  });
+
+  it("keeps the billed bytes of the rolled-up `other` row, so a catalog flag cannot miss them", () => {
+    const rows = [
+      { SourceTable: "T", Source: "", Attribution: "other", Bytes: 60_000_000, BillableBytes: 30_000_000, Events: 9, Sources: 40 },
+    ];
+    expect(parseSourceRows(rows).get("t")![0]).toMatchObject({
+      billableBytes: 30_000_000,
+      billableDailyMB: 1,
+      freeDailyMB: 1,
+    });
+  });
+
+  it("carries a product with its collector and splits billed from free", () => {
+    const rows = [
+      { SourceTable: "CommonSecurityLog", Source: "Cisco ASA", Attribution: "product", Collector: "localhost", Bytes: 1356860000, BillableBytes: 1356860000, Events: 1, Sources: 1 },
+    ];
+    const [asa] = parseSourceRows(rows).get("commonsecuritylog")!;
+    expect(asa).toMatchObject({ source: "Cisco ASA", attribution: "product", collector: "localhost", freeDailyMB: 0 });
+    expect(asa!.billableDailyMB).toBeCloseTo(45.23, 2);
+  });
+
+  it("FLAGS a source billed above its total instead of letting the clamp hide it", () => {
+    const rows = [
+      { SourceTable: "T", Source: "a", Attribution: "computer", Bytes: 30_000_000, BillableBytes: 60_000_000, Events: 1, Sources: 1 },
+      { SourceTable: "T", Source: "b", Attribution: "computer", Bytes: 60_000_000, BillableBytes: 60_000_000, Events: 1, Sources: 1 },
+    ];
+    const [b, a] = parseSourceRows(rows).get("t")!;
+    expect(a).toMatchObject({ source: "a", freeDailyMB: 0, billedExceedsTotal: true });
+    expect(b).toMatchObject({ source: "b", freeDailyMB: 0, billedExceedsTotal: false });
+  });
+
+  it("counts distinct Sources for the `other` row, from the pre-rollup source name", () => {
+    const kql = sourceBreakdownQuery(["T"]);
+    expect(kql).toContain("| extend _origSource = Source");
+    expect(kql).toContain("Sources = dcount(_origSource)");
+    expect(kql).not.toContain("Sources = count()");
+    expect(kql.indexOf("_origSource = Source")).toBeLessThan(kql.indexOf("Rank > "));
+  });
+
+  it("never yields a nameless product: it is unattributed", () => {
+    const rows = [
+      { SourceTable: "T", Source: "", Attribution: "product", Collector: "c", Bytes: 1, BillableBytes: 1, Events: 1, Sources: 1 },
+    ];
+    expect(parseSourceRows(rows).get("t")![0]!.attribution).toBe("none");
+  });
+
+  it("throws when the answer has no BillableBytes column - never reads as all free", () => {
+    const rows = [{ SourceTable: "T", Source: "a", Attribution: "computer", Bytes: 5, Events: 1, Sources: 1 }];
+    expect(() => parseSourceRows(rows)).toThrow(/BillableBytes/);
   });
 
   it("reports an UNATTRIBUTED source as such - AWS tables carry no resource or computer", () => {

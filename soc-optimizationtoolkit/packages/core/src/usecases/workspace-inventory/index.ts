@@ -20,3 +20,8 @@ export type {
   InventoryTable,
   TableSources,
 } from "../../domain/workspace-inventory";
+export { bySource } from "../../domain/workspace-inventory";
+export type {
+  SourceViewReconciliation,
+  SourceViewRow,
+} from "../../domain/workspace-inventory";

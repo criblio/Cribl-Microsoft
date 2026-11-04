@@ -42,7 +42,7 @@ type Answer = { status: number; body: unknown };
  * Route ARM calls by path. `usage` decides the Usage query's answer; a second
  * workspace (law-2, answered by `usage2`) is listed only when `usage2` is given.
  */
-function armStub(usage: Answer, usage2?: Answer) {
+function armStub(usage: Answer, usage2?: Answer, sourceRows?: unknown[][]) {
   return vi.fn(async (req: AzureManagementRequest) => {
     if (req.path === "/subscriptions") {
       return { status: 200, body: { value: [{ subscriptionId: "sub-1", displayName: "Prod", state: "Enabled" }] } };
@@ -69,8 +69,8 @@ function armStub(usage: Answer, usage2?: Answer) {
       return {
         status: 200,
         body: table(
-          ["SourceTable", "Source", "Attribution", "Bytes", "Events", "Sources"],
-          [["Syslog", "fw-01", "computer", 3_000_000, 1200, 1]],
+          ["SourceTable", "Source", "Attribution", "Collector", "Bytes", "BillableBytes", "Events", "Sources"],
+          sourceRows ?? [["Syslog", "fw-01", "computer", "", 3_000_000, 3_000_000, 1200, 1]],
         ),
       };
     }
@@ -144,11 +144,15 @@ describe("WorkspaceInventoryPanel", () => {
       ]),
     );
     expect(screen.getByText("Syslog")).toBeTruthy();
-    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day, 1,200 events/)).toBeTruthy();
+    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day \(billed 100\.0 KB, free 0 MB\), 1,200 events/)).toBeTruthy();
     // Heartbeat billed but its breakdown returned no rows: volume stays, failure is said.
     expect(screen.getByText("Heartbeat")).toBeTruthy();
     expect(screen.getByText(/Breakdown failed: .*although Usage billed it/)).toBeTruthy();
     expect(screen.getByText(/1 table\(s\) have no source breakdown/)).toBeTruthy();
+    // MIG-29: the per-table reconciliation line, from that table's own sources.
+    expect(
+      screen.getByText(/Sources \(measured from the rows\) total 100\.0 KB\/day of the 3\.0 MB\/day Usage reports/),
+    ).toBeTruthy();
     // Explanations are InfoTips, never native title hover text.
     expect(document.querySelector("[title]")).toBeNull();
   });
@@ -177,7 +181,92 @@ describe("WorkspaceInventoryPanel", () => {
     await waitFor(() => expect(ports.artifacts.save).toHaveBeenCalledTimes(1));
     const [name, mime, data] = vi.mocked(ports.artifacts.save).mock.calls[0]!;
     expect([name, mime]).toEqual(["law-1-inventory.csv", "text/csv"]);
-    expect(String(data)).toContain("Syslog,3.000,90.000,30,,fw-01,Computer,0.100,1200,read");
+    expect(String(data)).toContain("Syslog,3.000,90.000,30,,fw-01,Computer,0.100,1200,read")
+    expect(String(data)).toContain(",fw-01,,0.100,0.000");
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-29", () => {
+  it("names a product via its collector, with billed and free, and flags a billed figure over total", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      { status: 200, body: table(USAGE_COLS, [["CommonSecurityLog", 1500, 1500, 30, "[]"]]) },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", "localhost", 1356 * MB, 1356 * MB, 100, 1],
+        ["CommonSecurityLog", "Palo Alto", "product", "edge-1", 90 * MB, 120 * MB, 50, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via localhost - 45\.2 MB\/day \(billed 45\.2 MB, free 0 MB\)/);
+    // Billed above total: free is not knowable, so it reads not known (the CSV's empty cell), never 0.
+    expect(screen.getByText(/Palo Alto via edge-1 - 3\.0 MB\/day \(billed 4\.0 MB, free not known\)/)).toBeTruthy();
+    expect(screen.getAllByText("billed figure exceeds total - see tip")).toHaveLength(1);
+    expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB\/day of the 50\.0 MB\/day Usage reports/)).toBeTruthy();
+    expect(document.querySelector("[title]")).toBeNull();
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-32", () => {
+  it("quotes a punctuation-only collector, and flags a Billable table measured all free", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      {
+        status: 200,
+        body: table(USAGE_COLS, [
+          ["CommonSecurityLog", 1500, 1500, 30, "[]"],
+          ["SecurityCaseEvent", 30, 0, 30, "[]"],
+          ["Heartbeat", 30, 0, 30, "[]"],
+        ]),
+      },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", ":", 1356 * MB, 1356 * MB, 100, 1],
+        ["SecurityCaseEvent", "Case Mgmt", "product", "", 30 * MB, 0, 5, 1],
+        ["Heartbeat", "vm-1", "computer", "", 30 * MB, 0, 5, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via ":" - 45\.2 MB\/day/);
+    expect(
+      screen.getByText("measured free; not in the catalog's free list (SecurityCaseEvent)"),
+    ).toBeTruthy();
+    // Heartbeat is measured free too, but it is on the catalog's free list: no flag.
+    expect(screen.getAllByText(/measured free/)).toHaveLength(1);
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-30", () => {
+  it("opens on By table and switches to By source over the same inventory", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      { status: 200, body: table(USAGE_COLS, [["CommonSecurityLog", 1500, 1500, 30, "[]"]]) },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", "fw-a", 900 * MB, 900 * MB, 100, 1],
+        ["CommonSecurityLog", "Cisco ASA", "product", "fw-b", 450 * MB, 450 * MB, 50, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via fw-a/);
+    expect(screen.getByRole("tab", { name: "By table" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "By source" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.queryByText("2 collectors")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "By source" }));
+    expect(screen.getByRole("tab", { name: "By source" }).getAttribute("aria-selected")).toBe("true");
+    // One row for the product across both collectors; the By table drill-down is gone.
+    expect(screen.getAllByText("Cisco ASA")).toHaveLength(1);
+    expect(screen.getByText("2 collectors")).toBeTruthy();
+    expect(screen.queryByText(/Cisco ASA via fw-a/)).toBeNull();
+    expect(screen.getByText(/they agree within 10\.0%/)).toBeTruthy();
+    expect(document.querySelector("[title]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "By table" }));
+    expect(screen.getByText(/Cisco ASA via fw-a/)).toBeTruthy();
   });
 });
 
