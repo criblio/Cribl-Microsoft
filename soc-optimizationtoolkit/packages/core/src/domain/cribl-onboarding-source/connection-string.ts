@@ -9,7 +9,7 @@
  *
  * {@link checkPastedCredential} refuses BEFORE any write when the paste cannot
  * be the credential the lane needs: another namespace, a rule the namespace
- * does not list, a rule without Listen or Manage (a Cribl SOURCE reads, so the
+ * does not list, a rule without Listen, a Manage-capable rule (AZR-58) (a Cribl SOURCE reads, so the
  * Defender export's Send rule is not enough), or an EntityPath for a hub the
  * lane does not read. When the rules list itself could not be read the rights
  * are UNKNOWN, never assumed; only an explicit operator attestation passes it,
@@ -75,6 +75,21 @@ export function parseEventHubConnectionString(s: string): ParsedConnection {
   const entityPath = fields.get("entitypath") ?? "";
   const host = match[1]!.toLowerCase();
   return entityPath === "" ? { host, keyName } : { host, keyName, entityPath };
+}
+
+/**
+ * Whether a value pasted as a CLIENT SECRET (Entra ID or Blob) is really a
+ * key-bearing connection string: an Event Hub or Service Bus string (the
+ * RootManageSharedAccessKey one included), a storage account string, or a
+ * SAS. Such a value is never stored as a client secret (AZR-59 review): the
+ * source could not sign in with it, and the key would sit in the worker
+ * group's secrets. Never returns or echoes any part of the value.
+ */
+export function looksLikeConnectionString(value: string): boolean {
+  const text = value.trim();
+  if (text === "") return false;
+  if (!isInvalidConnection(parseEventHubConnectionString(text))) return true;
+  return /(?:^|;)\s*(?:sharedaccesskey|accountkey|sharedaccesssignature)\s*=|endpoint\s*=\s*sb:\/\//i.test(text);
 }
 
 /** Whether two descriptors name the same credential target. */

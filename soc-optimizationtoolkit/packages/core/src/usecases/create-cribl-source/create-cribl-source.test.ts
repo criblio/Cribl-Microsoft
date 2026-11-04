@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-management";
 import type { CriblClient, CriblRequest } from "../../ports/cribl-client";
+import type { GraphDirectory, ServicePrincipalRef } from "../../ports/graph-directory";
 import type { PortHttpResponse } from "../../ports/http";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
@@ -742,5 +743,271 @@ describe("applyCriblSource", () => {
     expect(JSON.stringify(outcome)).not.toContain('"committed"');
     // Every call scripted was consumed: the sequence stopped where the kit says.
     await expect(h.cribl.request({ method: "GET", path: "/x" })).rejects.toThrow(/no scripted response/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AZR-59, ADR 0008: Entra ID is the Event Hub lane's default credential.
+// ---------------------------------------------------------------------------
+
+describe("planCriblSource with Entra ID", () => {
+  const OBJ = "obj-1";
+  const CLIENT_SECRET = "ENTRA-CLIENT-SECRET-VALUE";
+  const NS_PATH = "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.EventHub/namespaces/ns1";
+  const HUB_PATH = `${NS_PATH}/eventhubs/h1`;
+  const RECEIVER_ID = "/subscriptions/sub1/providers/Microsoft.Authorization/roleDefinitions/a638d3c7-ab3a-418d-83e6-5f17a39d4fde";
+  const ra = (scope: string, roleDefinitionId = RECEIVER_ID) => ({ properties: { roleDefinitionId, scope, principalId: OBJ } });
+  const ENTRA: PlanCredential = { kind: "entra-id", tenantId: "t1", clientId: "c1" };
+  const entraValues = values({ criblPrincipalObjectId: OBJ });
+
+  function entraInput(over: Partial<PlanCriblSourceInput> = {}): PlanCriblSourceInput {
+    return planInput(ENTRA, { values: entraValues, ...over });
+  }
+
+  /** namespace (sku), the consumer group on h1, then the role reads given. */
+  function scriptAzureEntra(h: ReturnType<typeof harness>, ...roleReads: PortHttpResponse[]): void {
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), ok({ name: "cribl" }), ...roleReads);
+  }
+
+  async function readyEntra(h: ReturnType<typeof harness>): Promise<ReadyCriblSource> {
+    scriptAzureEntra(h, ok({ value: [ra(NS_PATH)] }));
+    scriptCriblPlan(h);
+    const plan = await planCriblSource(h.ports, entraInput());
+    if (plan.kind !== "ready") throw new Error(`plan not ready: ${JSON.stringify(plan)}`);
+    return plan.ready;
+  }
+
+  it("reads the namespace, the consumer group, then the principal's role assignments; never the SAS rules", async () => {
+    const h = harness();
+    const ready = await readyEntra(h);
+    expect(h.log.filter((e) => e.port === "azure").map((e) => e.label)).toEqual([
+      `AZ GET ${NS_PATH}`,
+      `AZ GET ${HUB_PATH}/consumergroups/cribl`,
+      `AZ GET ${NS_PATH}/providers/Microsoft.Authorization/roleAssignments`,
+    ]);
+    const roleRead = h.log.find((e) => e.label.endsWith("/roleAssignments"))!;
+    expect((roleRead.req as AzureManagementRequest).query).toMatchObject({ $filter: "assignedTo('obj-1')" });
+    expect(h.log.some((e) => e.label.includes("authorizationRules"))).toBe(false);
+    expect(h.log.every((e) => e.req.method === "GET")).toBe(true);
+    expect(ready).toMatchObject({
+      credentialKind: "entra-id",
+      keyNameOrPrincipal: "c1",
+      namespace: null,
+      entraPrincipal: {
+        tenantId: "t1",
+        clientId: "c1",
+        objectId: OBJ,
+        role: "Azure Event Hubs Data Receiver",
+        roleScope: NS_PATH,
+        principalCheck: "not-cross-checked",
+      },
+      readsFrom: { hubs: ["h1"], consumerGroup: "cribl" },
+    });
+    expect(ready.inputBody["sasl"]).toEqual(
+      buildEventHubInputBody({
+        id: INPUT_ID,
+        connectionTenantId: TENANT,
+        namespace: "ns1",
+        topics: ["h1"],
+        consumerGroup: "cribl",
+        secretId: SECRET_ID,
+        sourceId: "defenderExport",
+        sourceTitle: defender().title,
+        auth: { kind: "entra-id", tenantId: "t1", clientId: "c1" },
+      })["sasl"],
+    );
+  });
+
+  it("falls back to the hub scope when the namespace read shows no qualifying grant", async () => {
+    const h = harness();
+    scriptAzureEntra(h, ok({ value: [] }), ok({ value: [ra(HUB_PATH)] }));
+    scriptCriblPlan(h);
+    const plan = await planCriblSource(h.ports, entraInput());
+    expect(plan.kind).toBe("ready");
+    expect(h.log.filter((e) => e.label.endsWith("/roleAssignments")).map((e) => e.label)).toEqual([
+      `AZ GET ${NS_PATH}/providers/Microsoft.Authorization/roleAssignments`,
+      `AZ GET ${HUB_PATH}/providers/Microsoft.Authorization/roleAssignments`,
+    ]);
+  });
+
+  it("a grant on another hub, or a role that cannot receive, does not count", async () => {
+    const h = harness();
+    const SENDER = "/subscriptions/sub1/providers/Microsoft.Authorization/roleDefinitions/2b629674-e913-4c01-ae53-ef4638d8f975";
+    scriptAzureEntra(h, ok({ value: [ra(`${NS_PATH}/eventhubs/other`)] }), ok({ value: [ra(HUB_PATH, SENDER)] }));
+    const plan = await planCriblSource(h.ports, entraInput());
+    expect(plan).toMatchObject({ kind: "refused", reason: "receiver-role-missing" });
+  });
+
+  it("refuses receiver-role-missing from complete reads, naming the principal and the hub, before any Cribl call", async () => {
+    const h = harness();
+    scriptAzureEntra(h, ok({ value: [] }), ok({ value: [] }));
+    const plan = await planCriblSource(h.ports, entraInput());
+    expect(plan).toMatchObject({ kind: "refused", reason: "receiver-role-missing" });
+    const text = JSON.stringify(plan);
+    expect(text).toContain(OBJ);
+    expect(text).toContain("h1");
+    expect(text).toContain("Azure Event Hubs Data Receiver");
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+  });
+
+  it("refuses receiver-role-unreadable when the hub read is refused, never assuming absent", async () => {
+    const h = harness();
+    scriptAzureEntra(h, ok({ value: [] }), status(403, { error: { code: "AuthorizationFailed" } }));
+    const plan = await planCriblSource(h.ports, entraInput());
+    expect(plan).toMatchObject({ kind: "refused", reason: "receiver-role-unreadable" });
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+  });
+
+  it("a refused namespace read is answered by a complete hub read (assignedTo returns grants above the scope)", async () => {
+    const h = harness();
+    scriptAzureEntra(h, status(403, { error: { code: "AuthorizationFailed" } }), ok({ value: [ra(NS_PATH)] }));
+    scriptCriblPlan(h);
+    expect((await planCriblSource(h.ports, entraInput())).kind).toBe("ready");
+    const h2 = harness();
+    scriptAzureEntra(h2, status(403, { error: { code: "AuthorizationFailed" } }), ok({ value: [] }));
+    // The hub read is complete and empty; it covers grants above the hub, so
+    // this is a real absence even though the namespace read was refused.
+    expect(await planCriblSource(h2.ports, entraInput())).toMatchObject({ kind: "refused", reason: "receiver-role-missing" });
+  });
+
+  it("refuses missing-value for a blank object id, tenant or client, with no call", async () => {
+    for (const input of [
+      entraInput({ values: values({ criblPrincipalObjectId: "" }) }),
+      entraInput({ credential: { kind: "entra-id", tenantId: " ", clientId: "c1" } }),
+      entraInput({ credential: { kind: "entra-id", tenantId: "t1", clientId: "" } }),
+    ]) {
+      const h = harness();
+      const plan = await planCriblSource(h.ports, input);
+      expect(plan).toMatchObject({ kind: "refused", reason: "missing-value" });
+      expect(h.log).toEqual([]);
+    }
+  });
+
+  // ADR 0008 section 2: the app's own registration holds ARM write rights.
+  it("refuses the app's own registration as the Cribl principal, with no call", async () => {
+    const h = harness();
+    const plan = await planCriblSource(h.ports, entraInput({ appClientId: "C1" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "app-principal" });
+    expect(h.log).toEqual([]);
+  });
+
+  // Review finding 5: Data Owner carries listKeys on every rule (Manage-equivalent).
+  it("refuses receiver-role-overprivileged when Data Owner covers the hub, even alongside Data Receiver", async () => {
+    const OWNER_ID = "/subscriptions/sub1/providers/Microsoft.Authorization/roleDefinitions/f526a384-b230-433a-b45c-95f59c4a2dec";
+    for (const rows of [[ra("/subscriptions/sub1", OWNER_ID)], [ra(NS_PATH), ra(HUB_PATH, OWNER_ID)]]) {
+      const h = harness();
+      scriptAzureEntra(h, ok({ value: rows }), ok({ value: [] }));
+      const plan = await planCriblSource(h.ports, entraInput());
+      expect(plan).toMatchObject({ kind: "refused", reason: "receiver-role-overprivileged" });
+      expect(JSON.stringify(plan)).toContain("listKeys");
+      expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+    }
+  });
+
+  // Review findings 1 and 7: the role is read for the object id; the input
+  // signs in as the client id. The directory ties the two together.
+  function graphOf(sps: ServicePrincipalRef[] | Error): GraphDirectory & { calls: number } {
+    const g = {
+      calls: 0,
+      readSubscribedSkus: async () => ({ kind: "denied" as const, status: 403, detail: "unused" }),
+      listServicePrincipals: () => {
+        g.calls += 1;
+        return sps instanceof Error ? Promise.reject(sps) : Promise.resolve(sps);
+      },
+    };
+    return g;
+  }
+  const sp = (id: string, appId: string): ServicePrincipalRef => ({ id, appId, displayName: appId });
+
+  it("refuses principal-mismatch when the directory names another object id for the client id, before any Azure or Cribl call", async () => {
+    const h = harness();
+    const graph = graphOf([sp("obj-OTHER", "C1")]);
+    const plan = await planCriblSource({ ...h.ports, graph }, entraInput());
+    expect(plan).toMatchObject({ kind: "refused", reason: "principal-mismatch" });
+    const text = JSON.stringify(plan);
+    expect(text).toContain("obj-OTHER");
+    expect(text).toContain(OBJ);
+    expect(h.log).toEqual([]);
+    expect(graph.calls).toBe(1);
+  });
+
+  it("marks the principal matched when the directory ties the client id to the object id", async () => {
+    const h = harness();
+    scriptAzureEntra(h, ok({ value: [ra(NS_PATH)] }));
+    scriptCriblPlan(h);
+    const plan = await planCriblSource({ ...h.ports, graph: graphOf([sp("x", "other"), sp(OBJ.toUpperCase(), "c1")]) }, entraInput());
+    expect(plan).toMatchObject({ kind: "ready", ready: { entraPrincipal: { principalCheck: "matched" } } });
+  });
+
+  it("an unreadable directory, or a client id it does not list, is not-cross-checked, never matched", async () => {
+    for (const graph of [graphOf(new Error("403 Application.Read.All")), graphOf([sp("x", "other")])]) {
+      const h = harness();
+      scriptAzureEntra(h, ok({ value: [ra(NS_PATH)] }));
+      scriptCriblPlan(h);
+      const plan = await planCriblSource({ ...h.ports, graph }, entraInput());
+      expect(plan).toMatchObject({ kind: "ready", ready: { entraPrincipal: { principalCheck: "not-cross-checked" } } });
+    }
+  });
+
+  it("refuses app-principal when the object id is this app's own service principal", async () => {
+    const h = harness();
+    const plan = await planCriblSource(
+      { ...h.ports, graph: graphOf([sp(OBJ, "app-client"), sp("obj-2", "c1")]) },
+      entraInput({ appClientId: "app-client" }),
+    );
+    expect(plan).toMatchObject({ kind: "refused", reason: "app-principal" });
+    expect(h.log).toEqual([]);
+  });
+
+  it("refuses Entra ID on a blob lane as a credential mismatch", async () => {
+    const h = harness();
+    const blob = onboardingSource("vnetFlowLogs")!;
+    const plan = await planCriblSource(h.ports, entraInput({ lane: { source: blob, subSelection: [] } }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "credential-mismatch" });
+  });
+
+  it("applies with the pasted client secret as the Cribl text secret: pinned order, no listKeys ever", async () => {
+    const h = harness();
+    const ready = await readyEntra(h);
+    h.log.length = 0;
+    scriptApplyThroughCreate(h, ready);
+    scriptCommitDeploy(h);
+    const outcome = await applyCriblSource(h.ports, ready, { kind: "paste", value: () => CLIENT_SECRET });
+    expect(outcome.kind).toBe("created-running");
+    expect(h.labels()).toEqual(APPLY_LOG.filter((l) => !l.startsWith("AZ ")));
+    expect(h.log.filter((e) => e.port === "azure")).toEqual([]);
+    const secretPost = h.log.find((e) => e.label === `POST /m/${G}/system/secrets`)!;
+    expect(secretPost.req).toMatchObject({ body: { id: SECRET_ID, secretType: "text", value: CLIENT_SECRET } });
+    expect(h.log.filter((e) => deepContains(e.req, CLIENT_SECRET)).map((e) => e.label)).toEqual([`POST /m/${G}/system/secrets`]);
+    expect(deepContains(outcome, CLIENT_SECRET)).toBe(false);
+    expect(deepContains(h.logger.entries, CLIENT_SECRET)).toBe(false);
+  });
+
+  // Review finding 8: a connection string pasted into the client secret field
+  // (the Manage key included) is never stored.
+  it("refuses a pasted connection string as the client secret, before any write", async () => {
+    for (const pasted of [
+      `Endpoint=sb://ns1.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=${KEY}`,
+      `  SharedAccessKeyName=x;SharedAccessKey=${KEY}`,
+      `DefaultEndpointsProtocol=https;AccountName=sa;AccountKey=${KEY};EndpointSuffix=core.windows.net`,
+    ]) {
+      const h = harness();
+      const ready = await readyEntra(h);
+      h.log.length = 0;
+      h.cribl.respondWith(ok({ items: [] }), status(404), ok({ items: [] }));
+      const outcome = await applyCriblSource(h.ports, ready, { kind: "paste", value: () => pasted });
+      expect(outcome).toMatchObject({ kind: "refused", reason: "paste-is-connection-string" });
+      expect(h.writes()).toEqual([]);
+      expect(deepContains(outcome, KEY)).toBe(false);
+    }
+  });
+
+  it("refuses a listKeys apply of an Entra ID plan, with no call", async () => {
+    const h = harness();
+    const ready = await readyEntra(h);
+    h.log.length = 0;
+    const outcome = await applyCriblSource(h.ports, ready, { kind: "listKeys" });
+    expect(outcome).toMatchObject({ kind: "refused", reason: "credential-changed" });
+    expect(h.log).toEqual([]);
   });
 });

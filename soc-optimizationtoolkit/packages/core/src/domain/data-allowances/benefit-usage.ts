@@ -20,7 +20,9 @@ const CAP_TOLERANCE = 1.01;
 /**
  * The spec's Operation query: one row per day and benefit type. The amount
  * pattern allows an exponent: a small benefit can be written '1E-05 GB', and
- * stopping at the 'E' would read it as 1 GB.
+ * stopping at the 'E' would read it as 1 GB. sum() skips nulls, so an event
+ * whose amount does not extract would vanish inside its group: `Unreadable`
+ * counts those events so the parse can report them.
  */
 export const BENEFIT_QUERY = [
   "Operation",
@@ -28,7 +30,7 @@ export const BENEFIT_QUERY = [
   '| where Detail startswith "Benefit amount used"',
   "| extend BenefitType = replace_string(OperationKey, 'Benefit type used: ', ''),",
   "    BenefitUsedGB = todouble(extract(@'Benefit amount used: ([0-9.]+(?:[eE][-+]?[0-9]+)?)', 1, Detail))",
-  "| summarize BenefitUsedGB = sum(BenefitUsedGB)",
+  "| summarize BenefitUsedGB = sum(BenefitUsedGB), Unreadable = countif(isnull(BenefitUsedGB))",
   "    by Day = format_datetime(startofday(TimeGenerated), 'yyyy-MM-dd'), BenefitType",
   "| order by Day asc",
 ].join("\n");
@@ -61,12 +63,18 @@ export interface BenefitDay {
  * replaces them with the literal strings it records.
  */
 export const BENEFIT_TYPE_PATTERNS: ReadonlyArray<{ pattern: RegExp; grant: GrantId }> = [
-  { pattern: /M365|Microsoft 365|Defender XDR/i, grant: "e5" },
+  // "Microsoft ?365" also matches the reported "SentinelMicrosoft365" (MIG-26).
+  // "MicrosoftDefender" is deliberately unmatched: it could be either grant.
+  { pattern: /M365|Microsoft ?365|Defender XDR/i, grant: "e5" },
   { pattern: /Defender for Servers|per Node|Security/i, grant: "servers-p2" },
 ];
 
-function grantForType(type: string): GrantId | null {
-  const bare = type.startsWith(BENEFIT_TYPE_PREFIX) ? type.slice(BENEFIT_TYPE_PREFIX.length) : type;
+/** The benefit type without the "Benefit type used: " prefix a failed parse leaves on it. */
+function bareType(type: string): string {
+  return type.startsWith(BENEFIT_TYPE_PREFIX) ? type.slice(BENEFIT_TYPE_PREFIX.length) : type;
+}
+
+function grantForType(bare: string): GrantId | null {
   for (const { pattern, grant } of BENEFIT_TYPE_PATTERNS) {
     if (pattern.test(bare)) return grant;
   }
@@ -74,22 +82,44 @@ function grantForType(type: string): GrantId | null {
 }
 
 /**
+ * A benefit amount as a number, or null when it is not one. Number(null) and
+ * Number("") are 0, and a missing amount is not a zero benefit: it was not read.
+ */
+function benefitGB(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * Operation rows to per-day usage. If ANY benefit type is unrecognised the
  * whole result is pooled: attributing the recognised rows alone would present
- * a partial split as the whole.
+ * a partial split as the whole. A row with no day or no readable amount is
+ * dropped and COUNTED in `unreadableRows`: the caller must treat Used as a
+ * lower bound when it is not 0.
  */
 export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): {
   days: BenefitDay[];
   attribution: "per-grant" | "pooled";
   unmatchedTypes: string[];
+  unreadableRows: number;
 } {
   const parsed: Array<{ day: string; grant: GrantId | null; usedMB: number }> = [];
   const unmatched = new Set<string>();
+  let unreadableRows = 0;
   for (const row of rows) {
     const day = typeof row.Day === "string" ? row.Day : "";
-    const gb = Number(row.BenefitUsedGB);
-    if (!day || !Number.isFinite(gb)) continue;
-    const type = String(row.BenefitType ?? "");
+    const gb = benefitGB(row.BenefitUsedGB);
+    // Events the server-side sum() skipped because their amount did not extract.
+    const skipped = typeof row.Unreadable === "number" && row.Unreadable > 0 ? row.Unreadable : 0;
+    if (!day || gb === null) {
+      unreadableRows += Math.max(1, skipped);
+      continue;
+    }
+    unreadableRows += skipped;
+    // Unmatched types are reported bare: they reach the cross-check's skip reason.
+    const type = bareType(String(row.BenefitType ?? ""));
     const grant = grantForType(type);
     if (grant === null) unmatched.add(type);
     parsed.push({ day, grant, usedMB: gb * MB_PER_GB });
@@ -103,6 +133,7 @@ export function parseBenefitRows(rows: ReadonlyArray<Record<string, unknown>>): 
     })),
     attribution: pooled ? "pooled" : "per-grant",
     unmatchedTypes: [...unmatched],
+    unreadableRows,
   };
 }
 

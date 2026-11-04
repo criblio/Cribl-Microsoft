@@ -265,7 +265,7 @@ describe("readDataAllowances - licences", () => {
       expect(g.crossCheck.kind).toBe("skipped");
       expect((g.crossCheck as { reason: string }).reason).toMatch(/2 Sentinel workspaces/);
     }
-    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2 });
+    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: false });
   });
 
   it("several Sentinel workspaces do not skip the Servers P2 cross-check (MIG-19): only E5 is tenant-wide", async () => {
@@ -345,6 +345,26 @@ describe("readDataAllowances - Servers P2", () => {
     const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
     expect(view(r, "servers-p2").grantedMB).toBeNull();
     expect(view(r, "servers-p2").crossCheck.kind).toBe("skipped");
+  });
+
+  it("a Free VirtualMachines plan is off (read, not not-read); granted is 0 only when every subscription was read (MIG-22)", async () => {
+    const all = routedAzure({
+      ...base,
+      heartbeat: heartbeat(["vm1", "sub-a"]),
+      pricings: { "sub-a": pricings("Free", "") },
+    });
+    const r = await readDataAllowances(all.azure, undefined, WS, inventory(0), OPTS);
+    expect(r.servers.rows[0]!.plan).toBe("off");
+    expect(view(r, "servers-p2")).toMatchObject({ grantedMB: 0, grantedIsFloor: false });
+
+    const partial = routedAzure({
+      ...base,
+      heartbeat: heartbeat(["vm1", "sub-a"], ["vm2", "sub-b"]),
+      pricings: { "sub-a": pricings("Free", ""), "sub-b": DENIED },
+    });
+    const p = await readDataAllowances(partial.azure, undefined, WS, inventory(0), OPTS);
+    expect(p.servers.rows.map((x) => x.plan)).toEqual(["off", "not-read"]);
+    expect(view(p, "servers-p2").grantedIsFloor).toBe(true);
   });
 
   it("grantedMB is null, not 0, when Heartbeat reported no machines at all", async () => {
@@ -854,5 +874,103 @@ describe("compareTenant", () => {
     const r = await compareTenant(azure, undefined, [WS], new Map(), { readAt: OPTS.readAt });
     if (r.scope.kind !== "tenant") throw new Error("unreachable");
     expect(r.scope.notRead.map((n) => n.id)).toEqual([WS]);
+  });
+});
+
+describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
+  const DAY = "2026-10-20";
+
+  it("a benefit row with no readable amount is a gap and floors Used, never a 0 MB applied", async () => {
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(
+      routedAzure({
+        benefit: {
+          "*": queryResult(["Day", "BenefitType", "BenefitUsedGB"], [
+            [DAY, "M365 E5", 0.5],
+            [DAY, "M365 E5", null],
+          ]),
+        },
+        eligible: eligible([DAY, "SigninLogs", 900]),
+      }).azure,
+      graph,
+      WS,
+      inventory(0),
+      OPTS,
+    );
+    expect(r.gaps).toContain(
+      "1 benefit amount(s) could not be read (no day or no readable amount), so Used is a lower bound.",
+    );
+    expect(r.usedIsFloor).toBe(true);
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: "Cross-check skipped: some benefit amount(s) could not be read, so the applied figures are incomplete.",
+    });
+  });
+
+  it("an event the server-side sum() skipped (Unreadable > 0) is a gap and floors Used", async () => {
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(
+      routedAzure({
+        benefit: {
+          "*": queryResult(["Day", "BenefitType", "BenefitUsedGB", "Unreadable"], [[DAY, "M365 E5", 0.5, 1]]),
+        },
+        eligible: eligible([DAY, "SigninLogs", 900]),
+      }).azure,
+      graph,
+      WS,
+      inventory(0),
+      OPTS,
+    );
+    expect(r.gaps).toContain(
+      "1 benefit amount(s) could not be read (no day or no readable amount), so Used is a lower bound.",
+    );
+    expect(r.usedIsFloor).toBe(true);
+    expect(view(r, "e5").crossCheck.kind).toBe("skipped");
+  });
+
+  it("a discovery-floored Sentinel workspace count reads 'at least' in the skip reason and the scope", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "M365 E5", 0.5]) },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    });
+    const graph = graphWith(skusBody({ enabled: 120, consumed: 100 }));
+    const r = await readDataAllowances(azure, graph, WS, inventory(0), {
+      ...OPTS,
+      sentinelWorkspaces: 2,
+      sentinelWorkspacesAtLeast: true,
+    });
+    expect(view(r, "e5").crossCheck).toEqual({
+      kind: "skipped",
+      reason: expect.stringMatching(/shared across at least 2 Sentinel workspaces/),
+    });
+    expect(r.scope).toEqual({ kind: "workspace", sentinelWorkspaces: 2, sentinelWorkspacesAtLeast: true });
+  });
+
+  it("machines found without a subscription id never read as 'no reporting machines were found'", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 1]) },
+      eligible: eligible([DAY, "SecurityEvent", 1500]),
+      heartbeat: heartbeat(["onprem-1", ""], ["onprem-2", ""]),
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    expect(view(r, "servers-p2").crossCheck).toEqual({
+      kind: "skipped",
+      reason:
+        "Cross-check skipped: 2 reporting machine(s) were found, but none carried a subscription id, so no Defender plan could be read.",
+    });
+  });
+
+  it("the machines query counts running VMs, Uniform scale-set instances and Connected Arc machines only", async () => {
+    const { azure, calls } = routedAzure({ heartbeat: heartbeat(["vm1", "sub-a"]) });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(0), OPTS);
+    const posted = calls.find((c) => c.path === "/providers/Microsoft.ResourceGraph/resources");
+    const query = (posted!.body as { query: string }).query;
+    expect(query).toBe(r.queries.machines);
+    expect(query).toMatch(/powerState\.code\) in~ \('PowerState\/running', 'PowerState\/starting'\)/);
+    expect(query).toMatch(/computeresources[\s\S]*microsoft\.compute\/virtualmachinescalesets\/virtualmachines/);
+    expect(query).toMatch(
+      /\(type =~ 'microsoft\.hybridcompute\/machines' and tostring\(properties\.status\) =~ 'Connected'\)/,
+    );
+    expect(query).toMatch(/summarize Machines = count\(\) by subscriptionId$/);
   });
 });

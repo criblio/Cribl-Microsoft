@@ -47,6 +47,7 @@ import {
   DEFENDER_SUBSCRIPTION_ACTIONS,
 } from "../../domain/defender-export/defender-permissions";
 import type { PermissionSet, SetupPath } from "../../domain/azure-permissions";
+import { AUTOMATION_PERMISSIONS } from "../../domain/onboarding-sections";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import type { PortHttpResponse } from "../../ports/http";
@@ -708,5 +709,24 @@ describe("over a real preflight report", () => {
     expect(set.verdicts["dcr.read"]).toBe("denied");
     expect(set.verdicts["workspace.read"]).toBe("granted");
     expect(set.verdicts["dcr.write"]).toBe("granted");
+  });
+});
+
+describe("the onboarding automation declarations agree with this mapping (AZR-60)", () => {
+  // The section banner reads the cached set through these declarations. A
+  // declared action this table does not map would never be measured, and a
+  // grantOnly flag out of step with GRANT_ONLY_AZURE_ACTIONS would let the
+  // banner call an unmeasured miss a denial (or the reverse).
+  it("every declared need maps to its own capability, and grantOnly is exactly GRANT_ONLY_AZURE_ACTIONS", () => {
+    const needs = Object.values(AUTOMATION_PERMISSIONS).flatMap((p) => p.measured);
+    expect(needs.length).toBeGreaterThan(0);
+    for (const n of needs) {
+      expect(AZURE_ACTION_CAPABILITIES[n.action], n.action).toBe(n.capability);
+      expect(GRANT_ONLY_AZURE_ACTIONS.has(n.action), n.action).toBe(n.grantOnly);
+    }
+    // Both directions: every grant-only action is declared somewhere.
+    for (const action of GRANT_ONLY_AZURE_ACTIONS) {
+      expect(needs.some((n) => n.action === action && n.grantOnly), action).toBe(true);
+    }
   });
 });

@@ -63,16 +63,23 @@ const QUALIFYING_BY_ID = new Map(E5_QUALIFYING_SKUS.map((s) => [s.skuId.toLowerC
 /** Part numbers that look like the offer but are not in the matched list. */
 const MAY_QUALIFY = /E5|A5|F5|G5|E7|FLW/i;
 
+/**
+ * SKU states whose seats grant. Graph's capabilityStatus is Enabled, Warning
+ * (in grace), Suspended, LockedOut or Deleted; only the first two are live.
+ */
+const GRANTING_STATUS = new Set(["enabled", "warning"]);
+
 /** 0 qualifying, 1 may qualify (unlisted), 2 plain non-qualifying. */
 type Tier = 0 | 1 | 2;
 
 function classify(sku: SubscribedSku): { row: LicenceRow; tier: Tier } {
   const hit = QUALIFYING_BY_ID.get(sku.skuId.toLowerCase());
   if (hit) {
-    return {
-      row: { ...sku, qualifies: true, family: hit.family, reason: `Qualifies: Microsoft 365 ${hit.family} family` },
-      tier: 0,
-    };
+    const live = GRANTING_STATUS.has(sku.capabilityStatus.toLowerCase());
+    const reason = live
+      ? `Qualifies: Microsoft 365 ${hit.family} family`
+      : `Qualifies: Microsoft 365 ${hit.family} family, but the SKU is ${sku.capabilityStatus || "in an unknown state"}, so its seats are not counted`;
+    return { row: { ...sku, qualifies: true, family: hit.family, reason }, tier: 0 };
   }
   if (MAY_QUALIFY.test(sku.skuPartNumber)) {
     return {
@@ -94,7 +101,17 @@ function classify(sku: SubscribedSku): { row: LicenceRow; tier: Tier } {
 export function e5Granted(skus: readonly SubscribedSku[]): {
   rows: LicenceRow[];
   purchased: number;
+  /**
+   * consumedUnits summed over live qualifying SKUs. Graph gives no per-user
+   * overlap, so a user holding two qualifying SKUs is counted twice: see
+   * `assignedMayDoubleCount`.
+   */
   assigned: number;
+  /**
+   * True when more than one live qualifying SKU has seats assigned: `assigned`
+   * may count one user twice, and cannot be de-duplicated from subscribedSkus.
+   */
+  assignedMayDoubleCount: boolean;
   inGrace: number;
   suspended: number;
   possiblyMissing: number;
@@ -108,10 +125,16 @@ export function e5Granted(skus: readonly SubscribedSku[]): {
   let inGrace = 0;
   let suspended = 0;
   let possiblyMissing = 0;
+  let assignedSkus = 0;
   for (const { row, tier } of classified) {
     if (tier === 0) {
-      purchased += row.enabled;
-      assigned += row.consumed;
+      // A suspended, locked-out or deleted SKU still shows in the table, but
+      // its seats grant nothing.
+      if (GRANTING_STATUS.has(row.capabilityStatus.toLowerCase())) {
+        purchased += row.enabled;
+        assigned += row.consumed;
+        if (row.consumed > 0) assignedSkus += 1;
+      }
       inGrace += row.warning;
       suspended += row.suspended;
     } else if (tier === 1) {
@@ -122,6 +145,7 @@ export function e5Granted(skus: readonly SubscribedSku[]): {
     rows: classified.map((c) => c.row),
     purchased,
     assigned,
+    assignedMayDoubleCount: assignedSkus > 1,
     inGrace,
     suspended,
     possiblyMissing,
@@ -144,15 +168,20 @@ export interface ServersSubscriptionRow {
   machinesReportingHere: number;
 }
 
+/** The P2 grant on each basis: the machine counts and what they earn per day. */
+export interface ServersGranted {
+  /** Machine counts behind `grantedMB`; `inSubscription` is null when any P2 count is unknown. */
+  machines: { reportingHere: number; inSubscription: number | null };
+  grantedMB: { reportingHere: number; inSubscription: number | null };
+  atLeast: boolean;
+}
+
 /**
  * Defender for Servers P2 grant. Only P2 subscriptions grant; machines that
  * could not be attributed to a subscription never change the figure. A
  * subscription that could not be read makes the figure a lower bound.
  */
-export function serversGranted(
-  rows: readonly ServersSubscriptionRow[],
-  _unattributedMachines: number,
-): { grantedMB: { reportingHere: number; inSubscription: number | null }; atLeast: boolean } {
+export function serversGranted(rows: readonly ServersSubscriptionRow[]): ServersGranted {
   let here = 0;
   let inSub: number | null = 0;
   let atLeast = false;
@@ -163,6 +192,7 @@ export function serversGranted(
     inSub = inSub === null || r.machinesInSubscription === null ? null : inSub + r.machinesInSubscription;
   }
   return {
+    machines: { reportingHere: here, inSubscription: inSub },
     grantedMB: {
       reportingHere: here * SERVERS_MB_PER_MACHINE_PER_DAY,
       inSubscription: inSub === null ? null : inSub * SERVERS_MB_PER_MACHINE_PER_DAY,

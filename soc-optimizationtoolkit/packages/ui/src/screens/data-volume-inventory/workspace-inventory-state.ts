@@ -20,10 +20,10 @@ import { allowanceCsvCells } from "./allowance-state";
 
 export { formatMB } from "./format-mb";
 
-/** What the source cell says, and the full value for its title. */
+/** What the source cell says, and the full value or meaning for its InfoTip. */
 export interface SourceLabel {
   text: string;
-  title: string;
+  tip: string;
   kind: string;
 }
 
@@ -34,24 +34,24 @@ export function sourceLabel(source: InventorySource): SourceLabel {
       const parsed = parseResourceId(source.source);
       return {
         text: parsed.name || source.source,
-        title: source.source,
+        tip: source.source,
         kind: parsed.resourceType || "Azure resource",
       };
     }
     case "computer":
-      return { text: source.source, title: source.source, kind: "Computer" };
+      return { text: source.source, tip: source.source, kind: "Computer" };
     case "device":
-      return { text: source.source, title: source.source, kind: "CEF device" };
+      return { text: source.source, tip: source.source, kind: "CEF device" };
     case "other":
       return {
         text: `${source.sourceCount} other sources`,
-        title: "Every source past the largest 25 of this table, summed",
+        tip: "Every source past the largest 25 of this table, summed",
         kind: "Remainder",
       };
     default:
       return {
         text: "Unattributed",
-        title:
+        tip:
           "These rows carry no _ResourceId, Computer or DeviceVendor/DeviceProduct, " +
           "so nothing in the row says where it came from (typical of SaaS and AWS connectors)",
         kind: "None",

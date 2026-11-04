@@ -8,10 +8,11 @@
  * granted, because the automation lives in a resource group the subscription
  * evaluation cannot see into (GRANT_ONLY_AZURE_ACTIONS). The NAMESPACE list is
  * still unmeasured (CAP-7b): listKeys can be granted on the namespace itself,
- * so a subscription-scope evaluation would read it as denied. The screen still
- * shows both lists under {@link DEFENDER_ACTIONS_NOT_MEASURED}, because it does
- * not read the audit's verdicts, and Azure's own 403 at each step is what the
- * operator actually sees.
+ * so a subscription-scope evaluation would read it as denied. The screen shows
+ * the subscription list with the cached audit's verdict per action (AZR-60,
+ * onboarding-sections/automation-permissions), and only the namespace list
+ * under {@link DEFENDER_ACTIONS_NOT_MEASURED}, where Azure's own 403 at the
+ * step is what the operator actually sees.
  *
  * ONE LIST PER SCOPE, BECAUSE THE SCOPES DIFFER AND `RequiredAction` HAS NO
  * SCOPE FIELD. The automation is written at the subscription; the connection
@@ -98,7 +99,10 @@ export const DEFENDER_NAMESPACE_ACTIONS: readonly RequiredAction[] =
   DEFENDER_NAMESPACE_OPERATIONS.map(asRequired);
 
 /**
- * The line shown above both lists. Visible copy: no card ids, dates or phases.
+ * The line shown under the NAMESPACE list's heading - the one list no
+ * capability measures. It names its scope, so it cannot be read as covering
+ * the measured subscription rows above it. Visible copy: no card ids, dates or
+ * phases.
  */
 export const DEFENDER_ACTIONS_NOT_MEASURED =
-  "Needed, not yet measured. The app does not check these permissions before it runs; if one is missing, Azure's refusal is shown at the step that needed it.";
+  "Needed, not yet measured. The app does not check this namespace permission before it runs; if it is missing, Azure's refusal is shown at the step that needed it.";

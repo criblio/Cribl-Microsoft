@@ -10,7 +10,9 @@ import {
   DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   FakeKvDocumentStore,
+  AUTOMATION_PERMISSIONS,
   ITEM_AVAILABILITY,
+  automationPermissionView,
   COVERAGE_SELECTION_KEY,
   COVERAGE_SELECTION_VERSION,
   DEFENDER_PLANS,
@@ -22,6 +24,7 @@ import {
   toListing,
 } from "@soc/core";
 import type {
+  CapabilitySet,
   CoverageSelection,
   DefenderAutomation,
   DefenderDeployOutcome,
@@ -611,6 +614,43 @@ describe("visible copy carries no project history", () => {
     add("hubs.truncated", hubListMessage({ ok: true, listing: toListing([{ name: "h" } as never]), truncated: true })?.text);
     add("rule.note", ruleNote({ name: "r", rights: ["Manage"] }));
     for (const o of OUTCOMES) add(`outcome.${o.kind}`, deployOutcomeMessage(o).text);
+
+    // AZR-60: every banner, deploy caution and row label core's permission view
+    // can produce, for every declared source.
+    const verdictSets: CapabilitySet["verdicts"][] = [];
+    for (const v of ["granted", "denied", undefined] as const) {
+      for (const w of ["granted", "denied", undefined] as const) {
+        verdictSets.push({
+          ...(v === undefined ? {} : { "defender-plans.read": v, "defender-automation.read": v }),
+          ...(w === undefined ? {} : { "defender-automation.write": w }),
+        });
+      }
+    }
+    verdictSets.push({ "defender-plans.read": "denied", "defender-automation.read": "granted", "defender-automation.write": "granted" });
+    for (const [id, permissions] of Object.entries(AUTOMATION_PERMISSIONS)) {
+      add(`perm.${id}.source`, permissions.sourceTitle);
+      add(`perm.${id}.scope`, permissions.measuredScope);
+      for (const n of permissions.measured) {
+        add(`perm.${id}.does`, n.does);
+        add(`perm.${id}.role`, n.role);
+      }
+      for (const g of permissions.notMeasured) add(`perm.${id}.unmeasured`, g.scope);
+      const sets: (CapabilitySet | undefined)[] = [
+        undefined,
+        ...verdictSets.map((verdicts) => ({ verdicts, auditedAt: "a", connectionId: "c" })),
+      ];
+      for (const [ctxName, context] of [
+        ["connected", { azureIdentityPresent: true, criblReachable: true }],
+        ["no-identity", { azureIdentityPresent: false, criblReachable: true }],
+      ] as const) {
+        for (const capabilities of sets) {
+          const v = automationPermissionView({ permissions, capabilities, context, howtoSection: 8 });
+          add(`perm.${id}.${ctxName}.banner`, v.banner?.text);
+          add(`perm.${id}.${ctxName}.deploy`, v.deployCaution);
+          for (const r of v.rows) add(`perm.${id}.${ctxName}.row`, r.stateLabel);
+        }
+      }
+    }
 
     expect(entries.length).toBeGreaterThan(40);
     expect(findHistoryInCopy(entries)).toEqual([]);

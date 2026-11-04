@@ -82,6 +82,11 @@ const HEADER_LINES = 40;
  */
 const RETIRED = [
   {
+    token: 'Listen or Manage',
+    since: 'AZR-58 and ADR 0008 (2026-11-03)',
+    fix: 'a Cribl Event Hub source never takes a Manage-capable key; say "Listen only" (or Entra ID, the default).',
+  },
+  {
     token: 'apps/local-app',
     since: 'ADR 0002 (2026-08-17)',
     fix: 'the local shell was dropped; apps/cribl-app is the only shell.',

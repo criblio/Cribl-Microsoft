@@ -10,8 +10,10 @@
  * `type` + `queueName`).
  *
  * NO SECRET IN A BODY. The Event Hub input names its connection string through
- * `sasl.textSecret` (authType 'secret') and never carries `sasl.password`; the
- * blob input names its client secret through `clientTextSecret`. The only body
+ * `sasl.textSecret` (authType 'secret') and never carries `sasl.password`; in
+ * Entra ID mode (ADR 0008) it names the Cribl principal's client secret
+ * through `sasl.clientTextSecret`; the blob input names its client secret
+ * through `clientTextSecret`. The only body
  * that carries a credential is the secret body, built by the app-wide
  * buildSecretBody in domain/cribl-secrets (DBT-163; re-exported here), which
  * goes to POST /system/secrets and nowhere else. No body carries `_metadata` (the
@@ -188,6 +190,34 @@ export function onboardingSecretId(inputId: string): string {
   return `${cappedTo(inputId, ONBOARDING_ID_MAX - suffix.length)}${suffix}`;
 }
 
+/**
+ * How an Event Hub input authenticates (ADR 0008 section 1).
+ *
+ *   sas       SASL PLAIN with `$ConnectionString` and the Listen rule's
+ *             connection string in the named secret (the fallback modes)
+ *   entra-id  SASL OAUTHBEARER as a DEDICATED Cribl service principal holding
+ *             Azure Event Hubs Data Receiver; the named secret holds its client
+ *             secret. Never the app's own registration (ADR 0008 section 2).
+ */
+export type EventHubAuth =
+  | { readonly kind: "sas" }
+  | { readonly kind: "entra-id"; readonly tenantId: string; readonly clientId: string };
+
+/**
+ * The Entra ID authority Cribl's eventhub input is pointed at. The vendored
+ * OpenAPI enum also offers the US Government and China clouds; only the
+ * public cloud is built (Measured: schema read, ADR 0008 Context).
+ */
+export const EVENTHUB_OAUTH_ENDPOINT = "https://login.microsoftonline.com";
+
+/**
+ * The OAuth scope for a namespace's Kafka endpoint. Inferred, not measured
+ * (ADR 0008 Unverified: the Azure Event Hubs Kafka OAuth pattern).
+ */
+export function eventHubOAuthScope(namespace: string): string {
+  return `https://${namespace.trim()}.servicebus.windows.net/.default`;
+}
+
 export interface EventHubInputSpec {
   readonly id: string;
   readonly namespace: string;
@@ -200,9 +230,34 @@ export interface EventHubInputSpec {
   readonly sourceTitle: string;
   /** The connection's tenant, tagged on the input (tenantStreamtag). */
   readonly connectionTenantId: string;
+  /** SAS when absent (ADR 0007); Entra ID is the ADR 0008 default the UI offers first. */
+  readonly auth?: EventHubAuth;
 }
 
-/** The Event Hub (Kafka) input body (D8). Carries the secret's NAME only. */
+function eventHubSasl(spec: EventHubInputSpec, ns: string): Record<string, unknown> {
+  const auth = spec.auth ?? { kind: "sas" };
+  if (auth.kind === "entra-id") {
+    return {
+      disabled: false,
+      mechanism: "oauthbearer",
+      oauthEndpoint: EVENTHUB_OAUTH_ENDPOINT,
+      tenantId: auth.tenantId.trim(),
+      clientId: auth.clientId.trim(),
+      clientSecretAuthType: "secret",
+      clientTextSecret: spec.secretId,
+      scope: eventHubOAuthScope(ns),
+    };
+  }
+  return {
+    disabled: false,
+    mechanism: "plain",
+    authType: "secret",
+    username: "$ConnectionString",
+    textSecret: spec.secretId,
+  };
+}
+
+/** The Event Hub (Kafka) input body (D8, ADR 0008). Carries the secret's NAME only. */
 export function buildEventHubInputBody(spec: EventHubInputSpec): Record<string, unknown> {
   const ns = spec.namespace.trim();
   return {
@@ -216,13 +271,7 @@ export function buildEventHubInputBody(spec: EventHubInputSpec): Record<string, 
     topics: [...spec.topics],
     groupId: spec.consumerGroup,
     fromBeginning: true,
-    sasl: {
-      disabled: false,
-      mechanism: "plain",
-      authType: "secret",
-      username: "$ConnectionString",
-      textSecret: spec.secretId,
-    },
+    sasl: eventHubSasl(spec, ns),
     tls: {
       disabled: false,
       rejectUnauthorized: true,
@@ -298,7 +347,9 @@ export function buildBlobInputBody(spec: BlobInputSpec): Record<string, unknown>
  * Every field the builders set explicitly that changes what the input does -
  * whether it runs, whether its events reach routes, and its auth and TLS
  * posture - is listed, so a hand edit to any of them reads as `differs`, not
- * as already applied.
+ * as already applied. The SAS and the OAuth fields are both listed: a field
+ * the body does not set compares as absent on both sides, so a SAS input where
+ * an Entra ID one is planned (or the reverse) differs by name (AZR-59).
  */
 export const IDENTITY_FIELDS: Readonly<Record<CriblInputType, readonly string[]>> = {
   eventhub: [
@@ -313,6 +364,12 @@ export const IDENTITY_FIELDS: Readonly<Record<CriblInputType, readonly string[]>
     "sasl.authType",
     "sasl.username",
     "sasl.textSecret",
+    "sasl.oauthEndpoint",
+    "sasl.tenantId",
+    "sasl.clientId",
+    "sasl.clientSecretAuthType",
+    "sasl.clientTextSecret",
+    "sasl.scope",
     "tls.disabled",
     "tls.rejectUnauthorized",
   ],

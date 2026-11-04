@@ -370,11 +370,22 @@ function hubProvedAbsent(read: EventHubTargetRead<EventHubInfo>, hubName: string
 }
 
 /** One worded state line, toned. Shared with the other azure-onboarding sections. */
-export function PickerLine({ message }: { message: PickerMessage }) {
+export function PickerLine({
+  message,
+  announce = true,
+}: {
+  message: PickerMessage;
+  /**
+   * Whether an error is a live alert. False for a line present at mount from
+   * stored state (not a reaction to anything the user did): it keeps the error
+   * styling without interrupting the screen reader on every visit.
+   */
+  announce?: boolean;
+}) {
   return (
     <p
       className={`azure-onboarding-banner azure-onboarding-banner-${message.tone}`}
-      role={message.tone === "error" ? "alert" : undefined}
+      role={announce && message.tone === "error" ? "alert" : undefined}
     >
       {message.text}
     </p>

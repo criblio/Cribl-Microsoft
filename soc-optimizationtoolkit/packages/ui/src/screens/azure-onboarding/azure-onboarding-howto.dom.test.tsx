@@ -40,6 +40,7 @@ import type {
   CriblClient,
   CriblGroupSummary,
   CriblRequest,
+  GraphDirectory,
   Listing,
   PortHttpResponse,
 } from "@soc/core";
@@ -227,13 +228,20 @@ function mount(opts: {
   azure?: RoutingAzure;
   cribl?: RoutingCribl;
   pacing?: BatchPacing | null;
+  graph?: GraphDirectory;
 } = {}) {
   const store = opts.store ?? new FakeKvDocumentStore();
   const azure = opts.azure ?? new RoutingAzure();
   const cribl = opts.cribl ?? new RoutingCribl();
   const logger = new FakeLogger(() => "t");
   const pacing = opts.pacing === undefined ? countingPacing() : opts.pacing;
-  const ports = { azure, cribl, logger, kvDocuments: store } as unknown as UiPorts;
+  const ports = {
+    azure,
+    cribl,
+    logger,
+    kvDocuments: store,
+    ...(opts.graph === undefined ? {} : { graph: opts.graph }),
+  } as unknown as UiPorts;
   const view = render(
     <PortsProvider ports={ports} config={CONFIG}>
       {pacing === null ? <AzureOnboardingScreen /> : <AzureOnboardingScreen pacing={pacing} />}
@@ -433,6 +441,8 @@ describe("AzureOnboardingScreen - the Cribl source create", () => {
     fireEvent.click(button("Read the namespace's rules"));
     await waitFor(() => expect(azure.calls.map((c) => c.path)).toEqual([`${NS_PATH}/authorizationRules`]));
 
+    // Entra ID is the default (ADR 0008); this pin drives the paste fallback.
+    fireEvent.click(screen.getByLabelText(/^Paste a connection string/));
     const paste = screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`) as HTMLInputElement;
     fireEvent.change(paste, { target: { value: LISTEN_CS } });
 
@@ -490,6 +500,47 @@ describe("AzureOnboardingScreen - the Cribl source create", () => {
     expect(view.container.innerHTML).not.toContain(KEY);
     expect(paste.value).toBe("");
   });
+
+  it("an Entra ID plan asks the bound directory to tie the client id to the object id, and refuses a mismatch", async () => {
+    // AZR-59 review: without ports.graph reaching the plan, the cross-check
+    // never runs in the product and every create is "not cross-checked".
+    const CRIBL_CLIENT = "11111111-1111-1111-1111-111111111111";
+    const store = new FakeKvDocumentStore({
+      [ONBOARDING_PROGRESS_KEY]: progressDoc({
+        planValues: {
+          subscriptionId: SUB,
+          resourceGroup: RG,
+          namespace: NS,
+          hubName: HUB,
+          consumerGroup: "cribl",
+          criblTenantId: "cribl-tenant",
+          criblClientId: CRIBL_CLIENT,
+          criblPrincipalObjectId: "object-entered",
+        },
+      }),
+    });
+    let listed = 0;
+    const graph: GraphDirectory = {
+      readSubscribedSkus: async () => ({ kind: "denied", status: 403, detail: "unused" }),
+      listServicePrincipals: async () => {
+        listed++;
+        return [{ id: "object-real", appId: CRIBL_CLIENT, displayName: "cribl-reader" }];
+      },
+    };
+    const { cribl } = mount({ store, graph });
+    await loaded();
+    const secret = screen.getByLabelText(`Cribl principal client secret for ${DEFENDER_TITLE}`) as HTMLInputElement;
+    fireEvent.change(secret, { target: { value: "entra-client-secret-value" } });
+    const create = await waitFor(() => {
+      const b = button("Create the Cribl source");
+      expect(b.disabled).toBe(false);
+      return b;
+    });
+    fireEvent.click(create);
+    await waitFor(() => expect(screen.getByText(/belongs to the service principal with object ID object-real/)).toBeTruthy());
+    expect(listed).toBe(1);
+    expect(cribl.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
 });
 
 /** A stored tenant to Cribl mapping (AZR-64). */
@@ -504,11 +555,23 @@ function mappingDoc(over: Record<string, unknown> = {}): unknown {
   };
 }
 
+/**
+ * The Defender lane's paste field. Entra ID is the default credential since
+ * AZR-59 (ADR 0008), so the paste choice is picked first when it is not
+ * already showing.
+ */
+function pasteField(): HTMLInputElement {
+  if (screen.queryByLabelText(`Connection string for ${DEFENDER_TITLE}`) === null) {
+    fireEvent.click(screen.getByLabelText(/^Paste a connection string/));
+  }
+  return screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`) as HTMLInputElement;
+}
+
 /** Read the rules, paste a Listen key, and click Create then Confirm. */
 async function createThroughConfirm(store: FakeKvDocumentStore, azure: RoutingAzure): Promise<void> {
   fireEvent.click(button("Read the namespace's rules"));
   await waitFor(() => expect(azure.calls.map((c) => c.path)).toContain(`${NS_PATH}/authorizationRules`));
-  fireEvent.change(screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`), { target: { value: LISTEN_CS } });
+  fireEvent.change(pasteField(), { target: { value: LISTEN_CS } });
   const create = await waitFor(() => {
     const b = button("Create the Cribl source");
     expect(b.disabled).toBe(false);
@@ -643,7 +706,7 @@ describe("AzureOnboardingScreen - the tenant to Cribl mapping (AZR-64)", () => {
     expect(screen.queryByRole("button", { name: "Load worker groups" })).toBeNull();
     expect(button("Read Cribl side").disabled).toBe(true);
     expect((screen.getByRole("checkbox", { name: "Watch for data" }) as HTMLInputElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(`Connection string for ${DEFENDER_TITLE}`), { target: { value: LISTEN_CS } });
+    fireEvent.change(pasteField(), { target: { value: LISTEN_CS } });
     await waitFor(() => expect(button("Create the Cribl source").disabled).toBe(true));
     fireEvent.click(button("Create the Cribl source"));
     fireEvent.click(button("Read Cribl side"));

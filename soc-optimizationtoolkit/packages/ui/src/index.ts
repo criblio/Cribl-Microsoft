@@ -560,12 +560,13 @@ export type {
   SelectableWorkbook,
 } from "./screens/content-install/content-install-state";
 
+export { WorkspaceInventoryPanel } from "./screens/data-volume-inventory/workspace-inventory-panel";
+
 // SIEM Migration (porting-plan Unit 26, ENG-40 + GUI-22): the rebuilt
 // migration analyzer - upload a Splunk/QRadar export, map its data sources
 // to Sentinel solutions, enrich with the solutions' analytics rules, pivot
 // into Sentinel Integration via the preserved solution deep link, and keep
 // the plan across navigation (ContentCache persistence).
-export { WorkspaceInventoryPanel } from "./screens/data-volume-inventory/workspace-inventory-panel";
 export { SiemMigrationScreen } from "./screens/siem-migration/siem-migration-screen";
 export type { SiemMigrationScreenProps } from "./screens/siem-migration/siem-migration-screen";
 export {
@@ -843,7 +844,7 @@ export type { ConfigJsonResult } from "./screens/config-json";
 // Shared widgets.
 // DBT-249: the one dropdown control, so the app shell uses it too.
 export { SearchableSelect, SearchableMultiSelect } from "./components/searchable-select";
-export type { SelectOption, SearchableSelectProps } from "./components/searchable-select";
+export type { SelectOption } from "./components/searchable-select";
 export { InfoTip } from "./components/info-tip";
 export type { InfoTipProps } from "./components/info-tip";
 

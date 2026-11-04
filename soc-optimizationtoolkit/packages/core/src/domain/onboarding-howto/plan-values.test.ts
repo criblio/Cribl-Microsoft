@@ -43,6 +43,10 @@ describe("defaultPlanValues", () => {
         "networkWatcher",
         "flowLogName",
         "criblPrincipalObjectId",
+        // AZR-59, ADR 0008 section 2: the dedicated Cribl principal's ids
+        // (never the app's own registration). Ids, not credentials.
+        "criblTenantId",
+        "criblClientId",
       ].sort(),
     );
     for (const k of PLAN_VALUE_KEYS) expect(k).not.toMatch(/key|secret|password|connection/i);

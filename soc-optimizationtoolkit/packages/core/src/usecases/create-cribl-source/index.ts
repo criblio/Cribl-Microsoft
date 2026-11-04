@@ -16,6 +16,7 @@ export type {
   PlanCriblSourceInput,
   PlanCriblSourceResult,
   PlanRefusalReason,
+  PrincipalCheck,
   ReadyCriblSource,
 } from "./plan-cribl-source";
 

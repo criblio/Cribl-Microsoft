@@ -32,12 +32,12 @@ describe("formatMB", () => {
 });
 
 describe("sourceLabel", () => {
-  it("shows a resource by name and type, with the full id in the title", () => {
+  it("shows a resource by name and type, with the full id in its tip", () => {
     const id =
       "/subscriptions/s/resourcegroups/rg/providers/microsoft.hybridcompute/machines/lab-wks-01";
     expect(sourceLabel(source({ source: id, attribution: "resource" }))).toEqual({
       text: "lab-wks-01",
-      title: id,
+      tip: id,
       kind: "machines",
     });
   });
@@ -45,7 +45,7 @@ describe("sourceLabel", () => {
   it("names an unattributed source as such, not as blank", () => {
     const label = sourceLabel(source({ attribution: "none" }));
     expect(label.text).toBe("Unattributed");
-    expect(label.title).toMatch(/_ResourceId, Computer or DeviceVendor/);
+    expect(label.tip).toMatch(/_ResourceId, Computer or DeviceVendor/);
   });
 
   it("counts the members of the rolled-up row", () => {
@@ -127,7 +127,7 @@ describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", 
     // A hand split used to call this kind "resourceGroups".
     expect(label).toEqual({
       text: "rg-lab",
-      title: "/subscriptions/s/resourceGroups/rg-lab",
+      tip: "/subscriptions/s/resourceGroups/rg-lab",
       kind: "Azure resource",
     });
   });
