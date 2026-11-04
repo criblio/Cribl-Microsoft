@@ -135,15 +135,20 @@ export function NumberedSection({
   };
   const collapsible = !comingSoon;
   const bodyHidden = collapsible && collapsed;
-  // DBT-256: opening is not a move (DBT-248); working inside the body is. The
-  // capture handlers used to fire on the HEADER too, so pointer down on a
-  // folded header folded the open section above it at once, the header moved
-  // before the pointer came up, the click missed, and opening took two clicks.
-  // Anything inside the header (title, Expand, Pin, InfoTip) is now skipped;
-  // the others fold when the operator starts working in the opened section.
+  // DBT-256 / DBT-257: opening a folded section from its header is a move -
+  // it opens AND folds the others, in the one click (user direction
+  // 2026-11-04). The move fires on the CLICK, never on pointer down or focus
+  // in the header: folding on pointer down shifted the header before the
+  // pointer came up, so the click missed and opening took two clicks. The
+  // capture handlers below skip the header (title, Expand, Pin, InfoTip);
+  // pointer down or focus in the BODY is still a move.
   const headRef = useRef<HTMLDivElement>(null);
   const activateFromBody = (e: SyntheticEvent) => {
     if (headRef.current?.contains(e.target as Node) === true) return;
+    onActivate?.();
+  };
+  const open = () => {
+    setCollapsed(false);
     onActivate?.();
   };
   return (
@@ -159,7 +164,7 @@ export function NumberedSection({
         className="numbered-section-head"
         {...(collapsible
           ? {
-              onClick: () => setCollapsed(!collapsed),
+              onClick: () => (collapsed ? open() : setCollapsed(true)),
               style: { cursor: "pointer" },
             }
           : {})}
@@ -229,7 +234,7 @@ export function NumberedSection({
             aria-label={`Expand ${title}`}
             onClick={(e) => {
               e.stopPropagation();
-              setCollapsed(false);
+              open();
             }}
           >
             Expand

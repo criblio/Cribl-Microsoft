@@ -4718,6 +4718,21 @@
     },
     {
       "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "verified": "both",
+      "dependsOn": [
+        "DBT-256"
+      ],
+      "priority": "now",
+      "id": "DBT-257",
+      "type": "bug",
+      "title": "Opening a section from its header left the open section open",
+      "detail": "REPORTED 2026-11-04, right after DBT-256 shipped (1.13.8): one click now opened a folded section, but the section that was open stayed open until the operator worked inside the new one. User direction: the open click itself folds the others. FIXED: the header's opening click (title bar or Expand) is a move - it opens the section and folds the other open, unpinned sections in the same click. Pointer down and focus in the header still fold nothing, so the DBT-256 two-click bug cannot return: the layout shifts only after the click has landed. Supersedes DBT-248's \"opening is not a move\"; the Setup and wizard fold pins now assert the new contract. Mutation-checked: dropping the move from the open click fails 6 tests; verified live on Sentinel Integration."
+    },
+    {
+      "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
       "status": "done",
