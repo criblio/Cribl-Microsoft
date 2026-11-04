@@ -4,7 +4,7 @@
  *
  * The rules, in the order an operator meets them:
  *   - The page OPENS collapsed: only `currentId` is open.
- *   - Until the operator's first move, the load fold re-derives when
+ *   - Until the operator's first move or explicit open/fold, the load fold re-derives when
  *     `currentId` changes or the stored pins arrive (restored state lands
  *     after the first render).
  *   - A move ({@link SectionFolding.moveTo}: pointer-down or focus inside a
@@ -78,7 +78,13 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
   const [collapsed, setCollapsedSet] = useState<ReadonlySet<string>>(() =>
     initialCollapsed(ids, currentId),
   );
+  // DBT-256: an explicit open or fold (a header, Expand, Collapse, Done) ends
+  // the load fold just as a move does. Opening is not a move, so without this
+  // a section opened during load was shut again when `currentId` advanced or
+  // the stored pins arrived.
+  const touchedRef = useRef(false);
   const setCollapsed = useCallback((id: string, fold: boolean) => {
+    touchedRef.current = true;
     setCollapsedSet((prev) => {
       if (prev.has(id) === fold) return prev;
       const next = new Set(prev);
@@ -195,7 +201,7 @@ export function useSectionFolding(options: SectionFoldingOptions): SectionFoldin
   // advance during load. Once the operator has acted, nothing folds on a
   // status change again.
   useEffect(() => {
-    if (activeRef.current !== null) return;
+    if (activeRef.current !== null || touchedRef.current) return;
     const next = initialCollapsed(idsRef.current, currentId);
     for (const id of pinned) next.delete(id);
     setCollapsedSet((prev) =>

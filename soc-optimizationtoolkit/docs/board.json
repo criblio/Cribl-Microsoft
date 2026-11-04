@@ -4705,6 +4705,19 @@
     },
     {
       "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "verified": "both",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-256",
+      "type": "bug",
+      "title": "Opening a folded section takes two clicks: the first only folds the open one",
+      "detail": "REPORTED 2026-11-04 on Sentinel Integration: clicking a folded section's header closes the open section but does not open the clicked one; a second click opens it. CAUSE: NumberedSection calls onActivate (useSectionFolding.moveTo) on pointer DOWN and on focus. moveTo folds the other open sections at once, so when the open section sits above, the clicked header moves before the pointer comes up and the click never lands on it (focus on the header's Expand button does the same). Setup and the first-run wizard share NumberedSection (DBT-248), so they have it too. FIXED: nothing inside a section's header (title, Expand, Pin, InfoTip) reports a move; one click opens, and the other sections fold when the operator works in the opened one - the DBT-248 rule \"opening is not a move\", which the old capture handlers broke in practice. An explicit open or fold also ends the load fold (useSectionFolding), so a section opened during load is not shut when current advances. The wizard pin that encoded the two-click gesture now asserts the new contract. Pinned in one-click-open.dom.test.tsx and use-section-folding.dom.test.tsx (mutation-checked: the old component fails 3, dropping the load-fold change fails 2); verified live on Sentinel Integration 2026-11-04."
+    },
+    {
+      "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
       "status": "done",
