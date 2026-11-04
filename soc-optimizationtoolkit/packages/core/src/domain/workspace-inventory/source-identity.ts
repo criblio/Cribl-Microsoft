@@ -3,7 +3,8 @@
  *
  * There is no single "source" column across Log Analytics tables. The default
  * order (`_ResourceId`, then `Computer`, then `DeviceVendor DeviceProduct`) is
- * in workspace-inventory; this map overrides it for the tables where that
+ * built here by `identityKql()`, which workspace-inventory's query embeds;
+ * this map overrides it for the tables where that
  * order names the wrong thing. Measured 2026-11-04 on a Sentinel workspace:
  * CommonSecurityLog rows are Cisco ASA, `_ResourceId` empty, `Computer` the
  * COLLECTOR ("localhost", ":" or a host name) - the default order would name
