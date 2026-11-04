@@ -52,6 +52,7 @@ import {
   sourceLabel,
   sourceLineText,
   staleInventoryNote,
+  tableBillableFreeFlag,
   tableReconciliation,
   workspaceNameOf,
   workspaceSelectOption,
@@ -508,6 +509,9 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
                         <code className="code-chip">{t.table}</code>
                         {t.solutions.length > 0 && (
                           <div className="field-hint">{t.solutions.join(", ")}</div>
+                        )}
+                        {tableBillableFreeFlag(t) !== null && (
+                          <div className="match-warning">{tableBillableFreeFlag(t)}</div>
                         )}
                       </td>
                       <td>{formatMB(t.dailyAverageMB)}</td>

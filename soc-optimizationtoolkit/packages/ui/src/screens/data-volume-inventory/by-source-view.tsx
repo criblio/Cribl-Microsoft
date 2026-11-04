@@ -27,7 +27,9 @@ import {
   BY_SOURCE_SPLIT_TIP,
   bySourceFreeText,
   bySourceReconciliationText,
+  catalogBillableFlagText,
   catalogFlagText,
+  collectorDisplay,
 } from "./workspace-inventory-state";
 
 export interface BySourceViewProps {
@@ -93,6 +95,7 @@ export function BySourceView({ inventory }: BySourceViewProps) {
 
 function SourceRow({ row }: { row: SourceViewRow }) {
   const flag = catalogFlagText(row.freeTaggedTablesBilled);
+  const billableFlag = catalogBillableFlagText(row.billableTaggedTablesFree);
   return (
     <tr>
       <td>
@@ -126,6 +129,7 @@ function SourceRow({ row }: { row: SourceViewRow }) {
           </div>
         ))}
         {flag !== null && <div className="match-warning">{flag}</div>}
+        {billableFlag !== null && <div className="match-warning">{billableFlag}</div>}
       </td>
     </tr>
   );
@@ -165,7 +169,7 @@ function CollectorsCell({ row }: { row: SourceViewRow }) {
       <summary>{`${n} ${n === 1 ? "collector" : "collectors"}`}</summary>
       <div className="gap-handles-body">
         {row.collectors.map((c) => (
-          <div key={c.name}>{`${c.name} - ${formatMB(c.dailyMB)}/day`}</div>
+          <div key={c.name}>{`${collectorDisplay(c.name)} - ${formatMB(c.dailyMB)}/day`}</div>
         ))}
       </div>
     </details>

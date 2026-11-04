@@ -6,7 +6,7 @@
  * Pure: no IO, no React.
  */
 
-import { listingRows, parseResourceId } from "@soc/core";
+import { allowanceFor, listingRows, parseResourceId } from "@soc/core";
 import type {
   DataAllowances,
   SourceViewReconciliation,
@@ -176,13 +176,23 @@ export function sourceLineText(source: InventorySource): string {
   const label = sourceLabel(source);
   const who =
     source.attribution === "product"
-      ? `${label.text}${label.via === "" ? "" : ` via ${label.via}`}`
+      ? `${label.text}${label.via === "" ? "" : ` via ${collectorDisplay(label.via)}`}`
       : `${label.text} (${label.kind})`;
   return (
     `${who} - ${formatMB(source.dailyAverageMB)}/day ` +
     `(billed ${formatMB(source.billableDailyMB)}, ${freeText(source)}), ` +
     `${source.events.toLocaleString()} events`
   );
+}
+
+/**
+ * A collector name as shown. A name with no letter or digit (":", "-") or with
+ * leading or trailing spaces would read as punctuation in a sentence, so it is
+ * quoted; plain names are shown as they are.
+ */
+export function collectorDisplay(name: string): string {
+  const plain = /[\p{L}\p{N}]/u.test(name) && name === name.trim();
+  return plain ? name : `"${name}"`;
 }
 
 function freeText(source: InventorySource): string {
@@ -209,7 +219,7 @@ export const BILLED_EXCEEDS_TIP =
 export function tableReconciliation(table: InventoryTable): string | null {
   if (table.sources.kind === "failed") return null;
   const total = table.sources.sources.reduce((sum, s) => sum + s.dailyAverageMB, 0);
-  const figures = `${formatMB(total)} of the ${formatMB(table.dailyAverageMB)}/day Usage reports for this table`;
+  const figures = `${formatMB(total)}/day of the ${formatMB(table.dailyAverageMB)}/day Usage reports for this table`;
   if (table.sources.kind === "partial") {
     return (
       `This breakdown is partial (${table.sources.warning}), so the sources shown ` +
@@ -302,8 +312,8 @@ export const BY_SOURCE_COLLECTORS_TIP =
 export const BY_SOURCE_ALLOWANCE_TIP =
   "The allowance catalog's tag for each table this source lands in. The flag appears when " +
   "the rows say this source was billed (_IsBillable true) in a table the catalog tags " +
-  "Free: the catalog and the bill disagree, so check that table's billing before relying " +
-  "on the tag.";
+  "Free, or measured entirely free in a table the catalog tags Billable: the catalog and " +
+  "the bill disagree, so check that table's billing before relying on the tag.";
 
 /** The note on a source whose figure includes a partial breakdown. */
 export const BY_SOURCE_PARTIAL_TIP =
@@ -327,6 +337,26 @@ export function bySourceFreeText(row: { freeDailyMB: number | null; billedExceed
 export function catalogFlagText(freeTaggedTablesBilled: readonly string[]): string | null {
   if (freeTaggedTablesBilled.length === 0) return null;
   return `billed in a table the catalog tags Free (${freeTaggedTablesBilled.join(", ")})`;
+}
+
+/** The reverse flag on a By source row; null when no Billable-tagged table measured all free. */
+export function catalogBillableFlagText(billableTaggedTablesFree: readonly string[]): string | null {
+  if (billableTaggedTablesFree.length === 0) return null;
+  return `measured free; the catalog tags ${billableTaggedTablesFree.join(", ")} Billable`;
+}
+
+/**
+ * The same flag on a By table row: set when the catalog tags the table Billable
+ * and every source read in it measured free. A partial or failed breakdown is
+ * never flagged (a floor, or nothing measured).
+ */
+export function tableBillableFreeFlag(table: InventoryTable): string | null {
+  if (table.sources.kind !== "read" || table.sources.sources.length === 0) return null;
+  if (allowanceFor(table.table).kind !== "billable") return null;
+  const { sources } = table.sources;
+  const allFree =
+    sources.every((s) => s.billableDailyMB === 0) && sources.some((s) => s.dailyAverageMB > 0);
+  return allFree ? catalogBillableFlagText([table.table]) : null;
 }
 
 /**

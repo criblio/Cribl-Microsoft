@@ -34,6 +34,12 @@ export interface SourceViewRow {
   collectors: Array<{ name: string; dailyMB: number }>;
   /** Catalog-Free tables in which this row has billed volume. */
   freeTaggedTablesBilled: string[];
+  /**
+   * Catalog-Billable tables in which this row measured volume and none of it
+   * billed (the reverse disagreement). Partial tables are never listed: their
+   * figure is a floor, so "all free" is not established.
+   */
+  billableTaggedTablesFree: string[];
   /** Tables in this row whose breakdown was partial: the figure is a floor. */
   partialTables: string[];
   /** True when any contributing source was billed above its total (the free figure is clamped). */
@@ -64,6 +70,7 @@ interface Accumulator {
   billedDailyMB: number;
   freeDailyMB: number;
   billedByTable: Map<string, number>;
+  measuredByTable: Map<string, number>;
   collectors: Map<string, number>;
   partialTables: Set<string>;
   billedExceedsTotal: boolean;
@@ -93,6 +100,7 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
         billedDailyMB: 0,
         freeDailyMB: 0,
         billedByTable: new Map(),
+        measuredByTable: new Map(),
         collectors: new Map(),
         partialTables: new Set(),
         billedExceedsTotal: false,
@@ -109,6 +117,7 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
     acc.billedDailyMB += source.billableDailyMB;
     acc.freeDailyMB += source.freeDailyMB;
     acc.billedByTable.set(table, (acc.billedByTable.get(table) ?? 0) + source.billableDailyMB);
+    acc.measuredByTable.set(table, (acc.measuredByTable.get(table) ?? 0) + source.dailyAverageMB);
   };
 
   for (const table of listingRows(inventory.tables)) {
@@ -124,6 +133,7 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
         freeDailyMB: null,
         collectors: [],
         freeTaggedTablesBilled: [],
+        billableTaggedTablesFree: [],
         partialTables: [],
         billedExceedsTotal: false,
       });
@@ -208,6 +218,15 @@ function toRow(acc: Accumulator): SourceViewRow {
       .sort((a, b) => b.dailyMB - a.dailyMB || compareCodeUnits(a.name, b.name)),
     freeTaggedTablesBilled: [...acc.billedByTable]
       .filter(([table, billed]) => billed > 0 && allowanceFor(table).kind === "free")
+      .map(([table]) => table),
+    billableTaggedTablesFree: [...acc.measuredByTable]
+      .filter(
+        ([table, measured]) =>
+          measured > 0 &&
+          acc.billedByTable.get(table) === 0 &&
+          !acc.partialTables.has(table) &&
+          allowanceFor(table).kind === "billable",
+      )
       .map(([table]) => table),
     partialTables: [...acc.partialTables],
     billedExceedsTotal: acc.billedExceedsTotal,

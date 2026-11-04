@@ -55,7 +55,9 @@ the allowance cards keep doing that.
 4. **Measured wins, catalog explains**: each source shows billed and free
    volume from `_IsBillable`. A table the catalog tags Free whose sources are
    billed is flagged in both views ("catalog says free; 2 sources billed"), with
-   the reason one click down. Allowance arithmetic keeps using `Usage` per table
+   the reason one click down. The reverse is flagged too (MIG-32): a table the
+   catalog tags Billable whose measured volume is all free reads "measured free;
+   the catalog tags <tables> Billable" (never for a partial or not-read table). Allowance arithmetic keeps using `Usage` per table
    as today.
 5. **Tables with no product columns** appear in By source as one row each,
    named for the table ("AWSCloudTrail (no product columns)"), so every MB is on
@@ -129,7 +131,10 @@ Designer's calls, not the user's; each is cheap to reverse.
    original casing.
 5. **The catalog flag is per table.** By table shows it on the table row; on a
    By source row it reads "billed in a table the catalog tags Free
-   (SecurityAlert)" listing those tables.
+   (SecurityAlert)" listing those tables. The reverse flag (a Billable-tagged table
+   measured all free) is per table the same way: on the By table row when every
+   read source of the table is free, and on a By source row listing the tables
+   where that row measured volume and none of it billed.
 6. **Sources not read.** Per table, exactly as the existing breakdown decides
    (a failed batch is retried table by table). By source shows one row per such
    table, "<table> (sources not read)", with its `Usage` volume and Billed /

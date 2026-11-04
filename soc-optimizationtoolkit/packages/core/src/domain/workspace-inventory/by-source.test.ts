@@ -208,6 +208,41 @@ describe("bySource", () => {
     expect(rows[0]!.freeTaggedTablesBilled).toEqual([]);
   });
 
+  it("flags a catalog-Billable table whose measured volume is all free (MIG-32)", () => {
+    const { rows } = run(
+      inv(
+        table("SecurityCaseEvent", 1, read(src("Case Mgmt", "product", 1, { billedMb: 0 }))),
+        table("AWSCloudTrail", 2, read(src("", "none", 2, { billedMb: 0 }))),
+        table("Syslog", 3, read(src("web-1", "computer", 3, { billedMb: 1 }))),
+        table("SecurityAlert", 1, read(src("Defender", "product", 1, { billedMb: 0 }))),
+      ),
+    );
+    expect(rows.find((r) => r.label === "SecurityCaseEvent (no product columns)")!.billableTaggedTablesFree).toEqual([
+      "SecurityCaseEvent",
+    ]);
+    expect(
+      rows.find((r) => r.label === "AWSCloudTrail (no product columns)")!.billableTaggedTablesFree,
+    ).toEqual(["AWSCloudTrail"]);
+    // Partly billed: not flagged. Free-tagged and free: nothing to explain.
+    expect(rows.find((r) => r.label === "web-1")!.billableTaggedTablesFree).toEqual([]);
+    expect(rows.find((r) => r.label === "Defender")!.billableTaggedTablesFree).toEqual([]);
+  });
+
+  it("does not flag a Billable table that is partial, not read, or measured zero (MIG-32)", () => {
+    const { rows } = run(
+      inv(
+        table("AWSCloudTrail", 2, {
+          kind: "partial",
+          warning: "w",
+          sources: [src("", "none", 2, { billedMb: 0 })],
+        }),
+        table("SecurityCaseEvent", 1, { kind: "failed", error: "x" }),
+        table("Syslog", 0, read(src("web-1", "computer", 0, { billedMb: 0 }))),
+      ),
+    );
+    for (const r of rows) expect(r.billableTaggedTablesFree).toEqual([]);
+  });
+
   it("reconciles the two lenses exactly and sorts by volume then label", () => {
     const { rows, reconciliation } = run(
       inv(

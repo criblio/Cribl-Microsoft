@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { listingRows } from "@soc/core";
-import type { InventorySource, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
+import type { InventorySource, InventoryTable, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import {
   bySourceReconciliationText,
+  catalogBillableFlagText,
   catalogFlagText,
+  collectorDisplay,
+  tableBillableFreeFlag,
   discoveryHeadline,
   formatMB,
   inventoryCsv,
@@ -182,7 +185,7 @@ describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
 
   it("reconciles a table's own sources against its Usage average", () => {
     expect(tableReconciliation(listingRows(inv([cisco, other]).tables)[0]!)).toBe(
-      "Sources (measured from the rows) total 55.2 MB of the 60.0 MB/day Usage reports for this table.",
+      "Sources (measured from the rows) total 55.2 MB/day of the 60.0 MB/day Usage reports for this table.",
     );
   });
 
@@ -311,5 +314,61 @@ describe("catalogFlagText (MIG-30)", () => {
       "billed in a table the catalog tags Free (SecurityAlert, AzureActivity)",
     );
     expect(catalogFlagText([])).toBeNull();
+  });
+});
+
+describe("MIG-32 copy and flags", () => {
+  const src = (billable: number, total = 1) => ({
+    source: "x",
+    attribution: "none" as const,
+    collector: "",
+    bytes: 0,
+    billableBytes: 0,
+    events: 1,
+    sourceCount: 1,
+    dailyAverageMB: total,
+    billableDailyMB: billable,
+    freeDailyMB: total - billable,
+    billedExceedsTotal: false,
+  });
+  const tbl = (name: string, sources: InventoryTable["sources"]): InventoryTable => ({
+    table: name,
+    totalMB: 30,
+    billableMB: 30,
+    daysWithData: 30,
+    solutions: [],
+    dailyAverageMB: 1,
+    sources,
+  });
+
+  it("quotes collector names that are punctuation or padded, leaves plain names", () => {
+    expect(collectorDisplay(":")).toBe('":"');
+    expect(collectorDisplay("-")).toBe('"-"');
+    expect(collectorDisplay(" fw-a")).toBe('" fw-a"');
+    expect(collectorDisplay("fw-a")).toBe("fw-a");
+    expect(collectorDisplay("10.0.0.1")).toBe("10.0.0.1");
+  });
+
+  it("names the Billable-tagged tables measured free", () => {
+    expect(catalogBillableFlagText(["SecurityCaseEvent", "Foo"])).toBe(
+      "measured free; the catalog tags SecurityCaseEvent, Foo Billable",
+    );
+    expect(catalogBillableFlagText([])).toBeNull();
+  });
+
+  it("flags a By table row only when a Billable table's read sources are all free", () => {
+    expect(
+      tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(0)] })),
+    ).toBe("measured free; the catalog tags SecurityCaseEvent Billable");
+    expect(
+      tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "read", sources: [src(0), src(1)] })),
+    ).toBeNull();
+    expect(
+      tableBillableFreeFlag(
+        tbl("SecurityCaseEvent", { kind: "partial", warning: "w", sources: [src(0)] }),
+      ),
+    ).toBeNull();
+    expect(tableBillableFreeFlag(tbl("SecurityCaseEvent", { kind: "failed", error: "x" }))).toBeNull();
+    expect(tableBillableFreeFlag(tbl("SecurityAlert", { kind: "read", sources: [src(0)] }))).toBeNull();
   });
 });

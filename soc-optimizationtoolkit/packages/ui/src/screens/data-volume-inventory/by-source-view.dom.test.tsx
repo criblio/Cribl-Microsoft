@@ -117,6 +117,33 @@ describe("BySourceView", () => {
     expect(rowFor("Cisco ASA").textContent).not.toContain("catalog tags Free");
   });
 
+  it("flags a Billable-tagged table measured all free, and quotes a punctuation collector (MIG-32)", () => {
+    const tables: Listing<InventoryTable> = {
+      kind: "rows",
+      rows: [
+        tableOf("CommonSecurityLog", 6, { kind: "read", sources: [cisco(":", 6)] }),
+        tableOf("SecurityCaseEvent", 1, {
+          kind: "read",
+          sources: [
+            source({
+              source: "Case Mgmt",
+              attribution: "product",
+              dailyAverageMB: 1,
+              billableDailyMB: 0,
+              freeDailyMB: 1,
+            }),
+          ],
+        }),
+      ],
+    };
+    render(<BySourceView inventory={{ tables }} />);
+    expect(
+      within(rowFor("SecurityCaseEvent (no product columns)")).getByText("measured free; the catalog tags SecurityCaseEvent Billable"),
+    ).toBeTruthy();
+    expect(rowFor("Cisco ASA").textContent).not.toContain("measured free");
+    expect(within(rowFor("Cisco ASA")).getByText('":" - 6.0 MB/day')).toBeTruthy();
+  });
+
   it("draws the billed and free bar in proportion", () => {
     render(<BySourceView inventory={{ tables: TABLES }} />);
     const bar = rowFor("Microsoft Defender").querySelector(".by-source-split-bar")!;

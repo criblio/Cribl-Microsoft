@@ -151,7 +151,7 @@ describe("WorkspaceInventoryPanel", () => {
     expect(screen.getByText(/1 table\(s\) have no source breakdown/)).toBeTruthy();
     // MIG-29: the per-table reconciliation line, from that table's own sources.
     expect(
-      screen.getByText(/Sources \(measured from the rows\) total 100\.0 KB of the 3\.0 MB\/day Usage reports/),
+      screen.getByText(/Sources \(measured from the rows\) total 100\.0 KB\/day of the 3\.0 MB\/day Usage reports/),
     ).toBeTruthy();
     // Explanations are InfoTips, never native title hover text.
     expect(document.querySelector("[title]")).toBeNull();
@@ -203,8 +203,34 @@ describe("WorkspaceInventoryPanel - MIG-29", () => {
     // Billed above total: free is not knowable, so it reads not known (the CSV's empty cell), never 0.
     expect(screen.getByText(/Palo Alto via edge-1 - 3\.0 MB\/day \(billed 4\.0 MB, free not known\)/)).toBeTruthy();
     expect(screen.getAllByText("billed figure exceeds total - see tip")).toHaveLength(1);
-    expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB of the 50\.0 MB\/day Usage reports/)).toBeTruthy();
+    expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB\/day of the 50\.0 MB\/day Usage reports/)).toBeTruthy();
     expect(document.querySelector("[title]")).toBeNull();
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-32", () => {
+  it("quotes a punctuation-only collector, and flags a Billable table measured all free", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      {
+        status: 200,
+        body: table(USAGE_COLS, [
+          ["CommonSecurityLog", 1500, 1500, 30, "[]"],
+          ["SecurityCaseEvent", 30, 0, 30, "[]"],
+        ]),
+      },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", ":", 1356 * MB, 1356 * MB, 100, 1],
+        ["SecurityCaseEvent", "Case Mgmt", "product", "", 30 * MB, 0, 5, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via ":" - 45\.2 MB\/day/);
+    expect(
+      screen.getByText("measured free; the catalog tags SecurityCaseEvent Billable"),
+    ).toBeTruthy();
   });
 });
 
