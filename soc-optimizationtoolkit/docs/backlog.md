@@ -1610,17 +1610,19 @@ applies to its tooling too. The pins live beside it in
 `check-release-drift.test.mjs`, and the pure half takes facts so the cases can be
 stated without a repo, a git history or a tarball.
 
-**1.13.0 IS CURRENT (2026-10-30).**
-`release/soc-optimizationtoolkit-1.12.9.tgz` - worker-group pickers that say why
-they are empty (DBT-134), the permission audit's age in the connection bar
-(HON-6), and Sentinel Integration in one line per section (DBT-125). On top of
+**1.13.7 IS CURRENT (2026-11-04).**
+`release/soc-optimizationtoolkit-1.13.7.tgz` - Data Volume Inventory with data
+allowances and a By source view (MIG-10..32), multi-tenant Azure (AZR-61..65,
+AZR-92), the Fully/Partially/Disconnected setup choice (DBT-246) and folding
+setup (DBT-248), on top of 1.13.0's folding Sentinel Integration. Before that,
+1.12.9's worker-group pickers (DBT-134) and audit age (HON-6). On top of
 1.12.8's bug sweep - the Field Mappings example values (DBT-122) and RULE badges
 on every DCR gap analysis (DBT-121) - 1.12.7's operator-chosen pack wiring and
 600-second capture window, 1.12.6's wizard
 workspace picker, 1.12.5's ungated deployment target, 1.12.3's replacing pack
 rebuild, 1.12.1's guid-column cast (ADR-0004) and 1.12.0's ADR-0003 in full.
 Release notes in [release-notes.md](release-notes.md), started as an accumulating
-file at 1.4.0 and now current through 1.12.9.
+file at 1.4.0 and now current through 1.13.7.
 
 The two sub-claims above were rewritten on 2026-09-04 having decayed AGAIN - they
 named the 1.12.3 tarball and 1.12.3 notes while `release/` held 1.12.6. That is

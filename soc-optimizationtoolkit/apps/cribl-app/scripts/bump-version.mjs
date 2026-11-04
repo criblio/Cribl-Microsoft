@@ -4,7 +4,7 @@
 //
 // The release itself stays batched (operator's choice, 2026-11-04): package the
 // version the manifest already names with
-//   npm run package -- --version <current>
+//   npm run package --workspace apps/cribl-app -- --version <current>  (from the toolkit root)
 // so packaging does not bump a second time. check-release-drift warns while the
 // manifest is ahead of the last package and prints that command.
 //

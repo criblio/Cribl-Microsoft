@@ -43,7 +43,7 @@ describe('evaluateReleaseDrift', () => {
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain('1.12.1');
     expect(result.warnings[0]).toContain('1.12.0');
-    expect(result.warnings[0]).toContain('npm run package -- --version 1.12.1');
+    expect(result.warnings[0]).toContain('npm run package --workspace apps/cribl-app -- --version 1.12.1');
     // The packaged tarball stays the authority - it is what people install.
     expect(result.packagedVersion).toBe('1.12.0');
   });

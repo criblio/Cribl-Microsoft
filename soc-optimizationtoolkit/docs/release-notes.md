@@ -8,6 +8,24 @@ is harder to forget to update than a directory that has to be remembered.
 
 ---
 
+## 1.13.7
+
+Packages 1.13.1 to 1.13.7, the per-PR versions since 1.13.0 (versions now rise with every merge to main; DBT-299).
+
+**Data Volume Inventory has its own page, with data allowances (MIG-10 to MIG-26).** The workspace inventory moved out of SIEM Migration to Tools > Data Volume Inventory. Every table is tagged with the allowance it falls under - Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine, or Billable - and each grant shows granted, eligible, used and over, with the arithmetic and the query behind every number. Used and over come from the workspace's own `Operation` table, because `Usage.IsBillable` does not subtract these benefits. Granted needs one new optional Graph permission, `LicenseAssignment.Read.All` (SKU and seat counts only). A null or unreadable benefit amount now makes Used a floor rather than a definite 0, and the E5 benefit's published name ("SentinelMicrosoft365") is matched.
+
+**By source view (MIG-27 to MIG-32).** Beside By table, Data Volume Inventory can group volume by who sent it: a product (CommonSecurityLog rows read "Cisco ASA", not the collector's host name), a machine, or a resource, with the collector shown separately and billed versus free per source.
+
+**Multi-tenant Azure (AZR-61 to AZR-65, AZR-92).** Setup accepts several tenant IDs as a comma-separated list and produces one change request per tenant. Each tenant keeps its own session, and a gap dashboard shows what each tenant still lacks. Two connections can no longer write through one token slot: the app checks who owns the slot (tenant and client) before it writes.
+
+**Azure setup asks how connected you are (DBT-246, DBT-248).** Setup opens on one choice: Fully, Partially or Disconnected. Every change request, the az role script and the next action follow it, and Partially Connected never asks for a role you did not tick. Setup and the first-run wizard now fold like Sentinel Integration: one-line summaries, with running and failed sections kept open.
+
+**Azure onboarding live pass (AZR-34, AZR-54 to AZR-58, AZR-60, AZR-67, DBT-249).** Event Hub creation, Entra ID sign-in, the Cribl source safety checks and permission banners were confirmed against a live tenant. Every dropdown is a searchable select with a filter box.
+
+**Field matching (DBT-250 to DBT-253).** The destination table override offers every table in the Azure-Sentinel schema repo again, not four. Dest Field has a filter box. ASim tables re-match properly whatever their case, and PAN-OS TRAFFIC fields such as zones, session id and start time reach their ASim columns instead of `AdditionalFields`.
+
+**Docs.** The DCR template docs state DCE cost correctly.
+
 ## 1.13.0
 
 **Sentinel Integration folds what you are not using (DBT-232).** When you work in a section - click or tab into it, press Done - next, or use a footer pill - the other open sections fold to their one-line summary. Pinned sections stay open (the Pin button on each header, remembered for you), as do the section waiting for your action and Deploy while it runs. Scrolling never folds anything. Near the top of the page, sections above the one you are in stay open, so it never jumps under the pointer (DBT-234).
