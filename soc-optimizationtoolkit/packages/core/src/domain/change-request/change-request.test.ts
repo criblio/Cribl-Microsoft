@@ -105,6 +105,29 @@ describe("appRegistrationRequest", () => {
     expect(out).toContain("<client id>");
   });
 
+  it("never wraps a placeholder across two lines (AZR-62)", () => {
+    // Found building the Markdown download: the field wrapper broke
+    // `<resource group>` at its space, so no line held the whole placeholder,
+    // and a Markdown renderer read `<resource` ... `group>` as one HTML tag
+    // spanning the break - the unknown value vanished from the rendered ticket.
+    for (const gen of [appRegistrationRequest, roleAssignmentRequest, resourceCreationRequest]) {
+      for (const line of gen(emptyCtx("existing"), { includeDiagram: false }).split("\n")) {
+        // Every `<` on a line opens a placeholder that closes on the same line.
+        expect(line.split("<").length - 1, line).toBe(line.match(/<[a-z][a-z ]*>/g)?.length ?? 0);
+      }
+    }
+  });
+
+  it("names the tenant in the title, the creation step, the Graph consent and the hand-back (AZR-62)", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    const tenant = "22222222-2222-2222-2222-222222222222";
+    expect(out).toContain(`create Entra app registration for Cribl SOC Toolkit in tenant ${tenant}\n`);
+    expect(out).toContain(`   client) in tenant ${tenant}.\n`);
+    expect(out).toContain(`then grant admin consent in tenant\n${tenant}.\n`);
+    expect(out).toContain(`Hand back (tenant ${tenant})`);
+    expect(out).toContain("Client secret:           the secret VALUE from step 2");
+  });
+
   it("asks for EVERY permission the app needs, not just the registration", () => {
     // The defect this section exists for: the ticket used to stop at "create the
     // registration and a secret", so an operator who got exactly what they asked

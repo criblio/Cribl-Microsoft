@@ -30,6 +30,8 @@ export * from "./domain/least-privilege";
 export * from "./domain/tenancy";
 // ADR 0009 decision 5 (AZR-64): which worker group receives each tenant.
 export * from "./domain/tenant-cribl-mapping";
+// ADR 0009 decision 1 (AZR-62): the Setup tenant list, a connection per tenant.
+export * from "./domain/tenant-intake";
 export * from "./domain/dcr-request";
 export * from "./domain/dce-request";
 export * from "./domain/option-forms";

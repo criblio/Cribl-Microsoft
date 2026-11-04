@@ -24,9 +24,11 @@
  * Setup offers only that ticket to the subscription owner, so the feature gaps
  * the preflight reported were gaps no ticket the owner saw asked to close.
  *
- * SINGLE TENANT, FOR NOW. Every generator reads one config, so a ticket is one
- * tenant's. Per-tenant tickets are AZR-62 (ADR 0009 decision 1), built on these
- * generators rather than beside them.
+ * ONE TICKET IS ONE TENANT'S. Every generator reads one config, and the
+ * app-registration ticket names that config's tenant in its title, its steps,
+ * its Graph consent and its hand-back. Several tenants are several tickets
+ * (tenant-requests.ts, AZR-62, ADR 0009 decision 1), built on this generator
+ * rather than beside it.
  *
  * Any blank context field renders as a clear placeholder (for example
  * `<tenant id>`), so a partially filled request is visibly incomplete.
@@ -187,7 +189,10 @@ function field(label: string, value: string): string {
   const width = WRAP_COLUMNS - FIELD_INDENT;
   const lines: string[] = [];
   let current = "";
-  for (const word of value.split(" ")) {
+  // A placeholder such as `<resource group>` is one word: split at its space
+  // and no line holds it whole, which a Markdown renderer then reads as an HTML
+  // tag spanning the break, and the unknown value vanishes (AZR-62).
+  for (const word of value.match(/(?:<[a-z][a-z ]*>|[^\s<]|<)+/g) ?? [""]) {
     if (current === "") {
       current = word;
     } else if (current.length + 1 + word.length <= width) {
@@ -268,28 +273,39 @@ export function appRegistrationRequest(
   const plan = appPermissionPlan(ctx.config.setupPath);
   const graph = graphPermissions(plan);
   const rbac = rbacPermissions(plan);
+  const coreRoles = rbac.filter((permission) => permission.necessity === "core");
+  const featureRoles = rbac.filter((permission) => permission.necessity === "feature");
+  const rbacHeading = "Azure RBAC roles (setup path: " + ctx.config.setupPath + ")";
 
   const parts: string[] = [
-    "Change request: create Entra app registration for " + n.appName,
+    "Change request: create Entra app registration for " +
+      n.appName +
+      " in tenant " +
+      n.tenantId,
     requestHeader(n),
     section(
       "What is requested",
       [
         "1. Create a single-tenant Entra app registration (daemon / confidential",
-        "   client): sign-in audience this directory only, no redirect URI, no",
-        "   interactive user sign-in.",
+        "   client) in tenant " + n.tenantId + ".",
+        "   Sign-in audience this directory only, no redirect URI, no interactive",
+        "   user sign-in.",
         "2. Create a client secret on that app registration.",
         "3. Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT",
         "   them.",
         "4. Assign the Azure RBAC roles listed below to this app's service principal.",
         "5. Securely share the tenant id, application (client) id, and the client",
         "   secret with the requester (use a secrets manager or vault, not email or",
-        "   chat).",
+        "   chat) - see Hand back below.",
         "",
         "Steps 3 and 4 are usually different approvers. Every permission below says",
         "what needs it and what stops working without it, so each can be granted or",
         "refused on its own - a partial grant leaves a working app with fewer",
         "features, never a broken one.",
+        "",
+        "Everything here is for this one tenant. A registration, its consent and its",
+        "role assignments in one tenant grant nothing in any other, so each tenant",
+        "gets its own request.",
       ].join("\n"),
     ),
     section(
@@ -311,8 +327,10 @@ export function appRegistrationRequest(
         "Microsoft Graph API permissions (admin consent required)",
         [
           "Add these as APPLICATION permissions - not delegated, because the app runs",
-          "with no signed-in user - then grant admin consent. Until consent is",
-          "granted the permission is listed on the registration but has no effect.",
+          "with no signed-in user - then grant admin consent in tenant",
+          n.tenantId + ".",
+          "Until consent is granted the permission is listed on the registration but",
+          "has no effect.",
           "",
           ...graph.map((permission) => permissionBlock(permission, n)),
         ].join("\n"),
@@ -320,19 +338,51 @@ export function appRegistrationRequest(
     );
   }
 
+  // Core and feature roles are separate sections (AZR-62): an approver who
+  // grants only what the app cannot work without reads one section and stops.
   parts.push(
     section(
-      "Azure RBAC roles (setup path: " + ctx.config.setupPath + ")",
+      rbacHeading + " - core",
       [
         "Assign each role to the service principal for " +
           n.appName +
           " (client id:",
         n.clientId + ") at the scope given.",
         "",
-        "[core] roles are what this setup path needs to function at all. [feature]",
-        "roles each unlock one named capability and can be refused independently.",
+        "[core] roles are what this setup path needs to function at all.",
         "",
-        ...rbac.map((permission) => permissionBlock(permission, n)),
+        ...coreRoles.map((permission) => permissionBlock(permission, n)),
+      ].join("\n"),
+    ),
+  );
+  if (featureRoles.length > 0) {
+    parts.push(
+      section(
+        rbacHeading + " - feature",
+        [
+          "Assign these to the same service principal. [feature] roles each unlock",
+          "one named capability and can be refused independently.",
+          "",
+          ...featureRoles.map((permission) => permissionBlock(permission, n)),
+        ].join("\n"),
+      ),
+    );
+  }
+
+  parts.push(
+    section(
+      "Hand back (tenant " + n.tenantId + ")",
+      [
+        "Return these values to the requester through a secrets manager or vault -",
+        "never email or chat:",
+        "",
+        "Tenant id:               " + n.tenantId,
+        "Application (client) id: " + n.clientId,
+        "Client secret:           the secret VALUE from step 2 (not its secret id)",
+        "Secret expiry:           the expiry date chosen in step 2",
+        "",
+        "The requester enters them into the connection for this tenant. The secret",
+        "is stored encrypted and write-only, and is never displayed again.",
       ].join("\n"),
     ),
     section(

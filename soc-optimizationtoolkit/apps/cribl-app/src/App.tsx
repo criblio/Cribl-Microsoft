@@ -27,6 +27,7 @@ import {
   RepositoriesScreen,
   SettingsScreen,
   TenantCriblMappingSection,
+  TenantListSection,
   SetupWizard,
   SiemMigrationScreen,
   capabilitiesForRoute,
@@ -86,6 +87,7 @@ import {
   setActiveProfile,
   updateActiveConfig,
   upsertProfile,
+  addTenantProfiles,
 } from '@soc/core';
 import type {
   AcceptanceRecord,
@@ -1155,6 +1157,13 @@ function App() {
     setSwitchNotice('Stored secret cleared - re-enter the client secret in the App registration and connect section on Setup and Save and connect to re-authenticate.');
   };
 
+  // AZR-62: a connection per pasted tenant that has none. Additive only - no
+  // existing profile, no secret and not the active choice is touched, so this
+  // goes through no switch; the autosave effect persists the new profiles.
+  const handleAddTenants = (tenants: readonly string[]) => {
+    setStore((s) => addTenantProfiles(s, tenants, () => crypto.randomUUID()));
+  };
+
   const startRename = () => {
     setRenameValue(activeProfile?.name ?? '');
     setRenaming(true);
@@ -1842,6 +1851,8 @@ function App() {
       <div id="setup-connect-section" />
       {azureConnectElement}
       {azureResourcesElement}
+      {/* AZR-62: paste tenant ids, a connection and a change request per tenant. */}
+      <TenantListSection appName={APP_NAME} profiles={store.profiles} onAddTenants={handleAddTenants} />
       {/* AZR-64: each tenant (connection) to its Cribl worker group. */}
       <TenantCriblMappingSection profiles={store.profiles} />
       <RepositoriesScreen platform="cloud" />

@@ -2150,6 +2150,19 @@ button.readiness-pill:focus-visible {
   border-color: var(--border-focus);
 }
 
+/* Setup: one row per tenant with its change-request download. */
+.tenant-request-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .sample-chip-list {
   display: flex;
   flex-direction: column;
