@@ -28,6 +28,7 @@ import {
   eventGridSubscriptionName,
   eventGridSystemTopicName,
 } from "../labs/lab-storage";
+import { leastRoleFor, operationAction, privilegeOperation } from "../least-privilege";
 import type { PlanValues } from "../onboarding-howto/plan-values";
 import { onboardingSource } from "../onboarding-howto/sources";
 import type { HowToStep } from "./steps";
@@ -79,10 +80,7 @@ function flowLogStep(
       { label: "Container Azure writes to", value: onboardingSource(sourceId)?.defaultContainer ?? "" },
       { label: "Format", value: "JSON, version 2" },
     ],
-    rbac: [
-      "Microsoft.Network/networkWatchers/flowLogs/write on the Network Watcher (Network Contributor includes it).",
-      "Microsoft.Storage/storageAccounts/read on {{storageAccount}}.",
-    ],
+    rbac: FLOW_LOG_RBAC,
     confirmHow: "Network Watcher, Flow logs lists {{flowLogName}} as enabled; within minutes the container below appears in {{storageAccount}}.",
     dependsOnValues: [
       "subscriptionId",
@@ -98,6 +96,25 @@ function flowLogStep(
   };
 }
 
+/**
+ * The flow log PUT's rights, read from the least-privilege registry: the
+ * write, the extra actions the same PUT needs (Network Contributor alone
+ * fails - audit discrepancy 22), and the storage read the portal does.
+ */
+const FLOW_LOG_RBAC: readonly string[] = [
+  `${operationAction("flowLog.write")} on the Network Watcher (${leastRoleFor("flowLog.write")} includes it), plus ${(privilegeOperation("flowLog.write").extraActions ?? []).join(" and ")} - ${privilegeOperation("flowLog.write").scopeNote}.`,
+  `${operationAction("storageAccount.read")} on {{storageAccount}}.`,
+];
+
+/**
+ * Granting the Cribl principal its blob and queue roles. The app never makes
+ * this grant (the blob lane is How-to only), so the registry has no storage
+ * operation for it; the action and its least role are the role-assignment
+ * write's, conditioned to the two roles this step assigns (audit discrepancy
+ * 22: the line once named User Access Administrator or Owner).
+ */
+const BLOB_GRANT_RBAC = `${operationAction("dcr.roleAssignment.write")} on the storage account (${leastRoleFor("dcr.roleAssignment.write")}, with the condition: only Storage Blob Data Reader and Storage Queue Data Message Processor, only to service principals).`;
+
 export const BLOB_STEPS: readonly HowToStep[] = [
   {
     id: "blob-storage-account",
@@ -111,7 +128,7 @@ export const BLOB_STEPS: readonly HowToStep[] = [
     ],
     cli: "az storage account create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --name {{storageAccount}} --location {{region}} --sku Standard_LRS --kind StorageV2",
     values: (v) => [{ label: "Storage account resource ID", value: accountId(v) }],
-    rbac: ["Microsoft.Storage/storageAccounts/write on the resource group (Contributor includes it)."],
+    rbac: [`${operationAction("storageAccount.write")} on the resource group (${leastRoleFor("storageAccount.write")} includes it).`],
     confirmHow: "The account {{storageAccount}} shows Provisioning state Succeeded and location {{region}}.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "storageAccount", "region"],
     checkKinds: ["storage-account"],
@@ -181,7 +198,7 @@ export const BLOB_STEPS: readonly HowToStep[] = [
       },
     ],
     rbac: [
-      "Microsoft.EventGrid/systemTopics/write and Microsoft.EventGrid/eventSubscriptions/write on the resource group (EventGrid Contributor includes them).",
+      `${operationAction("eventGrid.systemTopic.write")} and ${operationAction("eventGrid.subscription.write")} on the resource group (${leastRoleFor("eventGrid.subscription.write")} includes them).`,
       "Microsoft.EventGrid/register/action on the subscription, only if it must be registered.",
     ],
     confirmHow: "The storage account's Events page lists the subscription with endpoint {{queueName}}; after the next flow-log blob, the queue's message count rises.",
@@ -219,7 +236,7 @@ export const BLOB_STEPS: readonly HowToStep[] = [
       },
       { label: "Principal object ID", value: v.criblPrincipalObjectId },
     ],
-    rbac: ["Microsoft.Authorization/roleAssignments/write on the storage account (User Access Administrator or Owner)."],
+    rbac: [BLOB_GRANT_RBAC],
     confirmHow: "Access control (IAM), Role assignments on {{storageAccount}} lists both roles for {{criblPrincipalObjectId}}.",
     dependsOnValues: [
       "subscriptionId",

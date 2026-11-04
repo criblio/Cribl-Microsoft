@@ -20,6 +20,7 @@ import {
   missingFeatureActions,
   REQUIRED_ACTIONS,
 } from "./index";
+import { LEAST_PRIVILEGE_OPERATIONS, leastRoleFor, operationAction } from "../least-privilege";
 import type { PermissionSet, PermissionsResponse } from "./index";
 
 /** Build a PermissionSet, defaulting the fields a test does not care about. */
@@ -243,7 +244,11 @@ describe("evaluatePermissions / allGranted per setup path", () => {
     ]);
   });
 
-  it("Contributor satisfies the CORE actions of existing-rg and lab-byo-rg", () => {
+  it("Contributor satisfies the CORE actions of existing-rg, and NOT of lab-byo-rg", () => {
+    // RE-PINNED (AZR-61 audit, medium): lab-byo-rg's roleAssignments/write is
+    // CORE now. The lab assigns its TTL identity Contributor in both
+    // resource-group modes and aborts when it cannot, so Contributor alone
+    // cannot deploy a byo lab - the preflight used to say it could.
     // RE-PINNED 2026-08-11 from allGranted to coreGranted, deliberately. Both
     // paths gained a `feature` check for roleAssignments/write, which
     // Contributor explicitly denies (see the next pin) - so allGranted is now
@@ -265,15 +270,15 @@ describe("evaluatePermissions / allGranted per setup path", () => {
           REQUIRED_ACTIONS["lab-byo-rg"],
         ),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("Contributor is DENIED the DCR ingestion grant on both existing-rg and lab-byo-rg", () => {
+  it("Contributor is DENIED the DCR ingestion grant on existing-rg", () => {
     // The other half of the re-pin above, and the fact that made the checks
     // worth adding: Contributor cannot assign roles at any scope, so data never
     // flows through a deployed DCR until someone else grants Cribl's identity
     // Monitoring Metrics Publisher on it. Reported, never gating.
-    for (const path of ["existing-rg", "lab-byo-rg"] as const) {
+    for (const path of ["existing-rg"] as const) {
       const results = evaluatePermissions(
         response(CONTRIBUTOR),
         REQUIRED_ACTIONS[path],
@@ -354,5 +359,52 @@ describe("allGranted", () => {
         { action: "b", label: "B", granted: false, necessity: "core" },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("AZR-61 - REQUIRED_ACTIONS reads the least-privilege registry", () => {
+  const registryActions = new Set(
+    Object.values(LEAST_PRIVILEGE_OPERATIONS).map((op) => op.operation),
+  );
+
+  it("checks only actions some registry operation needs, apart from one deferred row", () => {
+    // deployments/write: nothing in the app calls it (audit, medium). It stays
+    // until the arm.deploy capability the Labs route is gated on has another
+    // measurement - removing it today would leave that capability unmeasured.
+    const allowed = new Set(["Microsoft.Resources/deployments/write"]);
+    for (const [path, actions] of Object.entries(REQUIRED_ACTIONS)) {
+      for (const { action } of actions) {
+        expect(registryActions.has(action) || allowed.has(action), `${path}: ${action}`).toBe(true);
+      }
+    }
+  });
+
+  it("names, in a label, only the role the registry gives for that action", () => {
+    for (const actions of Object.values(REQUIRED_ACTIONS)) {
+      for (const { action, label } of actions) {
+        const named = /\(([^,)]+)/.exec(label)?.[1];
+        if (named === undefined) {
+          continue;
+        }
+        const roles = Object.values(LEAST_PRIVILEGE_OPERATIONS)
+          .filter((op) => op.operation === action)
+          .map((op) => op.leastRole);
+        // onboardingStates/write is the deliberate exception, reported: the
+        // audit names subscription Contributor (Microsoft documents it) but
+        // flags Sentinel Contributor at the resource group as untested, so the
+        // label keeps the role the ticket asks for until it is measured live.
+        const sentinel = leastRoleFor("sentinel.alertRule.write");
+        const onboarding = action === operationAction("sentinel.onboardingState.write");
+        expect(roles.includes(named) || (onboarding && named === sentinel), `${action}: ${named}`).toBe(true);
+      }
+    }
+  });
+
+  it("gates lab-byo-rg on the TTL role assignment (audit, medium)", () => {
+    const grant = REQUIRED_ACTIONS["lab-byo-rg"].find(
+      (a) => a.action === operationAction("lab.roleAssignment.write"),
+    );
+    expect(grant?.necessity ?? "core").toBe("core");
+    expect(grant?.label).toContain("TTL");
   });
 });

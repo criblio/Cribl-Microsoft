@@ -13,6 +13,7 @@
  *     from connection context instead of the projection guessing.
  */
 import { describe, expect, it } from "vitest";
+import { LEAST_PRIVILEGE_OPERATIONS } from "../../domain/least-privilege";
 
 import {
   AZURE_ACTION_CAPABILITIES,
@@ -128,6 +129,20 @@ function report(
 // ---------------------------------------------------------------------------
 // Mapping tables
 // ---------------------------------------------------------------------------
+
+describe("AZURE_ACTION_CAPABILITIES keys", () => {
+  it("are actions the least-privilege registry names, bar the one the audit says nothing calls", () => {
+    // Found by review (AZR-61): the keys were literals, and an unmapped action
+    // is "never an error" here - so a registry correction to dcr.write or
+    // table.write would have silently turned that capability to unknown.
+    // deployments/write is the documented exception (audit discrepancy 5;
+    // azure-permissions.ts REQUIRED_ACTIONS header): nothing calls it, so no
+    // registry operation names it.
+    const registry = new Set(Object.values(LEAST_PRIVILEGE_OPERATIONS).map((op) => op.operation));
+    const strays = Object.keys(AZURE_ACTION_CAPABILITIES).filter((action) => !registry.has(action));
+    expect(strays).toEqual(["Microsoft.Resources/deployments/write"]);
+  });
+});
 
 describe("mapping tables", () => {
   it("maps every action to a capability of the right side", () => {

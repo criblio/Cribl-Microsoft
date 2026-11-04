@@ -273,7 +273,7 @@ export function RbacPreflightPanel({
     });
     // Fire-and-forget: saveCapabilityAudit swallows backend failures, and a
     // missed write only costs a re-audit later.
-    void saveCapabilityAudit(ports.contentCache, set, ports.logger);
+    void saveCapabilityAudit(ports.contentCache, set, config.tenantId, ports.logger);
   }, [azure, cribl, config.tenantId, config.clientId, target, setupPath, workerGroup, ports]);
 
   // The artifacts for whatever the identity was MEASURED to lack

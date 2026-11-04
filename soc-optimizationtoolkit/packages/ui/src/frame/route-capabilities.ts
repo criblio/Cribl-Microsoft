@@ -91,6 +91,11 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // route is unconstrained and the screen reports every refused read itself
     // as UNKNOWN, counted. A dedicated capability is filed as its own card.
     "azure-logging-map": [],
+    // EXPLICITLY EMPTY. The tenant gap dashboard reads several tenants, each
+    // through its own connection; the audit measures only the ACTIVE one, so
+    // its verdicts say nothing about the others. Every refused read is shown
+    // as unknown in its own cell instead.
+    "tenant-gaps": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.
     harness: [],

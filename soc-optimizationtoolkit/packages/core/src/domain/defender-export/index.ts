@@ -55,5 +55,8 @@ export type {
 export {
   DEFENDER_ACTIONS_NOT_MEASURED,
   DEFENDER_NAMESPACE_ACTIONS,
+  DEFENDER_NAMESPACE_OPERATIONS,
   DEFENDER_SUBSCRIPTION_ACTIONS,
+  DEFENDER_SUBSCRIPTION_OPERATIONS,
 } from "./defender-permissions";
+export type { DefenderOperation } from "./defender-permissions";

@@ -4287,7 +4287,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-61",
@@ -4295,12 +4295,13 @@
       "priority": "now",
       "menu": "home",
       "title": "Least-privilege audit: every app function, the calls behind it, and the narrowest role at the narrowest scope",
-      "detail": "OPERATOR REQUEST 2026-11-03: \"an audit of what the app does and what the least privileges are for each function it needs to ensure the change requests are accurate.\" SCOPE: inventory every function the app performs (setup, DCR automation, Sentinel integration, packs, onboarding, validate, logging map, labs, discovery...), every Azure ARM, Microsoft Graph and Cribl API call behind each (method, path, scope), and the least built-in role or specific action at the narrowest scope that permits it, with Microsoft Learn citations. Lands as ONE registry in @soc/core that app-permissions, the change-request generators, the permission preflight and AZR-60 all read - never a second list - with a pin that every Azure call site in the code maps to a registry row (a call with no row fails). Discrepancies with today's app-permissions plan are reported, not silently fixed. Reasoning in backlog.md section 6i."
+      "detail": "OPERATOR REQUEST 2026-11-03: \"an audit of what the app does and what the least privileges are for each function it needs to ensure the change requests are accurate.\" SCOPE: inventory every function the app performs (setup, DCR automation, Sentinel integration, packs, onboarding, validate, logging map, labs, discovery...), every Azure ARM, Microsoft Graph and Cribl API call behind each (method, path, scope), and the least built-in role or specific action at the narrowest scope that permits it, with Microsoft Learn citations. Lands as ONE registry in @soc/core that app-permissions, the change-request generators, the permission preflight and AZR-60 all read - never a second list - with a pin that every Azure call site in the code maps to a registry row (a call with no row fails). Discrepancies with today's app-permissions plan are reported, not silently fixed. Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-62",
@@ -4308,43 +4309,48 @@
       "priority": "now",
       "menu": "home",
       "title": "Setup: paste a comma-delimited list of tenant ids, get one connection per tenant and a downloadable change request for each",
-      "detail": "OPERATOR REQUEST 2026-11-03. Decision 1: one app registration per tenant, one connection profile per tenant (azure-profiles). SCOPE: Setup accepts a comma (and newline) delimited list of tenant ids, validates each as a GUID (invalid ones named, duplicates collapsed), creates or reuses a connection profile per tenant without overwriting an existing one's secret, and offers a change request per tenant to download (and all as one archive or a combined file): create the app registration in THAT tenant, the audited least privileges from AZR-61 with their scopes, and the secret hand-back. Built on domain/change-request; every placeholder visible when a value is unknown. Reasoning in backlog.md section 6i."
+      "detail": "OPERATOR REQUEST 2026-11-03. Decision 1: one app registration per tenant, one connection profile per tenant (azure-profiles). SCOPE: Setup accepts a comma (and newline) delimited list of tenant ids, validates each as a GUID (invalid ones named, duplicates collapsed), creates or reuses a connection profile per tenant without overwriting an existing one's secret, and offers a change request per tenant to download (and all as one archive or a combined file): create the app registration in THAT tenant, the audited least privileges from AZR-61 with their scopes, and the secret hand-back. Built on domain/change-request; every placeholder visible when a value is unknown. Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), d5dacd77 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-63",
       "type": "story",
       "priority": "now",
+      "menu": "tenant-gaps",
       "title": "Multi-tenant native logging gap dashboard: per tenant, configured in Azure vs not, onboarded to Cribl vs not",
-      "detail": "OPERATOR REQUEST 2026-11-03: \"a dashboard that shows each tenant and a green or red indicator for what is being collected vs what is already produced and onboarded to cribl.\" SCOPE: a screen listing each connected tenant against each Azure native logging source (the onboarding catalog: Defender export, Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...), with two indicators per cell - configured in Azure, onboarded to Cribl - each green, red or UNKNOWN (inventory-honesty: a refused or unread check is never red). Reuses the Validate classifiers per tenant through that tenant's connection; Cribl side through AZR-64's mapping. Reads only on request, paced per tenant within the shared budget; mount makes no Azure call. Per the house dashboard standards, every tile has an (i). Reasoning in backlog.md section 6i."
+      "detail": "OPERATOR REQUEST 2026-11-03: \"a dashboard that shows each tenant and a green or red indicator for what is being collected vs what is already produced and onboarded to cribl.\" SCOPE: a screen listing each connected tenant against each Azure native logging source (the onboarding catalog: Defender export, Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...), with two indicators per cell - configured in Azure, onboarded to Cribl - each green, red or UNKNOWN (inventory-honesty: a refused or unread check is never red). Reuses the Validate classifiers per tenant through that tenant's connection; Cribl side through AZR-64's mapping. Reads only on request, paced per tenant within the shared budget; mount makes no Azure call. Per the house dashboard standards, every tile has an (i). Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), ff9e1313 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-64",
       "type": "story",
       "priority": "now",
       "title": "Tenant to Cribl mapping: one workspace for every tenant, or a worker group per tenant, chosen by the operator",
-      "detail": "Decision 2 (operator 2026-11-03): build for both. SCOPE: a persisted mapping (KV) from tenant to Cribl destination (the shared group, or a group per tenant), defaulting to unset rather than guessing; Cribl source ids carry the tenant so two tenants' sources never collide in one group; the gap dashboard and the onboarding create read the mapping. Reasoning in backlog.md section 6i."
+      "detail": "Decision 2 (operator 2026-11-03): build for both. SCOPE: a persisted mapping (KV) from tenant to Cribl destination (the shared group, or a group per tenant), defaulting to unset rather than guessing; Cribl source ids carry the tenant so two tenants' sources never collide in one group; the gap dashboard and the onboarding create read the mapping. Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), 713abf7f on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [],
       "id": "AZR-65",
       "type": "bug",
       "priority": "now",
       "title": "Changing the Azure tenant keeps showing the previous tenant's worker groups",
-      "detail": "KNOWN since the 2026-08-20 architecture audit and left unfixed because the product was single-tenant (project memory, now reversed): use-sample-sources.ts's started ref is never cleared, and cloudPorts is memoized on activeConfig.tenantId, so a tenant change rebuilds ports, re-fires the effect, and the guard swallows it. With multi-tenant customers this is a live defect. FIX: reset on the tenant key; pin a tenant switch re-reads. Then sweep for the same single-tenant assumption elsewhere (refs or caches keyed on nothing, or on the first config). Reasoning in backlog.md section 6i."
+      "detail": "KNOWN since the 2026-08-20 architecture audit and left unfixed because the product was single-tenant (project memory, now reversed): use-sample-sources.ts's started ref is never cleared, and cloudPorts is memoized on activeConfig.tenantId, so a tenant change rebuilds ports, re-fires the effect, and the guard swallows it. With multi-tenant customers this is a live defect. FIX: reset on the tenant key; pin a tenant switch re-reads. Then sweep for the same single-tenant assumption elsewhere (refs or caches keyed on nothing, or on the first config). Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), 8cb9f896 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
+      "verified": "pins"
     },
     {
       "id": "AZR-66",
@@ -4382,6 +4388,282 @@
       "dependsOn": [],
       "title": "After a deploy reads the Defender export back, Validate and the dataflow diagram still show it 'not found' until Validate is re-run by hand",
       "detail": "FOUND 2026-11-04 in the live pass (Live Preview, DatacenterEast). Validate ran at 12:22 and read CriblDefenderExport as absent (true then). The Defender section then deployed it and said 'CriblDefenderExport was created and read back from Azure'. The Validate results and the dataflow diagram's Defender node kept showing 'not found' in red on the same screen, with no sign the verdict predated the deploy; re-running Validate (7:14 local) read it 'as expected'.\n\nFAILURE: an operator who deploys and then looks at the diagram is told the thing they just created does not exist.\n\nFIX (settled, small): a deploy's successful read-back replaces that check's verdict (defender-export) in the Validate result the diagram draws from, or marks the whole Validate result as older than a write made since, naming the write. Pin: deploy after an absent verdict -> the Defender node no longer reads 'not found'. Never upgrade a verdict without a read; the read-back IS a read.\n\nNOTE: id AZR-93 skips 68-92 on purpose: feature/multi-tenant-azure (PR #200) holds AZR-61..65 and AZR-81..92."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-63"
+      ],
+      "id": "AZR-90",
+      "type": "story",
+      "priority": "later",
+      "menu": "tenant-gaps",
+      "title": "Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end",
+      "detail": "AZR-63 review follow-up. runTenantSession restores the active connection after EVERY tenant, so a Read all mints the active tenant's ARM and Graph tokens once per tenant for no gain (two proxied requests each). AZR-63 made every session request spend the run's pacer, so this costs budget time, not 429s. Fix: a batch form of the session that holds one lease and one exclusive section across the run, swaps A to B to C with a proof before and after each, and restores once. Reasoning in backlog.md section 6i."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-63"
+      ],
+      "id": "AZR-91",
+      "type": "story",
+      "priority": "later",
+      "menu": "tenant-gaps",
+      "title": "Tenant gap grid: one tab stop with arrow-key navigation between cells",
+      "detail": "AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user passes about 28 stops per tenant row to reach the next row's Read button. AZR-63 named every tip (tenant, source, side) so a screen reader can tell them apart; the remaining fix is a roving tabindex over the grid (arrow keys between cells, Enter opens the reason) so the Read buttons are a few keystrokes away. Reasoning in backlog.md section 6i."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [],
+      "id": "AZR-92",
+      "type": "bug",
+      "priority": "now",
+      "title": "While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant",
+      "detail": "FOUND 2026-11-03 reviewing the AZR-65 build (8cb9f896). The proxy injects every Azure credential from fixed KV keys (azureBasic, azureArmToken, azureGraphToken), and the app KV store is shared by every tab AND every user of the app. runTenantSession swaps those keys to tenant N, and its lease plus the before-and-after tenant proof protect ITS OWN batch only. apps/cribl-app/src/platform/credential-slot.ts says so: the in-tab lock admits one tenant at a time, and 'Other TABS are not covered by the lock'. Only Save and connect and the secret probe read the lease; ordinary reads in another tab (the onboarding screen, Validate, the Logging Map, the dashboard) do not.\n\nFAILURE: user B has the onboarding screen open on tenant A while user C runs Read all on the gap dashboard. B's tenant-wide reads (Graph directory, the subscription list, management groups, /tenants) answer for tenant N and are shown as tenant A's. Subscription-scoped reads mostly refuse (another tenant's subscription ids), which reads as a permission problem that does not exist. Writes (Deploy, Create Cribl source) would carry tenant N's token for tenant A's targets.\n\nOPTIONS (undecided): (a) every ordinary batch reads the lease first and refuses while another holder has it - one KV read per batch from the 100 req/min budget; (b) the slot records its owner tenant beside the token, and every ordinary batch checks it is its own tenant before sending and again after, as the session does; (c) multi-tenant reads run only when no other tab or user is active - unenforceable. (b) matches ADR 0009's proof model. Either (a) or (b) needs a pin that a foreign-owned slot refuses an ordinary read and a write. ADR 0009 must say this risk exists until it is fixed.\n\nDECIDED 2026-11-03 by the operator: option (b), an owner check per batch. The slot records the tenant that owns it; every ordinary Azure batch (reads AND writes) checks the owner is its own tenant before sending and again after, and a mismatch or an unreadable owner makes the batch unknown (writes are refused before sending), never red or absent.\n\nDONE 2026-11-03 (pins), 1739de9a on feature/multi-tenant-azure: built test-first, adversarially reviewed (ten findings, eight distinct, all confirmed and fixed, each new pin mutation-checked), and every CI gate re-run green by the operator's session after the commit. The owner record now carries tenant AND client; a switching marker is written before every slot change; write resends after a 429 and 401 re-mints re-check the owner; the Diagnostics panels go through the slot. Cost and the remaining unproven cases (no compare-and-swap, a read admitted just before a swap is sent but discarded, KV reads vs the 100 req/min budget unmeasured, pre-AZR-92 bundles in other tabs) are in ADR 0009 decision 2. Live check outstanding: the lab has one Azure tenant.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-75",
+      "menu": "home",
+      "title": "No change request asks for Event Hub listKeys, which Create Cribl source (listKeys credential) and the Defender export both call",
+      "detail": "FOUND by the AZR-61 least-privilege audit (comparison discrepancy, severity high). POST .../authorizationRules/{rule}/listKeys is an /action Reader does not grant, so Validate's eh-rule checks pass under Reader while listKeys returns 403; no role plan, FEATURE_ROLES or ticket asked for any role that grants it. FIX (AZR-61 branch): a feature role read from the registry - Azure Event Hubs Data Owner on the namespace (scope level 'resource', named in words because the namespace may sit in any resource group) - suppressed only where subscription Contributor/Owner already covers it; the justification states the Reader-passes-Validate trap. Unmeasured by design (CAP-7b: never probed, a probe returns a key), which the ask-equals-measure pin now records instead of hiding.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-76",
+      "menu": "home",
+      "title": "The preflight measures the Defender export's actions but no change request asks for a role that grants them",
+      "detail": "FOUND by the AZR-61 audit (severity high). REQUIRED_ACTIONS['existing-subscription'] checks pricings/read, automations/read and automations/write, and no plan asked for Security Admin or any role holding automations/write. FIX (AZR-61 branch): two feature roles read from the registry - Security Admin on the resource group that holds CriblDefenderExport, and Security Reader on the subscription (suppressed wherever subscription Reader already covers it).\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-77",
+      "menu": "home",
+      "title": "The role-assignment change request leaves out the feature roles the app-registration ticket and the preflight both cover",
+      "detail": "FOUND by the AZR-61 audit (severity medium). roleAssignmentRequest was built from the setup path's roles only, and Setup offers only that ticket to the subscription owner, so the feature gaps the preflight reported (Sentinel content, the DCR grant) were gaps no ticket the owner saw asked to close. FIX (AZR-61 branch): the ticket lists the RBAC half of appPermissionPlan - the path's own roles unchanged, then each feature role tagged [feature] with its condition and justification.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-78",
+      "menu": "labs",
+      "title": "Bring-your-own lab: the plan says the app cannot assign roles, but every lab deploy assigns its TTL identity Contributor and aborts when it cannot",
+      "detail": "FOUND by the AZR-61 audit (severity medium), confirmed in foundation-phase.ts: the ttl-role-assignment step runs in both resource-group modes. rolePlanForSetupPath('lab-byo-rg') asked for Contributor only, its CLI comment said 'the app cannot assign roles on this path', and REQUIRED_ACTIONS['lab-byo-rg'] checked roleAssignments/write as a non-gating DCR-grant feature. FIX (AZR-61 branch): RBAC Administrator on the lab resource group, conditioned to Contributor and Monitoring Metrics Publisher for service principals (the lab-new-rg condition), assigned in the portal; the preflight check is CORE with the TTL label; the CLI comment block says so. Contributor alone now reads as not deploy-ready for a byo lab, which is true.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-79",
+      "menu": "labs",
+      "title": "Bring-your-own lab preflight does not check resourceGroups/write, which the deploy needs to tag the group",
+      "detail": "FOUND by the AZR-61 audit (severity medium), confirmed in foundation-phase.ts: an existing group's TTL tags are PATCHed in both modes, and labRequiredActions checked resourceGroups/write only in create-new mode, so a principal without it passed the preflight and failed at the first step. FIX (AZR-61 branch): bring-your-own checks it as 'Tag the lab resource group with its TTL', action read from the registry.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-80",
+      "title": "How-to rbac lines put the Defender automation write on the subscription and name Contributor where Azure Event Hubs Data Owner is the least role",
+      "detail": "FOUND by the AZR-61 audit (two severity-low discrepancies cited by file and line). The Defender export step rendered automations/write 'on the subscription' though the automation lives in a resource group; the Event Hub namespace and hub steps said '(Contributor includes it)'. FIX (AZR-61 branch): both read the least-privilege registry - the Defender line takes its scope from the operation (on resource group {{resourceGroup}}), the Event Hub lines take the operation's least role.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-81",
+      "menu": "labs",
+      "title": "Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls",
+      "detail": "FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope). Labs GET and PUT the Event Grid provider registration at the subscription (Microsoft.EventGrid/register/action), read NetworkWatcherRG and may write the flow log on the watcher there, and the byo plan asked for Contributor on the lab RG only while saying 'no subscription-scope rights are needed'. AZR-61 review corrected the claim (role-plan justification, CLI header, and a pin that no plan says it while asking for a subscription-scope role). STILL OPEN: the ticket must either ask for register/action at the subscription and Reader or Network Contributor on NetworkWatcherRG, or tell the admin to pre-register the provider and create the watcher; the lab preflight should check both."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-82",
+      "menu": "azure-logging-map",
+      "title": "Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads",
+      "detail": "FOUND by the AZR-61 audit (discrepancies 10 and 11, medium, missing-from-plan). Policy assignments, definitions, exemptions and remediations, and managementGroups/descendants, are read at the customer's management group (logging-map-requests.ts, onboarding-validation/requests.ts, read-logging-map.ts); the Entra diagnostic settings read (GET /providers/microsoft.aadiam/diagnosticSettings) is tenant-level. No plan asks for Management Group Reader or the aadiam read, whose least privilege for a service principal is undocumented (low confidence). FIX: per-tenant feature rows for both, the aadiam one marked unverified and optional, and Validate reporting a 403 there as unknown, never red."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-83",
+      "menu": "preflight",
+      "title": "The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen",
+      "detail": "FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14 medium). A GET 2xx proves read only; the writes the features need (outputs, inputs, secrets, routes, commit, deploy, packs) are not measured, and under user-based mode they are granted by policies.yml. With no worker group chosen the probes hit undeclared leader paths and a non-admin's 403 is recorded as denied. FIX: say 'granted by app policy' instead of claiming a measured manage right; skip the probes until a group is chosen (unknown, not denied); state in the change requests that the Cribl-side least privilege is 'App user plus Org-admin install-time approval of policies.yml', with every group in scope."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-84",
+      "title": "Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them",
+      "detail": "FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan). onboard-batch associates the DCE with an AMPLS at its own subscription and RG (Monitoring Contributor there); deployment-preview reads the DCE a DCR names, which may sit elsewhere; Validate, Create Cribl source and Defender read the Event Hub namespace, its rules and consumer groups, which may sit in another subscription. FIX: name each as a resource-scoped feature row in words (as listKeys is), and have the preflight report those scopes as unknown rather than denied."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "next",
+      "id": "AZR-85",
+      "menu": "home",
+      "title": "Log Analytics Contributor is asked at the resource group where the workspace resource is enough",
+      "detail": "FOUND by the AZR-61 audit (discrepancy 16, low, wrong-scope). Every tables/write and savedSearches call addresses the workspace by full id, and the registry's table.write scope is the workspace; Log Analytics Contributor at the RG also carries VM-extension, storage listKeys and deployments rights over everything in it. FIX: ask at the workspace (a resource-scoped row, as the feature roles now derive), or offer a custom role with tables/read+write and workspaces/read on the workspace.",
+      "priorityWhy": "Over-asking, not under-asking: an approver who grants it as written gets a working app with broader rights than needed, so nothing fails and no data is lost. It outranks features because it is the first thing a security reviewer reading the existing-path ticket will push back on, but it ranks below the open defects where a granted ticket still leaves a feature failing (AZR-81, AZR-82, AZR-84)."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "next",
+      "id": "AZR-86",
+      "menu": "preflight",
+      "title": "Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked",
+      "detail": "FOUND by the AZR-61 audit (discrepancies 17, 18 and 21, low). Content install also PUTs and DELETEs contentPackages and savedSearches (content-install.ts), and a 403 on the DELETE is swallowed and resurfaces as the original 400; Application.Read.All is asked but never probed, and the repo disagrees with itself on whether Graph refuses with a 403 or an empty 200 (adapters.ts and proxies.yml vs list-service-principals.ts); the background capability audit never measures the defender-* capabilities for the existing setup path. FIX: add contentPackages/write and savedSearches/write as feature checks; settle the Graph refusal shape live, then probe it per tenant; run the subscription-scope evaluation in the background audit, per tenant.",
+      "priorityWhy": "Each gap leaves a capability reading unknown where it could read granted or denied, and unknown is honest: no screen claims a permission it has not measured. The fixes need a live Graph measurement first (the refusal shape is disputed in the repo), so ordering them before AZR-81..84, where a granted ticket still fails at run time, would spend the live session on the smaller cost."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "done",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "now",
+      "id": "AZR-87",
+      "title": "How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights",
+      "detail": "FOUND by the AZR-61 audit (discrepancy 22, low, wrong-role) and by AZR-61 review. blob-rbac said 'User Access Administrator or Owner' where RBAC Administrator conditioned to the two blob roles is least; the flow-log line named Network Contributor alone though the PUT also needs networkWatchers/configureFlowLog/action and storage listKeys; the storage-account line said 'Contributor includes it' where Storage Account Contributor is least; the Event Grid line spelled the subscription action without its systemTopics segment. FIX (AZR-61 branch): every one of these lines reads operationAction / leastRoleFor / extraActions from the registry, and a pin holds any '(X includes it)' line that names a registry action to that action's least role.\n\nDONE 2026-11-03 (pins), a296663 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit.",
+      "verified": "pins"
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "next",
+      "id": "AZR-88",
+      "menu": "home",
+      "title": "The resource-creation change request omits the Event Hub tier and the Cribl principal's Event Hub data-plane grant",
+      "detail": "FOUND by the AZR-61 audit (discrepancy 23, low, change-request-gap). plan-cribl-source refuses a Basic namespace, but the ticket never says Standard or higher, so an admin can create the one tier the app then rejects. Once ADR 0008 (Entra ID default credential) lands here, the ticket should also ask for Azure Event Hubs Data Receiver for the Cribl service principal on the namespace or hub, which replaces listKeys for that credential kind.",
+      "priorityWhy": "The failure is loud and early: plan-cribl-source refuses the Basic namespace with a message that names the tier, so nobody loses data or time beyond one recreate. The data-plane half depends on ADR 0008 reaching this branch, so it cannot be finished before that merge anyway."
+    },
+    {
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-61"
+      ],
+      "type": "bug",
+      "priority": "next",
+      "id": "AZR-89",
+      "menu": "labs",
+      "title": "The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group",
+      "detail": "FOUND by the AZR-61 audit (discrepancy 24, low, excess-in-plan). lab-foundation.ts only GETs and DELETEs the RG; resourceGroups/delete needs no more than a custom role with resourceGroups/read and delete (or a narrower built-in), and the RBAC Administrator condition (LAB_RBAC_CONDITION) would then name that role instead of Contributor. FIX: pick the role, change foundation-phase's role definition id and the condition together, and re-pin the TTL grant analysis that looks for the Contributor GUID.",
+      "priorityWhy": "Over-granting to an identity that lives only as long as the lab and whose sole code path deletes the group: the excess is real but its exposure window is the lab's TTL. Changing it touches the ABAC condition analysis that keeps live lab deploys from failing halfway, so it should be done with a live lab run, not ahead of the defects that fail today."
     }
   ],
   "features": [

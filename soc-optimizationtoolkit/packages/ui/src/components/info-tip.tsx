@@ -33,7 +33,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 export interface InfoTipProps {
   /** Tip content. Embedded "\n" characters render as line breaks. */
   text: string;
-  /** Accessible name of the icon. Defaults to "More information". */
+  /**
+   * The icon's accessible name; "More information" by default. Name what the
+   * tip explains wherever many tips sit side by side (a grid of cells), so a
+   * keyboard or screen-reader user can tell one stop from the next.
+   */
   label?: string;
 }
 

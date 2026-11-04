@@ -22,6 +22,7 @@ const expected = buildEventHubInputBody({
   secretId: "azure_onb_eh_ns1_hub1_secret",
   sourceId: "defenderExport",
   sourceTitle: "Defender",
+  connectionTenantId: "t",
 });
 const record: CriblSourceRecord = {
   groupId: "g1",
@@ -75,6 +76,7 @@ describe("classifyExistingInput", () => {
   it("a hand edit to an Entra ID input's OAuth fields is differs, naming the field", () => {
     const oauth = buildEventHubInputBody({
       id: "azure_onb_eh_ns1_hub1",
+      connectionTenantId: "t",
       namespace: "ns1",
       topics: ["hub1"],
       consumerGroup: "cribl",
@@ -105,6 +107,7 @@ describe("classifyExistingInput", () => {
   it("an existing SAS input where an Entra ID one is planned is differs, not already applied", () => {
     const oauth = buildEventHubInputBody({
       id: "azure_onb_eh_ns1_hub1",
+      connectionTenantId: "t",
       namespace: "ns1",
       topics: ["hub1"],
       consumerGroup: "cribl",
@@ -128,6 +131,7 @@ describe("classifyExistingInput", () => {
       secretId: "azure_onb_blob_acct_q1_secret",
       sourceId: "vnetFlowLogs",
       sourceTitle: "VNet",
+      connectionTenantId: "t",
     });
     const blobRecord: CriblSourceRecord = { groupId: "g1", inputId: "azure_onb_blob_acct_q1", inputType: "azure_blob", secretId: "azure_onb_blob_acct_q1_secret" };
     for (const [edit, field] of [[{ disabled: true }, "disabled"], [{ sendToRoutes: false }, "sendToRoutes"]] as const) {

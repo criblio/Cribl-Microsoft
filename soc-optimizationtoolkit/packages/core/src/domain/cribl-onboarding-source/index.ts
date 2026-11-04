@@ -18,6 +18,7 @@ export {
   isOnboardingInputId,
   isOnboardingSecretId,
   jsStringExpression,
+  legacyOnboardingInputId,
   onboardingInputId,
   onboardingSecretId,
 } from "./input-bodies";

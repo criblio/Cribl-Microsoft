@@ -138,6 +138,11 @@ export interface BuildOnboardingLanesInput {
   /** The live-flow states keyed by source; null while not watching. */
   readonly flow: Readonly<Partial<Record<OnboardingSourceId, LaneFlowState>>> | null;
   readonly perspective: DataflowPerspective;
+  /**
+   * The connection's tenant, for the id a lane's Cribl source WOULD get when no
+   * record names the one it has (onboardingInputId carries a tenant component).
+   */
+  readonly tenantId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,7 +650,7 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
     const { source, mode, steps } = d;
     const sid = source.id;
     const record = progress.criblSources[sid];
-    const inputId = record?.inputId ?? onboardingInputId(source, values);
+    const inputId = record?.inputId ?? onboardingInputId(source, values, input.tenantId);
     const flowState = laneFlowState(flow, sid, record);
 
     const ids = {

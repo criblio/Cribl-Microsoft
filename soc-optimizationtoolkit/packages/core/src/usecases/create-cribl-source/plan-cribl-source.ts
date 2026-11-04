@@ -72,7 +72,9 @@ import {
   checkPastedCredential,
   classifyExistingInput,
   classifyExistingSecret,
+  isOnboardingSecretId,
   laneTopics,
+  legacyOnboardingInputId,
   manageRefusalDetail,
   onboardingInputId,
   onboardingSecretId,
@@ -151,6 +153,12 @@ export interface PlanCriblSourceInput {
   /** This app's KV record of an earlier create for the lane, or null. */
   readonly kvRecord: CriblSourceRecord | null;
   readonly credential: PlanCredential;
+  /**
+   * The ACTIVE connection's tenant (ADR 0009): it names the input and its
+   * secret, and is tagged on the input. Not the blob credential's tenant, which
+   * is the service principal's and may differ.
+   */
+  readonly tenantId: string;
   /**
    * This app's own registration client id. An entra-id credential naming it is
    * refused (ADR 0008 section 2). Absent when the caller does not know it.
@@ -543,14 +551,32 @@ export async function planCriblSource(
     entra = { tenantId, clientId, objectId, principalCheck: tie.check };
   }
 
-  const inputId = onboardingInputId(source, values);
-  if (inputId === null) {
+  if (input.tenantId.trim() === "") {
+    return refused("missing-value", "The active connection has no tenant id, so the source cannot be named for a tenant.");
+  }
+  const computedId = onboardingInputId(source, values, input.tenantId);
+  if (computedId === null) {
     return refused(
       "missing-value",
       isBlob ? "Enter the storage account and queue first." : "Enter the namespace (and the hub, for a source that names it) first.",
     );
   }
-  const secretId = onboardingSecretId(inputId);
+  // A lane this app already created keeps the id its record names - but only
+  // while the record still describes THESE values. Ids gained a tenant
+  // component in ADR 0009; planning a lane created before that under the new
+  // id would find nothing and create a SECOND input on the same hubs and
+  // consumer group, so a record naming the pre-ADR-0009 id of the same values
+  // is kept. A record whose namespace, hub, account or queue no longer match
+  // (the operator changed a value) describes another input, and the lane
+  // targets the id the current values produce.
+  const recorded = input.kvRecord;
+  const keepRecorded =
+    recorded !== null &&
+    recorded.inputType === source.criblInputType &&
+    (recorded.inputId === computedId || recorded.inputId === legacyOnboardingInputId(source, values)) &&
+    isOnboardingSecretId(recorded.secretId);
+  const inputId = keepRecorded ? recorded.inputId : computedId;
+  const secretId = keepRecorded ? recorded.secretId : onboardingSecretId(inputId);
 
   let inputBody: Record<string, unknown>;
   let keyNameOrPrincipal: string;
@@ -575,6 +601,7 @@ export async function planCriblSource(
       secretId,
       sourceId: source.id,
       sourceTitle: source.title,
+      connectionTenantId: input.tenantId,
     });
   } else {
     namespace = namespaceOf(values);
@@ -688,6 +715,7 @@ export async function planCriblSource(
       secretId,
       sourceId: source.id,
       sourceTitle: source.title,
+      connectionTenantId: input.tenantId,
       auth,
     });
     // listKeys is the only apply step that addresses the namespace; an

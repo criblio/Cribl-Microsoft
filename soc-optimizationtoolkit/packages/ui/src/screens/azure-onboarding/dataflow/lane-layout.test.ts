@@ -66,6 +66,7 @@ function lanesFor(ids: readonly OnboardingSourceId[], perspective: DataflowPersp
     criblSide: null,
     flow: null,
     perspective,
+    tenantId: "tenant",
   }).lanes;
 }
 

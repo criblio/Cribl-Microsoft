@@ -20,7 +20,7 @@ export const DISCONNECTED_POINTER =
 /** The secret-verification probe as the shell tracks it. */
 export type SecretProbe =
   | { state: 'idle' | 'checking' | 'live' | 'missing' }
-  | { state: 'failed'; detail: string };
+  | { state: 'failed' | 'unproven'; detail: string };
 
 /**
  * The VERIFIED secret notice: null while the secret is live, the probe is still
@@ -33,8 +33,13 @@ export function secretNotice(
   probe: SecretProbe,
 ): string | null {
   if (secretLive) return null;
-  if (probe.state !== 'missing' && probe.state !== 'failed') return null;
+  if (probe.state !== 'missing' && probe.state !== 'failed' && probe.state !== 'unproven') return null;
   if (connectivity === 'disconnected') return DISCONNECTED_POINTER;
+  // AZR-92: not verified either way (another connection's record, or another
+  // tab holds the credential lease) - said as unknown, never as a failure.
+  if (probe.state === 'unproven') {
+    return `Whether the stored client secret is this connection's is not known: ${probe.detail}.`;
+  }
   if (probe.state === 'failed') {
     return (
       'The stored client secret FAILED verification just now - token acquisition ' +

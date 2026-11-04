@@ -27,6 +27,7 @@ import {
   type NamespaceRef,
 } from "../eventhub-arm/eventhub-arm";
 import type { PlanValues } from "../onboarding-howto/plan-values";
+import { leastRoleFor } from "../least-privilege";
 import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../onboarding-howto/sources";
 import type { HowToStep } from "./steps";
 
@@ -59,7 +60,10 @@ export const AUTO_HUB_SOURCE_IDS = idsWhere(
   (s) => s.transport === "eventhub" && s.hubNaming === "auto-created",
 );
 
-const NS_WRITE = "Microsoft.EventHub/namespaces/write on the resource group (Contributor includes it).";
+// The role in brackets is the registry's least role for the call (AZR-61):
+// Azure Event Hubs Data Owner holds Microsoft.EventHub/*, and is narrower than
+// the Contributor these lines used to name.
+const NS_WRITE = `Microsoft.EventHub/namespaces/write on the resource group (${leastRoleFor("eventhub.namespace.write")} includes it).`;
 
 const RECEIVER_ROLE = "Azure Event Hubs Data Receiver";
 
@@ -113,7 +117,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       { label: "Hub resource ID", value: eventHubResourceId(planNamespace(v), v.hubName) },
       { label: "Kafka topic", value: v.hubName },
     ],
-    rbac: ["Microsoft.EventHub/namespaces/eventhubs/write on the namespace (Contributor includes it)."],
+    rbac: [`Microsoft.EventHub/namespaces/eventhubs/write on the namespace (${leastRoleFor("eventhub.hub.write")} includes it).`],
     confirmHow: "The hub {{hubName}} is listed under Event Hubs in the namespace {{namespace}}.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName"],
     checkKinds: ["eh-hub"],

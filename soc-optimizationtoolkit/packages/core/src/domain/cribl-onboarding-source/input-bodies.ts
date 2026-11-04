@@ -30,6 +30,7 @@
  */
 
 import { stampDescription } from "../../kit/config-writes/ownership";
+import { normalizeTenantId, tenantToken } from "../tenancy";
 import { APP_ID } from "../cribl-secrets/secret-body";
 import type { CriblInputType, OnboardingSource } from "../onboarding-howto/sources";
 import type { PlanValues } from "../onboarding-howto/plan-values";
@@ -57,37 +58,103 @@ function sanitize(name: string): string {
   return name.trim().replace(/[^a-zA-Z0-9]/g, "_");
 }
 
+/** FNV-1a 32-bit over UTF-16 code units, as 8 lower-case hex digits. Pure. */
+function fnv1a8(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * `id` within `max` characters. An id that fits is unchanged; an over-long one
+ * keeps its head and ends in `_` plus a hash of the WHOLE id, so two ids that
+ * differ only past the cap stay two ids (a plain slice made them one).
+ */
+function cappedTo(id: string, max: number): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, max - 9)}_${fnv1a8(id)}`;
+}
+
 function capped(id: string): string {
-  return id.length <= ONBOARDING_ID_MAX ? id : id.slice(0, ONBOARDING_ID_MAX);
+  return cappedTo(id, ONBOARDING_ID_MAX);
 }
 
 /**
  * The input id for one source lane, or null when a value it needs is unset.
  *
- *   Event Hub  azure_onb_eh_{namespace}_{hub}. For a source whose emitter
- *              names its hub, {hub} is that hub; for one where Azure creates
- *              the hubs itself (several topics on one input), {hub} is the
- *              source id, so the id stays stable as measured hubs appear.
- *   Blob       azure_onb_blob_{storageAccount}_{queue}.
+ *   Event Hub  azure_onb_eh_{tenant}_{namespace}_{hub}. For a source whose
+ *              emitter names its hub, {hub} is that hub; for one where Azure
+ *              creates the hubs itself (several topics on one input), {hub} is
+ *              the source id, so the id stays stable as measured hubs appear.
+ *   Blob       azure_onb_blob_{tenant}_{storageAccount}_{queue}.
+ *
+ * {tenant} is the connection's 8-character tenant token (ADR 0009 decision 3),
+ * so two tenants' sources - and their secrets - never collide in one worker
+ * group, whatever their namespaces are called. Null without a tenant. Ids made
+ * before multi-tenant support carry no tenant component; this function never
+ * produces them again, and the lane uses its KV record's id when it has one.
  *
  * Idempotent: the same inputs always give the same id.
  */
-export function onboardingInputId(source: OnboardingSource, values: PlanValues): string | null {
+export function onboardingInputId(
+  source: OnboardingSource,
+  values: PlanValues,
+  tenantId: string,
+): string | null {
+  const tenant = tenantToken(tenantId);
+  if (tenant === null) return null;
   if (source.transport === "blob") {
     const account = values.storageAccount.trim();
     const queue = values.queueName.trim();
     if (account === "" || queue === "") return null;
-    return capped(`${ONBOARDING_INPUT_ID_PREFIX}blob_${sanitize(account)}_${sanitize(queue)}`);
+    return capped(`${ONBOARDING_INPUT_ID_PREFIX}blob_${tenant}_${sanitize(account)}_${sanitize(queue)}`);
   }
   const ns = values.namespace.trim();
   if (ns === "") return null;
-  let hubKey: string = source.id;
-  if (source.hubNaming === "named") {
-    const hub = values.hubName.trim();
-    if (hub === "") return null;
-    hubKey = hub;
+  const hubKey = laneHubKey(source, values);
+  if (hubKey === null) return null;
+  return capped(`${ONBOARDING_INPUT_ID_PREFIX}eh_${tenant}_${sanitize(ns)}_${sanitize(hubKey)}`);
+}
+
+/** The {hub} component of an Event Hub lane's id; null when a named hub is unset. */
+function laneHubKey(source: OnboardingSource, values: PlanValues): string | null {
+  if (source.hubNaming !== "named") return source.id;
+  const hub = values.hubName.trim();
+  return hub === "" ? null : hub;
+}
+
+/**
+ * The id {@link onboardingInputId} gave the same values BEFORE ids carried a
+ * tenant (ADR 0009): no tenant component, and an over-long id plainly sliced.
+ * Used only to recognise a lane's KV record as still describing these values;
+ * never used to name anything new.
+ */
+export function legacyOnboardingInputId(source: OnboardingSource, values: PlanValues): string | null {
+  const slice = (id: string): string => (id.length <= ONBOARDING_ID_MAX ? id : id.slice(0, ONBOARDING_ID_MAX));
+  if (source.transport === "blob") {
+    const account = values.storageAccount.trim();
+    const queue = values.queueName.trim();
+    if (account === "" || queue === "") return null;
+    return slice(`${ONBOARDING_INPUT_ID_PREFIX}blob_${sanitize(account)}_${sanitize(queue)}`);
   }
-  return capped(`${ONBOARDING_INPUT_ID_PREFIX}eh_${sanitize(ns)}_${sanitize(hubKey)}`);
+  const ns = values.namespace.trim();
+  if (ns === "") return null;
+  const hubKey = laneHubKey(source, values);
+  if (hubKey === null) return null;
+  return slice(`${ONBOARDING_INPUT_ID_PREFIX}eh_${sanitize(ns)}_${sanitize(hubKey)}`);
+}
+
+/**
+ * The streamtag naming the connection's tenant on every input this feature
+ * creates (audit tenancy MEDIUM, input-bodies.ts:144). The Event Hub input
+ * authenticates with a connection string, so nothing else on it - or on its
+ * events - says which tenant it reads.
+ */
+function tenantStreamtag(tenantId: string): string {
+  return `tenant:${normalizeTenantId(tenantId)}`;
 }
 
 /**
@@ -113,13 +180,14 @@ export function isOnboardingSecretId(id: string): boolean {
   );
 }
 
-/** The Cribl text secret an input references: one per input, never shared. */
+/**
+ * The Cribl text secret an input references: one per input, never shared. An
+ * input id too long to take the suffix is capped the same way ids are - head
+ * plus a hash of the whole input id - so two inputs never share a secret.
+ */
 export function onboardingSecretId(inputId: string): string {
   const suffix = "_secret";
-  const base = inputId.length + suffix.length <= ONBOARDING_ID_MAX
-    ? inputId
-    : inputId.slice(0, ONBOARDING_ID_MAX - suffix.length);
-  return `${base}${suffix}`;
+  return `${cappedTo(inputId, ONBOARDING_ID_MAX - suffix.length)}${suffix}`;
 }
 
 /**
@@ -160,6 +228,8 @@ export interface EventHubInputSpec {
   readonly secretId: string;
   readonly sourceId: string;
   readonly sourceTitle: string;
+  /** The connection's tenant, tagged on the input (tenantStreamtag). */
+  readonly connectionTenantId: string;
   /** SAS when absent (ADR 0007); Entra ID is the ADR 0008 default the UI offers first. */
   readonly auth?: EventHubAuth;
 }
@@ -196,7 +266,7 @@ export function buildEventHubInputBody(spec: EventHubInputSpec): Record<string, 
     disabled: false,
     sendToRoutes: true,
     pqEnabled: false,
-    streamtags: ["azure", "azure-onboarding", spec.sourceId],
+    streamtags: ["azure", "azure-onboarding", spec.sourceId, tenantStreamtag(spec.connectionTenantId)],
     brokers: [`${ns}.servicebus.windows.net:9093`],
     topics: [...spec.topics],
     groupId: spec.consumerGroup,
@@ -220,6 +290,8 @@ export interface BlobInputSpec {
   readonly secretId: string;
   readonly sourceId: string;
   readonly sourceTitle: string;
+  /** The connection's tenant, tagged on the input (tenantStreamtag). */
+  readonly connectionTenantId: string;
 }
 
 /**
@@ -245,7 +317,7 @@ export function buildBlobInputBody(spec: BlobInputSpec): Record<string, unknown>
     disabled: false,
     sendToRoutes: true,
     pqEnabled: false,
-    streamtags: ["azure", "azure-onboarding", spec.sourceId],
+    streamtags: ["azure", "azure-onboarding", spec.sourceId, tenantStreamtag(spec.connectionTenantId)],
     queueName: jsStringExpression(spec.queueName.trim()),
     fileFilter: "/.*/gm",
     visibilityTimeout: 600,

@@ -68,6 +68,8 @@ import { InfoTip } from "../../../components/info-tip";
 import { SearchableSelect } from "../../../components/searchable-select";
 import { WorkerGroupField } from "../../../components/worker-group-field";
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
+import { PickerLine } from "../eventhub-prerequisite-section";
+import type { OnboardingGroupChoice } from "./group-choice";
 import {
   ATTESTATION_LABEL,
   CONFIRM_IDLE,
@@ -105,8 +107,15 @@ export interface CriblSourcePanelProps {
   readonly workerGroups: WorkerGroupsState;
   /** Lists the worker groups; called only by the button and Retry. */
   readonly onLoadGroups: () => void;
+  /** The group the create and the reads use: the tenant's mapped group, or the picker's. */
   readonly groupId: string;
   readonly onGroupChange: (groupId: string) => void;
+  /**
+   * Where `groupId` came from (AZR-64): the tenant to Cribl mapping hides the
+   * picker; an unknown mapping hides it and blocks Create. Absent reads as the
+   * picker alone, as before the mapping existed.
+   */
+  readonly groupChoice?: OnboardingGroupChoice;
   /** The plan namespace's authorization rules, or null when not read yet. */
   readonly rules: ListRead<NamespaceAuthRule> | null;
   /** Reads the namespace's rules; the button is hidden without it. */
@@ -165,32 +174,39 @@ const PASTE_TIP =
   "key name and the hub are shown and checked; the key itself is sent once, " +
   "into a Cribl secret, when you confirm.";
 
-const GROUP_TIP = "The Cribl Stream worker group the source runs on. Listed only when you ask.";
+const GROUP_TIP =
+  "The Cribl Stream worker group the source runs on. When the tenant to Cribl mapping on Setup names a group " +
+  "for this tenant, that group is used and this picker is not offered. Listed only when you ask.";
 
 export function CriblSourcePanel(props: CriblSourcePanelProps) {
-  const { rows, workerGroups, onLoadGroups, groupId, onGroupChange, rules, onReadRules } = props;
+  const { rows, workerGroups, onLoadGroups, groupId, onGroupChange, rules, onReadRules, groupChoice } = props;
   const hasEventHub = rows.some((r) => r.transport === "eventhub");
+  const pickerShown = groupChoice?.pickerShown ?? true;
   return (
     <div className="azo-cribl-source">
       <p className="panel-desc">
         The app creates the Cribl source for each chosen lane, after you confirm. <InfoTip text={PANEL_TIP} />
       </p>
       <div className="panel-controls">
-        <button type="button" className="run-button" onClick={onLoadGroups}>
-          {workerGroups.kind === "idle" ? "Load worker groups" : "Reload worker groups"}
-        </button>
-        <WorkerGroupField state={workerGroups} onRetry={onLoadGroups}>
-          {(groups) => (
-            <SearchableSelect
-              label="Worker group"
-              placeholder="Choose a worker group"
-              clearLabel="None"
-              value={groupId}
-              options={groups.map((g) => ({ value: g.id, label: g.id }))}
-              onChange={onGroupChange}
-            />
-          )}
-        </WorkerGroupField>
+        {pickerShown && (
+          <>
+            <button type="button" className="run-button" onClick={onLoadGroups}>
+              {workerGroups.kind === "idle" ? "Load worker groups" : "Reload worker groups"}
+            </button>
+            <WorkerGroupField state={workerGroups} onRetry={onLoadGroups}>
+              {(groups) => (
+                <SearchableSelect
+                  label="Worker group"
+                  placeholder="Choose a worker group"
+                  clearLabel="None"
+                  value={groupId}
+                  options={groups.map((g) => ({ value: g.id, label: g.id }))}
+                  onChange={onGroupChange}
+                />
+              )}
+            </WorkerGroupField>
+          </>
+        )}
         <InfoTip text={GROUP_TIP} />
         {hasEventHub && onReadRules !== undefined && (
           <button type="button" className="run-button" onClick={onReadRules}>
@@ -208,6 +224,7 @@ export function CriblSourcePanel(props: CriblSourcePanelProps) {
           </button>
         )}
       </div>
+      {groupChoice?.message != null && <PickerLine message={groupChoice.message} />}
       {hasEventHub && (
         <p className="field-hint">{listenRuleMessage(rules) ?? "Rules with Listen rights are offered below."}</p>
       )}
@@ -293,6 +310,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
     ...(principal === null ? {} : { appClientId: principal.clientId }),
   });
   const disabledReason =
+    panel.groupChoice?.blockedReason ??
     gateReason ??
     (transport === "blob" && principal === null
       ? "The service principal's tenant and client id are not set up."

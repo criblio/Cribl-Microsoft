@@ -41,6 +41,8 @@ import {
   FakeKvDocumentStore,
   FakeLogger,
   ONBOARDING_PROGRESS_KEY,
+  tenantDocumentKey,
+  TENANT_CRIBL_MAPPING_KEY,
   UNSUPPORTED_SOURCES,
 } from "@soc/core";
 import type {
@@ -57,6 +59,11 @@ import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen, SHELL_GAP_MESSAGE } from "./azure-onboarding-screen";
 
 afterEach(cleanup);
+
+// The CONFIG tenant's own documents (ADR 0009 decision 3): the screen reads and
+// writes `{key}.{tenantId}`, never the legacy single-tenant key.
+const SELECTION_KEY = tenantDocumentKey(COVERAGE_SELECTION_KEY, "tenant") as string;
+const PROGRESS_KEY = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, "tenant") as string;
 
 const SUB = "sub-1";
 const EH_RG = "rg-eh";
@@ -211,6 +218,7 @@ function mount(opts: {
   azure?: RoutingAzure;
   store?: FakeKvDocumentStore | null;
   logger?: FakeLogger;
+  config?: AzureConfig;
   /** The shell's cached capability audit (AZR-60); absent = no audit wired. */
   capabilities?: CapabilitySet;
   capabilityContext?: CapabilityContext;
@@ -230,7 +238,7 @@ function mount(opts: {
   const view = render(
     <PortsProvider
       ports={ports}
-      config={CONFIG}
+      config={opts.config ?? CONFIG}
       capabilities={opts.capabilities}
       capabilityContext={opts.capabilityContext}
     >
@@ -377,15 +385,55 @@ async function readyToDeployFrom(target: () => Promise<void>): Promise<void> {
 }
 
 describe("AzureOnboardingScreen - mount and the saved selection", () => {
-  it("mounts with exactly two loads (selection and progress) and zero Azure calls", async () => {
+  it("mounts reading only the tenant's two documents (and, on a first run, their legacy copies), the tenant to Cribl mapping, and zero Azure calls", async () => {
+    // Both tenant documents are absent here, so each read also looks once at
+    // the legacy single-tenant key for something to move (ADR 0009). The
+    // mapping is one app-wide document (AZR-64), read once.
     const { azure, store } = mount();
     await loaded();
-    expect(store?.loads).toEqual([COVERAGE_SELECTION_KEY, ONBOARDING_PROGRESS_KEY]);
+    expect([...(store?.loads ?? [])].sort()).toEqual(
+      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY, TENANT_CRIBL_MAPPING_KEY].sort(),
+    );
     expect(azure.calls).toEqual([]);
   });
 
+  it("files the documents under the ACTIVE tenant, moving the legacy ones there once", async () => {
+    const legacySelection = {
+      kind: COVERAGE_SELECTION_KIND,
+      version: COVERAGE_SELECTION_VERSION,
+      enabled: ["defenderExport"],
+    };
+    const store = new FakeKvDocumentStore({ [COVERAGE_SELECTION_KEY]: legacySelection });
+    mount({ store });
+    await loaded();
+    // The legacy selection is now this tenant's, and shows.
+    await waitFor(() => expect(checkbox(DEFENDER_TITLE).checked).toBe(true));
+    expect(store.peek(SELECTION_KEY)).toEqual(legacySelection);
+    expect(store.peek(COVERAGE_SELECTION_KEY)).toEqual({ kind: "soc-tenant-migrated", tenantId: "tenant" });
+  });
+
+  it("never shows one tenant's saved selection under another tenant", async () => {
+    const store = new FakeKvDocumentStore({
+      [SELECTION_KEY]: { kind: COVERAGE_SELECTION_KIND, version: COVERAGE_SELECTION_VERSION, enabled: ["defenderExport"] },
+    });
+    mount({ store, config: { ...CONFIG, tenantId: "other-tenant" } as AzureConfig });
+    await loaded();
+    expect(checkbox(DEFENDER_TITLE).checked).toBe(false);
+    expect(store.loads).toContain(tenantDocumentKey(COVERAGE_SELECTION_KEY, "other-tenant"));
+    expect(store.loads).not.toContain(SELECTION_KEY);
+  });
+
+  it("with no tenant id, the documents are UNKNOWN and nothing can be saved", async () => {
+    const { store } = mount({ config: { ...CONFIG, tenantId: "" } as AzureConfig });
+    await loaded();
+    // Both documents say why: the selection and the How-to progress.
+    expect(screen.getAllByText(/no tenant id/).length).toBeGreaterThanOrEqual(2);
+    expect(button("Save selection").disabled).toBe(true);
+    expect(store?.loads).toEqual([]);
+  });
+
   it("a FAILED read keeps Save disabled, and clicking it writes nothing", async () => {
-    const store = new FakeKvDocumentStore().scriptLoad(COVERAGE_SELECTION_KEY, {
+    const store = new FakeKvDocumentStore().scriptLoad(SELECTION_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
       status: 403,
@@ -421,7 +469,7 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     fireEvent.click(button("Save selection"));
     await waitFor(() => expect(store?.saves.length).toBe(1));
     const saved = store?.saves[0];
-    expect(saved?.key).toBe(COVERAGE_SELECTION_KEY);
+    expect(saved?.key).toBe(SELECTION_KEY);
     const doc = saved?.value as { kind: string; version: number; enabled: string[] };
     expect(doc.kind).toBe(COVERAGE_SELECTION_KIND);
     expect(doc.version).toBe(COVERAGE_SELECTION_VERSION);
@@ -845,8 +893,11 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
       capabilityContext: CONNECTED,
     });
     await loaded();
-    // The banner comes from the CACHED audit: mount still costs no Azure call.
-    expect(store?.loads).toEqual([COVERAGE_SELECTION_KEY, ONBOARDING_PROGRESS_KEY]);
+    // The banner comes from the CACHED audit: mount still costs no Azure call,
+    // and reads exactly what any mount reads (the AZR-65 mount pin above).
+    expect([...(store?.loads ?? [])].sort()).toEqual(
+      [SELECTION_KEY, COVERAGE_SELECTION_KEY, PROGRESS_KEY, ONBOARDING_PROGRESS_KEY, TENANT_CRIBL_MAPPING_KEY].sort(),
+    );
     expect(azure.calls).toEqual([]);
 
     const b = banner();

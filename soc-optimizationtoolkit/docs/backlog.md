@@ -1305,6 +1305,36 @@ performs, each Azure ARM / Graph / Cribl call behind it, and the least role
 or permission at the narrowest scope that allows it, as ONE registry the
 change-request generators and the permission checks read, never restated.
 
+**What the audit found, and where each finding went.** The audit's 24
+comparison discrepancies are each either worked by a card or kept on purpose
+with the reason stated in code; the full map is a pin
+(`least-privilege/discrepancies.test.ts`), so a re-run audit with a new
+finding fails until someone disposes of it. Cards: AZR-75 (listKeys asked
+nowhere), AZR-76 (Defender export actions measured, never asked), AZR-62
+(single-tenant tickets), AZR-77 (role ticket missing the feature roles),
+AZR-78 (byo lab TTL grant), AZR-79 (byo RG tag PATCH unchecked), AZR-80 and
+AZR-87 (How-to rbac lines), AZR-81 (byo lab reaches outside its RG), AZR-82
+(management-group and tenant reads), AZR-83 (Cribl probes and policies.yml),
+AZR-84 (cross-scope Azure Monitor and Event Hub targets), AZR-85 (Log
+Analytics Contributor wider than the workspace), AZR-86 (unmeasured content,
+Graph and Defender checks), AZR-88 (Event Hub tier in the resource ticket),
+AZR-89 (TTL identity over-granted). Kept on purpose: `deployments/write` in
+the preflight (the only measure of `arm.deploy` today) and the
+`onboardingStates/write` label (changes when the narrower grant is measured
+live). AZR-75..80 were filed as AZR-67..72 and renumbered before merging,
+because feature/azure-onboarding-live-pass already uses AZR-66 and AZR-67.
+
+**The gap dashboard's request budget (AZR-63 review).** A Read all makes ONE
+request pacer for the run (`createRequestPacer`), so Validate's 40 a minute
+holds across every tenant instead of restarting per tenant, and the tenant
+session's own proxied requests - each proof read, and two per token mint -
+spend it too. A cancelled read sends nothing more (the pacer re-checks the
+signal after every wait), and never replaces a tenant's earlier complete
+answer. Two follow-ups are left on purpose: AZR-90 (restore the active
+credential once per Read all, not once per tenant - budget time, not
+correctness, now that the mints are paced) and AZR-91 (a roving tabindex
+over the grid; every tip is already named for its tenant, source and side).
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
