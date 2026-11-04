@@ -4667,6 +4667,19 @@
     },
     {
       "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "verified": "pins",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-254",
+      "type": "bug",
+      "title": "Two copies of \"is this an ASim table?\" disagreed on case",
+      "detail": "FOUND by the architecture audit 2026-11-04 (e446ac8..4543ca6). getOverflowConfig (overflow.ts, added by DBT-252) matched /^ASim/i while requiredIdentityFields (vendor-identity.ts) used a case-sensitive startsWith(\"ASim\"), so a lowercase asimnetworksessionlogs got the ASim AdditionalFields catch-all but none of the EventVendor/EventProduct requirement. FIXED: one isAsimTableName (field-matcher/table-family.ts, trims, case-insensitive) used by both; pinned in asim-equivalents.test.ts across three spellings. Same pass corrected two stale headers: getOverflowConfig no longer claims the verbatim legacy order, and knowledge-bases lists ASIM_COLUMN_EQUIVALENTS and where its entries are pinned."
+    },
+    {
+      "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
       "status": "done",

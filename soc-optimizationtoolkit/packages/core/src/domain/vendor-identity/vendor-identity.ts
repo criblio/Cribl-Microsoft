@@ -29,6 +29,7 @@
  */
 
 import type { MatchAction } from "../field-matcher/models";
+import { isAsimTableName } from "../field-matcher/table-family";
 
 /** A curated vendor/product identity suggestion. */
 export interface VendorIdentity {
@@ -125,7 +126,7 @@ export function requiredIdentityFields(tableName: string): readonly string[] {
   if (name === "CommonSecurityLog") {
     return ["DeviceVendor", "DeviceProduct"];
   }
-  if (name.startsWith("ASim")) {
+  if (isAsimTableName(name)) {
     return ["EventVendor", "EventProduct"];
   }
   return [];
