@@ -117,7 +117,10 @@ function resourceGroupScope(n: ResolvedNames): string {
  * ticket: the RBAC half of {@link appPermissionPlan}, in plan order (the path's
  * own roles, then the feature roles it does not already cover). This function
  * only turns each abstract scope into the concrete scope for the resolved
- * context, so the ticket and the setup wizard's az-CLI script can never drift.
+ * context. The path's own roles come from rolePlanForSetupPath, the plan the
+ * setup wizard's az-CLI script renders, so those two cannot drift; the feature
+ * roles (AZR-61) are asked for here only - the script grants what the setup
+ * path needs, not the optional features (architecture audit 2026-11-04).
  */
 function rolesForSetupPath(
   path: AzureSetupPath,
