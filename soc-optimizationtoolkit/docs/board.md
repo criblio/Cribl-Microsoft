@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 36 in progress, 154 done.**
+**93 in the backlog, 36 in progress, 155 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 2 | 20 | 0 |
+| Data Volume Inventory | 2 | 21 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 90% (28/31)
+### `MIG` SIEM migration analysis - 91% (29/32)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
@@ -144,7 +144,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
-| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 4/5 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31 |
+| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 5/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
 
 ---
 
@@ -1051,12 +1051,20 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
-  `MIG-F3` `spike` `settled`
-  Confirms the identity columns read well on real rows and records the Syslog
-  Facility decision (design open item 1). Design:
-  docs/features/inventory-by-source.md. Plan:
-  docs/inventory-by-source-implementation-plan.md (task MIG-31).
+- **MIG-32** By source live findings: a catalog-Billable table measured free is unexplained; "/day" missing; odd collector names unquoted
+  `MIG-F3` `bug` `settled`
+  FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source.
+  (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every
+  row measures free (billed 0 MB, free 1.1 KB) - the page shows "Billable"
+  beside "billed 0 MB" with nothing explaining it, which contradicts the
+  design's "measured wins, catalog explains" (only the opposite direction -
+  catalog Free but billed - is flagged today). Flag the reverse case in both
+  views too: "measured free; the catalog tags this table Billable (<tables>)".
+  (2) sentinel-new: the By table reconciliation line reads "total 54.8 MB of
+  the 56.0 MB/day" - the first figure lacks "/day" (the By source sentence has
+  it). (3) A collector whose name is punctuation or whitespace (sentinel-new's
+  ":") reads "Cisco ASA via : - 6.5 MB/day"; quote collector names that are
+  not plain names (e.g. via ":"). Pin each.
 
 ---
 
@@ -2437,7 +2445,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (154)
+## Done (155)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6517,6 +6525,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   render differently; not-read rows keep their Usage volume; reconciliation
   compares the two lenses and states not-read volume separately; every figure
   has an InfoTip. Stale source docs fixed. Live check is MIG-31.
+
+- **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
+  `MIG-F3` `spike` `settled` `verified: live`
+  Confirms the identity columns read well on real rows and records the Syslog
+  Facility decision (design open item 1). Design:
+  docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-31). DONE
+  2026-11-04 (live, Live Preview on jpederson org): sentinel-new - By table
+  names 'Cisco ASA via localhost / : / SNL-ASA-VPN-A01' with billed/free; By
+  source shows one Cisco ASA row, 54.8 MB/day all billed, 3 collectors by
+  volume, agreeing with Usage within 2.2%. andy-june - Syslog
+  'CriblStreamWorker local4' (computer + facility) plus 'Syslog (other
+  sources)' for 6,556 rows with no Computer; agree within 0.1%. DECISION
+  (design open item 1): Facility stays part of the Syslog identity - it reads
+  well and separates streams. Borg-LA - SecurityAlert 'Azure Active Directory
+  Identity Protection' free and tagged Free; SecurityIncident one row;
+  Watchlist '(sources not read)' with its Usage volume and the reconciliation
+  stating it separately. BuzzardStream - verified zero reads 'Usage answered
+  and reports no ingested data'. Three findings filed as MIG-32.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

@@ -3826,7 +3826,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-30"
       ],
@@ -3834,7 +3834,20 @@
       "type": "spike",
       "priority": "next",
       "title": "Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement",
-      "detail": "Confirms the identity columns read well on real rows and records the Syslog Facility decision (design open item 1). Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-31)."
+      "detail": "Confirms the identity columns read well on real rows and records the Syslog Facility decision (design open item 1). Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-31).\n\nDONE 2026-11-04 (live, Live Preview on jpederson org): sentinel-new - By table names 'Cisco ASA via localhost / : / SNL-ASA-VPN-A01' with billed/free; By source shows one Cisco ASA row, 54.8 MB/day all billed, 3 collectors by volume, agreeing with Usage within 2.2%. andy-june - Syslog 'CriblStreamWorker local4' (computer + facility) plus 'Syslog (other sources)' for 6,556 rows with no Computer; agree within 0.1%. DECISION (design open item 1): Facility stays part of the Syslog identity - it reads well and separates streams. Borg-LA - SecurityAlert 'Azure Active Directory Identity Protection' free and tagged Free; SecurityIncident one row; Watchlist '(sources not read)' with its Usage volume and the reconciliation stating it separately. BuzzardStream - verified zero reads 'Usage answered and reports no ingested data'. Three findings filed as MIG-32.",
+      "verified": "live"
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "in-progress",
+      "dependsOn": [],
+      "id": "MIG-32",
+      "type": "bug",
+      "priority": "now",
+      "title": "By source live findings: a catalog-Billable table measured free is unexplained; \"/day\" missing; odd collector names unquoted",
+      "detail": "FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source. (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every row measures free (billed 0 MB, free 1.1 KB) - the page shows \"Billable\" beside \"billed 0 MB\" with nothing explaining it, which contradicts the design's \"measured wins, catalog explains\" (only the opposite direction - catalog Free but billed - is flagged today). Flag the reverse case in both views too: \"measured free; the catalog tags this table Billable (<tables>)\". (2) sentinel-new: the By table reconciliation line reads \"total 54.8 MB of the 56.0 MB/day\" - the first figure lacks \"/day\" (the By source sentence has it). (3) A collector whose name is punctuation or whitespace (sentinel-new's \":\") reads \"Cisco ASA via : - 6.5 MB/day\"; quote collector names that are not plain names (e.g. via \":\"). Pin each."
     },
     {
       "settled": "settled",
