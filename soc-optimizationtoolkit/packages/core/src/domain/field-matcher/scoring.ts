@@ -11,7 +11,7 @@
  */
 
 import type { MatchConfidence } from "./models";
-import { ALIAS_TABLE, REVERSE_ALIAS } from "./knowledge-bases";
+import { ALIAS_TABLE, REVERSE_ALIAS, cefEquivalentOf } from "./knowledge-bases";
 
 /**
  * Lowercased-key alias index (2026-07-08 improvement): the legacy lookup was
@@ -37,6 +37,20 @@ export function normalize(name: string): string {
 const AFFIX_PREFIX =
   /^(source|src|dest|destination|dst|device|event|client|origin|edge|network)/i;
 const AFFIX_SUFFIX = /(name|value|address|field|string|number|label|id)$/i;
+
+/** Which side of a flow a name's prefix puts it on, if any (DBT-252). */
+function direction(name: string): "src" | "dst" | null {
+  if (/^(source|src)/i.test(name)) return "src";
+  if (/^(destination|dest|dst)/i.test(name)) return "dst";
+  return null;
+}
+
+/** True when one name is source-side and the other destination-side. */
+export function oppositeDirections(sourceName: string, destName: string): boolean {
+  const a = direction(sourceName);
+  const b = direction(destName);
+  return a !== null && b !== null && a !== b;
+}
 
 /** Strip common prefixes/suffixes for fuzzy matching. */
 export function stripAffixes(name: string): string {
@@ -153,6 +167,20 @@ export function scoreMatch(
     };
   }
 
+  // ASim equivalents (DBT-252): the same alias knowledge, aimed at an ASim
+  // column that stands in for the CEF one the alias names. One lookup covers
+  // both directions of the alias table, because REVERSE_ALIAS is built from
+  // every forward entry. Same score as a reverse alias - a schema never holds
+  // both columns of a pair, so nothing it competes with changes.
+  const cef = cefEquivalentOf(destName);
+  if (cef !== undefined && REVERSE_ALIAS.get(cef.toLowerCase())?.has(sourceName.toLowerCase())) {
+    return {
+      score: 88,
+      confidence: "alias",
+      reason: `Reverse alias: ${destName} (CEF ${cef}) <- ${sourceName}`,
+    };
+  }
+
   // 4. Normalized name match
   const normSrc = normalize(sourceName);
   const normDst = normalize(destName);
@@ -162,6 +190,15 @@ export function scoreMatch(
       confidence: "fuzzy",
       reason: "Normalized name match (stripped separators)",
     };
+  }
+
+  // POLARITY GUARD (DBT-252): the rungs below compare names with the
+  // source/destination prefix stripped, so "srcuser" and "DstUserId" both
+  // reduce to "user" and tied - the source user landed in the DESTINATION
+  // column. Opposite directions never match by name similarity; an alias
+  // (above) is the only way across, because it is a stated equivalence.
+  if (oppositeDirections(sourceName, destName)) {
+    return { score: 0, confidence: "unmatched", reason: "" };
   }
 
   // 5. Stripped affixes match

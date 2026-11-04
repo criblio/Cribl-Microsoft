@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 35 in progress, 162 done.**
+**94 in the backlog, 35 in progress, 164 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 51 | 90 | 23 |
+| Sentinel Integration | 51 | 92 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -115,14 +115,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 59% (98/166)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (100/168)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 49/60 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 39/87 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 50/61 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -2445,7 +2445,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (162)
+## Done (164)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6950,3 +6950,60 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   destination columns) with nothing gated; restored to CommonSecurityLog (156
   columns, no warning). The unreadable-workspace branch was verified by pins
   only - the live workspace listing succeeded.
+
+- **DBT-251** Dest Field in the Gap Analysis field mappings gets a filter box
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-04: "The Dest Field drop down in the field
+  mapping of the DCR Gap analysis section should have a filter box so I don't
+  have to scroll through the whole list of destination fields when changing
+  the mapping." The Dest Field cell is a native <select> over the whole
+  destination schema (156 columns for CommonSecurityLog). PLAN: render it as
+  the shared SearchableSelect (filter box, bounded list, keyboard), and have
+  SearchableSelect return focus to its control after a pick so the Dest Field
+  claim panel (DBT-208) still returns focus to the control that opened it.
+  DONE 2026-11-04. Dest Field is the shared SearchableSelect
+  (destFieldOptions: schema order, type as the hint, an off-schema current
+  dest such as the catch-all listed first); SearchableSelect now returns focus
+  to its control on a pick (before onChange) and on Escape, which keeps the
+  DBT-208 claim panel's focus contract. Pins: 2 SearchableSelect focus, 3
+  destFieldOptions, 1 row filter, and the existing remap / dest-claim /
+  reanalysis / coverage-apply DOM tests moved onto a shared
+  dest-field-test-driver; removing the focus call fails 3 of them. LIVE on the
+  jpederson org Live Preview: typing geo in dstloc's Dest Field narrowed 149
+  columns to the Src/Dst geo columns with their types; Escape closed it with
+  nothing chosen.
+
+- **DBT-252** Re-pointing a log type at an ASim table leaves its fields in AdditionalExtensions instead of mapping them
+  `DBT-F1` `bug` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-04: switching the PaloAlto TRAFFIC sample from
+  CommonSecurityLog to ASimNetworkSessionLogs left "a bunch of left overs that
+  are still trying to map to the AdditionalExtension field which doesn't exist
+  in that table... simple Dst should be the field the destination IP maps to".
+  The analysis DOES re-run against the new schema; three defects spoil it.
+  REPRODUCED against the bundled ASimNetworkSessionLogs schema (139 columns)
+  with the PaloAlto vendor packs: (1) getOverflowConfig (overflow.ts) falls
+  back to the CEF column AdditionalExtensions for any table not in its map, so
+  every ASim table overflows into a column it does not have - ASim tables
+  carry AdditionalFields (dynamic); (2) the alias knowledge
+  (knowledge-bases.ts) is CEF-only - dst aliases
+  DestinationIP/DestinationAddress/DstAddr - so src, dst, sport, dport,
+  natsrc, bytes_sent, bytes_received all overflow instead of reaching
+  SrcIpAddr, DstIpAddr, SrcPortNumber, DstPortNumber, SrcNatIpAddr, SrcBytes,
+  DstBytes; (3) the fuzzy tier ignores src/dst polarity: srcuser matched
+  DstUserId. FIXED 2026-11-04: (1) getOverflowConfig sends ASim* tables to
+  AdditionalFields (dynamic); (2) knowledge-bases ASIM_COLUMN_EQUIVALENTS maps
+  31 CommonSecurityLog columns to their ASim columns (every one checked
+  against the bundled ASim schemas), the alias tier accepts a column that is
+  the ASim equivalent of a known alias, and analyze-samples re-aims a
+  learned/pack mapping at the equivalent instead of filtering it out; (3) a
+  polarity guard stops the fuzzy rungs crossing source/destination prefixes.
+  CommonSecurityLog matching is pinned unchanged. 10 pins in
+  asim-equivalents.test.ts; each of the four fixes fails them when removed.
+  LIVE on the jpederson org Live Preview, PaloAlto TRAFFIC ->
+  ASimNetworkSessionLogs: 28 mapped by the Cribl pipeline, leftovers in
+  AdditionalFields (dynamic); dst -> DstIpAddr, dport -> DstPortNumber,
+  dstuser -> DstUsername, natdst -> DstNatIpAddr, bytes_received -> DstBytes,
+  all alias. Restored to CommonSecurityLog (27 mapped, 44 overflow, as
+  before). LEFT OPEN: PAN-specific fields (from/to zones, srcloc/dstloc,
+  elapsed, vsys) still overflow on both tables, and packets fuzzy-matches
+  DstPackets where NetworkPackets is the session total.

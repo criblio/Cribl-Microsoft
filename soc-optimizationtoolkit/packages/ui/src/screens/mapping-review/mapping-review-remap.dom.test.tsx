@@ -15,6 +15,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { parseSampleContent } from "@soc/core";
 import type { GapFieldMapping, GapReport, SchemaCatalog, TaggedSample } from "@soc/core";
 import { MappingReviewSection } from "./mapping-review-section";
+import { chooseDestField } from "./dest-field-test-driver";
 
 afterEach(cleanup);
 
@@ -97,11 +98,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
       "Field Mappings (1 mapped, 1 to overflow, 1 unmapped)",
     );
 
-    const destSelect = () =>
-      rowFor(container, "qqvendorfield").querySelector<HTMLSelectElement>(
-        "select.mapping-select",
-      )!;
-    fireEvent.change(destSelect(), { target: { value: "SourceMACAddress" } });
+    chooseDestField(rowFor(container, "qqvendorfield"), "SourceMACAddress");
 
     await waitFor(() => {
       expect(rowFor(container, "qqvendorfield").cells[3]!.textContent).toContain(
@@ -120,7 +117,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
     expect(summary(container)).toContain("Modified");
 
     // Set it back: the baseline row returns and nothing reads as modified.
-    fireEvent.change(destSelect(), { target: { value: "AdditionalExtensions" } });
+    chooseDestField(rowFor(container, "qqvendorfield"), "AdditionalExtensions");
     await waitFor(() => {
       expect(summary(container)).toContain(
         "Field Mappings (1 mapped, 1 to overflow, 1 unmapped)",
@@ -134,10 +131,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
 
   it("shows a chosen column as a reviewer choice, not as an exact match", async () => {
     const { container } = await renderAnalyzed();
-    const destSelect = rowFor(container, "qqvendorfield").querySelector<HTMLSelectElement>(
-      "select.mapping-select",
-    )!;
-    fireEvent.change(destSelect, { target: { value: "SourceMACAddress" } });
+    chooseDestField(rowFor(container, "qqvendorfield"), "SourceMACAddress");
     await waitFor(() => {
       expect(
         rowFor(container, "qqvendorfield").querySelector(".match-conf")?.className,
@@ -153,10 +147,7 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
   // catch-all, which the serialize then overwrites - the field is lost.
   it("makes a column-bound row moved into the catch-all an overflow row", async () => {
     const { container, effective } = await renderAnalyzed();
-    const destSelect = rowFor(container, "TimeGenerated").querySelector<HTMLSelectElement>(
-      "select.mapping-select",
-    )!;
-    fireEvent.change(destSelect, { target: { value: "AdditionalExtensions" } });
+    chooseDestField(rowFor(container, "TimeGenerated"), "AdditionalExtensions");
     await waitFor(() => {
       expect(summary(container)).toContain(
         "Field Mappings (0 mapped, 2 to overflow, 2 unmapped)",
@@ -174,9 +165,10 @@ describe("mapping review - re-pointing an overflow row (GEN-19)", () => {
 // reducer the table's catch-all, which refuses it, and the select says why.
 describe("mapping review - the Action select on an overflow row (DBT-209)", () => {
   const actionSelect = (container: HTMLElement, source: string) =>
+    // DBT-251: Dest Field is no longer a native select, so Action is the only one.
     rowFor(container, source).querySelectorAll<HTMLSelectElement>(
       "select.mapping-select",
-    )[1]!;
+    )[0]!;
 
   it("disables the actions that need a column and says to choose one in Dest Field", async () => {
     const { container } = await renderAnalyzed();
@@ -214,5 +206,24 @@ describe("mapping review - the Action select on an overflow row (DBT-209)", () =
       );
     });
     expect(effective().PanOS?.find((m) => m.source === "qqvendorfield")).toEqual(before);
+  });
+});
+
+describe("mapping review - Dest Field filters (DBT-251)", () => {
+  it("narrows the row's destination columns to the typed text", async () => {
+    const { container } = await renderAnalyzed();
+    const row = rowFor(container, "qqvendorfield");
+    fireEvent.click(row.querySelector(".mapping-dest-select .searchable-select-control")!);
+    const all = row.querySelectorAll(".mapping-dest-select .searchable-select-option").length;
+    const search = row.querySelector<HTMLInputElement>(
+      ".mapping-dest-select .searchable-select-search",
+    )!;
+    expect(search).not.toBeNull();
+    fireEvent.change(search, { target: { value: "macaddr" } });
+    const shown = [
+      ...row.querySelectorAll(".mapping-dest-select .searchable-select-option-label"),
+    ].map((o) => o.textContent);
+    expect(shown).toEqual(["SourceMACAddress"]);
+    expect(all).toBeGreaterThan(shown.length);
   });
 });

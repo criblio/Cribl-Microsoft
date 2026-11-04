@@ -19,7 +19,10 @@ export type {
 export type { EventCategory } from "./knowledge-bases";
 export {
   ALIAS_TABLE,
+  ASIM_COLUMN_EQUIVALENTS,
   REVERSE_ALIAS,
+  asimEquivalentOf,
+  cefEquivalentOf,
   COALESCE_PRIORITY,
   EVENT_TYPE_BOOSTS,
   VALUE_NORMALIZATIONS,
