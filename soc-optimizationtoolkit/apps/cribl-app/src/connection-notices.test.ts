@@ -3,7 +3,7 @@ import { deriveJourney } from '@soc/core';
 import type { AzureConnectivity, JourneyFacts } from '@soc/core';
 import { NOT_NEEDED_HINT, buildStepperItems, deriveNextActionView } from '@soc/ui';
 import { clearNotice } from './clear-notice';
-import { connectionIncompleteText, secretNotice } from './connection-notices';
+import { DISCONNECTED_POINTER, connectionIncompleteText, secretNotice } from './connection-notices';
 import { JOURNEY_LINKS, SETUP_GITHUB_ANCHOR } from './journey-links';
 
 // The sections hidden under Disconnected; no text a Disconnected operator sees
@@ -58,6 +58,17 @@ describe('connection notices follow the connectivity choice (I4)', () => {
     );
     expect(secretNotice('full', true, { state: 'missing' })).toBeNull();
     expect(secretNotice('full', false, { state: 'checking' })).toBeNull();
+  });
+
+  it('says an unproven secret (AZR-92) is not known, never failed, and keeps the Disconnected pointer', () => {
+    const unproven = { state: 'unproven' as const, detail: 'another tab of this app holds the credential' };
+    const text = secretNotice('full', false, unproven);
+    expect(text).toBe(
+      "Whether the stored client secret is this connection's is not known: another tab of this app holds the credential.",
+    );
+    expect(text).not.toMatch(/FAILED/);
+    expect(secretNotice('disconnected', false, unproven)).toBe(DISCONNECTED_POINTER);
+    expect(secretNotice('full', true, unproven)).toBeNull();
   });
 
   it('the Clear stored secret notice under Disconnected does not ask to re-authenticate in a hidden section', () => {

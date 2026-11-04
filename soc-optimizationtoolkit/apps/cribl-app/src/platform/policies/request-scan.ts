@@ -86,6 +86,9 @@ export const MIXED_FILES: readonly string[] = [
   'packages/core/src/usecases/create-cribl-source/plan-cribl-source.ts',
   'packages/core/src/usecases/onboard-table/onboard-table.ts',
   'packages/core/src/usecases/permission-preflight/permission-preflight.ts',
+  // Azure only through the tenant session's port (Validate); its one Cribl call is
+  // readInputs in plan-cribl-source.ts (GET /system/inputs), extracted there.
+  'packages/core/src/usecases/scan-tenant-gap/scan-tenant-gap.ts',
   // Port types and the context only; no request of its own.
   'packages/ui/src/ports-context.ts',
   // ARM only (readLoggingMap); it takes ports from ports-context and never calls Cribl.

@@ -54,6 +54,7 @@ function input(over: Partial<BuildOnboardingLanesInput>): BuildOnboardingLanesIn
     criblSide: null,
     flow: null,
     perspective: "end-to-end",
+    tenantId: "aaaaaaaa-0000-0000-0000-000000000001",
     ...over,
   };
 }

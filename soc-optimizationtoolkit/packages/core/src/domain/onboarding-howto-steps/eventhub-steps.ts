@@ -11,6 +11,9 @@
  *   - a NAMED hub (Defender export, XDR): create the hub, then its consumer group
  *   - AUTO-CREATED hubs (policy, Activity Log, Entra): a rule Azure can create
  *     hubs with, and a consumer group on each hub once Azure has created it
+ *   - the Cribl principal's receive role (AZR-59, ADR 0008): on the named hub,
+ *     or on the namespace when Azure creates the hubs (they do not exist yet,
+ *     so there is no hub to scope the grant to)
  *
  * The rule a diagnostic setting writes with is an operator-chosen DEDICATED
  * rule. The built-in namespace rule is never suggested.
@@ -24,6 +27,7 @@ import {
   type NamespaceRef,
 } from "../eventhub-arm/eventhub-arm";
 import type { PlanValues } from "../onboarding-howto/plan-values";
+import { leastRoleFor } from "../least-privilege";
 import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../onboarding-howto/sources";
 import type { HowToStep } from "./steps";
 
@@ -56,7 +60,23 @@ export const AUTO_HUB_SOURCE_IDS = idsWhere(
   (s) => s.transport === "eventhub" && s.hubNaming === "auto-created",
 );
 
-const NS_WRITE = "Microsoft.EventHub/namespaces/write on the resource group (Contributor includes it).";
+// The role in brackets is the registry's least role for the call (AZR-61):
+// Azure Event Hubs Data Owner holds Microsoft.EventHub/*, and is narrower than
+// the Contributor these lines used to name.
+const NS_WRITE = `Microsoft.EventHub/namespaces/write on the resource group (${leastRoleFor("eventhub.namespace.write")} includes it).`;
+
+const RECEIVER_ROLE = "Azure Event Hubs Data Receiver";
+
+/** Why the Cribl principal needs the receive role; shared by both families. */
+const RECEIVER_WHY =
+  "By default the Cribl Event Hubs source signs in with Entra ID as a service principal dedicated to Cribl, " +
+  "so no shared access key leaves Azure. That principal needs Azure Event Hubs Data Receiver, which can read " +
+  "events and nothing else. Use a principal made for Cribl, never this app's own registration: anyone who " +
+  "can read the worker group's secrets can use its client secret.";
+
+const RECEIVER_RBAC_NOTE =
+  "Microsoft.Authorization/roleAssignments/write is held by User Access Administrator, Role Based Access " +
+  "Control Administrator or Owner; Contributor does not include it.";
 
 export const EVENTHUB_STEPS: readonly HowToStep[] = [
   {
@@ -97,7 +117,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       { label: "Hub resource ID", value: eventHubResourceId(planNamespace(v), v.hubName) },
       { label: "Kafka topic", value: v.hubName },
     ],
-    rbac: ["Microsoft.EventHub/namespaces/eventhubs/write on the namespace (Contributor includes it)."],
+    rbac: [`Microsoft.EventHub/namespaces/eventhubs/write on the namespace (${leastRoleFor("eventhub.hub.write")} includes it).`],
     confirmHow: "The hub {{hubName}} is listed under Event Hubs in the namespace {{namespace}}.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName"],
     checkKinds: ["eh-hub"],
@@ -176,6 +196,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "listenRule"],
     checkKinds: ["eh-rule-listen"],
     provenance: "repo",
+    warning: "Only needed if the Cribl source uses a connection string. With Entra ID, the default, Cribl reads with the role the Cribl principal step assigns and no Listen rule is used.",
   },
   {
     id: "eh-consumer-group",
@@ -217,7 +238,59 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     rbac: ["Microsoft.EventHub/namespaces/eventhubs/consumergroups/write on the namespace."],
     confirmHow: "Every hub Azure created in {{namespace}} lists the consumer group {{consumerGroup}}.",
     dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "consumerGroup"],
-    checkKinds: ["eh-hub", "eh-consumer-group"],
+    checkKinds: ["eh-hub", "eh-consumer-group-auto"],
+    provenance: "inferred",
+  },
+  {
+    id: "eh-role-receiver",
+    sourceIds: NAMED_HUB_SOURCE_IDS,
+    title: "Give the Cribl principal Azure Event Hubs Data Receiver on the hub {{hubName}}",
+    why: RECEIVER_WHY,
+    portal: [
+      "Open the hub {{hubName}} in the namespace {{namespace}} and select Access control (IAM), then Add role assignment.",
+      "Role: Azure Event Hubs Data Receiver.",
+      "Members: User, group, or service principal; select the service principal with object ID {{criblPrincipalObjectId}}.",
+      "Review and assign.",
+    ],
+    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}`,
+    values: (v) => [
+      { label: "Role scope", value: eventHubResourceId(planNamespace(v), v.hubName) },
+      { label: "Role", value: RECEIVER_ROLE },
+      { label: "Principal object ID", value: v.criblPrincipalObjectId },
+    ],
+    rbac: [
+      `Microsoft.Authorization/roleAssignments/write on the hub. ${RECEIVER_RBAC_NOTE}`,
+    ],
+    confirmHow: "Access control (IAM), Role assignments on the hub {{hubName}} lists Azure Event Hubs Data Receiver for {{criblPrincipalObjectId}}.",
+    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName", "criblPrincipalObjectId"],
+    checkKinds: ["eh-role-receiver"],
+    // Inferred, not live-confirmed: that a hub-scoped grant alone is enough for
+    // the Kafka endpoint (ADR 0008 Unverified).
+    provenance: "inferred",
+  },
+  {
+    id: "eh-role-receiver-auto",
+    sourceIds: AUTO_HUB_SOURCE_IDS,
+    title: "Give the Cribl principal Azure Event Hubs Data Receiver on the namespace {{namespace}}",
+    why: `${RECEIVER_WHY} Azure creates these hubs itself when logs first arrive, so the role is assigned on the namespace, which covers every hub in it.`,
+    portal: [
+      "Open the namespace {{namespace}} and select Access control (IAM), then Add role assignment.",
+      "Role: Azure Event Hubs Data Receiver.",
+      "Members: User, group, or service principal; select the service principal with object ID {{criblPrincipalObjectId}}.",
+      "Review and assign.",
+    ],
+    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}`,
+    values: (v) => [
+      { label: "Role scope", value: eventHubNamespacePath(planNamespace(v)) },
+      { label: "Role", value: RECEIVER_ROLE },
+      { label: "Principal object ID", value: v.criblPrincipalObjectId },
+    ],
+    rbac: [
+      `Microsoft.Authorization/roleAssignments/write on the namespace. ${RECEIVER_RBAC_NOTE}`,
+    ],
+    confirmHow: "Access control (IAM), Role assignments on the namespace {{namespace}} lists Azure Event Hubs Data Receiver for {{criblPrincipalObjectId}}.",
+    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "criblPrincipalObjectId"],
+    checkKinds: ["eh-role-receiver"],
     provenance: "inferred",
   },
   {

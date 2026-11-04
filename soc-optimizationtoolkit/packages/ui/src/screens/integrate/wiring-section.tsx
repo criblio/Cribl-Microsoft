@@ -66,7 +66,7 @@ export function WiringSection({
   workerGroup,
   packName,
 }: WiringSectionProps) {
-  const { ports } = usePorts();
+  const { ports, config } = usePorts();
 
   const [sourceId, setSourceId] = useState("");
   const [lakeRequested, setLakeRequested] = useState(false);
@@ -159,6 +159,11 @@ export function WiringSection({
         id: SENTINEL_CLIENT_SECRET_NAME,
         value,
         description: SENTINEL_CLIENT_SECRET_DESCRIPTION,
+        // ONE secret name for every tenant (ADR 0009, audit HIGH
+        // secret-provisioning.ts:36): naming the tenant means a second tenant
+        // wiring into this group is refused instead of replacing the first
+        // tenant's value under its destinations.
+        tenantId: config.tenantId,
       });
       if (ensured.kind === "created") {
         setSecretNote(`Created Cribl secret ${SENTINEL_CLIENT_SECRET_NAME}.`);
@@ -183,6 +188,7 @@ export function WiringSection({
     workerGroup,
     secretValue,
     ports.cribl,
+    config.tenantId,
   ]);
 
   return (

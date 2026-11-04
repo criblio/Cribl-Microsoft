@@ -19,6 +19,7 @@
  */
 
 import {
+  CHECK_SUBJECT,
   NO_HUB_ARRIVAL,
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
@@ -237,7 +238,16 @@ export interface VerdictRow {
   readonly stepId: string;
   readonly kind: CheckResult["kind"];
   readonly view: VerdictView;
+  /**
+   * What this row checked, in words, when its step has more than one check for
+   * the source; null otherwise (AZR-55: two checks of one step read as the
+   * same sentence with opposite verdicts).
+   */
+  readonly subject: string | null;
 }
+
+/** What each check kind reads, as the operator would say it: one wording, held in @soc/core. */
+export { CHECK_SUBJECT };
 
 export interface SourceVerdictGroup {
   readonly sourceId: OnboardingSourceId;
@@ -250,13 +260,15 @@ export function verdictGroups(result: Pick<ValidationResult, "checks">): SourceV
   const groups = new Map<OnboardingSourceId, VerdictRow[]>();
   for (const c of result.checks) {
     const rows = groups.get(c.sourceId) ?? [];
-    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict, c.kind) });
+    rows.push({ key: c.key, stepId: c.stepId, kind: c.kind, view: verdictView(c.verdict, c.kind), subject: null });
     groups.set(c.sourceId, rows);
   }
   return [...groups].map(([sourceId, rows]) => ({
     sourceId,
     title: onboardingSource(sourceId)?.title ?? sourceId,
-    rows,
+    rows: rows.map((r) =>
+      rows.filter((o) => o.stepId === r.stepId).length > 1 ? { ...r, subject: CHECK_SUBJECT[r.kind] } : r,
+    ),
   }));
 }
 

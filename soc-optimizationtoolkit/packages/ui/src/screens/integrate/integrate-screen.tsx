@@ -401,6 +401,15 @@ export function dcrInventoryReadNotice(input: {
 /** Plain-KV key persisting the selected solution name across reloads. */
 const SELECTED_SOLUTION_KEY = "integrate-selected-solution~v1";
 
+/** GEN-13: the two pack shapes, in the order the picker offers them. */
+const PACK_SHAPE_OPTIONS: readonly { value: PackShape; label: string }[] = [
+  {
+    value: "all-inclusive",
+    label: "Self-contained - the pack carries its own Sentinel destination",
+  },
+  { value: "routable", label: "Routable - selectable from the Cribl Routes page" },
+];
+
 export interface IntegrateScreenProps {
   /**
    * Version of the toolkit, stamped into every pack this screen builds so a
@@ -2843,6 +2852,7 @@ export function IntegrateScreen({
                 setGroupId(next);
               }}
               placeholder="Select a worker group..."
+              label="Cribl worker group"
               ariaLabel="Filter worker groups"
             />
           )}
@@ -2891,23 +2901,21 @@ export function IntegrateScreen({
                       <span className="field-label">
                         Destination for {sentinelTable}
                       </span>
-                      <select
-                        aria-label={`Existing destination for ${sentinelTable}`}
+                      <SearchableSelect
+                        label={`Existing destination for ${sentinelTable}`}
+                        options={existingView.rows.map((row) => ({
+                          value: row.id,
+                          label: describeOutputRow(row),
+                        }))}
                         value={pickedRow?.id ?? ""}
-                        onChange={(e) =>
+                        onChange={(next) =>
                           setChosenByTable((prev) => ({
                             ...prev,
-                            [sentinelTable]: e.target.value,
+                            [sentinelTable]: next,
                           }))
                         }
-                      >
-                        <option value="">Select a destination...</option>
-                        {existingView.rows.map((row) => (
-                          <option key={row.id} value={row.id}>
-                            {describeOutputRow(row)}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Select a destination..."
+                      />
                     </label>
                     {pickedRow !== null && pick.prompt !== null && (
                       <label className="integrate-check">
@@ -2972,18 +2980,13 @@ export function IntegrateScreen({
               }
             />
           </span>
-          <select
+          <SearchableSelect
+            label="Pack wiring"
+            options={PACK_SHAPE_OPTIONS}
             value={effectivePackShape}
             disabled={existingMode}
-            onChange={(e) => setPackShape(e.target.value as PackShape)}
-          >
-            <option value="all-inclusive">
-              Self-contained - the pack carries its own Sentinel destination
-            </option>
-            <option value="routable">
-              Routable - selectable from the Cribl Routes page
-            </option>
-          </select>
+            onChange={(next) => setPackShape(next as PackShape)}
+          />
           {/* Stays VISIBLE (GEN-16): it is the one instruction this choice
               creates, and the only link between it and the action that
               satisfies it. Everything else about the shapes is in the tip. */}
@@ -3108,6 +3111,7 @@ export function IntegrateScreen({
                     values={extraGroups}
                     onChange={setExtraGroups}
                     placeholder="Select additional worker groups..."
+                    label="Additional worker groups"
                     ariaLabel="Filter worker groups"
                   />
                 </label>

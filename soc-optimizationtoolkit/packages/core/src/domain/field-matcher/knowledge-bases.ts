@@ -446,10 +446,29 @@ export const ALIAS_TABLE: Record<string, string[]> = {
   http_code: ["EventOutcome"],
   reqaction: ["DeviceAction"],
   error: ["Reason"],
+
+  // PAN-OS TRAFFIC counters and locations -> ASim network session (DBT-253).
+  // Field meanings per PAN's TRAFFIC log field descriptions: packets/bytes are
+  // the session TOTALS, pkts_sent/pkts_received the client->server and
+  // server->client halves, srcloc/dstloc the country (or "internal region"
+  // range for private addresses). No CommonSecurityLog column has these
+  // names, so CEF matching is unchanged.
+  //
+  // NOT HERE ON PURPOSE: elapsed. PAN reports seconds; ASim NetworkDuration is
+  // milliseconds. A rename would store a value 1000x too small - it needs a
+  // scaling eval in the pipeline, not an alias.
+  packets: ["NetworkPackets"],
+  bytes: ["NetworkBytes"],
+  pkts_sent: ["SrcPackets"],
+  pkts_received: ["DstPackets"],
+  srcloc: ["SrcGeoCountry"],
+  dstloc: ["DstGeoCountry"],
 };
 
 /**
- * CommonSecurityLog column -> its ASim normalized-schema equivalent (DBT-252).
+ * Alias target -> its ASim normalized-schema equivalent (DBT-252, DBT-253).
+ * Mostly CommonSecurityLog columns, plus a few targets the PAN-OS entries name
+ * that no CEF table has (SourceZone, SessionID).
  *
  * ALIAS_TABLE and the vendor packs name CEF / CommonSecurityLog columns
  * (dst -> DestinationIP). Pointed at an ASim table, none of those columns
@@ -494,6 +513,13 @@ export const ASIM_COLUMN_EQUIVALENTS: Readonly<Record<string, string>> = {
   FileSize: "FileSize",
   Message: "EventMessage",
   ExternalID: "EventOriginalUid",
+  // DBT-253: alias targets that are not CommonSecurityLog columns at all - the
+  // PAN-OS entries above name them (from -> SourceZone) and on CEF they never
+  // matched anything. On an ASim table they now land.
+  SourceZone: "SrcZone",
+  DestinationZone: "DstZone",
+  SessionID: "NetworkSessionId",
+  StartTime: "EventStartTime",
 };
 
 /** Lowercased CEF column -> ASim column, and the reverse. */

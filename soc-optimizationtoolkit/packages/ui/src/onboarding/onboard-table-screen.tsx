@@ -323,6 +323,7 @@ export function OnboardTableScreen({
                 value={groupId}
                 onChange={setGroupId}
                 placeholder="Select a worker group..."
+                label="Cribl worker group"
                 ariaLabel="Filter worker groups"
               />
             )}
@@ -373,18 +374,12 @@ export function OnboardTableScreen({
           <div className="form-grid">
             <label className="field">
               <span className="field-label">Schema source</span>
-              <select
+              <SearchableSelect
+                label="Schema source"
+                options={CUSTOM_SCHEMA_SOURCE_OPTIONS}
                 value={schemaSource}
-                onChange={(e) =>
-                  setSchemaSource(e.target.value as CustomSchemaSource)
-                }
-              >
-                {CUSTOM_SCHEMA_SOURCE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSchemaSource(v as CustomSchemaSource)}
+              />
               <span className="field-hint">
                 Bundled vendor schemas ship with the app (no fetch). Choose
                 &quot;Use the existing workspace table&quot; when the table
@@ -395,17 +390,16 @@ export function OnboardTableScreen({
             {schemaSource === "vendor" && (
               <label className="field">
                 <span className="field-label">Vendor schema</span>
-                <select
+                <SearchableSelect
+                  label="Vendor schema"
+                  options={VENDOR_SCHEMAS.map((entry) => ({
+                    value: entry.id,
+                    label: `${entry.label} (${entry.table})`,
+                  }))}
                   value={effectiveVendorId}
-                  onChange={(e) => setVendorId(e.target.value)}
-                >
-                  <option value="">Select a vendor schema...</option>
-                  {VENDOR_SCHEMAS.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label} ({entry.table})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setVendorId}
+                  placeholder="Select a vendor schema..."
+                />
                 <span className="field-hint">
                   A schema matching the typed table name preselects itself.
                 </span>
@@ -468,16 +462,12 @@ export function OnboardTableScreen({
             )}
             <label className="field">
               <span className="field-label">Interactive retention</span>
-              <select
+              <SearchableSelect
+                label="Interactive retention"
+                options={RETENTION_CHOICES}
                 value={String(retentionDays)}
-                onChange={(e) => setRetentionOverride(e.target.value)}
-              >
-                {RETENTION_CHOICES.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setRetentionOverride}
+              />
               <span className="field-hint">
                 Applies only when the table is created by this run. Default (
                 {persistedRetentionDefault} days) comes from the Options

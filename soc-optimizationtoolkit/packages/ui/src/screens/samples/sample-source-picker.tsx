@@ -185,6 +185,7 @@ export function SampleSourcePicker({
             value={selectedGroupId}
             onChange={onSelectGroup}
             placeholder="Select a worker group..."
+            label="Worker group"
             ariaLabel="Worker group"
             disabled={loadingSources}
           />
@@ -203,6 +204,7 @@ export function SampleSourcePicker({
             placeholder={
               mode === "lake-query" ? "Select a dataset..." : "Select a source..."
             }
+            label={mode === "lake-query" ? "Lake dataset" : "Source"}
             ariaLabel="Sample source"
           />
         </label>

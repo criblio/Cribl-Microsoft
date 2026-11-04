@@ -22,7 +22,16 @@
  * disarms for good (cribl-source-state.ts confirmReducer). A blob lane's
  * client secret has no descriptor, so any edit to it disarms directly.
  *
- * SECRETS. A pasted connection string (or a blob lane's client secret) lives
+ * ENTRA ID FIRST (ADR 0008). An Event Hub lane defaults to Entra ID: the
+ * Cribl service principal's tenant and client id and its client secret,
+ * handled exactly as the blob lane's. Each id FOLLOWS the plan values until
+ * the operator edits it here (then the edit wins); there is no fallback to the
+ * app's own tenant, because the dedicated principal may live elsewhere. Both
+ * are part of the arm key. The app's own registration is refused as the
+ * principal (`principal` is the app's own registration). A client secret that
+ * is really a connection string never arms (core looksLikeConnectionString).
+ *
+ * SECRETS. A pasted connection string (or a client secret) lives
  * only in a ref and in the uncontrolled password input. React state and the
  * parent see the parsed, NON-SECRET descriptor {host, keyName, entityPath}.
  * The value leaves the ref only through the `value()` closure the apply is
@@ -34,6 +43,7 @@ import {
   LEGACY_INPUT_MATCH_SUFFIX,
   checkPastedCredential,
   isInvalidConnection,
+  looksLikeConnectionString,
   parseEventHubConnectionString,
 } from "@soc/core";
 import type {
@@ -55,8 +65,11 @@ import type {
   SourceMode,
 } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
+import { SearchableSelect } from "../../../components/searchable-select";
 import { WorkerGroupField } from "../../../components/worker-group-field";
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
+import { PickerLine } from "../eventhub-prerequisite-section";
+import type { OnboardingGroupChoice } from "./group-choice";
 import {
   ATTESTATION_LABEL,
   CONFIRM_IDLE,
@@ -94,15 +107,26 @@ export interface CriblSourcePanelProps {
   readonly workerGroups: WorkerGroupsState;
   /** Lists the worker groups; called only by the button and Retry. */
   readonly onLoadGroups: () => void;
+  /** The group the create and the reads use: the tenant's mapped group, or the picker's. */
   readonly groupId: string;
   readonly onGroupChange: (groupId: string) => void;
+  /**
+   * Where `groupId` came from (AZR-64): the tenant to Cribl mapping hides the
+   * picker; an unknown mapping hides it and blocks Create. Absent reads as the
+   * picker alone, as before the mapping existed.
+   */
+  readonly groupChoice?: OnboardingGroupChoice;
   /** The plan namespace's authorization rules, or null when not read yet. */
   readonly rules: ListRead<NamespaceAuthRule> | null;
   /** Reads the namespace's rules; the button is hidden without it. */
   readonly onReadRules?: () => void;
   /** The hubs a lane's input reads (core laneTopics), or null when not computed. */
   readonly topicsFor: (sourceId: OnboardingSourceId) => LaneTopics | null;
-  /** The service principal a blob lane authenticates as, or null when not set up. */
+  /**
+   * This app's own registration, which a blob lane authenticates as, or null
+   * when not set up. An Event Hub lane in Entra ID mode REFUSES it as the
+   * Cribl principal (ADR 0008 section 2) and borrows nothing from it.
+   */
   readonly principal: { readonly tenantId: string; readonly clientId: string } | null;
   /** Core planCriblSource for one lane. Read-only. */
   readonly onPlan: (sourceId: OnboardingSourceId, credential: PlanCredential) => Promise<PlanCriblSourceResult>;
@@ -120,9 +144,25 @@ const PANEL_TIP =
   "The app creates the Cribl source for each lane: an Azure Event Hubs source " +
   "(eventhub) or an Azure Blob Storage source (azure_blob). It only creates - " +
   "it never changes or deletes a source that is already there - and it asks " +
-  "you to confirm first. The key goes into a Cribl secret; the source names the " +
-  "secret and never holds the key. After the create, the app commits the " +
-  "changed files and deploys the worker group, which restarts its workers.";
+  "you to confirm first. An Event Hubs source signs in with Entra ID by default; " +
+  "the client secret (or, in the fallback modes, the key) goes into a Cribl " +
+  "secret, and the source names the secret and never holds it. After the create, " +
+  "the app commits the changed files and deploys the worker group, which " +
+  "restarts its workers.";
+
+const ENTRA_TENANT_TIP =
+  "The Entra tenant (directory) ID of the service principal Cribl signs in as. " +
+  "Follows the plan values until you edit it here.";
+
+const ENTRA_CLIENT_TIP =
+  "The application (client) ID of a service principal made for Cribl. Do not use " +
+  "this app's own registration: anyone who can read the worker group's secrets " +
+  "could use its secret. Follows the plan values until you edit it here.";
+
+const ENTRA_SECRET_TIP =
+  "The Cribl service principal's client secret. It is sent once, into a Cribl " +
+  "secret, when you confirm; this page never stores or shows it. The principal " +
+  "needs Azure Event Hubs Data Receiver on the hub, which the app checks first.";
 
 const RULE_TIP =
   "A Cribl Event Hubs source reads from the hub, so its key must come from a " +
@@ -134,36 +174,39 @@ const PASTE_TIP =
   "key name and the hub are shown and checked; the key itself is sent once, " +
   "into a Cribl secret, when you confirm.";
 
-const GROUP_TIP = "The Cribl Stream worker group the source runs on. Listed only when you ask.";
+const GROUP_TIP =
+  "The Cribl Stream worker group the source runs on. When the tenant to Cribl mapping on Setup names a group " +
+  "for this tenant, that group is used and this picker is not offered. Listed only when you ask.";
 
 export function CriblSourcePanel(props: CriblSourcePanelProps) {
-  const { rows, workerGroups, onLoadGroups, groupId, onGroupChange, rules, onReadRules } = props;
+  const { rows, workerGroups, onLoadGroups, groupId, onGroupChange, rules, onReadRules, groupChoice } = props;
   const hasEventHub = rows.some((r) => r.transport === "eventhub");
+  const pickerShown = groupChoice?.pickerShown ?? true;
   return (
     <div className="azo-cribl-source">
       <p className="panel-desc">
         The app creates the Cribl source for each chosen lane, after you confirm. <InfoTip text={PANEL_TIP} />
       </p>
       <div className="panel-controls">
-        <button type="button" className="run-button" onClick={onLoadGroups}>
-          {workerGroups.kind === "idle" ? "Load worker groups" : "Reload worker groups"}
-        </button>
-        <WorkerGroupField state={workerGroups} onRetry={onLoadGroups}>
-          {(groups) => (
-            <select
-              aria-label="Worker group"
-              value={groupId}
-              onChange={(e) => onGroupChange(e.target.value)}
-            >
-              <option value="">Choose a worker group</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.id}
-                </option>
-              ))}
-            </select>
-          )}
-        </WorkerGroupField>
+        {pickerShown && (
+          <>
+            <button type="button" className="run-button" onClick={onLoadGroups}>
+              {workerGroups.kind === "idle" ? "Load worker groups" : "Reload worker groups"}
+            </button>
+            <WorkerGroupField state={workerGroups} onRetry={onLoadGroups}>
+              {(groups) => (
+                <SearchableSelect
+                  label="Worker group"
+                  placeholder="Choose a worker group"
+                  clearLabel="None"
+                  value={groupId}
+                  options={groups.map((g) => ({ value: g.id, label: g.id }))}
+                  onChange={onGroupChange}
+                />
+              )}
+            </WorkerGroupField>
+          </>
+        )}
         <InfoTip text={GROUP_TIP} />
         {hasEventHub && onReadRules !== undefined && (
           <button type="button" className="run-button" onClick={onReadRules}>
@@ -181,6 +224,7 @@ export function CriblSourcePanel(props: CriblSourcePanelProps) {
           </button>
         )}
       </div>
+      {groupChoice?.message != null && <PickerLine message={groupChoice.message} />}
       {hasEventHub && (
         <p className="field-hint">{listenRuleMessage(rules) ?? "Rules with Listen rights are offered below."}</p>
       )}
@@ -218,6 +262,16 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
   const [attested, setAttested] = useState(false);
   const [parsed, setParsed] = useState<ParsedConnection | null>(null);
   const [hasClientSecret, setHasClientSecret] = useState(false);
+  // Whether the pasted client secret is really a connection string: a flag,
+  // never the value.
+  const [secretIsConnectionString, setSecretIsConnectionString] = useState(false);
+  // Entra ID ids: names, not secrets, so state is fine. null = untouched, so
+  // the field shows the CURRENT plan value; an edit here wins from then on.
+  // No fallback to the app's tenant: the Cribl principal may live elsewhere.
+  const [tenantEdit, setTenantEdit] = useState<string | null>(null);
+  const [clientEdit, setClientEdit] = useState<string | null>(null);
+  const entraTenantId = tenantEdit ?? values.criblTenantId.trim();
+  const entraClientId = clientEdit ?? values.criblClientId.trim();
   const [wiringError, setWiringError] = useState("");
   const [state, dispatch] = useReducer(rowReducer, CONFIRM_IDLE);
 
@@ -251,14 +305,29 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
     pasteCheck,
     topics,
     hasClientSecret,
+    secretIsConnectionString,
+    entra: { tenantId: entraTenantId, clientId: entraClientId, objectId: values.criblPrincipalObjectId },
+    ...(principal === null ? {} : { appClientId: principal.clientId }),
   });
   const disabledReason =
+    panel.groupChoice?.blockedReason ??
     gateReason ??
     (transport === "blob" && principal === null
       ? "The service principal's tenant and client id are not set up."
       : null);
 
-  const key = armKey({ groupId, sourceId, credentialKind, rule, attested, values, readSeq, descriptor });
+  const isEntra = credentialKind === "entra-id";
+  const key = armKey({
+    groupId,
+    sourceId,
+    credentialKind,
+    rule,
+    attested,
+    values,
+    readSeq,
+    descriptor,
+    entra: isEntra ? [entraTenantId.trim(), entraClientId.trim()] : null,
+  });
   useEffect(() => {
     dispatch({ type: "inputs", key });
   }, [key]);
@@ -272,6 +341,9 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
     if (credentialKind === "paste") return descriptor === null ? null : { kind: "paste", descriptor, attested };
     if (credentialKind === "client-secret") {
       return principal === null ? null : { kind: "client-secret", ...principal };
+    }
+    if (credentialKind === "entra-id") {
+      return { kind: "entra-id", tenantId: entraTenantId.trim(), clientId: entraClientId.trim() };
     }
     return null;
   }
@@ -297,6 +369,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
         clearSecret();
         setParsed(null);
         setHasClientSecret(false);
+        setSecretIsConnectionString(false);
         onDescriptor?.(sourceId, null);
       }
       return;
@@ -316,9 +389,10 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
 
   function onPaste(value: string): void {
     secretRef.current = value;
-    if (transport === "blob") {
+    if (transport === "blob" || credentialKind === "entra-id") {
       dispatch({ type: "secret-changed" });
       setHasClientSecret(value !== "");
+      setSecretIsConnectionString(looksLikeConnectionString(value));
       return;
     }
     const next = value === "" ? null : parseEventHubConnectionString(value);
@@ -355,6 +429,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
                     clearSecret();
                     setParsed(null);
                     setHasClientSecret(false);
+                    setSecretIsConnectionString(false);
                     onDescriptor?.(sourceId, null);
                     setCredentialKind(c.kind);
                   }}
@@ -370,20 +445,68 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
             <span className="field-label">
               Listen rule <InfoTip text={RULE_TIP} />
             </span>
-            <select
-              aria-label={`Listen rule for ${row.title}`}
+            <SearchableSelect
+              label={`Listen rule for ${row.title}`}
+              placeholder="Choose a rule with Listen rights"
+              clearLabel="None"
               value={rule}
               disabled={ruleRows.length === 0}
-              onChange={(e) => setRule(e.target.value)}
-            >
-              <option value="">Choose a rule with Listen rights</option>
-              {ruleRows.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {`${r.name} (${r.rights.join(", ")})`}
-                </option>
-              ))}
-            </select>
+              options={ruleRows.map((r) => ({
+                value: r.name,
+                label: `${r.name} (${r.rights.join(", ")})`,
+              }))}
+              onChange={setRule}
+            />
           </label>
+        )}
+
+        {isEntra && (
+          <>
+            <label className="field">
+              <span className="field-label">
+                Tenant ID <InfoTip text={ENTRA_TENANT_TIP} />
+              </span>
+              <input
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                aria-label={`Cribl principal tenant ID for ${row.title}`}
+                value={entraTenantId}
+                onChange={(e) => setTenantEdit(e.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">
+                Client ID <InfoTip text={ENTRA_CLIENT_TIP} />
+              </span>
+              <input
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                aria-label={`Cribl principal client ID for ${row.title}`}
+                value={entraClientId}
+                onChange={(e) => setClientEdit(e.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">
+                Client secret <InfoTip text={ENTRA_SECRET_TIP} />
+              </span>
+              <input
+                ref={fieldRef}
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                aria-label={`Cribl principal client secret for ${row.title}`}
+                onChange={(e) => onPaste(e.target.value)}
+              />
+            </label>
+            {values.criblPrincipalObjectId.trim() === "" && (
+              <p className="field-hint">
+                Set the Cribl service principal object ID in the plan values: the app checks that principal's role on the hub.
+              </p>
+            )}
+          </>
         )}
 
         {usesPasteField && (

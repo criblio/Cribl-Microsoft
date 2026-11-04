@@ -138,6 +138,11 @@ fully read hub list. With none measured, the create refuses.
 
 ### 5. The credential: a Listen rule, a paste, or nothing (D7)
 
+> **Superseded in part, 2026-11-03.** ADR 0008 makes Entra ID OAuth the
+> default Event Hub credential, and AZR-58 refuses a Manage-capable rule in
+> every mode, so "Listen or Manage" below is no longer true: the rule must
+> Listen and must not Manage. The rest of this section is the fallback.
+
 The secret value comes from one of two places:
 
 - **listKeys** on an operator-picked Listen-capable rule (`ruleCanListen`:

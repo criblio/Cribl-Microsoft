@@ -52,6 +52,7 @@ import type {
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
+import { SearchableSelect } from "../../components/searchable-select";
 import {
   hubListMessage,
   namespaceListMessage,
@@ -68,7 +69,7 @@ export interface EventHubTarget {
   readonly rule: EventHubTargetRule | null;
 }
 
-/** A stable key for one namespace, for the select's values. */
+/** A stable key for one namespace, for the picker's values. */
 function namespaceKey(ns: NamespaceRef): string {
   return `${ns.subscriptionId}/${ns.resourceGroup}/${ns.name}`;
 }
@@ -122,6 +123,19 @@ export function EventHubPrerequisiteSection({
     } finally {
       setFinding(false);
     }
+  }
+
+  /**
+   * "None" on the namespace picker (DBT-249): the namespace, hub and rule go
+   * together, and a read still in flight for the old namespace is dropped.
+   */
+  function clearNamespace(): void {
+    targetRead.current += 1;
+    setHubs(null);
+    setRules(null);
+    setMissingHub("");
+    setLoadingTarget(false);
+    onChange({ namespace: null, hubName: "", rule: null });
   }
 
   async function chooseNamespace(ns: NamespaceRef, hubName = ""): Promise<void> {
@@ -219,22 +233,26 @@ export function EventHubPrerequisiteSection({
         <div className="form-grid">
           <label className="field">
             <span className="field-label">Namespace</span>
-            <select
-              aria-label="Event Hub namespace"
+            <SearchableSelect
+              label="Event Hub namespace"
+              placeholder="Choose a namespace"
               value={namespaceRows.some((n) => namespaceKey(n) === chosenKey) ? chosenKey : ""}
-              disabled={namespaceRows.length === 0}
-              onChange={(e) => {
-                const ns = namespaceRows.find((n) => namespaceKey(n) === e.target.value);
+              disabled={namespaceRows.length === 0 && value.namespace === null}
+              options={namespaceRows.map((ns) => ({
+                value: namespaceKey(ns),
+                label: `${ns.name} (${ns.resourceGroup}${ns.skuName !== "" ? `, ${ns.skuName}` : ""})`,
+              }))}
+              clearLabel="None"
+              hasValue={value.namespace !== null}
+              onChange={(key) => {
+                if (key === "") {
+                  clearNamespace();
+                  return;
+                }
+                const ns = namespaceRows.find((n) => namespaceKey(n) === key);
                 if (ns !== undefined) void chooseNamespace(ns);
               }}
-            >
-              <option value="">Choose a namespace</option>
-              {namespaceRows.map((ns) => (
-                <option key={namespaceKey(ns)} value={namespaceKey(ns)}>
-                  {`${ns.name} (${ns.resourceGroup}${ns.skuName !== "" ? `, ${ns.skuName}` : ""})`}
-                </option>
-              ))}
-            </select>
+            />
           </label>
 
           <label className="field">
@@ -267,22 +285,18 @@ export function EventHubPrerequisiteSection({
 
           <label className="field">
             <span className="field-label">Event Hub</span>
-            <select
-              aria-label="Event Hub"
+            <SearchableSelect
+              label="Event Hub"
+              placeholder="Choose an Event Hub"
+              clearLabel="None"
               value={value.hubName}
               disabled={value.namespace === null || hubOptions.length === 0}
-              onChange={(e) => {
+              options={hubOptions.map((name) => ({ value: name, label: name }))}
+              onChange={(name) => {
                 setMissingHub("");
-                onChange({ ...value, hubName: e.target.value });
+                onChange({ ...value, hubName: name });
               }}
-            >
-              <option value="">Choose an Event Hub</option>
-              {hubOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {missingHub !== "" && value.namespace !== null && (
             <PickerLine
@@ -298,24 +312,23 @@ export function EventHubPrerequisiteSection({
 
           <label className="field">
             <span className="field-label">Namespace authorization rule</span>
-            <select
-              aria-label="Authorization rule"
+            <SearchableSelect
+              label="Authorization rule"
+              placeholder="Choose a rule that can send"
+              clearLabel="None"
               value={value.rule?.name ?? ""}
               disabled={ruleChoices.length === 0}
-              onChange={(e) =>
+              options={ruleChoices.map((rule) => ({
+                value: rule.name,
+                label: `${rule.name} (${rule.rights.join(", ")})`,
+              }))}
+              onChange={(name) =>
                 onChange({
                   ...value,
-                  rule: ruleChoices.find((r) => r.name === e.target.value) ?? null,
+                  rule: ruleChoices.find((r) => r.name === name) ?? null,
                 })
               }
-            >
-              <option value="">Choose a rule that can send</option>
-              {ruleChoices.map((rule) => (
-                <option key={rule.name} value={rule.name}>
-                  {`${rule.name} (${rule.rights.join(", ")})`}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {rules !== null && ruleListMessage(rules) !== null && (
             <PickerLine message={ruleListMessage(rules) as PickerMessage} />
@@ -357,11 +370,22 @@ function hubProvedAbsent(read: EventHubTargetRead<EventHubInfo>, hubName: string
 }
 
 /** One worded state line, toned. Shared with the other azure-onboarding sections. */
-export function PickerLine({ message }: { message: PickerMessage }) {
+export function PickerLine({
+  message,
+  announce = true,
+}: {
+  message: PickerMessage;
+  /**
+   * Whether an error is a live alert. False for a line present at mount from
+   * stored state (not a reaction to anything the user did): it keeps the error
+   * styling without interrupting the screen reader on every visit.
+   */
+  announce?: boolean;
+}) {
   return (
     <p
       className={`azure-onboarding-banner azure-onboarding-banner-${message.tone}`}
-      role={message.tone === "error" ? "alert" : undefined}
+      role={announce && message.tone === "error" ? "alert" : undefined}
     >
       {message.text}
     </p>

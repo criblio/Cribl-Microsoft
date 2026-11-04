@@ -44,6 +44,7 @@ import type {
   CriblCapability,
 } from "../../domain/capabilities";
 import type { SetupPath } from "../../domain/azure-permissions";
+import { operationAction } from "../../domain/least-privilege";
 import {
   DEFENDER_AUTOMATIONS_READ,
   DEFENDER_AUTOMATIONS_WRITE,
@@ -59,7 +60,9 @@ import { checkedAzureActions } from "./permission-preflight";
 /**
  * Azure control-plane action -> the capability it establishes.
  *
- * Keys are the exact action strings in REQUIRED_ACTIONS. Two of those actions
+ * Keys are the exact action strings in REQUIRED_ACTIONS, read from the
+ * least-privilege registry (AZR-61) so a corrected action cannot silently stop
+ * establishing its capability. Two of those actions
  * are deliberately ABSENT: `Microsoft.Resources/subscriptions/resourceGroups/write`
  * and `Microsoft.OperationalInsights/workspaces/write` are lab-provisioning
  * concerns with no capability in the settled taxonomy, and inventing one here
@@ -73,12 +76,14 @@ import { checkedAzureActions } from "./permission-preflight";
  */
 export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>> =
   Object.freeze({
-    "Microsoft.Insights/dataCollectionRules/write": "dcr.write",
-    "Microsoft.Insights/dataCollectionRules/read": "dcr.read",
-    "Microsoft.OperationalInsights/workspaces/tables/write": "table.write",
-    "Microsoft.OperationalInsights/workspaces/read": "workspace.read",
+    [operationAction("dcr.write")]: "dcr.write",
+    [operationAction("dcr.read")]: "dcr.read",
+    [operationAction("table.write")]: "table.write",
+    [operationAction("workspace.read")]: "workspace.read",
+    // Not a registry action: nothing calls it (audit discrepancy 5); kept
+    // until arm.deploy is measured some other way (REQUIRED_ACTIONS header).
     "Microsoft.Resources/deployments/write": "arm.deploy",
-    "Microsoft.Authorization/roleAssignments/write": "role.assign",
+    [operationAction("dcr.roleAssignment.write")]: "role.assign",
     [DEFENDER_PRICINGS_READ]: "defender-plans.read",
     [DEFENDER_AUTOMATIONS_READ]: "defender-automation.read",
     [DEFENDER_AUTOMATIONS_WRITE]: "defender-automation.write",

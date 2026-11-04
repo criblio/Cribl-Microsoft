@@ -27,10 +27,14 @@
  */
 
 import {
+  EVENT_HUB_RECEIVER_ROLES,
+  eventHubResourceId,
   namespaceSupportsKafka,
   parseNamespaceAuthRules,
   eventHubNamespacePath,
-  ruleCanListen,
+  overprivilegedRoleCovering,
+  receiverRoleCovering,
+  ruleSafeForCriblSource,
   ruleCanManage,
   ruleCanSend,
 } from "../eventhub-arm/eventhub-arm";
@@ -658,6 +662,43 @@ function classifyStorageRbac(rows: readonly unknown[]): StepVerdict {
   };
 }
 
+/**
+ * AZR-59 (ADR 0008): the Cribl principal can receive from the plan's hub, or,
+ * when the plan names none (Azure creates the hubs), from the whole namespace.
+ * Reached only when every read was complete, so "absent" is a real absence.
+ * Data Owner covering the target differs on the role: it can read every
+ * rule's keys, so it is never as expected.
+ * A qualifying grant that sits only on another hub of the namespace is a
+ * difference naming its scope, not absent: something was granted, just not
+ * where every hub of this lane is covered.
+ */
+function classifyReceiverRole(values: PlanValues, rows: readonly unknown[]): StepVerdict {
+  const ns = planNamespace(values);
+  const nsPath = eventHubNamespacePath(ns);
+  const hub = value(values, "hubName");
+  const target = hub === "" ? nsPath : eventHubResourceId(ns, hub);
+  // Data Owner includes listKeys on every rule (Manage-equivalent): never as
+  // expected, even alongside a Data Receiver grant (ADR 0008 section 4).
+  const owner = overprivilegedRoleCovering(rows, target);
+  if (owner !== null) {
+    return {
+      kind: "present-differs",
+      diffs: [{ field: "role", expected: EVENT_HUB_RECEIVER_ROLES.map((r) => r.roleName).join(", "), actual: owner.roleName }],
+    };
+  }
+  if (receiverRoleCovering(rows, target) !== null) return { kind: "as-expected" };
+  const prefix = `${nsPath.toLowerCase()}/eventhubs/`;
+  for (const row of rows) {
+    const props = rec(row, "properties");
+    const scope = str(props, "scope");
+    const roleId = str(props, "roleDefinitionId").toLowerCase();
+    if (scope.toLowerCase().startsWith(prefix) && EVENT_HUB_RECEIVER_ROLES.some((r) => roleId.endsWith(r.guid))) {
+      return { kind: "present-differs", diffs: [{ field: "scope", expected: target, actual: scope }] };
+    }
+  }
+  return { kind: "absent" };
+}
+
 // ---------------------------------------------------------------------------
 // The entry points
 // ---------------------------------------------------------------------------
@@ -717,12 +758,23 @@ export function classifyCheck(
     case "eh-rule-send":
       return classifyRule(read, value(values, "sendRule"), ruleCanSend, "Send or Manage");
     case "eh-rule-listen":
-      return classifyRule(read, value(values, "listenRule"), ruleCanListen, "Listen or Manage");
+      // AZR-67: the same rule the create applies (AZR-58) - Listen, never Manage.
+      return classifyRule(read, value(values, "listenRule"), ruleSafeForCriblSource, "Listen, without Manage");
     case "eh-rule-manage":
       // The rule Azure creates hubs with: Send alone is a difference, not done.
       return classifyRule(read, value(values, "sendRule"), ruleCanManage, "Manage");
     case "eh-consumer-group":
       return classifyConsumerGroup(values);
+    case "eh-role-receiver":
+      return classifyReceiverRole(values, reads.flatMap((r) => (r.state === "read" ? r.rows : [])));
+    case "eh-consumer-group-auto": {
+      // Only the listing reaches here; the per-hub group reads are the
+      // usecase's second phase. A listing that names no target is final.
+      const targets = autoHubTargets(read, expectations);
+      return targets.kind === "verdict"
+        ? targets.verdict
+        : unknown("failed", "The consumer groups on the hubs Azure created were not read.");
+    }
     case "defender-plans":
       return classifyPlans(rows);
     case "defender-provider":
@@ -834,4 +886,76 @@ export function classifyHubArrival(
     if (!listedHubs.some((name) => name.toLowerCase() === wanted)) return { kind: "no-hub" };
   }
   return classifyArrival(read, window);
+}
+
+// ---------------------------------------------------------------------------
+// AZR-54: the consumer group on each hub Azure created itself
+// ---------------------------------------------------------------------------
+
+/** At most this many hubs have their group read in one run; more is truncated. */
+export const MAX_AUTO_HUB_GROUP_READS = 20;
+
+/**
+ * Which hubs the auto-created-hub consumer-group check reads, from the hub
+ * listing: the expected hub names (or prefix) that EXIST. A refused or
+ * incomplete listing is unknown; a complete listing with none of them means
+ * Azure has not created them yet, so there is nothing to check - unknown
+ * "unmeasurable", never absent and never as expected.
+ */
+export function autoHubTargets(
+  listing: ListRead<unknown>,
+  ex: CheckExpectations,
+): { readonly kind: "targets"; readonly hubs: readonly string[] } | { readonly kind: "verdict"; readonly verdict: StepVerdict } {
+  if (listing.state === "refused") return { kind: "verdict", verdict: refusalVerdict("eh-hub", listing.refusal) };
+  const names = measuredHubNames(listing);
+  if (names === null) {
+    return { kind: "verdict", verdict: unknown("failed", "The hub list was not read in full, so which hubs Azure created is unknown.") };
+  }
+  const expected = ex.expectedHubs ?? [];
+  const hubs =
+    expected.length > 0
+      ? names.filter((n) => expected.some((e) => same(e, n)))
+      : ex.expectedHubPrefix !== undefined
+        ? names.filter((n) => n.toLowerCase().startsWith(ex.expectedHubPrefix!.toLowerCase()))
+        : [];
+  if (hubs.length === 0) {
+    return {
+      kind: "verdict",
+      verdict: unknown(
+        "unmeasurable",
+        "Azure has not created any of these hubs yet (it does when the first logs are sent), so there is no hub to give the consumer group.",
+      ),
+    };
+  }
+  if (hubs.length > MAX_AUTO_HUB_GROUP_READS) {
+    return {
+      kind: "verdict",
+      verdict: unknown("truncated", `${hubs.length} hubs match; at most ${MAX_AUTO_HUB_GROUP_READS} are checked in one run.`),
+    };
+  }
+  return { kind: "targets", hubs };
+}
+
+/**
+ * The verdict over the per-hub group reads (each a GET by name, so a 404 is
+ * that hub lacking it). Any other refusal is unknown with its reason.
+ */
+export function classifyAutoHubConsumerGroups(
+  consumerGroup: string,
+  reads: readonly (readonly [hub: string, read: ListRead<unknown>])[],
+): StepVerdict {
+  const missing: string[] = [];
+  for (const [, read] of reads) {
+    if (read.state !== "refused") continue;
+    const r = read.refusal;
+    if (r.reason === "http" && r.status === 404 && !UNREGISTERED_CODES.test(r.code)) continue;
+    return unknown(refusalReason(r), r.text);
+  }
+  for (const [hub, read] of reads) if (read.state === "refused") missing.push(hub);
+  if (missing.length === 0) return { kind: "as-expected" };
+  if (missing.length === reads.length) return { kind: "absent" };
+  return {
+    kind: "present-differs",
+    diffs: [{ field: "consumer group", expected: `${consumerGroup} on every hub Azure created`, actual: `missing on ${missing.join(", ")}` }],
+  };
 }

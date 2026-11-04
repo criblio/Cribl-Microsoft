@@ -296,3 +296,38 @@ screen and changes four things this ADR stated:
 
 Persisting the Event Hub picker's choice is still not done (AZR-24): the How-to
 plan values are persisted, but they do not seed the picker.
+
+## Addendum 2026-11-03: section 7 superseded for the subscription actions (AZR-60)
+
+Appended; nothing above is edited. Section 7 ("Permissions are shown, not yet
+measured") was written before CAP-7a measured the three Defender subscription
+actions. It now holds only for the namespace `listKeys` (CAP-7b):
+
+- **The declaration lives in core.** `domain/onboarding-sections/automation-permissions.ts`
+  holds `AUTOMATION_PERMISSIONS`, one entry per item `ITEM_AVAILABILITY` marks
+  available, with the capabilities its automation needs. A pin fails when an
+  item becomes available without one. Defender: `defender-plans.read`
+  (informational), `defender-automation.read` and `defender-automation.write`
+  (core; the write is grant-only, as in capability-mapping). listKeys stays
+  listed as not measured.
+- **The section reads the cached audit, never Azure.** `automationPermissionView`
+  maps the declaration and the `CapabilitySet` in the ports context to a
+  banner. Mount still makes the two KV loads and no Azure call (ADR 0007).
+- **Nothing disables Deploy; the audit informs, never forbids** (capabilities.ts
+  rule 3, and claude-kit `standards/cribl-app-permissions.md`, which latches a
+  control only on a refusal actually received). A measured denial of a core
+  capability is an error banner naming the action, the role and the source's
+  How-to row, plus a caution beside Deploy (also its `aria-describedby`) that
+  Azure will likely refuse it. Deploy stays clickable behind its usual
+  two-step confirm, and Azure's own answer at the write is what decides.
+  Unknown, never-checked and a grant-only miss are a soft note with Re-check
+  permissions, never worded as denied. A denied informational capability
+  only warns.
+- **The first build blocked Deploy on a measured core denial; the operator
+  withdrew that the same day** (2026-11-03) in favour of the caution above,
+  because the request was for a banner pointing at How-to, not a gate.
+- **The caution is bounded like any cached prediction.** Only a set measured
+  for the CURRENT audit key counts (a set held over from another connection
+  while a new audit runs reads as not checked), and the banner and caution say
+  how old the check is ("the permission check 3 days ago found ...") and offer
+  Re-check permissions before How-to.

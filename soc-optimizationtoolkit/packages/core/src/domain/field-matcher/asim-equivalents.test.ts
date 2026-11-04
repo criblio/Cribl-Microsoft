@@ -195,3 +195,56 @@ describe("vendor/learned mappings follow a log type onto an ASim table (DBT-252)
     expect(row?.dest).toBe("DstIpAddr");
   });
 });
+
+describe("PAN-OS TRAFFIC counters, zones and locations on ASim (DBT-253)", () => {
+  const PAN_EXTRA = [
+    "from",
+    "to",
+    "sessionid",
+    "seqno",
+    "start",
+    "packets",
+    "bytes",
+    "pkts_sent",
+    "pkts_received",
+    "srcloc",
+    "dstloc",
+    "elapsed",
+  ];
+
+  it("maps each to its ASim network-session column", () => {
+    const { dest } = match(ASIM, PAN_EXTRA);
+    expect(Object.fromEntries(dest)).toMatchObject({
+      from: "SrcZone",
+      to: "DstZone",
+      sessionid: "NetworkSessionId",
+      seqno: "EventOriginalUid",
+      start: "EventStartTime",
+      packets: "NetworkPackets",
+      bytes: "NetworkBytes",
+      pkts_sent: "SrcPackets",
+      pkts_received: "DstPackets",
+      srcloc: "SrcGeoCountry",
+      dstloc: "DstGeoCountry",
+    });
+  });
+
+  it("breaks a two-target tie by alias order: sessionid takes NetworkSessionId, seqno the uid", () => {
+    // sessionid aliases [SessionID, ExternalID]; both have ASim columns. Offer
+    // ONLY sessionid so it is free to take either - it must take the first.
+    const alone = match(ASIM, ["sessionid"]);
+    expect(alone.dest.get("sessionid")).toBe("NetworkSessionId");
+  });
+
+  it("never renames elapsed (seconds) into NetworkDuration (milliseconds)", () => {
+    const { dest } = match(ASIM, ["elapsed"]);
+    expect(dest.get("elapsed")).not.toBe("NetworkDuration");
+  });
+
+  it("leaves CommonSecurityLog as it was: these still overflow there", () => {
+    // `bytes` is left out: alone it already fuzzy-matched ReceivedBytes before
+    // DBT-253 (substring rung), and this change does not touch that.
+    const { result } = match(CSL, ["from", "to", "packets", "pkts_sent", "srcloc"]);
+    expect(result.matched).toHaveLength(0);
+  });
+});

@@ -16,6 +16,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CREDENTIAL_OWNER_KEY, FakeKvDocumentStore, encodeCredentialOwner } from "@soc/core";
 
 /**
  * fetchWithTimeout is mocked rather than the global fetch, because the value
@@ -38,8 +39,10 @@ const {
   KvContentCache,
   PlatformGithubPat,
   PlatformGraphDirectory,
+  makeAzureCredentialSlot,
 } =
   await import("./adapters");
+const { SharedCredentialRefusal } = await import("./credential-slot");
 
 afterEach(() => {
   fetchWithTimeout.mockReset();
@@ -261,19 +264,26 @@ describe("PlatformGraphDirectory.readSubscribedSkus (MIG-14)", () => {
       };
     });
   }
+  /**
+   * The directory over a slot whose owner record lives in memory (AZR-92), so
+   * the owner reads never reach the scripted transport. Seeded with no record:
+   * a pre-AZR-92 install, which the slot admits.
+   */
+  const directory = (docs = new FakeKvDocumentStore()) =>
+    new PlatformGraphDirectory("tenant", makeAzureCredentialSlot(docs), "shared", "client");
   const skuGets = () =>
     fetchWithTimeout.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "GET");
 
   it("reads the SKU list with the select the spec names", async () => {
     scriptSkus(200);
-    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    const result = await directory().readSubscribedSkus();
     expect(result).toEqual({ kind: "read", body: { value: [{ skuId: "x" }] } });
     expect(skuGets()).toHaveLength(1);
   });
 
   it("re-acquires the token once on a 403, then returns denied naming LicenseAssignment.Read.All", async () => {
     scriptSkus(403, 403);
-    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    const result = await directory().readSubscribedSkus();
     expect(skuGets()).toHaveLength(2);
     expect(result).toMatchObject({ kind: "denied", status: 403 });
     expect((result as { detail: string }).detail).toMatch(/LicenseAssignment\.Read\.All/);
@@ -281,7 +291,16 @@ describe("PlatformGraphDirectory.readSubscribedSkus (MIG-14)", () => {
 
   it("a 403 that a fresh token clears reads the list", async () => {
     scriptSkus(403, 200);
-    const result = await new PlatformGraphDirectory("tenant").readSubscribedSkus();
+    const result = await directory().readSubscribedSkus();
     expect(result.kind).toBe("read");
+  });
+
+  it("refuses (rejects, nothing sent) while another tenant owns the shared slot - never that tenant's licences as this one's", async () => {
+    scriptSkus(200);
+    const docs = new FakeKvDocumentStore({
+      [CREDENTIAL_OWNER_KEY]: encodeCredentialOwner({ profileId: "px", tenantId: "other", clientId: "cx" }, "w-1"),
+    });
+    await expect(directory(docs).readSubscribedSkus()).rejects.toBeInstanceOf(SharedCredentialRefusal);
+    expect(skuGets()).toHaveLength(0);
   });
 });

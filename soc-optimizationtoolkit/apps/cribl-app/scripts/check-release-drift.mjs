@@ -8,7 +8,9 @@
 // instead - so this is it. A hand-maintained version claim decays exactly as
 // fast as the automated one it warns about, and nothing tells anyone.
 //
-// FIVE ERRORS and ONE WARNING, and the split is deliberate. The errors are all
+// FIVE ERRORS and TWO WARNINGS, and the split is deliberate. (Until DBT-299 the
+// manifest running ahead of the tarball was an error; since every PR to main now
+// bumps the version and packaging is batched, it is the second warning.) The errors are all
 // facts that are free to keep true at packaging time and that read as confident
 // answers when they are wrong - a doc naming the wrong version is worse than a
 // doc naming none. The warning is the one thing that CANNOT be an error: the app
@@ -49,6 +51,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockWorkspaceKey } from './lock-version.mjs';
+import { compareVersions, shippedPathspecs } from './shipped-paths.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, '..');
@@ -72,16 +75,10 @@ const TGZ_VERSION = /^soc-optimizationtoolkit-(\d+\.\d+\.\d+)\.tgz$/;
 // test, keeps the guard and the check on one definition.
 export const BACKLOG_CURRENT = /\*\*(\d+\.\d+\.\d+) IS CURRENT/;
 
-// Source that changes what the packaged app DOES. Docs are excluded: a doc-only
-// commit landing after a release is not a stale release, and warning about it
-// would train people to ignore the warning.
-const SOURCE_PATHS = [
-  'soc-optimizationtoolkit/packages',
-  'soc-optimizationtoolkit/apps/cribl-app/src',
-  'soc-optimizationtoolkit/apps/cribl-app/default',
-  'soc-optimizationtoolkit/apps/cribl-app/index.html',
-  'soc-optimizationtoolkit/scripts',
-];
+// Source that changes what the packaged app DOES: shipped-paths.mjs, the same
+// definition the version-bump gate reads (architecture audit 2026-11-04). Docs
+// are excluded there: a doc-only commit landing after a release is not a stale
+// release, and warning about it would train people to ignore the warning.
 
 /**
  * @param {{
@@ -129,13 +126,21 @@ export function evaluateReleaseDrift(facts) {
   // for the same reason; it cannot be imported here because it packages on load.
   const packagedVersion = versions.slice().sort(compareVersions).at(-1) ?? versions[0];
 
-  // A manifest ahead of the tarball is the double-bump this repo has already hit:
-  // editing package.json and THEN packaging bumps twice, and the tgz name is the
-  // only place the doubled number shows. A manifest behind it should be
-  // impossible, since package.mjs writes both.
-  if (facts.manifestVersion !== packagedVersion) {
+  // A manifest AHEAD of the tarball is the normal state between releases since
+  // DBT-299 (2026-11-04): every PR to main runs "npm run bump", version only,
+  // and packaging stays batched. It warns, and names the command that packages
+  // THIS version - a bare "npm run package" would bump a second time, which is
+  // the double-bump this rule used to guard as an error. A manifest BEHIND the
+  // tarball is still an error: no bump and no package produces it.
+  const order = compareVersions(facts.manifestVersion, packagedVersion);
+  if (order > 0) {
+    warnings.push(
+      `package.json is at ${facts.manifestVersion}, ahead of the packaged tarball ${packagedVersion} (bumped per PR, DBT-299). ` +
+        `To release it, run "npm run package -- --version ${facts.manifestVersion}" and add its release-notes section and backlog line.`,
+    );
+  } else if (order < 0) {
     errors.push(
-      `package.json says ${facts.manifestVersion} but the packaged tarball is ${packagedVersion}. Do not hand-bump: scripts/package.mjs IS the bump.`,
+      `package.json says ${facts.manifestVersion} but the packaged tarball is ${packagedVersion}, which is newer. No bump or package produces that; restore package.json from the release commit.`,
     );
   }
 
@@ -205,12 +210,6 @@ export function evaluateReleaseDrift(facts) {
   return { errors, warnings, notes, packagedVersion };
 }
 
-/** Compares X.Y.Z by component, so 1.12.0 sorts above 1.9.0. */
-function compareVersions(a, b) {
-  const left = a.split('.').map(Number);
-  const right = b.split('.').map(Number);
-  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
-}
 
 /**
  * Matches the heading for one version and not the versions it prefixes: "## 1.1.2"
@@ -271,7 +270,7 @@ export function readLockVersion(lockJson) {
  */
 function countSourceCommitsSinceRelease() {
   try {
-    // Pathspecs resolve against the CWD, and SOURCE_PATHS are written from the
+    // Pathspecs resolve against the CWD, and shippedPathspecs() are written from the
     // REPO root - the toolkit is one directory down. Running git here rather
     // than in the toolkit is what makes them match anything at all: with the
     // wrong cwd every path matches nothing, the count is zero, and the check
@@ -288,7 +287,7 @@ function countSourceCommitsSinceRelease() {
     if (!releaseCommit) return null;
 
     const count = git(repoRoot, [
-      'rev-list', '--count', `${releaseCommit}..HEAD`, '--', ...SOURCE_PATHS,
+      'rev-list', '--count', `${releaseCommit}..HEAD`, '--', ...shippedPathspecs(),
     ]);
     return count === '' ? null : Number(count);
   } catch {
@@ -328,8 +327,14 @@ async function main() {
       ? 'unreleased source not measured'
       : `${facts.sourceCommitsSinceRelease} source commit(s) since it was packaged`;
 
+  // Since DBT-299 package.json may be ahead of the package; then it is NOT one
+  // of the files that agree, and the line must not say it is.
+  const agreeing =
+    facts.manifestVersion === packagedVersion
+      ? 'package.json, package-lock.json, release/, release-notes.md and backlog.md'
+      : `release/, release-notes.md and backlog.md (package.json and package-lock.json are at ${facts.manifestVersion}, not yet packaged)`;
   console.log(
-    `Release ${packagedVersion} is consistent across package.json, package-lock.json, release/, release-notes.md and backlog.md (${unreleased}).`,
+    `Release ${packagedVersion} is consistent across ${agreeing} (${unreleased}).`,
   );
 }
 

@@ -322,6 +322,7 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
               // MIG-7: the shown inventory stays; staleNote says it is not this one.
               onChange={setSelectedId}
               placeholder="Select a workspace..."
+              label="Workspace"
               ariaLabel="Filter workspaces"
             />
           </div>

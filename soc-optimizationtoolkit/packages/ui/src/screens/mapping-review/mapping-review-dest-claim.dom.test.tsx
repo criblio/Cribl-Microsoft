@@ -31,7 +31,6 @@ import type {
 } from "@soc/core";
 import type { RequirementsForAssessment } from "./mapping-review-state";
 import { MappingReviewSection } from "./mapping-review-section";
-import { chooseDestField, destFieldControl, destFieldValue } from "./dest-field-test-driver";
 
 afterEach(cleanup);
 
@@ -107,12 +106,29 @@ function rowFor(container: HTMLElement, source: string): HTMLTableRowElement {
   return row;
 }
 
-// DBT-251: Dest Field is a SearchableSelect; the "select" is its control button.
+/** The row's Dest Field and Action comboboxes, in that order. */
+const rowControls = (row: HTMLElement): HTMLButtonElement[] => [
+  ...row.querySelectorAll<HTMLButtonElement>(".mapping-select .searchable-select-control"),
+];
+
+/** Open a combobox and click the option whose text is exactly `text`. */
+function chooseOption(control: HTMLElement, text: string): void {
+  fireEvent.click(control);
+  const option = [
+    ...(control.closest(".searchable-select")?.querySelectorAll(".searchable-select-option") ??
+      []),
+  ]// The option label, not its text: Dest Field options carry the column type
+    // as a hint (DBT-251), so the row text is "Name" + "type".
+    .find((o) => (o.querySelector(".searchable-select-option-label")?.textContent ?? o.textContent) === text);
+  if (option === undefined) throw new Error(`no option "${text}"`);
+  fireEvent.click(option);
+}
+
 const destSelect = (container: HTMLElement, source: string) =>
-  destFieldControl(rowFor(container, source));
+  rowControls(rowFor(container, source))[0]!;
 
 const pointAt = (container: HTMLElement, source: string, column: string) =>
-  chooseDestField(rowFor(container, source), column);
+  chooseOption(destSelect(container, source), column);
 
 const summary = (container: HTMLElement): string =>
   container.querySelector(".mapping-review-fields-summary")?.textContent ?? "";
@@ -207,7 +223,7 @@ describe("Dest Field re-point onto a column another row fills (DBT-208)", () => 
     // Nothing applied yet: both rows are as the analysis left them.
     expect(rowOf(effective, "qqzz")?.action).toBe("overflow");
     expect(rowOf(effective, "in")?.dest).toBe("ReceivedBytes");
-    expect(destFieldValue(rowFor(container, "qqzz"))).toBe("AdditionalExtensions");
+    expect(destSelect(container, "qqzz").textContent).toBe("AdditionalExtensions");
 
     // Keep: nothing changes, and focus returns to the select.
     fireEvent.click(button(container, "Keep in")!);
@@ -273,10 +289,7 @@ describe("Dest Field re-point onto a column another row fills (DBT-208)", () => 
 
     // `in` leaves ReceivedBytes by its OWN Action select while the question
     // is open: "already filled by in" is no longer true.
-    fireEvent.change(
-      rowFor(container, "in").querySelectorAll<HTMLSelectElement>("select.mapping-select")[0]!,
-      { target: { value: "drop" } },
-    );
+    chooseOption(rowControls(rowFor(container, "in"))[1]!, "drop");
     await waitFor(() => {
       expect(rowOf(effective, "in")?.action).toBe("drop");
     });

@@ -81,7 +81,7 @@ const TWO: readonly OnboardingSourceId[] = ["entraId", "activityLog"];
 
 function props(over: Partial<OnboardingDataflowProps> = {}, ids: readonly OnboardingSourceId[] = TWO): OnboardingDataflowProps {
   return {
-    laneInput: { selection: SELECTION, progress: progressFor(ids), stepsFor, verdicts: null, arrival: null, criblSide: null },
+    laneInput: { selection: SELECTION, progress: progressFor(ids), stepsFor, verdicts: null, arrival: null, criblSide: null, tenantId: "tenant" },
     live: liveWith(null),
     watching: false,
     onWatchingChange: () => undefined,
@@ -166,7 +166,7 @@ describe("OnboardingDataflow - measured-hop labels (AZR-45)", () => {
     const { container, getByRole } = render(
       <OnboardingDataflow
         {...props({
-          laneInput: { selection: SELECTION, progress: progressFor(["defenderExport"], false), stepsFor, verdicts: null, arrival: null, criblSide: null },
+          laneInput: { selection: SELECTION, progress: progressFor(["defenderExport"], false), stepsFor, verdicts: null, arrival: null, criblSide: null, tenantId: "tenant" },
         })}
       />,
     );
@@ -267,7 +267,7 @@ describe("OnboardingDataflow - info affordances", () => {
     const { container } = render(
       <OnboardingDataflow
         {...props({
-          laneInput: { selection: SELECTION, progress: emptyProgress(), stepsFor, verdicts: null, arrival: null, criblSide: null },
+          laneInput: { selection: SELECTION, progress: emptyProgress(), stepsFor, verdicts: null, arrival: null, criblSide: null, tenantId: "tenant" },
         })}
       />,
     );

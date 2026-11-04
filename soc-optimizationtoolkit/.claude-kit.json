@@ -80,6 +80,31 @@
         "skills/cribl-metrics/reference/seriesEstimate.ts": "not used by this app",
         "skills/cribl-metrics/reference/metricName.ts": "not used by this app"
       }
+    },
+    {
+      "skill": "ui-testing",
+      "from": "skills/ui-testing/reference",
+      "to": "apps/cribl-app/src/platform/ui-testing",
+      "skipped": [
+        "skills/ui-testing/reference/assetBudget.test.ts",
+        "skills/ui-testing/reference/assetBudget.ts",
+        "skills/ui-testing/reference/capraTreeShake.test.ts",
+        "skills/ui-testing/reference/capraTreeShake.ts",
+        "skills/ui-testing/reference/checkBudget.test.ts",
+        "skills/ui-testing/reference/checkBudget.ts",
+        "skills/ui-testing/reference/contrast.test.ts",
+        "skills/ui-testing/reference/contrast.ts",
+        "skills/ui-testing/reference/freeze.test.ts",
+        "skills/ui-testing/reference/freeze.ts",
+        "skills/ui-testing/reference/harness.test.ts",
+        "skills/ui-testing/reference/harness.ts",
+        "skills/ui-testing/reference/nativeSelects.test.template.ts",
+        "skills/ui-testing/reference/nativeSelects.test.ts",
+        "skills/ui-testing/reference/retiredClasses.test.template.ts",
+        "skills/ui-testing/reference/retiredClasses.test.ts",
+        "skills/ui-testing/reference/retiredClasses.ts",
+        "skills/ui-testing/reference/vitest.setup.ts"
+      ]
     }
   ],
   "files": [
@@ -96,6 +121,13 @@
       "to": "apps/cribl-app/src/platform/policies/policyCoverage.ts",
       "base": "e399e95d6d898501f9dc688d8cc61a5dab62b6a00721040acea3dc2726058ee9",
       "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+    },
+    {
+      "skill": "ui-testing",
+      "from": "skills/ui-testing/reference/nativeSelects.ts",
+      "to": "apps/cribl-app/src/platform/ui-testing/nativeSelects.ts",
+      "base": "69ad2e49dc3be74af464bd6b461da7b6e508eb7493ef643b018173fa75b0a762",
+      "kitCommit": "90deb9c69e17c4db84144f5e5961de5562366134"
     },
     {
       "skill": "cribl-config-writes",

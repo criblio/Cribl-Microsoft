@@ -1,7 +1,7 @@
 {
   "name": "soc-optimizationtoolkit",
   "private": true,
-  "version": "1.13.0",
+  "version": "1.13.2",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "check-release": "node scripts/check-release-drift.mjs",
+    "bump": "node scripts/bump-version.mjs",
+    "check-version-bump": "node scripts/check-version-bump.mjs",
     "check-docs": "node scripts/check-docs-drift.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "board": "node scripts/board.mjs",

@@ -28,6 +28,22 @@ import type {
 } from "@soc/core";
 import { deriveLeaderBaseUrl } from "./setup-wizard-state";
 import type { LeaderConnectFormInput } from "./setup-wizard-state";
+import { SearchableSelect } from "../../components/searchable-select";
+
+/** The deployment-type choices, in display order. */
+const DEPLOYMENT_TYPE_OPTIONS: readonly {
+  value: LeaderDeploymentType;
+  label: string;
+}[] = [
+  { value: "cloud", label: "Cribl.Cloud workspace" },
+  { value: "self-managed", label: "On-prem / self-managed" },
+];
+
+/** The self-managed leader protocol choices, in display order. */
+const PROTOCOL_OPTIONS: readonly { value: "https" | "http"; label: string }[] = [
+  { value: "https", label: "https" },
+  { value: "http", label: "http" },
+];
 
 /** A resolved reconnect the shell applies wholesale (the ok branch of ReconnectPlan). */
 export interface AppliedReconnect {
@@ -126,15 +142,15 @@ export function LeaderConnectStep({
       <div className="form-grid">
         <label className="field">
           <span className="field-label">Deployment type</span>
-          <select
+          <SearchableSelect
+            label="Deployment type"
+            options={DEPLOYMENT_TYPE_OPTIONS}
             value={form.deploymentType}
-            onChange={(e) =>
-              patch({ deploymentType: e.target.value as LeaderDeploymentType })
-            }
-          >
-            <option value="cloud">Cribl.Cloud workspace</option>
-            <option value="self-managed">On-prem / self-managed</option>
-          </select>
+            onChange={(v) => {
+              const opt = DEPLOYMENT_TYPE_OPTIONS.find((o) => o.value === v);
+              if (opt !== undefined) patch({ deploymentType: opt.value });
+            }}
+          />
         </label>
 
         {form.deploymentType === "cloud" ? (
@@ -155,15 +171,15 @@ export function LeaderConnectStep({
           <>
             <label className="field">
               <span className="field-label">Protocol</span>
-              <select
+              <SearchableSelect
+                label="Protocol"
+                options={PROTOCOL_OPTIONS}
                 value={form.protocol}
-                onChange={(e) =>
-                  patch({ protocol: e.target.value as "https" | "http" })
-                }
-              >
-                <option value="https">https</option>
-                <option value="http">http</option>
-              </select>
+                onChange={(v) => {
+                  const opt = PROTOCOL_OPTIONS.find((o) => o.value === v);
+                  if (opt !== undefined) patch({ protocol: opt.value });
+                }}
+              />
             </label>
             <label className="field">
               <span className="field-label">Leader address (IP or FQDN)</span>

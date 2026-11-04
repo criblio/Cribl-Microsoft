@@ -39,6 +39,7 @@ function useCombo(options: readonly SelectOption[]) {
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const filtered = useMemo(() => filterOptions(options, query), [options, query]);
 
@@ -46,6 +47,16 @@ function useCombo(options: readonly SelectOption[]) {
     setOpen(false);
     setQuery("");
   }, []);
+
+  /**
+   * Close and hand keyboard focus back to the trigger (DBT-249): the filter
+   * input that held focus unmounts, and without this focus falls to <body>.
+   * An outside click closes WITHOUT this - the user put focus elsewhere.
+   */
+  const closeToTrigger = useCallback(() => {
+    close();
+    triggerRef.current?.focus();
+  }, [close]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +67,7 @@ function useCombo(options: readonly SelectOption[]) {
       }
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") closeToTrigger();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -64,7 +75,7 @@ function useCombo(options: readonly SelectOption[]) {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, close]);
+  }, [open, close, closeToTrigger]);
 
   useEffect(() => {
     setHighlight((h) => clampHighlight(h, filtered.length));
@@ -80,7 +91,9 @@ function useCombo(options: readonly SelectOption[]) {
     filtered,
     rootRef,
     inputRef,
+    triggerRef,
     close,
+    closeToTrigger,
   };
 }
 
@@ -151,6 +164,15 @@ export interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * The control's accessible name, on the trigger button (DBT-249). The label
+   * decoy absorbs a wrapping <label>, so without this the trigger is an
+   * unnamed button. The filter input is named "Filter <label>" unless
+   * ariaLabel says otherwise.
+   */
+  label: string;
+  /** A hover hint on the trigger, e.g. why the control is disabled. */
+  title?: string;
   className?: string;
   /**
    * What the popover says when there are NO options at all (DBT-134). Kept
@@ -159,6 +181,18 @@ export interface SearchableSelectProps {
    * as the operator's typo.
    */
   emptyText?: string;
+  /**
+   * When set, and a value is chosen, the list starts with this choice (e.g.
+   * "None") and picking it sends "" - the clear a native <select>'s empty
+   * option gave (DBT-249). Omit it where an empty value means nothing.
+   */
+  clearLabel?: string;
+  /**
+   * Whether something is chosen, for clearLabel, when the chosen thing need
+   * not be one of the options (a namespace set from a pasted resource id).
+   * Defaults to value !== "".
+   */
+  hasValue?: boolean;
 }
 
 /** Single-select combobox: pick one option; the popover closes on selection. */
@@ -169,11 +203,19 @@ export function SearchableSelect({
   placeholder = "Select...",
   disabled = false,
   ariaLabel,
+  label,
+  title,
   className,
   emptyText = NO_OPTIONS_TEXT,
+  clearLabel,
+  hasValue,
 }: SearchableSelectProps) {
-  const c = useCombo(options);
-  const controlRef = useRef<HTMLButtonElement>(null);
+  const chosen = hasValue ?? value !== "";
+  const listed = useMemo(
+    () => (clearLabel !== undefined && chosen ? [{ value: "", label: clearLabel }, ...options] : options),
+    [clearLabel, chosen, options],
+  );
+  const c = useCombo(listed);
 
   // Focus goes BACK TO THE CONTROL before onChange runs (DBT-251). The filter
   // box that held focus unmounts on close, which would drop focus to <body>;
@@ -182,11 +224,14 @@ export function SearchableSelect({
   // to, so it must be the control by then.
   const pick = useCallback(
     (v: string) => {
-      controlRef.current?.focus();
+      if (options.find((o) => o.value === v)?.disabled === true) return;
+      // Focus the trigger BEFORE onChange (DBT-251): a host that opens a panel
+      // on change records document.activeElement as the control to return to.
+      c.triggerRef.current?.focus();
       onChange(v);
-      c.close();
+      c.closeToTrigger();
     },
-    [onChange, c],
+    [onChange, c, options],
   );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -200,8 +245,6 @@ export function SearchableSelect({
       e.preventDefault();
       const o = c.filtered[c.highlight];
       if (o !== undefined) pick(o.value);
-    } else if (e.key === "Escape") {
-      controlRef.current?.focus();
     }
   };
 
@@ -212,10 +255,12 @@ export function SearchableSelect({
     >
       <LabelDecoy />
       <button
-        ref={controlRef}
         type="button"
+        ref={c.triggerRef}
         className="searchable-select-control"
         disabled={disabled}
+        aria-label={label}
+        title={title}
         aria-haspopup="listbox"
         aria-expanded={c.open}
         onClick={() => c.setOpen((o) => !o)}
@@ -233,7 +278,7 @@ export function SearchableSelect({
           }}
           onKeyDown={onKeyDown}
           inputRef={c.inputRef}
-          ariaLabel={ariaLabel ?? "Filter options"}
+          ariaLabel={ariaLabel ?? (label !== undefined ? `Filter ${label}` : "Filter options")}
         >
           {c.filtered.length === 0 ? (
             <li className="searchable-select-empty">
@@ -245,7 +290,8 @@ export function SearchableSelect({
                 key={o.value}
                 role="option"
                 aria-selected={o.value === value}
-                className={`searchable-select-option${i === c.highlight ? " is-highlighted" : ""}${o.value === value ? " is-selected" : ""}`}
+                aria-disabled={o.disabled === true ? true : undefined}
+                className={`searchable-select-option${i === c.highlight ? " is-highlighted" : ""}${o.value === value ? " is-selected" : ""}${o.disabled === true ? " is-disabled" : ""}`}
                 onMouseEnter={() => c.setHighlight(i)}
                 onClick={() => pick(o.value)}
               >
@@ -269,6 +315,15 @@ export interface SearchableMultiSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * The control's accessible name, on the trigger button (DBT-249). The label
+   * decoy absorbs a wrapping <label>, so without this the trigger is an
+   * unnamed button. The filter input is named "Filter <label>" unless
+   * ariaLabel says otherwise.
+   */
+  label: string;
+  /** A hover hint on the trigger, e.g. why the control is disabled. */
+  title?: string;
   className?: string;
   /**
    * What the popover says when there are NO options at all (DBT-134). Kept
@@ -287,6 +342,8 @@ export function SearchableMultiSelect({
   placeholder = "Select...",
   disabled = false,
   ariaLabel,
+  label,
+  title,
   className,
   emptyText = NO_OPTIONS_TEXT,
 }: SearchableMultiSelectProps) {
@@ -295,11 +352,12 @@ export function SearchableMultiSelect({
 
   const toggle = useCallback(
     (v: string) => {
+      if (options.find((o) => o.value === v)?.disabled === true) return;
       onChange(
         selected.has(v) ? values.filter((x) => x !== v) : [...values, v],
       );
     },
-    [onChange, selected, values],
+    [onChange, selected, values, options],
   );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -324,8 +382,11 @@ export function SearchableMultiSelect({
       <LabelDecoy />
       <button
         type="button"
+        ref={c.triggerRef}
         className="searchable-select-control"
         disabled={disabled}
+        aria-label={label}
+        title={title}
         aria-haspopup="listbox"
         aria-expanded={c.open}
         onClick={() => c.setOpen((o) => !o)}
@@ -343,7 +404,7 @@ export function SearchableMultiSelect({
           }}
           onKeyDown={onKeyDown}
           inputRef={c.inputRef}
-          ariaLabel={ariaLabel ?? "Filter options"}
+          ariaLabel={ariaLabel ?? (label !== undefined ? `Filter ${label}` : "Filter options")}
         >
           {c.filtered.length === 0 ? (
             <li className="searchable-select-empty">
@@ -355,7 +416,8 @@ export function SearchableMultiSelect({
                 key={o.value}
                 role="option"
                 aria-selected={selected.has(o.value)}
-                className={`searchable-select-option searchable-select-option-multi${i === c.highlight ? " is-highlighted" : ""}${selected.has(o.value) ? " is-selected" : ""}`}
+                aria-disabled={o.disabled === true ? true : undefined}
+                className={`searchable-select-option searchable-select-option-multi${i === c.highlight ? " is-highlighted" : ""}${selected.has(o.value) ? " is-selected" : ""}${o.disabled === true ? " is-disabled" : ""}`}
                 onMouseEnter={() => c.setHighlight(i)}
                 onClick={() => toggle(o.value)}
               >

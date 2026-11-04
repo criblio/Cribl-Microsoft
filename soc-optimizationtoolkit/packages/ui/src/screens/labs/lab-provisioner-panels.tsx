@@ -14,10 +14,10 @@ import {
   type JobStep,
   type LabPlan,
   type LabResourceGroupMode,
-  type LabType,
   type ProvisionLabResult,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { SearchableSelect } from "../../components/searchable-select";
 import { sleep } from "../../polling/sleep";
 import {
   canDeployFoundation,
@@ -196,16 +196,15 @@ export function LabProvisionerPanels({
         </p>
         <label className="field">
           <span className="field-label">Profile</span>
-          <select
+          <SearchableSelect
+            label="Profile"
+            options={LAB_PROFILES.map((p) => ({ value: p.id, label: p.label }))}
             value={form.labType}
-            onChange={(e) => set("labType", e.target.value as LabType)}
-          >
-            {LAB_PROFILES.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => {
+              const picked = LAB_PROFILES.find((p) => p.id === v);
+              if (picked !== undefined) set("labType", picked.id);
+            }}
+          />
           {profile !== undefined && (
             <span className="field-hint">{profile.description}</span>
           )}

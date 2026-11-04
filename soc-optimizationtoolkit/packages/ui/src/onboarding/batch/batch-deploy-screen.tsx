@@ -149,16 +149,19 @@ function OverrideField({
   return (
     <label className="field">
       <span className="field-label">{label}</span>
-      <select
+      <SearchableSelect
+        label={label}
+        options={[
+          {
+            value: "default",
+            label: `Use saved option (${persisted ? "on" : "off"})`,
+          },
+          { value: "on", label: "On for this run" },
+          { value: "off", label: "Off for this run" },
+        ]}
         value={value}
-        onChange={(e) => onChange(e.target.value as BatchRunOverride)}
-      >
-        <option value="default">
-          Use saved option ({persisted ? "on" : "off"})
-        </option>
-        <option value="on">On for this run</option>
-        <option value="off">Off for this run</option>
-      </select>
+        onChange={(v) => onChange(v as BatchRunOverride)}
+      />
       <span className="field-hint">{hint}</span>
     </label>
   );
@@ -468,17 +471,16 @@ export function BatchDeployScreen({
         </label>
         <label className="field">
           <span className="field-label">Add a bundled vendor schema table</span>
-          <select
+          <SearchableSelect
+            label="Add a bundled vendor schema table"
+            options={availableVendors.map((entry) => ({
+              value: entry.id,
+              label: `${entry.label} (${entry.table})`,
+            }))}
             value={vendorPick}
-            onChange={(e) => setVendorPick(e.target.value)}
-          >
-            <option value="">Select a vendor schema...</option>
-            {availableVendors.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.label} ({entry.table})
-              </option>
-            ))}
-          </select>
+            onChange={setVendorPick}
+            placeholder="Select a vendor schema..."
+          />
           <button
             className="run-button"
             disabled={vendorPick === ""}
@@ -584,9 +586,13 @@ export function BatchDeployScreen({
             // are never hidden): the force is a mode fact, not a choice.
             <label className="field">
               <span className="field-label">Template only (this run)</span>
-              <select value="on" disabled>
-                <option value="on">Forced on for this run</option>
-              </select>
+              <SearchableSelect
+                label="Template only (this run)"
+                options={[{ value: "on", label: "Forced on for this run" }]}
+                value="on"
+                onChange={() => {}}
+                disabled
+              />
               <span className="field-hint">{FORCED_TEMPLATE_ONLY_NOTICE}</span>
             </label>
           ) : (
@@ -612,9 +618,14 @@ export function BatchDeployScreen({
           <span className="field-label">Cribl worker group</span>
           {forcedTemplateOnly ? (
             <>
-              <select disabled value="">
-                <option value="">Not needed - template-only run</option>
-              </select>
+              <SearchableSelect
+                label="Cribl worker group"
+                options={[]}
+                value=""
+                onChange={() => {}}
+                placeholder="Not needed - template-only run"
+                disabled
+              />
               <span className="field-hint">
                 This mode has no live Cribl connection, so there is no leader
                 to list worker groups from and the run creates no
@@ -633,6 +644,7 @@ export function BatchDeployScreen({
                   value={groupId}
                   onChange={setGroupId}
                   placeholder="Select a worker group..."
+                  label="Cribl worker group"
                   ariaLabel="Filter worker groups"
                 />
               )}

@@ -262,6 +262,23 @@ export function ruleCanManage(rights: readonly string[]): boolean {
 }
 
 /**
+ * True when a rule's key may be handed to a Cribl Event Hub SOURCE (AZR-58):
+ * it can Listen and it can NOT Manage. A Manage key stored as a Cribl secret
+ * is control of the whole namespace - reconfigure, delete, mint keys - for
+ * anyone who can read secrets in the worker group, where the source only ever
+ * needs to read. Listen-and-Send is allowed. Reasoning: backlog.md 6h-i.
+ */
+export function ruleSafeForCriblSource(rights: readonly string[]): boolean {
+  return ruleCanListen(rights) && !ruleCanManage(rights);
+}
+
+/**
+ * The name Azure gives the Manage rule it creates on every namespace. Used to
+ * refuse a pasted key by NAME when the rules themselves could not be read.
+ */
+export const ROOT_MANAGE_RULE_NAME = "RootManageSharedAccessKey";
+
+/**
  * Whether a namespace of this SKU speaks the Kafka protocol Cribl's Event Hub
  * source reads with. Basic does not; Standard and Premium do (and Dedicated,
  * which is Premium-class). `null` when the SKU is empty or not one of those:
@@ -354,4 +371,90 @@ export function parseEventHubResourceId(
     },
     hubName: segments[9],
   };
+}
+
+/**
+ * The built-in role that qualifies a Cribl principal to READ a hub through
+ * Entra ID (AZR-59, ADR 0008). Keyed by role definition GUID, which is what a
+ * role assignment carries. Verified on Microsoft Learn
+ * (built-in-roles/analytics) 2026-11-03: Data Receiver grants the Event Hubs
+ * receive data action and nothing else of note.
+ */
+export const EVENT_HUB_RECEIVER_ROLES: readonly { readonly guid: string; readonly roleName: string }[] = [
+  { guid: "a638d3c7-ab3a-418d-83e6-5f17a39d4fde", roleName: "Azure Event Hubs Data Receiver" },
+];
+
+/**
+ * Roles that can receive but are REFUSED for a Cribl principal. Data Owner
+ * carries Microsoft.EventHub/* in actions and dataActions, which includes
+ * control-plane listKeys on every authorization rule: a principal holding it
+ * can read RootManageSharedAccessKey, so its secret in a Cribl secret is the
+ * Manage-key exposure AZR-58 closed, reopened (ADR 0008 section 4).
+ */
+export const EVENT_HUB_OVERPRIVILEGED_ROLES: readonly { readonly guid: string; readonly roleName: string }[] = [
+  { guid: "f526a384-b230-433a-b45c-95f59c4a2dec", roleName: "Azure Event Hubs Data Owner" },
+];
+
+function normScope(scope: string): string {
+  const s = scope.trim().toLowerCase().replace(/\/+$/, "");
+  return s === "" ? "/" : s;
+}
+
+/**
+ * Whether an assignment at `scope` applies to `target`: the same scope, an
+ * ARM ancestor of it (at a path-segment boundary, so `.../eventhubs/h10` never
+ * covers `.../eventhubs/h1`), the root, or a management group. A management
+ * group is not a string prefix of a subscription path, but an assignedTo()
+ * read at `target` only returns management-group grants that apply above it.
+ */
+function scopeCovers(scope: string, target: string): boolean {
+  const s = normScope(scope);
+  const t = normScope(target);
+  if (s === "/" || s === t) return true;
+  if (s.startsWith("/providers/microsoft.management/managementgroups/")) return true;
+  return t.startsWith(`${s}/`);
+}
+
+function roleCovering(
+  rows: readonly unknown[],
+  targetScope: string,
+  roles: readonly { readonly guid: string; readonly roleName: string }[],
+): { readonly roleName: string; readonly scope: string } | null {
+  for (const row of rows) {
+    if (typeof row !== "object" || row === null) continue;
+    const props = (row as { properties?: unknown }).properties;
+    if (typeof props !== "object" || props === null) continue;
+    const roleId = (props as { roleDefinitionId?: unknown }).roleDefinitionId;
+    const scope = (props as { scope?: unknown }).scope;
+    if (typeof roleId !== "string" || typeof scope !== "string") continue;
+    const role = roles.find((r) => roleId.toLowerCase().endsWith(r.guid));
+    if (role !== undefined && scopeCovers(scope, targetScope)) return { roleName: role.roleName, scope };
+  }
+  return null;
+}
+
+/**
+ * The first role assignment in `rows` (a roleAssignments listing) that holds
+ * Data Receiver at, or above, `targetScope`; null when none does. Data Owner
+ * never counts (overprivilegedRoleCovering). A grant on a DIFFERENT hub, or
+ * below the target, never counts. Rows that are not role assignments are
+ * skipped. Pure: the caller decides what a refused or incomplete read means
+ * (unknown, never absent).
+ */
+export function receiverRoleCovering(
+  rows: readonly unknown[],
+  targetScope: string,
+): { readonly roleName: string; readonly scope: string } | null {
+  return roleCovering(rows, targetScope, EVENT_HUB_RECEIVER_ROLES);
+}
+
+/**
+ * The first assignment in `rows` of a role that can receive but is refused for
+ * a Cribl principal (Data Owner) at, or above, `targetScope`; null when none.
+ */
+export function overprivilegedRoleCovering(
+  rows: readonly unknown[],
+  targetScope: string,
+): { readonly roleName: string; readonly scope: string } | null {
+  return roleCovering(rows, targetScope, EVENT_HUB_OVERPRIVILEGED_ROLES);
 }

@@ -234,3 +234,28 @@ describe("checkExpectationsFor", () => {
     for (const s of ONBOARDING_SOURCES) expect(typeof checkExpectationsFor(s.id, FULL)).toBe("object");
   });
 });
+
+// AZR-59, ADR 0008 section 4.
+describe("requestsFor: eh-role-receiver", () => {
+  it("needs the namespace and the Cribl principal's object id", () => {
+    expect(CHECK_REQUIRED_VALUES["eh-role-receiver"]).toEqual([
+      "subscriptionId",
+      "resourceGroup",
+      "namespace",
+      "criblPrincipalObjectId",
+    ]);
+  });
+
+  it("lists the principal's assignments at the namespace, then at the plan's hub when one is named", () => {
+    const ns = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.EventHub/namespaces/ns1";
+    const reqs = requestsOf("eh-role-receiver", {});
+    expect(reqs.map((r) => [r.shape, r.request.path, r.request.query?.["$filter"]])).toEqual([
+      ["list", `${ns}/providers/Microsoft.Authorization/roleAssignments`, "assignedTo('00000000-0000-0000-0000-0000000000aa')"],
+      ["list", `${ns}/eventhubs/defender-alerts/providers/Microsoft.Authorization/roleAssignments`, "assignedTo('00000000-0000-0000-0000-0000000000aa')"],
+    ]);
+    const noHub = requestsFor("eh-role-receiver", { ...FULL, hubName: "" });
+    expect(noHub.kind === "requests" && noHub.requests.map((r) => r.request.path)).toEqual([
+      `${ns}/providers/Microsoft.Authorization/roleAssignments`,
+    ]);
+  });
+});

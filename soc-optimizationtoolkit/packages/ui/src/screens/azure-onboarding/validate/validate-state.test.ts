@@ -4,10 +4,11 @@
 // read shown as "not found", or an unreadable arrival metric shown as a zero.
 
 import { describe, expect, it } from "vitest";
-import { otherNameAlsoFound } from "@soc/core";
+import { CHECK_KINDS, otherNameAlsoFound } from "@soc/core";
 import type { CheckKind, PlanValues, StepVerdict, UnknownReason, ValidationResult } from "@soc/core";
 import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
+  CHECK_SUBJECT,
   VALIDATE_IDLE,
   arrivalView,
   runStatusText,
@@ -283,5 +284,38 @@ describe("copy", () => {
     }
     texts.push(validateIntro({ firstPageReads: 4, listReads: 2, maxReads: 42, missing: ["namespace"] }));
     expect(findHistoryInCopy(texts.map((text, i) => ({ where: `validate#${i}`, text })))).toEqual([]);
+  });
+});
+
+// AZR-55: two checks of one step rendered as the same sentence, one red
+// "not found" and one green "as expected".
+describe("rows that share a step say what each checked (AZR-55)", () => {
+  const check = (stepId: string, kind: CheckKind, verdict: StepVerdict) => ({
+    key: `entraId/${stepId}/${kind}`,
+    sourceId: "entraId" as const,
+    stepId,
+    kind,
+    verdict,
+  });
+
+  it("gives each row of a two-check step its own subject, and a one-check step none", () => {
+    const [group] = verdictGroups({
+      checks: [
+        check("eh-namespace", "eh-namespace", { kind: "as-expected" }),
+        check("eh-consumer-group-auto", "eh-hub", { kind: "absent" }),
+        check("eh-consumer-group-auto", "eh-consumer-group-auto", { kind: "as-expected" }),
+      ],
+    });
+    const rows = group!.rows;
+    expect(rows[0]!.subject).toBeNull();
+    expect(rows[1]!.subject).toBe(CHECK_SUBJECT["eh-hub"]);
+    expect(rows[2]!.subject).toBe(CHECK_SUBJECT["eh-consumer-group-auto"]);
+    expect(rows[1]!.subject).not.toBe(rows[2]!.subject);
+  });
+
+  it("has a distinct, non-empty subject for every check kind", () => {
+    const subjects = CHECK_KINDS.map((k) => CHECK_SUBJECT[k]);
+    expect(subjects.every((s) => s.trim().length > 0)).toBe(true);
+    expect(new Set(subjects).size).toBe(CHECK_KINDS.length);
   });
 });

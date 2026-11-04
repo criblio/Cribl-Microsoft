@@ -32,6 +32,7 @@ import type { CriblClient, CriblRequest } from "../../ports/cribl-client";
 import { buildSecretBody, decideSecretConflict } from "../../domain/cribl-secrets";
 import type { SecretConflictRead } from "../../domain/cribl-secrets";
 import { is2xx } from "../arm-http";
+import { tenantDescriptionMarker } from "../../domain/tenancy";
 
 export interface EnsureTextSecretInput {
   /** Worker group scope; omitted addresses the leader. */
@@ -42,6 +43,13 @@ export interface EnsureTextSecretInput {
   readonly value: string;
   /** The human description; buildSecretBody appends the ownership stamp. */
   readonly description: string;
+  /**
+   * The connection's tenant (ADR 0009). When given, the description names it,
+   * and a 409 on a secret this app wrote for ANOTHER tenant is refused rather
+   * than PATCHed - one fixed secret name is shared by every tenant wiring into
+   * the same worker group.
+   */
+  readonly tenantId?: string;
 }
 
 export type EnsureTextSecretOutcome =
@@ -50,7 +58,7 @@ export type EnsureTextSecretOutcome =
   /** A 409, and the secret there is not provably ours. Nothing was written. */
   | {
       readonly kind: "refused";
-      readonly reason: "foreign" | "unreadable";
+      readonly reason: "foreign" | "unreadable" | "other-tenant" | "untagged-legacy";
       readonly secretId: string;
       readonly message: string;
     }
@@ -73,7 +81,11 @@ export async function ensureTextSecret(
   input: EnsureTextSecretInput,
 ): Promise<EnsureTextSecretOutcome> {
   const secretId = input.id;
-  const body = buildSecretBody({ id: secretId, value: input.value, description: input.description });
+  const description =
+    input.tenantId === undefined || input.tenantId.trim() === ""
+      ? input.description
+      : `${input.description} ${tenantDescriptionMarker(input.tenantId)}`;
+  const body = buildSecretBody({ id: secretId, value: input.value, description });
   const one = `/system/secrets/${encodeURIComponent(secretId)}`;
 
   const create = await cribl.request(scoped({ method: "POST", path: "/system/secrets", body }, input.groupId));
@@ -94,7 +106,11 @@ export async function ensureTextSecret(
   } catch {
     read = null;
   }
-  const decision = decideSecretConflict(secretId, read);
+  const decision = decideSecretConflict(
+    secretId,
+    read,
+    input.tenantId === undefined || input.tenantId.trim() === "" ? undefined : input.tenantId,
+  );
   if (decision.kind === "refuse") {
     return { kind: "refused", reason: decision.reason, secretId, message: decision.message };
   }
