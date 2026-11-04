@@ -3682,6 +3682,16 @@ button.readiness-pill:focus-visible {
   color: var(--text-muted);
   white-space: nowrap;
 }
+/* DBT-250: the chosen destination table is not in the (read) workspace. */
+.mapping-review-table-absent {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+}
 
 .gap-handles {
   font-size: 12px;

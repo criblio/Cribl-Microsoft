@@ -67,9 +67,15 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { openWhen } from "../../components/open-when";
 import {
+  absentTableNote,
+  destinationTableOptions,
+  workspacePresence,
+} from "./destination-table-options";
+import {
   DEFAULT_GAP_PROFILE,
   FIELD_EXAMPLE_MAX_CHARS,
   actionEditRefusal,
+  bundledCatalogTableNames,
   collectGapReports,
   columnActionsRefusal,
   createBundledSchemaCatalog,
@@ -80,6 +86,7 @@ import {
   getOverflowConfig,
   landsInColumn,
   learnedToVendorMappings,
+  listKqlValidationTableNames,
   mergeDropSavings,
   resolveSampleRouting,
   resolveIdentityFields,
@@ -269,6 +276,12 @@ export interface MappingReviewSectionProps {
    */
   workspaceTablesNote?: { text: string; onRetry: () => void } | null;
   /**
+   * True only when the workspace listing COMPLETED (DBT-250). Gates the
+   * "not in workspace" flag: unverified, every table is offered unflagged and
+   * the override and pack build stay fully available.
+   */
+  workspaceTablesVerified?: boolean;
+  /**
    * Resolve a workspace table's LIVE columns, or null when it exposes none.
    *
    * AWAITED BEFORE THE RE-ANALYSIS, deliberately. The first version of this
@@ -402,6 +415,7 @@ export function MappingReviewSection({
   catalog,
   workspaceTables,
   workspaceTablesNote,
+  workspaceTablesVerified = false,
   fetchTableSchema,
   vendorProfile,
   ruleFields,
@@ -861,20 +875,49 @@ export function MappingReviewSection({
     logger,
   ]);
 
-  // Candidate destination tables for the per-sample override dropdown: the
-  // solution's resolved tables, the tables already in the reports, and a few
-  // common natives - deduped and sorted.
-  const candidateTables = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of resolution?.tables ?? []) set.add(t);
-    for (const r of reports) set.add(r.tableName);
-    for (const t of COMMON_NATIVE_TABLES) set.add(t);
-    // Tables that genuinely exist in the workspace. Added LAST but deduped by
-    // the set, so a table that is both a solution candidate and real appears
-    // once - the operator should not have to tell two identical entries apart.
-    for (const t of workspaceTables ?? []) set.add(t);
-    return [...set].filter((t) => t !== "").sort();
-  }, [resolution, reports, workspaceTables]);
+  // The schema repository's table names (DBT-250): the tables the analysis can
+  // resolve a schema for WITHOUT Azure, so they are offered whether or not the
+  // workspace can be read. Listed once per content port; a failure is logged
+  // and leaves the bundled names, never blocks the override.
+  const [repoTables, setRepoTables] = useState<readonly string[]>([]);
+  useEffect(() => {
+    if (content === undefined) return;
+    let cancelled = false;
+    listKqlValidationTableNames(content).then(
+      (names) => {
+        if (!cancelled) setRepoTables(names);
+      },
+      (error: unknown) => {
+        logger?.warn("gap-analysis: schema repository table listing failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // logger is a sink, not an input to the listing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
+  const bundledTables = useMemo(() => bundledCatalogTableNames(), []);
+
+  // The per-sample override's options (DBT-250, destination-table-options.ts
+  // owns the decision): solution, reports, common natives, schema repository,
+  // bundled templates and the live workspace - deduped, sorted, and flagged
+  // "not in workspace" only when the workspace was actually read.
+  const tableOptions = useMemo(
+    () =>
+      destinationTableOptions({
+        resolved: resolution?.tables ?? [],
+        reported: reports.map((r) => r.tableName),
+        common: COMMON_NATIVE_TABLES,
+        repo: repoTables,
+        bundled: bundledTables,
+        workspace: workspaceTables ?? [],
+        workspaceVerified: workspaceTablesVerified,
+      }),
+    [resolution, reports, repoTables, bundledTables, workspaceTables, workspaceTablesVerified],
+  );
 
   // Reassign a logType to a different destination table, then re-analyze so its
   // gap report reflects the new table's schema.
@@ -1388,7 +1431,7 @@ export function MappingReviewSection({
                   <InfoTip text="The native table this log sample aligns to - detected from the solution. Override it to realign this sample to a different DCR/table; re-analysis runs against the new table's schema." />
                 </span>
                 <SearchableSelect
-                  options={candidateTables.map((t) => ({ value: t, label: t }))}
+                  options={tableOptions}
                   value={report.tableName}
                   onChange={(t) => changeTable(report.logType, t)}
                   disabled={analyzing}
@@ -1408,6 +1451,20 @@ export function MappingReviewSection({
                 </button>
               )}
             </div>
+
+            {/* DBT-250: said only when the workspace was READ and lacks the
+                table. A warning, never a gate - the mapping and the pack
+                build stay available, because the operator may be about to
+                create the table, or deploying into another workspace. */}
+            {workspacePresence(
+              report.tableName,
+              workspaceTables ?? [],
+              workspaceTablesVerified,
+            ) === "absent" && (
+              <p className="mapping-review-table-absent" role="status">
+                {absentTableNote(report.tableName)}
+              </p>
+            )}
 
             <div className="match-stat-grid">
               {deriveLiveStats(report, effective).map((stat) => (

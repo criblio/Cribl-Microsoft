@@ -1,4 +1,4 @@
-// `npm run bump` (DBT-250): raise the app's patch version in package.json and
+// `npm run bump` (DBT-251): raise the app's patch version in package.json and
 // the lock, WITHOUT packaging. Every PR to main that changes what ships or what
 // Live Preview shows runs it once; check-version-bump fails the PR otherwise.
 //

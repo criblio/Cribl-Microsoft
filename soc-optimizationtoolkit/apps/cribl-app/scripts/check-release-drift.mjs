@@ -8,7 +8,7 @@
 // instead - so this is it. A hand-maintained version claim decays exactly as
 // fast as the automated one it warns about, and nothing tells anyone.
 //
-// FIVE ERRORS and TWO WARNINGS, and the split is deliberate. (Until DBT-250 the
+// FIVE ERRORS and TWO WARNINGS, and the split is deliberate. (Until DBT-251 the
 // manifest running ahead of the tarball was an error; since every PR to main now
 // bumps the version and packaging is batched, it is the second warning.) The errors are all
 // facts that are free to keep true at packaging time and that read as confident
@@ -127,7 +127,7 @@ export function evaluateReleaseDrift(facts) {
   const packagedVersion = versions.slice().sort(compareVersions).at(-1) ?? versions[0];
 
   // A manifest AHEAD of the tarball is the normal state between releases since
-  // DBT-250 (2026-11-04): every PR to main runs "npm run bump", version only,
+  // DBT-251 (2026-11-04): every PR to main runs "npm run bump", version only,
   // and packaging stays batched. It warns, and names the command that packages
   // THIS version - a bare "npm run package" would bump a second time, which is
   // the double-bump this rule used to guard as an error. A manifest BEHIND the
@@ -135,7 +135,7 @@ export function evaluateReleaseDrift(facts) {
   const order = compareVersions(facts.manifestVersion, packagedVersion);
   if (order > 0) {
     warnings.push(
-      `package.json is at ${facts.manifestVersion}, ahead of the packaged tarball ${packagedVersion} (bumped per PR, DBT-250). ` +
+      `package.json is at ${facts.manifestVersion}, ahead of the packaged tarball ${packagedVersion} (bumped per PR, DBT-251). ` +
         `To release it, run "npm run package -- --version ${facts.manifestVersion}" and add its release-notes section and backlog line.`,
     );
   } else if (order < 0) {
@@ -327,7 +327,7 @@ async function main() {
       ? 'unreleased source not measured'
       : `${facts.sourceCommitsSinceRelease} source commit(s) since it was packaged`;
 
-  // Since DBT-250 package.json may be ahead of the package; then it is NOT one
+  // Since DBT-251 package.json may be ahead of the package; then it is NOT one
   // of the files that agree, and the line must not say it is.
   const agreeing =
     facts.manifestVersion === packagedVersion

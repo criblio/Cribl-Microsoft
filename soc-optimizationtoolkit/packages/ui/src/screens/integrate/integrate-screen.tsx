@@ -2623,6 +2623,7 @@ export function IntegrateScreen({
         ruleFields={ruleFields}
         workspaceTables={workspaceTables}
         workspaceTablesNote={workspaceTableListing.note}
+        workspaceTablesVerified={workspaceTableListing.verified}
         fetchTableSchema={fetchTableSchema}
         onGateChange={setMappingsApproved}
         onReportsChange={(reports) => {
