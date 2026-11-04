@@ -65,8 +65,11 @@ const USAGE_TIP =
 
 const SOURCES_TIP =
   "From the rows themselves: sum(_BilledSize) per table over the same 30 days, " +
-  "grouped by the first of _ResourceId, Computer, or DeviceVendor DeviceProduct the " +
-  "row carries. The 25 largest sources per table are listed and the rest summed into " +
+  "billed from each row's _IsBillable. CommonSecurityLog, SecurityAlert and Syslog " +
+  "name a source by product (vendor and product, product name, or computer and " +
+  "facility), with the collector as 'via'; other tables use the first of " +
+  "_ResourceId, Computer, or DeviceVendor DeviceProduct the row carries. The 25 " +
+  "largest sources per table are listed and the rest summed into " +
   "one row. _BilledSize and Usage are separate measurements and can differ by a few " +
   "percent, so a table's sources need not add up exactly to its Usage total.";
 

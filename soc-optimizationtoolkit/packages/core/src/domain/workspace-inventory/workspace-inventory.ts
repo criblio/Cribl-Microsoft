@@ -23,7 +23,9 @@ import { identityKql } from "./source-identity";
  * daily bins).
  *
  * WHAT A SOURCE IS. There is no single "source" column across Log Analytics
- * tables, so each row is attributed to the first non-empty of: `_ResourceId`
+ * tables. The tables in source-identity.ts (CommonSecurityLog, SecurityAlert,
+ * Syslog) are named by product, with the collector kept separately (MIG-27);
+ * every other row is attributed to the first non-empty of: `_ResourceId`
  * (the Azure resource that emitted it - diagnostics, AMA, Arc), `Computer`
  * (agent and Syslog/WEF data), `DeviceVendor DeviceProduct` (CEF). A row with
  * none of them is UNATTRIBUTED, and that is reported as such: the measured AWS
