@@ -94,7 +94,8 @@ describe("useSectionFolding", () => {
         <Page currentId="three" />
       </PortsProvider>,
     );
-    // Opening is not a move, so nothing else folded; and the load fold stopped.
+    // setCollapsed alone is not a move (a header's opening click adds one,
+    // DBT-257), so nothing else folded; and the load fold stopped.
     expect([state("one"), state("two"), state("three")]).toEqual(["open", "open", "folded"]);
   });
 
