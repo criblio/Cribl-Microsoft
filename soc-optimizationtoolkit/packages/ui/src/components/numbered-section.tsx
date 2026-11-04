@@ -40,8 +40,8 @@
  * decision help text.
  */
 
-import { useState } from "react";
-import type { ReactNode } from "react";
+import { useRef, useState } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 import type { SectionStatus } from "@soc/core";
 import { InfoTip } from "./info-tip";
 
@@ -127,8 +127,7 @@ export function NumberedSection({
   // toggles; coming-soon sections have no body to collapse.
   const [ownCollapsed, setOwnCollapsed] = useState(false);
   const collapsed = collapsedProp ?? ownCollapsed;
-  const setCollapsed = (next: boolean | ((c: boolean) => boolean)) => {
-    const value = typeof next === "function" ? next(collapsed) : next;
+  const setCollapsed = (value: boolean) => {
     if (collapsedProp === undefined) {
       setOwnCollapsed(value);
     }
@@ -136,19 +135,31 @@ export function NumberedSection({
   };
   const collapsible = !comingSoon;
   const bodyHidden = collapsible && collapsed;
+  // DBT-256: opening is not a move (DBT-248); working inside the body is. The
+  // capture handlers used to fire on the HEADER too, so pointer down on a
+  // folded header folded the open section above it at once, the header moved
+  // before the pointer came up, the click missed, and opening took two clicks.
+  // Anything inside the header (title, Expand, Pin, InfoTip) is now skipped;
+  // the others fold when the operator starts working in the opened section.
+  const headRef = useRef<HTMLDivElement>(null);
+  const activateFromBody = (e: SyntheticEvent) => {
+    if (headRef.current?.contains(e.target as Node) === true) return;
+    onActivate?.();
+  };
   return (
     <section
       {...(anchorId !== undefined ? { id: anchorId } : {})}
       {...(onActivate !== undefined
-        ? { onPointerDownCapture: onActivate, onFocusCapture: onActivate }
+        ? { onPointerDownCapture: activateFromBody, onFocusCapture: activateFromBody }
         : {})}
       className={`numbered-section numbered-section-${status}${bodyHidden ? " numbered-section-collapsed" : ""}`}
     >
       <div
+        ref={headRef}
         className="numbered-section-head"
         {...(collapsible
           ? {
-              onClick: () => setCollapsed((c) => !c),
+              onClick: () => setCollapsed(!collapsed),
               style: { cursor: "pointer" },
             }
           : {})}

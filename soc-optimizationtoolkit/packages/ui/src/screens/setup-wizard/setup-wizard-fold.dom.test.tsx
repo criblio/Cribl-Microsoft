@@ -202,10 +202,16 @@ describe("wizard GitHub step folding (DBT-248)", () => {
     // reports one, which un-gates the sections behind it for the move.
     mount({ store: new Map(), hasPat: true, facts: factsWith({ tokenPresent: false }) });
     await waitFor(() => expect(open(GITHUB_TITLES)).toEqual(["GitHub personal access token"]));
-    // The real gesture: the press lands first (and moves), then the click opens.
+    // The real gesture: the press lands first, then the click opens. Neither
+    // is a move (DBT-256): the press used to fold the open section at once,
+    // which shifted the header under the pointer and swallowed the click.
     const expand = screen.getByRole("button", { name: "Expand Sentinel content" });
     fireEvent.pointerDown(expand);
     fireEvent.click(expand);
+    expect(open(GITHUB_TITLES)).toEqual(["GitHub personal access token", "Sentinel content"]);
+    // Working in the opened section is the move.
+    const body = within(sectionOf("Sentinel content")).getByTestId("numbered-section-body");
+    fireEvent.pointerDown(body);
     await waitFor(() => expect(open(GITHUB_TITLES)).toEqual(["Sentinel content"]));
   });
 

@@ -49,6 +49,7 @@ function Page(props: { currentId: string | undefined; keepOpen?: string[] }): Re
       {IDS.map((id) => (
         <section key={id} id={id}>
           <button type="button" data-testid={`move-${id}`} onClick={() => f.moveTo(id)} />
+          <button type="button" data-testid={`open-${id}`} onClick={() => f.setCollapsed(id, false)} />
           <button type="button" data-testid={`pin-${id}`} onClick={() => f.setPinned(id, !f.pinned.has(id))} />
           <span data-testid={`state-${id}`}>{f.collapsed.has(id) ? "folded" : "open"}</span>
         </section>
@@ -82,6 +83,19 @@ describe("useSectionFolding", () => {
       </PortsProvider>,
     );
     expect([state("one"), state("two"), state("three")]).toEqual(["folded", "folded", "open"]);
+  });
+
+  it("an explicit open ends the load fold too: current advancing does not shut it (DBT-256)", () => {
+    const ports = makePorts({ store: new Map() });
+    const { rerender } = mount(ports, <Page currentId="one" />);
+    fireEvent.click(screen.getByTestId("open-two"));
+    rerender(
+      <PortsProvider ports={ports} config={EMPTY_AZURE_CONFIG}>
+        <Page currentId="three" />
+      </PortsProvider>,
+    );
+    // Opening is not a move, so nothing else folded; and the load fold stopped.
+    expect([state("one"), state("two"), state("three")]).toEqual(["open", "open", "folded"]);
   });
 
   it("stops following current after the first move, and the move folds the others", () => {
