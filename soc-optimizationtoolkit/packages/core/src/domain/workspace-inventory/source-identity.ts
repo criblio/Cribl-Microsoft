@@ -35,6 +35,12 @@ export interface SourceIdentityRule {
    * a machine. `first`: the first non-empty column (a fallback chain).
    */
   combine: "join" | "first";
+  /**
+   * `join` only: the first column must be non-empty, else the identity is
+   * empty. Syslog sets it so a facility is never named as a machine; CEF does
+   * not, so a product with no vendor is still a product.
+   */
+  requireFirst?: boolean;
 }
 
 /** The CEF device columns: the default order's last step and CommonSecurityLog's rule. */
@@ -61,6 +67,7 @@ export const SOURCE_IDENTITY_RULES: readonly SourceIdentityRule[] = [
     columns: ["Computer", "Facility"],
     keepsCollector: false,
     combine: "join",
+    requireFirst: true,
   },
 ];
 
@@ -74,13 +81,14 @@ function identityExpression(rule: SourceIdentityRule): string {
     const arms = rule.columns.map((c) => `isnotempty(${col(c)}), ${col(c)}`);
     return `case(${arms.join(", ")}, '')`;
   }
-  return joinExpression(rule.columns);
+  return joinExpression(rule.columns, rule.requireFirst === true);
 }
 
-/** `a b` from columns, empty unless the first column has a value. */
-function joinExpression(columns: readonly string[]): string {
+/** `a b` from columns; with `requireFirst`, empty unless the first column has a value. */
+function joinExpression(columns: readonly string[], requireFirst = false): string {
   const parts = columns.map(col).join(", ' ', ");
-  return `iff(isnotempty(${col(columns[0]!)}), trim(' ', strcat(${parts})), '')`;
+  const joined = `trim(' ', strcat(${parts}))`;
+  return requireFirst ? `iff(isnotempty(${col(columns[0]!)}), ${joined}, '')` : joined;
 }
 
 /**

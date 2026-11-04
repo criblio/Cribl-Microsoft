@@ -53,8 +53,8 @@ describe("identityKql", () => {
 describe("identityKql - hardening", () => {
   const kql = identityKql();
   const vendorProduct =
-    "iff(isnotempty(tostring(column_ifexists('DeviceVendor', ''))), trim(' ', strcat(" +
-    "tostring(column_ifexists('DeviceVendor', '')), ' ', tostring(column_ifexists('DeviceProduct', '')))), '')";
+    "trim(' ', strcat(tostring(column_ifexists('DeviceVendor', '')), ' ', " +
+    "tostring(column_ifexists('DeviceProduct', ''))))";
 
   it("builds the default _dev and the CommonSecurityLog rule from ONE definition", () => {
     expect(kql).toContain(`_dev = ${vendorProduct}`);
@@ -62,7 +62,12 @@ describe("identityKql - hardening", () => {
     expect(kql.split(vendorProduct)).toHaveLength(3);
   });
 
-  it("requires a join rule's FIRST column to be non-empty - a facility alone is not a machine", () => {
+  it("keeps a CEF row with only a DeviceProduct a product: no first-column guard on CEF", () => {
+    expect(kql).not.toContain("iff(isnotempty(tostring(column_ifexists('DeviceVendor'");
+    expect(SOURCE_IDENTITY_RULES.find((r) => r.table === "CommonSecurityLog")!.requireFirst).toBeUndefined();
+  });
+
+  it("requires the Syslog rule's FIRST column to be non-empty - a facility alone is not a machine", () => {
     expect(kql).toContain(
       "_id2 = iff(isnotempty(tostring(column_ifexists('Computer', ''))), trim(' ', strcat(" +
         "tostring(column_ifexists('Computer', '')), ' ', tostring(column_ifexists('Facility', '')))), '')",
