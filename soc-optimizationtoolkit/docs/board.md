@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 36 in progress, 155 done.**
+**93 in the backlog, 35 in progress, 156 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 2 | 21 | 1 |
+| Data Volume Inventory | 1 | 22 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 129.
+Open work totals 128.
 
 ## Epics and features
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 91% (29/32)
+### `MIG` SIEM migration analysis - 94% (30/32)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
@@ -144,11 +144,11 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
-| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 5/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
+| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 6/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
 
 ---
 
-## In progress (36)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1050,21 +1050,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   api-version 2023-04-01 and return full ids. Second, a Send-only rule named
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
-
-- **MIG-32** By source live findings: a catalog-Billable table measured free is unexplained; "/day" missing; odd collector names unquoted
-  `MIG-F3` `bug` `settled`
-  FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source.
-  (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every
-  row measures free (billed 0 MB, free 1.1 KB) - the page shows "Billable"
-  beside "billed 0 MB" with nothing explaining it, which contradicts the
-  design's "measured wins, catalog explains" (only the opposite direction -
-  catalog Free but billed - is flagged today). Flag the reverse case in both
-  views too: "measured free; the catalog tags this table Billable (<tables>)".
-  (2) sentinel-new: the By table reconciliation line reads "total 54.8 MB of
-  the 56.0 MB/day" - the first figure lacks "/day" (the By source sentence has
-  it). (3) A collector whose name is punctuation or whitespace (sentinel-new's
-  ":") reads "Cisco ASA via : - 6.5 MB/day"; quote collector names that are
-  not plain names (e.g. via ":"). Pin each.
 
 ---
 
@@ -2445,7 +2430,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (155)
+## Done (156)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6544,6 +6529,27 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Watchlist '(sources not read)' with its Usage volume and the reconciliation
   stating it separately. BuzzardStream - verified zero reads 'Usage answered
   and reports no ingested data'. Three findings filed as MIG-32.
+
+- **MIG-32** By source live findings: a catalog-Billable table measured free is unexplained; "/day" missing; odd collector names unquoted
+  `MIG-F3` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source.
+  (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every
+  row measures free (billed 0 MB, free 1.1 KB) - the page shows "Billable"
+  beside "billed 0 MB" with nothing explaining it, which contradicts the
+  design's "measured wins, catalog explains" (only the opposite direction -
+  catalog Free but billed - is flagged today). Flag the reverse case in both
+  views too: "measured free; the catalog tags this table Billable (<tables>)".
+  (2) sentinel-new: the By table reconciliation line reads "total 54.8 MB of
+  the 56.0 MB/day" - the first figure lacks "/day" (the By source sentence has
+  it). (3) A collector whose name is punctuation or whitespace (sentinel-new's
+  ":") reads "Cisco ASA via : - 6.5 MB/day"; quote collector names that are
+  not plain names (e.g. via ":"). Pin each. DONE 2026-11-04 (pins,
+  e362bf12..e89ca1f5): measured-free tables the catalog does not list as free
+  are flagged in both views ('measured free; not in the catalog's free list');
+  Azure Monitor's never-billed tables named on Microsoft's cost-logs page
+  (Heartbeat, Usage, Operation) join the Free list so they are not flagged; By
+  table line reads 'total X MB/day of the Y MB/day'; collector names that are
+  punctuation or padded are quoted. One fix round.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

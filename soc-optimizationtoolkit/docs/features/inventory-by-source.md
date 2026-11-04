@@ -1,7 +1,6 @@
 # Data Volume Inventory: a By source view beside By table
 
-Status: Proposed - design agreed in brainstorming 2026-11-04; not built.
-Last-confirmed: 2026-11-04
+Status: Living - built on feature/inventory-by-source (MIG-27..32) and seen in Live Preview 2026-11-04 on sentinel-new, andy-june and Borg-LA.
 
 ## Intent
 

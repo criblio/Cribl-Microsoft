@@ -1,7 +1,6 @@
 # Data Volume Inventory By source - Implementation Plan
 
-Status: Proposed - written 2026-11-04 from the approved design; not started.
-Last-confirmed: 2026-11-04
+Status: Record - executed 2026-11-04 subagent-driven (per-task review, fix rounds on Tasks 2, 3 and MIG-32), live check MIG-31; see the MIG-F3 cards.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

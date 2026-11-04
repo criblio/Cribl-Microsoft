@@ -3841,13 +3841,14 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-32",
       "type": "bug",
       "priority": "now",
       "title": "By source live findings: a catalog-Billable table measured free is unexplained; \"/day\" missing; odd collector names unquoted",
-      "detail": "FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source. (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every row measures free (billed 0 MB, free 1.1 KB) - the page shows \"Billable\" beside \"billed 0 MB\" with nothing explaining it, which contradicts the design's \"measured wins, catalog explains\" (only the opposite direction - catalog Free but billed - is flagged today). Flag the reverse case in both views too: \"measured free; the catalog tags this table Billable (<tables>)\". (2) sentinel-new: the By table reconciliation line reads \"total 54.8 MB of the 56.0 MB/day\" - the first figure lacks \"/day\" (the By source sentence has it). (3) A collector whose name is punctuation or whitespace (sentinel-new's \":\") reads \"Cisco ASA via : - 6.5 MB/day\"; quote collector names that are not plain names (e.g. via \":\"). Pin each."
+      "detail": "FOUND 2026-11-04 in Live Preview (MIG-31) on feature/inventory-by-source. (1) Borg-LA: SecurityCaseEvent is tagged Billable by the catalog but every row measures free (billed 0 MB, free 1.1 KB) - the page shows \"Billable\" beside \"billed 0 MB\" with nothing explaining it, which contradicts the design's \"measured wins, catalog explains\" (only the opposite direction - catalog Free but billed - is flagged today). Flag the reverse case in both views too: \"measured free; the catalog tags this table Billable (<tables>)\". (2) sentinel-new: the By table reconciliation line reads \"total 54.8 MB of the 56.0 MB/day\" - the first figure lacks \"/day\" (the By source sentence has it). (3) A collector whose name is punctuation or whitespace (sentinel-new's \":\") reads \"Cisco ASA via : - 6.5 MB/day\"; quote collector names that are not plain names (e.g. via \":\"). Pin each.\n\nDONE 2026-11-04 (pins, e362bf12..e89ca1f5): measured-free tables the catalog does not list as free are flagged in both views ('measured free; not in the catalog's free list'); Azure Monitor's never-billed tables named on Microsoft's cost-logs page (Heartbeat, Usage, Operation) join the Free list so they are not flagged; By table line reads 'total X MB/day of the Y MB/day'; collector names that are punctuation or padded are quoted. One fix round.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
