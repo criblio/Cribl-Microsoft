@@ -3765,6 +3765,75 @@
     },
     {
       "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "backlog",
+      "dependsOn": [],
+      "id": "MIG-27",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: per-table source identity map, collector and billed bytes in the source breakdown query",
+      "detail": "USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others unchanged), collector kept as via for product identities, billed vs free per source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco ASA through three collectors, which today reads as three collector-named sources. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-27)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-27"
+      ],
+      "id": "MIG-28",
+      "type": "enabler",
+      "priority": "next",
+      "title": "Core: fold the inventory into By source rows with reconciliation and the per-table catalog flag",
+      "detail": "Merge across tables by identity kind + case-folded value; one row per table with no product columns and per table whose sources were not read; the reconciliation compares row-measured and Usage totals, never subtracts. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-28)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-27"
+      ],
+      "id": "MIG-29",
+      "type": "story",
+      "priority": "next",
+      "title": "By table: Sources drill-down names product sources via their collector, shows billed vs free and the reconciliation line; CSV columns",
+      "detail": "Existing CSV columns unchanged; SourceIdentity, Collector, BillableDailyMB, FreeDailyMB appended. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-29)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-28",
+        "MIG-29"
+      ],
+      "id": "MIG-30",
+      "type": "story",
+      "priority": "next",
+      "title": "By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence",
+      "detail": "USER DECISION 2026-11-04: option B - two views of one inventory, By table stays the default. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-30)."
+    },
+    {
+      "settled": "settled",
+      "epic": "MIG",
+      "feature": "MIG-F3",
+      "status": "backlog",
+      "dependsOn": [
+        "MIG-30"
+      ],
+      "id": "MIG-31",
+      "type": "spike",
+      "priority": "next",
+      "title": "Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement",
+      "detail": "Confirms the identity columns read well on real rows and records the Syslog Facility decision (design open item 1). Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-31)."
+    },
+    {
+      "settled": "settled",
       "epic": "DBT",
       "feature": "DBT-F2",
       "status": "done",
@@ -4101,6 +4170,12 @@
       "epic": "MIG",
       "menu": "data-volume-inventory",
       "title": "Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine)"
+    },
+    {
+      "id": "MIG-F3",
+      "epic": "MIG",
+      "menu": "data-volume-inventory",
+      "title": "Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source)"
     }
   ]
 }
