@@ -495,7 +495,15 @@ Started. Anything here with an unfinished dependency is called out on its card.
   /products/stream/groups/<g> and /deploy through the proxy (reached only
   inside apply; a top-level fetch without the app's token is 401), the files
   the create dirties against COMMIT_MARKERS, secretType, the deploy route and
-  configVersion matching.
+  configVersion matching. LIVE 2026-11-04 (Live Preview, DatacenterEast,
+  namespace ehnsjpedersoneastus): the Event Hub lane created end to end with
+  the listKeys credential: input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus with its secret,
+  committed and deployed (DatacenterEast runs 7857821e). Read Cribl side then
+  read it as present (eventhub), and planning again reported 'Already created
+  ... matches the plan' with nothing armed. NOT yet live: the Entra ID
+  credential (AZR-59, no Cribl principal in the lab), the paste credential,
+  the Blob lane, and data arriving (nothing is exported to the hub yet).
 
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18`
@@ -1163,7 +1171,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   security reviewer raised 8 findings, all confirmed and fixed with
   mutation-checked pins; the gates were re-run by the orchestrator (7878 tests
   green, build green). ADR 0008 corrected: the Blob lane signs in as the app's
-  own registration today, which is AZR-66.
+  own registration today, which is AZR-66. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): the credential choice offers
+  Entra ID first and selected by default on both Event Hub lanes, with tenant
+  id, client id and client secret fields. The create itself was NOT run in
+  Entra ID mode: the lab has no dedicated Cribl service principal yet, so ADR
+  0008's Unverified list is still unmeasured.
   DECISION: How should the Cribl Event Hub source authenticate?
     [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
@@ -6789,7 +6802,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Solution open and Add Sample Data in place, and sections 3-8 folded.
 
 - **AZR-54** Validate checks the consumer group of the auto-created-hub step on the plan's named hub, not on the hubs Azure creates
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
   subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
   the ADR 0007 live-verification pass. Step eh-consumer-group-auto
@@ -6818,10 +6831,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   run of the lanes pin caught. Mutation-checked: targeting every listed hub
   fails 2 pins; losing the missing-hub bookkeeping fails 1. Live check
   outstanding: against ehnsjpedersoneastus the Entra row should now read
-  unmeasurable while cribl exists only on ehjpedersoneastus.
+  unmeasurable while cribl exists only on ehjpedersoneastus. LIVE 2026-11-04
+  (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus): Validate read
+  'consumer group cribl on ehjpedersoneastus: as expected' on the plan's named
+  hub (Defender lane).
 
 - **AZR-55** Validate prints two different checks of one step under the same words, so one sentence reads both 'not found' and 'as expected'
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
   subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
   the ADR 0007 live-verification pass. validate-panel.tsx renders every result
@@ -6837,10 +6853,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   checked (CHECK_SUBJECT, one phrase per check kind, exhaustive and distinct)
   whenever its step has more than one check for the source, e.g. "... - the
   hubs: not found" beside "... - the consumer group on each hub Azure created:
-  ..."; single-check rows are unchanged.
+  ..."; single-check rows are unchanged. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): the Entra lane printed the
+  two checks of the auto-created-hub step under different words ('the hubs:
+  not found' and 'the consumer group on each hub Azure created: cannot be
+  checked from Azure').
 
 - **AZR-56** The Cribl source create arms although Validate read the plan's consumer group as not found, so it would create a source that cannot read
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
   subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
   the ADR 0007 live-verification pass. With consumer group cribl absent on
@@ -6862,10 +6882,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the confirm says "Reads hub h1 with consumer group cribl." The plan GET
   count went from 5 to 6 in the GET-only pin, and the screen fake gained the
   consumer-group route. Mutation-checked: treating a 404 as present fails 1
-  pin. Live check outstanding with the resumed pass.
+  pin. Live check outstanding with the resumed pass. LIVE 2026-11-04 (Live
+  Preview, DatacenterEast, namespace ehnsjpedersoneastus): the Entra lane's
+  Create stayed disabled ('No hub has appeared yet') while its hubs read not
+  found; the Defender lane armed only after Validate read its group as
+  expected.
 
 - **AZR-57** The Cribl source confirm reads 'Create a Azure Event Hubs source'
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   Not now because: The sentence is still understood and names the right source
   type; it sits on the same confirm that AZR-56 and AZR-58 change, so it is
   fixed in that pass rather than ahead of the defects that would write a bad
@@ -6879,10 +6903,12 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   for both transports. DONE 2026-11-03 (pins): the confirm now opens "New
   Cribl source <id>, an Azure Event Hubs source (eventhub), in worker group
   <g>." Both type labels start with Azure, and the pins fix the exact first
-  line for both transports and forbid " a A" anywhere in the confirm.
+  line for both transports and forbid " a A" anywhere in the confirm. LIVE
+  2026-11-04 (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus):
+  the confirm read 'an Azure Event Hubs source (eventhub)'.
 
 - **AZR-58** The Cribl source create would copy a Manage-capable SAS key (RootManageSharedAccessKey) into a Cribl secret
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   FOUND LIVE 2026-11-03 (Live Preview, operator's admin account, lab
   subscription, namespace ehnsjpedersoneastus, hub ehjpedersoneastus) during
   the ADR 0007 live-verification pass. The Listen rule picker offers every
@@ -6916,10 +6942,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   read, so the safest SAS rule cannot be pasted yet; that belongs with
   [[AZR-36]] and [[AZR-59]]. Live check outstanding: in Live Preview against
   ehnsjpedersoneastus (Root only), the picker should be empty with the Manage
-  message.
+  message. LIVE 2026-11-04 (Live Preview, DatacenterEast, namespace
+  ehnsjpedersoneastus): the confirm said the source names the Cribl secret and
+  never holds the key; the create used a Listen-only rule (cribl-listen) and
+  the Manage-capable RootManageSharedAccessKey was never offered.
 
 - **DBT-249** 36 dropdowns in 22 files are native <select>s with no filter box, against the SearchableSelect standard
-  `DBT-F2` `bug` `settled` `verified: pins`
+  `DBT-F2` `bug` `settled` `verified: both`
   REPORTED 2026-11-03 by the operator during the ADR 0007 live pass: "The
   eventhub namespace drop down still doesn't have a filter box, this is the
   standard for dropdowns. makes sure they all have it and update the claude
@@ -6967,9 +6996,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   namespace picker stays enabled while a pasted namespace is set.
   Mutation-checked: dropping the reset or ignoring hasValue each fails a pin.
   Live check outstanding: the onboarding namespace picker in Live Preview.
+  LIVE 2026-11-04 (Live Preview, DatacenterEast, namespace
+  ehnsjpedersoneastus): the namespace, Event Hub, authorization-rule,
+  worker-group and Listen-rule dropdowns all opened with a filter box;
+  filtering 'jpedersoneastus' narrowed the namespace list to one.
 
 - **AZR-60** Each automatable onboarding section says when the Azure identity lacks the permissions to automate it, and points to the How-to
-  `AZR-F9` `story` `settled` `verified: pins`
+  `AZR-F9` `story` `settled` `verified: both`
   OPERATOR REQUEST 2026-11-03, during the ADR 0007 live pass: "We should also
   detect if the user has granted the correct permissions for each Native
   logging source configuration in Azure and if not put a banner on the section
@@ -7019,10 +7052,15 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   still makes two KV loads and no Azure call. ADR 0005 addendum records it.
   Mutation-checked: removing the grant-only rule fails a core and a UI pin;
   disabling Deploy on a caution fails two UI pins. Live check outstanding: an
-  identity without Microsoft.Security/automations/read in Live Preview.
+  identity without Microsoft.Security/automations/read in Live Preview. LIVE
+  2026-11-04 (Live Preview, DatacenterEast, namespace ehnsjpedersoneastus):
+  the Defender section showed the not-measured note naming the unmeasured
+  actions, with 'Go to the How-to steps' and 'Re-check permissions', and
+  Deploy stayed available. The DENIED kind was not seen live (nothing measured
+  as denied in this lab).
 
 - **AZR-67** Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses
-  `AZR-F9` `bug` `settled` `verified: pins`
+  `AZR-F9` `bug` `settled` `verified: both`
   FOUND 2026-11-03 by the architecture audit (duplicated decision).
   classify.ts judges the eh-rule-listen check with ruleCanListen ("Listen or
   Manage"), while planCriblSource and the Listen picker use
@@ -7037,4 +7075,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   reads as expected. The pin failed before the fix and passes after. The stale
   connection-string.ts header is corrected. Live check outstanding: against
   the lab namespace (only RootManageSharedAccessKey), the Cribl-reads-with
-  step should now read present but different.
+  step should now read present but different. LIVE 2026-11-04 (Live Preview,
+  DatacenterEast, namespace ehnsjpedersoneastus): Validate showed
+  RootManageSharedAccessKey as 'present but different' (plan Listen without
+  Manage, Azure Listen, Manage, Send), and the Listen-rule picker offered only
+  cribl-listen.
