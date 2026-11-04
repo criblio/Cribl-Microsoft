@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { InventorySource, WorkspaceDiscovery } from "@soc/core";
+import { listingRows } from "@soc/core";
+import type { InventorySource, WorkspaceDiscovery, WorkspaceInventory } from "@soc/core";
 import {
   discoveryHeadline,
   formatMB,
   inventoryCsv,
   sourceLabel,
+  sourceLineText,
+  tableReconciliation,
   staleInventoryNote,
   workspaceNameOf,
 } from "./workspace-inventory-state";
@@ -44,6 +47,7 @@ describe("sourceLabel", () => {
       text: "lab-wks-01",
       tip: id,
       kind: "machines",
+      via: "",
     });
   });
 
@@ -103,8 +107,93 @@ describe("inventoryCsv", () => {
     }, null);
     // MIG-15: a Billable table's allowance figures are empty, never 0.
     expect(csv.split("\n")[1]).toBe(
-      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,,',
+      'Big_CL,1.000,30.000,30,,,,,,"failed: HTTP 504, timeout",Billable,,,,,,,,',
     );
+  });
+});
+
+describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
+  const cisco = source({
+    source: "Cisco ASA",
+    attribution: "product",
+    collector: "localhost",
+    bytes: 45.2e6 * 30,
+    billableBytes: 45.2e6 * 30,
+    dailyAverageMB: 45.2,
+    billableDailyMB: 45.2,
+    freeDailyMB: 0,
+    events: 10,
+  });
+  const other = source({
+    source: "",
+    attribution: "other",
+    sourceCount: 40,
+    dailyAverageMB: 10,
+    billableDailyMB: 4,
+    freeDailyMB: 6,
+  });
+  const inv = (sources: InventorySource[], kind: "read" | "partial" | "failed" = "read") => ({
+    workspaceId: "/w",
+    windowDays: 30,
+    tables: {
+      kind: "rows" as const,
+      rows: [
+        {
+          table: "CommonSecurityLog",
+          totalMB: 1,
+          billableMB: 1,
+          daysWithData: 30,
+          solutions: [],
+          dailyAverageMB: 60,
+          sources:
+            kind === "failed"
+              ? { kind: "failed" as const, error: "x" }
+              : kind === "partial"
+                ? { kind: "partial" as const, sources, warning: "one batch timed out" }
+                : { kind: "read" as const, sources },
+        },
+      ],
+    },
+    totals: { totalMB: 1, billableMB: 1, dailyAverageMB: 1, billableDailyAverageMB: 1 },
+    usageWarning: null,
+    queries: { usage: "", sourcesExample: null },
+  }) as unknown as WorkspaceInventory;
+
+  it("labels a product with its collector and kind", () => {
+    const label = sourceLabel(cisco);
+    expect(label).toMatchObject({ text: "Cisco ASA", kind: "Product", via: "localhost" });
+    expect(label.tip).toContain("localhost");
+  });
+
+  it("reads Cisco ASA via localhost with billed and free", () => {
+    expect(sourceLineText(cisco)).toBe(
+      "Cisco ASA via localhost - 45.2 MB/day (billed 45.2, free 0), 10 events",
+    );
+  });
+
+  it("reconciles a table's own sources against its Usage average", () => {
+    expect(tableReconciliation(listingRows(inv([cisco, other]).tables)[0]!)).toBe(
+      "Sources (measured from the rows) total 55.2 MB of the 60.0 MB/day Usage reports for this table.",
+    );
+  });
+
+  it("says a partial breakdown is partial and a failed one has no line", () => {
+    expect(tableReconciliation(listingRows(inv([cisco], "partial").tables)[0]!)).toContain(
+      "partial (one batch timed out)",
+    );
+    expect(tableReconciliation(listingRows(inv([], "failed").tables)[0]!)).toBeNull();
+  });
+
+  it("appends the four columns to the old header in order, with other's billed and free", () => {
+    const lines = inventoryCsv(inv([cisco, other]), null).split("\n");
+    expect(lines[0]).toBe(
+      "Table,TableDailyAvgMB,TableBillableMB,DaysWithData,Solutions,Source,SourceKind," +
+        "SourceDailyAvgMB,SourceEvents,SourceStatus,Allowance,AllowanceEligibleDailyMB," +
+        "AllowanceUsedDailyMB,AllowanceOverDailyMB,AllowanceFigures," +
+        "SourceIdentity,Collector,BillableDailyMB,FreeDailyMB",
+    );
+    expect(lines[1]!.endsWith(",Cisco ASA,localhost,45.200,0.000")).toBe(true);
+    expect(lines[2]!.endsWith(",,,4.000,6.000")).toBe(true);
   });
 });
 
@@ -134,6 +223,7 @@ describe("ARM id parsing goes through core parseResourceId (audit 2026-10-30)", 
       text: "rg-lab",
       tip: "/subscriptions/s/resourceGroups/rg-lab",
       kind: "Azure resource",
+      via: "",
     });
   });
 

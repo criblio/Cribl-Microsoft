@@ -451,14 +451,17 @@ describe("inventoryCsv allowance columns", () => {
     },
   } as unknown as WorkspaceInventory;
 
-  const rowOf = (a: Parameters<typeof inventoryCsv>[1]) => inventoryCsv(inventory, a).trim().split("\n")[1];
+  // The four by-source columns (MIG-29) append after the allowance ones; these pins are about the latter.
+  const withoutSourceColumns = (line: string | undefined) => line?.replace(/,,,,$/, "");
+  const rowOf = (a: Parameters<typeof inventoryCsv>[1]) =>
+    withoutSourceColumns(inventoryCsv(inventory, a).trim().split("\n")[1]);
 
   it("adds five columns, empty (never 0) with no allowances", () => {
     const [header, row] = inventoryCsv(inventory, null).trim().split("\n");
     expect(header).toMatch(
-      /,Allowance,AllowanceEligibleDailyMB,AllowanceUsedDailyMB,AllowanceOverDailyMB,AllowanceFigures$/,
+      /,Allowance,AllowanceEligibleDailyMB,AllowanceUsedDailyMB,AllowanceOverDailyMB,AllowanceFigures,SourceIdentity,Collector,BillableDailyMB,FreeDailyMB$/,
     );
-    expect(row).toMatch(/,E5 5 MB\/user,,,,$/);
+    expect(withoutSourceColumns(row)).toMatch(/,E5 5 MB\/user,,,,$/);
   });
 
   it("repeats the grant-level figures per row, marked exact", () => {

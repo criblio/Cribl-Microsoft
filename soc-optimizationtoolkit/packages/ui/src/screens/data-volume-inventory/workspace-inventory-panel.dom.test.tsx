@@ -42,7 +42,7 @@ type Answer = { status: number; body: unknown };
  * Route ARM calls by path. `usage` decides the Usage query's answer; a second
  * workspace (law-2, answered by `usage2`) is listed only when `usage2` is given.
  */
-function armStub(usage: Answer, usage2?: Answer) {
+function armStub(usage: Answer, usage2?: Answer, sourceRows?: unknown[][]) {
   return vi.fn(async (req: AzureManagementRequest) => {
     if (req.path === "/subscriptions") {
       return { status: 200, body: { value: [{ subscriptionId: "sub-1", displayName: "Prod", state: "Enabled" }] } };
@@ -70,7 +70,7 @@ function armStub(usage: Answer, usage2?: Answer) {
         status: 200,
         body: table(
           ["SourceTable", "Source", "Attribution", "Collector", "Bytes", "BillableBytes", "Events", "Sources"],
-          [["Syslog", "fw-01", "computer", "", 3_000_000, 3_000_000, 1200, 1]],
+          sourceRows ?? [["Syslog", "fw-01", "computer", "", 3_000_000, 3_000_000, 1200, 1]],
         ),
       };
     }
@@ -144,11 +144,15 @@ describe("WorkspaceInventoryPanel", () => {
       ]),
     );
     expect(screen.getByText("Syslog")).toBeTruthy();
-    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day, 1,200 events/)).toBeTruthy();
+    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day \(billed 0\.1, free 0\), 1,200 events/)).toBeTruthy();
     // Heartbeat billed but its breakdown returned no rows: volume stays, failure is said.
     expect(screen.getByText("Heartbeat")).toBeTruthy();
     expect(screen.getByText(/Breakdown failed: .*although Usage billed it/)).toBeTruthy();
     expect(screen.getByText(/1 table\(s\) have no source breakdown/)).toBeTruthy();
+    // MIG-29: the per-table reconciliation line, from that table's own sources.
+    expect(
+      screen.getByText(/Sources \(measured from the rows\) total 100\.0 KB of the 3\.0 MB\/day Usage reports/),
+    ).toBeTruthy();
     // Explanations are InfoTips, never native title hover text.
     expect(document.querySelector("[title]")).toBeNull();
   });
@@ -177,7 +181,29 @@ describe("WorkspaceInventoryPanel", () => {
     await waitFor(() => expect(ports.artifacts.save).toHaveBeenCalledTimes(1));
     const [name, mime, data] = vi.mocked(ports.artifacts.save).mock.calls[0]!;
     expect([name, mime]).toEqual(["law-1-inventory.csv", "text/csv"]);
-    expect(String(data)).toContain("Syslog,3.000,90.000,30,,fw-01,Computer,0.100,1200,read");
+    expect(String(data)).toContain("Syslog,3.000,90.000,30,,fw-01,Computer,0.100,1200,read")
+    expect(String(data)).toContain(",fw-01,,0.100,0.000");
+  });
+});
+
+describe("WorkspaceInventoryPanel - MIG-29", () => {
+  it("names a product via its collector, with billed and free, and flags a billed figure over total", async () => {
+    const MB = 1_000_000;
+    const request = armStub(
+      { status: 200, body: table(USAGE_COLS, [["CommonSecurityLog", 1500, 1500, 30, "[]"]]) },
+      undefined,
+      [
+        ["CommonSecurityLog", "Cisco ASA", "product", "localhost", 1356 * MB, 1356 * MB, 100, 1],
+        ["CommonSecurityLog", "Palo Alto", "product", "edge-1", 90 * MB, 120 * MB, 50, 1],
+      ],
+    );
+    renderPanel(request);
+    await discoverAndInventory();
+    await screen.findByText(/Cisco ASA via localhost - 45\.2 MB\/day \(billed 45\.2, free 0\)/);
+    expect(screen.getByText(/Palo Alto via edge-1/)).toBeTruthy();
+    expect(screen.getAllByText("billed figure exceeds total - see tip")).toHaveLength(1);
+    expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB of the 50\.0 MB\/day Usage reports/)).toBeTruthy();
+    expect(document.querySelector("[title]")).toBeNull();
   });
 });
 
