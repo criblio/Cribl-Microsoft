@@ -27,6 +27,7 @@ import type { AzureConfig, TaggedSample } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { IntegrateScreen } from "./integrate-screen";
+import { destFieldValue } from "../mapping-review/dest-field-test-driver";
 
 afterEach(cleanup);
 
@@ -167,9 +168,7 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
     expect(gapRow(container, "in")?.className).toBe(
       "mapping-row mapping-row-rename",
     );
-    expect(gapRow(container, "in")!.querySelectorAll("select")[0]!.value).toBe(
-      "ReceivedBytes",
-    );
+    expect(destFieldValue(gapRow(container, "in")!)).toBe("ReceivedBytes");
     expect(unmappedColumns(container)).not.toContain("ReceivedBytes");
     expect(chips(rules)).not.toContain("ReceivedBytes");
   });
@@ -211,9 +210,9 @@ describe("Rule Coverage chips apply a close match (DBT-203)", () => {
         "mapping-row mapping-row-rename",
       );
     });
-    const selects = gapRow(container, "PanSrcMac")!.querySelectorAll("select");
-    expect(selects[0]!.value).toBe("SourceMACAddress");
-    expect(selects[1]!.value).toBe("rename");
+    // DBT-251: Dest Field is a combobox; Action is the row's one native select.
+    expect(destFieldValue(gapRow(container, "PanSrcMac")!)).toBe("SourceMACAddress");
+    expect(gapRow(container, "PanSrcMac")!.querySelector("select")!.value).toBe("rename");
     expect(unmappedColumns(container)).not.toContain("SourceMACAddress");
     // Same path as the Unmapped Destination Fields panel: approval withdrawn.
     expect(fieldsSummary(container)).toContain("Approval Required");

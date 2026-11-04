@@ -13,6 +13,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { parseSampleContent } from "@soc/core";
 import type { GapFieldMapping, SchemaCatalog, TaggedSample } from "@soc/core";
 import { MappingReviewSection } from "./mapping-review-section";
+import { chooseDestField } from "./dest-field-test-driver";
 
 afterEach(cleanup);
 
@@ -76,12 +77,9 @@ async function renderEdited() {
   await waitFor(() => {
     expect(container.querySelector(".mapping-review-grid")).not.toBeNull();
   });
+  chooseDestField(rowFor(container, "qqvendorfield"), "SourceMACAddress");
   fireEvent.change(
-    rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
-    { target: { value: "SourceMACAddress" } },
-  );
-  fireEvent.change(
-    rowFor(container, "qqother").querySelectorAll("select.mapping-select")[1]!,
+    rowFor(container, "qqother").querySelectorAll("select.mapping-select")[0]!,
     { target: { value: "drop" } },
   );
   await waitFor(() => {
@@ -172,10 +170,7 @@ describe("mapping review - edits across a re-analysis (DBT-210)", () => {
     await waitFor(() => {
       expect(effective.PanOS?.find((m) => m.source === "qqother")?.action).toBe("overflow");
     });
-    fireEvent.change(
-      rowFor(container, "qqvendorfield").querySelectorAll("select.mapping-select")[0]!,
-      { target: { value: "SourceMACAddress" } },
-    );
+    chooseDestField(rowFor(container, "qqvendorfield"), "SourceMACAddress");
     await waitFor(() => {
       expect(effective.PanOS?.find((m) => m.source === "qqvendorfield")?.action).toBe(
         "rename",

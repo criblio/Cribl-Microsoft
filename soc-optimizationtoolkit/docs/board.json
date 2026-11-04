@@ -3929,6 +3929,32 @@
       "priority": "next",
       "title": "Finish the DBT-197 review follow-up: name what the sample store kept after a trim",
       "detail": "PARKED 2026-10-29 on local branch wip/dbt-197-review-leftover (DBT-197 itself is done, verified both). Adds storedTrimSentences (planned-samples.ts) so the Lake and capture headlines say what the STORE trimmed, not only what the panel fetched; 2 pins plus a DOM test. Does NOT apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture live."
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F2",
+      "status": "done",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-251",
+      "type": "story",
+      "title": "Dest Field in the Gap Analysis field mappings gets a filter box",
+      "detail": "RAISED BY THE USER 2026-11-04: \"The Dest Field drop down in the field mapping of the DCR Gap analysis section should have a filter box so I don't have to scroll through the whole list of destination fields when changing the mapping.\" The Dest Field cell is a native <select> over the whole destination schema (156 columns for CommonSecurityLog). PLAN: render it as the shared SearchableSelect (filter box, bounded list, keyboard), and have SearchableSelect return focus to its control after a pick so the Dest Field claim panel (DBT-208) still returns focus to the control that opened it. DONE 2026-11-04. Dest Field is the shared SearchableSelect (destFieldOptions: schema order, type as the hint, an off-schema current dest such as the catch-all listed first); SearchableSelect now returns focus to its control on a pick (before onChange) and on Escape, which keeps the DBT-208 claim panel's focus contract. Pins: 2 SearchableSelect focus, 3 destFieldOptions, 1 row filter, and the existing remap / dest-claim / reanalysis / coverage-apply DOM tests moved onto a shared dest-field-test-driver; removing the focus call fails 3 of them. LIVE on the jpederson org Live Preview: typing geo in dstloc's Dest Field narrowed 149 columns to the Src/Dst geo columns with their types; Escape closed it with nothing chosen.",
+      "verified": "both"
+    },
+    {
+      "settled": "settled",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "status": "done",
+      "dependsOn": [],
+      "priority": "now",
+      "id": "DBT-252",
+      "type": "bug",
+      "title": "Re-pointing a log type at an ASim table leaves its fields in AdditionalExtensions instead of mapping them",
+      "detail": "RAISED BY THE USER 2026-11-04: switching the PaloAlto TRAFFIC sample from CommonSecurityLog to ASimNetworkSessionLogs left \"a bunch of left overs that are still trying to map to the AdditionalExtension field which doesn't exist in that table... simple Dst should be the field the destination IP maps to\". The analysis DOES re-run against the new schema; three defects spoil it. REPRODUCED against the bundled ASimNetworkSessionLogs schema (139 columns) with the PaloAlto vendor packs: (1) getOverflowConfig (overflow.ts) falls back to the CEF column AdditionalExtensions for any table not in its map, so every ASim table overflows into a column it does not have - ASim tables carry AdditionalFields (dynamic); (2) the alias knowledge (knowledge-bases.ts) is CEF-only - dst aliases DestinationIP/DestinationAddress/DstAddr - so src, dst, sport, dport, natsrc, bytes_sent, bytes_received all overflow instead of reaching SrcIpAddr, DstIpAddr, SrcPortNumber, DstPortNumber, SrcNatIpAddr, SrcBytes, DstBytes; (3) the fuzzy tier ignores src/dst polarity: srcuser matched DstUserId. FIXED 2026-11-04: (1) getOverflowConfig sends ASim* tables to AdditionalFields (dynamic); (2) knowledge-bases ASIM_COLUMN_EQUIVALENTS maps 31 CommonSecurityLog columns to their ASim columns (every one checked against the bundled ASim schemas), the alias tier accepts a column that is the ASim equivalent of a known alias, and analyze-samples re-aims a learned/pack mapping at the equivalent instead of filtering it out; (3) a polarity guard stops the fuzzy rungs crossing source/destination prefixes. CommonSecurityLog matching is pinned unchanged. 10 pins in asim-equivalents.test.ts; each of the four fixes fails them when removed. LIVE on the jpederson org Live Preview, PaloAlto TRAFFIC -> ASimNetworkSessionLogs: 28 mapped by the Cribl pipeline, leftovers in AdditionalFields (dynamic); dst -> DstIpAddr, dport -> DstPortNumber, dstuser -> DstUsername, natdst -> DstNatIpAddr, bytes_received -> DstBytes, all alias. Restored to CommonSecurityLog (27 mapped, 44 overflow, as before). LEFT OPEN: PAN-specific fields (from/to zones, srcloc/dstloc, elapsed, vsys) still overflow on both tables, and packets fuzzy-matches DstPackets where NetworkPackets is the session total.",
+      "verified": "both"
     }
   ],
   "features": [

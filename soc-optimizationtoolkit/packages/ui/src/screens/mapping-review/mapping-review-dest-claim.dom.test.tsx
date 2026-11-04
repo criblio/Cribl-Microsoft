@@ -31,6 +31,7 @@ import type {
 } from "@soc/core";
 import type { RequirementsForAssessment } from "./mapping-review-state";
 import { MappingReviewSection } from "./mapping-review-section";
+import { chooseDestField, destFieldControl, destFieldValue } from "./dest-field-test-driver";
 
 afterEach(cleanup);
 
@@ -106,11 +107,12 @@ function rowFor(container: HTMLElement, source: string): HTMLTableRowElement {
   return row;
 }
 
+// DBT-251: Dest Field is a SearchableSelect; the "select" is its control button.
 const destSelect = (container: HTMLElement, source: string) =>
-  rowFor(container, source).querySelector<HTMLSelectElement>("select.mapping-select")!;
+  destFieldControl(rowFor(container, source));
 
 const pointAt = (container: HTMLElement, source: string, column: string) =>
-  fireEvent.change(destSelect(container, source), { target: { value: column } });
+  chooseDestField(rowFor(container, source), column);
 
 const summary = (container: HTMLElement): string =>
   container.querySelector(".mapping-review-fields-summary")?.textContent ?? "";
@@ -205,7 +207,7 @@ describe("Dest Field re-point onto a column another row fills (DBT-208)", () => 
     // Nothing applied yet: both rows are as the analysis left them.
     expect(rowOf(effective, "qqzz")?.action).toBe("overflow");
     expect(rowOf(effective, "in")?.dest).toBe("ReceivedBytes");
-    expect(destSelect(container, "qqzz").value).toBe("AdditionalExtensions");
+    expect(destFieldValue(rowFor(container, "qqzz"))).toBe("AdditionalExtensions");
 
     // Keep: nothing changes, and focus returns to the select.
     fireEvent.click(button(container, "Keep in")!);
@@ -272,7 +274,7 @@ describe("Dest Field re-point onto a column another row fills (DBT-208)", () => 
     // `in` leaves ReceivedBytes by its OWN Action select while the question
     // is open: "already filled by in" is no longer true.
     fireEvent.change(
-      rowFor(container, "in").querySelectorAll<HTMLSelectElement>("select.mapping-select")[1]!,
+      rowFor(container, "in").querySelectorAll<HTMLSelectElement>("select.mapping-select")[0]!,
       { target: { value: "drop" } },
     );
     await waitFor(() => {
