@@ -44,6 +44,16 @@ export function normalizeTenantId(tenantId: string): string {
   return tenantId.trim().toLowerCase();
 }
 
+/**
+ * The one spelling of an application (client) id in an owner record. Every
+ * writer and every matcher goes through it, so a record written by one cannot
+ * fail to match in the other (architecture audit 2026-11-03: it was restated
+ * inline four times).
+ */
+function normalizeClientId(clientId: string): string {
+  return clientId.trim().toLowerCase();
+}
+
 /** Length of {@link tenantToken}: 8 hex digits, 32 bits. */
 const TENANT_TOKEN_LENGTH = 8;
 
@@ -225,7 +235,7 @@ export function encodeCredentialOwner(owner: CredentialOwner, writeId?: string):
     kind: OWNER_KIND,
     profileId: owner.profileId,
     tenantId: normalizeTenantId(owner.tenantId),
-    clientId: owner.clientId.trim().toLowerCase(),
+    clientId: normalizeClientId(owner.clientId),
     ...(writeId !== undefined ? { writeId } : {}),
   };
 }
@@ -302,7 +312,7 @@ export function decodeCredentialOwner(value: unknown): CredentialOwner | null {
   return {
     profileId: v.profileId,
     tenantId: normalizeTenantId(v.tenantId),
-    clientId: v.clientId.trim().toLowerCase(),
+    clientId: normalizeClientId(v.clientId),
   };
 }
 
@@ -314,7 +324,7 @@ export function credentialOwnerMatches(
   return (
     owner !== null &&
     owner.tenantId === normalizeTenantId(identity.tenantId) &&
-    owner.clientId === identity.clientId.trim().toLowerCase()
+    owner.clientId === normalizeClientId(identity.clientId)
   );
 }
 
@@ -389,7 +399,7 @@ export function judgeSlotOwner(
   }
   // Same tenant, another app registration (review finding): its grants are
   // not this connection's, so its answers are not this connection's either.
-  if (clientId !== undefined && owner.clientId !== clientId.trim().toLowerCase()) {
+  if (clientId !== undefined && owner.clientId !== normalizeClientId(clientId)) {
     return {
       kind: "refuse",
       reason: `the shared Azure credential is another app registration's in tenant ${wanted} right now (client ${owner.clientId}) - another tab of this app is reading through it`,

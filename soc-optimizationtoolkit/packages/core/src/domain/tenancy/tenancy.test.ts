@@ -191,6 +191,15 @@ describe("slot owner check (AZR-92: an owner check per batch)", () => {
     expect(check).toEqual({ kind: "admit", stamp: JSON.stringify(mine) });
   });
 
+  it("matches the client id case- and space-blind, the same way credentialOwnerMatches and the encoder do (architecture audit 2026-11-03)", () => {
+    const spelled = { tenantId: ` ${TENANT.toUpperCase()} `, clientId: " C1 " };
+    expect(judgeSlotOwner(value(mine), spelled).kind).toBe("admit");
+    expect(credentialOwnerMatches(decodeCredentialOwner(mine), spelled)).toBe(true);
+    const upper = encodeCredentialOwner({ profileId: "p1", tenantId: TENANT, clientId: " C1 " }, "tab-1:1:2");
+    expect(judgeSlotOwner(value(upper), { tenantId: TENANT, clientId: "c1" }).kind).toBe("admit");
+    expect(judgeSlotOwner(value(mine), { tenantId: TENANT, clientId: "c2" }).kind).toBe("refuse");
+  });
+
   it("REFUSES another tenant, naming that another tab is reading a different tenant", () => {
     const check = judgeSlotOwner(value(mine), OTHER);
     expect(check.kind).toBe("refuse");

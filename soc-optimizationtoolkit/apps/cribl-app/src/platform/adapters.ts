@@ -287,11 +287,6 @@ export class PlatformAzureManagement implements AzureManagement {
     this.identity = clientId === undefined ? { tenantId } : { tenantId, clientId };
   }
 
-  /** Acquire a fresh ARM token for the constructed tenant into the slot. */
-  async ensureArmToken(): Promise<void> {
-    await this.slot.mintArm(this.tenantId);
-  }
-
   async request(opts: AzureManagementRequest): Promise<PortHttpResponse> {
     return this.withSlot(accessOf(opts.method), () => this.send(opts));
   }
