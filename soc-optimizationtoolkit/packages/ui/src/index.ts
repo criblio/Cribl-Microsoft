@@ -565,6 +565,7 @@ export type {
 // to Sentinel solutions, enrich with the solutions' analytics rules, pivot
 // into Sentinel Integration via the preserved solution deep link, and keep
 // the plan across navigation (ContentCache persistence).
+export { WorkspaceInventoryPanel } from "./screens/data-volume-inventory/workspace-inventory-panel";
 export { SiemMigrationScreen } from "./screens/siem-migration/siem-migration-screen";
 export type { SiemMigrationScreenProps } from "./screens/siem-migration/siem-migration-screen";
 export {

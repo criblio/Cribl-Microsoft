@@ -1635,6 +1635,22 @@ const OPERATIONS = {
       "GET https://graph.microsoft.com/v1.0/servicePrincipals?$select=id,appId,displayName&$top=100",
     ],
   },
+  "graph.subscribedSkus.read": {
+    id: "graph.subscribedSkus.read",
+    calls: [
+      { method: "GET", path: "https://graph.microsoft.com/v1.0/subscribedSkus", api: "graph" },
+    ],
+    operation: "LicenseAssignment.Read.All",
+    leastRole: "LicenseAssignment.Read.All",
+    alsoGrantedBy: ["Organization.Read.All", "Organization.ReadWrite.All", "Directory.Read.All", "Directory.ReadWrite.All"],
+    scope: "tenant",
+    scopeNote: "the tenant, consented on the app registration by an Entra administrator",
+    citation: "https://learn.microsoft.com/en-us/graph/api/subscribedsku-list?view=graph-rest-1.0",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "The call arrived with MIG-14 (data allowances) on main and reached this registry in the 2026-11-03 merge, after the audit was taken. Least privilege is from the Microsoft Graph page cited (Application: LicenseAssignment.Read.All; Directory and Organization read are higher), read 2026-11-03.",
+  },
   "entra.token": {
     id: "entra.token",
     calls: [

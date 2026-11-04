@@ -29,6 +29,7 @@ export * from "./tenant-documents";
 export * from "./scan-tenant-gap";
 export * from "./workspace-tables";
 export * from "./workspace-inventory";
+export * from "./data-allowances";
 export * from "./install-pack";
 export * from "./dcr-inventory";
 export * from "./update-dcr";

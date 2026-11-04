@@ -97,6 +97,7 @@ describe("acquireServicePrincipals", () => {
         sp("obj-own", "app-own", "Own"),
         sp("obj-a", "app-a", "Alpha"),
       ],
+      readSubscribedSkus: async () => ({ kind: "denied", status: 403, detail: "unused" }),
     };
     const sorted = listingRows(await acquireServicePrincipals(graph, "app-own"));
     expect(sorted.map((s) => s.id)).toEqual(["obj-own", "obj-a", "obj-b"]);
@@ -107,6 +108,7 @@ describe("acquireServicePrincipals", () => {
       listServicePrincipals: async () => {
         throw new Error("Authorization_RequestDenied");
       },
+      readSubscribedSkus: async () => ({ kind: "denied", status: 403, detail: "unused" }),
     };
     await expect(acquireServicePrincipals(graph, "app-own")).rejects.toThrow(
       "Authorization_RequestDenied",

@@ -434,6 +434,14 @@ const GRAPH_MAX_PAGES = 20;
 const GRAPH_SP_URL =
   `${GRAPH_BASE_URL}/v1.0/servicePrincipals?$select=id,appId,displayName&$top=100`;
 
+const GRAPH_SKUS_URL =
+  `${GRAPH_BASE_URL}/v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo`;
+
+/** What GraphDirectory.readSubscribedSkus resolves to. */
+type SubscribedSkusRead =
+  | { kind: 'read'; body: unknown }
+  | { kind: 'denied'; status: number; detail: string };
+
 /** Map one Graph servicePrincipals `value[]` body into ServicePrincipalRefs. */
 function mapServicePrincipals(body: unknown): ServicePrincipalRef[] {
   const value = prop(body, 'value');
@@ -531,6 +539,45 @@ export class PlatformGraphDirectory implements GraphDirectory {
       body = page.body;
     }
     return out;
+  }
+
+  /**
+   * Goes through the shared slot exactly as listServicePrincipals does
+   * (AZR-92): the owner record is checked before the read and after it, so a
+   * slot another tab swapped to a different tenant refuses (rejects) instead of
+   * returning that tenant's licences as this one's.
+   */
+  async readSubscribedSkus(): Promise<SubscribedSkusRead> {
+    return this.mode === 'session'
+      ? this.skus(async () => undefined)
+      : this.slot.shared(this.identity, 'read', (recheck) => this.skus(recheck));
+  }
+
+  private async skus(recheck: SlotRecheck): Promise<SubscribedSkusRead> {
+    if (this.mode === 'shared') {
+      await this.slot.ensureGraph(this.tenantId);
+    }
+    let res = await this.page(GRAPH_SKUS_URL);
+    if (res.status === 401 || res.status === 403) {
+      // Same single re-acquire as listServicePrincipals: a token minted before
+      // the LicenseAssignment.Read.All consent keeps answering 403. The
+      // re-mint is sent on the batch's verdict, so the owner is re-checked first.
+      await recheck();
+      await this.slot.mintGraph(this.tenantId);
+      res = await this.page(GRAPH_SKUS_URL);
+    }
+    if (res.status === 200) {
+      return { kind: 'read', body: res.body };
+    }
+    const hint =
+      res.status === 403
+        ? ' - the app registration needs LicenseAssignment.Read.All consented to read license SKUs and seat counts'
+        : '';
+    return {
+      kind: 'denied',
+      status: res.status,
+      detail: `Graph subscribedSkus: HTTP ${res.status}${hint}`,
+    };
   }
 }
 

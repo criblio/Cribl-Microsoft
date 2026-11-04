@@ -17,6 +17,9 @@
  * the Application.Read.All (or Directory.Read.All) permission consented; without
  * it the directory read is denied and the adapter rejects, so the picker falls
  * back to manual object-id entry (never worse than the plain text field).
+ * `readSubscribedSkus` (the data-allowances licence read) needs the separate
+ * LicenseAssignment.Read.All application permission; its refusal is returned,
+ * not thrown, so the caller can say "not read" instead of "no licences".
  */
 
 /** A service principal (Enterprise Application) as the picker needs it. */
@@ -44,4 +47,15 @@ export interface GraphDirectory {
    * tenant resolves `[]`; a permission or transport failure rejects.
    */
   listServicePrincipals(): Promise<ServicePrincipalRef[]>;
+
+  /**
+   * Read the tenant's subscribed license SKUs (GET /v1.0/subscribedSkus: SKU
+   * id, part number, status, purchased and consumed seats - never who holds
+   * them). Resolves `denied` with the HTTP status and detail when Graph
+   * refuses (typically 403: LicenseAssignment.Read.All not consented); rejects
+   * only on a transport failure. `body` is the raw response, parsed by core.
+   */
+  readSubscribedSkus(): Promise<
+    { kind: "read"; body: unknown } | { kind: "denied"; status: number; detail: string }
+  >;
 }

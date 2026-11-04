@@ -106,6 +106,13 @@ const ID_RELATIVE_SITES: Readonly<Record<string, readonly { tail: string; operat
       why: "the id is an Event Hub (listAuthRulesRequest(hubResourceId))",
     },
   ],
+  "packages/core/src/usecases/data-allowances/data-allowances.ts": [
+    {
+      tail: "tables",
+      operations: ["tables.list"],
+      why: "the id is the Log Analytics workspace (readTablePlans(workspaceId))",
+    },
+  ],
   "packages/core/src/usecases/workspace-inventory/workspace-inventory.ts": [
     {
       tail: "query",
@@ -158,6 +165,7 @@ describe("least-privilege coverage of Azure call sites", () => {
       "workspaces.list",
     );
     expect(reached("apps/cribl-app/src/platform/adapters.ts")).toContain("graph.servicePrincipals.read");
+    expect(reached("apps/cribl-app/src/platform/adapters.ts")).toContain("graph.subscribedSkus.read");
     expect(reached("apps/cribl-app/src/platform/http.ts")).toContain("entra.token");
   }, 120_000);
 

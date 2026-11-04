@@ -212,6 +212,19 @@ const FUNCTIONS = [
     operations: ["subscriptions.list", "workspaces.list", "solutions.list", "workspace.query"],
   },
   {
+    id: "data-allowances",
+    label: "Show how much of the free data allowances is granted and used",
+    necessity: "feature",
+    operations: [
+      "entra.token",
+      "graph.subscribedSkus.read",
+      "defender.pricings.read",
+      "resourceGraph.query",
+      "tables.list",
+      "workspace.query",
+    ],
+  },
+  {
     id: "labs",
     label: "Deploy, extend and destroy labs",
     necessity: "core",

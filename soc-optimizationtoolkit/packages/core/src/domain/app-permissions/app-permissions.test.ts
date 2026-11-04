@@ -73,6 +73,19 @@ describe("appPermissionPlan - completeness", () => {
     }
   });
 
+  it("asks for exactly the two Graph permissions, both optional features", () => {
+    // LicenseAssignment.Read.All feeds the E5 granted figure (data allowances).
+    // It is a feature, so an approver can refuse it without blocking setup.
+    expect(GRAPH_PERMISSIONS.map((p) => p.name)).toEqual([
+      "Application.Read.All",
+      "LicenseAssignment.Read.All",
+    ]);
+    for (const p of GRAPH_PERMISSIONS) expect(p.necessity, p.name).toBe("feature");
+    for (const path of PATHS) {
+      expect(names(path)).toContain("LicenseAssignment.Read.All");
+    }
+  });
+
   it("explains every permission - which feature, why, and the cost of refusing", () => {
     // A permission with no stated cost invites a blanket no, because the
     // approver cannot tell a nice-to-have from a blocker.
@@ -247,6 +260,7 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
   it("names the Graph permission the registry names for the identity picker", () => {
     expect(GRAPH_PERMISSIONS.map((p) => p.name)).toEqual([
       leastRoleFor("graph.servicePrincipals.read"),
+      leastRoleFor("graph.subscribedSkus.read"),
     ]);
   });
 

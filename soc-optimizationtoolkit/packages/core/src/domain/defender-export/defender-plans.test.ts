@@ -229,3 +229,18 @@ describe("the app never writes a Defender plan", () => {
     ).toBe(false);
   });
 });
+
+describe("parsePricings - subPlan", () => {
+  it("keeps subPlan P2 on VirtualMachines and uses an empty string when absent", () => {
+    const result = read(
+      ok([
+        { name: "VirtualMachines", properties: { pricingTier: "Standard", subPlan: "P2" } },
+        pricing("Arm", "Standard"),
+      ]),
+    );
+    expect(result.enabled.map((p) => [p.name, p.subPlan])).toEqual([
+      ["VirtualMachines", "P2"],
+      ["Arm", ""],
+    ]);
+  });
+});
