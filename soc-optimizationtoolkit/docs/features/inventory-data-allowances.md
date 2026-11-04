@@ -227,9 +227,15 @@ MIG-17 stays open.
    Resource Graph machine count answers (55 machines in one subscription).
 2. Which seat basis and which machine basis the `Operation` figures match -
    NOT MEASURED; the cross-check marks a basis when the data allows.
-3. The literal `Operation` benefit-type strings - NOT MEASURED; the
-   `BENEFIT_TYPE_PATTERNS` are placeholders, and an unrecognised type degrades
-   the read to one pooled figure rather than guessing.
+3. The literal `Operation` benefit-type strings - NOT MEASURED; an
+   unrecognised type degrades the read to one pooled figure rather than
+   guessing. The patterns cover the strings published so far (2026-11-04,
+   asserted by a community guide, not observed): "SentinelMicrosoft365" reads
+   as E5, "Standard Data Included per Node" (also Microsoft's meter name) as
+   Servers P2, and the ambiguous "MicrosoftDefender" stays unattributed
+   (MIG-26). A workspace with no applied benefit cannot answer this: the
+   `Operation` table has no list of possible types, only rows for benefits
+   applied.
 
 ## Left to the builder
 
