@@ -118,6 +118,7 @@ export {
 export {
   KQL_VALIDATION_TABLES_DIR,
   createKqlValidationSchemaCatalog,
+  listKqlValidationTableNames,
   mapValidationColumnType,
   parseKqlValidationTable,
 } from "./kql-validation-schema-catalog";
