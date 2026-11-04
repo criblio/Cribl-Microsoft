@@ -144,7 +144,7 @@ describe("WorkspaceInventoryPanel", () => {
       ]),
     );
     expect(screen.getByText("Syslog")).toBeTruthy();
-    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day \(billed 0\.1, free 0\), 1,200 events/)).toBeTruthy();
+    expect(screen.getByText(/fw-01 \(Computer\) - 100\.0 KB\/day \(billed 100\.0 KB, free 0 MB\), 1,200 events/)).toBeTruthy();
     // Heartbeat billed but its breakdown returned no rows: volume stays, failure is said.
     expect(screen.getByText("Heartbeat")).toBeTruthy();
     expect(screen.getByText(/Breakdown failed: .*although Usage billed it/)).toBeTruthy();
@@ -199,7 +199,7 @@ describe("WorkspaceInventoryPanel - MIG-29", () => {
     );
     renderPanel(request);
     await discoverAndInventory();
-    await screen.findByText(/Cisco ASA via localhost - 45\.2 MB\/day \(billed 45\.2, free 0\)/);
+    await screen.findByText(/Cisco ASA via localhost - 45\.2 MB\/day \(billed 45\.2 MB, free 0 MB\)/);
     expect(screen.getByText(/Palo Alto via edge-1/)).toBeTruthy();
     expect(screen.getAllByText("billed figure exceeds total - see tip")).toHaveLength(1);
     expect(screen.getByText(/Sources \(measured from the rows\) total 48\.2 MB of the 50\.0 MB\/day Usage reports/)).toBeTruthy();

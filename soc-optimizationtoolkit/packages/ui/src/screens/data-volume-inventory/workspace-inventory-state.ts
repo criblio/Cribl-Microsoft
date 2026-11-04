@@ -165,8 +165,6 @@ export function sourceCount(table: InventoryTable): number | null {
   return table.sources.sources.reduce((sum, s) => sum + s.sourceCount, 0);
 }
 
-const plainMB = (mb: number): string => String(Number(mb.toFixed(1)));
-
 /**
  * One source's drill-down line: "Cisco ASA via localhost - 45.2 MB/day (billed
  * 45.2, free 0), 1,200 events". Non-product kinds keep their kind in brackets.
@@ -179,10 +177,16 @@ export function sourceLineText(source: InventorySource): string {
       : `${label.text} (${label.kind})`;
   return (
     `${who} - ${formatMB(source.dailyAverageMB)}/day ` +
-    `(billed ${plainMB(source.billableDailyMB)}, free ${plainMB(source.freeDailyMB)}), ` +
+    `(billed ${formatMB(source.billableDailyMB)}, free ${formatMB(source.freeDailyMB)}), ` +
     `${source.events.toLocaleString()} events`
   );
 }
+
+/** What the per-table reconciliation line compares; the InfoTip on that line. */
+export const RECONCILE_TIP =
+  "Source figures are _BilledSize summed from the rows over 30 days; the table figure " +
+  "is the Usage table's. They are separate measurements, so a small gap is expected. " +
+  "Billed is what counts toward ingestion; free is the part the rows say is not billed.";
 
 /** Why a source's billed figure is shown with a flag; the InfoTip on the note. */
 export const BILLED_EXCEEDS_TIP =
@@ -242,7 +246,9 @@ export function inventoryCsv(inventory: WorkspaceInventory, allowances: DataAllo
       const label = sourceLabel(s);
       lines.push(
         [...head, s.source || label.text, label.kind, s.dailyAverageMB.toFixed(3), s.events, status, ...allowance,
-          s.source, s.collector, s.billableDailyMB.toFixed(3), s.freeDailyMB.toFixed(3)]
+          s.source, s.collector, s.billableDailyMB.toFixed(3),
+          // Billed above total is a broken answer: the free figure is not knowable, so it is empty, never 0.
+          s.billedExceedsTotal ? "" : s.freeDailyMB.toFixed(3)]
           .map(esc)
           .join(","),
       );

@@ -167,7 +167,7 @@ describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
 
   it("reads Cisco ASA via localhost with billed and free", () => {
     expect(sourceLineText(cisco)).toBe(
-      "Cisco ASA via localhost - 45.2 MB/day (billed 45.2, free 0), 10 events",
+      "Cisco ASA via localhost - 45.2 MB/day (billed 45.2 MB, free 0 MB), 10 events",
     );
   });
 
@@ -194,6 +194,9 @@ describe("by-source labels, lines, reconciliation and CSV (MIG-29)", () => {
     );
     expect(lines[1]!.endsWith(",Cisco ASA,localhost,45.200,0.000")).toBe(true);
     expect(lines[2]!.endsWith(",,,4.000,6.000")).toBe(true);
+    // Billed above total: the free figure is not knowable, so it is empty, never 0.
+    const broken = source({ ...cisco, billedExceedsTotal: true, billableDailyMB: 50, freeDailyMB: 0 });
+    expect(inventoryCsv(inv([broken]), null).split("\n")[1]!.endsWith(",Cisco ASA,localhost,50.000,")).toBe(true);
   });
 });
 

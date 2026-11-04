@@ -40,17 +40,18 @@ import {
   tenantDiscoveryNote,
 } from "./allowance-state";
 import {
+  BILLED_EXCEEDS_TIP,
   discoveryHeadline,
   formatMB,
   inventoryCsv,
   inventoryEmptyText,
+  RECONCILE_TIP,
   sourceCount,
   sourceGaps,
   sourceLabel,
   sourceLineText,
-  tableReconciliation,
-  BILLED_EXCEEDS_TIP,
   staleInventoryNote,
+  tableReconciliation,
   workspaceNameOf,
   workspaceSelectOption,
 } from "./workspace-inventory-state";
@@ -60,11 +61,6 @@ const USAGE_TIP =
   "table (DataType), summed over the last 30 complete UTC days (today excluded) and " +
   "divided by 30. Billable excludes free tables such as Heartbeat. This is the number " +
   "the Azure portal's Usage and estimated costs blade is built from.";
-
-const RECONCILE_TIP =
-  "Source figures are _BilledSize summed from the rows over 30 days; the table figure " +
-  "is the Usage table's. They are separate measurements, so a small gap is expected. " +
-  "Billed is what counts toward ingestion; free is the part the rows say is not billed.";
 
 const SOURCES_TIP =
   "From the rows themselves: sum(_BilledSize) per table over the same 30 days, " +
