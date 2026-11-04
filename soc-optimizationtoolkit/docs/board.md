@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 41 in progress, 152 done.**
+**95 in the backlog, 41 in progress, 152 done.**
 
 ## By menu item
 
@@ -36,12 +36,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 30 | 12 |
+| Azure Native Source Onboarding | 33 | 30 | 13 |
 | Azure Logging Map | 3 | 1 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 135.
+Open work totals 136.
 
 ## Epics and features
 
@@ -50,7 +50,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 43% (27/63)
+### `AZR` Azure native source onboarding - 42% (27/64)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -63,7 +63,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 25/40 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 25/41 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 0/5 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -174,7 +174,16 @@ Started. Anything here with an unfinished dependency is called out on its card.
   listKeys only after confirm; GET back and compare non-secret fields. Never
   enables a plan, never re-PUTs, never deletes. Recommendations, Secure Score,
   Regulatory Compliance, multi-subscription, repair and Remove are follow-up
-  cards. Done after Live Preview against a real subscription.
+  cards. Done after Live Preview against a real subscription. LIVE 2026-11-04
+  (Live Preview): the Defender section deployed CriblDefenderExport (Alerts
+  only) to hub ehjpedersoneastus in rg-jpederson-QuickstartLab after its
+  two-step confirm, and read it back; az security automation list agreed
+  (enabled, Alerts, that hub). Before the deploy the app said honestly that it
+  could not confirm there were no existing exports (no permission check covers
+  that list); az read 0. DELIVERY NOT VERIFIED: four Defender App Service
+  [SAMPLE ALERT]s raised at 13:13:24Z (about 2 minutes after the export was
+  created) did not reach the hub in 27 minutes (IncomingMessages 0). Unproven
+  whether a new export needs time before it forwards.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -503,7 +512,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   read it as present (eventhub), and planning again reported 'Already created
   ... matches the plan' with nothing armed. NOT yet live: the Entra ID
   credential (AZR-59, no Cribl principal in the lab), the paste credential,
-  the Blob lane, and data arriving (nothing is exported to the hub yet).
+  the Blob lane, and data arriving (nothing is exported to the hub yet). LIVE
+  2026-11-04 (Live Preview): no event has reached the created input yet; see
+  AZR-3 for why the hub is still empty.
 
 - **AZR-11** Make the prerequisite ordering explicit
   `AZR-F9` `enabler` `settled` `blocked by AZR-18`
@@ -1249,7 +1260,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1475,6 +1486,24 @@ Next to pick up. Nothing blocks these.
   refuse the app's own client id (reason app-principal, as AZR-59 does for
   Event Hub), and update the Blob How-to steps; existing Blob inputs created
   with the app's identity are reported, not silently rewritten.
+
+- **AZR-93** After a deploy reads the Defender export back, Validate and the dataflow diagram still show it 'not found' until Validate is re-run by hand
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-04 in the live pass (Live Preview, DatacenterEast). Validate
+  ran at 12:22 and read CriblDefenderExport as absent (true then). The
+  Defender section then deployed it and said 'CriblDefenderExport was created
+  and read back from Azure'. The Validate results and the dataflow diagram's
+  Defender node kept showing 'not found' in red on the same screen, with no
+  sign the verdict predated the deploy; re-running Validate (7:14 local) read
+  it 'as expected'. FAILURE: an operator who deploys and then looks at the
+  diagram is told the thing they just created does not exist. FIX (settled,
+  small): a deploy's successful read-back replaces that check's verdict
+  (defender-export) in the Validate result the diagram draws from, or marks
+  the whole Validate result as older than a write made since, naming the
+  write. Pin: deploy after an absent verdict -> the Defender node no longer
+  reads 'not found'. Never upgrade a verdict without a read; the read-back IS
+  a read. NOTE: id AZR-93 skips 68-92 on purpose: feature/multi-tenant-azure
+  (PR #200) holds AZR-61..65 and AZR-81..92.
 
 ---
 
