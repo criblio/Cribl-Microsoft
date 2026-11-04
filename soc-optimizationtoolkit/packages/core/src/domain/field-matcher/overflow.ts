@@ -12,6 +12,8 @@
  * Pure: no IO, no fetch, no React, no Date/crypto.
  */
 
+import { isAsimTableName } from "./table-family";
+
 /**
  * Maps Sentinel table names to their overflow/catch-all field. Verbatim from
  * legacy TABLE_OVERFLOW_FIELDS.
@@ -60,9 +62,10 @@ export const SKIP_OVERFLOW_FIELDS = new Set([
 ]);
 
 /**
- * Get the overflow field config for a table. Verbatim from legacy
- * getOverflowConfig: exact match, then the _CL custom default, then the
- * CEF-style AdditionalExtensions fallback.
+ * Get the overflow field config for a table. Legacy order (exact match, then
+ * the _CL custom default, then the CEF-style AdditionalExtensions fallback)
+ * with ONE rung added by DBT-252: ASim tables, ahead of the _CL default, use
+ * their dynamic AdditionalFields column.
  */
 export function getOverflowConfig(tableName: string): {
   fieldName: string;
@@ -75,7 +78,7 @@ export function getOverflowConfig(tableName: string): {
   // the CEF fallback below sent every overflowed field of an ASim pick into a
   // column the table does not have. Checked against the bundled schemas: all
   // ten ASim tables declare AdditionalFields as dynamic.
-  if (/^ASim/i.test(tableName)) {
+  if (isAsimTableName(tableName)) {
     return { fieldName: "AdditionalFields", fieldType: "dynamic" };
   }
   // Custom table default

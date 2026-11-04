@@ -241,7 +241,7 @@ describe("Setup page folding (DBT-248)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
     // Opening is not a move; working inside the section is.
     expect(openTitles()).toEqual(["App registration and connect", "Sentinel content"]);
-    // findBy: Refresh renders after the section loads its data (DBT-254).
+    // findBy: Refresh renders after the section loads its data (DBT-298).
     fireEvent.pointerDown(
       await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
     );
@@ -256,7 +256,7 @@ describe("Setup page folding (DBT-248)", () => {
     // An unpinned open section that the move MUST fold, so this cannot pass vacuously.
     fireEvent.click(screen.getByRole("button", { name: "Expand Recent runs" }));
     expect(isFolded("Recent runs")).toBe(false);
-    // findBy: Refresh renders after the section loads its data (DBT-254).
+    // findBy: Refresh renders after the section loads its data (DBT-298).
     fireEvent.pointerDown(
       await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
     );
@@ -320,7 +320,7 @@ describe("Setup page folding (DBT-248)", () => {
     await settle();
     // Fold the current section by moving elsewhere, then use the button.
     fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
-    // findBy: Refresh renders after the section loads its data (DBT-254).
+    // findBy: Refresh renders after the section loads its data (DBT-298).
     fireEvent.pointerDown(
       await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
     );
@@ -418,7 +418,7 @@ describe("Setup page folding (DBT-248)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save and connect" }));
     await waitFor(() => expect(screen.getByText("running")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Expand Sentinel content" }));
-    // findBy: Refresh renders after the section loads its data (DBT-254).
+    // findBy: Refresh renders after the section loads its data (DBT-298).
     fireEvent.pointerDown(
       await within(sectionOf("Sentinel content")).findByRole("button", { name: "Refresh" }),
     );

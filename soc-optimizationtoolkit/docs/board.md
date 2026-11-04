@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 37 in progress, 187 done.**
+**106 in the backlog, 37 in progress, 188 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 52 | 94 | 24 |
+| Sentinel Integration | 52 | 95 | 24 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -117,14 +117,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 60% (103/172)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (104/173)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 40/88 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 51/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-254, DBT-249 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 41/89 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 51/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -1140,7 +1140,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
   but different' (the namespace has no such rule) and the policy-definition
   listing (no management group id in the plan).
 
-- **DBT-254** setup-fold.dom.test.tsx fails intermittently: it queries Sentinel content's Refresh button before it renders
+- **DBT-298** setup-fold.dom.test.tsx fails intermittently: it queries Sentinel content's Refresh button before it renders
   `DBT-F2` `bug` `settled`
   FOUND 2026-11-04 merging #199 and #200 (feature DBT-248, merged in #197).
   'the Next action button opens its folded target' failed in full-suite runs
@@ -1155,7 +1155,9 @@ Started. Anything here with an unfinished dependency is called out on its card.
   to 1 in 30 (measured: 1 failure in 30 runs, the same test, "Refresh" still
   absent after the 1 s default wait). Only that test mounts with no GitHub
   token (hasPat: false), so the remaining delay is in the component path for
-  that state; not yet pinned. Stays in-progress.
+  that state; not yet pinned. Stays in-progress. RENUMBERED 2026-11-04 from
+  DBT-254, which a PR merged to main first ("Two copies of is this an ASim
+  table"). DBT-298 sits outside the sequence parallel sessions number from.
 
 - **AZR-59** Event Hub lane authenticates with Entra ID OAuth by default, Listen-only SAS as the fallback
   `AZR-F9` `story` `settled`
@@ -2779,7 +2781,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (187)
+## Done (188)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7913,3 +7915,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   feature/multi-tenant-azure: built test-first, adversarially reviewed (every
   confirmed finding fixed and its pin mutation-checked), and every CI gate
   re-run green by the operator's session after the last commit.
+
+- **DBT-254** Two copies of "is this an ASim table?" disagreed on case
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND by the architecture audit 2026-11-04 (e446ac8..4543ca6).
+  getOverflowConfig (overflow.ts, added by DBT-252) matched /^ASim/i while
+  requiredIdentityFields (vendor-identity.ts) used a case-sensitive
+  startsWith("ASim"), so a lowercase asimnetworksessionlogs got the ASim
+  AdditionalFields catch-all but none of the EventVendor/EventProduct
+  requirement. FIXED: one isAsimTableName (field-matcher/table-family.ts,
+  trims, case-insensitive) used by both; pinned in asim-equivalents.test.ts
+  across three spellings. Same pass corrected two stale headers:
+  getOverflowConfig no longer claims the verbatim legacy order, and
+  knowledge-bases lists ASIM_COLUMN_EQUIVALENTS and where its entries are
+  pinned.

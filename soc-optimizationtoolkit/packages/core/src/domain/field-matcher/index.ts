@@ -42,6 +42,7 @@ export {
   SKIP_OVERFLOW_FIELDS,
   getOverflowConfig,
 } from "./overflow";
+export { isAsimTableName } from "./table-family";
 
 export type { VendorMapping, SampleFieldInput } from "./match-fields";
 export { matchFields, matchSampleToSchema } from "./match-fields";

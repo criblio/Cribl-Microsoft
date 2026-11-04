@@ -7,10 +7,13 @@
  * extension" section at the end of ALIAS_TABLE adds vendor knowledge for
  * fields that previously landed in fuzzy/overflow (PAN-OS field names as the
  * panos-dictionary parser emits them, missing CEF standard keys, FortiGate,
- * and cross-vendor web/hash conventions). Every extension entry is pinned in
- * field-matcher-improvements.test.ts - additions must come with a test.
+ * and cross-vendor web/hash conventions). Every extension entry is pinned -
+ * in field-matcher-improvements.test.ts, or asim-equivalents.test.ts for the
+ * ASim / PAN-OS session entries (DBT-252, DBT-253). Additions must come with a
+ * test.
  *
  *   ALIAS_TABLE          legacy lines 73-316  (~240 entries) + curated extension
+ *   ASIM_COLUMN_EQUIVALENTS  alias target -> ASim column (DBT-252, DBT-253)
  *   REVERSE_ALIAS        legacy lines 319-327
  *   classifyEventType    legacy lines 367-383
  *   EVENT_TYPE_BOOSTS    legacy lines 386-395
