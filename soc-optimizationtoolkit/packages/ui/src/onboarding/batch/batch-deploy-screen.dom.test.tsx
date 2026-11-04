@@ -47,6 +47,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "rg-soc-prod",
   workspaceName: "law-soc",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 /** Both sides connected, so an unmeasured capability reads `unknown`. */

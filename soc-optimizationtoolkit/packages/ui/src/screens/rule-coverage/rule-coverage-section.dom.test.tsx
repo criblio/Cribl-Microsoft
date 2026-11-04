@@ -35,6 +35,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 const COLUMNS = ["TimeGenerated", "SourceIP", "DestinationIP", "DeviceAction"];

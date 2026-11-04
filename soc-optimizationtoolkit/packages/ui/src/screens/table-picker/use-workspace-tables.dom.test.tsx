@@ -45,6 +45,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "rg",
   workspaceName: "law-test",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 /** ARM list response shaped as the parser expects. */

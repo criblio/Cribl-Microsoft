@@ -20,8 +20,8 @@
  */
 
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AzureConfig, WizardCapabilities } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -62,7 +62,6 @@ function renderOnAzureStep(section?: ReactNode, resources?: ReactNode) {
     <PortsProvider ports={PORTS} config={CONFIG}>
       <SetupWizard
         capabilities={CAPABILITIES}
-        criblShellMode="cloud"
         contentPlatform="cloud"
         initialTarget="cribl-hosted"
         lockTarget
@@ -116,15 +115,15 @@ describe("SetupWizard - Connect Azure step", () => {
     expect(screen.getByText("connect form")).toBeTruthy();
   });
 
-  it("keeps the step's own guidance BESIDE the form, not replaced by it", () => {
+  it("keeps the step's own one-line guidance BESIDE the form, not replaced by it", () => {
     // The change-request path was not a workaround to retire - most operators
-    // genuinely have to ask another team for credentials. The form was added
-    // alongside it, and a future edit that swaps one for the other would be a
-    // regression for whichever half it dropped.
+    // genuinely have to ask another team for credentials. The generator now
+    // lives in the connect section alone (DBT-240: one per screen), so the step
+    // keeps only its guidance line beside the form.
     renderOnAzureStep(<div data-testid="azure-connect-slot">connect form</div>);
     advanceToAzureStep();
     expect(screen.getByText("connect form")).toBeTruthy();
-    expect(screen.getByText(/change request/i)).toBeTruthy();
+    expect(screen.getByText(/choose below how much this app may do in azure/i)).toBeTruthy();
   });
 
   it("RENDERS the resources section too, because the step's own copy promises it", () => {
@@ -168,6 +167,42 @@ describe("SetupWizard - Connect Azure step", () => {
     advanceToAzureStep();
     expect(screen.queryByTestId("azure-connect-slot")).toBeNull();
     // Reached the step and it still has its content - not a blank panel.
-    expect(screen.getByText(/change request/i)).toBeTruthy();
+    expect(screen.getByText(/choose below how much this app may do in azure/i)).toBeTruthy();
+  });
+});
+
+describe("SetupWizard - GitHub step token status (DBT-246)", () => {
+  it("forwards a saved token to onTokenStatusChange", async () => {
+    const onTokenStatusChange = vi.fn();
+    const ports = {
+      githubPat: {
+        status: vi.fn(async () => ({ hasPat: false })),
+        validateAndStore: vi.fn(async () => ({ hasPat: true, login: "octo" })),
+        clear: vi.fn(),
+      },
+      content: { getCommitSha: vi.fn(), listSolutions: vi.fn(async () => []) },
+    } as unknown as UiPorts;
+    await act(async () => {
+      render(
+        <PortsProvider ports={ports} config={CONFIG}>
+          <SetupWizard
+            capabilities={CAPABILITIES}
+            contentPlatform="cloud"
+            initialTarget="cribl-hosted"
+            lockTarget
+            installedInLeader
+            onGetStarted={() => {}}
+            onTokenStatusChange={onTokenStatusChange}
+          />
+        </PortsProvider>,
+      );
+    });
+    expect(screen.getByRole("heading", { name: "Connect GitHub content" })).toBeTruthy();
+    const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "github_pat_abcdefghijklmnop" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Save|Validate|Store|Connect/i }));
+    });
+    expect(onTokenStatusChange.mock.calls).toEqual([[true]]);
   });
 });

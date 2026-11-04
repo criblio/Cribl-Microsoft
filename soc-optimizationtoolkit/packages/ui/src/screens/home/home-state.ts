@@ -21,7 +21,7 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import { nextAction } from "@soc/core";
+import { deriveJourney, nextAction } from "@soc/core";
 import type { JourneyFacts, JourneyStageId } from "@soc/core";
 import type { JourneyLinks } from "../../frame/stepper-state";
 
@@ -68,3 +68,76 @@ export function deriveNextActionView(
 export const NO_ACTION_FALLBACK =
   "Nothing on the journey needs action right now.";
 
+
+// ---------------------------------------------------------------------------
+// Folding (DBT-248): the Setup page opens collapsed, like Sentinel Integration.
+// ---------------------------------------------------------------------------
+
+/** Every foldable section of the Setup page, in page order. The Next action panel is not one: it never folds. */
+export const SETUP_SECTION_IDS: readonly string[] = [
+  "journey",
+  "azure-connectivity",
+  "azure-connect",
+  "azure-resources",
+  "github-token",
+  "sentinel-content",
+  "schema-tables",
+  "recent-runs",
+];
+
+/** Content-cache key prefix of the Setup page's pins. */
+export const SETUP_PIN_PREFIX = "setup-pinned-sections";
+
+/** The DOM id a Setup section scrolls to (distinct from the shell's legacy anchor divs). */
+export function setupAnchorFor(id: string): string {
+  return `setup-section-${id}`;
+}
+
+/**
+ * The section a journey stage lands on, or undefined when the stage has no
+ * section on this page (accept, ready, the integrate arc).
+ */
+export function sectionForStage(stageId: string): string | undefined {
+  switch (stageId) {
+    case "connect":
+      return "azure-connect";
+    case "target":
+      return "azure-resources";
+    case "github":
+      return "github-token";
+    default:
+      return undefined;
+  }
+}
+
+/** The section that needs the operator: the one the Next action points at. */
+export function currentSetupSection(action: NextActionView | null): string | undefined {
+  return action === null ? undefined : sectionForStage(action.stageId);
+}
+
+/** The sections the page actually renders, in order - the badge numbers count these. */
+export function visibleSetupSections(facts: JourneyFacts): string[] {
+  const connectivity = facts.connectivity ?? "full";
+  return SETUP_SECTION_IDS.filter((id) => {
+    if (id === "azure-connectivity") return connectivity === "partial";
+    if (id === "azure-connect" || id === "azure-resources") return connectivity !== "disconnected";
+    return true;
+  });
+}
+
+/** "Step 2 of 4: Connect" for the current first-run stage, or "Setup complete". */
+export function journeySummary(facts: JourneyFacts): string {
+  const stages = deriveJourney(facts).firstRun.filter((s) => s.status !== "not-needed");
+  const at = stages.findIndex((s) => s.status === "current");
+  const current = stages[at];
+  return current === undefined
+    ? "Setup complete"
+    : `Step ${at + 1} of ${stages.length}: ${current.label}`;
+}
+
+/** The Recent runs one-liner; undefined while the first load is pending. */
+export function runsSummary(count: number | null, failed = false): string | undefined {
+  if (failed) return "Could not load runs";
+  if (count === null) return undefined;
+  return count === 0 ? "No runs yet" : count === 1 ? "1 run" : `${count} runs`;
+}

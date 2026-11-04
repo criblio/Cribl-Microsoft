@@ -53,6 +53,8 @@ describe("validateConfigJson", () => {
         resourceGroup: "rg-1",
         workspaceName: "ws-1",
         setupPath: "lab-byo-rg",
+        connectivity: "full",
+        allowedPermissions: ["Reader"],
       });
       expect(result.warnings).toEqual([]);
       expect(JSON.parse(result.normalizedJson)).toEqual(result.config);

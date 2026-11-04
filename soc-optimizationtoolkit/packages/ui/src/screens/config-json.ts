@@ -35,7 +35,7 @@ export type ConfigJsonResult =
     }
   | { ok: false; error: string };
 
-/** The six known AzureConfig keys; everything else is dropped by the codec. */
+/** The known AzureConfig keys; everything else is dropped by the codec. */
 const KNOWN_KEYS = new Set(Object.keys(EMPTY_AZURE_CONFIG));
 
 /**
@@ -84,7 +84,13 @@ export function validateConfigJson(text: string): ConfigJsonResult {
   }
 
   for (const key of KNOWN_KEYS) {
-    if (key === "setupPath") {
+    // setupPath, connectivity and allowedPermissions are not plain strings;
+    // the codec narrows them itself.
+    if (
+      key === "setupPath" ||
+      key === "connectivity" ||
+      key === "allowedPermissions"
+    ) {
       continue;
     }
     const value = input[key];

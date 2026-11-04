@@ -10,7 +10,12 @@ import type { JourneyFacts } from "@soc/core";
 import { SHARED_JOURNEY_LINKS, mergeJourneyLinks } from "../../frame/stepper-state";
 import {
   NO_ACTION_FALLBACK,
+  currentSetupSection,
   deriveNextActionView,
+  journeySummary,
+  runsSummary,
+  sectionForStage,
+  visibleSetupSections,
 } from "./home-state";
 
 /** A green azure-only baseline; tests override the facts under exercise. */
@@ -104,3 +109,48 @@ describe("deriveNextActionView", () => {
   });
 });
 
+
+describe("Setup folding decisions (DBT-248)", () => {
+  it("maps the stages that live on Setup to their section, and no others", () => {
+    expect(sectionForStage("connect")).toBe("azure-connect");
+    expect(sectionForStage("target")).toBe("azure-resources");
+    expect(sectionForStage("github")).toBe("github-token");
+    expect(sectionForStage("accept")).toBeUndefined();
+    expect(sectionForStage("deploy")).toBeUndefined();
+  });
+
+  it("makes the section the Next action points at current", () => {
+    const connect = deriveNextActionView(facts({ secretLive: "missing" }));
+    expect(currentSetupSection(connect)).toBe("azure-connect");
+    const target = deriveNextActionView(facts({ scopeCommitted: false }));
+    expect(currentSetupSection(target)).toBe("azure-resources");
+    const github = deriveNextActionView(facts({ tokenRequired: true, tokenPresent: false }));
+    expect(currentSetupSection(github)).toBe("github-token");
+    expect(currentSetupSection(deriveNextActionView(facts()))).toBeUndefined();
+    expect(currentSetupSection(null)).toBeUndefined();
+  });
+
+  it("numbers only the sections the connectivity choice leaves on the page", () => {
+    expect(visibleSetupSections(facts({ connectivity: "disconnected" }))).toEqual([
+      "journey",
+      "github-token",
+      "sentinel-content",
+      "schema-tables",
+      "recent-runs",
+    ]);
+    expect(visibleSetupSections(facts({ connectivity: "partial" }))).toContain("azure-connectivity");
+    expect(visibleSetupSections(facts({ connectivity: "full" }))).not.toContain("azure-connectivity");
+  });
+
+  it("summarises the journey as the current step, or complete", () => {
+    expect(journeySummary(facts({ secretLive: "missing" }))).toMatch(/^Step \d of \d: Connect$/);
+    expect(journeySummary(facts())).toBe("Setup complete");
+  });
+
+  it("words the run count", () => {
+    expect(runsSummary(null)).toBeUndefined();
+    expect(runsSummary(0)).toBe("No runs yet");
+    expect(runsSummary(1)).toBe("1 run");
+    expect(runsSummary(5)).toBe("5 runs");
+  });
+});

@@ -1,3 +1,7 @@
+import { clearNotice } from './clear-notice';
+import { connectionIncompleteText, secretNotice as secretNoticeFor } from './connection-notices';
+import type { SecretProbe } from './connection-notices';
+import { JOURNEY_LINKS, SETUP_CONNECT_ANCHOR, SETUP_GITHUB_ANCHOR } from './journey-links';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -9,6 +13,7 @@ import {
   AzureLoggingMapScreen,
   MappingCatalogScreen,
   AzureConnectSection,
+  AzureConnectivitySection,
   AzureResourcesSection,
   BatchDeployScreen,
   DcrAutomationScreen,
@@ -33,7 +38,6 @@ import {
   commitNoticeText,
   formatScopeChip,
   loadableSetupFromRead,
-  mergeJourneyLinks,
   OPTIONS_LOADING,
   OPTIONS_UNREADABLE_NOTICE,
   beginOptionsRetry,
@@ -51,7 +55,6 @@ import type {
   AppRoute,
   AzureConnectResult,
   CommitScopeOutcome,
-  JourneyLinks,
   LoadableAcceptance,
   LoadableSetup,
   OptionsRead,
@@ -62,6 +65,9 @@ import {
   computeInvalidation,
   DEFAULT_THEME_CHOICE,
   mustProduceArtifacts,
+  patPolicyFor,
+  requestedPermissions,
+  scopeNeed,
   EMPTY_AZURE_CONFIG,
   EMPTY_PROFILE_STORE,
   getActiveConfig,
@@ -173,47 +179,7 @@ const ONBOARD_REQUIRED_FIELDS = [
   'workspaceName',
 ] as const;
 
-// This shell's journey stage bindings (ux-flow-plan 4.4, Unit 6.5): the
-// shared bindings plus the CLOUD-specific connect cross-link - identity
-// entry lives in the App registration and connect section of the Setup page.
-// Cross-links are DATA passed to the shared screens; shared prose never
-// names shell-specific UI.
-// The Setup page's App registration and connect section, which holds the
-// app-permissions change request.
-const SETUP_CONNECT_ANCHOR = 'setup-connect-section';
-
-const SHELL_LINK_OVERRIDES: JourneyLinks = {
-  connect: {
-    routeId: 'home',
-    // Same-route action: the anchor scrolls Setup down to the section so the
-    // button visibly lands somewhere (user report 2026-07-28).
-    anchorId: SETUP_CONNECT_ANCHOR,
-    hint:
-      'Identity entry lives in the App registration and connect section of the Setup ' +
-      'page: Save and connect stores the secret and verifies it by acquiring an ARM token.',
-  },
-};
-// Full mode: the integrate-arc stages the single-page Integrate flagship
-// serves (choose-content / configure / deploy) cross-link to the 'integrate'
-// route - Setup's Integrate rail opens the one page (legacy-flow-analysis.md).
-// In cribl-only / air-gapped these stages render 'not-yet-available'
-// (non-navigable), so the binding is inert where the 'both'-gated route is
-// hidden.
-const JOURNEY_LINKS = mergeJourneyLinks({
-  ...SHELL_LINK_OVERRIDES,
-  'choose-content': {
-    routeId: 'integrate',
-    hint: 'Start on the Sentinel Integration page - the single-page flow from Azure resources through deploy.',
-  },
-  configure: {
-    routeId: 'integrate',
-    hint: 'Configure Azure resources and Cribl on the Sentinel Integration page.',
-  },
-  deploy: {
-    routeId: 'integrate',
-    hint: 'Deploy the native table on the Sentinel Integration page.',
-  },
-});
+// This shell's journey stage bindings live in journey-links.ts (pinned there).
 
 // azure-only: the Onboard route requires a live Cribl side and is hidden, so
 // the integrate stages bind to DCR Automation - the surface the relaxed
@@ -801,10 +767,7 @@ function App() {
   // azureBasic slot is the definitive probe. Success marks the secret live
   // (and stores a fresh azureArmToken, same as a connect); only a VERIFIED
   // failure surfaces a notice. 'idle' = nothing to probe yet (no identity).
-  const [secretProbe, setSecretProbe] = useState<
-    | { state: 'idle' | 'checking' | 'live' | 'missing' }
-    | { state: 'failed'; detail: string }
-  >({ state: 'idle' });
+  const [secretProbe, setSecretProbe] = useState<SecretProbe>({ state: 'idle' });
   const probedProfileRef = useRef<string | null>(null);
 
   // A transient message surfaced after a switch / clear (e.g. "enter the secret
@@ -932,6 +895,35 @@ function App() {
     () => makeCloudPorts(activeConfig.tenantId, appLogger),
     [activeConfig.tenantId]
   );
+
+  // DBT-246: whether a GitHub token is stored, read ONCE through the same port
+  // RepositoriesScreen uses (githubPat.status(): hasPat, never the token). A
+  // failed read leaves it undefined (unknown), never false and never true
+  // (DBT-175 / DBT-159).
+  const [tokenPresent, setTokenPresent] = useState<boolean | undefined>(undefined);
+  // Set once a save/clear has reported: the mount-time read below may resolve
+  // AFTER that and must not overwrite the newer fact with a stale one.
+  const tokenReportedRef = useRef(false);
+  const handleTokenStatusChange = useCallback((present: boolean) => {
+    tokenReportedRef.current = true;
+    setTokenPresent(present);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await cloudPorts.githubPat.status();
+        if (!cancelled && !tokenReportedRef.current) {
+          setTokenPresent(status.hasPat);
+        }
+      } catch {
+        // Unknown stays unknown.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudPorts]);
 
   // Which top-level surface to show (loading / AUA gate / mode select /
   // frame). Computed every render from the two loadable states.
@@ -1085,14 +1077,17 @@ function App() {
 
   // Clear stored secret: the explicit way to force re-auth without switching
   // connections (e.g. after editing the active connection's tenant/client id).
-  const handleClearSecret = () => {
+  const clearStoredSecretState = () => {
     // Independent fire-and-forget clears (DELETE responses are lost by the
     // bridge; sequenced awaits would strand the second delete).
     void kvDelete('azureBasic');
     void kvDelete('azureArmToken');
     setLiveSecretProfileId(null);
     setLiveSecretIdentity(null);
-    setSwitchNotice('Stored secret cleared - re-enter the client secret in the App registration and connect section on Setup and Save and connect to re-authenticate.');
+  };
+  const handleClearSecret = () => {
+    clearStoredSecretState();
+    setSwitchNotice(clearNotice('secret', activeConfig.connectivity));
   };
 
   const startRename = () => {
@@ -1485,9 +1480,30 @@ function App() {
         "connection's secret is live at a time: switching connections clears it and you re-enter " +
         'and reconnect here. If a secret is already stored the field stays blank - enter a new ' +
         'value only to replace it. The client ID, tenant ID, and setup path are non-secret ' +
-        'configuration remembered per connection in the plain azureProfiles KV entry. The ' +
-        "connection bar above shows whether this connection's secret is live this session."
+        'configuration remembered per connection in the plain azureProfiles KV entry.'
       }
+    />
+  );
+
+  // The "How will this app work with Azure?" choice, at the TOP of the Azure
+  // area in BOTH places (the wizard's Connect Azure step and the Setup page).
+  // It writes the whole next config through updateField, the same persistence
+  // path the sections below use for non-secret config (no new store key).
+  // Clearing the identity also clears the secret and token, so a Disconnected
+  // choice never leaves a live credential behind.
+  const azureConnectivityElement = (
+    <AzureConnectivitySection
+      key={`connectivity-${store.activeProfileId ?? 'none'}`}
+      config={activeConfig}
+      onChange={updateField}
+      storedIdentity={activeConfig.tenantId.trim() !== '' && activeConfig.clientId.trim() !== ''}
+      onClearIdentity={() => {
+        updateField({ tenantId: '', clientId: '' });
+        // No re-authenticate notice: under Disconnected the connect section the
+        // secret notice points at is hidden.
+        clearStoredSecretState();
+        setSwitchNotice(clearNotice('identity'));
+      }}
     />
   );
 
@@ -1516,51 +1532,6 @@ function App() {
     />
   );
 
-  if (phase.phase === 'aua' || phase.phase === 'setup') {
-    return (
-      <PortsProvider {...portsProviderProps}>
-        <SetupWizard
-          capabilities={{
-            // Cribl is reachable BY CONSTRUCTION here: the app is served by the
-            // workspace it would talk to. The consolidated platform-link poll is
-            // the honest live signal, and 'checking...' must not read as a
-            // failure, so an unresolved poll counts as connected.
-            hasCribl: criblReachableUnlessFailed(platformLink),
-            hasAzure:
-              activeConfig.tenantId.trim() !== '' &&
-              activeConfig.clientId.trim() !== '',
-          }}
-          initialTarget="cribl-hosted"
-          lockTarget
-          // This page only renders because the app is already installed in the
-          // leader, so "where should the toolkit run?" and the .tgz upload
-          // walkthrough are both answered already (user report 2026-08-03).
-          // The cloud first run is Connect GitHub -> Connect Azure -> Check
-          // permissions -> Mode: only steps that can still be acted on.
-          installedInLeader
-          criblShellMode="cloud"
-          contentPlatform="cloud"
-          defaultSetupPath={defaultPreflightPath(activeConfig.setupPath)}
-          azureChangeRequestContext={changeRequestCtx}
-          azureConnectSection={azureConnectElement}
-          azureResourcesSection={azureResourcesElement}
-          azureConnectGuidance={
-            'Already have the credentials? Enter the tenant id, client id, and secret in the ' +
-            'App registration and connect section on Setup. The secret is stored encrypted in ' +
-            'the app key-value store and is write-only - it can be replaced but never read back.'
-          }
-          accepted={phase.phase !== 'aua'}
-          onAccept={handleAccept}
-          // The wizard no longer produces a mode (capability-model-plan step
-          // 5). 'full' is what the plan says the app always runs as; the entry
-          // survives only as the "setup complete" signal until slice 3 deletes
-          // appMode outright.
-          onGetStarted={handleSetupComplete}
-        />
-      </PortsProvider>
-    );
-  }
-
   // The journey readiness FACTS (ux-flow-plan 4.1, Unit 6.5), composed from
   // signals this shell already owns - nothing new is probed. The split
   // replaces the conflated five-field gate: identity (tenant + client ids on
@@ -1588,22 +1559,66 @@ function App() {
       activeConfig.resourceGroup.trim() !== '' &&
       activeConfig.workspaceName.trim() !== '',
     criblReachable: criblReachability(platformLink),
+    connectivity: activeConfig.connectivity,
+    scopeNeed: scopeNeed(
+      activeConfig.connectivity,
+      requestedPermissions(
+        activeConfig.connectivity,
+        activeConfig.allowedPermissions,
+        activeConfig.setupPath,
+      ),
+    ),
+    subscriptionChosen: activeConfig.subscriptionId.trim() !== '',
+    tokenRequired: patPolicyFor('cloud').required,
+    tokenPresent,
   };
+
+  if (phase.phase === 'aua' || phase.phase === 'setup') {
+    return (
+      <PortsProvider {...portsProviderProps}>
+        <SetupWizard
+          capabilities={{
+            // Cribl is reachable BY CONSTRUCTION here: the app is served by the
+            // workspace it would talk to. The consolidated platform-link poll is
+            // the honest live signal, and 'checking...' must not read as a
+            // failure, so an unresolved poll counts as connected.
+            hasCribl: criblReachableUnlessFailed(platformLink),
+            hasAzure:
+              activeConfig.tenantId.trim() !== '' &&
+              activeConfig.clientId.trim() !== '',
+          }}
+          initialTarget="cribl-hosted"
+          lockTarget
+          // This page only renders because the app is already installed in the
+          // leader, so "where should the toolkit run?" and the .tgz upload
+          // walkthrough are both answered already (user report 2026-08-03).
+          // The cloud first run is Connect GitHub -> Connect Azure, then Get
+          // Started: only steps that can still be acted on.
+          installedInLeader
+          contentPlatform="cloud"
+          azureConnectivitySection={azureConnectivityElement}
+          azureConnectSection={azureConnectElement}
+          azureResourcesSection={azureResourcesElement}
+          onTokenStatusChange={handleTokenStatusChange}
+          foldFacts={journeyFacts}
+          accepted={phase.phase !== 'aua'}
+          onAccept={handleAccept}
+          // The wizard no longer produces a mode (capability-model-plan step
+          // 5). 'full' is what the plan says the app always runs as; the entry
+          // survives only as the "setup complete" signal until slice 3 deletes
+          // appMode outright.
+          onGetStarted={handleSetupComplete}
+        />
+      </PortsProvider>
+    );
+  }
 
   // The VERIFIED secret notice (user direction 2026-07-14 - replaces the
   // speculative "not entered this session" warning): null while the secret
   // is live, the probe is still running, or there is nothing to probe yet.
-  // Only a VERIFIED absence/failure warns.
-  const secretNotice = secretLive
-    ? null
-    : secretProbe.state === 'missing'
-      ? 'No client secret is stored for this connection (verified just now). Enter it ' +
-        'in the App registration and connect section on Setup and Save and connect.'
-      : secretProbe.state === 'failed'
-        ? 'The stored client secret FAILED verification just now - token acquisition ' +
-          'was refused. Re-enter the secret in the App registration and connect ' +
-          `section on Setup. Detail: ${secretProbe.detail}`
-        : null;
+  // Only a VERIFIED absence/failure warns, and under Disconnected it points at
+  // the connectivity choice rather than the hidden connect section.
+  const secretNotice = secretNoticeFor(activeConfig.connectivity, secretLive, secretProbe);
 
   // The connection bar: shell chrome that stays visible within the frame,
   // above whatever screen is active. Connection select/create/rename/delete,
@@ -1755,9 +1770,11 @@ function App() {
     <>
       {/* The journey's connect action scrolls here (SHELL_LINK_OVERRIDES). */}
       <div id={SETUP_CONNECT_ANCHOR} />
+      {azureConnectivityElement}
       {azureConnectElement}
       {azureResourcesElement}
-      <RepositoriesScreen platform="cloud" />
+      <div id={SETUP_GITHUB_ANCHOR} />
+      <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />
     </>
   );
 
@@ -1912,13 +1929,7 @@ function App() {
         <section className="panel">
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
-            The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
-            single next step. Connect first in the App registration and connect section on
-            Setup - that fills the tenant and client ids. Then choose WHERE to deploy in the
-            Select resources and grant permissions section (or commit a scope from the
-            Sentinel Integration page&apos;s Azure Resources section). The Run action unlocks once all
-            five fields are set.
+            {connectionIncompleteText(activeConfig.connectivity, missingOnboardFields, 'onboard')}
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>
@@ -1974,11 +1985,7 @@ function App() {
         <section className="panel">
           <h2 className="panel-title">Connection incomplete</h2>
           <p className="panel-desc">
-            The active connection is missing required configuration:{' '}
-            {missingOnboardFields.join(', ')}. Setup shows the whole journey and names the
-            single next step: connect first in the App registration and connect section on
-            Setup, then choose the target in the Select resources and grant permissions
-            section. The Run action unlocks once all five fields are set.
+            {connectionIncompleteText(activeConfig.connectivity, missingOnboardFields, 'batch')}
           </p>
           <div className="panel-controls">
             <button className="run-button" onClick={() => nav.navigate('home')}>
@@ -2307,7 +2314,7 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        <RepositoriesScreen platform="cloud" />
+        <RepositoriesScreen platform="cloud" onTokenStatusChange={handleTokenStatusChange} />
       </PortsProvider>
     </>
   );

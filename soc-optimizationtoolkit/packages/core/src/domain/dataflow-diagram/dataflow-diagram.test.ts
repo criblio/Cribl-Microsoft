@@ -22,6 +22,8 @@ const FULL_CTX: DiagramContext = {
     resourceGroup: "rg-soc-lab",
     workspaceName: "law-soc-lab",
     setupPath: "existing",
+    connectivity: "full",
+    allowedPermissions: ["Reader"],
   },
 };
 
@@ -34,6 +36,8 @@ const EMPTY_CTX: DiagramContext = {
     resourceGroup: "",
     workspaceName: "",
     setupPath: "existing",
+    connectivity: "full",
+    allowedPermissions: ["Reader"],
   },
 };
 

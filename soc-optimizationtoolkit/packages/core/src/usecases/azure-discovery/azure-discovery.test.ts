@@ -798,6 +798,8 @@ describe("commitTargetScope", () => {
     resourceGroup: "old-rg",
     workspaceName: "old-ws",
     setupPath: "lab-byo-rg",
+    connectivity: "full",
+    allowedPermissions: ["Reader"],
   };
 
   function storeWithActive(): ProfileStore {
@@ -829,6 +831,9 @@ describe("commitTargetScope", () => {
       subscriptionId: SUB,
       resourceGroup: "rg-new",
       workspaceName: "law-new",
+      // The connectivity choice also survives the merge.
+      connectivity: "full",
+      allowedPermissions: ["Reader"],
     });
     // Other profiles and the active pointer are untouched.
     expect(result.store.profiles.find((p) => p.id === "p-other")!.config).toEqual({

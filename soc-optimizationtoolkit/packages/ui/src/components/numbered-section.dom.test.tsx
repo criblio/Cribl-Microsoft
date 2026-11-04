@@ -229,3 +229,24 @@ describe("NumberedSection not-needed (GEN-21)", () => {
     ).toBe("Section 7, not needed");
   });
 });
+
+describe("NumberedSection blocked while folded (DBT-237)", () => {
+  it("shows the gate reason in the header when the body is hidden", () => {
+    const { container } = render(
+      <NumberedSection number={8} title="Deploy" infoTip="tip" status="blocked" reason="Run the gap analysis first" collapsed>
+        <p>body</p>
+      </NumberedSection>,
+    );
+    const head = container.querySelector(".numbered-section-head")!;
+    expect(head.textContent).toContain("Run the gap analysis first");
+  });
+
+  it("does not repeat it in the header while the body (which states it) is open", () => {
+    const { container } = render(
+      <NumberedSection number={8} title="Deploy" infoTip="tip" status="blocked" reason="Run the gap analysis first" collapsed={false}>
+        <p>body</p>
+      </NumberedSection>,
+    );
+    expect(container.querySelector(".numbered-section-head")!.textContent).not.toContain("Run the gap analysis first");
+  });
+});

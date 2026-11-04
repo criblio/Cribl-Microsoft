@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**93 in the backlog, 35 in progress, 151 done.**
+**94 in the backlog, 35 in progress, 162 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 0 | 2 |
-| Sentinel Integration | 50 | 79 | 22 |
+| Sentinel Integration | 51 | 90 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 128.
+Open work totals 129.
 
 ## Epics and features
 
@@ -115,14 +115,14 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 56% (87/154)
+### `DBT` Quality and technical debt _(enabler)_ - 59% (98/166)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
 | `DBT-F1` Verification gaps | Sentinel Integration | 38/86 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220 |
-| `DBT-F2` Copy and UX | Sentinel Integration | 38/48 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-233, DBT-234, DBT-235, DBT-236, DBT-250 |
+| `DBT-F2` Copy and UX | Sentinel Integration | 49/60 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 9/14 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136 |
 | `DBT-F6` Effect-identity defect class | Pack Maintenance | 0/1 | FX-4 |
@@ -1052,7 +1052,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (11)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1260,6 +1260,22 @@ Next to pick up. Nothing blocks these.
   Reader on one workspace (and, if possible, a table-level RBAC custom role
   excluding Usage). If either answers 200 with no rows, the measured-zero copy
   is a confident wrong answer and becomes a bug card.
+
+- **DBT-247** Three older notices still point a Disconnected operator at hidden or unreachable Azure fields
+  `DBT-F2` `bug` `settled`
+  FOUND by the DBT-246 final re-review 2026-11-02, in code that predates that
+  branch: (1) the switch-connection notice (App.tsx ~1023) tells the operator
+  to enter the client secret in the App registration and connect section on
+  Setup, which is hidden under Disconnected; (2) ROLE_GUIDANCE (App.tsx ~190,
+  passed to Onboard and Batch) still renders under Disconnected when an older
+  profile has all five fields; (3) the Disconnected Connection incomplete text
+  (connection-notices.ts) ends 'The Run action unlocks once all five fields
+  are set.', which a Disconnected operator cannot do on screen. FIX: route
+  each through the connectivity-aware notice helpers in connection-notices.ts
+  and pin them. Also follow-ups from the same review, not defects: a
+  config-json warning when an imported connectivity value is coerced to full;
+  Batch's template-only export is gated on the identity fields, so
+  Disconnected cannot reach it from Batch (fallback routing).
 
 ---
 
@@ -2429,7 +2445,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (151)
+## Done (162)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6709,6 +6725,42 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   active one up by about 100 px; below the first section the compensation
   holds.
 
+- **DBT-237** Sentinel Integration opens collapsed, keeping only pinned, current and needs-action sections open
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-02: "I thought we set the default behavior for
+  the sentinel integration page to be collapsed and only keep sections open if
+  the user clicks the pin button for that section?" DBT-232 folds only on an
+  explicit move, so on load every section is open (collapsedSections starts as
+  an empty Set, integrate-screen.tsx). DECIDED by the operator 2026-11-02: on
+  load, apply the same fold a move to the current section would - every
+  section collapses except pinned ones, the arc's current section, and Deploy
+  while a run is in progress. Pins load asynchronously from the content cache,
+  so a pinned section that arrives after the first fold must be reopened, and
+  the load fold must run once, never again on a status flip (the DBT-127
+  rule). FIX: seed the fold once statuses and pins are known; pin with a DOM
+  test on first render; confirm in Live Preview. ALSO DECIDED 2026-11-02: "if
+  the user clicks into a new section the other open sections that are not
+  pinned should collapse" - a move now folds every unpinned section except the
+  one moved to and a running Deploy; the arc current section and DBT-234
+  near-the-top exceptions are DROPPED (foldableWithoutShift deleted; scroll
+  compensation still holds the active section wherever the page can scroll
+  back). DONE 2026-11-02 (both). initialCollapsedSections seeds the fold;
+  until the first move the fold re-derives as restored state moves the current
+  section, and stored pins reopen when they load. Because sections now start
+  folded, a blocked section shows its gate reason in the collapsed header
+  (NumberedSection). Pins: the pure load rule, the DOM load fold with and
+  without a stored pin (waits for the settled page - an early version sampled
+  the frame between the render and the effect), the click fold now folding the
+  current section, the blocked reason in a folded header; eight older pins
+  open the section they read via expandSection. Mutation-checked: no load fold
+  fails 5, keeping current open on a move fails 1. LIVE on the jpederson org
+  (PaloAlto-PAN-OS, 2 samples): the page opened with only Run DCR Gap Analysis
+  (current) open and the other seven on summary lines; expanding Select
+  Sentinel Solution folded Gap Analysis to "not analyzed". KNOWN GAP: a status
+  of complete can still carry a warning in its body (the DBT-102
+  unresolved-restore notice in Select Sentinel Solution) that is now folded on
+  load.
+
 - **DBT-233** Audit after DBT-224..232: stale docblocks, dead CSS, and the self-opening disclosure rule written seven times
   `DBT-F2` `enabler` `settled` `verified: pins`
   FOUND 2026-10-30 by the architecture audit over DBT-223..232 (14 commits).
@@ -6743,6 +6795,128 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   pins fail when the scroll check is removed. LIVE 2026-10-30 on the jpederson
   org: at scroll top, clicking inside Add Sample Data left Select Sentinel
   Solution open and Add Sample Data in place, and sections 3-8 folded.
+
+- **DBT-246** Setup: Azure connectivity choice shapes the change request and the next action
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-02: review the setup pages for wordiness; "the
+  Azure page is really optional, we should start that page with a selection on
+  how the user wants to run it from an Azure perspective (Fully Connected,
+  partially connected, or disconnected)." Partially connected: "a checkbox
+  experience that will shape the Generate Change Request text", each with an
+  (i), "not wordy on the screen by default", and encourage "at least
+  Read-only". Disconnected: "no app registration at all so the app only
+  creates exportable items". Save the choice and have the next action follow
+  it. Lab paths are Fully Connected only. Design: docs/setup-pages-plan.md;
+  plan: docs/setup-pages-implementation-plan.md. DONE 2026-11-02 (both). Built
+  task by task (docs/setup-pages-implementation-plan.md) with a review per
+  task, a whole-branch review and one fix wave. Saved per connection in
+  AzureConfig (connectivity, allowedPermissions; unset parses as full with
+  Reader; partial normalises to the existing path). The app-registration
+  ticket, the role-assignment ticket, the az role script and the request
+  summary all derive from requestedPermissions, so under Partially Connected
+  nothing asks for an unticked role. The journey gains a GitHub token stage
+  (required per patPolicyFor), not-needed stages, not-used chips and a
+  subscription-only target under partial; the deploy gate still needs the full
+  committed scope. The wizard is Agreement, GitHub, Azure. LIVE on the
+  jpederson org Live Preview: Full shows the 5-role + Graph ticket line;
+  Partial shows Option A with Requesting: 1 role - Reader and a single-Reader
+  role script; Disconnected hides the Azure sections, chips read not used,
+  Connect/Target read Not needed for the saved Azure connectivity choice,
+  Deploy says export instead, next action is Choose content. Restored to Full
+  afterwards. NOT verified live: the token-rollback re-read after a failed
+  replacement (pins only; forcing it would delete the real token).
+
+- **DBT-248** Setup page and wizard fold like Sentinel Integration: open collapsed, refold on move, hide what the choices make irrelevant
+  `DBT-F2` `story` `settled` `verified: both`
+  RAISED BY THE USER 2026-11-02: "There are still a ton of words on the setup
+  pages, lets collapse them and only reveal what is needed once the user
+  inputs what they need to focus on. Just like we did with the Sentinel
+  integration pages. default to collapsed and re collapse once the user moves
+  on to the next section. If there is something the user never needs to see
+  because of the options they choose don't reveal it." DECIDED 2026-11-02:
+  applies to the Setup page AND inside each first-run wizard step; branch
+  stacked on PR #196 with PR #195 merged in. Same rules as DBT-232/DBT-237:
+  open with only the section that needs the operator plus pinned ones; a move
+  into a section folds every other unpinned one; folded sections keep a
+  one-line summary; pins per user; collapsed bodies stay mounted; gate reasons
+  never hidden. The fold logic is shared, not copied. DONE 2026-11-02 (both).
+  Task A moved the fold logic into packages/ui/src/components/section-folding
+  (useSectionFolding, pure rules, useFoldScopeFolding) with Sentinel
+  Integration unchanged (its tests untouched in assertions). Task B: one fold
+  scope on Setup (SectionFoldScope context; sections join via useSectionFold,
+  report busy/failed via useSectionRunState so a running section stays open
+  and a failure reopens it on its own edge); Next action never folds; current
+  section from nextAction; one-line summaries; descriptions moved verbatim
+  behind (i). Task C: each first-run wizard step has its own scope (pinPrefix
+  wizard-pinned-sections, ids wizard-section-<id>, numbers over the visible
+  sections). Choosing Partially Connected opens the checklist and counts as a
+  move. Pins merge with in-session pins and are never written before the
+  stored list loads. Per-task reviews, a whole-branch review, one fix wave and
+  a scoped re-review; mutation-checked. LIVE on the jpederson org Live
+  Preview: Setup opens with only Next action open and every other section on
+  its summary line; expanding App registration then Select resources refolds
+  App registration; choosing Partially Connected opens What this app may do in
+  Azure and it stays open; spacing uniform; restored to Fully Connected. The
+  wizard was verified by pins only (running it live means Reconfigure, which
+  resets the install).
+
+- **DBT-238** The GitHub setup step says "This step is optional." while the cloud token is required
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  setup-wizard.tsx:382-384 renders it for every skippable non-final view;
+  patPolicyFor('cloud').required is true (pat-policy.ts:118-124) and
+  repositories-screen.tsx:267-271 says a token is required.
+
+- **DBT-239** Setup's next action asks an operator who will not connect Azure for an Azure identity
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  journey-state.ts:275-279 connectSatisfied and nextAction (430-457) require
+  identity + live secret before every later stage, while the wizard says to
+  skip Azure (setup-wizard.tsx:446-451).
+
+- **DBT-240** The two descriptions of the same app-registration change request disagree
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md). Both
+  call appRegistrationRequest; setup-wizard.tsx:461-464 says it asks for the
+  client, secret and ids only, azure-connect-section.tsx:108-113 says it
+  covers EVERYTHING including Graph and every RBAC role. Two generators render
+  on the same wizard step (setup-wizard.tsx:458,
+  azure-connect-section.tsx:105).
+
+- **DBT-241** The resource-picker intro says the pickers depend on the setup path; both always render
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  azure-resources-section.tsx:402-403 ties the target pickers to the existing
+  and bring-your-own-RG paths, but both render unconditionally (486-545) and
+  both lists load (157-169); the discovery label still switches on setup path
+  (550-554).
+
+- **DBT-242** Wizard guidance points to a section on Setup that sits directly below it
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  App.tsx:1536-1540 (fallback setup-wizard.tsx:473-476) says to enter
+  credentials in the App registration and connect section on Setup; in the
+  wizard that section renders just below (setup-wizard.tsx:319).
+
+- **DBT-243** The storage note says "The connection bar above shows..." where the wizard has no connection bar
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  App.tsx:1486-1487; the wizard renders before the frame, so there is no
+  connection bar.
+
+- **DBT-244** Next action and the scope chip name the removed Azure Targeting route
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  journey-state.ts:474 ("Browse subscriptions and workspaces in Azure
+  Targeting, then commit the scope with Use this target") and the scope chip
+  hint (journey-state.ts ~543); the route is gone and Setup's pickers set the
+  scope directly.
+
+- **DBT-245** The GitHub token scope is stated two contradictory ways
+  `DBT-F2` `bug` `settled` `verified: pins`
+  FOUND by the setup-pages review 2026-11-02 (docs/setup-pages-plan.md).
+  repositories-screen.tsx:352 says only public_repo is needed;
+  pat-policy.ts:39-43 says a classic token needs no scopes.
 
 - **DBT-250** Gap Analysis destination-table override offers only 4 tables when the workspace listing does not run
   `DBT-F2` `bug` `settled` `verified: both`
