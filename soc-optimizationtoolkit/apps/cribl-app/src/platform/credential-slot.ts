@@ -34,8 +34,8 @@ import type { CredentialSlot, TenantPorts, TenantProfile } from '@soc/core';
 import { acquireArmToken, acquireGraphToken, fetchWithTimeout, kvUrl } from './http';
 
 const BASIC_KV_KEY = 'azureBasic';
-export const ARM_TOKEN_KV_KEY = 'azureArmToken';
-export const GRAPH_TOKEN_KV_KEY = 'azureGraphToken';
+const ARM_TOKEN_KV_KEY = 'azureArmToken';
+const GRAPH_TOKEN_KV_KEY = 'azureGraphToken';
 
 /** Builds the ports a session runs with; supplied by adapters.ts to avoid an import cycle. */
 export type SessionPortsFactory = (tenantId: string, slot: AzureCredentialSlot) => TenantPorts;

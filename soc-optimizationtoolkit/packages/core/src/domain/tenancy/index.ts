@@ -3,7 +3,6 @@ export {
   CREDENTIAL_LEASE_KEY,
   CREDENTIAL_OWNER_KEY,
   TENANT_PROOF_API_VERSION,
-  TENANT_TOKEN_LENGTH,
   clearedCredentialOwner,
   credentialOwnerMatches,
   decodeCredentialOwner,

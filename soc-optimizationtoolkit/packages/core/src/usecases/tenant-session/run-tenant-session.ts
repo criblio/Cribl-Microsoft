@@ -62,7 +62,7 @@ import {
 } from "../../domain/tenancy";
 
 /** Default lease lifetime: long enough for one tenant's scan at the shared budget. */
-export const DEFAULT_TENANT_LEASE_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_TENANT_LEASE_TTL_MS = 10 * 60 * 1000;
 
 export interface TenantSessionDeps {
   readonly slot: CredentialSlot;

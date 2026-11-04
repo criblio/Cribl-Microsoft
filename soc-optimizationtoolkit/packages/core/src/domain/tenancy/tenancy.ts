@@ -42,7 +42,7 @@ export function normalizeTenantId(tenantId: string): string {
 }
 
 /** Length of {@link tenantToken}: 8 hex digits, 32 bits. */
-export const TENANT_TOKEN_LENGTH = 8;
+const TENANT_TOKEN_LENGTH = 8;
 
 /**
  * The short tenant component a Cribl id carries: the first 8 alphanumerics of

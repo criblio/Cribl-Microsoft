@@ -151,7 +151,7 @@ export function legacyOnboardingInputId(source: OnboardingSource, values: PlanVa
  * authenticates with a connection string, so nothing else on it - or on its
  * events - says which tenant it reads.
  */
-export function tenantStreamtag(tenantId: string): string {
+function tenantStreamtag(tenantId: string): string {
   return `tenant:${normalizeTenantId(tenantId)}`;
 }
 
