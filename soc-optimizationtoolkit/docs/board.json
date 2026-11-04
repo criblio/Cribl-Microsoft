@@ -3767,19 +3767,20 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [],
       "id": "MIG-27",
       "type": "enabler",
       "priority": "next",
       "title": "Core: per-table source identity map, collector and billed bytes in the source breakdown query",
-      "detail": "USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others unchanged), collector kept as via for product identities, billed vs free per source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco ASA through three collectors, which today reads as three collector-named sources. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-27)."
+      "detail": "USER DECISIONS 2026-11-04: per-table identity (CommonSecurityLog vendor/product, SecurityAlert ProductName, Syslog Computer+Facility, others unchanged), collector kept as via for product identities, billed vs free per source from _IsBillable. Measured on sentinel-new: 1.68 GB of CEF is Cisco ASA through three collectors, which today reads as three collector-named sources. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-27).\n\nDONE 2026-11-04 (both, 3f2a1e51): source-identity.ts (dated per-table rules: CommonSecurityLog vendor+product, SecurityAlert ProductName then ProviderName, Syslog Computer+Facility), the breakdown query groups by Source/Attribution/Collector and sums BillableBytes; a missing BillableBytes column fails the breakdown rather than reading as all free. Live on sentinel-new: three Cisco ASA rows via localhost, ':' and SNL-ASA-VPN-A01, all billable.",
+      "verified": "both"
     },
     {
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "backlog",
+      "status": "in-progress",
       "dependsOn": [
         "MIG-27"
       ],
