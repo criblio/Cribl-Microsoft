@@ -30,9 +30,9 @@ export interface SourceIdentityRule {
    */
   keepsCollector: boolean;
   /**
-   * `join`: all columns, space-separated (vendor + product), and only when the
-   * FIRST column is non-empty - a row naming a facility but no machine is not
-   * a machine. `first`: the first non-empty column (a fallback chain).
+   * `join`: all columns, space-separated (vendor + product); see
+   * `requireFirst` for the rules that also demand the first column.
+   * `first`: the first non-empty column (a fallback chain).
    */
   combine: "join" | "first";
   /**

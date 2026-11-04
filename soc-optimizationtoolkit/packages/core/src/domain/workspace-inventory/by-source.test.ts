@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toListing } from "../inventory-listing";
+import { listingRows, toListing } from "../inventory-listing";
 import { bySource } from "./by-source";
 import { BYTES_PER_MB, INVENTORY_WINDOW_DAYS } from "./workspace-inventory";
 import type { InventorySource, InventoryTable, TableSources } from "./workspace-inventory";
@@ -47,9 +47,15 @@ function table(name: string, usageMb: number, sources: TableSources): InventoryT
 const read = (...sources: InventorySource[]): TableSources => ({ kind: "read", sources });
 const inv = (...tables: InventoryTable[]) => ({ tables: toListing(tables) });
 
+/** bySource with the rows unwrapped, for tests that know there are some. */
+const run = (input: Parameters<typeof bySource>[0]) => {
+  const result = bySource(input);
+  return { rows: listingRows(result.rows), reconciliation: result.reconciliation };
+};
+
 describe("bySource", () => {
   it("makes ONE product row of Cisco ASA through three collectors, listing each", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table(
           "CommonSecurityLog",
@@ -80,7 +86,7 @@ describe("bySource", () => {
   });
 
   it("merges 'Cisco ASA' and 'cisco asa ' on a trimmed, case-folded key; label is the commonest casing", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table(
           "CommonSecurityLog",
@@ -97,7 +103,7 @@ describe("bySource", () => {
   });
 
   it("merges a product across tables, but never a product with a computer of the same name", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table("CommonSecurityLog", 5, read(src("Palo Alto", "product", 5))),
         table("SecurityAlert", 2, read(src("Palo Alto", "product", 2))),
@@ -112,7 +118,7 @@ describe("bySource", () => {
   });
 
   it("makes an unmapped table with read sources ONE '(no product columns)' row", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(table("AWSCloudTrail", 8, read(src("", "none", 5), src("arn:x", "resource", 3)))),
     );
     expect(rows).toEqual([
@@ -127,7 +133,7 @@ describe("bySource", () => {
   });
 
   it("makes a table whose sources were not requested a '(sources not read)' row with Usage volume and null billed/free", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(table("Heartbeat", 3, { kind: "failed", error: "source breakdown not requested" })),
     );
     expect(rows).toEqual([
@@ -144,7 +150,7 @@ describe("bySource", () => {
   });
 
   it("puts a mapped table's `other` source in '<table> (other sources)', never into a product", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table(
           "CommonSecurityLog",
@@ -160,7 +166,7 @@ describe("bySource", () => {
   });
 
   it("flags a Free-tagged table billed through a named source", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table(
           "SecurityAlert",
@@ -179,7 +185,7 @@ describe("bySource", () => {
   });
 
   it("flags a Free-tagged table whose billed volume sits in the `other` row", () => {
-    const { rows } = bySource(
+    const { rows } = run(
       inv(
         table(
           "SecurityAlert",
@@ -198,12 +204,12 @@ describe("bySource", () => {
   });
 
   it("does not flag a billed table the catalog does not tag Free", () => {
-    const { rows } = bySource(inv(table("AWSCloudTrail", 2, read(src("", "none", 2)))));
+    const { rows } = run(inv(table("AWSCloudTrail", 2, read(src("", "none", 2)))));
     expect(rows[0]!.freeTaggedTablesBilled).toEqual([]);
   });
 
   it("reconciles the two lenses exactly and sorts by volume then label", () => {
-    const { rows, reconciliation } = bySource(
+    const { rows, reconciliation } = run(
       inv(
         table(
           "CommonSecurityLog",
@@ -221,6 +227,7 @@ describe("bySource", () => {
       notReadDailyMB: 4,
       notReadTables: 2,
       agreementPct: (100 * 14) / 14.5,
+      partialTables: [],
     });
     expect(rows.map((r) => r.label)).toEqual([
       "Cisco ASA",
@@ -232,8 +239,82 @@ describe("bySource", () => {
   });
 
   it("gives a null agreement when nothing was measured and nothing read", () => {
-    const { reconciliation } = bySource(inv(table("Heartbeat", 3, { kind: "failed", error: "x" })));
+    const { reconciliation } = run(inv(table("Heartbeat", 3, { kind: "failed", error: "x" })));
     expect(reconciliation).toMatchObject({ measuredDailyMB: 0, usageDailyMB: 0, agreementPct: null });
-    expect(bySource({ tables: { kind: "none" } }).rows).toEqual([]);
+  });
+
+  it("keeps the tables listing's kind: verified none stays none, unverified empty stays empty", () => {
+    expect(bySource({ tables: { kind: "none" } }).rows).toEqual({ kind: "none" });
+    expect(bySource({ tables: { kind: "empty" } }).rows).toEqual({ kind: "empty" });
+    expect(bySource(inv(table("AWSCloudTrail", 2, read(src("", "none", 2))))).rows.kind).toBe("rows");
+  });
+
+  it("marks rows and the reconciliation with the tables whose breakdown was PARTIAL", () => {
+    const partial: TableSources = {
+      kind: "partial",
+      warning: "timeout",
+      sources: [src("Cisco ASA", "product", 2)],
+    };
+    const result = bySource(
+      inv(
+        table("CommonSecurityLog", 5, partial),
+        table("SecurityAlert", 1, read(src("Cisco ASA", "product", 1))),
+        table("AWSCloudTrail", 4, read(src("", "none", 4))),
+      ),
+    );
+    const rows = listingRows(result.rows);
+    expect(rows.find((r) => r.kind === "product")).toMatchObject({
+      measured: true,
+      dailyMB: 3,
+      partialTables: ["CommonSecurityLog"],
+    });
+    expect(rows.find((r) => r.kind === "table")!.partialTables).toEqual([]);
+    expect(result.reconciliation.partialTables).toEqual(["CommonSecurityLog"]);
+  });
+
+  it("carries billedExceedsTotal onto the row when any contributing source had it", () => {
+    const { rows } = run(
+      inv(
+        table(
+          "CommonSecurityLog",
+          5,
+          read(
+            src("Cisco ASA", "product", 2, { collector: "a", billedExceedsTotal: true }),
+            src("Cisco ASA", "product", 3, { collector: "b" }),
+            src("Fortinet", "product", 1),
+          ),
+        ),
+      ),
+    );
+    expect(rows.map((r) => [r.label, r.billedExceedsTotal])).toEqual([
+      ["Cisco ASA", true],
+      ["Fortinet", false],
+    ]);
+  });
+
+  it("sorts a row's collectors by volume, highest first, across merged tables", () => {
+    const { rows } = run(
+      inv(
+        table("CommonSecurityLog", 3, read(src("Cisco ASA", "product", 1, { collector: "small" }))),
+        table("SecurityAlert", 6, read(src("Cisco ASA", "product", 5, { collector: "big" }))),
+      ),
+    );
+    expect(rows[0]!.collectors.map((c) => c.name)).toEqual(["big", "small"]);
+  });
+
+  it("puts a computer-attributed fall-through row in CommonSecurityLog into '(other sources)'", () => {
+    const { rows } = run(
+      inv(
+        table(
+          "CommonSecurityLog",
+          5,
+          read(src("Cisco ASA", "product", 3), src("collector-1", "computer", 2)),
+        ),
+      ),
+    );
+    expect(rows.map((r) => [r.kind, r.label, r.dailyMB])).toEqual([
+      ["product", "Cisco ASA", 3],
+      ["table", "CommonSecurityLog (other sources)", 2],
+    ]);
   });
 });

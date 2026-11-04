@@ -14,7 +14,7 @@
  */
 
 import { allowanceFor } from "../data-allowances/allowance-catalog";
-import { listingRows } from "../inventory-listing";
+import { listingRows, toListing } from "../inventory-listing";
 import type { Listing } from "../inventory-listing";
 import { SOURCE_IDENTITY_RULES } from "./source-identity";
 import type { InventorySource, InventoryTable } from "./workspace-inventory";
@@ -34,6 +34,10 @@ export interface SourceViewRow {
   collectors: Array<{ name: string; dailyMB: number }>;
   /** Catalog-Free tables in which this row has billed volume. */
   freeTaggedTablesBilled: string[];
+  /** Tables in this row whose breakdown was partial: the figure is a floor. */
+  partialTables: string[];
+  /** True when any contributing source was billed above its total (the free figure is clamped). */
+  billedExceedsTotal: boolean;
 }
 
 export interface SourceViewReconciliation {
@@ -46,6 +50,8 @@ export interface SourceViewReconciliation {
   notReadTables: number;
   /** 100 * min / max of measured and usage; null when both are 0. */
   agreementPct: number | null;
+  /** Tables whose breakdown was partial; their measured volume is a floor. */
+  partialTables: string[];
 }
 
 interface Accumulator {
@@ -59,16 +65,20 @@ interface Accumulator {
   freeDailyMB: number;
   billedByTable: Map<string, number>;
   collectors: Map<string, number>;
+  partialTables: Set<string>;
+  billedExceedsTotal: boolean;
 }
 
 export function bySource(inventory: { tables: Listing<InventoryTable> }): {
-  rows: SourceViewRow[];
+  /** `none` (verified) and `empty` (unverified) pass through from the tables listing. */
+  rows: Listing<SourceViewRow>;
   reconciliation: SourceViewReconciliation;
 } {
   const accumulators = new Map<string, Accumulator>();
   const notRead: SourceViewRow[] = [];
   let usageDailyMB = 0;
   let notReadDailyMB = 0;
+  const partialTables: string[] = [];
 
   const accumulator = (key: string, kind: Accumulator["kind"], fixedLabel: string | null) => {
     let acc = accumulators.get(key);
@@ -84,13 +94,17 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
         freeDailyMB: 0,
         billedByTable: new Map(),
         collectors: new Map(),
+        partialTables: new Set(),
+        billedExceedsTotal: false,
       };
       accumulators.set(key, acc);
     }
     return acc;
   };
-  const add = (acc: Accumulator, table: string, source: InventorySource) => {
+  const add = (acc: Accumulator, table: string, source: InventorySource, partial: boolean) => {
     acc.tables.add(table);
+    if (partial) acc.partialTables.add(table);
+    if (source.billedExceedsTotal) acc.billedExceedsTotal = true;
     acc.dailyMB += source.dailyAverageMB;
     acc.billedDailyMB += source.billableDailyMB;
     acc.freeDailyMB += source.freeDailyMB;
@@ -110,11 +124,15 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
         freeDailyMB: null,
         collectors: [],
         freeTaggedTablesBilled: [],
+        partialTables: [],
+        billedExceedsTotal: false,
       });
       notReadDailyMB += table.dailyAverageMB;
       continue;
     }
     usageDailyMB += table.dailyAverageMB;
+    const partial = table.sources.kind === "partial";
+    if (partial) partialTables.push(table.table);
     const rule = SOURCE_IDENTITY_RULES.find(
       (r) => r.table.toLowerCase() === table.table.toLowerCase(),
     );
@@ -124,7 +142,7 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
         "table",
         `${table.table} (no product columns)`,
       );
-      for (const source of table.sources.sources) add(acc, table.table, source);
+      for (const source of table.sources.sources) add(acc, table.table, source, partial);
       continue;
     }
     for (const source of table.sources.sources) {
@@ -138,12 +156,13 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
           ),
           table.table,
           source,
+          partial,
         );
         continue;
       }
       const acc = accumulator(`${rule.attribution}:${name.toLowerCase()}`, rule.attribution, null);
       acc.casings.set(name, (acc.casings.get(name) ?? 0) + 1);
-      add(acc, table.table, source);
+      add(acc, table.table, source, partial);
       if (rule.keepsCollector && source.collector !== "") {
         acc.collectors.set(
           source.collector,
@@ -154,9 +173,11 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
   }
 
   const measuredRows = [...accumulators.values()].map(toRow);
-  const rows = [...measuredRows, ...notRead].sort(
-    (a, b) => b.dailyMB - a.dailyMB || a.label.localeCompare(b.label),
+  const sorted = [...measuredRows, ...notRead].sort(
+    (a, b) => b.dailyMB - a.dailyMB || compareCodeUnits(a.label, b.label),
   );
+  const rows: Listing<SourceViewRow> =
+    inventory.tables.kind === "rows" ? toListing(sorted) : { kind: inventory.tables.kind };
   const measuredDailyMB = measuredRows.reduce((sum, r) => sum + r.dailyMB, 0);
   const high = Math.max(measuredDailyMB, usageDailyMB);
   return {
@@ -166,6 +187,7 @@ export function bySource(inventory: { tables: Listing<InventoryTable> }): {
       usageDailyMB,
       notReadDailyMB,
       notReadTables: notRead.length,
+      partialTables,
       agreementPct: high === 0 ? null : (100 * Math.min(measuredDailyMB, usageDailyMB)) / high,
     },
   };
@@ -181,14 +203,23 @@ function toRow(acc: Accumulator): SourceViewRow {
     measured: true,
     billedDailyMB: acc.billedDailyMB,
     freeDailyMB: acc.freeDailyMB,
-    collectors: [...acc.collectors].map(([name, dailyMB]) => ({ name, dailyMB })),
+    collectors: [...acc.collectors]
+      .map(([name, dailyMB]) => ({ name, dailyMB }))
+      .sort((a, b) => b.dailyMB - a.dailyMB || compareCodeUnits(a.name, b.name)),
     freeTaggedTablesBilled: [...acc.billedByTable]
       .filter(([table, billed]) => billed > 0 && allowanceFor(table).kind === "free")
       .map(([table]) => table),
+    partialTables: [...acc.partialTables],
+    billedExceedsTotal: acc.billedExceedsTotal,
   };
 }
 
 /** The spelling seen most often; ties go to the code-unit-first one, so it is stable. */
 function commonestCasing(casings: ReadonlyMap<string, number>): string {
-  return [...casings].sort(([a, na], [b, nb]) => nb - na || (a < b ? -1 : a > b ? 1 : 0))[0]![0];
+  return [...casings].sort(([a, na], [b, nb]) => nb - na || compareCodeUnits(a, b))[0]![0];
+}
+
+/** Locale-independent ordering, so a tie breaks the same way on every machine. */
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
