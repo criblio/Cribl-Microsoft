@@ -11,7 +11,7 @@
  * direct IO.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ONBOARD_TABLE_JOB_KIND } from "@soc/core";
 import type { JobRecord, OnboardTableOutcome } from "@soc/core";
 import { usePorts } from "../ports-context";
@@ -50,6 +50,15 @@ export interface RecentRunsProps {
   label?: (job: JobRecord) => string;
   /** Expanded detail per record; defaults to the onboard-table detail. */
   detail?: (job: JobRecord) => string;
+  /** Told how many runs each successful load found (a host's folded summary). */
+  onLoaded?: (count: number) => void;
+  /** Told when a load failed (a host's folded summary must not read as empty). */
+  onLoadError?: () => void;
+  /**
+   * Render the run list directly instead of inside its own collapsed
+   * dropdown - for a host that already folds it (the Setup page, DBT-248).
+   */
+  inline?: boolean;
 }
 
 export function RecentRuns({
@@ -58,19 +67,30 @@ export function RecentRuns({
   title = "Recent runs",
   label = runLabel,
   detail = runDetail,
+  onLoaded,
+  onLoadError,
+  inline = false,
 }: RecentRunsProps) {
   const { ports } = usePorts();
   const [jobs, setJobs] = useState<JobRecord[] | null>(null);
   const [error, setError] = useState("");
+  // A ref so a host passing an inline callback does not reload the list.
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
   // The run whose detail is shown; null means the latest.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setJobs(await ports.jobs.list(kind));
+      const list = await ports.jobs.list(kind);
+      setJobs(list);
       setError("");
+      onLoadedRef.current?.(list.length);
     } catch (err) {
       setError(String(err));
+      onLoadErrorRef.current?.();
     }
   }, [ports.jobs, kind]);
 
@@ -85,17 +105,8 @@ export function RecentRuns({
   const latest = jobs !== null && jobs.length > 0 ? jobs[0] : undefined;
   const selected =
     jobs?.find((job) => job.id === selectedId) ?? latest;
-  return (
-    <details className="discovery-result recent-runs">
-      <summary className="field-label">
-        {title}
-        {jobs === null
-          ? ""
-          : latest === undefined
-            ? " - none recorded yet"
-            : ` (${jobs.length}) - latest: ${label(latest)}`}{" "}
-        <InfoTip text="The app's own run log - every recorded run, newest first, kept in this app's storage." />
-      </summary>
+  const content = (
+    <>
       <div className="panel-controls">
         {jobs !== null && jobs.length > 0 && (
           <select
@@ -116,6 +127,23 @@ export function RecentRuns({
       </div>
       {error !== "" && <pre className="result">{error}</pre>}
       {selected !== undefined && <pre className="result">{detail(selected)}</pre>}
+    </>
+  );
+  if (inline) {
+    return <div className="discovery-result recent-runs">{content}</div>;
+  }
+  return (
+    <details className="discovery-result recent-runs">
+      <summary className="field-label">
+        {title}
+        {jobs === null
+          ? ""
+          : latest === undefined
+            ? " - none recorded yet"
+            : ` (${jobs.length}) - latest: ${label(latest)}`}{" "}
+        <InfoTip text="The app's own run log - every recorded run, newest first, kept in this app's storage." />
+      </summary>
+      {content}
     </details>
   );
 }

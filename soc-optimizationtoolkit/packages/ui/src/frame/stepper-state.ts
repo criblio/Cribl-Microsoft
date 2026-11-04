@@ -98,6 +98,14 @@ export function mergeJourneyLinks(overrides: JourneyLinks = {}): JourneyLinks {
   return merged;
 }
 
+/**
+ * The hint a 'not-needed' stage carries in place of its link guidance. The
+ * link would point into a section the connectivity choice hides (connect and
+ * target under Disconnected), so the stage says why it is skipped instead.
+ */
+export const NOT_NEEDED_HINT =
+  "Not needed for the saved Azure connectivity choice.";
+
 /** Everything the stepper renders for one stage. */
 export interface StepperItem {
   id: JourneyStageId;
@@ -120,6 +128,9 @@ export interface StepperItem {
  * pass through from deriveJourney untouched. Rules (pinned by tests):
  *   - 'not-yet-available' stages NEVER get a route, even if a link binds
  *     one (no navigation into unshipped surfaces);
+ *   - 'not-needed' stages get no route and {@link NOT_NEEDED_HINT}, never
+ *     the link's guidance (both would point into a section the
+ *     connectivity choice hides);
  *   - every other status keeps its link's route (read-ahead: blocked
  *     stages stay navigable);
  *   - blockedReason outranks the link hint.
@@ -129,7 +140,8 @@ export function buildStepperItems(
   links: JourneyLinks = {},
 ): StepperItem[] {
   return stages.map((stage, i) => {
-    const link = links[stage.id];
+    const notNeeded = stage.status === "not-needed";
+    const link = notNeeded ? undefined : links[stage.id];
     const routeId =
       stage.status === "not-yet-available" ? null : (link?.routeId ?? null);
     return {
@@ -138,7 +150,7 @@ export function buildStepperItems(
       status: stage.status,
       index: i + 1,
       routeId,
-      hint: stage.blockedReason ?? link?.hint ?? null,
+      hint: notNeeded ? NOT_NEEDED_HINT : (stage.blockedReason ?? link?.hint ?? null),
     };
   });
 }

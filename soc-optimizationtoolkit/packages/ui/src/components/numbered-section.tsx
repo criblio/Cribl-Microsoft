@@ -203,6 +203,14 @@ export function NumberedSection({
         {bodyHidden && summary !== undefined && summary !== "" && (
           <span className="numbered-section-summary">{summary}</span>
         )}
+        {/* DBT-237: Integrate opens collapsed, so a blocked section's reason
+            must not sit only in the hidden body - a gate reason is never
+            hidden behind a closed disclosure (DBT-224..232). */}
+        {bodyHidden && blocked && reason !== undefined && reason !== "" && (
+          <span className="numbered-section-summary numbered-section-blocked-reason-head">
+            {reason}
+          </span>
+        )}
         {collapsible && collapsed && (
           <button
             className="numbered-section-collapse"

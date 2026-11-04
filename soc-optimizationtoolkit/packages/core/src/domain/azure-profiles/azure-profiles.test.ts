@@ -31,6 +31,8 @@ const CONFIG_A: AzureConfig = {
   resourceGroup: "rg-a",
   workspaceName: "law-a",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 const CONFIG_B: AzureConfig = {
@@ -40,6 +42,8 @@ const CONFIG_B: AzureConfig = {
   resourceGroup: "",
   workspaceName: "",
   setupPath: "lab-new-rg",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 const PROFILE_A: ConnectionProfile = { id: "id-a", name: "Prod", config: CONFIG_A };

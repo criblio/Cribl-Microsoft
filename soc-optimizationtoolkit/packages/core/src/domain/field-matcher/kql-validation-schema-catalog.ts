@@ -106,6 +106,32 @@ export function parseKqlValidationTable(text: string): DcrSchemaColumn[] | null 
 }
 
 /**
+ * The table names the validation-schema directory defines, for the Gap
+ * Analysis destination-table override (DBT-250). One listing, file names with
+ * `.json` stripped, deduped case-insensitively and sorted.
+ *
+ * BEST-EFFORT AND SAYS SO: the contents API caps a directory listing at 1000
+ * entries and this directory is past that, so a name beyond the cap is absent
+ * here even though `resolveSchema` would still find it by exact read. A read
+ * failure THROWS rather than resolving `[]`, so a caller cannot mistake an
+ * unreachable repo for an empty one.
+ */
+export async function listKqlValidationTableNames(
+  content: SentinelContent,
+): Promise<string[]> {
+  const files = await content.listRepoFiles(KQL_VALIDATION_TABLES_DIR);
+  const byLower = new Map<string, string>();
+  for (const file of files) {
+    if (!/\.json$/i.test(file.name)) continue;
+    const name = file.name.replace(/\.json$/i, "");
+    if (name === "") continue;
+    const key = name.toLowerCase();
+    if (!byLower.has(key)) byLower.set(key, name);
+  }
+  return [...byLower.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * Wrap `base` with the KQL-validation tier: a table defined in the repo's
  * validation schemas resolves from there FIRST; everything else falls
  * through to `base`. Results (including misses) are cached per instance.

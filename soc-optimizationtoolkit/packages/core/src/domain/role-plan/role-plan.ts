@@ -202,10 +202,13 @@ function commandFor(
  * `<clientId>`, `<subscriptionId>`, and the path-dependent resource group
  * (`<workspaceRg>` for `existing`, otherwise `<labRg>`). The per-path comment
  * blocks are preserved verbatim from the legacy `buildAzScript`.
+ *
+ * `onlyRoles`, when given, keeps only the plan roles it names.
  */
 export function renderRoleAssignmentCli(
   path: AzureSetupPath,
   params: RoleAssignmentCliParams,
+  onlyRoles?: readonly string[],
 ): string {
   const client =
     params.clientId.trim() === "" ? "<clientId>" : params.clientId.trim();
@@ -222,9 +225,16 @@ export function renderRoleAssignmentCli(
 
   // Command lines come from the canonical plan: portal-assigned roles carry a
   // comment block instead of a command, so they are filtered out here.
+  // `onlyRoles` narrows the script to the roles the operator asked for (the
+  // RBAC half of the connectivity request), so a Partially Connected script
+  // never assigns a role nobody ticked. Omitted, the whole plan is emitted.
   const commands = rolePlanForSetupPath(path)
     .filter((req) => req.assignViaPortal !== true)
+    .filter((req) => onlyRoles === undefined || onlyRoles.includes(req.role))
     .map((req) => commandFor(req, client, sub, rg));
+  if (commands.length === 0) {
+    commands.push("# No roles are requested, so there is nothing to assign.");
+  }
 
   if (path === "existing") {
     return [

@@ -45,6 +45,8 @@ const CONFIG: AzureConfig = {
   resourceGroup: "rg",
   workspaceName: "law-test",
   setupPath: "existing",
+  connectivity: "full",
+  allowedPermissions: ["Reader"],
 };
 
 /** ARM list response shaped as the parser expects. */
@@ -90,6 +92,7 @@ function Probe({
   });
   return (
     <div>
+      <p data-testid="verified">{String(state.verified)}</p>
       <ul data-testid="names">
         {state.names.map((name) => (
           <li key={name}>{name}</li>
@@ -128,6 +131,36 @@ function renderProbe(opts: {
   const { rerender } = render(tree());
   return { request, rerender: () => rerender(tree()) };
 }
+
+describe("useWorkspaceTables - verified (DBT-250)", () => {
+  // The selectors flag "not in workspace" only when this is true, so it must be
+  // false for every state that is not a completed read.
+  it("is true only after a listing completes", async () => {
+    const request = vi.fn().mockResolvedValue(tablesResponse(["SecurityEvent"]));
+    renderProbe({ request });
+    expect(screen.getByTestId("verified").textContent).toBe("false");
+    await waitFor(() => {
+      expect(screen.getByTestId("verified").textContent).toBe("true");
+    });
+  });
+
+  it("stays false when the listing fails", async () => {
+    const request = vi.fn().mockRejectedValue(new Error("403 Forbidden: denied"));
+    renderProbe({ request });
+    await waitFor(() => {
+      expect(screen.getByTestId("note")).toBeTruthy();
+    });
+    expect(screen.getByTestId("verified").textContent).toBe("false");
+  });
+
+  it("stays false when the listing is not enabled", async () => {
+    const request = vi.fn().mockResolvedValue(tablesResponse(["SecurityEvent"]));
+    renderProbe({ request, enabled: false });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.getByTestId("verified").textContent).toBe("false");
+  });
+});
 
 describe("useWorkspaceTables - it lists without being asked", () => {
   it("lists the workspace tables on mount", async () => {
@@ -241,12 +274,14 @@ describe("useWorkspaceTables - the note is the whole surface", () => {
   });
 
   it("names the consequence, not just the error", async () => {
-    // The operator needs to know what the failure COST them: the selectors fall
-    // back to the solution's tables and the common natives.
+    // The operator needs to know what the failure COST them: the selectors can
+    // no longer say which tables exist (DBT-250) - and that nothing is blocked.
     const request = vi.fn().mockRejectedValue(new Error("403 Forbidden: denied"));
     renderProbe({ request });
     await waitFor(() => {
-      expect(screen.getByTestId("note").textContent).toContain("destination selectors");
+      const text = screen.getByTestId("note").textContent ?? "";
+      expect(text).toContain("cannot say which tables exist");
+      expect(text).toContain("pack can still be built");
     });
   });
 
