@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**94 in the backlog, 36 in progress, 153 done.**
+**94 in the backlog, 35 in progress, 154 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 1 | 0 | 1 |
-| Data Volume Inventory | 3 | 19 | 0 |
+| Data Volume Inventory | 2 | 20 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 3 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 17 | 6 |
 
-Open work totals 130.
+Open work totals 129.
 
 ## Epics and features
 
@@ -136,7 +136,7 @@ RAISED BY THE USER 2026-08-31. DCR Automation can onboard a table you can alread
 |---|---|---|---|
 | `TBL-F3` The new surfaces work without write permission | DCR Automation | 0/1 | TBL-7 |
 
-### `MIG` SIEM migration analysis - 87% (27/31)
+### `MIG` SIEM migration analysis - 90% (28/31)
 
 RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export and says which Sentinel solutions the detections need, but it cannot say what an EXISTING Sentinel workspace already ingests. Sizing a migration, or a Cribl reduction, starts from that inventory: which tables carry data, from which sources, at what daily volume.
 
@@ -144,11 +144,11 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 |---|---|---|---|
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
-| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 3/5 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31 |
+| `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 4/5 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31 |
 
 ---
 
-## In progress (36)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1051,12 +1051,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   as sendRule should read 'present but different' on the Manage rule step in
   Live Preview.
 
-- **MIG-30** By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence
-  `MIG-F3` `story` `settled`
-  USER DECISION 2026-11-04: option B - two views of one inventory, By table
-  stays the default. Design: docs/features/inventory-by-source.md. Plan:
-  docs/inventory-by-source-implementation-plan.md (task MIG-30).
-
 ---
 
 ## Backlog - now (11)
@@ -1924,7 +1918,7 @@ Settled and unblocked, sequenced behind now.
   card stays open until a benefit-receiving workspace is available.
 
 - **MIG-31** Live: By source on sentinel-new (Cisco ASA CEF) and a workspace with Syslog and SecurityAlert; decide Facility placement
-  `MIG-F3` `spike` `settled` `blocked by MIG-30`
+  `MIG-F3` `spike` `settled`
   Confirms the identity columns read well on real rows and records the Syslog
   Facility decision (design open item 1). Design:
   docs/features/inventory-by-source.md. Plan:
@@ -2443,7 +2437,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (153)
+## Done (154)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -6510,6 +6504,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   billed-above-total note with an InfoTip; CSV appends SourceIdentity,
   Collector, BillableDailyMB, FreeDailyMB (FreeDailyMB empty when billed
   exceeds total). One fix round (units).
+
+- **MIG-30** By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence
+  `MIG-F3` `story` `settled` `verified: pins`
+  USER DECISION 2026-11-04: option B - two views of one inventory, By table
+  stays the default. Design: docs/features/inventory-by-source.md. Plan:
+  docs/inventory-by-source-implementation-plan.md (task MIG-30). DONE
+  2026-11-04 (pins, 732ad57c + 16a55f14): By source view beside By table
+  (default): one row per product across tables with Lands in, Daily avg,
+  billed/free bar and figures, collectors drill-down (native details),
+  allowance tags and the catalog-Free flag; verified-none vs unverified-empty
+  render differently; not-read rows keep their Usage volume; reconciliation
+  compares the two lenses and states not-read volume separately; every figure
+  has an InfoTip. Stale source docs fixed. Live check is MIG-31.
 
 - **DBT-224** Sample Data asks how samples are supplied, and lists log types only on request
   `DBT-F2` `story` `settled` `verified: both`

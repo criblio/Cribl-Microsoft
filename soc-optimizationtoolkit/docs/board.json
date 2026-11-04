@@ -3810,7 +3810,7 @@
       "settled": "settled",
       "epic": "MIG",
       "feature": "MIG-F3",
-      "status": "in-progress",
+      "status": "done",
       "dependsOn": [
         "MIG-28",
         "MIG-29"
@@ -3819,7 +3819,8 @@
       "type": "story",
       "priority": "next",
       "title": "By source view: products across tables, collectors drill-down, billed vs free, catalog disagreement flag, reconciliation sentence",
-      "detail": "USER DECISION 2026-11-04: option B - two views of one inventory, By table stays the default. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-30)."
+      "detail": "USER DECISION 2026-11-04: option B - two views of one inventory, By table stays the default. Design: docs/features/inventory-by-source.md. Plan: docs/inventory-by-source-implementation-plan.md (task MIG-30).\n\nDONE 2026-11-04 (pins, 732ad57c + 16a55f14): By source view beside By table (default): one row per product across tables with Lands in, Daily avg, billed/free bar and figures, collectors drill-down (native details), allowance tags and the catalog-Free flag; verified-none vs unverified-empty render differently; not-read rows keep their Usage volume; reconciliation compares the two lenses and states not-read volume separately; every figure has an InfoTip. Stale source docs fixed. Live check is MIG-31.",
+      "verified": "pins"
     },
     {
       "settled": "settled",
