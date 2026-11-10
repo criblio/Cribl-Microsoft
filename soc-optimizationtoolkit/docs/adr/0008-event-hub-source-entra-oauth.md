@@ -28,11 +28,12 @@ Two facts shaped the options, both read on 2026-11-03:
   `clientSecretAuthType` (`manual`, `secret`, `certificate`) with
   `clientTextSecret` or `certificateName`. **Measured** (schema read).
 - The Blob lane already authenticates as a service principal (tenant, client,
-  `clientTextSecret`). **Measured** (input-bodies.ts). That principal is
-  currently this app's OWN registration (Setup's tenant and client id), so the
-  app registration's secret goes into a Cribl secret: a pre-existing defect,
-  carded as AZR-66 and not changed by AZR-59. The Blob lane is the precedent
-  for the input SHAPE only, not for the identity.
+  `clientTextSecret`). **Measured** (input-bodies.ts). When this ADR was
+  written that principal was this app's OWN registration (Setup's tenant and
+  client id), so the app registration's secret went into a Cribl secret: a
+  pre-existing defect, carded as AZR-66 and not changed by AZR-59. The Blob
+  lane was the precedent for the input SHAPE only, not for the identity.
+  (2026-11-10, AZR-66: fixed; see section 2.)
 
 The operator chose "offer both" (backlog.md section 6h-i records the options
 and why each single path was rejected).
@@ -66,9 +67,14 @@ Cribl text secret. A client id equal to this app's own is refused, and so is a
 pasted value that is a connection string (`SharedAccessKey=`, `AccountKey=`,
 `Endpoint=sb://`): it is never stored.
 
-The Blob lane does NOT do this today: it signs in as this app's own
-registration (defect AZR-66). Until AZR-66 lands, the Blob lane carries the
-exact exposure this section rejects for Event Hub.
+The Blob lane follows the same rule since AZR-66 (2026-11-10): it takes the
+Cribl principal's tenant and client id from the same plan values, editable in
+the panel, and a client id equal to this app's own is refused there and in the
+plan. Its role is not read, so it needs no object id. A blob input created
+before AZR-66 with this app's client id is never rewritten: planning that
+lane again refuses `input-differs` and says it signs in as this app's own
+registration, so the operator replaces its credential in Cribl and rotates
+this app's client secret.
 
 The role is read for the OBJECT id; the input signs in as the CLIENT id. When
 the shell binds the `GraphDirectory` port, the plan lists service principals

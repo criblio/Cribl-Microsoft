@@ -272,7 +272,7 @@ export interface CreateGateInput {
   readonly topics: LaneTopics | null;
   /** The pasted client secret is present (blob and Entra ID). */
   readonly hasClientSecret?: boolean;
-  /** The Cribl principal's ids (Entra ID only); objectId is the plan value. */
+  /** The Cribl principal's ids (Entra ID and blob); objectId is the plan value. */
   readonly entra?: { readonly tenantId: string; readonly clientId: string; readonly objectId: string };
   /** This app's own registration client id, refused as the Cribl principal. */
   readonly appClientId?: string;
@@ -310,6 +310,15 @@ export function createDisabledReason(g: CreateGateInput): string | null {
   if (g.credentialKind === null) return "Choose where the credential comes from.";
   if (g.transport === "blob") {
     if (g.credentialKind !== "client-secret") return PLAN_REFUSAL_COPY["credential-mismatch"];
+    // AZR-66: the blob lane signs in as the Cribl principal too, never as
+    // this app's own registration. Its role is not read here, so no object id.
+    const ids = g.entra;
+    const missing: string[] = [];
+    if (ids === undefined || ids.tenantId.trim() === "") missing.push("tenant ID");
+    if (ids === undefined || ids.clientId.trim() === "") missing.push("client ID");
+    if (missing.length > 0) return `Enter the Cribl service principal's ${missing.join(", ")}.`;
+    const app = g.appClientId?.trim().toLowerCase() ?? "";
+    if (ids !== undefined && app !== "" && ids.clientId.trim().toLowerCase() === app) return PLAN_REFUSAL_COPY["app-principal"];
     if (g.hasClientSecret !== true) return "Paste the service principal's client secret.";
     return g.secretIsConnectionString === true ? CLIENT_SECRET_IS_CONNECTION_STRING : null;
   }

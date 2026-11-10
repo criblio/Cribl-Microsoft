@@ -455,6 +455,54 @@ describe("planCriblSource", () => {
     expect(plan.ready.keyNameOrPrincipal).toBe("c1");
     expect(h.log.filter((e) => e.port === "azure")).toEqual([]);
   });
+
+  // AZR-66: the blob lane signed in as the app's own registration, whose
+  // secret then sat in a Cribl secret with the app's ARM write rights.
+  it("refuses the app's own registration as the blob lane's principal, with no call", async () => {
+    const blob = { lane: { source: onboardingSource("vnetFlowLogs")!, subSelection: [] }, values: values({ storageAccount: "sa1", queueName: "q1" }) };
+    for (const appClientId of ["c1", " C1 "]) {
+      const h = harness();
+      const plan = await planCriblSource(h.ports, planInput({ kind: "client-secret", tenantId: "t1", clientId: "c1" }, { ...blob, appClientId }));
+      expect(plan).toMatchObject({ kind: "refused", reason: "app-principal" });
+      expect(h.log).toEqual([]);
+    }
+    // A dedicated principal still plans.
+    const h = harness();
+    h.cribl.respondWith(ok({ items: [] }), status(404), ok({ items: [] }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "client-secret", tenantId: "t1", clientId: "c1" }, { ...blob, appClientId: "app-1" }));
+    expect(plan.kind).toBe("ready");
+  });
+
+  it("reports an existing blob input that signs in as the app's registration, and changes nothing", async () => {
+    const blob = { lane: { source: onboardingSource("vnetFlowLogs")!, subSelection: [] }, values: values({ storageAccount: "sa1", queueName: "q1" }) };
+    // The input as an earlier create made it, with the app's own client id.
+    const first = harness();
+    first.cribl.respondWith(ok({ items: [] }), status(404), ok({ items: [] }));
+    const earlier = await planCriblSource(first.ports, planInput({ kind: "client-secret", tenantId: "t1", clientId: "app-1" }, blob));
+    if (earlier.kind !== "ready") throw new Error(`expected ready, got ${earlier.kind}`);
+    const existing = earlier.ready.inputBody;
+    const kvRecord = { groupId: G, inputId: earlier.ready.inputId, inputType: "azure_blob" as const, secretId: earlier.ready.secretId };
+
+    const h = harness();
+    h.cribl.respondWith(ok({ items: [existing] }));
+    const plan = await planCriblSource(
+      h.ports,
+      planInput({ kind: "client-secret", tenantId: "t1", clientId: "cribl-sp" }, { ...blob, appClientId: "APP-1", kvRecord }),
+    );
+    expect(plan).toMatchObject({ kind: "refused", reason: "input-differs" });
+    expect(plan.kind === "refused" ? plan.detail : "").toContain("signs in as this app's own registration");
+    expect(h.log.every((e) => e.req.method === "GET")).toBe(true);
+
+    // The same difference on an input that does NOT use the app's id says nothing about it.
+    const other = harness();
+    other.cribl.respondWith(ok({ items: [{ ...existing, clientId: "someone-else" }] }));
+    const plain = await planCriblSource(
+      other.ports,
+      planInput({ kind: "client-secret", tenantId: "t1", clientId: "cribl-sp" }, { ...blob, appClientId: "app-1", kvRecord }),
+    );
+    expect(plain).toMatchObject({ kind: "refused", reason: "input-differs" });
+    expect(plain.kind === "refused" ? plain.detail : "").not.toContain("own registration");
+  });
 });
 
 describe("applyCriblSource", () => {

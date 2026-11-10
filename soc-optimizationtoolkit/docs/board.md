@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 39 in progress, 198 done.**
+**104 in the backlog, 37 in progress, 200 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 35 | 11 |
+| Azure Native Source Onboarding | 29 | 37 | 9 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 143.
+Open work totals 141.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 49% (40/82)
+### `AZR` Azure native source onboarding - 51% (42/82)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 25/41 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 27/41 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (39)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1236,42 +1236,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
-
-- **AZR-66** The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx
-  passes { kind: "client-secret", ...principal } where principal is
-  config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx),
-  i.e. the APP'S OWN app registration, and the operator pastes that
-  registration's secret, which is then stored as the Cribl text secret. That
-  registration holds ARM write rights (DCRs, role assignments, Defender
-  export), so anyone who can read the worker group's secrets gets them - the
-  class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's
-  Manage key. ADR 0008 section 2 claimed the Blob lane already used a
-  dedicated Cribl principal; it does not, and the ADR is corrected under
-  AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the
-  Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable),
-  refuse the app's own client id (reason app-principal, as AZR-59 does for
-  Event Hub), and update the Blob How-to steps; existing Blob inputs created
-  with the app's identity are reported, not silently rewritten.
-
-- **AZR-93** After a deploy reads the Defender export back, Validate and the dataflow diagram still show it 'not found' until Validate is re-run by hand
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-04 in the live pass (Live Preview, DatacenterEast). Validate
-  ran at 12:22 and read CriblDefenderExport as absent (true then). The
-  Defender section then deployed it and said 'CriblDefenderExport was created
-  and read back from Azure'. The Validate results and the dataflow diagram's
-  Defender node kept showing 'not found' in red on the same screen, with no
-  sign the verdict predated the deploy; re-running Validate (7:14 local) read
-  it 'as expected'. FAILURE: an operator who deploys and then looks at the
-  diagram is told the thing they just created does not exist. FIX (settled,
-  small): a deploy's successful read-back replaces that check's verdict
-  (defender-export) in the Validate result the diagram draws from, or marks
-  the whole Validate result as older than a write made since, naming the
-  write. Pin: deploy after an absent verdict -> the Defender node no longer
-  reads 'not found'. Never upgrade a verdict without a read; the read-back IS
-  a read. NOTE: id AZR-93 skips 68-92 on purpose: feature/multi-tenant-azure
-  (PR #200) holds AZR-61..65 and AZR-81..92.
 
 ---
 
@@ -2805,7 +2769,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (198)
+## Done (200)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7773,6 +7737,36 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   tenant, so multi-tenant behaviour is proven with fakes until a second test
   tenant exists (ADR 0009).
 
+- **AZR-66** The Blob lane signs in as the app's own registration and stores its client secret in a Cribl secret
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-03 by the AZR-59 security review. cribl-source-panel.tsx
+  passes { kind: "client-secret", ...principal } where principal is
+  config.tenantId/config.clientId from Setup (azure-onboarding-screen.tsx),
+  i.e. the APP'S OWN app registration, and the operator pastes that
+  registration's secret, which is then stored as the Cribl text secret. That
+  registration holds ARM write rights (DCRs, role assignments, Defender
+  export), so anyone who can read the worker group's secrets gets them - the
+  class of mistake ADR 0008 section 2 forbids, and the same class as AZR-58's
+  Manage key. ADR 0008 section 2 claimed the Blob lane already used a
+  dedicated Cribl principal; it does not, and the ADR is corrected under
+  AZR-59. FIX: give the Blob lane the same dedicated Cribl principal as the
+  Entra ID Event Hub mode (criblTenantId/criblClientId plan values, editable),
+  refuse the app's own client id (reason app-principal, as AZR-59 does for
+  Event Hub), and update the Blob How-to steps; existing Blob inputs created
+  with the app's identity are reported, not silently rewritten. DONE
+  2026-11-10 (pins; not run live - the lab has no Blob plan values and no
+  dedicated Cribl principal): the blob lane's tenant and client id follow the
+  plan values criblTenantId/criblClientId, editable in the panel exactly as
+  the Entra ID fields (no object id: its role is not read). The app's own
+  client id is refused in the gate (PLAN_REFUSAL_COPY app-principal) and in
+  core planCriblSource (reason app-principal, before any call). An existing
+  blob input that signs in as the app is not rewritten: planning it again
+  refuses input-differs and now says it signs in as this app's own
+  registration, so replace its credential in Cribl and rotate the app's
+  secret. Blob How-to step blob-rbac says the principal is made for Cribl,
+  never the app's registration. ADR 0008 sections 1 and 2 corrected. Pins
+  mutation-checked.
+
 - **AZR-67** Validate counts a Manage-capable rule as done for the rule Cribl reads with, which the create refuses
   `AZR-F9` `bug` `settled` `verified: both`
   FOUND 2026-11-03 by the architecture audit (duplicated decision).
@@ -7794,6 +7788,38 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   RootManageSharedAccessKey as 'present but different' (plan Listen without
   Manage, Azure Listen, Manage, Send), and the Listen-rule picker offered only
   cribl-listen.
+
+- **AZR-93** After a deploy reads the Defender export back, Validate and the dataflow diagram still show it 'not found' until Validate is re-run by hand
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 in the live pass (Live Preview, DatacenterEast). Validate
+  ran at 12:22 and read CriblDefenderExport as absent (true then). The
+  Defender section then deployed it and said 'CriblDefenderExport was created
+  and read back from Azure'. The Validate results and the dataflow diagram's
+  Defender node kept showing 'not found' in red on the same screen, with no
+  sign the verdict predated the deploy; re-running Validate (7:14 local) read
+  it 'as expected'. FAILURE: an operator who deploys and then looks at the
+  diagram is told the thing they just created does not exist. FIX (settled,
+  small): a deploy's successful read-back replaces that check's verdict
+  (defender-export) in the Validate result the diagram draws from, or marks
+  the whole Validate result as older than a write made since, naming the
+  write. Pin: deploy after an absent verdict -> the Defender node no longer
+  reads 'not found'. Never upgrade a verdict without a read; the read-back IS
+  a read. NOTE: id AZR-93 skips 68-92 on purpose: feature/multi-tenant-azure
+  (PR #200) holds AZR-61..65 and AZR-81..92. DONE 2026-11-10 (pins; not run
+  live - reproducing needs the lab's CriblDefenderExport removed and
+  redeployed, an Azure write): core applyDefenderDeploy
+  (validate-azure-onboarding.ts) replaces the run's defender-export verdict
+  after a deploy to the SAME subscription and hub: as-expected after
+  written-and-read-back (its GET compared the same expectedExportFor the check
+  uses), unknown after accepted-not-verified (wrote, not confirmed - never
+  kept as 'not found', never upgraded without a read), nothing for another
+  target. The Defender section reports the deploy (onDeployed); the screen
+  applies it to the Validate panel through a reducer 'amend' action (so a run
+  that finished during the deploy is amended, never replaced by an older
+  capture) and to the diagram's last run. The status line names the deploy and
+  its time. Pins: core usecase (6), lanes (Defender node no longer 'absent'),
+  reducer (4); mutation-checked. NOT pinned: the section-to-screen callback
+  (no DOM fixture deploys and validates together).
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`

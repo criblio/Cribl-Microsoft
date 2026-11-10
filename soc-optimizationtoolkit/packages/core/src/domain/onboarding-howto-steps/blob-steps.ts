@@ -218,7 +218,7 @@ export const BLOB_STEPS: readonly HowToStep[] = [
     id: "blob-rbac",
     sourceIds: BLOB_IDS,
     title: "Let the Cribl service principal read {{storageAccount}} and its queue",
-    why: "The Cribl Azure Blob source signs in as a service principal. It must read the blobs and receive and delete the queue messages.",
+    why: "The Cribl Azure Blob source signs in as a service principal made for Cribl, never this app's own registration: its client secret is stored in Cribl, where anyone who can read the worker group's secrets could use it. It must read the blobs and receive and delete the queue messages.",
     portal: [
       "Open the storage account {{storageAccount}} and select Access control (IAM), then Add role assignment.",
       "Assign Storage Blob Data Reader to the service principal with object ID {{criblPrincipalObjectId}}.",

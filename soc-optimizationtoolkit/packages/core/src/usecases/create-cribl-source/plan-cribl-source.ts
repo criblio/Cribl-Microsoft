@@ -132,7 +132,10 @@ export interface CriblSourceLane {
  *                  plan sees its descriptor. `attested` is the explicit "This
  *                  key has Listen rights" tick, honoured only when the rules
  *                  list could not be read.
- *   client-secret  Blob: a service principal; the operator pastes its secret.
+ *   client-secret  Blob: a service principal DEDICATED to Cribl (the plan
+ *                  values criblTenantId / criblClientId by default), never this
+ *                  app's own registration (AZR-66); the operator pastes its
+ *                  secret, supplied only at apply time.
  *   entra-id       Event Hub (ADR 0008, the default): a DEDICATED Cribl
  *                  service principal signs in with OAUTHBEARER. Its object id
  *                  is the plan value criblPrincipalObjectId; its client secret
@@ -160,8 +163,9 @@ export interface PlanCriblSourceInput {
    */
   readonly tenantId: string;
   /**
-   * This app's own registration client id. An entra-id credential naming it is
-   * refused (ADR 0008 section 2). Absent when the caller does not know it.
+   * This app's own registration client id. An entra-id or client-secret
+   * credential naming it is refused (ADR 0008 section 2, AZR-66). Absent when
+   * the caller does not know it.
    */
   readonly appClientId?: string;
 }
@@ -301,6 +305,20 @@ export async function readInputs(request: Request): Promise<ExistingRead> {
   const items = (r.body as { items?: unknown } | null)?.items;
   if (!Array.isArray(items)) return { state: "refused", detail: "the inputs list answered without an items array" };
   return { state: "read", items };
+}
+
+/**
+ * Whether the existing input `inputId` signs in with this app's own client id
+ * (AZR-66: blob inputs created before the dedicated-principal rule did). A
+ * read the caller could not make, or no app id, answers false.
+ */
+function signsInAsApp(read: ExistingRead, inputId: string, appClientId: string): boolean {
+  if (appClientId === "" || read.state !== "read") return false;
+  const row = read.items.find(
+    (i): i is Record<string, unknown> => typeof i === "object" && i !== null && (i as Record<string, unknown>)["id"] === inputId,
+  );
+  const clientId = row?.["clientId"];
+  return typeof clientId === "string" && clientId.trim().toLowerCase() === appClientId;
 }
 
 /** GET /system/secrets/:id as an ExistingRead. A 404 is a read with no items: the secret is absent. */
@@ -518,6 +536,9 @@ export async function planCriblSource(
   const { source, subSelection } = input.lane;
   const { values, credential } = input;
   const isBlob = source.transport === "blob";
+  // ADR 0008 section 2, AZR-66: this app's own registration is never the
+  // principal a Cribl source signs in as, on any lane.
+  const appClientId = input.appClientId?.trim().toLowerCase() ?? "";
   if (isBlob !== (credential.kind === "client-secret")) {
     return refused(
       "credential-mismatch",
@@ -539,7 +560,6 @@ export async function planCriblSource(
     if (tenantId === "" || clientId === "" || objectId === "") {
       return refused("missing-value", "Enter the Cribl service principal's tenant ID, client ID and object ID.");
     }
-    const appClientId = input.appClientId?.trim().toLowerCase() ?? "";
     if (appClientId !== "" && clientId.toLowerCase() === appClientId) {
       return refused(
         "app-principal",
@@ -591,6 +611,12 @@ export async function planCriblSource(
     const tenantId = credential.tenantId.trim();
     const clientId = credential.clientId.trim();
     if (tenantId === "" || clientId === "") return refused("missing-value", "Enter the service principal's tenant and client id.");
+    if (appClientId !== "" && clientId.toLowerCase() === appClientId) {
+      return refused(
+        "app-principal",
+        `Client ID ${clientId} is this app's own registration. Its secret in a Cribl secret would give the worker group this app's Azure rights; use a service principal dedicated to Cribl.`,
+      );
+    }
     keyNameOrPrincipal = clientId;
     inputBody = buildBlobInputBody({
       id: inputId,
@@ -735,7 +761,10 @@ export async function planCriblSource(
     case "differs":
       return refused(
         "input-differs",
-        `Input ${inputId} exists but differs in ${inputVerdict.fields.join(", ")}. This app does not change an existing input; edit or remove it in Cribl.`,
+        `Input ${inputId} exists but differs in ${inputVerdict.fields.join(", ")}. This app does not change an existing input; edit or remove it in Cribl.` +
+          (signsInAsApp(inputs, inputId, appClientId)
+            ? ` It signs in as this app's own registration, so its Cribl secret holds this app's Azure rights: give it a service principal dedicated to Cribl, then rotate this app's client secret.`
+            : ""),
         inputVerdict.fields,
       );
     case "foreign":
