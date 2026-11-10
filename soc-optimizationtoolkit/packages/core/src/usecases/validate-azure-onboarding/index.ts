@@ -4,7 +4,9 @@
  */
 
 export {
+  applyDefenderDeploy,
   CANCELLED_DETAIL,
+  DEFENDER_WRITTEN_UNCONFIRMED_DETAIL,
   checkKey,
   planValidation,
   stepKey,
@@ -13,6 +15,8 @@ export {
 } from "./validate-azure-onboarding";
 export type {
   CheckResult,
+  DefenderDeployForValidation,
+  DefenderWriteOutcome,
   PlanValidationOptions,
   PlannedArrival,
   PlannedCheck,

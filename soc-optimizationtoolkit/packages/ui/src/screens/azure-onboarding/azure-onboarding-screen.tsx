@@ -63,6 +63,7 @@ import {
   DEFENDER_EXPORT_ITEM_ID,
   ONBOARDING_PROGRESS_KEY,
   applyCriblSource,
+  applyDefenderDeploy,
   buildNamespaceAuthRulesListRequest,
   emptyProgress,
   encodeProgress,
@@ -91,6 +92,7 @@ import type {
   BatchPacing,
   BuildOnboardingLanesInput,
   CoverageSelection,
+  DefenderDeployForValidation,
   DefenderState,
   KvDocumentLoad,
   LaneTopics,
@@ -154,6 +156,7 @@ import {
   VALIDATE_IDLE,
   VALIDATE_REQUESTS_PER_MINUTE,
   changedPlanKeys,
+  defenderAmendNote,
   validateRunReducer,
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
@@ -623,6 +626,22 @@ export function AzureOnboardingScreen({
     }
   }
 
+  /**
+   * A Defender deploy that wrote the export: its read-back replaces the
+   * export verdict of a Validate run made BEFORE it, in the panel and in the
+   * diagram, so the screen never says "not found" next to the export it just
+   * created (AZR-93). A run in flight is left to read Azure itself.
+   */
+  function onDefenderDeployed(deploy: DefenderDeployForValidation): void {
+    dispatchRun({ type: "amend", deploy, note: defenderAmendNote(deploy.outcome, new Date().toLocaleTimeString()) });
+    setLastRun((current) => {
+      if (current === null) return current;
+      const amended = applyDefenderDeploy(current.result, current.values, deploy);
+      return amended === null ? current : { result: amended, values: current.values };
+    });
+    logger?.info(`${LOG} Defender deploy applied to the last Validate result`, { outcome: deploy.outcome });
+  }
+
   // -------------------------------------------------------------------------
   // Cribl source (D7-D10)
   // -------------------------------------------------------------------------
@@ -869,6 +888,7 @@ export function AzureOnboardingScreen({
                   target={target}
                   state={defenderState}
                   onState={setDefenderState}
+                  onDeployed={onDefenderDeployed}
                   howtoSection={firstExtra + 1}
                   onShowHowto={() => showHowto(DEFENDER_EXPORT_ITEM_ID)}
                   onRecheckPermissions={onRecheckPermissions}

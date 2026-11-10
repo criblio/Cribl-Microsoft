@@ -27,8 +27,9 @@
  * handled exactly as the blob lane's. Each id FOLLOWS the plan values until
  * the operator edits it here (then the edit wins); there is no fallback to the
  * app's own tenant, because the dedicated principal may live elsewhere. Both
- * are part of the arm key. The app's own registration is refused as the
- * principal (`principal` is the app's own registration). A client secret that
+ * are part of the arm key. A blob lane signs in as the same Cribl principal,
+ * with the same two id fields (AZR-66). The app's own registration is refused
+ * as the principal on every lane (`principal` is the app's own registration). A client secret that
  * is really a connection string never arms (core looksLikeConnectionString).
  *
  * SECRETS. A pasted connection string (or a client secret) lives
@@ -123,9 +124,10 @@ export interface CriblSourcePanelProps {
   /** The hubs a lane's input reads (core laneTopics), or null when not computed. */
   readonly topicsFor: (sourceId: OnboardingSourceId) => LaneTopics | null;
   /**
-   * This app's own registration, which a blob lane authenticates as, or null
-   * when not set up. An Event Hub lane in Entra ID mode REFUSES it as the
-   * Cribl principal (ADR 0008 section 2) and borrows nothing from it.
+   * This app's own registration, or null when not set up. Every lane REFUSES
+   * it as the principal its Cribl source signs in as (ADR 0008 section 2,
+   * AZR-66) and borrows nothing from it: Entra ID and blob lanes take the
+   * Cribl principal's ids from the plan values.
    */
   readonly principal: { readonly tenantId: string; readonly clientId: string } | null;
   /** Core planCriblSource for one lane. Read-only. */
@@ -312,11 +314,11 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
   const disabledReason =
     panel.groupChoice?.blockedReason ??
     gateReason ??
-    (transport === "blob" && principal === null
-      ? "The service principal's tenant and client id are not set up."
-      : null);
+    null;
 
   const isEntra = credentialKind === "entra-id";
+  // Lanes whose source signs in as the Cribl service principal (AZR-66).
+  const usesCriblPrincipal = isEntra || credentialKind === "client-secret";
   const key = armKey({
     groupId,
     sourceId,
@@ -326,7 +328,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
     values,
     readSeq,
     descriptor,
-    entra: isEntra ? [entraTenantId.trim(), entraClientId.trim()] : null,
+    entra: usesCriblPrincipal ? [entraTenantId.trim(), entraClientId.trim()] : null,
   });
   useEffect(() => {
     dispatch({ type: "inputs", key });
@@ -340,7 +342,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
     if (credentialKind === "listKeys") return { kind: "listKeys", rule };
     if (credentialKind === "paste") return descriptor === null ? null : { kind: "paste", descriptor, attested };
     if (credentialKind === "client-secret") {
-      return principal === null ? null : { kind: "client-secret", ...principal };
+      return { kind: "client-secret", tenantId: entraTenantId.trim(), clientId: entraClientId.trim() };
     }
     if (credentialKind === "entra-id") {
       return { kind: "entra-id", tenantId: entraTenantId.trim(), clientId: entraClientId.trim() };
@@ -460,7 +462,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
           </label>
         )}
 
-        {isEntra && (
+        {usesCriblPrincipal && (
           <>
             <label className="field">
               <span className="field-label">
@@ -488,6 +490,11 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
                 onChange={(e) => setClientEdit(e.target.value)}
               />
             </label>
+          </>
+        )}
+
+        {isEntra && (
+          <>
             <label className="field">
               <span className="field-label">
                 Client secret <InfoTip text={ENTRA_SECRET_TIP} />

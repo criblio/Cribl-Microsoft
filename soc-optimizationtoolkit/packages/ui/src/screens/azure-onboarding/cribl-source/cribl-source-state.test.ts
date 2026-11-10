@@ -289,9 +289,23 @@ describe("createDisabledReason", () => {
     expect(createDisabledReason({ ...GATE, credentialKind: "listKeys" })).toContain("Listen rights");
     expect(createDisabledReason({ ...GATE, credentialKind: "listKeys", rule: "listen" })).toBeNull();
     expect(createDisabledReason({ ...GATE, paste: null })).not.toBeNull();
-    const blob: CreateGateInput = { ...GATE, transport: "blob", credentialKind: "client-secret", topics: null };
+    const blob: CreateGateInput = {
+      ...GATE,
+      transport: "blob",
+      credentialKind: "client-secret",
+      topics: null,
+      entra: { tenantId: "t1", clientId: "cribl-sp", objectId: "" },
+      appClientId: "app-1",
+    };
     expect(createDisabledReason(blob)).not.toBeNull();
     expect(createDisabledReason({ ...blob, hasClientSecret: true })).toBeNull();
+    // AZR-66: the blob lane needs the Cribl principal's ids, never the app's own.
+    expect(createDisabledReason({ ...blob, hasClientSecret: true, entra: { tenantId: "", clientId: "", objectId: "" } })).toBe(
+      "Enter the Cribl service principal's tenant ID, client ID.",
+    );
+    expect(createDisabledReason({ ...blob, hasClientSecret: true, entra: { tenantId: "t1", clientId: " APP-1 ", objectId: "" } })).toBe(
+      PLAN_REFUSAL_COPY["app-principal"],
+    );
   });
 });
 
@@ -536,7 +550,7 @@ describe("Entra ID mode", () => {
   it("refuses a connection string pasted as the client secret, on Entra ID and on blob", () => {
     expect(createDisabledReason({ ...ENTRA_GATE, secretIsConnectionString: true })).toBe(CLIENT_SECRET_IS_CONNECTION_STRING);
     expect(
-      createDisabledReason({ ...GATE, transport: "blob", credentialKind: "client-secret", paste: null, pasteCheck: null, hasClientSecret: true, secretIsConnectionString: true }),
+      createDisabledReason({ ...GATE, transport: "blob", credentialKind: "client-secret", paste: null, pasteCheck: null, hasClientSecret: true, secretIsConnectionString: true, entra: { tenantId: "t1", clientId: "cribl-sp", objectId: "" } }),
     ).toBe(CLIENT_SECRET_IS_CONNECTION_STRING);
     expect(CLIENT_SECRET_IS_CONNECTION_STRING).toContain("connection string");
   });

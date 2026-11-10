@@ -11,6 +11,7 @@ import {
   CHECK_SUBJECT,
   VALIDATE_IDLE,
   arrivalView,
+  defenderAmendNote,
   runStatusText,
   validateDisabledReason,
   validateIntro,
@@ -271,6 +272,61 @@ describe("validateRunReducer", () => {
       { type: "finish", runId: 1, result: { ...RESULT, cancelled: true }, asOf: "10:00", values: {} as PlanValues },
     );
     expect(runStatusText(s)).toContain("could not be read");
+  });
+});
+
+// AZR-93: a Defender deploy's read-back amends the finished run it bears on.
+describe("validateRunReducer amend (AZR-93)", () => {
+  const VALUES = { subscriptionId: "sub-1", resourceGroup: "rg-1", namespace: "ns1", hubName: "hub1" } as PlanValues;
+  const DEPLOY = {
+    outcome: "written-and-read-back",
+    input: { subscriptionId: "sub-1", namespace: { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" }, hubName: "hub1" },
+  } as const;
+  const finished = (result: ValidationResult = RESULT) =>
+    validateRunReducer(validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 1, total: 1 }), {
+      type: "finish",
+      runId: 1,
+      result,
+      asOf: "10:00",
+      values: VALUES,
+    });
+  const exportVerdict = (s: ReturnType<typeof finished>) =>
+    s.kind === "done" ? s.result.checks.find((c) => c.kind === "defender-export")?.verdict : undefined;
+
+  it("replaces the current run's export verdict and names the write in the status line", () => {
+    const note = defenderAmendNote("written-and-read-back", "10:05");
+    const s = validateRunReducer(finished(), { type: "amend", deploy: DEPLOY, note });
+    expect(exportVerdict(finished())).toEqual({ kind: "absent" });
+    expect(exportVerdict(s)).toEqual({ kind: "as-expected" });
+    expect(runStatusText(s)).toBe(
+      "Checked as of 10:00. The Defender export was created and read back at 10:05, after this check; its result is from that read.",
+    );
+  });
+
+  it("amends the run that is current when the deploy lands, not one captured before it", () => {
+    // A run that finished during the deploy, with its own other verdicts.
+    const newer: ValidationResult = {
+      ...RESULT,
+      checks: RESULT.checks.map((c) => (c.kind === "eh-namespace" ? { ...c, verdict: { kind: "absent" } } : c)),
+    };
+    const s = validateRunReducer(finished(newer), { type: "amend", deploy: DEPLOY, note: "n" });
+    expect(s.kind === "done" && s.result.checks.find((c) => c.kind === "eh-namespace")?.verdict).toEqual({ kind: "absent" });
+    expect(exportVerdict(s)).toEqual({ kind: "as-expected" });
+  });
+
+  it("an unconfirmed write says so, and never claims a read-back", () => {
+    const note = defenderAmendNote("accepted-not-verified", "10:05");
+    expect(note).not.toContain("read back");
+    expect(note).toContain("not confirmed");
+  });
+
+  it("is ignored by a run in flight, an idle panel, and a deploy to another hub", () => {
+    const running = validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 2, total: 1 });
+    expect(validateRunReducer(running, { type: "amend", deploy: DEPLOY, note: "n" })).toBe(running);
+    expect(validateRunReducer(VALIDATE_IDLE, { type: "amend", deploy: DEPLOY, note: "n" })).toBe(VALIDATE_IDLE);
+    const done = finished();
+    const elsewhere = { ...DEPLOY, input: { ...DEPLOY.input, hubName: "other" } };
+    expect(validateRunReducer(done, { type: "amend", deploy: elsewhere, note: "n" })).toBe(done);
   });
 });
 

@@ -19,7 +19,9 @@ import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../../domain/onboar
 import { DEFENDER_EXPORT_NAME } from "../../domain/defender-export";
 import { MAX_LIST_PAGES } from "../azure-discovery";
 import {
+  applyDefenderDeploy,
   CANCELLED_DETAIL,
+  DEFENDER_WRITTEN_UNCONFIRMED_DETAIL,
   checkKey,
   planValidation,
   validateAzureOnboarding,
@@ -508,5 +510,65 @@ describe("the consumer group on the hubs Azure creates (AZR-54)", () => {
     const plan = planValidation(["entraId"], FULL);
     await validateAzureOnboarding(azure, plan);
     expect(azure.calls.length).toBeLessThanOrEqual(plan.maxReads);
+  });
+});
+
+describe("a Defender deploy made after the run (AZR-93)", () => {
+  const NS = { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" };
+  const TARGET = { subscriptionId: "sub-1", namespace: NS, hubName: "defender-alerts" };
+  // The generic 200 lists no automations, so the run reads the export absent.
+  const absentRun = () => validateAzureOnboarding(new RecordingAzure(), planValidation(["defenderExport"], FULL));
+  const exportVerdicts = (r: { checks: readonly { kind: string; key: string }[]; verdicts: Readonly<Record<string, unknown>> }) =>
+    r.checks.filter((c) => c.kind === "defender-export").map((c) => r.verdicts[c.key]);
+
+  it("a read-back after an absent verdict replaces 'not found' with as-expected, in checks and verdicts", async () => {
+    const before = await absentRun();
+    expect(exportVerdicts(before)).toEqual([{ kind: "absent" }]);
+    const after = applyDefenderDeploy(before, FULL, { outcome: "written-and-read-back", input: TARGET });
+    expect(after).not.toBeNull();
+    expect(exportVerdicts(after!)).toEqual([{ kind: "as-expected" }]);
+    expect(after!.checks.filter((c) => c.kind === "defender-export").map((c) => c.verdict)).toEqual([
+      { kind: "as-expected" },
+    ]);
+  });
+
+  it("leaves every other check as the run read it", async () => {
+    const before = await absentRun();
+    const after = applyDefenderDeploy(before, FULL, { outcome: "written-and-read-back", input: TARGET })!;
+    const others = (r: typeof before) => r.checks.filter((c) => c.kind !== "defender-export");
+    expect(others(after)).toEqual(others(before));
+    expect(others(before).length).toBeGreaterThan(0);
+    expect(Object.keys(after.verdicts).sort()).toEqual(Object.keys(before.verdicts).sort());
+    expect(after.arrival).toBe(before.arrival);
+  });
+
+  it("a write whose read-back did not confirm it retires the verdict to unknown, never as-expected", async () => {
+    const after = applyDefenderDeploy(await absentRun(), FULL, { outcome: "accepted-not-verified", input: TARGET })!;
+    expect(exportVerdicts(after)).toEqual([
+      { kind: "unknown", reason: "failed", detail: DEFENDER_WRITTEN_UNCONFIRMED_DETAIL },
+    ]);
+  });
+
+  it("matches the target without regard to case or padding, as ARM ids do", async () => {
+    const loud = { subscriptionId: "SUB-1", namespace: { ...NS, resourceGroup: "RG-1", name: "NS1" }, hubName: "Defender-Alerts" };
+    expect(applyDefenderDeploy(await absentRun(), { ...FULL, hubName: " defender-alerts " }, { outcome: "written-and-read-back", input: loud })).not.toBeNull();
+  });
+
+  it("a deploy to another hub, namespace or subscription says nothing about the run's checks", async () => {
+    const before = await absentRun();
+    for (const input of [
+      { ...TARGET, hubName: "other-hub" },
+      { ...TARGET, namespace: { ...NS, name: "ns2" } },
+      { ...TARGET, namespace: { ...NS, resourceGroup: "rg-2" } },
+      { ...TARGET, subscriptionId: "sub-2", namespace: { ...NS, subscriptionId: "sub-2" } },
+    ]) {
+      expect(applyDefenderDeploy(before, FULL, { outcome: "written-and-read-back", input })).toBeNull();
+    }
+  });
+
+  it("a run with no defender-export check is not changed", async () => {
+    const run = await validateAzureOnboarding(new RecordingAzure(), planValidation(["activityLog"], FULL));
+    expect(run.checks.some((c) => c.kind === "defender-export")).toBe(false);
+    expect(applyDefenderDeploy(run, FULL, { outcome: "written-and-read-back", input: TARGET })).toBeNull();
   });
 });

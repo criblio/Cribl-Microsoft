@@ -36,7 +36,7 @@ import type {
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
 import { CriblSourcePanel } from "./cribl-source-panel";
 import type { CriblSourcePanelProps } from "./cribl-source-panel";
-import { sourceRows } from "./cribl-source-state";
+import { PLAN_REFUSAL_COPY, sourceRows } from "./cribl-source-state";
 
 afterEach(cleanup);
 
@@ -288,7 +288,9 @@ function blobProps(over: Partial<CriblSourcePanelProps> = {}): CriblSourcePanelP
   return props({
     rows: sourceRows(["vnetFlowLogs"], { criblSources: {} }),
     modes: { vnetFlowLogs: "manual" },
+    // PRINCIPAL is this app's own registration: refused, never signed in as (AZR-66).
     principal: PRINCIPAL,
+    values: { ...defaultPlanValues(null), storageAccount: "acct", queueName: "q1", criblTenantId: "cribl-tenant", criblClientId: "cribl-client" },
     onPlan: vi.fn(async (): Promise<PlanCriblSourceResult> => ({ kind: "ready", ready: READY_BLOB })),
     ...over,
   });
@@ -306,12 +308,17 @@ async function armBlob(p: CriblSourcePanelProps): Promise<void> {
 }
 
 describe("CriblSourcePanel - blob lane", () => {
-  it("keeps Create disabled with the principal reason while no principal is set up", () => {
-    const p = blobProps({ principal: null });
+  // AZR-66: the blob lane signed in as the app's own registration.
+  it("keeps Create disabled until the Cribl principal's ids are set, and refuses the app's own client id", () => {
+    const p = blobProps({ values: { ...defaultPlanValues(null), storageAccount: "acct", queueName: "q1" } });
     render(<CriblSourcePanel {...p} />);
     fireEvent.change(blobSecretField(), { target: { value: BLOB_SECRET } });
     expect(createButton().disabled).toBe(true);
-    expect(screen.getByText(/service principal's tenant and client id are not set up/)).toBeTruthy();
+    expect(screen.getByText("Enter the Cribl service principal's tenant ID, client ID.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Cribl principal tenant ID for/), { target: { value: "tenant-1" } });
+    fireEvent.change(screen.getByLabelText(/Cribl principal client ID for/), { target: { value: "CLIENT-1" } });
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText(PLAN_REFUSAL_COPY["app-principal"])).toBeTruthy();
     fireEvent.click(createButton());
     expect(p.onPlan).not.toHaveBeenCalled();
   });
@@ -328,7 +335,7 @@ describe("CriblSourcePanel - blob lane", () => {
     });
     const { container } = render(<CriblSourcePanel {...p} />);
     await armBlob(p);
-    expect(vi.mocked(p.onPlan).mock.calls[0]![1]).toEqual({ kind: "client-secret", ...PRINCIPAL });
+    expect(vi.mocked(p.onPlan).mock.calls[0]![1]).toEqual({ kind: "client-secret", tenantId: "cribl-tenant", clientId: "cribl-client" });
     fireEvent.click(createButton());
     await waitFor(() => expect(p.onApply).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
