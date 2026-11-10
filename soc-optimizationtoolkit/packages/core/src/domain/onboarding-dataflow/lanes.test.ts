@@ -472,3 +472,40 @@ describe("a Defender deploy after an absent Validate verdict (AZR-93)", () => {
     expect(node(after!)?.status.label).toBe("configured as expected");
   });
 });
+
+// AZR-94 (found live 2026-11-04 under AZR-33): Defender's Cribl source existed
+// and received data, but Defender was in How-to mode and not ticked in the
+// How-to list, so it had no lane and its arrival was invisible.
+describe("a source whose Cribl source exists (AZR-94)", () => {
+  const RECORD_DEF = { groupId: "g1", inputId: "azure_onb_eh_ns1_defender-hub", inputType: "eventhub" as const, secretId: "s2" };
+  const howToUnchosen = (p: OnboardingProgress) =>
+    withSourceMode(withSourceChosen(p, "defenderExport", false), "defenderExport", "manual");
+
+  it("gets a lane, marked not chosen, when it is in How-to mode and not ticked there - even with the catalog tick", () => {
+    const progress = withCriblSource(howToUnchosen(manual(plan(emptyProgress()), "entraId")), "defenderExport", RECORD_DEF);
+    const selection: CoverageSelection = { mode: "Centralized", enabled: ["defenderExport"], subSelections: {} };
+    const lanes = buildOnboardingLanes(input({ selection, progress }));
+    expect(lanes.lanes.map((l) => [l.sourceId, l.chosen])).toEqual([
+      ["entraId", true],
+      ["defenderExport", false],
+    ]);
+    expect(lanes.lanes[1]!.inputId).toBe(RECORD_DEF.inputId);
+  });
+
+  it("carries its measured flow like any lane", () => {
+    const progress = withCriblSource(howToUnchosen(plan(emptyProgress())), "defenderExport", RECORD_DEF);
+    const lanes = buildOnboardingLanes(input({ progress, flow: { defenderExport: FLOWING } }));
+    expect(lanes.lanes.map((l) => l.sourceId)).toEqual(["defenderExport"]);
+    expect(lanes.lanes[0]!.flow).toEqual(FLOWING);
+  });
+
+  it("a source neither chosen nor created still gets no lane", () => {
+    const lanes = buildOnboardingLanes(input({ progress: howToUnchosen(plan(emptyProgress())) }));
+    expect(lanes.lanes).toEqual([]);
+  });
+
+  it("a chosen lane is marked chosen", () => {
+    const lanes = buildOnboardingLanes(input({ progress: manual(plan(emptyProgress()), "entraId") }));
+    expect(lanes.lanes.map((l) => l.chosen)).toEqual([true]);
+  });
+});

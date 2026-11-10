@@ -311,6 +311,12 @@ export function OnboardingDataflow({
         <div className="azo-flow-popover-kind">FLOW</div>
         <div className="azo-flow-popover-title">{section.title}</div>
         <ul className="azo-flow-popover-facts">
+          {!lane.chosen && (
+            <li>
+              Not chosen to onboard. Shown because its Cribl source exists, so data may still arrive there. Tick it to
+              onboard it, or remove the source in Cribl.
+            </li>
+          )}
           <li>{lane.mode === "automate" ? "The app sets up the Azure side." : "You set up the Azure side (How-to)."}</li>
           <li>{`Transport: ${lane.transport === "eventhub" ? "Event Hub" : "Blob storage"}. Cribl source type: ${lane.criblInputType}.`}</li>
           <li>{lane.inputId === null ? "Cribl input id: needs plan values." : `Cribl input id: ${lane.inputId}.`}</li>

@@ -12,6 +12,7 @@ import {
   stepsFor,
   withPlanValues,
   withSourceChosen,
+  withCriblSource,
   withSourceMode,
   type CoverageSelection,
   type DataflowPerspective,
@@ -29,6 +30,7 @@ import {
   LANE_COLUMN_GAP,
   clampToSection,
   edgeLabelWidth,
+  NOT_CHOSEN_SUFFIX,
   layoutLanes,
   relayoutEdges,
   type LaidEdge,
@@ -482,5 +484,35 @@ describe("relayoutEdges", () => {
     expect(now.textEnd.y - was.textEnd.y).toBeCloseTo(15, 9);
     expect(now.info.x - was.info.x).toBeCloseTo(20, 9);
     expect(now.info.y - was.info.y).toBeCloseTo(15, 9);
+  });
+});
+
+// AZR-94: a lane drawn only because its Cribl source exists says so on its band.
+describe("the band caption of a lane that is not chosen (AZR-94)", () => {
+  it("marks only that lane", () => {
+    // entraId chosen in How-to; defenderExport not chosen but with a created Cribl source.
+    const progress = withCriblSource(progressFor(["entraId"]), "defenderExport", {
+      groupId: "g1",
+      inputId: "azure_onb_eh_ns1_defender-hub",
+      inputType: "eventhub",
+      secretId: "s1",
+    });
+    const lanes = buildOnboardingLanes({
+      selection: SELECTION,
+      progress: withSourceMode(progress, "defenderExport", "manual"),
+      stepsFor,
+      verdicts: null,
+      arrival: null,
+      criblSide: null,
+      flow: null,
+      perspective: "end-to-end",
+      tenantId: "tenant",
+    }).lanes;
+    const layout = layoutLanes(lanes, "end-to-end");
+    expect(layout.sections.map((s) => [s.sourceId, s.title])).toEqual([
+      ["entraId", lanes[0]!.title],
+      ["defenderExport", `${lanes[1]!.title}${NOT_CHOSEN_SUFFIX}`],
+    ]);
+    expect(NOT_CHOSEN_SUFFIX).toBe(" (not chosen to onboard)");
   });
 });
