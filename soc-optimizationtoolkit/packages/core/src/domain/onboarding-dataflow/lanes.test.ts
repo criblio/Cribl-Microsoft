@@ -12,7 +12,12 @@ import {
 } from "../onboarding-howto/progress-document";
 import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../onboarding-howto/sources";
 import { stepsFor } from "../onboarding-howto-steps/steps";
-import { checkKey } from "../../usecases/validate-azure-onboarding/validate-azure-onboarding";
+import {
+  applyDefenderDeploy,
+  checkKey,
+  type ValidationResult,
+} from "../../usecases/validate-azure-onboarding/validate-azure-onboarding";
+import { defaultPlanValues } from "../onboarding-howto/plan-values";
 import type { LaneFlowState } from "../onboarding-flow/flow-state";
 import {
   arrivalText,
@@ -434,5 +439,36 @@ describe("Cribl side", () => {
       label: "named by route sentinel: sentinel_out",
     });
     expect(card(lanes, "entraId", "destination")?.facts).toEqual(["destination sentinel_out"]);
+  });
+});
+
+// AZR-93: the Defender node kept reading 'not found' after the deploy that
+// created the export, until Validate was run again by hand.
+describe("a Defender deploy after an absent Validate verdict (AZR-93)", () => {
+  it("the Defender node no longer reads 'not found' once the deploy's read-back is applied", () => {
+    const key = checkKey("defenderExport", "defender-export", "defender-export");
+    const before: ValidationResult = {
+      verdicts: { [key]: { kind: "absent" } },
+      checks: [
+        { key, sourceId: "defenderExport", stepId: "defender-export", kind: "defender-export", verdict: { kind: "absent" } },
+      ],
+      measuredHubs: null,
+      arrival: {},
+      cancelled: false,
+    };
+    const values = { ...defaultPlanValues({ subscriptionId: "sub-1", resourceGroup: "rg-1" }), namespace: "ns1", hubName: "hub1" };
+    const progress = manual(plan(emptyProgress()), "defenderExport");
+    const node = (r: ValidationResult) =>
+      buildOnboardingLanes(input({ progress, verdicts: r.verdicts, perspective: "azure" })).lanes[0].cards.find(
+        (c) => c.stepId === "defender-export",
+      );
+    expect(node(before)?.status.kind).toBe("absent");
+    const after = applyDefenderDeploy(before, values, {
+      outcome: "written-and-read-back",
+      input: { subscriptionId: "sub-1", namespace: { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" }, hubName: "hub1" },
+    });
+    expect(after).not.toBeNull();
+    expect(node(after!)?.status.kind).not.toBe("absent");
+    expect(node(after!)?.status.label).toBe("configured as expected");
   });
 });

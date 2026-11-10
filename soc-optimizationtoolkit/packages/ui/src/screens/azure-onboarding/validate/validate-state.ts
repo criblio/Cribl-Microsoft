@@ -25,6 +25,7 @@ import {
   PLAN_VALUE_LABELS,
   changedValueKeys,
   fillTemplate,
+  applyDefenderDeploy,
   filledPlanValues,
   howToStep,
   onboardingSource,
@@ -34,6 +35,8 @@ import type {
   ArrivalReading,
   CheckKind,
   CheckResult,
+  DefenderDeployForValidation,
+  DefenderWriteOutcome,
   OnboardingSourceId,
   PlanValueKey,
   PlanValues,
@@ -285,6 +288,12 @@ export type ValidateRunState =
       readonly asOf: string;
       /** The plan values the run checked - its answers are about these, not the current ones. */
       readonly values: PlanValues;
+      /**
+       * Set when a write made after the run replaced some of its verdicts
+       * (AZR-93): what was re-read, and when, so the run's own time is not
+       * taken as the time of every answer.
+       */
+      readonly amended?: string;
     }
   | { readonly kind: "failed"; readonly message: string };
 
@@ -299,6 +308,8 @@ export type ValidateRunAction =
       readonly values: PlanValues;
     }
   | { readonly type: "fail"; readonly runId: number; readonly message: string }
+  /** A Defender deploy made after the run: its read-back replaces the export verdict (AZR-93). */
+  | { readonly type: "amend"; readonly deploy: DefenderDeployForValidation; readonly note: string }
   | { readonly type: "reset" };
 
 export const VALIDATE_IDLE: ValidateRunState = { kind: "idle" };
@@ -324,9 +335,25 @@ export function validateRunReducer(state: ValidateRunState, action: ValidateRunA
     case "fail":
       if (state.kind !== "running" || state.runId !== action.runId) return state;
       return { kind: "failed", message: action.message };
+    case "amend": {
+      // Applied to the CURRENT finished run, against the values it checked,
+      // never to a result captured earlier: a run that finished during the
+      // deploy must not be replaced by an older one. A run in flight reads
+      // Azure itself; a deploy to another target leaves the run as it was.
+      if (state.kind !== "done") return state;
+      const result = applyDefenderDeploy(state.result, state.values, action.deploy);
+      return result === null ? state : { ...state, result, amended: action.note };
+    }
     case "reset":
       return VALIDATE_IDLE;
   }
+}
+
+/** The status-line note for a Defender deploy that replaced the run's export verdict (AZR-93). */
+export function defenderAmendNote(outcome: DefenderWriteOutcome, asOf: string): string {
+  return outcome === "written-and-read-back"
+    ? `The Defender export was created and read back at ${asOf}, after this check; its result is from that read.`
+    : `The Defender export was written at ${asOf}, after this check, but not confirmed; check it again.`;
 }
 
 /** The line under the button while and after a run. */
@@ -339,7 +366,7 @@ export function runStatusText(state: ValidateRunState): string {
     case "done":
       return state.result.cancelled
         ? `Cancelled as of ${state.asOf}: the checks not reached could not be read.`
-        : `Checked as of ${state.asOf}.`;
+        : `Checked as of ${state.asOf}.${state.amended === undefined ? "" : ` ${state.amended}`}`;
     case "failed":
       return `Validate stopped: ${state.message}`;
   }

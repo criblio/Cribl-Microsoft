@@ -73,6 +73,8 @@ import {
   measuredHubNames,
 } from "../../domain/onboarding-validation/classify";
 import { buildHubConsumerGroupGetRequest } from "../../domain/eventhub-arm";
+import { expectedExportFor } from "../../domain/defender-export/defender-automation";
+import type { DefenderExportInput } from "../../domain/defender-export/defender-automation";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
 import { MAX_LIST_PAGES } from "../azure-discovery";
 
@@ -507,4 +509,68 @@ export function verdictsForStep(
   return result.checks
     .filter((c) => c.stepId === stepId && (sourceId === undefined || c.sourceId === sourceId))
     .map((c) => c.verdict);
+}
+
+// ---------------------------------------------------------------------------
+// A Defender deploy made after the run (AZR-93)
+// ---------------------------------------------------------------------------
+
+/** The deploy outcomes that WROTE the export, so a verdict read before them is stale. */
+export type DefenderWriteOutcome = "written-and-read-back" | "accepted-not-verified";
+
+/** What a Defender deploy did, as {@link applyDefenderDeploy} needs it. */
+export interface DefenderDeployForValidation {
+  readonly outcome: DefenderWriteOutcome;
+  /** The deploy's own target: the export is about this subscription and hub. */
+  readonly input: Pick<DefenderExportInput, "subscriptionId" | "namespace" | "hubName">;
+}
+
+/** The detail of a defender-export check retired by a write whose read-back did not confirm it. */
+export const DEFENDER_WRITTEN_UNCONFIRMED_DETAIL =
+  "The export was written after this check ran, but reading it back did not confirm it. Choose Validate to check again.";
+
+/**
+ * The run's result with its Defender export verdicts brought up to date by a
+ * deploy made AFTER the run (AZR-93), or null when the deploy does not bear on
+ * it. Without this, a Validate run that read the export as absent keeps
+ * saying "not found" next to the deploy that just created it.
+ *
+ * Never upgrades a verdict without a read: only "written-and-read-back" sets
+ * as-expected, because its read-back GET compared the export with the same
+ * expectedExportFor the defender-export check uses, and the deploy refused to
+ * write over any export that already existed - so the check's listing would
+ * classify it present-matching. "accepted-not-verified" wrote but did not
+ * confirm, so the old verdict is retired to unknown rather than kept.
+ *
+ * A deploy aimed at another subscription or hub than the values the run
+ * checked says nothing about those checks: null.
+ */
+export function applyDefenderDeploy(
+  result: ValidationResult,
+  values: PlanValues,
+  deploy: DefenderDeployForValidation,
+): ValidationResult | null {
+  const ran = expectedExportFor({
+    subscriptionId: values.subscriptionId.trim(),
+    namespace: {
+      subscriptionId: values.subscriptionId.trim(),
+      resourceGroup: values.resourceGroup.trim(),
+      name: values.namespace.trim(),
+    },
+    hubName: values.hubName.trim(),
+  });
+  const wrote = expectedExportFor(deploy.input);
+  const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+  if (!same(ran.scopePath, wrote.scopePath) || !same(ran.eventHubResourceId, wrote.eventHubResourceId)) {
+    return null;
+  }
+  const verdict: StepVerdict =
+    deploy.outcome === "written-and-read-back"
+      ? { kind: "as-expected" }
+      : { kind: "unknown", reason: "failed", detail: DEFENDER_WRITTEN_UNCONFIRMED_DETAIL };
+  if (!result.checks.some((c) => c.kind === "defender-export")) return null;
+  const checks = result.checks.map((c) => (c.kind === "defender-export" ? { ...c, verdict } : c));
+  const verdicts = { ...result.verdicts };
+  for (const c of checks) if (c.kind === "defender-export") verdicts[c.key] = verdict;
+  return { ...result, checks, verdicts };
 }

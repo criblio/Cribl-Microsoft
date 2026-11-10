@@ -64,6 +64,7 @@ import type {
   AutomationPermissions,
   AzureResourceGroup,
   CoverageSelection,
+  DefenderDeployForValidation,
   DefenderDeployOutcome,
   DefenderState,
   Listing,
@@ -113,6 +114,11 @@ export interface DefenderExportSectionProps {
   /** The last Defender state read, owned by the screen (its rows read it too). */
   state: DefenderState | null;
   onState: (state: DefenderState) => void;
+  /**
+   * Called after a deploy that WROTE the export, with its target, so a
+   * Validate result read before it can be brought up to date (AZR-93).
+   */
+  onDeployed?: (deploy: DefenderDeployForValidation) => void;
   /** The How-to section's number on the screen, so the banner can name it. */
   howtoSection: number;
   /** Scroll to and focus this source's How-to row. */
@@ -136,6 +142,7 @@ export function DefenderExportSection({
   target,
   state,
   onState,
+  onDeployed,
   howtoSection,
   onShowHowto,
   onRecheckPermissions,
@@ -253,22 +260,20 @@ export function DefenderExportSection({
       hub: target.hubName,
       rule: target.rule.name,
     });
-    const result = await deployDefenderExport(
-      ports.azure,
-      {
-        subscriptionId,
-        resourceGroup: resourceGroup.name,
-        location: resourceGroup.location,
-        namespace,
-        hubName: target.hubName,
-        ruleName: target.rule.name,
-      },
-      ports.logger,
-    );
+    const input = {
+      subscriptionId,
+      resourceGroup: resourceGroup.name,
+      location: resourceGroup.location,
+      namespace,
+      hubName: target.hubName,
+      ruleName: target.rule.name,
+    };
+    const result = await deployDefenderExport(ports.azure, input, ports.logger);
     setOutcome(result);
     setRunning(false);
     ports.logger?.info("azure-onboarding: defender deploy finished", { outcome: result.kind });
     if (result.kind === "written-and-read-back" || result.kind === "accepted-not-verified") {
+      onDeployed?.({ outcome: result.kind, input });
       // Re-read so the row and the gate reflect what is now in Azure.
       await readState();
     }
