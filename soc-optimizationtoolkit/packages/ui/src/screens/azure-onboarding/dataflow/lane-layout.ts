@@ -57,6 +57,14 @@ import {
   type Point,
 } from "../../../components/diagram";
 
+/** Appended to the caption of a lane drawn only because its Cribl source exists (AZR-94). */
+export const NOT_CHOSEN_SUFFIX = " (not chosen to onboard)";
+
+/** A lane's band caption: its title, marked when the source is not chosen to onboard. */
+export function laneCaption(lane: Pick<OnboardingLane, "title" | "chosen">): string {
+  return lane.chosen ? lane.title : `${lane.title}${NOT_CHOSEN_SUFFIX}`;
+}
+
 export const LANE_CARD_WIDTH = 200;
 
 /**
@@ -318,7 +326,7 @@ export function layoutLanes(lanes: readonly OnboardingLane[], perspective: Dataf
       });
     }
     const height = bottom + SECTION_PAD - top;
-    sections.push({ sourceId: lane.sourceId, title: lane.title, x: 0, y: top, width, height, captionY: top + 20 });
+    sections.push({ sourceId: lane.sourceId, title: laneCaption(lane), x: 0, y: top, width, height, captionY: top + 20 });
 
     // Step edges enter their target at distinct anchors in its lower half,
     // ordered like the stack; data edges use mid-height on both ends.

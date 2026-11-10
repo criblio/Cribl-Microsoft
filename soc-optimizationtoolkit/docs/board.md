@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 37 in progress, 200 done.**
+**104 in the backlog, 37 in progress, 201 done.**
 
 ## By menu item
 
@@ -36,7 +36,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 29 | 37 | 9 |
+| Azure Native Source Onboarding | 29 | 38 | 9 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 51% (42/82)
+### `AZR` Azure native source onboarding - 52% (43/83)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 27/41 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 28/42 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -421,7 +421,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   even after ticking Defender for Cloud alert export on screen; the named-hub
   input that received the event was not drawn, so Watch for data had nothing
   to watch. Not yet diagnosed whether this is a defect or the Defender lane
-  needing Automate mode plus a Cribl side read.
+  needing Automate mode plus a Cribl side read. DIAGNOSED 2026-11-10: a
+  defect, carded and fixed as [[AZR-94]]. The diagram drew a lane only for a
+  CHOSEN source, and a source in How-to mode is chosen only by the How-to list
+  tick, so the catalog tick did nothing for it; the Defender lane with the
+  live input therefore had no lane. Now any source with a created Cribl source
+  is drawn, marked not chosen. AZR-33 itself stays in-progress until ADR 0007
+  item 6 (watching a real flow) is run in Live Preview.
 
 - **AZR-34** Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)
   `AZR-F9` `story` `settled`
@@ -2769,7 +2775,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (200)
+## Done (201)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -7820,6 +7826,33 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   its time. Pins: core usecase (6), lanes (Defender node no longer 'absent'),
   reducer (4); mutation-checked. NOT pinned: the section-to-screen callback
   (no DOM fixture deploys and validates together).
+
+- **AZR-94** The dataflow diagram hides a source whose Cribl source exists when the source is in How-to mode and not ticked in the How-to list
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-04 in the live pass (AZR-33 note), DIAGNOSED 2026-11-10.
+  buildOnboardingLanes draws a lane only when isLaneChosen: in Automate mode
+  the catalog tick, in How-to mode only the How-to list tick (the catalog tick
+  is ignored). The Defender lane created input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (AZR-34) and data
+  arrived, but the diagram drew only the other lane, so Watch for data showed
+  nothing for it, while liveFlowLanes still polled every created source.
+  Reproduced with a throwaway core probe: Defender automate + ticked -> lane
+  drawn; Defender stored mode manual and not chosen -> no lane. The live
+  progress document was not read, so the stored mode in the live session is
+  inferred, not measured. FAILURE: a source whose Cribl source exists and
+  receives data has no lane, so the arrival the operator is waiting for is
+  invisible. DECISION (operator 2026-11-10): keep the chosen rule, and ALSO
+  draw any source with a created Cribl source (progress.criblSources), marked
+  not chosen to onboard. Rejected: either tick counts (a source with a Cribl
+  source could still vanish once both ticks clear); both; not a defect. DONE
+  2026-11-10 (pins; not run live): buildOnboardingLanes (lanes.ts) draws a
+  source when it is chosen OR progress.criblSources has its record;
+  OnboardingLane.chosen says which. The band caption of an unchosen lane ends
+  "(not chosen to onboard)" (lane-layout laneCaption) and its FLOW popover
+  says it is shown because its Cribl source exists. Its measured flow is drawn
+  like any lane, so Watch for data now matches what is drawn. Pins:
+  lanes.test.ts (4, the live state reproduced; mutation-checked: dropping the
+  record clause fails 2), lane-layout.test.ts (caption).
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`

@@ -223,6 +223,11 @@ export interface LaneEdge {
 export interface OnboardingLane {
   readonly sourceId: OnboardingSourceId;
   readonly title: string;
+  /**
+   * False for a lane drawn only because its Cribl source exists (AZR-94): the
+   * source is not chosen to onboard (isLaneChosen), but data may be arriving.
+   */
+  readonly chosen: boolean;
   readonly mode: SourceMode;
   readonly transport: OnboardingTransport;
   readonly criblInputType: CriblInputType;
@@ -450,7 +455,11 @@ export function laneMode(progress: OnboardingProgress, id: OnboardingSourceId): 
   return stored === "automate" && automatable ? "automate" : "manual";
 }
 
-/** Whether a source gets a lane (D2). */
+/**
+ * Whether a source is chosen to onboard (D2). A source that is not chosen
+ * still gets a lane when its Cribl source exists ({@link buildOnboardingLanes},
+ * AZR-94).
+ */
 export function isLaneChosen(
   selection: CoverageSelection,
   progress: OnboardingProgress,
@@ -582,6 +591,7 @@ function laneFlowState(
 
 interface LaneDraft {
   readonly source: OnboardingSource;
+  readonly chosen: boolean;
   readonly mode: SourceMode;
   readonly subSelection: readonly string[];
   readonly steps: readonly HowToStep[];
@@ -597,10 +607,15 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
 
   const drafts: LaneDraft[] = [];
   for (const source of ONBOARDING_SOURCES) {
-    if (!isLaneChosen(selection, progress, source.id)) continue;
+    // AZR-94: a source whose Cribl source exists is drawn even when it is not
+    // chosen (How-to mode with the How-to tick cleared, or unticked in the
+    // catalog), so data arriving at that source is never hidden.
+    const chosen = isLaneChosen(selection, progress, source.id);
+    if (!chosen && progress.criblSources[source.id] === undefined) continue;
     const subSelection = selection.subSelections[source.id] ?? [];
     drafts.push({
       source,
+      chosen,
       mode: laneMode(progress, source.id),
       subSelection,
       steps: input.stepsFor(source.id, subSelection),
@@ -819,6 +834,7 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
     return {
       sourceId: sid,
       title: source.title,
+      chosen: d.chosen,
       mode,
       transport: source.transport,
       criblInputType: source.criblInputType,
