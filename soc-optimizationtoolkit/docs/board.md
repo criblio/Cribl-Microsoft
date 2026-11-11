@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 37 in progress, 201 done.**
+**106 in the backlog, 38 in progress, 201 done.**
 
 ## By menu item
 
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1258,9 +1258,27 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-95** Watch for data never measures: the worker-group metrics query POST /m/<group>/system/metrics/query answers 404 on Cribl.Cloud
+  `AZR-F9` `bug` `settled`
+  FOUND LIVE 2026-11-10 (Live Preview on main 460422a9, DatacenterEast). With
+  the Defender lane drawn and its Cribl source created and running, ticking
+  Watch for data sent POST
+  /api/v1/a/__dev__soc-optimizationtoolkit/m/DatacenterEast/system/metrics/query
+  and got 404 with body "Cannot POST /api/v1/system/metrics/query". The
+  diagram stayed honest: the hop read "not measured: lookback failed" with the
+  HTTP 404 in its (i). So the flow state is never measured on Cribl.Cloud and
+  no lane can ever animate. The path came from the vendored spec and the
+  claude-kit cribl-metrics standard, both Documented and never measured; this
+  is the first live measurement and it contradicts them. FIX: find the path
+  Cribl.Cloud serves for Cribl's own metrics (leader-level
+  /system/metrics/query with a group filter, or the per-group form the leader
+  UI itself calls - capture it from the Stream UI network log), capture one
+  real response as a fixture, update policies.yml and the claude-kit
+  standard's provenance.
+
 ---
 
-## Backlog - now (17)
+## Backlog - now (16)
 
 Next to pick up. Nothing blocks these.
 
@@ -1484,24 +1502,6 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
-
-- **AZR-95** Watch for data never measures: the worker-group metrics query POST /m/<group>/system/metrics/query answers 404 on Cribl.Cloud
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-10 (Live Preview on main 460422a9, DatacenterEast). With
-  the Defender lane drawn and its Cribl source created and running, ticking
-  Watch for data sent POST
-  /api/v1/a/__dev__soc-optimizationtoolkit/m/DatacenterEast/system/metrics/query
-  and got 404 with body "Cannot POST /api/v1/system/metrics/query". The
-  diagram stayed honest: the hop read "not measured: lookback failed" with the
-  HTTP 404 in its (i). So the flow state is never measured on Cribl.Cloud and
-  no lane can ever animate. The path came from the vendored spec and the
-  claude-kit cribl-metrics standard, both Documented and never measured; this
-  is the first live measurement and it contradicts them. FIX: find the path
-  Cribl.Cloud serves for Cribl's own metrics (leader-level
-  /system/metrics/query with a group filter, or the per-group form the leader
-  UI itself calls - capture it from the Stream UI network log), capture one
-  real response as a fixture, update policies.yml and the claude-kit
-  standard's provenance.
 
 - **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
   `AZR-F10` `bug` `settled`
