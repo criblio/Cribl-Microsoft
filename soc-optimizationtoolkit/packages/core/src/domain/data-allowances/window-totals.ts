@@ -177,6 +177,8 @@ export interface WindowTotalsInput {
    * the whole grant. The reason is shown in place of the net.
    */
   netWithheld: string | null;
+  /** False when the eligible-volume read failed: no grant then means not read, not none. */
+  eligibleKnown: boolean;
 }
 
 /** The workspace (or tenant) strip: billable, allowance and applied over the window, and the net. */
@@ -199,7 +201,12 @@ export function windowTotals(input: WindowTotalsInput): WindowTotals {
     input.netWithheld !== null
       ? { kind: "not-known", reason: input.netWithheld }
       : allowanceUnknown?.why === "no-grant"
-        ? { kind: "not-known", reason: "no grant covers a table with billable volume here" }
+        ? {
+            kind: "not-known",
+            reason: input.eligibleKnown
+              ? "no grant covers a table with billable volume here"
+              : "eligible volume was not read",
+          }
         : windowNet(input.billableMB, input.billableIsFloor, allowanceMB, allowanceIsFloor);
   return {
     days: input.days,

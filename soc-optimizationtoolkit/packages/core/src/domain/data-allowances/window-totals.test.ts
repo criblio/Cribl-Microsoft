@@ -141,6 +141,7 @@ describe("windowTotals", () => {
       appliedIsFloor: false,
       grants: both(),
       netWithheld: null,
+      eligibleKnown: true,
     });
     expect(t.allowanceMB).toBe(37500); // 15,000 + 22,500
     expect(t.allowanceIsFloor).toBe(false);
@@ -158,6 +159,7 @@ describe("windowTotals", () => {
       appliedIsFloor: false,
       grants: [grantWindowTotals(e5(), SHORT), grantWindowTotals(servers(), SHORT)],
       netWithheld: null,
+      eligibleKnown: true,
     });
     expect(floored.allowanceMB).toBe(28500); // 6,000 + 22,500
     expect(floored.allowanceIsFloor).toBe(true);
@@ -171,6 +173,7 @@ describe("windowTotals", () => {
       appliedIsFloor: false,
       grants: [grantWindowTotals(e5({ perDayMB: null }), FULL), grantWindowTotals(servers(), FULL)],
       netWithheld: null,
+      eligibleKnown: true,
     });
     expect(unknown.allowanceMB).toBeNull();
     expect(unknown.allowanceIsFloor).toBe(false);
@@ -188,10 +191,23 @@ describe("windowTotals", () => {
       appliedIsFloor: false,
       grants: [],
       netWithheld: null,
+      eligibleKnown: true,
     });
     expect(t.allowanceMB).toBeNull();
     expect(t.allowanceUnknown).toEqual({ grant: null, why: "no-grant" });
     expect(t.net).toEqual({ kind: "not-known", reason: "no grant covers a table with billable volume here" });
+    // An unread eligible volume never reads as "no grant applies".
+    const unread = windowTotals({
+      days: FULL,
+      billableMB: 3000,
+      billableIsFloor: false,
+      appliedMB: 0,
+      appliedIsFloor: false,
+      grants: [],
+      netWithheld: null,
+      eligibleKnown: false,
+    });
+    expect(unread.net).toEqual({ kind: "not-known", reason: "eligible volume was not read" });
   });
 
   it("a withheld net states its reason in place of the figure", () => {
@@ -203,6 +219,7 @@ describe("windowTotals", () => {
       appliedIsFloor: false,
       grants: both(),
       netWithheld: "shared",
+      eligibleKnown: true,
     });
     expect(t.allowanceMB).toBe(37500);
     expect(t.net).toEqual({ kind: "not-known", reason: "shared" });

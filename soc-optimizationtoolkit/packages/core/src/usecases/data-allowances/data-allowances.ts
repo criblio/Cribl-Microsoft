@@ -711,6 +711,7 @@ function assemble(
     appliedIsFloor: input.sumsAreFloors || !benefitComplete,
     grants: grants.map((g) => g.window),
     netWithheld: grants.some((g) => g.grant === "e5") ? input.e5NetWithheld : null,
+    eligibleKnown,
   });
   return {
     attribution: benefit.attribution,

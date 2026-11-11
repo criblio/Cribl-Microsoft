@@ -1012,7 +1012,7 @@ describe("window totals: licence counts and the allowance over the window", () =
   });
 
   it("refused licence counts: the window allowance is not known while the applied benefit still shows", async () => {
-    const graph = graphWith({ kind: "denied", detail: "HTTP 403" });
+    const graph = graphWith({ kind: "denied", status: 403, detail: "HTTP 403" });
     const r = await readDataAllowances(routedAzure(e5Script()).azure, graph, WS, inventory(200), OPTS);
     const w = view(r, "e5").window;
     // The per-day card still shows the largest applied day as a floor; the window does not borrow it.
