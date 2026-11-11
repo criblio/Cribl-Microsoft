@@ -1309,7 +1309,29 @@ Started. Anything here with an unfinished dependency is called out on its card.
   (Azure checks it for a diagnostic setting even though no key is returned to
   the caller) - to measure. NOT DECIDED: which rule rights Azure demands of
   eventHubAuthorizationRuleId (Manage vs Send); AZR-23's dedicated Send-only
-  rule may or may not serve.
+  rule may or may not serve. BUILT 2026-11-11, PINS ONLY (nothing run against
+  Azure). domain/activity-log-export (one diagnostic-settings parser now
+  shared with Validate's Activity Log and Entra classifiers; setting name
+  cribl-activity-log; 8 categories; no eventHubName, no listKeys),
+  usecases/activity-log-export readActivityLogState / deployActivityLogExport
+  (re-list after the confirm; refuse already-exists, present-differs,
+  possible-duplicate (another setting on the same namespace), limit-reached
+  (5), denied / unregistered / failed; PUT; read-back compare), Validate amend
+  after a deploy (applyOnboardingDeploy), activityLog flipped to available, UI
+  section activity-log-section.tsx with a two-step confirm, least-privilege
+  operation activityLog.diagnosticSetting.write (Documented, not measured).
+  Deploy requires a rule with Manage rights. STAYS IN-PROGRESS until measured
+  live: which rule rights Azure requires of eventHubAuthorizationRuleId
+  (Manage vs Send) and whether the caller needs listKeys; Monitoring
+  Contributor as the least role; api-version 2021-05-01-preview for PUT and
+  GET; PUT 200 vs 201 and the read-back body shape; the 5-setting limit and
+  its error shape; whether the list pages; insights-activity-logs auto-created
+  on first event; category list per cloud; MissingSubscriptionRegistration for
+  an unregistered microsoft.insights; a portal setting using category groups
+  reads as present-differs (safe refusal). KNOWN GAPS: the shared rule picker
+  still says a Send-only rule is safer, which is wrong for this deploy (the
+  section and its gate say Manage); no permission-audit capability covers
+  diagnostic settings yet (the section shows a not-measured banner).
 
 ---
 
