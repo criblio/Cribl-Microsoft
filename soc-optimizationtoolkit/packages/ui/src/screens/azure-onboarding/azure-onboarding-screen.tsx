@@ -64,6 +64,7 @@ import {
   ONBOARDING_PROGRESS_KEY,
   applyCriblSource,
   applyDefenderDeploy,
+  applyLakeRoute,
   buildNamespaceAuthRulesListRequest,
   emptyProgress,
   encodeProgress,
@@ -75,6 +76,7 @@ import {
   paceAzureManagement,
   parseNamespaceAuthRules,
   planCriblSource,
+  planLakeRoute,
   planValidation,
   readAllPages,
   readOnboardingCriblSide,
@@ -84,17 +86,20 @@ import {
   tenantDocumentKey,
   validateAzureOnboarding,
   withCriblSource,
+  withLakeRoute,
   withWorkerGroup,
 } from "@soc/core";
 import type {
   ApplyCredential,
   ApplyCriblSourceOutcome,
+  ApplyLakeRouteOutcome,
   BatchPacing,
   BuildOnboardingLanesInput,
   CoverageSelection,
   DefenderDeployForValidation,
   DefenderState,
   KvDocumentLoad,
+  LakeRouteSourceId,
   LaneTopics,
   ListRead,
   NamespaceAuthRule,
@@ -105,8 +110,11 @@ import type {
   OtherLane,
   PlanCredential,
   PlanCriblSourceResult,
+  PlanLakeRouteResult,
   PlanValues,
   ReadyCriblSource,
+  ReadyLakeRoute,
+  RoutePosition,
   SectionStatus,
   SourceMode,
   TenantCriblMappingRead,
@@ -768,6 +776,37 @@ export function AzureOnboardingScreen({
     return outcome;
   }
 
+  // AZR-35: route the Defender for Cloud export or the Activity Log to Cribl
+  // Lake. Read-only plan; the apply records what it created in the progress
+  // document (ownership evidence for the shared pipeline, and the dataflow's
+  // route hop).
+  async function onPlanLakeRoute(sourceId: LakeRouteSourceId, position: RoutePosition): Promise<PlanLakeRouteResult> {
+    const p = loadedProgress(latestProgressLoad.current);
+    if (p === null) throw new Error("the saved progress is not available");
+    return planLakeRoute(criblPorts, {
+      sourceId,
+      criblSource: p.criblSources[sourceId] ?? null,
+      lakeRoutes: p.criblLakeRoutes ?? {},
+      deploymentType: ports.criblDeploymentType,
+      position,
+    });
+  }
+
+  async function onApplyLakeRoute(ready: ReadyLakeRoute): Promise<ApplyLakeRouteOutcome> {
+    const outcome = await applyLakeRoute(criblPorts, ready);
+    if (outcome.record !== null) {
+      const p = loadedProgress(latestProgressLoad.current);
+      const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record), "lake route");
+      if (!recorded) {
+        setProgressMessage({
+          tone: "warning",
+          text: `The route to Cribl Lake created objects in Cribl, but your saved progress could not be updated, so this page cannot prove it created them after a reload.`,
+        });
+      }
+    }
+    return outcome;
+  }
+
   async function onReadCriblSide(): Promise<void> {
     const g = effectiveGroup.trim();
     if (g === "" || progress === null) return;
@@ -965,6 +1004,12 @@ export function AzureOnboardingScreen({
             onReadCriblSide={() => void onReadCriblSide()}
             criblSide={criblSide}
             criblSideBusy={criblSideBusy}
+            lakeRoute={{
+              deploymentType: ports.criblDeploymentType,
+              records: progress.criblLakeRoutes ?? {},
+              onPlan: onPlanLakeRoute,
+              onApply: onApplyLakeRoute,
+            }}
           />
         )}
       </NumberedSection>

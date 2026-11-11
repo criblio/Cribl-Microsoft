@@ -43,6 +43,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   LEGACY_INPUT_MATCH_SUFFIX,
   checkPastedCredential,
+  isLakeRouteSource,
   isInvalidConnection,
   looksLikeConnectionString,
   parseEventHubConnectionString,
@@ -71,6 +72,7 @@ import { WorkerGroupField } from "../../../components/worker-group-field";
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
 import { PickerLine } from "../eventhub-prerequisite-section";
 import type { OnboardingGroupChoice } from "./group-choice";
+import { LakeRoutePanel, type LakeRouteHooks } from "./lake-route-panel";
 import {
   ATTESTATION_LABEL,
   CONFIRM_IDLE,
@@ -140,6 +142,11 @@ export interface CriblSourcePanelProps {
   readonly onReadCriblSide?: () => void;
   readonly criblSide?: OnboardingCriblSide | null;
   readonly criblSideBusy?: boolean;
+  /**
+   * AZR-35: the "Route to Cribl Lake" action, shown under the Defender for
+   * Cloud export's and the Activity Log's rows only. Absent = not offered.
+   */
+  readonly lakeRoute?: LakeRouteHooks;
 }
 
 const PANEL_TIP =
@@ -594,6 +601,9 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
           {resultView.detail !== "" && <p>{resultView.detail}</p>}
           {resultView.inCribl !== null && <p>{resultView.inCribl}</p>}
         </div>
+      )}
+      {isLakeRouteSource(sourceId) && panel.lakeRoute !== undefined && (
+        <LakeRoutePanel sourceId={sourceId} criblSource={row.record} readSeq={readSeq} hooks={panel.lakeRoute} />
       )}
     </section>
   );
