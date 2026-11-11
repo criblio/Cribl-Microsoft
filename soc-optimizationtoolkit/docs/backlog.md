@@ -3292,3 +3292,30 @@ rule's detections target. It would give the most accurate coverage figure, but
 it rests on attributing every detection to log types, which is its own
 accuracy question; rules that do not filter by log type would need all of them
 anyway. It stays available as a refinement once that attribution is trusted.
+
+## 26. SDI-2: what the ATT&CK heat map calls coverage - 2026-11-11
+
+Raised by the operator while designing Sentinel Data Inventory as the app's
+landing page (docs/sentinel-data-inventory-landing-design.md). The worry, in the
+operator's words: do not give the user a false sense of security - one
+detection rule over a limited dataset does not cover a technique.
+
+Research the same day (DeTT&CT 2.2.0; ATT&CK v18 detection strategies,
+analytics and log sources; Microsoft Sentinel's MITRE coverage page; CTID
+Summiting the Pyramid and Mappings Explorer; Splunk Security Essentials;
+practitioner write-ups) found that mature tools grade coverage on an ordinal
+scale and reject a binary covered/uncovered, and that Sentinel's own page counts
+active rules by their self-declared tags without checking the tables they read
+receive data.
+
+**Chosen: both, as two graded views.** A data view (are the sources ATT&CK v18
+says a technique's analytics need onboarded, translated to Sentinel tables by a
+curated asset) and a detection view (is a rule available and enabled over that
+data), each an ordinal grade with the capping factor named, never "Covered" and
+never a percentage on a tile. Microsoft built-in detections are a labelled
+vendor marker that never lifts a tile above Basic. Operator answers on tiles
+only feed the ranked gap list.
+
+**Rejected: rules only** - it is what Sentinel's own page already shows, and it
+reports a rule whose tables are empty as coverage. **Rejected: data components
+only** - it shows what is possible and hides that nothing detects it.

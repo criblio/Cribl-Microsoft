@@ -2516,7 +2516,7 @@ Settled and unblocked, sequenced behind now.
   heat map is added beside them.
 
 - **SDI-2** MITRE ATT&CK heat map of the workspace's data sources: tactic cards, drill into techniques, which ingested sources and rules cover each
-  `SDI-F1` `story` `undecided` `blocked by SDI-1`
+  `SDI-F1` `story` `settled` `blocked by SDI-1`
   RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source
   Onboarding tenant inventory heat map
   (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel
@@ -2544,12 +2544,19 @@ Settled and unblocked, sequenced behind now.
   capabilities including Sentinel to techniques, but its Azure set was
   versioned against ATT&CK 8.2 - check its age before using it. Pin the ATT&CK
   version the heat map was built from and show it on the page; refresh by a
-  deliberate bump, not a live fetch at runtime.
-  DECISION (unanswered): What makes an ATT&CK technique 'covered' on the heat
-  map?
+  deliberate bump, not a live fetch at runtime. DECIDED 2026-11-11 (operator):
+  BOTH, as two graded views - a data view (are the sources needed for the
+  technique onboarded) and a detection view (is a rule available and enabled
+  over that data) - with no binary covered: ordinal grades per
+  docs/sentinel-data-inventory-landing-design.md (Grading), from research into
+  DeTT&CT 2.2.0, ATT&CK v18 detection strategies, Sentinel's MITRE page, CTID
+  Summiting the Pyramid / Mappings Explorer and Splunk Security Essentials.
+  Microsoft built-in detections count as a labelled vendor marker. Operator
+  answers on tiles only feed the gap list. Reasoning in backlog.md section 26.
+  DECISION: What makes an ATT&CK technique 'covered' on the heat map?
     [ ] `rules` Analytics rules over ingested tables - A technique is covered when an analytics rule (enabled in the workspace, or available from installed content) tags it AND every table the rule queries carries data. Uses data the app already parses; measures detection that exists, not detection that is possible.
     [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
-    [ ] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
+    [x] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
 
 ---
 
