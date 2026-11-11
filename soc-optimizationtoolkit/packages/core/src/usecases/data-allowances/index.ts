@@ -25,6 +25,14 @@ export type { AllowanceTag, GrantId } from "../../domain/data-allowances/allowan
 export type { GrantUsage } from "../../domain/data-allowances/benefit-usage";
 export { serversGranted } from "../../domain/data-allowances/granted";
 export type {
+  AllowanceUnknown,
+  CompleteDays,
+  GrantWindowTotals,
+  LicenceCount,
+  WindowNet,
+  WindowTotals,
+} from "../../domain/data-allowances/window-totals";
+export type {
   CrossCheck,
   LicenceRow,
   ServersSubscriptionRow,

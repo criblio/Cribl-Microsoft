@@ -51,6 +51,18 @@ import {
   serversGranted,
 } from "../../domain/data-allowances/granted";
 import type { CrossCheck, ServersGranted, ServersSubscriptionRow } from "../../domain/data-allowances/granted";
+import {
+  completeDays,
+  grantWindowTotals,
+  windowSum,
+  windowTotals,
+} from "../../domain/data-allowances/window-totals";
+import type {
+  CompleteDays,
+  GrantWindowTotals,
+  LicenceCount,
+  WindowTotals,
+} from "../../domain/data-allowances/window-totals";
 import { INVENTORY_WINDOW_DAYS } from "../../domain/workspace-inventory";
 import { WINDOW_FILTER } from "../../domain/workspace-inventory/workspace-inventory";
 import { runWorkspaceQuery } from "../workspace-inventory/workspace-inventory";
@@ -119,6 +131,8 @@ export interface GrantView {
   /** True when `grantedMB` is "at least" - a lower bound, not the figure. */
   grantedIsFloor: boolean;
   crossCheck: CrossCheck;
+  /** The grant over the window: licence count, eligible, allowance and applied totals. */
+  window: GrantWindowTotals;
   eligibleTables: Array<{
     table: string;
     eligibleDailyMB: number;
@@ -152,6 +166,11 @@ export interface DataAllowances {
    */
   usedIsFloor: boolean;
   licences: LicenceRead;
+  /**
+   * Billable, allowance and applied summed over the window's complete days,
+   * and the net between billable and allowance (window-totals.ts).
+   */
+  window: WindowTotals;
   servers: {
     rows: ServersSubscriptionRow[];
     unattributedMachines: number;
@@ -441,6 +460,14 @@ async function readServers(
 interface Assembly {
   reads: readonly WorkspaceReads[];
   billableDailyAverageMB: number;
+  /** Billable MB over the window (Usage), summed over the workspaces read. */
+  billableMB: number;
+  /** The complete days the window totals cover. */
+  days: CompleteDays;
+  /** The billable and eligible sums are lower bounds (see DataAllowances.sumsAreFloors). */
+  sumsAreFloors: boolean;
+  /** Why the window net is withheld when an E5 card is shown; null when it is not. */
+  e5NetWithheld: string | null;
   licences: LicenceRead;
   servers: ServersRead;
   heartbeatComplete: boolean;
@@ -468,7 +495,7 @@ function assemble(
   input: Assembly,
 ): Pick<
   DataAllowances,
-  "attribution" | "grants" | "pooled" | "eligibleKnown" | "afterAllowancesDailyMB" | "usedIsFloor"
+  "attribution" | "grants" | "pooled" | "eligibleKnown" | "afterAllowancesDailyMB" | "usedIsFloor" | "window"
 > {
   const benefit = parseBenefitRows(input.reads.flatMap((r) => r.benefitRows));
   const eligibleByDay = new Map<GrantId, Map<string, number>>([
@@ -542,6 +569,10 @@ function assemble(
     let grantedMB: number | null;
     let grantedIsFloor: boolean;
     let check: CrossCheck;
+    // The window allowance rests on licence counts only: E5's largest applied
+    // day is a per-day floor, never a figure to multiply by the window.
+    let perDayMB: number | null = null;
+    let licenceCount: LicenceCount = { kind: "not-read" };
     const skip = skipReason(grant);
     if (grant === "e5") {
       const licences = input.licences;
@@ -549,6 +580,13 @@ function assemble(
         grantedMB = licences.e5.grantedMB.assigned;
         // Qualifying-looking SKUs outside the matched list may add seats.
         grantedIsFloor = licences.e5.possiblyMissing > 0;
+        perDayMB = grantedMB;
+        licenceCount = {
+          kind: "seats",
+          assigned: licences.e5.assigned,
+          purchased: licences.e5.purchased,
+          isFloor: grantedIsFloor,
+        };
         check =
           skip !== null
             ? { kind: "skipped", reason: skip }
@@ -585,6 +623,7 @@ function assemble(
         // The card's figure is the per-day grant averaged over the window.
         grantedMB = served.grantedMB.reportingHere;
         grantedIsFloor = served.atLeast || !input.heartbeatComplete;
+        licenceCount = { kind: "machines", dailyAverage: served.machines.reportingHere, isFloor: false };
         const p2 = rows.filter((r) => r.plan === "P2").map((r) => r.subscriptionId);
         const grantedOn = (day: string): number =>
           p2.reduce((sum, sub) => sum + (input.servers.byDay.get(sub)?.get(day) ?? 0), 0) *
@@ -609,6 +648,25 @@ function assemble(
     }
     // An unread workspace hides machines (Servers); the E5 seat count is tenant-wide.
     if (input.floorServers && grant === "servers-p2" && grantedMB !== null) grantedIsFloor = true;
+    if (grant === "servers-p2") {
+      perDayMB = grantedMB;
+      if (licenceCount.kind === "machines") licenceCount = { ...licenceCount, isFloor: grantedIsFloor };
+    }
+    const window = grantWindowTotals(
+      {
+        grant,
+        perDayMB,
+        perDayIsFloor: grantedIsFloor,
+        basis: grant === "e5" ? "per-complete-day" : "window-average",
+        licences: licenceCount,
+        eligibleMB: eligibleKnown ? windowSum(usage.eligibleByDay) : null,
+        eligibleIsFloor: input.sumsAreFloors,
+        // Pooled: the benefit is known only in total, never split by grant.
+        appliedMB: pooledMode ? null : windowSum(usage.usedByDay),
+        appliedIsFloor: input.sumsAreFloors || !benefitComplete,
+      },
+      input.days,
+    );
 
     const tables = [...eligibleByTable.get(grant)!.values()]
       .filter((t) => t.mb > 0)
@@ -619,7 +677,16 @@ function assemble(
         criblWritable: criblWritable(t.table),
       }))
       .sort((a, b) => b.eligibleDailyMB - a.eligibleDailyMB || a.table.localeCompare(b.table));
-    grants.push({ grant, usage, eligibleKnown, grantedMB, grantedIsFloor, crossCheck: check, eligibleTables: tables });
+    grants.push({
+      grant,
+      usage,
+      eligibleKnown,
+      grantedMB,
+      grantedIsFloor,
+      crossCheck: check,
+      window,
+      eligibleTables: tables,
+    });
   }
 
   let pooled: GrantUsage | null = null;
@@ -632,6 +699,19 @@ function assemble(
   } else {
     usedDailyMB = grants.reduce((sum, g) => sum + g.usage.usedDailyMB, 0);
   }
+  const appliedMB =
+    pooled !== null
+      ? windowSum(pooled.usedByDay)
+      : grants.reduce((sum, g) => sum + windowSum(g.usage.usedByDay), 0);
+  const window = windowTotals({
+    days: input.days,
+    billableMB: input.billableMB,
+    billableIsFloor: input.sumsAreFloors,
+    appliedMB,
+    appliedIsFloor: input.sumsAreFloors || !benefitComplete,
+    grants: grants.map((g) => g.window),
+    netWithheld: grants.some((g) => g.grant === "e5") ? input.e5NetWithheld : null,
+  });
   return {
     attribution: benefit.attribution,
     grants,
@@ -639,7 +719,17 @@ function assemble(
     eligibleKnown,
     afterAllowancesDailyMB: Math.max(0, input.billableDailyAverageMB - usedDailyMB),
     usedIsFloor: !benefitComplete,
+    window,
   };
+}
+
+/** The complete days with data across the inventories read (window-totals.ts completeDays). */
+function daysOf(inventories: readonly WorkspaceInventory[]): CompleteDays {
+  const windowDays = inventories[0]?.windowDays ?? INVENTORY_WINDOW_DAYS;
+  return completeDays(
+    inventories.flatMap((inv) => (inv.tables.kind === "rows" ? inv.tables.rows.map((t) => t.daysWithData) : [])),
+    windowDays,
+  );
 }
 
 function machinesOf(reads: readonly WorkspaceReads[]): MachineKey[] {
@@ -724,6 +814,16 @@ export async function readDataAllowances(
   const result = assemble({
     reads,
     billableDailyAverageMB: inventory.totals.billableDailyAverageMB,
+    billableMB: inventory.totals.billableMB,
+    days: daysOf([inventory]),
+    sumsAreFloors: inventory.usageWarning !== null,
+    // One workspace's billable cannot be netted against a grant it shares.
+    e5NetWithheld:
+      n === 1 && !atLeastN
+        ? null
+        : n === null
+          ? "the E5 grant is tenant-wide and how many Sentinel workspaces share it is not known - use Compare against the whole tenant"
+          : `the E5 grant is tenant-wide and shared across ${atLeastN ? "at least " : ""}${n} Sentinel workspaces - use Compare against the whole tenant`,
     licences,
     servers,
     heartbeatComplete: reads.every((r) => r.heartbeatComplete),
@@ -768,6 +868,8 @@ export async function compareTenant(
   let partialUsage = false;
   const notRead: Array<{ id: string; error: string }> = [];
   let billable = 0;
+  let billableMB = 0;
+  const readInventories: WorkspaceInventory[] = [];
   for (const [index, id] of workspaceIds.entries()) {
     const label = ` (workspace ${index + 1} of ${workspaceIds.length})`;
     const inventory = inventories.get(id);
@@ -778,6 +880,8 @@ export async function compareTenant(
     try {
       reads.push(await readWorkspace(azure, id, label, gaps, opts));
       billable += inventory.totals.billableDailyAverageMB;
+      billableMB += inventory.totals.billableMB;
+      readInventories.push(inventory);
       if (inventory.usageWarning !== null) partialUsage = true;
     } catch (error) {
       notRead.push({ id, error: errorText(error) });
@@ -800,6 +904,10 @@ export async function compareTenant(
   const result = assemble({
     reads,
     billableDailyAverageMB: billable,
+    billableMB,
+    days: daysOf(readInventories),
+    sumsAreFloors,
+    e5NetWithheld: null,
     licences,
     servers,
     heartbeatComplete: reads.every((r) => r.heartbeatComplete),
