@@ -1090,7 +1090,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
   any clause naming another input; word-boundary the patterns; accept the
   reversed form; true wording for endsWith; repin the includes case.
 
-- **AZR-35** Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled
+- **AZR-35** Route the onboarding Cribl source to its destination (Cribl Lake for Defender alerts and Activity Log), with diagnostic records unrolled
   `AZR-F9` `story` `settled` `blocked by AZR-34, DBT-301`
   FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
   `eventhub` / `azure_blob` input but writes no route: the onboarding screen
@@ -1116,7 +1116,36 @@ Started. Anything here with an unfinished dependency is called out on its card.
   inputRouteFilter({type:'eventhub', id}) so read-onboarding-cribl-side
   recognises it. Open: whether the Logs Ingestion API accepts SecurityAlert
   and AzureActivity as native tables (to verify before building the
-  destination step).
+  destination step). RESOLVED 2026-11-10 (Documented, Microsoft Learn "Azure
+  Monitor Logs table feature support", tables-features, read 2026-11-10): the
+  Logs Ingestion API (the API column; what a Cribl Sentinel destination uses
+  through a DCR) does NOT support SecurityAlert or AzureActivity - their API
+  cells are blank (SigninLogs too), while SecurityEvent carries it. So the
+  decided first slice cannot write those NATIVE tables; it needs a different
+  target (a _CL table, or another destination). DECISION (operator
+  2026-11-10): MIRROR _CL TABLES - Defender alerts to SecurityAlert_CL and
+  Activity Log to AzureActivity_CL, columns derived from the native schema the
+  way the app already derives _CL tables. Detections written for the native
+  tables will not see this data without a function alias (the
+  native-onboarding plan's shim); the screen must say so. DECISION REVISED
+  (operator 2026-11-10, supersedes the Defender half of the line above):
+  DEFENDER ALERTS GO TO CRIBL LAKE, not Sentinel. An operator who wants
+  Defender alerts in Sentinel uses Microsoft's native Defender for Cloud data
+  connector; the screen says so and does not offer a SecurityAlert_CL path.
+  Activity Log is unchanged: AzureActivity_CL via the Sentinel destination. So
+  the first slice is two different destinations: a Cribl Lake dataset
+  (Cribl.Cloud only; the app already creates Lake datasets in wire-source /
+  Unit 20) for Defender, and a _CL Sentinel destination for Activity Log.
+  DECISION REVISED AGAIN (operator 2026-11-10, supersedes the Activity Log
+  half above): ACTIVITY LOG IS NEVER SENT TO LOG ANALYTICS FROM CRIBL. Its
+  Sentinel ingestion is free through Microsoft's native Azure Activity data
+  connector, so routing it through Cribl to Sentinel only adds cost.
+  Onboarding Activity Log (and Defender alerts) through Cribl is for ARCHIVE
+  or for sending to OTHER destinations. FIRST SLICE THEREFORE: both sources
+  route to a Cribl Lake dataset (Cribl.Cloud); no Sentinel destination, no _CL
+  table, no DCR. The screen states, for each, that Sentinel gets this data
+  through the native connector. Other destinations (beyond Lake) are a later
+  slice. The unroll of records[] still applies before Lake.
 
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
