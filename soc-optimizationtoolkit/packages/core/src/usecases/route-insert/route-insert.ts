@@ -33,7 +33,8 @@
  *   8. GET /m/<g>/routes/<tableId>    - the kit's verifyStored; anything but
  *                                       stored is written-not-verified and is
  *                                       NEVER committed
- *   9. the kit's commitAndDeploy      - status, commit {message, files},
+ *   9. the kit's commitAndDeploy      - status, commit {message, files} (the
+ *                                       routes file plus any extraCommitMarkers),
  *                                       status, HEAD, deploy (products, master
  *                                       on 404)
  *
@@ -58,6 +59,7 @@ import {
   commitScopeGrew,
   observeCommitDeploy,
   pendingFiles,
+  placePending,
   type CommitDeployOutcome,
   type CommitDeployStep,
   type CommitScope,
@@ -136,6 +138,14 @@ export interface PlanRouteInsertInput extends RouteInsertRequest {
   readonly groupId: string;
   /** The commit message the apply uses. */
   readonly commitMessage: string;
+  /**
+   * Group-relative markers of OTHER files the same commit must carry (AZR-35:
+   * the unroll pipeline a caller creates just before the insert, kit marker
+   * `local/cribl/pipelines/<id>/`). Added to ROUTE_COMMIT_MARKERS for the
+   * scope the confirm shows, the files it names and the commit itself, so the
+   * routes and that object land in ONE commit. Absent = the routes file only.
+   */
+  readonly extraCommitMarkers?: readonly string[];
 }
 
 /** The routing table as the confirm and a position picker show it. */
@@ -166,6 +176,12 @@ export interface ReadyRouteInsert {
   /** Every file the commit can carry, in the group's tree: an upper bound. */
   readonly commitFiles: readonly string[];
   readonly commitMessage: string;
+  /**
+   * The group-relative markers the scope and the commit use: ROUTE_COMMIT_MARKERS
+   * plus the plan's extraCommitMarkers. Absent (a hand-built plan) reads as
+   * ROUTE_COMMIT_MARKERS alone.
+   */
+  readonly commitMarkers?: readonly string[];
 }
 
 export type PlanRouteInsertRefusalReason =
@@ -212,16 +228,21 @@ function httpDetail(what: string, r: ApiResponse): string {
   return `${what}: HTTP ${r.status}`;
 }
 
-/** The commit files a confirm names, as full paths under the group. */
-export function routeCommitFiles(groupId: string): string[] {
-  return ROUTE_COMMIT_MARKERS.map((m) => `groups/${groupId}/${m}`);
+/** The commit files a confirm names, as full paths under the group (plus any extra markers' paths). */
+export function routeCommitFiles(groupId: string, extraMarkers: readonly string[] = []): string[] {
+  return commitMarkersWith(extraMarkers).map((m) => `groups/${groupId}/${m}`);
+}
+
+/** ROUTE_COMMIT_MARKERS followed by `extra`, without duplicates. */
+function commitMarkersWith(extra: readonly string[]): string[] {
+  return [...new Set([...ROUTE_COMMIT_MARKERS, ...extra])];
 }
 
 type ScopeRead =
   | { readonly kind: "ok"; readonly scope: CommitScope }
   | { readonly kind: "refused"; readonly reason: "status-unknown" | "scope-unplaced"; readonly detail: string };
 
-async function readScope(request: Request, groupId: string): Promise<ScopeRead> {
+async function readScope(request: Request, groupId: string, markers: readonly string[]): Promise<ScopeRead> {
   let pending: string[] | null;
   try {
     pending = await pendingFiles(request);
@@ -235,7 +256,7 @@ async function readScope(request: Request, groupId: string): Promise<ScopeRead> 
       detail: "Cribl's pending-change status could not be read, so what a commit would carry is unknown. Nothing was changed.",
     };
   }
-  const scope = commitScope(pending, groupId, ROUTE_COMMIT_MARKERS);
+  const scope = commitScope(pending, groupId, markers);
   if (scope.unplaced.length > 0) {
     return {
       kind: "refused",
@@ -312,7 +333,8 @@ export async function planRouteInsert(ports: RouteInsertPorts, input: PlanRouteI
   }
 
   // 4. What the commit would carry.
-  const scope = await readScope(request, groupId);
+  const commitMarkers = commitMarkersWith(input.extraCommitMarkers ?? []);
+  const scope = await readScope(request, groupId, commitMarkers);
   if (scope.kind === "refused") return refuse(scope.reason, scope.detail, { table });
 
   ports.logger?.info("[route-insert] planned", { groupId, tableId: parsed.tableId, index: inserted.index });
@@ -331,8 +353,9 @@ export async function planRouteInsert(ports: RouteInsertPorts, input: PlanRouteI
       uncheckable: inserted.uncheckable,
       shadowedBy: inserted.shadowedBy,
       scope: scope.scope,
-      commitFiles: routeCommitFiles(groupId),
+      commitFiles: routeCommitFiles(groupId, input.extraCommitMarkers ?? []),
       commitMessage: input.commitMessage,
+      commitMarkers,
     },
   };
 }
@@ -396,12 +419,31 @@ export function commitOutcomeDetail(outcome: CommitDeployOutcome, groupId: strin
   }
 }
 
+/** Options for an apply that runs inside a larger confirmed change (AZR-35). */
+export interface ApplyRouteInsertOptions {
+  /**
+   * Group-relative markers (each one of the plan's commitMarkers) of files the
+   * CALLER dirtied in this same confirmed apply, just before the insert - e.g.
+   * the pipeline it created. Pending paths under them are the caller's own
+   * write, so they do not count as scope growth; every other new pending path
+   * still voids. The caller must have run its own scope check (against the
+   * confirm's scope) BEFORE its first write.
+   */
+  readonly createdBeforeInsert?: readonly string[];
+}
+
 /**
  * APPLY: only after the person approved `ready.diff`. Never throws for an HTTP
  * answer; a void is re-planned by the caller, never retried.
  */
-export async function applyRouteInsert(ports: RouteInsertPorts, ready: ReadyRouteInsert): Promise<ApplyRouteInsertOutcome> {
+export async function applyRouteInsert(
+  ports: RouteInsertPorts,
+  ready: ReadyRouteInsert,
+  options: ApplyRouteInsertOptions = {},
+): Promise<ApplyRouteInsertOutcome> {
   const { groupId, tableId } = ready;
+  const markers = ready.commitMarkers ?? ROUTE_COMMIT_MARKERS;
+  const ownMarkers = (options.createdBeforeInsert ?? []).filter((m) => markers.includes(m));
   const log = { groupId, tableId };
   // Track whether the write left, so a rejection can say what may have happened.
   let writeSent = false;
@@ -422,13 +464,16 @@ export async function applyRouteInsert(ports: RouteInsertPorts, ready: ReadyRout
 
   // 5. The commit the confirm described must not have grown (a request of its
   // own, so it runs BEFORE the re-read).
-  const scope = await readScope(request, groupId);
+  const scope = await readScope(request, groupId, markers);
   if (scope.kind === "refused") return end({ kind: "scope-refused", reason: scope.reason, detail: scope.detail });
-  if (commitScopeGrew(ready.scope, scope.scope)) {
+  // The caller's own writes in this apply are not someone else's new work.
+  const ownPending = ownMarkers.length === 0 ? [] : placePending(scope.scope.alreadyDirty, groupId, ownMarkers).mine;
+  const nowScope = { ...scope.scope, alreadyDirty: scope.scope.alreadyDirty.filter((f) => !ownPending.includes(f)) };
+  if (commitScopeGrew(ready.scope, nowScope)) {
     return end({
       kind: "void",
       cause: "scope-grew",
-      detail: `Since the confirm, more uncommitted work appeared in the file this commit carries (${scope.scope.alreadyDirty.join(", ") || "could not tell which"}). Nothing was changed; check again and confirm the new scope.`,
+      detail: `Since the confirm, more uncommitted work appeared in the file this commit carries (${nowScope.alreadyDirty.join(", ") || "could not tell which"}). Nothing was changed; check again and confirm the new scope.`,
     });
   }
 
@@ -497,7 +542,7 @@ export async function applyRouteInsert(ports: RouteInsertPorts, ready: ReadyRout
   // 9. Commit and deploy, the kit's sequence (observed through `request`).
   let outcome: CommitDeployOutcome;
   try {
-    outcome = await commitAndDeploy(request, { group: groupId, markers: ROUTE_COMMIT_MARKERS, message: ready.commitMessage });
+    outcome = await commitAndDeploy(request, { group: groupId, markers, message: ready.commitMessage });
   } catch (error) {
     return end({
       kind: "commit-sequence-failed",
