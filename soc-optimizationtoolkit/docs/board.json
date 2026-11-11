@@ -1869,6 +1869,20 @@
       "verified": "pins"
     },
     {
+      "id": "DBT-302",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-35"
+      ],
+      "title": "One Cribl Lake dataset writer and one cribl_lake output builder: source wiring and the onboarding Lake route create datasets through different routes",
+      "detail": "FOUND 2026-11-11 by the architecture audit (range cac80aa3..61fc6c6b). Two code paths create the same kind of object and can disagree: guided-deploy/wire-source.ts POSTs the non-spec /system/lake/datasets (LAKE_DATASETS_API_PATH, 409 = success), while usecases/onboarding-lake-route POSTs the spec route /products/lake/lakes/default/datasets after a listing GET. The route output form is also built twice: source-wiring.ts:143 and domain/onboarding-lake-route lake-route.ts (lakeOutput), and parsed a third time in live-architecture.ts. Whichever create route is wrong on a real leader fails in only one of the two features. FIX after AZR-35 measures the routes live: one dataset create helper (listing read, create-only, 409 handling) and one cribl_lake:<dataset> builder/parser in domain, used by wire-source, the Lake route and live-architecture; drop the losing route from policies.yml and the least-privilege registry."
+    },
+    {
       "id": "DBT-150",
       "epic": "DBT",
       "feature": "DBT-F3",
@@ -4500,7 +4514,7 @@
         "AZR-98"
       ],
       "title": "Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub",
-      "detail": "FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing on ours-exists, ours-differs, and another setting already sending a category to the same hub. After AZR-98 because it reuses that refusal and read-back shape, and because it needs a TENANT-level role (Security Administrator or Global Administrator for the write; the read is entra.diagnosticSettings.read) that the lab's single-subscription principal does not hold - the permission plan and its change request must name that, and AZR-82 (reads at management-group and tenant scope with no change request) is related. Category availability depends on Entra licensing (P1/P2 for some sign-in categories); an unlicensed category must be refused by name, not silently dropped."
+      "detail": "FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing on ours-exists, ours-differs, and another setting already sending a category to the same hub. After AZR-98 because it reuses that refusal and read-back shape, and because it needs a TENANT-level role (Security Administrator or Global Administrator for the write; the read is entra.diagnosticSettings.read) that the lab's single-subscription principal does not hold - the permission plan and its change request must name that, and AZR-82 (reads at management-group and tenant scope with no change request) is related. Category availability depends on Entra licensing (P1/P2 for some sign-in categories); an unlicensed category must be refused by name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added domain/activity-log-export/diagnostic-setting.ts beside the existing domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy on ONE diagnostic-setting body/compare module rather than a third copy."
     },
     {
       "id": "AZR-100",
@@ -5019,7 +5033,7 @@
       "settled": "settled",
       "dependsOn": [],
       "title": "Rename the Data Volume Inventory page to Sentinel Data Inventory",
-      "detail": "RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding tenant inventory heat map (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel side. Nav label, page title, headings, info tips, docs (feature-catalog, CONTEXT.md, README, release notes going forward) and the copy-history / docs-drift gates. DESIGNER CALL (open to change): keep the route id `data-volume-inventory` so existing links, the capability map (capabilitiesForRoute) and board `menu` values stay valid; only the visible name changes. If the route id should change too, that is a separate card with a redirect."
+      "detail": "RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding tenant inventory heat map (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel side. Nav label, page title, headings, info tips, docs (feature-catalog, CONTEXT.md, README, release notes going forward) and the copy-history / docs-drift gates. DESIGNER CALL (open to change): keep the route id `data-volume-inventory` so existing links, the capability map (capabilitiesForRoute) and board `menu` values stay valid; only the visible name changes. If the route id should change too, that is a separate card with a redirect. KEEP EVERYTHING (operator 2026-11-11): the rename removes nothing - By table, By source, the allowance cards and drill-downs, and the tenant-wide allowance comparison all stay on the renamed page; the ATT&CK heat map is added beside them."
     },
     {
       "epic": "SDI",
