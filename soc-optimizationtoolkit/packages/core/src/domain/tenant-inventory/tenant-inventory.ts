@@ -11,6 +11,8 @@
 
 import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-setting";
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
+import { ONBOARDING_SOURCES, onboardingSource } from "../onboarding-howto/sources";
+import type { OnboardingProgress } from "../onboarding-howto/progress-document";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
 import type { DefenderAutomation } from "../defender-export/defender-automation";
@@ -298,6 +300,136 @@ export function defenderCells(reads: readonly SubscriptionAutomationsRead[]): re
       collectors,
       state,
       archive: ARCHIVE_NOT_CLASSIFIED,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Archive classification
+// ---------------------------------------------------------------------------
+
+/** What the app's own Cribl setup says about where logs end up. */
+export interface AppArchiveEvidence {
+  /** The Event Hub namespace resource path the app's Cribl sources read, or null when the plan does not name one. */
+  readonly namespacePath: string | null;
+  /** Categories whose Cribl source exists and whose Lake route was written. */
+  readonly lakeRoutedSources: readonly InventoryCategoryId[];
+}
+
+/** The categories this phase reads, which are also the ones a Lake route can name. */
+const ROUTABLE_CATEGORIES: readonly InventoryCategoryId[] = ["entraId", "activityLog", DEFENDER_EXPORT_ITEM_ID];
+
+export function archiveEvidenceFrom(progress: OnboardingProgress): AppArchiveEvidence {
+  const sub = progress.planValues["subscriptionId"] ?? "";
+  const rg = progress.planValues["resourceGroup"] ?? "";
+  const ns = progress.planValues["namespace"] ?? "";
+  const namespacePath =
+    sub === "" || rg === "" || ns === ""
+      ? null
+      : `/subscriptions/${sub}/resourceGroups/${rg}/providers/Microsoft.EventHub/namespaces/${ns}`;
+  const lakeRoutedSources = ROUTABLE_CATEGORIES.filter((id) => {
+    const key = id as OnboardingSourceId;
+    return (
+      progress.criblSources[key] !== undefined &&
+      (progress.criblLakeRoutes?.[key]?.routeId ?? null) !== null
+    );
+  });
+  return { namespacePath, lakeRoutedSources };
+}
+
+function classify(cell: LogTypeCell, evidence: AppArchiveEvidence): ArchiveState {
+  if (cell.state.kind === "not-collected" || cell.state.kind === "could-not-check") return cell.archive;
+  const destinations = cell.collectors.flatMap((c) => c.destinations);
+  if (destinations.some((d) => d.kind === "storage")) return { kind: "archived", via: "storage" };
+  const hubs = destinations.filter((d) => d.kind === "event-hub");
+  if (hubs.length > 0) {
+    const path = evidence.namespacePath?.toLowerCase() ?? null;
+    const inNamespace = path !== null && hubs.some((d) => d.resourceId.toLowerCase().startsWith(path));
+    if (inNamespace && evidence.lakeRoutedSources.includes(cell.category)) {
+      return { kind: "archived", via: "cribl" };
+    }
+    return {
+      kind: "unknown",
+      reason: inNamespace
+        ? "this app has no Lake route for this category"
+        : "an Event Hub this app's Cribl sources do not read",
+    };
+  }
+  return { kind: "not-archived" };
+}
+
+/** Fills in each cell's archive state from the collectors it already carries. */
+export function withArchive(
+  cells: readonly LogTypeCell[],
+  evidence: AppArchiveEvidence,
+): readonly LogTypeCell[] {
+  return cells.map((c) => ({ ...c, archive: classify(c, evidence) }));
+}
+
+// ---------------------------------------------------------------------------
+// Category cards
+// ---------------------------------------------------------------------------
+
+export type CardColour = "green" | "amber" | "red" | "blue" | "mixed";
+type Tone = Exclude<CardColour, "mixed">;
+
+export interface CategoryCard {
+  readonly id: InventoryCategoryId;
+  readonly title: string;
+  readonly colour: CardColour;
+  readonly counts: Readonly<Record<Tone, number>>;
+  /** Collected cells over cells that could be checked; null when none could. */
+  readonly collectedShare: number | null;
+  /** Archived cells over cells that could be checked; null when none could. */
+  readonly archivedShare: number | null;
+  /** The reason a category is not read at all, or null. */
+  readonly notChecked: string | null;
+}
+
+export const NOT_CHECKED_YET = "Not checked yet: this category is not read yet.";
+
+const RESOURCE_LOGS_TITLE = "Resource logs";
+
+/** Cards in catalog order, with resource logs last. */
+const CARD_IDS: readonly InventoryCategoryId[] = [
+  ...ONBOARDING_SOURCES.map((s) => s.id).filter(
+    (id): id is Exclude<OnboardingSourceId, "diagnosticSettingsInitiative" | "communityPolicyInitiative"> =>
+      id !== "diagnosticSettingsInitiative" && id !== "communityPolicyInitiative",
+  ),
+  "resourceLogs",
+];
+
+function cardTitle(id: InventoryCategoryId): string {
+  return id === "resourceLogs" ? RESOURCE_LOGS_TITLE : (onboardingSource(id)?.title ?? id);
+}
+
+export function cellTone(cell: LogTypeCell): Tone {
+  switch (cell.state.kind) {
+    case "could-not-check":
+      return "blue";
+    case "not-collected":
+      return "red";
+    default:
+      return cell.archive.kind === "archived" ? "green" : "amber";
+  }
+}
+
+export function categoryCards(cells: readonly LogTypeCell[]): readonly CategoryCard[] {
+  return CARD_IDS.map((id): CategoryCard => {
+    const mine = cells.filter((c) => c.category === id);
+    const counts: Record<Tone, number> = { green: 0, amber: 0, red: 0, blue: 0 };
+    for (const c of mine) counts[cellTone(c)] += 1;
+    const checked = counts.green + counts.amber + counts.red;
+    const present = (Object.keys(counts) as Tone[]).filter((t) => counts[t] > 0);
+    const colour: CardColour = present.length === 1 ? present[0]! : present.length === 0 ? "blue" : "mixed";
+    return {
+      id,
+      title: cardTitle(id),
+      colour,
+      counts,
+      collectedShare: checked === 0 ? null : (counts.green + counts.amber) / checked,
+      archivedShare: checked === 0 ? null : counts.green / checked,
+      notChecked: ROUTABLE_CATEGORIES.includes(id) ? null : NOT_CHECKED_YET,
     };
   });
 }

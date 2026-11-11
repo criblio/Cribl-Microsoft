@@ -5,7 +5,13 @@ import type { DefenderAutomation } from "../defender-export/defender-automation"
 import { DEFENDER_EXPORT_ITEM_ID } from "../defender-export/defender-automation";
 import { toListing } from "../inventory-listing/inventory-listing";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
-import { activityLogCells, defenderCells, DEFENDER_EXPORT_TYPES, destinationsOf, entraCells } from "./tenant-inventory";
+import type { OnboardingProgress } from "../onboarding-howto/progress-document";
+import { emptyProgress } from "../onboarding-howto/progress-document";
+import {
+  activityLogCells, archiveEvidenceFrom, categoryCards, cellTone, defenderCells, DEFENDER_EXPORT_TYPES,
+  destinationsOf, entraCells, NOT_CHECKED_YET, withArchive,
+} from "./tenant-inventory";
+import type { AppArchiveEvidence, LogTypeCell } from "./tenant-inventory";
 import type { EntraRead, SubscriptionAutomationsRead, SubscriptionSettingsRead } from "./tenant-inventory";
 
 function setting(props: Record<string, unknown>, name = "s1") {
@@ -278,5 +284,157 @@ describe("defenderCells", () => {
       reason: "403 Forbidden",
     });
     expect(pick([], "alerts").state.kind).toBe("could-not-check");
+  });
+});
+
+describe("archive classification and cards", () => {
+  const NS = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/ns";
+  const evidence: AppArchiveEvidence = { namespacePath: NS, lakeRoutedSources: ["entraId"] };
+  const signIn = (props: Record<string, unknown>) =>
+    cell(withArchive(entraCells(read(setting({ logs: [on("SignInLogs")], ...props }))), evidence), "SignInLogs");
+
+  it("storage destination is archived via storage, even beside a workspace", () => {
+    const c = signIn({ workspaceId: "/ws", storageAccountId: "/st" });
+    expect(c.archive).toEqual({ kind: "archived", via: "storage" });
+    expect(cellTone(c)).toBe("green");
+  });
+
+  it("event hub in the namespace with a Lake route is archived via cribl, case-insensitively", () => {
+    const c = signIn({ eventHubAuthorizationRuleId: `${NS.toUpperCase()}/authorizationRules/x` });
+    expect(c.archive).toEqual({ kind: "archived", via: "cribl" });
+  });
+
+  it("event hub in the namespace without a Lake route is unknown and amber", () => {
+    const cells = withArchive(
+      entraCells(read(setting({ logs: [on("SignInLogs")], eventHubAuthorizationRuleId: `${NS}/authorizationRules/x` }))),
+      { namespacePath: NS, lakeRoutedSources: [] },
+    );
+    const c = cell(cells, "SignInLogs");
+    expect(c.archive.kind).toBe("unknown");
+    expect(cellTone(c)).toBe("amber");
+  });
+
+  it("event hub outside the namespace is unknown", () => {
+    const other = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/other";
+    const c = signIn({ eventHubAuthorizationRuleId: `${other}/authorizationRules/x` });
+    expect(c.archive).toEqual({
+      kind: "unknown",
+      reason: "an Event Hub this app's Cribl sources do not read",
+    });
+  });
+
+  it("a null namespace path never matches", () => {
+    const cells = withArchive(
+      entraCells(read(setting({ logs: [on("SignInLogs")], eventHubAuthorizationRuleId: `${NS}/authorizationRules/x` }))),
+      { namespacePath: null, lakeRoutedSources: ["entraId"] },
+    );
+    expect(cell(cells, "SignInLogs").archive.kind).toBe("unknown");
+  });
+
+  it("workspace-only is not-archived and amber", () => {
+    const c = signIn({ workspaceId: "/ws" });
+    expect(c.archive).toEqual({ kind: "not-archived" });
+    expect(cellTone(c)).toBe("amber");
+  });
+
+  it("not-collected stays unknown and red; could-not-check stays unknown and blue", () => {
+    const nc = cell(withArchive(entraCells(read()), evidence), "SignInLogs");
+    expect(nc.archive.kind).toBe("unknown");
+    expect(cellTone(nc)).toBe("red");
+    const bl = withArchive(entraCells({ kind: "unread", reason: "403" }), evidence)[0]!;
+    expect(bl.archive.kind).toBe("unknown");
+    expect(cellTone(bl)).toBe("blue");
+  });
+
+  it("a partly cell with storage is green", () => {
+    const partly = {
+      ...cell(entraCells(read(setting({ logs: [on("SignInLogs")], storageAccountId: "/st" }))), "SignInLogs"),
+      state: { kind: "partly", scopes: { collected: 1, read: 2, unread: 0 } },
+    } as LogTypeCell;
+    expect(cellTone(withArchive([partly], evidence)[0]!)).toBe("green");
+  });
+
+  it("archiveEvidenceFrom needs a source record and a written route, and ignores other keys", () => {
+    const base = emptyProgress();
+    const src = { groupId: "g", inputId: "i", inputType: "eventhub", secretId: "k" } as const;
+    const route = { groupId: "g", datasetId: "d", pipelineId: null, routeId: "rt" };
+    const progress: OnboardingProgress = {
+      ...base,
+      planValues: { ...base.planValues, subscriptionId: "s", resourceGroup: "r", namespace: "ns" },
+      criblSources: { entraId: src, activityLog: src, vnetFlowLogs: { ...src, inputType: "azure_blob" } },
+      criblLakeRoutes: {
+        entraId: route,
+        activityLog: { ...route, routeId: null },
+        vnetFlowLogs: route,
+        [DEFENDER_EXPORT_ITEM_ID]: route,
+      },
+    };
+    const ev = archiveEvidenceFrom(progress);
+    expect(ev.namespacePath).toBe(NS);
+    expect(ev.lakeRoutedSources).toEqual(["entraId"]);
+  });
+
+  it("archiveEvidenceFrom gives a null path when any plan value is empty", () => {
+    const base = emptyProgress();
+    const p = { ...base, planValues: { ...base.planValues, subscriptionId: "s", resourceGroup: "r", namespace: "" } };
+    expect(archiveEvidenceFrom(p).namespacePath).toBeNull();
+  });
+
+  it("returns seven cards in order, four of them not built", () => {
+    const cards = categoryCards(withArchive(entraCells(read()), evidence));
+    expect(cards.map((c) => c.id)).toEqual([
+      "activityLog",
+      "entraId",
+      DEFENDER_EXPORT_ITEM_ID,
+      "xdrStreaming",
+      "vnetFlowLogs",
+      "nsgFlowLogs",
+      "resourceLogs",
+    ]);
+    const unbuilt = cards.filter((c) => c.notChecked !== null);
+    expect(unbuilt.map((c) => c.id).sort()).toEqual(
+      ["nsgFlowLogs", "resourceLogs", "vnetFlowLogs", "xdrStreaming"].sort(),
+    );
+    for (const c of unbuilt) {
+      expect(c.colour).toBe("blue");
+      expect(c.notChecked).toBe(NOT_CHECKED_YET);
+      expect(c.collectedShare).toBeNull();
+    }
+    expect(cards.find((c) => c.id === "resourceLogs")!.title).toBe("Resource logs");
+    expect(cards.find((c) => c.id === "entraId")!.title).not.toBe("entraId");
+  });
+
+  it("rolls up counts, colour and shares", () => {
+    const cells = withArchive(
+      entraCells(
+        read(
+          setting({ logs: [on("SignInLogs"), on("AuditLogs")], storageAccountId: "/st" }, "a"),
+          setting({ logs: [on("AuditLogs")], workspaceId: "/ws" }, "b"),
+        ),
+      ),
+      evidence,
+    );
+    const card = categoryCards(cells).find((c) => c.id === "entraId")!;
+    expect(card.counts).toEqual({ green: 2, amber: 0, red: 13, blue: 0 });
+    expect(card.colour).toBe("mixed");
+    expect(card.collectedShare).toBeCloseTo(2 / 15);
+    expect(card.archivedShare).toBeCloseTo(2 / 15);
+  });
+
+  it("shares are null and colour blue when every cell is blue", () => {
+    const card = categoryCards(withArchive(entraCells({ kind: "unread", reason: "403" }), evidence)).find(
+      (c) => c.id === "entraId",
+    )!;
+    expect(card.colour).toBe("blue");
+    expect(card.counts.blue).toBe(15);
+    expect(card.collectedShare).toBeNull();
+    expect(card.archivedShare).toBeNull();
+    expect(card.notChecked).toBeNull();
+  });
+
+  it("a single-tone category takes that colour", () => {
+    const card = categoryCards(withArchive(entraCells(read()), evidence)).find((c) => c.id === "entraId")!;
+    expect(card.colour).toBe("red");
+    expect(card.collectedShare).toBe(0);
   });
 });
