@@ -32,6 +32,8 @@ export const AZURE_ONBOARDING_COPY_FILES = [
   "azure-onboarding-screen.tsx",
   "eventhub-prerequisite-section.tsx",
   "defender-export-section.tsx",
+  "activity-log-section.tsx",
+  "activity-log-state.ts",
   "automation-permission-banner.tsx",
   // The How-to, Validate, Cribl source and dataflow sections the screen composes.
   "howto/howto-panel.tsx",

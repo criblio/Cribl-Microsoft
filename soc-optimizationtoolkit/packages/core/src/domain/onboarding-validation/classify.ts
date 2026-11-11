@@ -45,6 +45,11 @@ import {
 } from "../defender-export/defender-automation";
 import { STANDARD_TIER } from "../defender-export/defender-plans";
 import { DEFAULT_SETTING_NAME } from "../entra-diagnostics/entra-diagnostic-setting";
+import {
+  readDiagnosticSetting,
+  settingTargetsNamespace,
+  type DiagnosticSettingRead,
+} from "../activity-log-export/diagnostic-setting";
 import { listingRows } from "../inventory-listing/inventory-listing";
 import {
   readRows,
@@ -351,28 +356,11 @@ function classifyProvider(row: unknown): StepVerdict {
     : { kind: "present-differs", diffs: [{ field: "registrationState", expected: "Registered", actual: state }] };
 }
 
-/** One diagnostic setting, as Validate reads it. */
-interface DiagnosticSetting {
-  readonly name: string;
-  readonly ruleId: string;
-  readonly hub: string;
-  readonly enabled: readonly string[];
-}
+/** One diagnostic setting, as Validate reads it: the one shared reading (AZR-98). */
+type DiagnosticSetting = DiagnosticSettingRead;
 
 function parseSettings(rows: readonly unknown[]): DiagnosticSetting[] {
-  return rows.map((row) => {
-    const props = rec(row, "properties");
-    const logs = Array.isArray(props["logs"]) ? props["logs"] : [];
-    return {
-      name: str(row, "name"),
-      ruleId: str(props, "eventHubAuthorizationRuleId"),
-      hub: str(props, "eventHubName"),
-      enabled: logs
-        .filter((l) => isRecord(l) && l["enabled"] === true)
-        .map((l) => str(l, "category") || str(l, "categoryGroup"))
-        .filter((c) => c !== ""),
-    };
-  });
+  return rows.map(readDiagnosticSetting);
 }
 
 function settingDiffs(
@@ -385,7 +373,7 @@ function settingDiffs(
   const nsPath = eventHubNamespacePath(planNamespace(values));
   const sendRule = value(values, "sendRule");
   const expectedRule = sendRule === "" ? `${nsPath}/authorizationRules/...` : `${nsPath}/authorizationRules/${sendRule}`;
-  const targetsNs = setting.ruleId.toLowerCase().startsWith(`${nsPath.toLowerCase()}/`);
+  const targetsNs = settingTargetsNamespace(setting, nsPath);
   const ruleOk = targetsNs && (sendRule === "" || same(lastSegment(setting.ruleId), sendRule));
   if (!ruleOk) {
     diffs.push({ field: "eventHubAuthorizationRuleId", expected: expectedRule, actual: setting.ruleId || "(none)" });
@@ -405,8 +393,7 @@ function settingDiffs(
 }
 
 function targetsPlanNamespace(values: PlanValues, setting: DiagnosticSetting): boolean {
-  const nsPath = eventHubNamespacePath(planNamespace(values)).toLowerCase();
-  return setting.ruleId.toLowerCase().startsWith(`${nsPath}/`);
+  return settingTargetsNamespace(setting, eventHubNamespacePath(planNamespace(values)));
 }
 
 function classifyEntra(values: PlanValues, rows: readonly unknown[], ex: CheckExpectations): StepVerdict {

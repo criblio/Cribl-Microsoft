@@ -31,7 +31,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   COVERAGE_CATALOG,
   COVERAGE_SELECTION_KEY,
@@ -524,12 +524,15 @@ describe("AzureOnboardingScreen - the catalog layout", () => {
       const box = checkbox(item.title);
       expect({ id: item.id, disabled: box.disabled }).toEqual({
         id: item.id,
-        disabled: item.id !== "defenderExport",
+        // AZR-98 deliberately made the Activity Log deployable beside Defender.
+        disabled: item.id !== "defenderExport" && item.id !== "activityLog",
       });
     }
     // Spelled out, so a catalog edit cannot quietly drop the two named here.
     const entra = COVERAGE_CATALOG.find((i) => i.id === "entraId");
-    const policy = COVERAGE_CATALOG.filter((i) => i.method === "built-in-policy" || i.method === "custom-initiative");
+    const policy = COVERAGE_CATALOG.filter(
+      (i) => (i.method === "built-in-policy" || i.method === "custom-initiative") && i.id !== "activityLog",
+    );
     expect(entra).toBeDefined();
     expect(policy.length).toBeGreaterThan(0);
     expect(checkbox(entra?.title ?? "").disabled).toBe(true);
@@ -854,7 +857,7 @@ describe("AzureOnboardingScreen - the plans read", () => {
     expect(screen.getByText("Enabled, not in the known plan list")).toBeTruthy();
     expect(view.container.textContent ?? "").not.toMatch(NO_PLAN);
     expect(screen.getByText(/It never turns a plan on or changes a plan's tier/)).toBeTruthy();
-    expect(screen.getByText(/Needed, not yet measured/)).toBeTruthy();
+    expect(within(defenderBlock()).getByText(/Needed, not yet measured/)).toBeTruthy();
   });
 });
 
@@ -875,8 +878,19 @@ const CONNECTED: CapabilityContext = { azureIdentityPresent: true, criblReachabl
 const ALL_GRANTED = audit({ plans: "granted", read: "granted", write: "granted" });
 const DENIAL_WORDS = /\bdenied\b|\bcannot\b|\brefused\b/i;
 
+/**
+ * The Defender section's own block. The Activity Log section (AZR-98) renders
+ * its own banner and not-measured list beside it, so these pins look inside
+ * the Defender block only.
+ */
+function defenderBlock(): HTMLElement {
+  const block = screen.getByRole("heading", { name: "Defender for Cloud alert export" }).closest<HTMLElement>(".azure-onboarding-block");
+  if (block === null) throw new Error("no Defender block");
+  return block;
+}
+
 function banner(): HTMLElement | null {
-  return screen.queryByTestId("azo-permission-banner");
+  return within(defenderBlock()).queryByTestId("azo-permission-banner");
 }
 
 /** The measured permission row for one Azure action. */
@@ -1059,7 +1073,7 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     await loaded();
     // The hint sits in the namespace list's own block, not under the measured
     // subscription rows it would otherwise contradict.
-    const hint = screen.getByText(/Needed, not yet measured/);
+    const hint = within(defenderBlock()).getByText(/Needed, not yet measured/);
     const block = hint.closest(".azure-onboarding-actions");
     expect(block?.textContent).toContain("On the Event Hub namespace");
     expect(block?.textContent).toMatch(/listKeys\/action/);

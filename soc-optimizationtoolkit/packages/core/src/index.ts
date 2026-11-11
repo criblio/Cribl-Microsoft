@@ -74,6 +74,8 @@ export * from "./domain/eventhub-discovery";
 export * from "./domain/eventhub-arm";
 // AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
 export * from "./domain/defender-export";
+// AZR-98: the subscription Activity Log diagnostic setting (create-only).
+export * from "./domain/activity-log-export";
 // AZR-18: the Azure onboarding screen's section layout and item availability.
 export * from "./domain/onboarding-sections";
 export * from "./domain/siem-migration";

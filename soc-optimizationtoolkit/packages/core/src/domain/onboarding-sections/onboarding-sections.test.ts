@@ -91,11 +91,12 @@ describe("ONBOARDING_SECTIONS layout", () => {
 });
 
 describe("ITEM_AVAILABILITY", () => {
-  it("has exactly one available item: defenderExport", () => {
+  // AZR-98 deliberately added activityLog: its create-only deploy exists.
+  it("has exactly two available items: activityLog and defenderExport", () => {
     const available = Object.entries(ITEM_AVAILABILITY)
       .filter(([, a]) => a.status === "available")
       .map(([id]) => id);
-    expect(available).toEqual(["defenderExport"]);
+    expect(available).toEqual(["activityLog", "defenderExport"]);
   });
 
   it("has an entry for every catalog id and no other", () => {
@@ -113,6 +114,7 @@ describe("ITEM_AVAILABILITY", () => {
   it("treats an unknown id as not built, never available", () => {
     expect(itemAvailability("noSuchItem").status).toBe("not-built");
     expect(itemAvailability("defenderExport").status).toBe("available");
+    expect(itemAvailability("activityLog").status).toBe("available");
     expect(itemAvailability("entraId").status).toBe("not-built");
   });
 });
@@ -142,8 +144,16 @@ describe("sectionAvailability", () => {
     expect(sectionAvailability(script)).toBe("available");
   });
 
+  it("makes the built-in-policy section available through activityLog while the initiative is not built", () => {
+    const policy = section("built-in-policy");
+    expect(policy.rows.map((r) => r.id)).toEqual(
+      expect.arrayContaining(["diagnosticSettingsInitiative", "activityLog"]),
+    );
+    expect(itemAvailability("diagnosticSettingsInitiative").status).toBe("not-built");
+    expect(sectionAvailability(policy)).toBe("available");
+  });
+
   it("marks sections with only unbuilt items as not-built, and the reference section as reference", () => {
-    expect(sectionAvailability(section("built-in-policy"))).toBe("not-built");
     expect(sectionAvailability(section("custom-initiative"))).toBe("not-built");
     expect(sectionAvailability(section("guided-portal"))).toBe("not-built");
     expect(sectionAvailability(section("none"))).toBe("reference");

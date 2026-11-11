@@ -17,6 +17,10 @@ import type { PortHttpResponse } from "../../ports/http";
 import { defaultPlanValues, type PlanValues } from "../../domain/onboarding-howto/plan-values";
 import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../../domain/onboarding-howto/sources";
 import { DEFENDER_EXPORT_NAME } from "../../domain/defender-export";
+import {
+  buildActivityLogSettingPutRequest,
+  subscriptionDiagnosticSettingsPath,
+} from "../../domain/activity-log-export";
 import { MAX_LIST_PAGES } from "../azure-discovery";
 import {
   applyDefenderDeploy,
@@ -26,6 +30,9 @@ import {
   planValidation,
   validateAzureOnboarding,
   verdictsForStep,
+  ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL,
+  applyActivityLogDeploy,
+  applyOnboardingDeploy,
 } from "./index";
 
 const FULL: PlanValues = {
@@ -570,5 +577,76 @@ describe("a Defender deploy made after the run (AZR-93)", () => {
     const run = await validateAzureOnboarding(new RecordingAzure(), planValidation(["activityLog"], FULL));
     expect(run.checks.some((c) => c.kind === "defender-export")).toBe(false);
     expect(applyDefenderDeploy(run, FULL, { outcome: "written-and-read-back", input: TARGET })).toBeNull();
+  });
+});
+
+describe("an Activity Log deploy made after the run (AZR-98)", () => {
+  const NS = { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" };
+  const TARGET = { subscriptionId: "sub-1", namespace: NS, ruleName: "sender" };
+  const deploy = (outcome: "written-and-read-back" | "accepted-not-verified", input = TARGET) =>
+    ({ source: "activityLog", outcome, input }) as const;
+  // The generic 200 lists no settings, so the run reads the setting absent.
+  const absentRun = () => validateAzureOnboarding(new RecordingAzure(), planValidation(["activityLog"], FULL));
+  const settingVerdicts = (r: { checks: readonly { kind: string; key: string }[]; verdicts: Readonly<Record<string, unknown>> }) =>
+    r.checks.filter((c) => c.kind === "activity-log-setting").map((c) => r.verdicts[c.key]);
+
+  it("a read-back after an absent verdict replaces 'not found' with as-expected, and nothing else", async () => {
+    const before = await absentRun();
+    expect(settingVerdicts(before).length).toBeGreaterThan(0);
+    expect(settingVerdicts(before).every((v) => (v as { kind: string }).kind === "absent")).toBe(true);
+    const after = applyActivityLogDeploy(before, FULL, deploy("written-and-read-back"));
+    expect(after).not.toBeNull();
+    expect(settingVerdicts(after!).every((v) => (v as { kind: string }).kind === "as-expected")).toBe(true);
+    const others = (r: typeof before) => r.checks.filter((c) => c.kind !== "activity-log-setting");
+    expect(others(after!)).toEqual(others(before));
+  });
+
+  it("is what a fresh read of the setting the deploy writes would say (the amend is not a guess)", async () => {
+    const written = buildActivityLogSettingPutRequest(TARGET);
+    const azure = new RecordingAzure([
+      onPath(subscriptionDiagnosticSettingsPath("sub-1"), {
+        status: 200,
+        body: { value: [{ id: written.path, name: "cribl-activity-log", properties: written.body.properties }] },
+      } as unknown as PortHttpResponse),
+    ]);
+    const fresh = await validateAzureOnboarding(azure, planValidation(["activityLog"], FULL));
+    expect(settingVerdicts(fresh).every((v) => (v as { kind: string }).kind === "as-expected")).toBe(true);
+  });
+
+  it("an unconfirmed write retires the verdict to unknown, never as-expected", async () => {
+    const after = applyActivityLogDeploy(await absentRun(), FULL, deploy("accepted-not-verified"))!;
+    for (const v of settingVerdicts(after)) {
+      expect(v).toEqual({ kind: "unknown", reason: "failed", detail: ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL });
+    }
+  });
+
+  it("a deploy to another subscription, namespace or rule than the plan's says nothing about the run", async () => {
+    const before = await absentRun();
+    for (const input of [
+      { ...TARGET, ruleName: "other-rule" },
+      { ...TARGET, namespace: { ...NS, name: "ns2" } },
+      { ...TARGET, namespace: { ...NS, resourceGroup: "rg-2" } },
+      { ...TARGET, subscriptionId: "sub-2" },
+    ]) {
+      expect(applyActivityLogDeploy(before, FULL, deploy("written-and-read-back", input))).toBeNull();
+    }
+    // A plan that names no send rule accepts the deploy's rule.
+    expect(applyActivityLogDeploy(before, { ...FULL, sendRule: "" }, deploy("written-and-read-back", { ...TARGET, ruleName: "x" }))).not.toBeNull();
+  });
+
+  it("applyOnboardingDeploy routes by source: an Activity Log deploy never touches the Defender verdict", async () => {
+    const run = await validateAzureOnboarding(new RecordingAzure(), planValidation(["activityLog", "defenderExport"], FULL));
+    const after = applyOnboardingDeploy(run, FULL, deploy("written-and-read-back"))!;
+    const defender = (r: typeof run) => r.checks.filter((c) => c.kind === "defender-export");
+    expect(defender(after)).toEqual(defender(run));
+    expect(defender(run).length).toBeGreaterThan(0);
+    // And a Defender deploy (no source) still goes to the Defender amend.
+    const viaDefender = applyOnboardingDeploy(run, FULL, {
+      outcome: "written-and-read-back",
+      input: { subscriptionId: "sub-1", namespace: NS, hubName: "defender-alerts" },
+    })!;
+    expect(viaDefender.checks.filter((c) => c.kind === "activity-log-setting")).toEqual(
+      run.checks.filter((c) => c.kind === "activity-log-setting"),
+    );
   });
 });

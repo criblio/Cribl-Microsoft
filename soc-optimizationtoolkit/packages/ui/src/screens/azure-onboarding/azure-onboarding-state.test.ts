@@ -54,6 +54,7 @@ import {
   defenderDeployDisabledReason,
   defenderStateNote,
   deployOutcomeMessage,
+  deployedFrom,
   hubListMessage,
   loadBanners,
   loadStateFrom,
@@ -150,7 +151,9 @@ describe("withItem", () => {
 
     expect(withItem(base, "defenderExport", true).enabled).toEqual(["entraId", "defenderExport"]);
     expect(withItem(base, "entraId", false).enabled).toEqual([]);
-    expect(withItem(base, "activityLog", true)).toBe(base);
+    expect(withItem(base, "communityPolicyInitiative", true)).toBe(base);
+    // AZR-98: the Activity Log is built now, so it ticks.
+    expect(withItem(base, "activityLog", true).enabled).toEqual(["entraId", "activityLog"]);
   });
 });
 
@@ -175,6 +178,22 @@ describe("buildSections - an unread state is never a confident negative", () => 
         expect(row.state).toBe("unknown");
       }
     }
+  });
+
+  // AZR-98: two sources are read by two buttons; one read says nothing about the other.
+  it("a read of one deployable source leaves the other unread, never 'Not selected' or 'will be deployed'", () => {
+    const both: CoverageSelection = { ...defaultSelection(), enabled: ["defenderExport", "activityLog"] };
+    const onlyDefender = deployedFrom([
+      [DEFENDER_EXPORT_ITEM_ID, [DEFENDER_EXPORT_ITEM_ID]],
+      ["activityLog", null],
+    ]);
+    const sections = buildSections(both, onlyDefender, new Map());
+    expect(itemRow(sections, DEFENDER_EXPORT_ITEM_ID).label).toBe("Deployed");
+    expect(itemRow(sections, "activityLog").state).toBe("unread");
+    const afterBoth = buildSections(both, deployedFrom([[DEFENDER_EXPORT_ITEM_ID, []], ["activityLog", ["activityLog"]]]), new Map());
+    expect(itemRow(afterBoth, "activityLog").label).toBe("Deployed");
+    expect(itemRow(afterBoth, DEFENDER_EXPORT_ITEM_ID).label).toBe("Selected - will be deployed");
+    expect(deployedFrom([[DEFENDER_EXPORT_ITEM_ID, null], ["activityLog", null]])).toBeNull();
   });
 
   it("before any read, the Defender row makes no deployment claim either", () => {

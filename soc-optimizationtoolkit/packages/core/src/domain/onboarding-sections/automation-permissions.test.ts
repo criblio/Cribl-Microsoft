@@ -282,3 +282,37 @@ describe("automationPermissionView", () => {
     expect(v.deployCaution).toBeNull();
   });
 });
+
+describe("the Activity Log declaration (AZR-98): nothing is measured, and the view says so", () => {
+  function activityLog(): AutomationPermissions {
+    const p = automationPermissionsFor("activityLog");
+    if (p === null) throw new Error("activityLog has no declaration");
+    return p;
+  }
+
+  it("lists the subscription and rule actions from the registry, all unmeasured", () => {
+    const p = activityLog();
+    expect(p.measured).toEqual([]);
+    expect(p.notMeasured.map((g) => g.scope)).toEqual(["On the subscription", "On the Event Hub namespace rule"]);
+    expect(p.notMeasured.flatMap((g) => g.actions.map((a) => a.action))).toEqual([
+      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSettings.read"].operation,
+      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.write"].operation,
+      LEAST_PRIVILEGE_OPERATIONS["eventhub.rule.listKeys"].operation,
+    ]);
+  });
+
+  it("shows a not-measured banner whatever the cached set says - never silence, never a denial, never a caution", () => {
+    const sets: (CapabilitySet | undefined)[] = [
+      undefined,
+      audited({ plans: "denied", read: "denied", write: "denied" }),
+    ];
+    for (const capabilities of sets) {
+      const v = automationPermissionView({ permissions: activityLog(), capabilities, context: CONNECTED, howtoSection: HOWTO_SECTION });
+      expect(v.banner?.kind).toBe("not-measured");
+      expect(v.banner?.text).toContain("does not measure");
+      expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
+      expect(v.deployCaution).toBeNull();
+      expect(v.rows).toEqual([]);
+    }
+  });
+});

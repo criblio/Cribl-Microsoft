@@ -16,6 +16,8 @@ export * from "./discover-event-hubs";
 export * from "./eventhub-target";
 // AZR-3: read Defender state subscription-wide; create-only deploy.
 export * from "./defender-export";
+// AZR-98: read the subscription diagnostic settings; create-only Activity Log setting.
+export * from "./activity-log-export";
 // DBT-301: insert routes into a routing table without touching the others.
 export * from "./route-insert";
 // AZR-35: route an onboarding source to Cribl Lake through the unroll pipeline.

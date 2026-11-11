@@ -4,7 +4,10 @@
  */
 
 export {
+  ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL,
+  applyActivityLogDeploy,
   applyDefenderDeploy,
+  applyOnboardingDeploy,
   CANCELLED_DETAIL,
   DEFENDER_WRITTEN_UNCONFIRMED_DETAIL,
   checkKey,
@@ -14,9 +17,11 @@ export {
   verdictsForStep,
 } from "./validate-azure-onboarding";
 export type {
+  ActivityLogDeployForValidation,
   CheckResult,
   DefenderDeployForValidation,
   DefenderWriteOutcome,
+  OnboardingDeployForValidation,
   PlanValidationOptions,
   PlannedArrival,
   PlannedCheck,

@@ -24,6 +24,7 @@
 import {
   eventHubNamespacePath,
   eventHubResourceId,
+  namespaceRuleResourceId,
   type NamespaceRef,
 } from "../eventhub-arm/eventhub-arm";
 import type { PlanValues } from "../onboarding-howto/plan-values";
@@ -38,7 +39,7 @@ export function planNamespace(v: PlanValues): NamespaceRef {
 
 /** The ARM id of the plan's rule `ruleName` on the plan's namespace. */
 export function planRuleId(v: PlanValues, ruleName: string): string {
-  return `${eventHubNamespacePath(planNamespace(v))}/authorizationRules/${ruleName}`;
+  return namespaceRuleResourceId(planNamespace(v), ruleName);
 }
 
 function idsWhere(pred: (s: (typeof ONBOARDING_SOURCES)[number]) => boolean): OnboardingSourceId[] {

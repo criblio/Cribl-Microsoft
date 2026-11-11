@@ -110,15 +110,18 @@ describe("isAutomatable", () => {
       const fresh = await import("./sources");
       expect(fresh.isAutomatable("entraId")).toBe(true);
       expect(fresh.isAutomatable("defenderExport")).toBe(true);
-      expect(fresh.isAutomatable("activityLog")).toBe(false);
+      expect(fresh.isAutomatable("activityLog")).toBe(true);
+      expect(fresh.isAutomatable("communityPolicyInitiative")).toBe(false);
     } finally {
       vi.doUnmock("../onboarding-sections");
       vi.resetModules();
     }
   });
 
-  it("is today exactly the Defender export", () => {
-    expect(ONBOARDING_SOURCES.filter((s) => isAutomatable(s.id)).map((s) => s.id)).toEqual([
+  // AZR-98 deliberately added activityLog.
+  it("is today exactly the Activity Log and the Defender export", () => {
+    expect(ONBOARDING_SOURCES.filter((s) => isAutomatable(s.id)).map((s) => s.id).sort()).toEqual([
+      "activityLog",
       "defenderExport",
     ]);
   });

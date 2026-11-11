@@ -49,9 +49,16 @@
  */
 
 import type { AzureManagement } from "../../ports/azure-management";
-import type { PortHttpResponse } from "../../ports/http";
 import type { Logger } from "../../ports/logger";
-import { armErrorCode, asString, is2xx, prop } from "../arm-http";
+import {
+  MISSING_REGISTRATION_CODE,
+  asString,
+  attemptArm,
+  classifyArmFailure,
+  is2xx,
+  prop,
+} from "../arm-http";
+import type { ArmReadFailure } from "../arm-http";
 import type { Listing } from "../../domain/inventory-listing/inventory-listing";
 import type { OnboardingItemId } from "../../domain/onboarding-selection";
 import type { NamespaceRef } from "../../domain/eventhub-arm/eventhub-arm";
@@ -92,20 +99,9 @@ export { DEFENDER_EXPORT_ITEM_ID };
  */
 export const DEFENDER_AUTOMATIONS_MAX_PAGES = 20;
 
-/** The ARM error code Azure returns when Microsoft.Security is not registered. */
-export const MISSING_REGISTRATION_CODE = "MissingSubscriptionRegistration";
-
-/** Why one ARM call produced no usable answer, classified for the operator. */
-export interface ArmReadFailure {
-  /** 403, provider not registered, or anything else (incl. no answer at all). */
-  readonly kind: "denied" | "unregistered" | "failed";
-  /** Azure's status, or null when the transport produced no answer. */
-  readonly status: number | null;
-  /** Azure's error code, "" when there was none. */
-  readonly code: string;
-  /** Azure's message, or ours. */
-  readonly message: string;
-}
+/** Declared once, in arm-http, and re-exported here for the barrel's existing API. */
+export { MISSING_REGISTRATION_CODE };
+export type { ArmReadFailure };
 
 /**
  * The plan read. Only `read` carries plan lists, so only `read` can ever be
@@ -191,44 +187,6 @@ export type DefenderDeployOutcome =
       readonly message: string;
     };
 
-type Attempt =
-  | { readonly ok: true; readonly response: PortHttpResponse }
-  | { readonly ok: false; readonly message: string };
-
-/** One call that never rejects. The rejection text is kept, never thrown. */
-async function attempt(
-  run: () => Promise<PortHttpResponse>,
-): Promise<Attempt> {
-  try {
-    return { ok: true, response: await run() };
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-/**
- * Classify a non-2xx answer (or no answer). Registration is checked BEFORE
- * 403: an unregistered provider can come back as a 403 carrying
- * MissingSubscriptionRegistration, and "register Microsoft.Security" is the
- * fix the operator needs there, not "ask for a role".
- */
-function classifyFailure(result: Attempt, what: string): ArmReadFailure {
-  if (!result.ok) {
-    return { kind: "failed", status: null, code: "", message: `${what}: ${result.message}` };
-  }
-  const { status, body } = result.response;
-  const code = armErrorCode(body);
-  const azureMessage = asString(prop(prop(body, "error"), "message")) || asString(prop(body, "message"));
-  const message = `${what}: HTTP ${status}${azureMessage !== "" ? ` - ${azureMessage}` : ""}`;
-  if (code.toLowerCase() === MISSING_REGISTRATION_CODE.toLowerCase()) {
-    return { kind: "unregistered", status, code, message };
-  }
-  if (status === 403) {
-    return { kind: "denied", status, code, message };
-  }
-  return { kind: "failed", status, code, message };
-}
-
 /**
  * List every automation in the subscription, following nextLink. Any page
  * failing makes the whole list unread: "ours is absent" cannot be claimed from
@@ -245,11 +203,11 @@ async function listSubscriptionAutomations(
   subscriptionId: string,
 ): Promise<DefenderAutomationsState> {
   const what = "List Defender automations";
-  const first = await attempt(() =>
+  const first = await attemptArm(() =>
     azure.request(buildSubscriptionAutomationsListRequest(subscriptionId)),
   );
   if (!first.ok || !is2xx(first.response.status)) {
-    return { kind: "unread", failure: classifyFailure(first, what) };
+    return { kind: "unread", failure: classifyArmFailure(first, what) };
   }
   const items: unknown[] = [];
   /** The page's nextLink ("" for the last page), or null when the body is not a listing. */
@@ -297,9 +255,9 @@ async function listSubscriptionAutomations(
     }
     pages += 1;
     const url = nextLink;
-    const page = await attempt(() => requestUrl({ method: "GET", url }));
+    const page = await attemptArm(() => requestUrl({ method: "GET", url }));
     if (!page.ok || !is2xx(page.response.status)) {
-      return { kind: "unread", failure: classifyFailure(page, `${what} (page ${pages + 1})`) };
+      return { kind: "unread", failure: classifyArmFailure(page, `${what} (page ${pages + 1})`) };
     }
     nextLink = collect(page.response.body);
     if (nextLink === null) return notAListing(` (page ${pages + 1})`, page.response.status);
@@ -321,7 +279,7 @@ export async function readDefenderState(
   subscriptionId: string,
   logger?: Logger,
 ): Promise<DefenderState> {
-  const pricingsAttempt = await attempt(() =>
+  const pricingsAttempt = await attemptArm(() =>
     azure.request(buildPricingsListRequest(subscriptionId)),
   );
   let plans: DefenderPlansState;
@@ -333,11 +291,11 @@ export async function readDefenderState(
       // A 2xx we could not understand: not denied, not unregistered.
       plans = { kind: "failed", status: parsed.status, code: parsed.code, message: parsed.message };
     } else {
-      const failure = classifyFailure(pricingsAttempt, "Read Defender plans");
+      const failure = classifyArmFailure(pricingsAttempt, "Read Defender plans");
       plans = { ...failure };
     }
   } else {
-    plans = { ...classifyFailure(pricingsAttempt, "Read Defender plans") };
+    plans = { ...classifyArmFailure(pricingsAttempt, "Read Defender plans") };
   }
 
   const automations = await listSubscriptionAutomations(azure, subscriptionId);
@@ -434,12 +392,12 @@ export async function deployDefenderExport(
   }
 
   // 2. listKeys. The only place the connection string exists.
-  const keysAttempt = await attempt(() =>
+  const keysAttempt = await attemptArm(() =>
     azure.request(buildNamespaceListKeysRequest(input.namespace, input.ruleName)),
   );
   if (!keysAttempt.ok || !is2xx(keysAttempt.response.status)) {
     // A failed listKeys answer carries no key, so its text may be reported.
-    return done(stepFailure("list-keys", classifyFailure(keysAttempt, "List the rule's keys")));
+    return done(stepFailure("list-keys", classifyArmFailure(keysAttempt, "List the rule's keys")));
   }
   let connectionString: string;
   try {
@@ -457,9 +415,9 @@ export async function deployDefenderExport(
 
   // 3. PUT. The body carries the secret; nothing built from the answer may.
   const put = buildAutomationPutRequest({ ...input, connectionString });
-  const putAttempt = await attempt(() => azure.request(put));
+  const putAttempt = await attemptArm(() => azure.request(put));
   if (!putAttempt.ok || !is2xx(putAttempt.response.status)) {
-    const failure = classifyFailure(putAttempt, "Create the Defender export");
+    const failure = classifyArmFailure(putAttempt, "Create the Defender export");
     return done(
       stepFailure("automation-put", { ...failure, message: scrub(failure.message, connectionString) }),
     );
@@ -467,11 +425,11 @@ export async function deployDefenderExport(
 
   // 4. Read back by id and compare only the non-secret fields.
   const automationId = defenderExportPath(input.subscriptionId, input.resourceGroup);
-  const readAttempt = await attempt(() =>
+  const readAttempt = await attemptArm(() =>
     azure.request(buildAutomationGetByIdRequest(automationId)),
   );
   if (!readAttempt.ok || !is2xx(readAttempt.response.status)) {
-    const failure = classifyFailure(readAttempt, "Read the export back");
+    const failure = classifyArmFailure(readAttempt, "Read the export back");
     return done({
       kind: "accepted-not-verified",
       automationId,

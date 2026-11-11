@@ -88,12 +88,17 @@ const ok = (body: unknown): PortHttpResponse => ({ status: 200, body }) as unkno
 const notFound = (): PortHttpResponse =>
   ({ status: 404, body: { error: { code: "NotFound", message: "not found" } } }) as unknown as PortHttpResponse;
 
-/** A progress document with Defender chosen in How-to mode against ns1/h1. */
+/**
+ * A progress document with Defender chosen in How-to mode against ns1/h1. The
+ * Activity Log is pinned to How-to and not chosen: it became automatable
+ * (AZR-98), and with no stored mode the default selection would choose it,
+ * putting a second source into every Defender-only pin here.
+ */
 function progressDoc(over: Record<string, unknown> = {}): unknown {
   return {
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
-    sources: { defenderExport: { chosen: true, mode: "manual" } },
+    sources: { defenderExport: { chosen: true, mode: "manual" }, activityLog: { chosen: false, mode: "manual" } },
     planValues: { subscriptionId: SUB, resourceGroup: RG, namespace: NS, hubName: HUB, consumerGroup: "cribl" },
     ticks: {},
     criblSources: {},
@@ -369,8 +374,10 @@ describe("AzureOnboardingScreen - progress writes", () => {
   it("a source in How-to mode hides the Defender deploy controls behind a note", async () => {
     mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
-    expect(screen.getByText(DEFENDER_HOWTO_NOTE)).toBeTruthy();
+    // Both deployable sources are in How-to in progressDoc, so each shows the note.
+    expect(screen.getAllByText(DEFENDER_HOWTO_NOTE)).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Read Defender state" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read diagnostic settings" })).toBeNull();
   });
 
   it("with no progress stored, Defender stays Automated and its deploy controls are shown", async () => {
@@ -378,6 +385,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
     await loaded();
     expect(screen.queryByText(DEFENDER_HOWTO_NOTE)).toBeNull();
     expect(screen.getByRole("button", { name: "Read Defender state" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Read diagnostic settings" })).toBeTruthy();
   });
 });
 

@@ -10,6 +10,7 @@ import { findHistoryInCopy } from "../../../components/copy-rules";
 import {
   CHECK_SUBJECT,
   VALIDATE_IDLE,
+  activityLogAmendNote,
   arrivalView,
   defenderAmendNote,
   runStatusText,
@@ -330,6 +331,55 @@ describe("validateRunReducer amend (AZR-93)", () => {
   });
 });
 
+// AZR-98: an Activity Log deploy's read-back amends its own check, through the same action.
+describe("validateRunReducer amend (AZR-98, Activity Log)", () => {
+  const VALUES = { subscriptionId: "sub-1", resourceGroup: "rg-1", namespace: "ns1", sendRule: "sender" } as PlanValues;
+  const WITH_SETTING: ValidationResult = {
+    ...RESULT,
+    checks: [
+      ...RESULT.checks,
+      { key: "activityLog/A1/activity-log-setting", sourceId: "activityLog", stepId: "A1", kind: "activity-log-setting", verdict: { kind: "absent" } },
+    ],
+  };
+  const DEPLOY = {
+    source: "activityLog",
+    outcome: "written-and-read-back",
+    input: { subscriptionId: "sub-1", namespace: { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" }, ruleName: "sender" },
+  } as const;
+  const finished = () =>
+    validateRunReducer(validateRunReducer(VALIDATE_IDLE, { type: "start", runId: 1, total: 1 }), {
+      type: "finish",
+      runId: 1,
+      result: WITH_SETTING,
+      asOf: "10:00",
+      values: VALUES,
+    });
+  const verdictOf = (s: ReturnType<typeof finished>, kind: string) =>
+    s.kind === "done" ? s.result.checks.find((c) => c.kind === kind)?.verdict : undefined;
+
+  it("replaces the setting verdict only, and names the write in the status line", () => {
+    const note = activityLogAmendNote("written-and-read-back", "10:05");
+    const s = validateRunReducer(finished(), { type: "amend", deploy: DEPLOY, note });
+    expect(verdictOf(s, "activity-log-setting")).toEqual({ kind: "as-expected" });
+    expect(verdictOf(s, "defender-export")).toEqual({ kind: "absent" });
+    expect(runStatusText(s)).toBe(
+      "Checked as of 10:00. The Activity Log setting was created and read back at 10:05, after this check; its result is from that read.",
+    );
+  });
+
+  it("a deploy with another rule than the plan's leaves the run as it was", () => {
+    const done = finished();
+    const other = { ...DEPLOY, input: { ...DEPLOY.input, ruleName: "other" } };
+    expect(validateRunReducer(done, { type: "amend", deploy: other, note: "n" })).toBe(done);
+  });
+
+  it("an unconfirmed write says so, and never claims a read-back", () => {
+    const note = activityLogAmendNote("accepted-not-verified", "10:05");
+    expect(note).not.toContain("read back");
+    expect(note).toContain("not confirmed");
+  });
+});
+
 describe("copy", () => {
   it("carries no project history", () => {
     const texts: string[] = [];
@@ -338,6 +388,7 @@ describe("copy", () => {
       texts.push(v.word, v.detail);
       texts.push(arrivalView("h", { kind: "unknown", reason: r, detail: "" }).text);
     }
+    texts.push(activityLogAmendNote("written-and-read-back", "t"), activityLogAmendNote("accepted-not-verified", "t"));
     texts.push(validateIntro({ firstPageReads: 4, listReads: 2, maxReads: 42, missing: ["namespace"] }));
     expect(findHistoryInCopy(texts.map((text, i) => ({ where: `validate#${i}`, text })))).toEqual([]);
   });

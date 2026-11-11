@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**105 in the backlog, 37 in progress, 204 done.**
+**116 in the backlog, 38 in progress, 204 done.**
 
 ## By menu item
 
@@ -27,22 +27,22 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 52 | 100 | 24 |
+| Sentinel Integration | 53 | 100 | 24 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 3 | 2 | 2 |
-| Data Volume Inventory | 1 | 22 | 0 |
+| Data Volume Inventory | 3 | 22 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 30 | 40 | 8 |
+| Azure Native Source Onboarding | 39 | 40 | 11 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 142.
+Open work totals 154.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 52% (45/86)
+### `AZR` Azure native source onboarding - 47% (45/95)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/45 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/54 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -117,13 +117,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 61% (109/178)
+### `DBT` Quality and technical debt _(enabler)_ - 61% (109/179)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 46/94 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 46/95 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 51/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -148,9 +148,17 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
 | `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 6/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
 
+### `SDI` Sentinel Data Inventory: MITRE ATT&CK heat map over the workspace's data sources - 0% (0/2)
+
+RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding tenant inventory heat map (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel side. Data Volume Inventory (MIG-F2, MIG-F3) says which tables carry data, from which sources, at what daily volume and against which allowances, but not what that data is WORTH for detection. An operator sizing a migration or a Cribl reduction needs to see, per ATT&CK tactic and technique, which of the ingested data sources make detection possible, so that dropping or reducing a source is a visible coverage decision rather than a blind cost cut. The page becomes Sentinel Data Inventory: volume, allowances and ATT&CK coverage of the same data in one place.
+
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `SDI-F1` Sentinel Data Inventory page: the Data Volume Inventory renamed, with an ATT&CK heat map of its data sources | Data Volume Inventory | 0/2 | SDI-1, SDI-2 |
+
 ---
 
-## In progress (37)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1274,9 +1282,60 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-98** Automate the Activity Log source: create the subscription diagnostic setting that streams it to the chosen Event Hub
+  `AZR-F9` `story` `settled`
+  FILED 2026-11-11 by the operator's question 'what else do we need to enable
+  the various selections'. Only defenderExport is `available` in
+  ITEM_AVAILABILITY (domain/onboarding-sections); activityLog, entraId, both
+  initiatives and xdrStreaming are How-to only, and activityLog and entraId
+  had no card at all. Activity Log first because it is one subscription-scope
+  ARM resource (PUT
+  /subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name})
+  with an Event Hub target, the same shape the 2026-11-04 hand-made test
+  setting cribl-activitylog-test used (AZR-34), and because AZR-35 now routes
+  it to Cribl Lake. Follows the Defender export pattern
+  (usecases/defender-export): read the subscription's diagnostic settings (the
+  existing activityLog.diagnosticSettings.read), REFUSE rather than replace
+  when ours exists, when ours differs, or when another setting already sends
+  Activity Log to the chosen hub or namespace (a second setting would
+  duplicate every event); then listKeys-free write (diagnostic settings take
+  eventHubAuthorizationRuleId, not a connection string), GET it back, and flip
+  activityLog to available so the Automate option unlocks. Categories: every
+  Activity Log category on (Administrative, Security, ServiceHealth, Alert,
+  Recommendation, Policy, Autoscale, ResourceHealth); hub name omitted so
+  Azure auto-creates insights-activity-logs, which is what sources.ts expects.
+  Least privilege: Monitoring Contributor at the subscription plus
+  Microsoft.EventHub/namespaces/authorizationRules/listkeys/action on the rule
+  (Azure checks it for a diagnostic setting even though no key is returned to
+  the caller) - to measure. NOT DECIDED: which rule rights Azure demands of
+  eventHubAuthorizationRuleId (Manage vs Send); AZR-23's dedicated Send-only
+  rule may or may not serve. BUILT 2026-11-11, PINS ONLY (nothing run against
+  Azure). domain/activity-log-export (one diagnostic-settings parser now
+  shared with Validate's Activity Log and Entra classifiers; setting name
+  cribl-activity-log; 8 categories; no eventHubName, no listKeys),
+  usecases/activity-log-export readActivityLogState / deployActivityLogExport
+  (re-list after the confirm; refuse already-exists, present-differs,
+  possible-duplicate (another setting on the same namespace), limit-reached
+  (5), denied / unregistered / failed; PUT; read-back compare), Validate amend
+  after a deploy (applyOnboardingDeploy), activityLog flipped to available, UI
+  section activity-log-section.tsx with a two-step confirm, least-privilege
+  operation activityLog.diagnosticSetting.write (Documented, not measured).
+  Deploy requires a rule with Manage rights. STAYS IN-PROGRESS until measured
+  live: which rule rights Azure requires of eventHubAuthorizationRuleId
+  (Manage vs Send) and whether the caller needs listKeys; Monitoring
+  Contributor as the least role; api-version 2021-05-01-preview for PUT and
+  GET; PUT 200 vs 201 and the read-back body shape; the 5-setting limit and
+  its error shape; whether the list pages; insights-activity-logs auto-created
+  on first event; category list per cloud; MissingSubscriptionRegistration for
+  an unregistered microsoft.insights; a portal setting using category groups
+  reads as present-differs (safe refusal). KNOWN GAPS: the shared rule picker
+  still says a Send-only rule is safer, which is wrong for this deploy (the
+  section and its gate say Manage); no permission-audit capability covers
+  diagnostic settings yet (the section shows a not-measured banner).
+
 ---
 
-## Backlog - now (16)
+## Backlog - now (18)
 
 Next to pick up. Nothing blocks these.
 
@@ -1501,6 +1560,43 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
+- **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Seen live: sections 2-5 (the
+  AZR-18 selection, staged behind Save selection, here the unsaved defaults)
+  show Microsoft Audit initiative, Activity Log, community initiative and
+  Entra ID as 'Selected - not available yet' and Defender for Cloud export
+  UNticked, while section 8's chooser ('Choose what to onboard', the progress
+  document, saved at once) has Microsoft Audit and Defender ticked and
+  Activity Log and Entra unticked. ADR 0007 D2 routes the click by mode
+  (Automated -> AZR-18 selection, How-to -> progress), but the screen still
+  renders both lists, so an operator sees two answers to 'what am I
+  onboarding'. Once [[AZR-98]] makes Activity Log automatable this becomes a
+  daily problem: it would have to be ticked in two places. FIX DIRECTION: one
+  visible choice per source (the chooser row, with its Automate | How-to
+  toggle), and the Automate sections show deploy state only for sources chosen
+  there; decide in an ADR 0007 amendment what happens to a saved AZR-18
+  selection that disagrees.
+
+- **AZR-101** Azure Activity Log is listed under 'Azure Policy - built-in initiatives', but it is a subscription diagnostic setting, not a policy
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Section 2 'Azure Policy - built-in
+  initiatives' lists the Microsoft Audit initiative AND Azure Activity Log.
+  Activity Log reaches the Event Hub through a subscription diagnostic setting
+  (sources.ts emitterKind 'activity-log-setting'; the How-to steps and
+  [[AZR-98]]'s automation write Microsoft.Insights/diagnosticSettings at the
+  subscription), the same kind of direct configuration as Entra ID and the
+  Defender export in section 4 'Direct configuration - no policy'. The
+  grouping comes from the coverage catalog's collection method (itemsByMethod
+  in domain/onboarding-sections). Move it to the direct-configuration section,
+  check the coverage-model method value it reads, and keep the order pins
+  honest. Priority now because AZR-98 adds an Automate deploy for it, which
+  would otherwise appear under a policy heading.
+
 - **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
   `AZR-F10` `bug` `settled`
   FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
@@ -1555,7 +1651,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (51)
+## Backlog - next (59)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1941,6 +2037,23 @@ Settled and unblocked, sequenced behind now.
   preferred="". Unpinned: the saved default wins when it is listed, and an
   existing pick is never overridden. Fix: two hook pins, mutation-checked.
 
+- **DBT-302** One Cribl Lake dataset writer and one cribl_lake output builder: source wiring and the onboarding Lake route create datasets through different routes
+  `DBT-F1` `story` `settled` `blocked by AZR-35`
+  FOUND 2026-11-11 by the architecture audit (range cac80aa3..61fc6c6b). Two
+  code paths create the same kind of object and can disagree:
+  guided-deploy/wire-source.ts POSTs the non-spec /system/lake/datasets
+  (LAKE_DATASETS_API_PATH, 409 = success), while
+  usecases/onboarding-lake-route POSTs the spec route
+  /products/lake/lakes/default/datasets after a listing GET. The route output
+  form is also built twice: source-wiring.ts:143 and
+  domain/onboarding-lake-route lake-route.ts (lakeOutput), and parsed a third
+  time in live-architecture.ts. Whichever create route is wrong on a real
+  leader fails in only one of the two features. FIX after AZR-35 measures the
+  routes live: one dataset create helper (listing read, create-only, 409
+  handling) and one cribl_lake:<dataset> builder/parser in domain, used by
+  wire-source, the Lake route and live-architecture; drop the losing route
+  from policies.yml and the least-privilege registry.
+
 - **DBT-161** Diagram drag hook can swallow one non-pointer click after a drag
   `DBT-F1` `bug` `settled`
   Not now because: PLAUSIBLE, not reproduced: affects only a click with no
@@ -2254,6 +2367,94 @@ Settled and unblocked, sequenced behind now.
   problem (Manage key: replace and rotate) instead of a plain refusal - never
   rewrite it.
 
+- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
+  `AZR-F9` `story` `settled` `blocked by AZR-98`
+  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
+  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
+  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
+  on ours-exists, ours-differs, and another setting already sending a category
+  to the same hub. After AZR-98 because it reuses that refusal and read-back
+  shape, and because it needs a TENANT-level role (Security Administrator or
+  Global Administrator for the write; the read is
+  entra.diagnosticSettings.read) that the lab's single-subscription principal
+  does not hold - the permission plan and its change request must name that,
+  and AZR-82 (reads at management-group and tenant scope with no change
+  request) is related. Category availability depends on Entra licensing (P1/P2
+  for some sign-in categories); an unlicensed category must be refused by
+  name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added
+  domain/activity-log-export/diagnostic-setting.ts beside the existing
+  domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
+  on ONE diagnostic-setting body/compare module rather than a third copy.
+
+- **AZR-102** One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Section 1 'Event Hub the sources
+  send to' picks namespace, hub and authorization rule; section 8's plan
+  values ('Your names and ids') hold their own Event Hub namespace, Event Hub
+  name and Send rule, bridged by a 'Use the Event Hub picked above' button.
+  [[AZR-24]] only persists the section 1 choice. Two copies can drift: a
+  deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to
+  steps, Validate and the Cribl source plan read the plan values. Make one the
+  source and derive the other (or show the plan value as read-only from the
+  picker with an explicit override), and pin that a deploy and the steps name
+  the same hub.
+
+- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
+  `AZR-F9` `story` `settled` `blocked by AZR-59`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. The recommended Entra ID
+  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
+  Data Receiver; today that is only a How-to step ('Give the Cribl principal
+  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
+  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
+  request. Nothing creates it, so the default credential cannot work without a
+  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
+  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
+  deterministic GUID name, create-only, refusing when the assignment exists
+  for that principal and role (already-applied) and when the app identity
+  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
+  User Access Administrator or Role Based Access Control Administrator,
+  ideally constrained to this role). Least-privilege registry and change
+  request updated. Measure the propagation delay before Cribl's first read.
+
+- **AZR-104** Route the remaining onboarding sources (Entra ID, the diagnostic-settings initiatives, XDR, flow logs) from their Cribl source to a destination
+  `AZR-F9` `story` `settled` `blocked by AZR-35`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. [[AZR-35]] routes only the
+  Defender for Cloud export and the Activity Log (to Cribl Lake, because
+  Sentinel gets both through native connectors) and named 'other destinations'
+  a later slice with no card. Every other lane stops at its Cribl source:
+  Route and Destination read 'not read' in the dataflow. Per source decide the
+  destination before building, applying
+  [[project_native_connector_first]]-style reasoning (is the native connector
+  free or built in?): Entra ID sign-in and audit logs (native connector costs
+  ingestion; Cribl's value is reduction - the native-onboarding plan's Mode A
+  is unavailable for Entra tables), the initiatives' resource logs (category
+  -> table per record, the records[] unroll already exists), XDR streaming,
+  VNet/NSG flow logs (Blob). Reuse route-insert and the onboarding-lake-route
+  pieces; Sentinel destinations need DCR/table decisions recorded first.
+
+- **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Only the Defender export has a
+  Remove card ([[AZR-28]]). The screen also creates the Cribl Event Hubs /
+  Blob inputs and their secrets ([[AZR-34]]), the Lake dataset, unroll
+  pipeline and route ([[AZR-35]]), and with [[AZR-98]] the subscription
+  diagnostic setting; none can be removed from the app, and a leftover object
+  blocks a fresh deploy with already-exists. House rule (claude-kit
+  cribl-config-writes rule 11): delete only what the app can prove it created
+  (manifest id + description stamp + KV record), in teardown order (route
+  before pipeline; a shared pipeline only when no recorded route uses it; a
+  Lake dataset only on explicit opt-in because it holds data), and ship
+  Pause/Remove because there is no uninstall hook. Each removal behind its own
+  confirm quoting what goes.
+
 - **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
   `AZR-F10` `bug` `settled`
   Not now because: Over-asking, not under-asking: an approver who grants it as
@@ -2320,9 +2521,68 @@ Settled and unblocked, sequenced behind now.
   condition together, and re-pin the TTL grant analysis that looks for the
   Contributor GUID.
 
+- **SDI-1** Rename the Data Volume Inventory page to Sentinel Data Inventory
+  `SDI-F1` `story` `settled`
+  RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source
+  Onboarding tenant inventory heat map
+  (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel
+  side. Nav label, page title, headings, info tips, docs (feature-catalog,
+  CONTEXT.md, README, release notes going forward) and the copy-history /
+  docs-drift gates. DESIGNER CALL (open to change): keep the route id
+  `data-volume-inventory` so existing links, the capability map
+  (capabilitiesForRoute) and board `menu` values stay valid; only the visible
+  name changes. If the route id should change too, that is a separate card
+  with a redirect. KEEP EVERYTHING (operator 2026-11-11): the rename removes
+  nothing - By table, By source, the allowance cards and drill-downs, and the
+  tenant-wide allowance comparison all stay on the renamed page; the ATT&CK
+  heat map is added beside them.
+
+- **SDI-2** MITRE ATT&CK heat map of the workspace's data sources: tactic cards, drill into techniques, which ingested sources and rules cover each
+  `SDI-F1` `story` `settled` `blocked by SDI-1`
+  RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source
+  Onboarding tenant inventory heat map
+  (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel
+  side. Same interaction as the Azure tenant inventory heat map: one card per
+  ATT&CK tactic coloured by coverage, click to drill into its techniques, each
+  technique tile naming the ingested tables / data sources that support it,
+  the analytics rules that use them, and the gap. Covered vs not must follow
+  inventory-honesty: a table that could not be read is 'could not check',
+  never 'not covered'. Existing pieces: analytics-rule tactics and
+  relevantTechniques are already parsed (domain/coverage-analysis,
+  domain/siem-migration has a per-tactic MITRE rollup), and the inventory
+  already knows which tables carry data. Feeds the Cribl reduction story: show
+  what coverage a source supports before it is reduced or dropped. UNDECIDED:
+  what 'covered' means - see the decision. DATA SOURCE (researched 2026-11-11,
+  not yet pulled): the official ATT&CK STIX 2.1 bundles in
+  github.com/mitre-attack/attack-stix-data (enterprise-attack.json is always
+  the latest Enterprise release; versioned files sit beside it; ATT&CK
+  changelogs reached v19.x). Since STIX schema v3.3.0 (2025-10-28) Detection
+  Strategies and Analytics are object types and the
+  data-component-to-technique detects relationship is replaced by the
+  Detection Strategy framework, so the data-components option must be built on
+  detection strategies / analytics / log sources, not the old detects edges.
+  Optional overlay: CTID Mappings Explorer
+  (github.com/center-for-threat-informed-defense/mappings-explorer) maps Azure
+  capabilities including Sentinel to techniques, but its Azure set was
+  versioned against ATT&CK 8.2 - check its age before using it. Pin the ATT&CK
+  version the heat map was built from and show it on the page; refresh by a
+  deliberate bump, not a live fetch at runtime. DECIDED 2026-11-11 (operator):
+  BOTH, as two graded views - a data view (are the sources needed for the
+  technique onboarded) and a detection view (is a rule available and enabled
+  over that data) - with no binary covered: ordinal grades per
+  docs/sentinel-data-inventory-landing-design.md (Grading), from research into
+  DeTT&CT 2.2.0, ATT&CK v18 detection strategies, Sentinel's MITRE page, CTID
+  Summiting the Pyramid / Mappings Explorer and Splunk Security Essentials.
+  Microsoft built-in detections count as a labelled vendor marker. Operator
+  answers on tiles only feed the gap list. Reasoning in backlog.md section 26.
+  DECISION: What makes an ATT&CK technique 'covered' on the heat map?
+    [ ] `rules` Analytics rules over ingested tables - A technique is covered when an analytics rule (enabled in the workspace, or available from installed content) tags it AND every table the rule queries carries data. Uses data the app already parses; measures detection that exists, not detection that is possible.
+    [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
+    [x] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
+
 ---
 
-## Backlog - later (38)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -2808,6 +3068,23 @@ Settled, gated on something above.
   days ago'. This card persists a lastSeen per input (KV, written only from a
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
+
+- **AZR-106** Automate the VNet and NSG flow-log sources on the Azure side: flow log, storage queue and Event Grid subscription
+  `AZR-F9` `story` `settled` `blocked by AZR-8`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. VNet Flow Logs and NSG Flow Logs
+  are Blob sources, How-to only; [[AZR-8]] shows them as rows and [[AZR-34]]
+  creates the Cribl azure_blob input. Nothing creates the Azure side: the
+  Network Watcher flow log writing to the storage account
+  (insights-logs-flowlogflowevent), the storage queue, and the Event Grid
+  system topic + subscription that put BlobCreated events on the queue (plan
+  values already name Storage account, Blob container, Storage queue, Event
+  Grid system topic, Network Watcher, Flow log name). Create-only with refusal
+  on existing objects, in the dependency order, and note NSG flow logs are
+  being retired by Microsoft in favour of VNet flow logs - decide whether NSG
+  gets automation at all. Later because the permission bugs [[AZR-81]] (Event
+  Grid provider registration, NetworkWatcherRG) block it.
 
 - **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
   `AZR-F10` `story` `settled`

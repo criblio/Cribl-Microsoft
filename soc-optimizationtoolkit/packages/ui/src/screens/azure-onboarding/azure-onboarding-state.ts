@@ -309,21 +309,60 @@ export const STATE_UNREADABLE_PREFIX = "Deployment state could not be read";
 const UNREAD_LABEL = "Deployment state not read yet";
 
 /**
+ * What the screen's reads found, per deployable source: which items were READ
+ * (`read`, null meaning every built item) and which of those are deployed. The
+ * Defender export and the Activity Log are read by separate buttons, so one
+ * having been read says nothing about the other.
+ */
+export interface DeployedReads {
+  readonly read: ReadonlySet<OnboardingItemId> | null;
+  readonly deployed: readonly OnboardingItemId[];
+}
+
+function isDeployedReads(value: readonly OnboardingItemId[] | DeployedReads): value is DeployedReads {
+  return !Array.isArray(value);
+}
+
+/**
+ * Combine per-source reads, each `[item, what its read found deployed]` with
+ * null for a source not read yet. Null when nothing was read at all.
+ */
+export function deployedFrom(
+  entries: readonly (readonly [OnboardingItemId, readonly OnboardingItemId[] | null])[],
+): DeployedReads | null {
+  const read = new Set<OnboardingItemId>();
+  const deployed: OnboardingItemId[] = [];
+  for (const [item, found] of entries) {
+    if (found === null) continue;
+    read.add(item);
+    deployed.push(...found);
+  }
+  return read.size === 0 ? null : { read, deployed };
+}
+
+/**
  * The screen's sections, with a label per item row.
  *
  * @param selection the loaded selection, or null when none could be loaded
  *                  (every item then reads as unselected and untickable)
  * @param deployed  what a read found deployed, or null when no read has been
- *                  attempted - a null is never shown as "not deployed"
+ *                  attempted - a null is never shown as "not deployed". A
+ *                  {@link DeployedReads} says which items were read: a built
+ *                  item outside it is labelled unread, never "not deployed"
  * @param unknown   items whose read FAILED, with the reason. Takes precedence
  *                  over every other label for that row
  */
 export function buildSections(
   selection: CoverageSelection | null,
-  deployed: readonly OnboardingItemId[] | null,
+  deployedOrReads: readonly OnboardingItemId[] | DeployedReads | null,
   unknown: ReadonlyMap<OnboardingItemId, string>,
 ): OnboardingSectionView[] {
   const desired = selection === null ? [] : selectedItemIds(selection);
+  const reads: DeployedReads | null =
+    deployedOrReads === null || isDeployedReads(deployedOrReads)
+      ? deployedOrReads
+      : { read: null, deployed: deployedOrReads };
+  const deployed = reads === null ? null : reads.deployed;
   return ONBOARDING_SECTIONS.map((section) => ({
     key: section.key,
     title: section.title,
@@ -366,7 +405,7 @@ export function buildSections(
           label: selected ? "Selected - not available yet" : "Not available yet",
         };
       }
-      if (deployed === null) {
+      if (deployed === null || (reads !== null && reads.read !== null && !reads.read.has(row.id))) {
         return { ...base, state: "unread", label: UNREAD_LABEL };
       }
       const state = itemState(row.id, desired, deployed);

@@ -14,6 +14,7 @@ export {
   DEFAULT_NAMESPACE_RULE,
   eventHubNamespacePath,
   eventHubResourceId,
+  namespaceRuleResourceId,
   buildNamespaceGetRequest,
   buildNamespacePutRequest,
   buildNamespaceHubsListRequest,
