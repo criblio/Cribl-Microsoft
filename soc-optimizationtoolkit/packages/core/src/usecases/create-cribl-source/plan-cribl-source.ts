@@ -524,6 +524,19 @@ async function crossCheckPrincipal(
 }
 
 /**
+ * The refusal for a credential naming this app's own registration (ADR 0008
+ * section 2, AZR-66), or null. ONE place for every lane: Entra ID and blob.
+ * `appClientId` is already trimmed and lower-cased; empty means unknown.
+ */
+function appPrincipalRefusal(clientId: string, appClientId: string): PlanCriblSourceResult | null {
+  if (appClientId === "" || clientId.toLowerCase() !== appClientId) return null;
+  return refused(
+    "app-principal",
+    `Client ID ${clientId} is this app's own registration. Its secret in a Cribl secret would give the worker group this app's Azure rights; use a service principal dedicated to Cribl.`,
+  );
+}
+
+/**
  * Plan the create of one lane's Cribl source. READ-ONLY (GETs only).
  * Never throws for a refused or failed read: those are refusals.
  */
@@ -560,12 +573,8 @@ export async function planCriblSource(
     if (tenantId === "" || clientId === "" || objectId === "") {
       return refused("missing-value", "Enter the Cribl service principal's tenant ID, client ID and object ID.");
     }
-    if (appClientId !== "" && clientId.toLowerCase() === appClientId) {
-      return refused(
-        "app-principal",
-        `Client ID ${clientId} is this app's own registration. Its secret in a Cribl secret would give the worker group this app's Azure rights; use a service principal dedicated to Cribl.`,
-      );
-    }
+    const asApp = appPrincipalRefusal(clientId, appClientId);
+    if (asApp !== null) return asApp;
     const tie = await crossCheckPrincipal(ports.graph, clientId, objectId, appClientId);
     if (tie.kind === "refused") return refused(tie.reason, tie.detail);
     entra = { tenantId, clientId, objectId, principalCheck: tie.check };
@@ -611,12 +620,8 @@ export async function planCriblSource(
     const tenantId = credential.tenantId.trim();
     const clientId = credential.clientId.trim();
     if (tenantId === "" || clientId === "") return refused("missing-value", "Enter the service principal's tenant and client id.");
-    if (appClientId !== "" && clientId.toLowerCase() === appClientId) {
-      return refused(
-        "app-principal",
-        `Client ID ${clientId} is this app's own registration. Its secret in a Cribl secret would give the worker group this app's Azure rights; use a service principal dedicated to Cribl.`,
-      );
-    }
+    const asApp = appPrincipalRefusal(clientId, appClientId);
+    if (asApp !== null) return asApp;
     keyNameOrPrincipal = clientId;
     inputBody = buildBlobInputBody({
       id: inputId,

@@ -51,6 +51,7 @@ import {
   DATAFLOW_PERSPECTIVES,
   FLOW_STATE_LABEL,
   buildOnboardingLanes,
+  lookbackPhrase,
   type BuildOnboardingLanesInput,
   type DataflowPerspective,
   type LaneCardKind,
@@ -157,11 +158,6 @@ function requestText(label: string, r: LiveFlowRequest | null): string {
 
 function windowPhrase(seconds: number): string {
   return seconds % 60 === 0 ? `the last ${seconds / 60} minutes` : `the last ${seconds} seconds`;
-}
-
-function lookbackPhrase(lookback: string): string {
-  const m = /^-(\d+)h$/.exec(lookback);
-  return m === null ? lookback : `the last ${m[1]} hours`;
 }
 
 export function OnboardingDataflow({

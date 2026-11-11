@@ -11,6 +11,7 @@ import {
   type FlowInput,
   type LaneFlowState,
   type LookbackStatus,
+  lookbackPhrase,
 } from "./index";
 
 const input: FlowInput = { type: "eventhub", id: "azure_onb_eh_ns_hub" };
@@ -191,5 +192,15 @@ describe("unmatchedInputLabels", () => {
     const a = rows([label, 1], ["syslog:in_syslog:udp", 2], ["eventhub:x", 3], ["eventhub:x", 4]);
     expect(unmatchedInputLabels(a, [input])).toEqual(["eventhub:x", "syslog:in_syslog:udp"]);
     expect(unmatchedInputLabels(forbidden, [input])).toEqual([]);
+  });
+});
+
+// Architecture audit 2026-11-10: the toolbar kept its own copy of this phrase and
+// would have said "the last 1 hours"; both now use this one.
+describe("lookbackPhrase", () => {
+  it("words the lookback token once, for the lane sentence and the toolbar alike", () => {
+    expect(lookbackPhrase("-24h")).toBe("the last 24 hours");
+    expect(lookbackPhrase("-1h")).toBe("the last hour");
+    expect(lookbackPhrase("86400s")).toBe("86400s");
   });
 });
