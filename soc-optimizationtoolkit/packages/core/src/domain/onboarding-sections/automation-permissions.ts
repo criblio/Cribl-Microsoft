@@ -83,6 +83,10 @@ import {
   DEFENDER_NAMESPACE_ACTIONS,
   DEFENDER_PRICINGS_READ,
 } from "../defender-export/defender-permissions";
+import {
+  ACTIVITY_LOG_NAMESPACE_ACTIONS,
+  ACTIVITY_LOG_SUBSCRIPTION_ACTIONS,
+} from "../activity-log-export/activity-log-permissions";
 import type { OnboardingItemId } from "../onboarding-selection";
 import type { ItemAvailability } from "./onboarding-sections";
 
@@ -166,10 +170,26 @@ const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
 };
 
 /**
+ * AZR-98. No capability measures Microsoft.Insights diagnostic settings, so
+ * nothing is `measured` and both scopes are listed as not measured; the view
+ * then says the check does not cover this source rather than staying silent.
+ */
+const ACTIVITY_LOG_PERMISSIONS: AutomationPermissions = {
+  sourceTitle: "Activity Log export",
+  measuredScope: "On the subscription",
+  measured: [],
+  notMeasured: [
+    { scope: "On the subscription", actions: ACTIVITY_LOG_SUBSCRIPTION_ACTIONS },
+    { scope: "On the Event Hub namespace rule", actions: ACTIVITY_LOG_NAMESPACE_ACTIONS },
+  ],
+};
+
+/**
  * The declaration per AUTOMATABLE item. Keyed like ITEM_AVAILABILITY and
  * covering exactly its "available" ids - the pin holds both directions.
  */
 export const AUTOMATION_PERMISSIONS: Readonly<Record<OnboardingItemId, AutomationPermissions>> = {
+  activityLog: ACTIVITY_LOG_PERMISSIONS,
   defenderExport: DEFENDER_EXPORT_PERMISSIONS,
 };
 
@@ -313,6 +333,24 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
     return { need, state, stateLabel: stateLabel(need, state) };
   });
   const core = rows.filter((r) => r.need.necessity === "core");
+
+  // A source the check measures nothing for: say so, never stay silent
+  // (silence reads as "you have what this needs").
+  if (permissions.measured.length === 0) {
+    return {
+      rows,
+      banner: {
+        kind: "not-measured",
+        tone: "info",
+        text:
+          `The app's permission check does not measure what setting up ${source} needs, so whether your ` +
+          `Azure identity can is not known. Azure's own answer at each step is what decides; the permissions ` +
+          `it needs are listed in this section.`,
+        offerRecheck: false,
+      },
+      deployCaution: null,
+    };
+  }
 
   const denied = core.filter((r) => r.state === "denied").map((r) => r.need);
   if (denied.length > 0) {

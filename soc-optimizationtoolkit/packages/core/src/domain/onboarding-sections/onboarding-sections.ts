@@ -19,8 +19,9 @@
  *
  * AVAILABILITY IS PER ITEM, NOT PER SECTION. The `script` method holds both
  * entraId and defenderExport (coverage-model.test.ts), and only the Defender
- * export is built in this slice. A per-section flag would either hide the
- * Defender export or offer an Entra deploy that does not exist. So
+ * export is built there; built-in-policy holds the policy initiative and the
+ * Activity Log, and only the Activity Log is built there. A per-section flag
+ * would either hide a built item or offer a deploy that does not exist. So
  * {@link ITEM_AVAILABILITY} is keyed by item id, and {@link sectionAvailability}
  * is derived from it: a section is available when any of its items is.
  *
@@ -137,9 +138,12 @@ export type ItemAvailability =
 const NOT_BUILT_REASON = "Not available yet - this source cannot be deployed from here.";
 
 /**
- * Availability per catalog item. Only the Defender for Cloud alert export is
- * built in this slice; Entra (AZR-2), the policy sections and the guided XDR
- * portal flow render as coming-soon with disabled rows (plan outOfScope).
+ * Availability per catalog item. The Defender for Cloud alert export (AZR-3)
+ * and the subscription Activity Log setting (AZR-98) are built; Entra (AZR-2),
+ * the policy initiatives and the guided XDR portal flow render as coming-soon
+ * with disabled rows (plan outOfScope). The Activity Log row sits in the
+ * built-in-policy section because that is its catalog method, but its
+ * automation is one direct diagnostic setting, not a policy.
  *
  * The type does NOT guard completeness: {@link OnboardingItemId} is `string`,
  * so a catalog item with no entry here compiles cleanly and indexing the map
@@ -151,7 +155,7 @@ const NOT_BUILT_REASON = "Not available yet - this source cannot be deployed fro
 export const ITEM_AVAILABILITY: Readonly<Record<OnboardingItemId, ItemAvailability>> = {
   diagnosticSettingsInitiative: { status: "not-built", reason: NOT_BUILT_REASON },
   communityPolicyInitiative: { status: "not-built", reason: NOT_BUILT_REASON },
-  activityLog: { status: "not-built", reason: NOT_BUILT_REASON },
+  activityLog: { status: "available" },
   entraId: { status: "not-built", reason: NOT_BUILT_REASON },
   defenderExport: { status: "available" },
   xdrStreaming: { status: "not-built", reason: NOT_BUILT_REASON },

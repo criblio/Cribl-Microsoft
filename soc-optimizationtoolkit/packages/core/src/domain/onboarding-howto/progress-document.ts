@@ -21,7 +21,8 @@
  * the SECRET'S ID, never its value.
  *
  * MODE IS COERCED. A stored `automate` for a source the app cannot deploy
- * (isAutomatable false - everything but the Defender export today) decodes as
+ * (isAutomatable false - everything but the Defender export and the Activity
+ * Log today) decodes as
  * `manual`, so an older or hand-edited document cannot offer a deploy path that
  * does not exist.
  *

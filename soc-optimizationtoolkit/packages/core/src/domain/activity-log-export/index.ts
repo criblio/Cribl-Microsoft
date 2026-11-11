@@ -37,3 +37,9 @@ export type {
   OursSettingState,
   SettingDiff,
 } from "./activity-log-setting";
+
+export {
+  ACTIVITY_LOG_ACTIONS_NOT_MEASURED,
+  ACTIVITY_LOG_NAMESPACE_ACTIONS,
+  ACTIVITY_LOG_SUBSCRIPTION_ACTIONS,
+} from "./activity-log-permissions";

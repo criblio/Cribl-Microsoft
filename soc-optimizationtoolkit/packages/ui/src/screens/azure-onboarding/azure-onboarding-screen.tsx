@@ -1,9 +1,10 @@
 /**
  * AzureOnboardingScreen - Azure Native Source Onboarding (AZR-18, extended by
  * AZR-30..34). Every Azure-native source the coverage catalog knows, grouped by
- * how it is collected, with the one that can be deployed today - the Defender
- * for Cloud alert export - working end to end, and every other row visible
- * with its control disabled and the reason beside it. Below them: the
+ * how it is collected, with the ones that can be deployed today - the Defender
+ * for Cloud alert export and the subscription Activity Log setting (AZR-98) -
+ * working end to end, and every other row visible with its control disabled
+ * and the reason beside it. Below them: the
  * dataflow diagram per chosen source, the How-to path (guided steps with done
  * ticks), the read-only Validate, and the Cribl Stream source the app creates.
  *
@@ -60,10 +61,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   COVERAGE_SELECTION_KEY,
+  ACTIVITY_LOG_ITEM_ID,
   DEFENDER_EXPORT_ITEM_ID,
   ONBOARDING_PROGRESS_KEY,
   applyCriblSource,
-  applyDefenderDeploy,
+  applyOnboardingDeploy,
   applyLakeRoute,
   buildNamespaceAuthRulesListRequest,
   emptyProgress,
@@ -96,8 +98,11 @@ import type {
   BatchPacing,
   BuildOnboardingLanesInput,
   CoverageSelection,
+  ActivityLogDeployForValidation,
+  ActivityLogState,
   DefenderDeployForValidation,
   DefenderState,
+  OnboardingDeployForValidation,
   KvDocumentLoad,
   LakeRouteSourceId,
   LaneTopics,
@@ -128,6 +133,7 @@ import {
   buildSections,
   canSave,
   criblSideReadingOf,
+  deployedFrom,
   loadBanners,
   loadStateFrom,
   loadedSelection,
@@ -143,6 +149,7 @@ import type {
 import { EventHubPrerequisiteSection, PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { DefenderExportSection } from "./defender-export-section";
+import { ActivityLogSection } from "./activity-log-section";
 import { HowToPanel } from "./howto/howto-panel";
 import {
   applyPlanValues,
@@ -164,6 +171,7 @@ import {
   VALIDATE_IDLE,
   VALIDATE_REQUESTS_PER_MINUTE,
   changedPlanKeys,
+  activityLogAmendNote,
   defenderAmendNote,
   validateRunReducer,
 } from "./validate/validate-state";
@@ -182,7 +190,7 @@ export const PROGRESS_SHELL_GAP_REASON = "this build of the app has no storage f
 
 const SECTION_TIPS: Readonly<Record<OnboardingSectionView["key"], string>> = {
   "built-in-policy":
-    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet.",
+    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet. The Activity Log can be deployed from here as one subscription diagnostic setting, without a policy.",
   "custom-initiative":
     "A community-maintained policy initiative that covers resource types the built-in one does not. Deploying it from here is not available yet.",
   script:
@@ -213,7 +221,7 @@ const CRIBL_TIP =
 export const DATAFLOW_WAITING_TEXT =
   "The dataflow appears once the saved selection and your How-to progress are loaded.";
 
-/** Shown in place of the Defender deploy controls while the source is in How-to mode. */
+/** Shown in place of a source's deploy controls while it is in How-to mode (Defender export, Activity Log). */
 export const DEFENDER_HOWTO_NOTE =
   "This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate there.";
 
@@ -311,6 +319,7 @@ export function AzureOnboardingScreen({
   const [saveMessage, setSaveMessage] = useState<PickerMessage | null>(null);
   const [target, setTarget] = useState<EventHubTarget>(EMPTY_EVENTHUB_TARGET);
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
+  const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
 
   // How-to progress (ADR 0007 D1, D3).
   const [progressLoad, setProgressLoad] = useState<ProgressLoadState>(
@@ -433,11 +442,24 @@ export function AzureOnboardingScreen({
     if (defenderState?.unknownReason !== undefined) {
       map.set(DEFENDER_EXPORT_ITEM_ID, defenderState.unknownReason);
     }
+    if (activityLogState?.unknownReason !== undefined) {
+      map.set(ACTIVITY_LOG_ITEM_ID, activityLogState.unknownReason);
+    }
     return map;
-  }, [defenderState]);
+  }, [defenderState, activityLogState]);
+  // What the reads found deployed. Null until one read happened; a source not
+  // yet read is then labelled from what is known (deployedFrom).
+  const deployed = useMemo(
+    () =>
+      deployedFrom([
+        [DEFENDER_EXPORT_ITEM_ID, defenderState?.deployed ?? null],
+        [ACTIVITY_LOG_ITEM_ID, activityLogState?.deployed ?? null],
+      ]),
+    [defenderState, activityLogState],
+  );
   const sections = useMemo(
-    () => buildSections(selection, defenderState?.deployed ?? null, unknown),
-    [selection, defenderState, unknown],
+    () => buildSections(selection, deployed, unknown),
+    [selection, deployed, unknown],
   );
 
   const saveAllowed = store !== undefined && selection !== null && canSave(load, { dirty, saving });
@@ -451,6 +473,8 @@ export function AzureOnboardingScreen({
       : null;
   const defenderHowTo =
     progress !== null && effectiveMode(progress, DEFENDER_EXPORT_ITEM_ID) === "manual";
+  const activityLogHowTo =
+    progress !== null && effectiveMode(progress, ACTIVITY_LOG_ITEM_ID) === "manual";
   const chosen = useMemo(
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
@@ -641,13 +665,23 @@ export function AzureOnboardingScreen({
    * created (AZR-93). A run in flight is left to read Azure itself.
    */
   function onDefenderDeployed(deploy: DefenderDeployForValidation): void {
-    dispatchRun({ type: "amend", deploy, note: defenderAmendNote(deploy.outcome, new Date().toLocaleTimeString()) });
+    amendLastRun(deploy, defenderAmendNote(deploy.outcome, new Date().toLocaleTimeString()));
+    logger?.info(`${LOG} Defender deploy applied to the last Validate result`, { outcome: deploy.outcome });
+  }
+
+  /** The same for the Activity Log setting (AZR-98): its read-back replaces that check's verdict. */
+  function onActivityLogDeployed(deploy: ActivityLogDeployForValidation): void {
+    amendLastRun(deploy, activityLogAmendNote(deploy.outcome, new Date().toLocaleTimeString()));
+    logger?.info(`${LOG} Activity Log deploy applied to the last Validate result`, { outcome: deploy.outcome });
+  }
+
+  function amendLastRun(deploy: OnboardingDeployForValidation, note: string): void {
+    dispatchRun({ type: "amend", deploy, note });
     setLastRun((current) => {
       if (current === null) return current;
-      const amended = applyDefenderDeploy(current.result, current.values, deploy);
+      const amended = applyOnboardingDeploy(current.result, current.values, deploy);
       return amended === null ? current : { result: amended, values: current.values };
     });
-    logger?.info(`${LOG} Defender deploy applied to the last Validate result`, { outcome: deploy.outcome });
   }
 
   // -------------------------------------------------------------------------
@@ -918,6 +952,20 @@ export function AzureOnboardingScreen({
             notBuiltBody={status === "coming-soon" ? rows : undefined}
           >
             {rows}
+            {view.rows.some((r) => r.kind === "item" && r.id === ACTIVITY_LOG_ITEM_ID) &&
+              (activityLogHowTo ? (
+                <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
+              ) : (
+                <ActivityLogSection
+                  selection={selection}
+                  target={target}
+                  state={activityLogState}
+                  onState={setActivityLogState}
+                  onDeployed={onActivityLogDeployed}
+                  howtoSection={firstExtra + 1}
+                  onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
+                />
+              ))}
             {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_EXPORT_ITEM_ID) &&
               (defenderHowTo ? (
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
