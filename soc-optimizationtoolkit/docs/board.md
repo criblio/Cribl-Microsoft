@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 38 in progress, 204 done.**
+**113 in the backlog, 38 in progress, 204 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 40 | 9 |
+| Azure Native Source Onboarding | 39 | 40 | 11 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 144.
+Open work totals 151.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 51% (45/88)
+### `AZR` Azure native source onboarding - 47% (45/95)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/47 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97, AZR-98, AZR-99 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/54 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1305,7 +1305,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (16)
+## Backlog - now (18)
 
 Next to pick up. Nothing blocks these.
 
@@ -1530,6 +1530,43 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
+- **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Seen live: sections 2-5 (the
+  AZR-18 selection, staged behind Save selection, here the unsaved defaults)
+  show Microsoft Audit initiative, Activity Log, community initiative and
+  Entra ID as 'Selected - not available yet' and Defender for Cloud export
+  UNticked, while section 8's chooser ('Choose what to onboard', the progress
+  document, saved at once) has Microsoft Audit and Defender ticked and
+  Activity Log and Entra unticked. ADR 0007 D2 routes the click by mode
+  (Automated -> AZR-18 selection, How-to -> progress), but the screen still
+  renders both lists, so an operator sees two answers to 'what am I
+  onboarding'. Once [[AZR-98]] makes Activity Log automatable this becomes a
+  daily problem: it would have to be ticked in two places. FIX DIRECTION: one
+  visible choice per source (the chooser row, with its Automate | How-to
+  toggle), and the Automate sections show deploy state only for sources chosen
+  there; decide in an ADR 0007 amendment what happens to a saved AZR-18
+  selection that disagrees.
+
+- **AZR-101** Azure Activity Log is listed under 'Azure Policy - built-in initiatives', but it is a subscription diagnostic setting, not a policy
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Section 2 'Azure Policy - built-in
+  initiatives' lists the Microsoft Audit initiative AND Azure Activity Log.
+  Activity Log reaches the Event Hub through a subscription diagnostic setting
+  (sources.ts emitterKind 'activity-log-setting'; the How-to steps and
+  [[AZR-98]]'s automation write Microsoft.Insights/diagnosticSettings at the
+  subscription), the same kind of direct configuration as Entra ID and the
+  Defender export in section 4 'Direct configuration - no policy'. The
+  grouping comes from the coverage catalog's collection method (itemsByMethod
+  in domain/onboarding-sections). Move it to the direct-configuration section,
+  check the coverage-model method value it reads, and keep the order pins
+  honest. Priority now because AZR-98 adds an Automate deploy for it, which
+  would otherwise appear under a policy heading.
+
 - **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
   `AZR-F10` `bug` `settled`
   FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
@@ -1584,7 +1621,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (52)
+## Backlog - next (56)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2299,6 +2336,75 @@ Settled and unblocked, sequenced behind now.
   for some sign-in categories); an unlicensed category must be refused by
   name, not silently dropped.
 
+- **AZR-102** One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Section 1 'Event Hub the sources
+  send to' picks namespace, hub and authorization rule; section 8's plan
+  values ('Your names and ids') hold their own Event Hub namespace, Event Hub
+  name and Send rule, bridged by a 'Use the Event Hub picked above' button.
+  [[AZR-24]] only persists the section 1 choice. Two copies can drift: a
+  deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to
+  steps, Validate and the Cribl source plan read the plan values. Make one the
+  source and derive the other (or show the plan value as read-only from the
+  picker with an explicit override), and pin that a deploy and the steps name
+  the same hub.
+
+- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
+  `AZR-F9` `story` `settled` `blocked by AZR-59`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. The recommended Entra ID
+  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
+  Data Receiver; today that is only a How-to step ('Give the Cribl principal
+  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
+  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
+  request. Nothing creates it, so the default credential cannot work without a
+  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
+  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
+  deterministic GUID name, create-only, refusing when the assignment exists
+  for that principal and role (already-applied) and when the app identity
+  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
+  User Access Administrator or Role Based Access Control Administrator,
+  ideally constrained to this role). Least-privilege registry and change
+  request updated. Measure the propagation delay before Cribl's first read.
+
+- **AZR-104** Route the remaining onboarding sources (Entra ID, the diagnostic-settings initiatives, XDR, flow logs) from their Cribl source to a destination
+  `AZR-F9` `story` `settled` `blocked by AZR-35`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. [[AZR-35]] routes only the
+  Defender for Cloud export and the Activity Log (to Cribl Lake, because
+  Sentinel gets both through native connectors) and named 'other destinations'
+  a later slice with no card. Every other lane stops at its Cribl source:
+  Route and Destination read 'not read' in the dataflow. Per source decide the
+  destination before building, applying
+  [[project_native_connector_first]]-style reasoning (is the native connector
+  free or built in?): Entra ID sign-in and audit logs (native connector costs
+  ingestion; Cribl's value is reduction - the native-onboarding plan's Mode A
+  is unavailable for Entra tables), the initiatives' resource logs (category
+  -> table per record, the records[] unroll already exists), XDR streaming,
+  VNet/NSG flow logs (Blob). Reuse route-insert and the onboarding-lake-route
+  pieces; Sentinel destinations need DCR/table decisions recorded first.
+
+- **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Only the Defender export has a
+  Remove card ([[AZR-28]]). The screen also creates the Cribl Event Hubs /
+  Blob inputs and their secrets ([[AZR-34]]), the Lake dataset, unroll
+  pipeline and route ([[AZR-35]]), and with [[AZR-98]] the subscription
+  diagnostic setting; none can be removed from the app, and a leftover object
+  blocks a fresh deploy with already-exists. House rule (claude-kit
+  cribl-config-writes rule 11): delete only what the app can prove it created
+  (manifest id + description stamp + KV record), in teardown order (route
+  before pipeline; a shared pipeline only when no recorded route uses it; a
+  Lake dataset only on explicit opt-in because it holds data), and ship
+  Pause/Remove because there is no uninstall hook. Each removal behind its own
+  confirm quoting what goes.
+
 - **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
   `AZR-F10` `bug` `settled`
   Not now because: Over-asking, not under-asking: an approver who grants it as
@@ -2367,7 +2473,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (38)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -2853,6 +2959,23 @@ Settled, gated on something above.
   days ago'. This card persists a lastSeen per input (KV, written only from a
   MEASURED non-zero row, never from an unknown) and shows it beside the
   lookback verdict, labelled as remembered rather than measured.
+
+- **AZR-106** Automate the VNet and NSG flow-log sources on the Azure side: flow log, storage queue and Event Grid subscription
+  `AZR-F9` `story` `settled` `blocked by AZR-8`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. VNet Flow Logs and NSG Flow Logs
+  are Blob sources, How-to only; [[AZR-8]] shows them as rows and [[AZR-34]]
+  creates the Cribl azure_blob input. Nothing creates the Azure side: the
+  Network Watcher flow log writing to the storage account
+  (insights-logs-flowlogflowevent), the storage queue, and the Event Grid
+  system topic + subscription that put BlobCreated events on the queue (plan
+  values already name Storage account, Blob container, Storage queue, Event
+  Grid system topic, Network Watcher, Flow log name). Create-only with refusal
+  on existing objects, in the dependency order, and note NSG flow logs are
+  being retired by Microsoft in favour of VNet flow logs - decide whether NSG
+  gets automation at all. Later because the permission bugs [[AZR-81]] (Event
+  Grid provider registration, NetworkWatcherRG) block it.
 
 - **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
   `AZR-F10` `story` `settled`
