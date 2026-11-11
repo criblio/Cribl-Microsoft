@@ -10,18 +10,14 @@
  */
 
 import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-setting";
+import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import type { Listing } from "../inventory-listing/inventory-listing";
 import { listingRows } from "../inventory-listing/inventory-listing";
 
 export type InventoryCategoryId =
-  | "entraId"
-  | "activityLog"
-  | "defenderExport"
-  | "resourceLogs"
-  | "xdrStreaming"
-  | "vnetFlowLogs"
-  | "nsgFlowLogs";
+  | Exclude<OnboardingSourceId, "diagnosticSettingsInitiative" | "communityPolicyInitiative">
+  | "resourceLogs";
 
 export type DestinationKind = "workspace" | "event-hub" | "storage" | "partner";
 
@@ -31,7 +27,7 @@ export interface Destination {
 }
 
 export interface Collector {
-  readonly kind: "diagnostic-setting" | "defender-export";
+  readonly kind: "diagnostic-setting" | "security-automation";
   readonly name: string;
   /** A subscription id, or "tenant". */
   readonly scope: string;
