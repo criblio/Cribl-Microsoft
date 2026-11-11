@@ -54,3 +54,5 @@ export * from "./create-cribl-source";
 export * from "./validate-azure-onboarding";
 // AZR-33 / AZR-30: the live-flow metrics read and the onboarding Cribl side.
 export * from "./read-source-flow";
+// Tenant inventory heat map: the READ-ONLY inventory across every readable subscription.
+export * from "./read-tenant-inventory";
