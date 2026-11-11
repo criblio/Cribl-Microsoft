@@ -2040,16 +2040,18 @@ const OPERATIONS = {
   "cribl.metrics.query": {
     id: "cribl.metrics.query",
     calls: [
-      { method: "POST", path: "/m/{groupId}/system/metrics/query", api: "cribl" },
+      { method: "POST", path: "/system/metrics/query", api: "cribl" },
     ],
-    operation: "policies.yml '/m/:gid/system/metrics/query' POST",
+    operation: "policies.yml '/system/metrics/query' POST",
     leastRole: "App user",
     alsoGrantedBy: [],
-    scope: "cribl-group",
-    scopeNote: "the selected worker group",
+    scope: "cribl-leader",
+    scopeNote: "a leader route; the selected worker group is chosen in the query (AZR-95)",
     citation: "https://docs.cribl.io/apps/admin-guide/",
     confidence: "medium",
     audit: [
+      // The 2026-11-03 audit recorded the group-scoped path; AZR-95 measured it as a 404 and moved the
+      // call to the leader route above. The audit row is cited as recorded.
       "POST /m/{groupId}/system/metrics/query",
     ],
   },

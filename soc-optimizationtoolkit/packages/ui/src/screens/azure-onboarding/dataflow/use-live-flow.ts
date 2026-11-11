@@ -12,8 +12,8 @@
  *
  * EACH RUN SENDS EXACTLY ONE REQUEST: core's nextFlowQuery picks the lookback
  * (cumulative over the last 24 hours) or the window (the last 300 seconds),
- * and readSourceFlow makes one POST /m/<group>/system/metrics/query that
- * covers every lane. The lookback runs first; once it answers every run is a
+ * and readSourceFlow makes one leader-level POST /system/metrics/query, scoped
+ * to the group in its where (AZR-95), that covers every lane. The lookback runs first; once it answers every run is a
  * window run; if it fails, the window runs and the lookback is retried every
  * 5th run until it answers.
  *

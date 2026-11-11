@@ -664,8 +664,10 @@ describe("AzureOnboardingScreen - the tenant to Cribl mapping (AZR-64)", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Watch for data" }));
     await waitFor(() => expect((screen.getByRole("checkbox", { name: "Watch for data" }) as HTMLInputElement).checked).toBe(true));
     const tip = view.container.querySelector(".azo-flow-watch .info-tip-pop")?.textContent ?? "";
-    expect(tip).toContain(`/m/${MAPPED}/system/metrics/query`);
-    expect(tip).not.toContain(`/m/${G}/`);
+    // AZR-95: the path is the leader's; the mapped group is the one the body's where scopes.
+    expect(tip).toContain("POST /system/metrics/query");
+    expect(tip).toContain(`__worker_group==\\"${MAPPED}\\"`);
+    expect(tip).not.toContain(`__worker_group==\\"${G}\\"`);
   });
 
   it("UNSET falls back to the group chosen on the screen, and says so as information, not a fault", async () => {

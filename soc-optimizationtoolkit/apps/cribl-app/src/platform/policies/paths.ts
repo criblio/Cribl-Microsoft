@@ -72,7 +72,7 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'PATCH', path: '/m/:gid/system/secrets/:id', caller: `${ENSURE_SECRET} (on 409, only a secret carrying our stamp) for ${WIRING_UI} and ${FLOWLOG}` },
   { method: 'GET', path: '/m/:gid/system/secrets/:id', caller: `${CREATE_SOURCE} plan-cribl-source.ts; ${ENSURE_SECRET} (who owns the secret a 409 named)` },
   { method: 'POST', path: '/m/:gid/system/capture', caller: 'core usecases/capture-samples/capture-samples.ts' },
-  { method: 'POST', path: '/m/:gid/system/metrics/query', caller: 'core usecases/read-source-flow/read-source-flow.ts via kit metricsQuery (AZR-33)' },
+  { method: 'POST', path: '/system/metrics/query', caller: 'core usecases/read-source-flow/read-source-flow.ts via kit metricsQuery (AZR-33; leader route since AZR-95)' },
   // Search is group-scoped under the SEARCH group, whose id is resolved from
   // /master/groups (not a constant), so it is `:gid`, not a literal.
   { method: 'POST', path: '/m/:gid/search/jobs', caller: LAKE_QUERY },

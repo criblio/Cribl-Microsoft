@@ -233,7 +233,8 @@ describe("OnboardingDataflow - info affordances", () => {
   it("the toolbar (i) carries the literal request: method, path and body", () => {
     const { container } = render(<OnboardingDataflow {...props()} />);
     const text = container.querySelector(".azo-flow-watch")?.textContent ?? "";
-    expect(text).toContain("POST /m/g1/system/metrics/query");
+    expect(text).toContain("POST /system/metrics/query");
+    expect(text).toContain('__worker_group==\\"g1\\"');
     expect(text).toContain("total.in_events");
   });
 

@@ -80,8 +80,11 @@
 #                                             commitAndDeploy status reads
 #   /m/{groupId}/version (get)              - the kit's HEAD read
 #                                             (?offset=0&limit=1)
-#   /m/{groupId}/system/metrics/query (post)- read-source-flow: ONE intake
-#                                             query per poll; it writes nothing
+#   /system/metrics/query (post)            - read-source-flow: ONE intake
+#                                             query per poll; it writes nothing.
+#                                             LEADER route: the group is chosen
+#                                             in the body's where (AZR-95,
+#                                             measured; /m/:gid/... is a 404)
 #   /products/stream/groups/{id}/deploy (patch) - the kit's commitAndDeploy
 #                                             deploys here first ...
 #   /products/stream/groups/{id} (get)      - ... and reads configVersion here
@@ -222,8 +225,10 @@ policies:
     actions: ['GET']
   # read-source-flow (AZR-33): the per-input intake query behind the onboarding
   # dataflow's live flow. A POST because the query travels in the body; it
-  # creates nothing.
-  - object: '/m/:gid/system/metrics/query'
+  # creates nothing. A LEADER route (no /m/ prefix): the worker group is chosen
+  # in the body's where clause, as Cribl's own Monitoring page does. Measured
+  # 2026-11-10 (AZR-95): the group-scoped /m/:gid/system/metrics/query is a 404.
+  - object: '/system/metrics/query'
     actions: ['POST']
   # Unit 20 CLOUD-ONLY Cribl Lake dataset create (full-fidelity federation);
   # 409/exists is treated as success. A LEADER route (no /m/ prefix).

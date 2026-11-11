@@ -124,8 +124,8 @@ export const DYNAMIC_PATHS: readonly { file: string; raw: string; why: string }[
   },
   {
     file: 'packages/core/src/kit/metrics/metricsQuery.ts',
-    raw: 'metricsQueryPath(groupId)',
-    why: "'/m/<g>/system/metrics/query' - POST /m/:gid/system/metrics/query in API_CALLS (read-source-flow)",
+    raw: 'METRICS_QUERY_PATH',
+    why: "'/system/metrics/query' - POST /system/metrics/query (leader) in API_CALLS (read-source-flow, AZR-95)",
   },
   {
     file: 'packages/core/src/usecases/live-architecture/fetch-live-architecture.ts',
