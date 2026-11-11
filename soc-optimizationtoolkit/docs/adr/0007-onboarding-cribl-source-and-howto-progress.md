@@ -82,8 +82,10 @@ plan (AZR-24 stays open).
 ### 2. A source is Automated or How-to, and Automated is a function
 
 `isAutomatable(id)` is `itemAvailability(id).status === 'available'`, a
-function over ADR 0005's `ITEM_AVAILABILITY`, never a stored field. Today
-only `defenderExport` is automatable. A stored `automate` mode for any other
+function over ADR 0005's `ITEM_AVAILABILITY`, never a stored field. When
+this was decided only `defenderExport` was automatable; since 2026-11-11
+(AZR-98) `activityLog` is too, so a fresh progress document reads it as
+Automated. A stored `automate` mode for any other
 id decodes to `manual`. The How-to step catalog is data in
 `packages/core/src/domain/onboarding-howto-steps/`, built from the ported
 builders and constants, never retyped. A step whose content is inferred

@@ -54,7 +54,9 @@ data: `ONBOARDING_SECTIONS`, `ITEM_AVAILABILITY`, `ITEM_PREREQUISITES` and
 `sectionAvailability`.
 
 - `ITEM_AVAILABILITY` is keyed by item id. Only `defenderExport` is
-  `available`. A section is available when any of its items is, so the
+  `available`. (Superseded 2026-11-11 by AZR-98: `activityLog` is also
+  `available`, through a create-only subscription diagnostic setting; see
+  `usecases/activity-log-export`.) A section is available when any of its items is, so the
   `script` section is available while its `entraId` row stays disabled.
 - An id missing from the map counts as not built, never as available.
 - The layout has the methods first, then every `UNSUPPORTED_SOURCES` row, then
