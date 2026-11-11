@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**113 in the backlog, 38 in progress, 204 done.**
+**115 in the backlog, 38 in progress, 204 done.**
 
 ## By menu item
 
@@ -32,7 +32,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 3 | 2 | 2 |
-| Data Volume Inventory | 1 | 22 | 0 |
+| Data Volume Inventory | 3 | 22 | 0 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
@@ -42,7 +42,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 151.
+Open work totals 153.
 
 ## Epics and features
 
@@ -147,6 +147,14 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 | `MIG-F1` Sentinel workspace data-source inventory | SIEM Migration | 8/9 | MIG-1, MIG-2, MIG-3, MIG-4, MIG-5, MIG-6, MIG-7, MIG-8, MIG-9 |
 | `MIG-F2` Data Volume Inventory page with data allowances (Free, E5 5 MB/user, Defender for Servers P2 500 MB/machine) | Data Volume Inventory | 16/17 | MIG-10, MIG-11, MIG-12, MIG-13, MIG-14, MIG-15, MIG-16, MIG-17, MIG-18, MIG-19, MIG-20, MIG-21, MIG-22, MIG-23, MIG-24, MIG-25, MIG-26 |
 | `MIG-F3` Data Volume Inventory: a By source view beside By table (product identity, collector, billed vs free per source) | Data Volume Inventory | 6/6 | MIG-27, MIG-28, MIG-29, MIG-30, MIG-31, MIG-32 |
+
+### `SDI` Sentinel Data Inventory: MITRE ATT&CK heat map over the workspace's data sources - 0% (0/2)
+
+RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding tenant inventory heat map (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel side. Data Volume Inventory (MIG-F2, MIG-F3) says which tables carry data, from which sources, at what daily volume and against which allowances, but not what that data is WORTH for detection. An operator sizing a migration or a Cribl reduction needs to see, per ATT&CK tactic and technique, which of the ingested data sources make detection possible, so that dropping or reducing a source is a visible coverage decision rather than a blind cost cut. The page becomes Sentinel Data Inventory: volume, allowances and ATT&CK coverage of the same data in one place.
+
+| Feature | Menu | Done | Stories |
+|---|---|---|---|
+| `SDI-F1` Sentinel Data Inventory page: the Data Volume Inventory renamed, with an ATT&CK heat map of its data sources | Data Volume Inventory | 0/2 | SDI-1, SDI-2 |
 
 ---
 
@@ -1621,7 +1629,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (56)
+## Backlog - next (58)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2470,6 +2478,55 @@ Settled and unblocked, sequenced behind now.
   pick the role, change foundation-phase's role definition id and the
   condition together, and re-pin the TTL grant analysis that looks for the
   Contributor GUID.
+
+- **SDI-1** Rename the Data Volume Inventory page to Sentinel Data Inventory
+  `SDI-F1` `story` `settled`
+  RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source
+  Onboarding tenant inventory heat map
+  (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel
+  side. Nav label, page title, headings, info tips, docs (feature-catalog,
+  CONTEXT.md, README, release notes going forward) and the copy-history /
+  docs-drift gates. DESIGNER CALL (open to change): keep the route id
+  `data-volume-inventory` so existing links, the capability map
+  (capabilitiesForRoute) and board `menu` values stay valid; only the visible
+  name changes. If the route id should change too, that is a separate card
+  with a redirect.
+
+- **SDI-2** MITRE ATT&CK heat map of the workspace's data sources: tactic cards, drill into techniques, which ingested sources and rules cover each
+  `SDI-F1` `story` `undecided` `blocked by SDI-1`
+  RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source
+  Onboarding tenant inventory heat map
+  (docs/tenant-inventory-heatmap-design.md), as the same idea for the Sentinel
+  side. Same interaction as the Azure tenant inventory heat map: one card per
+  ATT&CK tactic coloured by coverage, click to drill into its techniques, each
+  technique tile naming the ingested tables / data sources that support it,
+  the analytics rules that use them, and the gap. Covered vs not must follow
+  inventory-honesty: a table that could not be read is 'could not check',
+  never 'not covered'. Existing pieces: analytics-rule tactics and
+  relevantTechniques are already parsed (domain/coverage-analysis,
+  domain/siem-migration has a per-tactic MITRE rollup), and the inventory
+  already knows which tables carry data. Feeds the Cribl reduction story: show
+  what coverage a source supports before it is reduced or dropped. UNDECIDED:
+  what 'covered' means - see the decision. DATA SOURCE (researched 2026-11-11,
+  not yet pulled): the official ATT&CK STIX 2.1 bundles in
+  github.com/mitre-attack/attack-stix-data (enterprise-attack.json is always
+  the latest Enterprise release; versioned files sit beside it; ATT&CK
+  changelogs reached v19.x). Since STIX schema v3.3.0 (2025-10-28) Detection
+  Strategies and Analytics are object types and the
+  data-component-to-technique detects relationship is replaced by the
+  Detection Strategy framework, so the data-components option must be built on
+  detection strategies / analytics / log sources, not the old detects edges.
+  Optional overlay: CTID Mappings Explorer
+  (github.com/center-for-threat-informed-defense/mappings-explorer) maps Azure
+  capabilities including Sentinel to techniques, but its Azure set was
+  versioned against ATT&CK 8.2 - check its age before using it. Pin the ATT&CK
+  version the heat map was built from and show it on the page; refresh by a
+  deliberate bump, not a live fetch at runtime.
+  DECISION (unanswered): What makes an ATT&CK technique 'covered' on the heat
+  map?
+    [ ] `rules` Analytics rules over ingested tables - A technique is covered when an analytics rule (enabled in the workspace, or available from installed content) tags it AND every table the rule queries carries data. Uses data the app already parses; measures detection that exists, not detection that is possible.
+    [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
+    [ ] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
 
 ---
 
