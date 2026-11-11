@@ -5024,6 +5024,18 @@
       "verified": "pins"
     },
     {
+      "epic": "MIG",
+      "feature": "MIG-F2",
+      "id": "MIG-33",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Data Volume Inventory: licence counts on the card face and 30-day totals, billable versus allowance",
+      "detail": "RAISED BY THE OPERATOR 2026-11-11. Every allowance figure is per day (MB/day) and seat counts appear only inside the E5 drill-down. Operator decisions 2026-11-11: (1) a summary strip at the top for the workspace - 30-day billable GB, 30-day allowance GB, net over or under - AND on each allowance card its licence count (E5 seats, Defender for Servers P2 machines) and its own 30-day totals; (2) the 30-day allowance = the daily grant from licence counts multiplied by the complete days in the window, with the benefit Microsoft actually applied over those days (Operation table) shown beside it."
+    },
+    {
       "epic": "SDI",
       "feature": "SDI-F1",
       "id": "SDI-1",
