@@ -555,7 +555,7 @@ describe("DEFENDER_EXPORT_ITEM_ID is the one Defender id", () => {
     for (const step of DEFENDER_STEPS) expect(step.sourceIds).toEqual([DEFENDER_EXPORT_ITEM_ID]);
   });
 
-  it("appears as a literal only in its declaration and the two catalogs it names", () => {
+  it("appears as a literal only in its declaration, the two catalogs it names and the inventory Collector kind", () => {
     const hits: Record<string, number> = {};
     let scanned = 0;
     for (const root of ROOTS) {
@@ -572,6 +572,7 @@ describe("DEFENDER_EXPORT_ITEM_ID is the one Defender id", () => {
       "packages/core/src/domain/coverage-model/coverage-catalog.ts": 1,
       "packages/core/src/domain/defender-export/defender-automation.ts": 1,
       "packages/core/src/domain/onboarding-howto/sources.ts": 2,
+      "packages/core/src/domain/tenant-inventory/tenant-inventory.ts": 1,
     });
   }, 30000);
 });

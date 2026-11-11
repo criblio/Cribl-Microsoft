@@ -102,3 +102,5 @@ export { describeMetricsRequest } from "./kit/metrics/metricsQuery";
 export type { ApiResponse, Clock } from "./kit/config-writes/transport";
 export * from "./assets/vendor-schemas";
 export * from "./usecases";
+// Tenant inventory heat map: the log-type cells and their collectors.
+export * from "./domain/tenant-inventory";
