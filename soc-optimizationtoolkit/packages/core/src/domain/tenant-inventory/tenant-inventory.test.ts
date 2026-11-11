@@ -9,7 +9,7 @@ import type { OnboardingProgress } from "../onboarding-howto/progress-document";
 import { emptyProgress } from "../onboarding-howto/progress-document";
 import {
   activityLogCells, archiveEvidenceFrom, categoryCards, cellTone, defenderCells, DEFENDER_EXPORT_TYPES,
-  destinationsOf, entraCells, NOT_CHECKED_YET, withArchive,
+  destinationsOf, entraCells, NO_APP_ARCHIVE_EVIDENCE, NOT_CHECKED_YET, scopeState, withArchive,
 } from "./tenant-inventory";
 import type { AppArchiveEvidence, LogTypeCell } from "./tenant-inventory";
 import type { EntraRead, SubscriptionAutomationsRead, SubscriptionSettingsRead } from "./tenant-inventory";
@@ -45,6 +45,7 @@ describe("entraCells", () => {
         kind: "diagnostic-setting",
         name: "s1",
         scope: "tenant",
+        enabled: true,
         destinations: [{ kind: "workspace", resourceId: "/ws" }],
       },
     ]);
@@ -100,6 +101,30 @@ describe("destinationsOf", () => {
       { kind: "partner", resourceId: "/p" },
     ]);
     expect(destinationsOf(setting({}))).toEqual([]);
+  });
+});
+
+describe("scopeState", () => {
+  it("is partly when 1 subscription has it, 1 does not and 1 is unread", () => {
+    expect(scopeState(3, 2, 1, ["403 Forbidden"])).toEqual({
+      kind: "partly",
+      scopes: { collected: 1, read: 2, unread: 1 },
+    });
+  });
+
+  it("walks the rest of the ladder", () => {
+    expect(scopeState(2, 2, 2, [])).toEqual({ kind: "collected", scopes: { collected: 2, read: 2, unread: 0 } });
+    expect(scopeState(2, 2, 0, [])).toEqual({ kind: "not-collected" });
+    expect(scopeState(2, 1, 1, ["x"]).kind).toBe("partly");
+    expect(scopeState(2, 1, 0, ["403 Forbidden"])).toEqual({
+      kind: "could-not-check",
+      reason: "1 of 2 subscriptions could not be read: 403 Forbidden",
+    });
+    expect(scopeState(2, 0, 0, ["403 Forbidden", "x"])).toEqual({ kind: "could-not-check", reason: "403 Forbidden" });
+    expect(scopeState(0, 0, 0, [])).toEqual({
+      kind: "could-not-check",
+      reason: "no subscription was visible to this connection",
+    });
   });
 });
 
@@ -230,6 +255,7 @@ describe("defenderCells", () => {
         kind: "security-automation",
         name: "exp",
         scope: "a",
+        enabled: true,
         destinations: [{ kind: "event-hub", resourceId: "/hub" }],
       },
     ]);
@@ -259,6 +285,35 @@ describe("defenderCells", () => {
     const c = pick([sub("a", auto("off", ["Alerts"], { isEnabled: false }))], "alerts");
     expect(c.state).toEqual({ kind: "not-collected" });
     expect(c.collectors.map((x) => x.name)).toEqual(["off (disabled)"]);
+    expect(c.collectors.map((x) => x.enabled)).toEqual([false]);
+  });
+
+  it("is partly 1 when disabled in one subscription and enabled in another", () => {
+    const c = pick(
+      [sub("a", auto("off", ["Alerts"], { isEnabled: false })), sub("b", auto("on", ["Alerts"]))],
+      "alerts",
+    );
+    expect(c.state).toEqual({ kind: "partly", scopes: { collected: 1, read: 2, unread: 0 } });
+    expect(c.collectors.map((x) => x.name)).toEqual(["off (disabled)", "on"]);
+  });
+
+  it("a disabled export into the app's namespace with a Lake route does not archive the cell", () => {
+    const NS = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/ns";
+    const workspace = auto("ws", ["Alerts"], {
+      actions: [{ actionType: "Workspace", eventHubResourceId: "", workspaceResourceId: "/ws" }],
+    });
+    const off = auto("off", ["Alerts"], {
+      isEnabled: false,
+      actions: [{ actionType: "EventHub", eventHubResourceId: `${NS}/eventhubs/h`, workspaceResourceId: "" }],
+    });
+    const [c] = withArchive([pick([sub("a", workspace, off)], "alerts")], {
+      namespacePath: NS,
+      lakeRoutedSources: [DEFENDER_EXPORT_ITEM_ID],
+    });
+    expect(c!.state.kind).toBe("collected");
+    expect(c!.collectors.map((x) => x.name)).toEqual(["ws", "off (disabled)"]);
+    expect(c!.archive).toEqual({ kind: "not-archived" });
+    expect(cellTone(c!)).toBe("amber");
   });
 
   it("is partly when 1 of 2 subscriptions has it, and partly when 1 has it and 1 is unread", () => {
@@ -351,12 +406,82 @@ describe("archive classification and cards", () => {
     expect(cellTone(bl)).toBe("blue");
   });
 
-  it("a partly cell with storage is green", () => {
+  it("a partly cell with storage in its only collecting scope is archived but amber, never green", () => {
     const partly = {
       ...cell(entraCells(read(setting({ logs: [on("SignInLogs")], storageAccountId: "/st" }))), "SignInLogs"),
       state: { kind: "partly", scopes: { collected: 1, read: 2, unread: 0 } },
     } as LogTypeCell;
-    expect(cellTone(withArchive([partly], evidence)[0]!)).toBe("green");
+    const c = withArchive([partly], evidence)[0]!;
+    expect(c.archive).toEqual({ kind: "archived", via: "storage" });
+    expect(cellTone(c)).toBe("amber");
+  });
+
+  describe("per collecting scope", () => {
+    const subWith = (id: string, props: Record<string, unknown>): SubscriptionSettingsRead => ({
+      subscriptionId: id,
+      kind: "read",
+      settings: toListing([setting({ logs: [on("Administrative")], ...props }, `s-${id}`)]),
+    });
+    const subWithout = (id: string): SubscriptionSettingsRead => ({
+      subscriptionId: id,
+      kind: "read",
+      settings: toListing([]),
+    });
+    const ev: AppArchiveEvidence = { namespacePath: NS, lakeRoutedSources: ["activityLog"] };
+    const admin = (reads: SubscriptionSettingsRead[], e: AppArchiveEvidence | null = ev) =>
+      withArchive(activityLogCells(reads), e).find((c) => c.logType === "Administrative")!;
+
+    it("storage in sub A and workspace-only in sub B is not fully archived: amber, archived in 1 of 2", () => {
+      const c = admin([subWith("a", { storageAccountId: "/st" }), subWith("b", { workspaceId: "/ws" })]);
+      expect(c.state.kind).toBe("collected");
+      expect(c.archive).toEqual({ kind: "partial", archived: 1, collecting: 2 });
+      expect(cellTone(c)).toBe("amber");
+    });
+
+    it("every collecting scope archiving is archived, and says when both routes are used", () => {
+      const c = admin([
+        subWith("a", { storageAccountId: "/st" }),
+        subWith("b", { eventHubAuthorizationRuleId: `${NS}/authorizationRules/x` }),
+      ]);
+      expect(c.archive).toEqual({ kind: "archived", via: "storage-and-cribl" });
+      expect(cellTone(c)).toBe("green");
+    });
+
+    it("two collecting subscriptions of three, one archiving, is partly and archived in 1 of 2", () => {
+      const c = admin([subWith("a", { storageAccountId: "/st" }), subWith("b", { workspaceId: "/ws" }), subWithout("c")]);
+      expect(c.state).toEqual({ kind: "partly", scopes: { collected: 2, read: 3, unread: 0 } });
+      expect(c.archive).toEqual({ kind: "partial", archived: 1, collecting: 2 });
+      expect(cellTone(c)).toBe("amber");
+    });
+
+    it("without the app's own record an Event Hub is unknown with the reason, and storage is still archived", () => {
+      const hub = admin([subWith("a", { eventHubAuthorizationRuleId: `${NS}/authorizationRules/x` })], null);
+      expect(hub.archive).toEqual({ kind: "unknown", reason: NO_APP_ARCHIVE_EVIDENCE });
+      expect(admin([subWith("a", { storageAccountId: "/st" })], null).archive).toEqual({
+        kind: "archived",
+        via: "storage",
+      });
+    });
+
+    it("shares weight a partly cell by its scopes, not as a whole log type", () => {
+      // Administrative: collected in 1 of 2 read, archived there. Every other
+      // category: not collected in either.
+      const cells = withArchive(activityLogCells([subWith("a", { storageAccountId: "/st" }), subWithout("b")]), ev);
+      const card = categoryCards(cells).find((c) => c.id === "activityLog")!;
+      expect(card.counts).toEqual({ green: 0, amber: 1, red: ACTIVITY_LOG_CATEGORIES.length - 1, blue: 0 });
+      expect(card.collectedShare).toBeCloseTo(0.5 / ACTIVITY_LOG_CATEGORIES.length);
+      expect(card.archivedShare).toBeCloseTo(0.5 / ACTIVITY_LOG_CATEGORIES.length);
+    });
+
+    it("a partial archive adds only its archiving scopes to the archived share", () => {
+      const cells = withArchive(
+        activityLogCells([subWith("a", { storageAccountId: "/st" }), subWith("b", { workspaceId: "/ws" })]),
+        ev,
+      );
+      const card = categoryCards(cells).find((c) => c.id === "activityLog")!;
+      expect(card.collectedShare).toBeCloseTo(1 / ACTIVITY_LOG_CATEGORIES.length);
+      expect(card.archivedShare).toBeCloseTo(0.5 / ACTIVITY_LOG_CATEGORIES.length);
+    });
   });
 
   it("archiveEvidenceFrom needs a source record and a written route, and ignores other keys", () => {

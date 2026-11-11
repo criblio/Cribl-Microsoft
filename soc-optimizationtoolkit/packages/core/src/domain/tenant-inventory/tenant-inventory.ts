@@ -36,6 +36,12 @@ export interface Collector {
   readonly name: string;
   /** A subscription id, or "tenant". */
   readonly scope: string;
+  /**
+   * False for a collector that exists but sends nothing (a disabled Defender
+   * automation). It is listed so the operator sees it, but its destinations
+   * never count toward collection or archiving.
+   */
+  readonly enabled: boolean;
   readonly destinations: readonly Destination[];
 }
 
@@ -51,8 +57,14 @@ export type CellState =
   | { readonly kind: "not-collected" }
   | { readonly kind: "could-not-check"; readonly reason: string };
 
+/**
+ * Archiving is judged per collecting scope (a subscription, or the tenant).
+ * `archived` means EVERY collecting scope has an archiving collector; when only
+ * some do the cell is `partial`, with the counts, and never reads as archived.
+ */
 export type ArchiveState =
-  | { readonly kind: "archived"; readonly via: "storage" | "cribl" }
+  | { readonly kind: "archived"; readonly via: "storage" | "cribl" | "storage-and-cribl" }
+  | { readonly kind: "partial"; readonly archived: number; readonly collecting: number }
   | { readonly kind: "not-archived" }
   | { readonly kind: "unknown"; readonly reason: string };
 
@@ -87,6 +99,7 @@ function collectorOf(setting: DiagnosticSettingRead, scope: string): Collector {
     kind: "diagnostic-setting",
     name: setting.name,
     scope,
+    enabled: true,
     destinations: destinationsOf(setting),
   };
 }
@@ -157,6 +170,39 @@ export type SubscriptionSettingsRead = { readonly subscriptionId: string } & (
 const NO_SUBSCRIPTION_VISIBLE = "no subscription was visible to this connection";
 
 /**
+ * The per-subscription state ladder shared by every subscription-scoped
+ * category. `total` subscriptions were listed, `readCount` of them were read,
+ * and `collected` of those collect the log type; `unreadReasons` holds one
+ * reason per unread subscription.
+ *
+ * Collected only when every subscription was read and collects. Something
+ * found with a subscription short is partly. Nothing found with a
+ * subscription unread is could-not-check: an unread scope cannot prove
+ * absence. An empty subscription list is could-not-check too - a
+ * permission-filtered list is not "no subscriptions".
+ */
+export function scopeState(
+  total: number,
+  readCount: number,
+  collected: number,
+  unreadReasons: readonly string[],
+): CellState {
+  const unread = total - readCount;
+  const scopes = { collected, read: readCount, unread };
+  if (total === 0) return { kind: "could-not-check", reason: NO_SUBSCRIPTION_VISIBLE };
+  if (readCount === 0) return { kind: "could-not-check", reason: unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE };
+  if (collected === readCount && unread === 0) return { kind: "collected", scopes };
+  if (collected > 0) return { kind: "partly", scopes };
+  if (unread > 0) {
+    return {
+      kind: "could-not-check",
+      reason: `${unread} of ${total} subscriptions could not be read: ${unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE}`,
+    };
+  }
+  return { kind: "not-collected" };
+}
+
+/**
  * One cell per Activity Log category, in ACTIVITY_LOG_CATEGORIES order,
  * counted across subscriptions. Collected only when every subscription was
  * read and has a setting collecting the category; a subscription that could
@@ -178,26 +224,12 @@ export function activityLogCells(reads: readonly SubscriptionSettingsRead[]): re
       if (found.length > 0) collected += 1;
       collectors.push(...found);
     }
-    const unread = reads.length - readCount;
-    const scopes = { collected, read: readCount, unread };
-    let state: CellState;
-    if (reads.length === 0) state = { kind: "could-not-check", reason: NO_SUBSCRIPTION_VISIBLE };
-    else if (readCount === 0) {
-      state = { kind: "could-not-check", reason: unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE };
-    } else if (collected === readCount && unread === 0) state = { kind: "collected", scopes };
-    else if (collected > 0) state = { kind: "partly", scopes };
-    else if (unread > 0) {
-      state = {
-        kind: "could-not-check",
-        reason: `${unread} of ${reads.length} subscriptions could not be read: ${unreadReasons[0]}`,
-      };
-    } else state = { kind: "not-collected" };
     return {
       category: "activityLog",
       logType: category,
       title: category,
       collectors,
-      state,
+      state: scopeState(reads.length, readCount, collected, unreadReasons),
       archive: ARCHIVE_NOT_CLASSIFIED,
     };
   });
@@ -254,7 +286,8 @@ function automationDestinations(a: DefenderAutomation): readonly Destination[] {
  * One cell per Defender export type, in DEFENDER_EXPORT_TYPES order, counted
  * across subscriptions with the same ladder as {@link activityLogCells}. Only an
  * enabled automation collects; a disabled one is still listed as a collector,
- * named with a " (disabled)" suffix, so the operator sees it exists.
+ * named with a " (disabled)" suffix and `enabled: false`, so the operator sees
+ * it exists - and it never counts toward collection or archiving.
  */
 export function defenderCells(reads: readonly SubscriptionAutomationsRead[]): readonly LogTypeCell[] {
   const unreadReasons = reads.flatMap((r) => (r.kind === "unread" ? [r.reason] : []));
@@ -275,30 +308,17 @@ export function defenderCells(reads: readonly SubscriptionAutomationsRead[]): re
           kind: "security-automation",
           name: a.isEnabled ? a.name : `${a.name} (disabled)`,
           scope: r.subscriptionId,
+          enabled: a.isEnabled,
           destinations: automationDestinations(a),
         });
       }
     }
-    const unread = reads.length - readCount;
-    const scopes = { collected, read: readCount, unread };
-    let state: CellState;
-    if (reads.length === 0) state = { kind: "could-not-check", reason: NO_SUBSCRIPTION_VISIBLE };
-    else if (readCount === 0) {
-      state = { kind: "could-not-check", reason: unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE };
-    } else if (collected === readCount && unread === 0) state = { kind: "collected", scopes };
-    else if (collected > 0) state = { kind: "partly", scopes };
-    else if (unread > 0) {
-      state = {
-        kind: "could-not-check",
-        reason: `${unread} of ${reads.length} subscriptions could not be read: ${unreadReasons[0]}`,
-      };
-    } else state = { kind: "not-collected" };
     return {
       category: DEFENDER_EXPORT_ITEM_ID,
       logType: type.logType,
       title: type.title,
       collectors,
-      state,
+      state: scopeState(reads.length, readCount, collected, unreadReasons),
       archive: ARCHIVE_NOT_CLASSIFIED,
     };
   });
@@ -337,31 +357,65 @@ export function archiveEvidenceFrom(progress: OnboardingProgress): AppArchiveEvi
   return { namespacePath, lakeRoutedSources };
 }
 
-function classify(cell: LogTypeCell, evidence: AppArchiveEvidence): ArchiveState {
-  if (cell.state.kind === "not-collected" || cell.state.kind === "could-not-check") return cell.archive;
-  const destinations = cell.collectors.flatMap((c) => c.destinations);
+/** Why an Event Hub destination cannot be judged when the app's own record could not be read. */
+export const NO_APP_ARCHIVE_EVIDENCE = "this app's own Cribl setup could not be read";
+
+type ScopeArchive =
+  | { readonly kind: "archived"; readonly via: "storage" | "cribl" }
+  | { readonly kind: "not-archived" }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/** Whether one collecting scope's destinations archive this category. */
+function scopeArchive(
+  destinations: readonly Destination[],
+  category: InventoryCategoryId,
+  evidence: AppArchiveEvidence | null,
+): ScopeArchive {
   if (destinations.some((d) => d.kind === "storage")) return { kind: "archived", via: "storage" };
   const hubs = destinations.filter((d) => d.kind === "event-hub");
-  if (hubs.length > 0) {
-    const path = evidence.namespacePath?.toLowerCase() ?? null;
-    const inNamespace = path !== null && hubs.some((d) => d.resourceId.toLowerCase().startsWith(`${path}/`));
-    if (inNamespace && evidence.lakeRoutedSources.includes(cell.category)) {
-      return { kind: "archived", via: "cribl" };
-    }
-    return {
-      kind: "unknown",
-      reason: inNamespace
-        ? "this app has no Lake route for this category"
-        : "an Event Hub this app's Cribl sources do not read",
-    };
-  }
-  return { kind: "not-archived" };
+  if (hubs.length === 0) return { kind: "not-archived" };
+  if (evidence === null) return { kind: "unknown", reason: NO_APP_ARCHIVE_EVIDENCE };
+  const path = evidence.namespacePath?.toLowerCase() ?? null;
+  const inNamespace = path !== null && hubs.some((d) => d.resourceId.toLowerCase().startsWith(`${path}/`));
+  if (inNamespace && evidence.lakeRoutedSources.includes(category)) return { kind: "archived", via: "cribl" };
+  return {
+    kind: "unknown",
+    reason: inNamespace
+      ? "this app has no Lake route for this category"
+      : "an Event Hub this app's Cribl sources do not read",
+  };
 }
 
-/** Fills in each cell's archive state from the collectors it already carries. */
+/**
+ * Archived only when every collecting scope has an archiving collector; only
+ * some scopes archiving is `partial`. Only enabled collectors count: a
+ * disabled automation's destinations receive nothing.
+ */
+function classify(cell: LogTypeCell, evidence: AppArchiveEvidence | null): ArchiveState {
+  if (cell.state.kind === "not-collected" || cell.state.kind === "could-not-check") return cell.archive;
+  const byScope = new Map<string, Destination[]>();
+  for (const c of cell.collectors) {
+    if (!c.enabled) continue;
+    byScope.set(c.scope, [...(byScope.get(c.scope) ?? []), ...c.destinations]);
+  }
+  const verdicts = [...byScope.values()].map((d) => scopeArchive(d, cell.category, evidence));
+  const vias = new Set(verdicts.flatMap((v) => (v.kind === "archived" ? [v.via] : [])));
+  const archived = verdicts.filter((v) => v.kind === "archived").length;
+  if (verdicts.length > 0 && archived === verdicts.length) {
+    return { kind: "archived", via: vias.size > 1 ? "storage-and-cribl" : vias.has("cribl") ? "cribl" : "storage" };
+  }
+  if (archived > 0) return { kind: "partial", archived, collecting: verdicts.length };
+  return verdicts.find((v) => v.kind === "unknown") ?? { kind: "not-archived" };
+}
+
+/**
+ * Fills in each cell's archive state from the collectors it already carries.
+ * `evidence` is null when the app's own progress record could not be read:
+ * an Event Hub destination is then unknown, never archived.
+ */
 export function withArchive(
   cells: readonly LogTypeCell[],
-  evidence: AppArchiveEvidence,
+  evidence: AppArchiveEvidence | null,
 ): readonly LogTypeCell[] {
   return cells.map((c) => ({ ...c, archive: classify(c, evidence) }));
 }
@@ -388,7 +442,6 @@ export interface CategoryCard {
 
 export const NOT_CHECKED_YET = "Not checked yet: this category is not read yet.";
 
-
 const RESOURCE_LOGS_TITLE = "Resource logs";
 /** Cards in display order. */
 const CARD_IDS: readonly InventoryCategoryId[] = [
@@ -405,17 +458,41 @@ function cardTitle(id: InventoryCategoryId): string {
   return id === "resourceLogs" ? RESOURCE_LOGS_TITLE : (onboardingSource(id)?.title ?? id);
 }
 
+/** A partly collected cell is never green, however it is archived. */
 export function cellTone(cell: LogTypeCell): Tone {
   switch (cell.state.kind) {
     case "could-not-check":
       return "blue";
     case "not-collected":
       return "red";
-    default:
+    case "partly":
+      return "amber";
+    case "collected":
       return cell.archive.kind === "archived" ? "green" : "amber";
   }
 }
 
+/** How much of a log type is collected: its collecting share of the read scopes. */
+function collectedWeight(cell: LogTypeCell): number {
+  const s = cell.state;
+  if ((s.kind !== "collected" && s.kind !== "partly") || s.scopes.read === 0) return 0;
+  return s.scopes.collected / s.scopes.read;
+}
+
+/** How much of a log type is archived: its archiving share of the read scopes. */
+function archivedWeight(cell: LogTypeCell): number {
+  const s = cell.state;
+  if ((s.kind !== "collected" && s.kind !== "partly") || s.scopes.read === 0) return 0;
+  const a = cell.archive;
+  const scopes = a.kind === "archived" ? s.scopes.collected : a.kind === "partial" ? a.archived : 0;
+  return scopes / s.scopes.read;
+}
+
+/**
+ * The bars count log types across subscriptions: a log type collected in 3
+ * of 5 read subscriptions adds 3/5 of a log type to the collected bar, not a
+ * whole one.
+ */
 export function categoryCards(cells: readonly LogTypeCell[]): readonly CategoryCard[] {
   return CARD_IDS.map((id): CategoryCard => {
     const mine = cells.filter((c) => c.category === id);
@@ -424,13 +501,14 @@ export function categoryCards(cells: readonly LogTypeCell[]): readonly CategoryC
     const checked = counts.green + counts.amber + counts.red;
     const present = (Object.keys(counts) as Tone[]).filter((t) => counts[t] > 0);
     const colour: CardColour = present.length === 1 ? present[0]! : present.length === 0 ? "blue" : "mixed";
+    const sum = (weight: (c: LogTypeCell) => number): number => mine.reduce((n, c) => n + weight(c), 0);
     return {
       id,
       title: cardTitle(id),
       colour,
       counts,
-      collectedShare: checked === 0 ? null : (counts.green + counts.amber) / checked,
-      archivedShare: checked === 0 ? null : counts.green / checked,
+      collectedShare: checked === 0 ? null : sum(collectedWeight) / checked,
+      archivedShare: checked === 0 ? null : sum(archivedWeight) / checked,
       notChecked: ROUTABLE_CATEGORIES.includes(id) ? null : NOT_CHECKED_YET,
     };
   });

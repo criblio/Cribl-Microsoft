@@ -19,15 +19,33 @@ export function destinationLabel(d: Destination): string {
   return `${KIND_WORD[d.kind]} ${last}`;
 }
 
+/** The read time as a local date and time; the raw text when it is not a date. */
+export function readAtLabel(readAt: string): string {
+  const t = new Date(readAt);
+  return Number.isNaN(t.getTime()) ? readAt : t.toLocaleString();
+}
+
 /** A whole percentage, or "not known" for a share that could not be worked out. */
 export function shareLabel(share: number | null): string {
   return share === null ? "not known" : `${Math.round(share * 100)}%`;
 }
 
+/**
+ * The Cribl archive is judged from this app's own record of the Cribl sources
+ * and Lake routes it wrote, not from a live read of Cribl, so the words say so.
+ */
+const VIA_WORDS = {
+  storage: "archived to storage",
+  cribl: "archived through Cribl, as recorded by this app",
+  "storage-and-cribl": "archived to storage and through Cribl, as recorded by this app",
+} as const;
+
 function archiveWords(cell: LogTypeCell): string {
   switch (cell.archive.kind) {
     case "archived":
-      return cell.archive.via === "storage" ? "archived to storage" : "archived through Cribl";
+      return VIA_WORDS[cell.archive.via];
+    case "partial":
+      return `archived in ${cell.archive.archived} of ${cell.archive.collecting} collecting scopes`;
     case "not-archived":
       return "not archived";
     case "unknown":
@@ -59,7 +77,7 @@ export function cardSummary(card: CategoryCard): string {
   const c = card.counts;
   const parts = [
     c.green > 0 ? `${c.green} collected and archived` : "",
-    c.amber > 0 ? `${c.amber} collected, not archived` : "",
+    c.amber > 0 ? `${c.amber} collected, not fully archived or not everywhere` : "",
     c.red > 0 ? `${c.red} not collected` : "",
     c.blue > 0 ? `${c.blue} could not check` : "",
   ].filter((p) => p !== "");
