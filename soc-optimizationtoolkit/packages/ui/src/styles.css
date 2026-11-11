@@ -8576,3 +8576,151 @@ details[open] > summary::before {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* Tenant inventory heat map */
+.tih {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tih-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tih-note,
+.tih-read-at,
+.tih-bar-label,
+.tih-bar-value {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tih-disabled-reason,
+.tih-warning {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+.tih-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.tih-card,
+.tih-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 5px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+}
+
+.tih-card {
+  cursor: pointer;
+}
+
+.tih-card[aria-expanded="true"] {
+  outline: 2px solid var(--border-focus);
+}
+
+.tih-card-title,
+.tih-tile-title,
+.tih-detail-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.tih-detail-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tih-card-state,
+.tih-tile-state {
+  font-weight: 500;
+}
+
+.tih-card-summary,
+.tih-tile-collector,
+.tih-detail-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tih-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tih-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.tih-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--text-muted);
+}
+
+.tih-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tih-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.tih-tone-green {
+  border-color: var(--ok-border);
+  border-left-color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.tih-tone-amber {
+  border-color: var(--warn-border);
+  border-left-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.tih-tone-red {
+  border-color: var(--error-border);
+  border-left-color: var(--error);
+  background: var(--error-bg);
+}
+
+.tih-tone-blue {
+  border-color: var(--accent-border);
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.tih-tone-mixed {
+  border-color: var(--purple-border);
+  border-left-color: var(--purple);
+  background: var(--purple-bg);
+}
