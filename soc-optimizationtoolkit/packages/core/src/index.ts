@@ -64,6 +64,8 @@ export * from "./domain/cribl-api";
 export * from "./domain/sample-sources";
 export * from "./domain/log-type-catalog";
 export * from "./domain/capture-filter";
+// DBT-301: the routing table read and the pure route insert.
+export * from "./domain/routes-table";
 export * from "./domain/eventhub-discovery";
 // AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
 // Azure onboarding screen all use.
