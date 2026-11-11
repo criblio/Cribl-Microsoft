@@ -9,28 +9,30 @@ import { useState } from "react";
 import { cellTone } from "@soc/core";
 import type { InventoryCategoryId, TenantInventory } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
-import { cardSummary, cellLabel, destinationLabel, shareLabel } from "./tenant-inventory-state";
+import { cardSummary, cellLabel, destinationLabel, readAtLabel, shareLabel } from "./tenant-inventory-state";
 
 export interface TenantInventoryHeatmapProps {
   inventory: TenantInventory | null;
   reading: boolean;
   /** Why the read button is disabled, or null when it can be used. */
   disabledReason: string | null;
+  /** Reads done and expected while a read runs; null when not known yet. */
+  progress?: { readonly done: number; readonly total: number } | null;
   onRead: () => void;
 }
 
 const COLOUR_WORD = {
   green: "collected and archived",
-  amber: "collected, not archived",
+  amber: "collected, not fully archived or not everywhere",
   red: "not collected",
   blue: "could not check",
   mixed: "a mix of states",
 } as const;
 
 const HEATMAP_TIP =
-  "Each card is one kind of log. Green is collected and archived, amber is collected but not archived, red is not collected, and blue means the app could not check.\n" +
+  "Each card is one kind of log. Green is collected everywhere and archived everywhere, amber is collected but not archived everywhere or collected in only some subscriptions, red is not collected, and blue means the app could not check.\n" +
+  "Archived through Cribl is what this app recorded when it set up the Cribl source and Lake route; Cribl itself is not read.\n" +
   "Open a card to see each log type, what collects it and where it goes. Reading only looks; it changes nothing.";
-
 function Bar({ label, share }: { label: string; share: number | null }) {
   return (
     <div className="tih-bar-row">
@@ -43,7 +45,13 @@ function Bar({ label, share }: { label: string; share: number | null }) {
   );
 }
 
-export function TenantInventoryHeatmap({ inventory, reading, disabledReason, onRead }: TenantInventoryHeatmapProps) {
+export function TenantInventoryHeatmap({
+  inventory,
+  reading,
+  disabledReason,
+  progress = null,
+  onRead,
+}: TenantInventoryHeatmapProps) {
   const [open, setOpen] = useState<InventoryCategoryId | null>(null);
   const blocked = reading || disabledReason !== null;
   const openCard = inventory?.cards.find((c) => c.id === open) ?? null;
@@ -59,9 +67,14 @@ export function TenantInventoryHeatmap({ inventory, reading, disabledReason, onR
         <span className="tih-note">Reading only looks. Nothing is changed in Azure or Cribl.</span>
       </div>
       {disabledReason !== null && <p className="tih-disabled-reason">{disabledReason}</p>}
+      {reading && progress !== null && (
+        <p className="tih-progress">
+          {progress.done} of {progress.total} reads
+        </p>
+      )}
       {inventory !== null && (
         <>
-          <p className="tih-read-at">Read at {inventory.readAt}</p>
+          <p className="tih-read-at">Read at {readAtLabel(inventory.readAt)}</p>
           {inventory.subscriptions.kind === "unread" && (
             <p className="tih-warning">Subscriptions could not be listed: {inventory.subscriptions.reason}</p>
           )}

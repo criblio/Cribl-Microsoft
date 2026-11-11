@@ -73,7 +73,27 @@ describe("TenantInventoryHeatmap", () => {
       expect(screen.getByText(card.title)).toBeTruthy();
     }
     expect(screen.getAllByText(/Not checked yet/)).toHaveLength(4);
-    expect(screen.getByText(/2026-01-02T03:04:05Z/)).toBeTruthy();
+    const readAt = container.querySelector(".tih-read-at")!.textContent;
+    expect(readAt).toBe(`Read at ${new Date("2026-01-02T03:04:05Z").toLocaleString()}`);
+    expect(readAt).not.toContain("T03:04:05");
+  });
+
+  it("while reading, shows how many reads are done of how many", () => {
+    const { rerender } = render(
+      <TenantInventoryHeatmap inventory={null} reading disabledReason={null} progress={{ done: 3, total: 8 }} onRead={() => {}} />,
+    );
+    expect(screen.getByText("3 of 8 reads")).toBeTruthy();
+    rerender(
+      <TenantInventoryHeatmap inventory={null} reading={false} disabledReason={null} progress={{ done: 8, total: 8 }} onRead={() => {}} />,
+    );
+    expect(screen.queryByText(/of 8 reads/)).toBeNull();
+  });
+
+  it("the tip says a Cribl archive is what this app recorded", () => {
+    const { container } = render(
+      <TenantInventoryHeatmap inventory={null} reading={false} disabledReason={null} onRead={() => {}} />,
+    );
+    expect(container.innerHTML).toContain("recorded when it set up the Cribl source and Lake route");
   });
 
   it("a not-built card says not checked yet and never could not check", () => {
@@ -135,12 +155,28 @@ describe("tenant-inventory-state", () => {
     expect(cellLabel(cell)).toBe("Partly collected (2 of 3 read), not archived, 1 could not be read");
   });
 
+  it("cellLabel says archived in N of M for a partial archive, and a Cribl archive is recorded by this app", () => {
+    const base = {
+      category: "activityLog",
+      logType: "Write",
+      title: "Write",
+      collectors: [],
+      state: { kind: "collected", scopes: { collected: 2, read: 2, unread: 0 } },
+    } as const;
+    expect(cellLabel({ ...base, archive: { kind: "partial", archived: 1, collecting: 2 } })).toBe(
+      "Collected, archived in 1 of 2 collecting scopes",
+    );
+    expect(cellLabel({ ...base, archive: { kind: "archived", via: "cribl" } })).toBe(
+      "Collected, archived through Cribl, as recorded by this app",
+    );
+  });
+
   it("cellLabel and cardSummary state the state in words", () => {
     const inv = inventory();
     const signIn = inv.cells.find((c) => c.logType === "SignInLogs")!;
     expect(cellLabel(signIn)).toMatch(/^Collected, not archived/);
     const entra = inv.cards.find((c) => c.id === "entraId")!;
-    expect(cardSummary(entra)).toContain("collected, not archived");
+    expect(cardSummary(entra)).toContain("collected, not fully archived");
     const activity = inv.cards.find((c) => c.id === "activityLog")!;
     expect(cardSummary(activity)).toMatch(/could not check/);
     expect(cardSummary(inv.cards.find((c) => c.id === "nsgFlowLogs")!)).toMatch(/Not checked yet/);
