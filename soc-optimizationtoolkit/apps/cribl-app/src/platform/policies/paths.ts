@@ -31,6 +31,7 @@ const ENSURE_SECRET = 'core usecases/ensure-secret/ensure-text-secret.ts (DBT-15
 const CREATE_SOURCE = 'core usecases/create-cribl-source (AZR-34)';
 const KIT_COMMIT = 'core kit/config-writes/commitDeploy.ts via create-cribl-source (AZR-34)';
 const LAKE_QUERY = 'core usecases/query-lake-samples/query-lake-samples.ts';
+const LAKE_ROUTE = 'core usecases/onboarding-lake-route/onboarding-lake-route.ts (AZR-35)';
 
 export const API_CALLS: readonly ApiCall[] = [
   // ---- Leader level ------------------------------------------------------
@@ -42,7 +43,8 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'PATCH', path: '/products/stream/groups/:id/deploy', caller: `${KIT_COMMIT}; ${KIT_COMMIT_ROUTES}` },
   { method: 'GET', path: '/products/stream/groups/:id', caller: `${KIT_COMMIT} (deployedVersion)` },
   { method: 'POST', path: '/system/lake/datasets', caller: WIRE },
-  { method: 'GET', path: '/products/lake/lakes/:lakeId/datasets', caller: 'core usecases/discover-sample-sources/discover-sample-sources.ts' },
+  { method: 'GET', path: '/products/lake/lakes/:lakeId/datasets', caller: `core usecases/discover-sample-sources/discover-sample-sources.ts; ${LAKE_ROUTE} (plan read and read-back)` },
+  { method: 'POST', path: '/products/lake/lakes/:lakeId/datasets', caller: `${LAKE_ROUTE} (create-only, Cribl.Cloud only)` },
 
   // ---- Worker group context ---------------------------------------------
   { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx (routable check; GEN-21 existing Sentinel destination picker, parsed by core domain/sentinel-destination/existing-outputs.ts)` },
@@ -51,7 +53,8 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'GET', path: '/m/:gid/system/inputs', caller: `${LIVE_ARCH}; ${PREFLIGHT}; discover-sample-sources.ts; ${CREATE_SOURCE}; read-source-flow/read-onboarding-cribl-side.ts; ${WIRE} (the source's type)` },
   { method: 'POST', path: '/m/:gid/system/inputs', caller: `${CREATE_SOURCE} apply-cribl-source.ts` },
   { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored); ui screens/integrate/integrate-screen.tsx (GEN-21 QuickConnect check, parsed by existing-destination-state.ts sourceRouting)` },
-  { method: 'GET', path: '/m/:gid/pipelines', caller: LIVE_ARCH },
+  { method: 'GET', path: '/m/:gid/pipelines', caller: `${LIVE_ARCH}; ${LAKE_ROUTE} (the unroll pipeline: plan read and read-back)` },
+  { method: 'POST', path: '/m/:gid/pipelines', caller: `${LAKE_ROUTE} (create-only)` },
   { method: 'GET', path: '/m/:gid/lib/breakers', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/jobs', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/p/:pack/system/inputs', caller: LIVE_ARCH },

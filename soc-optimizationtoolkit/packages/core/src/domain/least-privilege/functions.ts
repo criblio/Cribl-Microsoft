@@ -329,7 +329,7 @@ const FUNCTIONS = [
   },
   {
     id: "cribl-onboard",
-    label: "Create Cribl destinations, secrets and routes, then commit and deploy",
+    label: "Create Cribl destinations, secrets, routes, pipelines and Lake datasets, then commit and deploy",
     necessity: "feature",
     operations: [
       "cribl.secret.read",
@@ -338,6 +338,8 @@ const FUNCTIONS = [
       "cribl.output.create",
       "cribl.routes.write",
       "cribl.lake.dataset.create",
+      "cribl.lake.dataset.createInLake",
+      "cribl.pipeline.create",
       "cribl.commit",
       "cribl.deploy",
     ],

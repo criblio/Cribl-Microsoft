@@ -18,6 +18,8 @@ export * from "./eventhub-target";
 export * from "./defender-export";
 // DBT-301: insert routes into a routing table without touching the others.
 export * from "./route-insert";
+// AZR-35: route an onboarding source to Cribl Lake through the unroll pipeline.
+export * from "./onboarding-lake-route";
 export * from "./guided-deploy";
 // DBT-152: create-or-update a named text secret, updating only one that is ours.
 export * from "./ensure-secret";

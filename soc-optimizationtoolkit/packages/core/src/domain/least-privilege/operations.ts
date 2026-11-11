@@ -2090,6 +2090,42 @@ const OPERATIONS = {
       "GET /products/lake/lakes/{lakeId}/datasets",
     ],
   },
+  "cribl.pipeline.create": {
+    id: "cribl.pipeline.create",
+    // AZR-35: the onboarding Lake route creates the app's stamped unroll
+    // pipeline, create-only (its GET is cribl.config.read).
+    calls: [
+      { method: "POST", path: "/m/{groupId}/pipelines", api: "cribl" },
+    ],
+    operation: "policies.yml '/m/:gid/pipelines' POST",
+    leastRole: "App user",
+    alsoGrantedBy: [],
+    scope: "cribl-group",
+    scopeNote: "the selected worker group",
+    citation: "https://docs.cribl.io/apps/admin-guide/",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit by AZR-35 (route the Defender for Cloud export and the Activity Log to Cribl Lake): one create-only POST of the app's own unroll pipeline. Same app-scoped grant model as the audited Cribl rows (policies.yml, App user).",
+  },
+  "cribl.lake.dataset.createInLake": {
+    id: "cribl.lake.dataset.createInLake",
+    // AZR-35: the spec's dataset create route (wire-source's create still uses
+    // /system/lake/datasets, cribl.lake.dataset.create).
+    calls: [
+      { method: "POST", path: "/products/lake/lakes/{lakeId}/datasets", api: "cribl" },
+    ],
+    operation: "policies.yml '/products/lake/lakes/:lakeId/datasets' POST",
+    leastRole: "App user",
+    alsoGrantedBy: [],
+    scope: "cribl-leader",
+    scopeNote: "the workspace's Lake (Cribl.Cloud only)",
+    citation: "https://docs.cribl.io/apps/admin-guide/",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit by AZR-35: one create-only POST of the source's Lake dataset, through the spec's route rather than the /system/lake/datasets route the audit recorded for the source wiring. Same app-scoped grant model as the audited Cribl rows (policies.yml, App user).",
+  },
   "cribl.search.jobs": {
     id: "cribl.search.jobs",
     calls: [
