@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 36 in progress, 203 done.**
+**105 in the backlog, 37 in progress, 203 done.**
 
 ## By menu item
 
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1066,6 +1066,21 @@ Started. Anything here with an unfinished dependency is called out on its card.
   any clause naming another input; word-boundary the patterns; accept the
   reversed form; true wording for endsWith; repin the includes case.
 
+- **AZR-35** Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled
+  `AZR-F9` `story` `settled` `blocked by AZR-34`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
+  `eventhub` / `azure_blob` input but writes no route: the onboarding screen
+  only READS GET /system/inputs and GET /routes and reports whether an
+  existing route consumes the input (or 'cannot check' when the filter cannot
+  be evaluated). The data therefore reaches Cribl and stops at whatever the
+  existing routes do with it. This card adds the route (and the pipeline that
+  unrolls the Azure diagnostic envelope `records[]` into one event per record)
+  to the Sentinel destination for the matching table, through the same
+  confirm, read-modify-write, create-only and kit commit-and-deploy discipline
+  AZR-34 uses. A route is a shared, ordered table other admins own, so the
+  insert position and the refusal when an equal filter already exists need
+  deciding first.
+
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
   FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
@@ -1464,7 +1479,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (52)
+## Backlog - next (51)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1969,21 +1984,6 @@ Settled and unblocked, sequenced behind now.
   decided here"). AZR-3 is create-only: on `present-differs` it refuses and
   warns rather than re-PUT, where legacy LOG-08 repaired drift on every run
   (ADR 0005 departure 6). This card adds an explicit, confirmed repair.
-
-- **AZR-35** Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled
-  `AZR-F9` `story` `settled` `blocked by AZR-34`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
-  `eventhub` / `azure_blob` input but writes no route: the onboarding screen
-  only READS GET /system/inputs and GET /routes and reports whether an
-  existing route consumes the input (or 'cannot check' when the filter cannot
-  be evaluated). The data therefore reaches Cribl and stops at whatever the
-  existing routes do with it. This card adds the route (and the pipeline that
-  unrolls the Azure diagnostic envelope `records[]` into one event per record)
-  to the Sentinel destination for the matching table, through the same
-  confirm, read-modify-write, create-only and kit commit-and-deploy discipline
-  AZR-34 uses. A route is a shared, ordered table other admins own, so the
-  insert position and the refusal when an equal filter already exists need
-  deciding first.
 
 - **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
   `AZR-F9` `story` `settled` `blocked by AZR-34`

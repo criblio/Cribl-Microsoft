@@ -175,8 +175,8 @@
       "skill": "cribl-metrics",
       "from": "skills/cribl-metrics/reference/metricsQuery.ts",
       "to": "packages/core/src/kit/metrics/metricsQuery.ts",
-      "base": "e24b13b0410ccd06782f1d5c6424c8bd9ac1c14ba79075ae0ba2393caa3a5f36",
-      "kitCommit": "edd55c4ae2bacde135786a46b7de2a1806756c09"
+      "base": "3f13d1d7f2bc078c760385c1946ec66f0a8da1ee0a761ad8515288a2cf979e4f",
+      "kitCommit": "d20065c693e3b7ccbc652b5884728712373ec506"
     }
   ]
 }

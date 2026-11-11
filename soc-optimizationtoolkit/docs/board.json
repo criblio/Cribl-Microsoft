@@ -2494,7 +2494,7 @@
       "feature": "AZR-F9",
       "title": "Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
