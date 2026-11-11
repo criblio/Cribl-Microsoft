@@ -2,7 +2,7 @@
  * Route an onboarding source to Cribl Lake (AZR-35, first slice) - PURE.
  *
  * SCOPE. Exactly two onboarding sources: the Defender for Cloud export
- * (`defenderExport`, its alerts) and the Azure Activity Log (`activityLog`).
+ * (DEFENDER_EXPORT_ITEM_ID, its alerts) and the Azure Activity Log (`activityLog`).
  * Both go to a CRIBL LAKE dataset, never to Sentinel: Sentinel gets each
  * through Microsoft's own data connector (the Defender for Cloud connector;
  * the Azure Activity connector, whose ingestion is free), so routing them
@@ -45,12 +45,14 @@
 import { inputRouteFilter } from "../capture-filter/input-id";
 import { criblEnvelopeItems, readProp } from "../cribl-api/envelope";
 import { APP_ID } from "../cribl-secrets/secret-body";
+import { DEFENDER_EXPORT_ITEM_ID } from "../defender-export/defender-automation";
 import type { NewRoute } from "../routes-table";
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { proveOwnership, stampDescription } from "../../kit/config-writes/ownership";
 
 /** The two sources this slice routes to Lake. */
-export type LakeRouteSourceId = Extract<OnboardingSourceId, "defenderExport" | "activityLog">;
+// The Defender id is spelled once, in defender-automation.ts (its own pin holds that).
+export type LakeRouteSourceId = Extract<OnboardingSourceId, typeof DEFENDER_EXPORT_ITEM_ID | "activityLog">;
 
 /** What the app creates for one source, and what the screen says about it. */
 export interface LakeRouteSource {
@@ -75,7 +77,7 @@ export interface LakeRouteSource {
  */
 export const LAKE_ROUTE_SOURCES: Readonly<Record<LakeRouteSourceId, LakeRouteSource>> = {
   defenderExport: {
-    sourceId: "defenderExport",
+    sourceId: DEFENDER_EXPORT_ITEM_ID,
     label: "Defender for Cloud alerts",
     datasetId: "azure_defender_alerts",
     routeId: "azure_onb_defender_alerts_lake",
@@ -110,7 +112,7 @@ export const LAKE_DATASET_ID_PATTERN = /^[a-z][a-z0-9_]{0,99}$/;
 
 /** Whether `id` is one of the two sources this slice routes to Lake. */
 export function isLakeRouteSource(id: string): id is LakeRouteSourceId {
-  return id === "defenderExport" || id === "activityLog";
+  return id === DEFENDER_EXPORT_ITEM_ID || id === "activityLog";
 }
 
 /**

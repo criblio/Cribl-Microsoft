@@ -4,6 +4,7 @@
  * fake-routes-leader.test-util measuredTable), as snapshots.
  */
 
+import { DEFENDER_EXPORT_ITEM_ID } from "@soc/core";
 import type { ApplyLakeRouteOutcome, CriblSourceRecord, ReadyLakeRoute, RoutesTableSnapshot } from "@soc/core";
 
 export const SOURCE: CriblSourceRecord = { groupId: "g1", inputId: "in_def", inputType: "eventhub", secretId: "s_def" };
@@ -32,7 +33,7 @@ const ROUTE = {
 export function readyLake(over: { index?: number; shadowed?: boolean; dirty?: readonly string[] } = {}): ReadyLakeRoute {
   const index = over.index ?? 0;
   return {
-    sourceId: "defenderExport",
+    sourceId: DEFENDER_EXPORT_ITEM_ID,
     groupId: "g1",
     inputId: "in_def",
     dataset: { id: "azure_defender_alerts", action: "create" },
