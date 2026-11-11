@@ -329,3 +329,65 @@ describe("applyRouteInsert - the write keeps everything it did not add", () => {
     expect(steps).toEqual(["status:200", "status:200", "commit:200", "status:200", "head:200", "deploy:200"]);
   });
 });
+
+describe("extra commit markers (AZR-35: one commit carries the routes and a pipeline)", () => {
+  const PIPE_MARKER = "local/cribl/pipelines/unroll/";
+  const PIPE_FILE = `groups/${G}/local/cribl/pipelines/unroll/conf.yml`;
+
+  it("names the extra files in the confirm, scopes them, and commits them with the routes file", async () => {
+    const leader = new FakeRoutesLeader();
+    leader.pending = [PIPE_FILE];
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput({ extraCommitMarkers: [PIPE_MARKER] })));
+    expect(r.commitFiles).toEqual([ROUTE_FILE, `groups/${G}/${PIPE_MARKER}`]);
+    expect(r.commitMarkers).toEqual(["local/cribl/pipelines/route.yml", PIPE_MARKER]);
+    // Someone's pending work inside the extra marker is named, not hidden.
+    expect(r.scope.alreadyDirty).toEqual([PIPE_FILE]);
+    const outcome = await applyRouteInsert({ cribl: leader }, r);
+    expect(outcome.kind).toBe("deployed");
+    const commit = leader.requests.find((q) => q.method === "POST")!;
+    expect(commit.body).toEqual({ message: "wire pan", files: [PIPE_FILE, ROUTE_FILE] });
+  });
+
+  it("without extra markers the pipeline file is NOT committed (unchanged behaviour)", async () => {
+    const leader = new FakeRoutesLeader();
+    leader.pending = [PIPE_FILE];
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput()));
+    expect(r.scope.alreadyDirty).toEqual([]);
+    await applyRouteInsert({ cribl: leader }, r);
+    const commit = leader.requests.find((q) => q.method === "POST")!;
+    expect(commit.body).toEqual({ message: "wire pan", files: [ROUTE_FILE] });
+  });
+
+  it("the caller's own pipeline write (createdBeforeInsert) is not scope growth", async () => {
+    const leader = new FakeRoutesLeader();
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput({ extraCommitMarkers: [PIPE_MARKER] })));
+    leader.pending = [PIPE_FILE];
+    const outcome = await applyRouteInsert({ cribl: leader }, r, { createdBeforeInsert: [PIPE_MARKER] });
+    expect(outcome.kind).toBe("deployed");
+  });
+
+  it("the same pending pipeline file WITHOUT createdBeforeInsert voids (scope-grew)", async () => {
+    const leader = new FakeRoutesLeader();
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput({ extraCommitMarkers: [PIPE_MARKER] })));
+    leader.pending = [PIPE_FILE];
+    expect(await applyRouteInsert({ cribl: leader }, r)).toMatchObject({ kind: "void", cause: "scope-grew" });
+    expect(leader.writes()).toEqual([]);
+  });
+
+  it("createdBeforeInsert never excuses new work in the ROUTES file", async () => {
+    const leader = new FakeRoutesLeader();
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput({ extraCommitMarkers: [PIPE_MARKER] })));
+    leader.pending = [PIPE_FILE, ROUTE_FILE];
+    const outcome = await applyRouteInsert({ cribl: leader }, r, { createdBeforeInsert: [PIPE_MARKER] });
+    expect(outcome).toMatchObject({ kind: "void", cause: "scope-grew" });
+    expect(leader.writes()).toEqual([]);
+  });
+
+  it("a createdBeforeInsert marker the plan did not carry excuses nothing", async () => {
+    const leader = new FakeRoutesLeader();
+    const r = ready(await planRouteInsert({ cribl: leader }, planInput()));
+    leader.pending = [ROUTE_FILE];
+    const outcome = await applyRouteInsert({ cribl: leader }, r, { createdBeforeInsert: ["local/cribl/pipelines/"] });
+    expect(outcome).toMatchObject({ kind: "void", cause: "scope-grew" });
+  });
+});

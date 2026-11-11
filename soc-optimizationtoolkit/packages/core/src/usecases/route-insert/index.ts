@@ -16,6 +16,7 @@ export {
   routesWriteTarget,
 } from "./route-insert";
 export type {
+  ApplyRouteInsertOptions,
   ApplyRouteInsertOutcome,
   NotVerifiedCheck,
   PlanRouteInsertInput,

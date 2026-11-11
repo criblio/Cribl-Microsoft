@@ -99,6 +99,19 @@
 # The kit falls back to the /master/groups/{id}[/deploy] routes declared below
 # only on a 404, which is why both pairs are granted.
 #
+# Onboarding route to Cribl Lake (AZR-35) ADDS exactly two writes, both
+# CREATE-ONLY (no PATCH or DELETE of either object is granted):
+#   /m/{groupId}/pipelines (post)           - create the app's stamped unroll
+#                                             pipeline (azure_onb_unroll_records)
+#                                             when absent; the GET beside it
+#                                             (Live Architecture) is its plan
+#                                             read and read-back
+#   /products/lake/lakes/{lakeId}/datasets (post) - CLOUD-ONLY: create the
+#                                             source's Lake dataset when absent
+#                                             (the spec route; the GET beside it
+#                                             is its plan read and read-back)
+# The route itself goes through the route-insert writer declared above.
+#
 # Live Architecture (2026-07-29, Architecture page's Live view) READS the
 # group's configured flow to draw it - five GET-only additions plus the
 # outputs-list GET, all in /m/{groupId} context, nothing written:
@@ -159,8 +172,10 @@ policies:
   # QuickConnected (sendToRoutes) before it shows a route to add.
   - object: '/m/:gid/system/inputs/:id'
     actions: ['GET']
+  # GET: Live Architecture, and AZR-35's plan read and read-back of the unroll
+  # pipeline. POST: AZR-35 creates that pipeline, create-only.
   - object: '/m/:gid/pipelines'
-    actions: ['GET']
+    actions: ['GET', 'POST']
   - object: '/m/:gid/lib/breakers'
     actions: ['GET']
   - object: '/m/:gid/jobs'
@@ -259,8 +274,10 @@ policies:
   # while the Lake dataset LISTING beside them does not.
   # Cribl Lake dataset LISTING is a LEADER route carrying a lakeId segment -
   # a DIFFERENT route family from the /system/lake/datasets create above.
+  # POST (AZR-35): the onboarding Lake route creates its source's dataset here,
+  # create-only, through the spec's route (CLOUD-ONLY).
   - object: '/products/lake/lakes/:lakeId/datasets'
-    actions: ['GET']
+    actions: ['GET', 'POST']
   # Sample capture (ADR 0003 Phase 4). THE ONLY NON-GET THIS FEATURE ADDS, and
   # worth reading carefully because the verb overstates it: POST /system/capture
   # CREATES NOTHING. It opens a short diagnostic read of events already flowing

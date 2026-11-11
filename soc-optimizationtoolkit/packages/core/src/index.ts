@@ -66,6 +66,8 @@ export * from "./domain/log-type-catalog";
 export * from "./domain/capture-filter";
 // DBT-301: the routing table read and the pure route insert.
 export * from "./domain/routes-table";
+// AZR-35: Defender for Cloud alerts and the Activity Log to Cribl Lake.
+export * from "./domain/onboarding-lake-route";
 export * from "./domain/eventhub-discovery";
 // AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
 // Azure onboarding screen all use.

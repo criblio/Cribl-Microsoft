@@ -56,6 +56,7 @@ export {
   readProgressDocument,
   tickState,
   withCriblSource,
+  withLakeRoute,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -65,6 +66,7 @@ export {
 } from "./progress-document";
 export type {
   CriblSourceRecord,
+  LakeRouteRecord,
   DecodedProgress,
   OnboardingProgress,
   ProgressDocument,

@@ -7176,6 +7176,21 @@ details[open] > summary::before {
   font-size: 13px;
 }
 
+/* AZR-35: "Route to Cribl Lake", nested in a lane's Cribl source row. */
+.azo-lake-route {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.azo-lake-route h5 {
+  margin: 0;
+  font-size: 13px;
+}
+
 /* Dataflow diagram (hand SVG on the components/diagram shell). */
 .azo-flow {
   display: flex;
