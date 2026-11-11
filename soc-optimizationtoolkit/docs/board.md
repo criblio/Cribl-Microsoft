@@ -1343,7 +1343,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   category cards with collected and archived shares. Resource logs, XDR and
   flow logs show "not checked yet". Later phases (selection, re-hosting
   sections behind tiles, Automate / How-to per selection, new reads) get their
-  own cards.
+  own cards. PROGRESS 2026-11-11: plan tasks 1-6 of 8 built and each
+  task-reviewed (parser destinations; Entra, Activity Log and Defender for
+  Cloud log-type cells; archive classification and category cards, with a
+  segment-bounded namespace match after review caught a false-green; the
+  read-only readTenantInventory usecase, GET only, every refused read reaching
+  the tiles as could-not-check). Remaining: the heat map component and its
+  place on the screen, then the whole-branch review and a Live Preview check.
 
 ---
 
