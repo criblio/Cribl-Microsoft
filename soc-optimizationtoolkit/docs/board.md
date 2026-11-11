@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**105 in the backlog, 37 in progress, 204 done.**
+**106 in the backlog, 38 in progress, 204 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 30 | 40 | 8 |
+| Azure Native Source Onboarding | 32 | 40 | 9 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 142.
+Open work totals 144.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 52% (45/86)
+### `AZR` Azure native source onboarding - 51% (45/88)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/45 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/47 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97, AZR-98, AZR-99 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1274,6 +1274,35 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-98** Automate the Activity Log source: create the subscription diagnostic setting that streams it to the chosen Event Hub
+  `AZR-F9` `story` `settled`
+  FILED 2026-11-11 by the operator's question 'what else do we need to enable
+  the various selections'. Only defenderExport is `available` in
+  ITEM_AVAILABILITY (domain/onboarding-sections); activityLog, entraId, both
+  initiatives and xdrStreaming are How-to only, and activityLog and entraId
+  had no card at all. Activity Log first because it is one subscription-scope
+  ARM resource (PUT
+  /subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name})
+  with an Event Hub target, the same shape the 2026-11-04 hand-made test
+  setting cribl-activitylog-test used (AZR-34), and because AZR-35 now routes
+  it to Cribl Lake. Follows the Defender export pattern
+  (usecases/defender-export): read the subscription's diagnostic settings (the
+  existing activityLog.diagnosticSettings.read), REFUSE rather than replace
+  when ours exists, when ours differs, or when another setting already sends
+  Activity Log to the chosen hub or namespace (a second setting would
+  duplicate every event); then listKeys-free write (diagnostic settings take
+  eventHubAuthorizationRuleId, not a connection string), GET it back, and flip
+  activityLog to available so the Automate option unlocks. Categories: every
+  Activity Log category on (Administrative, Security, ServiceHealth, Alert,
+  Recommendation, Policy, Autoscale, ResourceHealth); hub name omitted so
+  Azure auto-creates insights-activity-logs, which is what sources.ts expects.
+  Least privilege: Monitoring Contributor at the subscription plus
+  Microsoft.EventHub/namespaces/authorizationRules/listkeys/action on the rule
+  (Azure checks it for a diagnostic setting even though no key is returned to
+  the caller) - to measure. NOT DECIDED: which rule rights Azure demands of
+  eventHubAuthorizationRuleId (Manage vs Send); AZR-23's dedicated Send-only
+  rule may or may not serve.
+
 ---
 
 ## Backlog - now (16)
@@ -1555,7 +1584,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (51)
+## Backlog - next (52)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2253,6 +2282,22 @@ Settled and unblocked, sequenced behind now.
   credential, and when it is ours, report it by name with its credential
   problem (Manage key: replace and rotate) instead of a plain refusal - never
   rewrite it.
+
+- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
+  `AZR-F9` `story` `settled` `blocked by AZR-98`
+  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
+  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
+  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
+  on ours-exists, ours-differs, and another setting already sending a category
+  to the same hub. After AZR-98 because it reuses that refusal and read-back
+  shape, and because it needs a TENANT-level role (Security Administrator or
+  Global Administrator for the write; the read is
+  entra.diagnosticSettings.read) that the lab's single-subscription principal
+  does not hold - the permission plan and its change request must name that,
+  and AZR-82 (reads at management-group and tenant scope with no change
+  request) is related. Category availability depends on Entra licensing (P1/P2
+  for some sign-in categories); an unlicensed category must be refused by
+  name, not silently dropped.
 
 - **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
   `AZR-F10` `bug` `settled`

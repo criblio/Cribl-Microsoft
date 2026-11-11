@@ -4471,6 +4471,32 @@
       "priorityWhy": "The input still runs and is visible in Cribl; what is lost is the app knowing about it, and the workaround (a second input on a new consumer group) is recorded on this card."
     },
     {
+      "id": "AZR-98",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "story",
+      "status": "in-progress",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Automate the Activity Log source: create the subscription diagnostic setting that streams it to the chosen Event Hub",
+      "detail": "FILED 2026-11-11 by the operator's question 'what else do we need to enable the various selections'. Only defenderExport is `available` in ITEM_AVAILABILITY (domain/onboarding-sections); activityLog, entraId, both initiatives and xdrStreaming are How-to only, and activityLog and entraId had no card at all. Activity Log first because it is one subscription-scope ARM resource (PUT /subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name}) with an Event Hub target, the same shape the 2026-11-04 hand-made test setting cribl-activitylog-test used (AZR-34), and because AZR-35 now routes it to Cribl Lake. Follows the Defender export pattern (usecases/defender-export): read the subscription's diagnostic settings (the existing activityLog.diagnosticSettings.read), REFUSE rather than replace when ours exists, when ours differs, or when another setting already sends Activity Log to the chosen hub or namespace (a second setting would duplicate every event); then listKeys-free write (diagnostic settings take eventHubAuthorizationRuleId, not a connection string), GET it back, and flip activityLog to available so the Automate option unlocks. Categories: every Activity Log category on (Administrative, Security, ServiceHealth, Alert, Recommendation, Policy, Autoscale, ResourceHealth); hub name omitted so Azure auto-creates insights-activity-logs, which is what sources.ts expects. Least privilege: Monitoring Contributor at the subscription plus Microsoft.EventHub/namespaces/authorizationRules/listkeys/action on the rule (Azure checks it for a diagnostic setting even though no key is returned to the caller) - to measure. NOT DECIDED: which rule rights Azure demands of eventHubAuthorizationRuleId (Manage vs Send); AZR-23's dedicated Send-only rule may or may not serve."
+    },
+    {
+      "id": "AZR-99",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "story",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [
+        "AZR-98"
+      ],
+      "title": "Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub",
+      "detail": "FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing on ours-exists, ours-differs, and another setting already sending a category to the same hub. After AZR-98 because it reuses that refusal and read-back shape, and because it needs a TENANT-level role (Security Administrator or Global Administrator for the write; the read is entra.diagnosticSettings.read) that the lab's single-subscription principal does not hold - the permission plan and its change request must name that, and AZR-82 (reads at management-group and tenant scope with no change request) is related. Category availability depends on Entra licensing (P1/P2 for some sign-in categories); an unlicensed category must be refused by name, not silently dropped."
+    },
+    {
       "epic": "AZR",
       "feature": "AZR-F10",
       "status": "backlog",
