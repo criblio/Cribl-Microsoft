@@ -73,8 +73,10 @@ import {
   measuredHubNames,
 } from "../../domain/onboarding-validation/classify";
 import { buildHubConsumerGroupGetRequest } from "../../domain/eventhub-arm";
-import { expectedExportFor } from "../../domain/defender-export/defender-automation";
+import { DEFENDER_EXPORT_ITEM_ID, expectedExportFor } from "../../domain/defender-export/defender-automation";
 import type { DefenderExportInput } from "../../domain/defender-export/defender-automation";
+import type { ActivityLogSettingInput } from "../../domain/activity-log-export/activity-log-setting";
+import { eventHubNamespacePath } from "../../domain/eventhub-arm/eventhub-arm";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
 import { MAX_LIST_PAGES } from "../azure-discovery";
 
@@ -520,6 +522,8 @@ export type DefenderWriteOutcome = "written-and-read-back" | "accepted-not-verif
 
 /** What a Defender deploy did, as {@link applyDefenderDeploy} needs it. */
 export interface DefenderDeployForValidation {
+  /** Absent on the Defender deploy's own calls; set to tell it from the Activity Log one. */
+  readonly source?: typeof DEFENDER_EXPORT_ITEM_ID;
   readonly outcome: DefenderWriteOutcome;
   /** The deploy's own target: the export is about this subscription and hub. */
   readonly input: Pick<DefenderExportInput, "subscriptionId" | "namespace" | "hubName">;
@@ -573,4 +577,76 @@ export function applyDefenderDeploy(
   const verdicts = { ...result.verdicts };
   for (const c of checks) if (c.kind === "defender-export") verdicts[c.key] = verdict;
   return { ...result, checks, verdicts };
+}
+
+// ---------------------------------------------------------------------------
+// An Activity Log deploy made after the run (AZR-98)
+// ---------------------------------------------------------------------------
+
+/** What an Activity Log deploy did, as {@link applyActivityLogDeploy} needs it. */
+export interface ActivityLogDeployForValidation {
+  readonly source: "activityLog";
+  /** The same two write outcomes as the Defender deploy. */
+  readonly outcome: DefenderWriteOutcome;
+  /** The deploy's own target: the subscription, the namespace and the rule. */
+  readonly input: ActivityLogSettingInput;
+}
+
+/** Either deploy that can amend a finished run. */
+export type OnboardingDeployForValidation = DefenderDeployForValidation | ActivityLogDeployForValidation;
+
+/** The detail of an activity-log-setting check retired by a write whose read-back did not confirm it. */
+export const ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL =
+  "The Activity Log setting was written after this check ran, but reading it back did not confirm it. Choose Validate to check again.";
+
+/**
+ * The run's result with its Activity Log setting verdicts brought up to date
+ * by a deploy made AFTER the run, or null when the deploy does not bear on it
+ * - the same contract as {@link applyDefenderDeploy}.
+ *
+ * Sound only because of what the deploy refuses. The activity-log-setting
+ * check takes the setting that sends to the plan's namespace, whatever its
+ * name, and asks for the plan's send rule (when one is given) and no hub
+ * name. The deploy wrote no hub name, refused to write beside ANY other
+ * setting in that namespace, and "written-and-read-back" compared the
+ * read-back with the rule it wrote - so a fresh read would find exactly that
+ * setting and call it as-expected. That holds only when the deploy's
+ * subscription and namespace are the plan's, and its rule is the plan's send
+ * rule or the plan names none; anything else returns null and the run stands.
+ */
+export function applyActivityLogDeploy(
+  result: ValidationResult,
+  values: PlanValues,
+  deploy: ActivityLogDeployForValidation,
+): ValidationResult | null {
+  const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const planNamespace = {
+    subscriptionId: values.subscriptionId.trim(),
+    resourceGroup: values.resourceGroup.trim(),
+    name: values.namespace.trim(),
+  };
+  if (!same(values.subscriptionId, deploy.input.subscriptionId)) return null;
+  if (!same(eventHubNamespacePath(planNamespace), eventHubNamespacePath(deploy.input.namespace))) return null;
+  const sendRule = (values.sendRule ?? "").trim();
+  if (sendRule !== "" && !same(sendRule, deploy.input.ruleName)) return null;
+  if (!result.checks.some((c) => c.kind === "activity-log-setting")) return null;
+  const verdict: StepVerdict =
+    deploy.outcome === "written-and-read-back"
+      ? { kind: "as-expected" }
+      : { kind: "unknown", reason: "failed", detail: ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL };
+  const checks = result.checks.map((c) => (c.kind === "activity-log-setting" ? { ...c, verdict } : c));
+  const verdicts = { ...result.verdicts };
+  for (const c of checks) if (c.kind === "activity-log-setting") verdicts[c.key] = verdict;
+  return { ...result, checks, verdicts };
+}
+
+/** Apply whichever deploy this is to a finished run: the reducer's one entry point. */
+export function applyOnboardingDeploy(
+  result: ValidationResult,
+  values: PlanValues,
+  deploy: OnboardingDeployForValidation,
+): ValidationResult | null {
+  return deploy.source === "activityLog"
+    ? applyActivityLogDeploy(result, values, deploy)
+    : applyDefenderDeploy(result, values, deploy);
 }

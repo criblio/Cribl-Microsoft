@@ -25,7 +25,7 @@ import {
   PLAN_VALUE_LABELS,
   changedValueKeys,
   fillTemplate,
-  applyDefenderDeploy,
+  applyOnboardingDeploy,
   filledPlanValues,
   howToStep,
   onboardingSource,
@@ -35,8 +35,8 @@ import type {
   ArrivalReading,
   CheckKind,
   CheckResult,
-  DefenderDeployForValidation,
   DefenderWriteOutcome,
+  OnboardingDeployForValidation,
   OnboardingSourceId,
   PlanValueKey,
   PlanValues,
@@ -308,8 +308,11 @@ export type ValidateRunAction =
       readonly values: PlanValues;
     }
   | { readonly type: "fail"; readonly runId: number; readonly message: string }
-  /** A Defender deploy made after the run: its read-back replaces the export verdict (AZR-93). */
-  | { readonly type: "amend"; readonly deploy: DefenderDeployForValidation; readonly note: string }
+  /**
+   * A deploy made after the run: its read-back replaces that source's verdict
+   * (AZR-93 for the Defender export, AZR-98 for the Activity Log setting).
+   */
+  | { readonly type: "amend"; readonly deploy: OnboardingDeployForValidation; readonly note: string }
   | { readonly type: "reset" };
 
 export const VALIDATE_IDLE: ValidateRunState = { kind: "idle" };
@@ -341,7 +344,7 @@ export function validateRunReducer(state: ValidateRunState, action: ValidateRunA
       // deploy must not be replaced by an older one. A run in flight reads
       // Azure itself; a deploy to another target leaves the run as it was.
       if (state.kind !== "done") return state;
-      const result = applyDefenderDeploy(state.result, state.values, action.deploy);
+      const result = applyOnboardingDeploy(state.result, state.values, action.deploy);
       return result === null ? state : { ...state, result, amended: action.note };
     }
     case "reset":
@@ -354,6 +357,13 @@ export function defenderAmendNote(outcome: DefenderWriteOutcome, asOf: string): 
   return outcome === "written-and-read-back"
     ? `The Defender export was created and read back at ${asOf}, after this check; its result is from that read.`
     : `The Defender export was written at ${asOf}, after this check, but not confirmed; check it again.`;
+}
+
+/** The status-line note for an Activity Log deploy that replaced the run's setting verdict (AZR-98). */
+export function activityLogAmendNote(outcome: DefenderWriteOutcome, asOf: string): string {
+  return outcome === "written-and-read-back"
+    ? `The Activity Log setting was created and read back at ${asOf}, after this check; its result is from that read.`
+    : `The Activity Log setting was written at ${asOf}, after this check, but not confirmed; check it again.`;
 }
 
 /** The line under the button while and after a run. */
