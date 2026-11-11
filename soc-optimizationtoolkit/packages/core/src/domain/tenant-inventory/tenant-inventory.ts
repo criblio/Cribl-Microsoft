@@ -11,7 +11,7 @@
 
 import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-setting";
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
-import { ONBOARDING_SOURCES, onboardingSource } from "../onboarding-howto/sources";
+import { onboardingSource } from "../onboarding-howto/sources";
 import type { OnboardingProgress } from "../onboarding-howto/progress-document";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
@@ -344,7 +344,7 @@ function classify(cell: LogTypeCell, evidence: AppArchiveEvidence): ArchiveState
   const hubs = destinations.filter((d) => d.kind === "event-hub");
   if (hubs.length > 0) {
     const path = evidence.namespacePath?.toLowerCase() ?? null;
-    const inNamespace = path !== null && hubs.some((d) => d.resourceId.toLowerCase().startsWith(path));
+    const inNamespace = path !== null && hubs.some((d) => d.resourceId.toLowerCase().startsWith(`${path}/`));
     if (inNamespace && evidence.lakeRoutedSources.includes(cell.category)) {
       return { kind: "archived", via: "cribl" };
     }
@@ -388,15 +388,17 @@ export interface CategoryCard {
 
 export const NOT_CHECKED_YET = "Not checked yet: this category is not read yet.";
 
-const RESOURCE_LOGS_TITLE = "Resource logs";
 
-/** Cards in catalog order, with resource logs last. */
+const RESOURCE_LOGS_TITLE = "Resource logs";
+/** Cards in display order. */
 const CARD_IDS: readonly InventoryCategoryId[] = [
-  ...ONBOARDING_SOURCES.map((s) => s.id).filter(
-    (id): id is Exclude<OnboardingSourceId, "diagnosticSettingsInitiative" | "communityPolicyInitiative"> =>
-      id !== "diagnosticSettingsInitiative" && id !== "communityPolicyInitiative",
-  ),
+  "entraId",
+  "activityLog",
+  DEFENDER_EXPORT_ITEM_ID,
+  "xdrStreaming",
   "resourceLogs",
+  "vnetFlowLogs",
+  "nsgFlowLogs",
 ];
 
 function cardTitle(id: InventoryCategoryId): string {

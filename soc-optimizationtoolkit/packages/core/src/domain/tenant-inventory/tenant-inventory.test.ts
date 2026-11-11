@@ -323,6 +323,11 @@ describe("archive classification and cards", () => {
     });
   });
 
+  it("a namespace whose name only starts with ours is not ours", () => {
+    const c = signIn({ eventHubAuthorizationRuleId: `${NS}-prod/authorizationRules/x` });
+    expect(c.archive.kind).toBe("unknown");
+  });
+
   it("a null namespace path never matches", () => {
     const cells = withArchive(
       entraCells(read(setting({ logs: [on("SignInLogs")], eventHubAuthorizationRuleId: `${NS}/authorizationRules/x` }))),
@@ -383,13 +388,13 @@ describe("archive classification and cards", () => {
   it("returns seven cards in order, four of them not built", () => {
     const cards = categoryCards(withArchive(entraCells(read()), evidence));
     expect(cards.map((c) => c.id)).toEqual([
-      "activityLog",
       "entraId",
+      "activityLog",
       DEFENDER_EXPORT_ITEM_ID,
       "xdrStreaming",
+      "resourceLogs",
       "vnetFlowLogs",
       "nsgFlowLogs",
-      "resourceLogs",
     ]);
     const unbuilt = cards.filter((c) => c.notChecked !== null);
     expect(unbuilt.map((c) => c.id).sort()).toEqual(
