@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 36 in progress, 203 done.**
+**105 in the backlog, 37 in progress, 204 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 52 | 99 | 24 |
+| Sentinel Integration | 52 | 100 | 24 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -117,13 +117,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 61% (108/177)
+### `DBT` Quality and technical debt _(enabler)_ - 61% (109/178)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 45/93 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 46/94 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 51/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (36)
+## In progress (37)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1066,6 +1066,63 @@ Started. Anything here with an unfinished dependency is called out on its card.
   any clause naming another input; word-boundary the patterns; accept the
   reversed form; true wording for endsWith; repin the includes case.
 
+- **AZR-35** Route the onboarding Cribl source to its destination (Cribl Lake for Defender alerts and Activity Log), with diagnostic records unrolled
+  `AZR-F9` `story` `settled` `blocked by AZR-34`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
+  `eventhub` / `azure_blob` input but writes no route: the onboarding screen
+  only READS GET /system/inputs and GET /routes and reports whether an
+  existing route consumes the input (or 'cannot check' when the filter cannot
+  be evaluated). The data therefore reaches Cribl and stops at whatever the
+  existing routes do with it. This card adds the route (and the pipeline that
+  unrolls the Azure diagnostic envelope `records[]` into one event per record)
+  to the Sentinel destination for the matching table, through the same
+  confirm, read-modify-write, create-only and kit commit-and-deploy discipline
+  AZR-34 uses. A route is a shared, ordered table other admins own, so the
+  insert position and the refusal when an equal filter already exists need
+  deciding first. DECISIONS (operator 2026-11-10): (1) build on ONE safe
+  routes writer shared with the [[DBT-301]] fix (kit read-modify-write, rows
+  merged by id, groups round-tripped, unknown shape refused), DBT-301 first;
+  (2) INSERT POSITION: the operator picks it in the confirm, shown against the
+  current table; (3) an EQUAL FILTER already present (same input) is REFUSED
+  and the existing route named with where it sends the data - the app never
+  edits a route it cannot prove it created; (4) FIRST SLICE: Defender alerts
+  -> SecurityAlert and Activity Log -> AzureActivity (one table each); Entra
+  and the diagnostic-settings initiative pick the table per record category
+  and come later. The filter written is exactly
+  inputRouteFilter({type:'eventhub', id}) so read-onboarding-cribl-side
+  recognises it. Open: whether the Logs Ingestion API accepts SecurityAlert
+  and AzureActivity as native tables (to verify before building the
+  destination step). RESOLVED 2026-11-10 (Documented, Microsoft Learn "Azure
+  Monitor Logs table feature support", tables-features, read 2026-11-10): the
+  Logs Ingestion API (the API column; what a Cribl Sentinel destination uses
+  through a DCR) does NOT support SecurityAlert or AzureActivity - their API
+  cells are blank (SigninLogs too), while SecurityEvent carries it. So the
+  decided first slice cannot write those NATIVE tables; it needs a different
+  target (a _CL table, or another destination). DECISION (operator
+  2026-11-10): MIRROR _CL TABLES - Defender alerts to SecurityAlert_CL and
+  Activity Log to AzureActivity_CL, columns derived from the native schema the
+  way the app already derives _CL tables. Detections written for the native
+  tables will not see this data without a function alias (the
+  native-onboarding plan's shim); the screen must say so. DECISION REVISED
+  (operator 2026-11-10, supersedes the Defender half of the line above):
+  DEFENDER ALERTS GO TO CRIBL LAKE, not Sentinel. An operator who wants
+  Defender alerts in Sentinel uses Microsoft's native Defender for Cloud data
+  connector; the screen says so and does not offer a SecurityAlert_CL path.
+  Activity Log is unchanged: AzureActivity_CL via the Sentinel destination. So
+  the first slice is two different destinations: a Cribl Lake dataset
+  (Cribl.Cloud only; the app already creates Lake datasets in wire-source /
+  Unit 20) for Defender, and a _CL Sentinel destination for Activity Log.
+  DECISION REVISED AGAIN (operator 2026-11-10, supersedes the Activity Log
+  half above): ACTIVITY LOG IS NEVER SENT TO LOG ANALYTICS FROM CRIBL. Its
+  Sentinel ingestion is free through Microsoft's native Azure Activity data
+  connector, so routing it through Cribl to Sentinel only adds cost.
+  Onboarding Activity Log (and Defender alerts) through Cribl is for ARCHIVE
+  or for sending to OTHER destinations. FIRST SLICE THEREFORE: both sources
+  route to a Cribl Lake dataset (Cribl.Cloud); no Sentinel destination, no _CL
+  table, no DCR. The screen states, for each, that Sentinel gets this data
+  through the native connector. Other destinations (beyond Lake) are a later
+  slice. The unroll of records[] still applies before Lake.
+
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
   FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
@@ -1464,7 +1521,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (52)
+## Backlog - next (51)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1969,21 +2026,6 @@ Settled and unblocked, sequenced behind now.
   decided here"). AZR-3 is create-only: on `present-differs` it refuses and
   warns rather than re-PUT, where legacy LOG-08 repaired drift on every run
   (ADR 0005 departure 6). This card adds an explicit, confirmed repair.
-
-- **AZR-35** Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled
-  `AZR-F9` `story` `settled` `blocked by AZR-34`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
-  `eventhub` / `azure_blob` input but writes no route: the onboarding screen
-  only READS GET /system/inputs and GET /routes and reports whether an
-  existing route consumes the input (or 'cannot check' when the filter cannot
-  be evaluated). The data therefore reaches Cribl and stops at whatever the
-  existing routes do with it. This card adds the route (and the pipeline that
-  unrolls the Azure diagnostic envelope `records[]` into one event per record)
-  to the Sentinel destination for the matching table, through the same
-  confirm, read-modify-write, create-only and kit commit-and-deploy discipline
-  AZR-34 uses. A route is a shared, ordered table other admins own, so the
-  insert position and the refusal when an equal filter already exists need
-  deciding first.
 
 - **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
   `AZR-F9` `story` `settled` `blocked by AZR-34`
@@ -2754,7 +2796,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (203)
+## Done (204)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -4878,6 +4920,55 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   corrected. Mutation-checked by implementer and reviewer. Pins only: the
   shape has never been seen live, so there is nothing to observe. The
   nextLink-without-requestUrl gap is DBT-160.
+
+- **DBT-301** Wire source would replace a worker group's whole routes table with only the app's routes: it reads routes from body.routes, but the leader answers {items:[{id, groups, routes}]}
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-11-10 by the AZR-35 exploration, MEASURED the same day.
+  wireSource (packages/core/src/usecases/guided-deploy/wire-source.ts) GETs
+  /routes, reads the existing table with existingRoutesOf, which looks only at
+  body.routes, prepends the app's routes, and PUTs /routes with {id, routes}.
+  Read-only on a Cribl.Cloud leader (DatacenterEast, read with Cribl Stream's
+  own request options): GET /m/<g>/routes answered 200 {items:[{id, groups,
+  routes:[37 routes]}], count:1} - no top-level routes. So existingRoutesOf
+  returns [] and the PUT would carry ONLY the app's routes: the other 37
+  routes are deleted, and `groups` (route groups) is dropped too. The tests
+  feed only the bare {id, routes} shape (wire-source.test.ts), which is why
+  they pass. NOT run live: no write was made to measure what the PUT then
+  does. Reachable from the Integrate screen's source wiring (WiringSection).
+  Breaks config-plane-writes rules 2, 4 and 5 (read-modify-write, a stripped
+  key is a deleted key, merge nested), and DBT-149 (no commit scope) compounds
+  it: the wipe would be committed with everyone else's pending work. FIX: read
+  the table through the same envelope rule read-onboarding-cribl-side uses
+  (items[0] or the bare object), REFUSE when the shape is anything else rather
+  than treat it as empty, and round-trip every key of the table object (groups
+  included). Better: move the write onto the kit's planChange / writeApproved
+  with an ArrayPolicy byId on routes, which AZR-35 needs anyway. Pin with the
+  measured {items:[{id, groups, routes}]} fixture. DONE 2026-11-10 (pins; not
+  run live - no route write was made). A SHARED route writer replaces the PUT:
+  domain/routes-table (parseRoutesListing refuses any shape but
+  {items:[table]} or a bare {id, routes} - never an empty table; insertRoutes
+  at top / before <id> / end; routeConflicts refuses an id already taken and
+  an existing route selecting the same input, a legacy bare-id match included;
+  catch-alls are reported as shadowing, unreadable filters as uncheckable) and
+  usecases/route-insert (planRouteInsert: list -> kit planChange on PATCH
+  /m/<g>/routes/<tableId> with routes:replace, so every other table key - id,
+  groups, comments - round-trips and a table that moved voids the approval;
+  applyRouteInsert: commitScopeGrew, writeApproved with a synchronous
+  FreshCheck, verifyStored, and only on stored the kit commitAndDeploy).
+  wire-source is plan + apply on it (also closes DBT-149 for wire-source
+  only), writes inputRouteFilter (the type read from GET /system/inputs, never
+  guessed), and deploys only the group it wrote; the Integrate wiring step is
+  two clicks with a confirm naming the group, table, position, routes, the
+  Lake dataset, the commit file and the restart. policies.yml: /m/:gid/routes
+  GET only (PUT removed), /m/:gid/routes/:id GET+PATCH. Pins on the measured
+  {items:[{id, groups, routes}], count:1} fixture: other routes and groups
+  survive; 16 mutation checks caught. NOT MEASURED LIVE: that PATCH
+  /routes/{id} accepts the full table body; that GET /routes/{id} answers
+  {items:[table]}; which file /version/status names after the write (marker
+  local/cribl/pipelines/route.yml; a different path reads as
+  nothing-to-commit, said so). Still out of scope: air-gap-export writes the
+  bare-id filter; onboard-table and deploy-flowlog-pack keep the old commit
+  (DBT-149).
 
 - **DBT-156** UI tests time out or miscount under full-suite load and pass alone
   `DBT-F1` `bug` `settled` `verified: pins`

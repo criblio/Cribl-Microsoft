@@ -35,6 +35,8 @@ import * as readSourceFlow from "./usecases/read-source-flow";
 import * as onboardBatch from "./usecases/onboard-batch";
 import * as kitMetricsQuery from "./kit/metrics/metricsQuery";
 import * as workspaceInventory from "./usecases/workspace-inventory";
+import * as routesTable from "./domain/routes-table";
+import * as routeInsert from "./usecases/route-insert";
 
 type Entry = readonly [name: string, source: Record<string, unknown>, kind: string];
 
@@ -125,6 +127,16 @@ describe("@soc/core entry point exports the Azure onboarding surface", () => {
     expect(usecases.validateAzureOnboarding).toBe(validateAzureOnboarding.validateAzureOnboarding);
     expect(usecases.readSourceFlow).toBe(readSourceFlow.readSourceFlow);
     expect(usecases.readOnboardingCriblSide).toBe(readSourceFlow.readOnboardingCriblSide);
+  });
+
+  it("publishes the shared routing-table writer: the pure insert and the plan/apply usecase (DBT-301)", () => {
+    expect(core.parseRoutesListing).toBe(routesTable.parseRoutesListing);
+    expect(core.insertRoutes).toBe(routesTable.insertRoutes);
+    expect(core.routeInsertFreshCheck).toBe(routesTable.routeInsertFreshCheck);
+    expect(core.planRouteInsert).toBe(routeInsert.planRouteInsert);
+    expect(core.applyRouteInsert).toBe(routeInsert.applyRouteInsert);
+    expect(usecases.planRouteInsert).toBe(routeInsert.planRouteInsert);
+    expect(core.ROUTE_COMMIT_MARKERS).toBe(routeInsert.ROUTE_COMMIT_MARKERS);
   });
 
   it("the kit is never re-exported wholesale: no clock and no kit transport reach the root", () => {

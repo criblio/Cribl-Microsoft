@@ -105,17 +105,17 @@ export const DYNAMIC_PATHS: readonly { file: string; raw: string; why: string }[
   {
     file: 'packages/core/src/kit/config-writes/readModifyWrite.ts',
     raw: 'target.path',
-    why: 'the kit reads whatever WriteTarget the caller passes; create-cribl-source passes /system/inputs/:id (API_CALLS)',
+    why: 'the kit reads whatever WriteTarget the caller passes; create-cribl-source passes /system/inputs/:id, route-insert /m/:gid/routes/:id (API_CALLS)',
   },
   {
     file: 'packages/core/src/kit/config-writes/readModifyWrite.ts',
     raw: 'path',
-    why: 'the kit verifyStored/read helpers read the caller path; create-cribl-source passes /system/inputs/:id (API_CALLS)',
+    why: 'the kit verifyStored/read helpers read the caller path; create-cribl-source passes /system/inputs/:id, route-insert /m/:gid/routes/:id (API_CALLS)',
   },
   {
     file: 'packages/core/src/kit/config-writes/readModifyWrite.ts',
     raw: 'target.method, target.path',
-    why: 'the kit write itself (method and path from the WriteTarget); create-cribl-source imports only verifyStored from this file, never the write, so no shipped caller reaches it; a new caller must add its grant to API_CALLS and policies.yml',
+    why: 'the kit write itself (method and path from the WriteTarget); its one shipped caller is route-insert (routesWriteTarget: PATCH /m/:gid/routes/:id, in API_CALLS); a new caller must add its grant to API_CALLS and policies.yml',
   },
   {
     file: 'packages/core/src/kit/config-writes/commitDeploy.ts',
@@ -149,23 +149,13 @@ export const DYNAMIC_PATHS: readonly { file: string; raw: string; why: string }[
   },
   {
     file: 'packages/core/src/usecases/guided-deploy/wire-source.ts',
-    raw: 'ROUTES_API_PATH',
-    why: "'/routes' - GET and PUT /m/:gid/routes in API_CALLS",
-  },
-  {
-    file: 'packages/core/src/usecases/guided-deploy/wire-source.ts',
     raw: 'LAKE_DATASETS_API_PATH',
     why: "'/system/lake/datasets' - POST /system/lake/datasets in API_CALLS",
   },
   {
     file: 'packages/core/src/usecases/guided-deploy/wire-source.ts',
-    raw: 'COMMIT_API_PATH',
-    why: "'/version/commit' - POST /m/:gid/version/commit in API_CALLS",
-  },
-  {
-    file: 'packages/core/src/usecases/guided-deploy/wire-source.ts',
-    raw: 'deployApiPath(g)',
-    why: "'/master/groups/<g>/deploy' - PATCH /master/groups/:id/deploy in API_CALLS",
+    raw: 'WIRE_INPUTS_API_PATH',
+    why: "'/system/inputs' - GET /m/:gid/system/inputs in API_CALLS (the wiring reads the source's type)",
   },
   {
     file: 'packages/core/src/usecases/query-lake-samples/query-lake-samples.ts',

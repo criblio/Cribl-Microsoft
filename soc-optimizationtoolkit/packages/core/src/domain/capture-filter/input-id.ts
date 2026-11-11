@@ -17,10 +17,11 @@
  * verified against the product on 2026-08-21, including that the bare form
  * `__inputId === "<id>"` matched NOTHING.
  *
- * A BARE-ID MATCH IS STILL REPORTED, BUT AS `legacy`. This app's own wiring
- * (guided-deploy/source-wiring.ts, air-gap-export.ts) writes
- * `__inputId=='<id>'`; a reader that ignored it would hide routes the app
- * itself created. Whether that filter routes any event is UNCONFIRMED until
+ * A BARE-ID MATCH IS STILL REPORTED, BUT AS `legacy`. This app's air-gap
+ * export (air-gap-export.ts) still writes `__inputId=='<id>'`, and its source
+ * wiring (guided-deploy/source-wiring.ts) did until DBT-301 moved it to
+ * inputRouteFilter; a reader that ignored the bare form would hide routes the
+ * app itself created. Whether that filter routes any event is UNCONFIRMED until
  * __inputId is read live on a wired source, so a reader must surface the
  * `legacy` answer to the operator rather than present it as a plain match.
  * The typed answer always wins: a filter that names both forms is `match`.

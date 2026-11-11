@@ -3,16 +3,17 @@
 //
 // Standard: standards/cribl-metrics.md §1.
 //
-// Provenance: MEASURED live 2026-11-10 on a Cribl.Cloud leader (AZR-95), by reading Cribl Stream's own
-// Monitoring traffic. The query is a LEADER-level POST /system/metrics/query; one worker group is
-// selected in `where` (`__worker_group=="<g>" && __dist_mode=="worker"`), exactly as the Monitoring
-// page does. The group-scoped POST /m/<g>/system/metrics/query that the 4.19.0 spec implies answers
-// 404 ("Cannot POST /api/v1/system/metrics/query") - measured in the same session. The answer is
-// `{results: [...], metrics, info}`, and an input row's label is `<type>:<id>` (e.g.
-// `eventhub:azure_onb_eh_...`). TIME: a relative `earliest` is seconds-ago with no sign (`"86400s"`)
-// or epoch milliseconds; `"-24h"` answers 200 with ZERO results (measured: it hid 158 real events),
-// so {@link buildMetricsQueryBody} refuses any other relative form. `latest: "now"` works. One app sent `filterExpr`/`metricNameFilter` (not keys) and read
-// `.items` (not the envelope); its card most likely never rendered and nothing said so.
+// Provenance: MEASURED 2026-11-10 on one Cribl.Cloud leader, by reading Cribl Stream's own Monitoring
+// traffic and replaying variants of its query (standards/cribl-metrics.md §1):
+// - PATH: a LEADER-level POST /system/metrics/query. One worker group is chosen in `where`
+//   (`__worker_group=="<g>" && __dist_mode=="worker"`), exactly as the Monitoring page does. The
+//   group-scoped POST /m/<g>/system/metrics/query that the 4.19.0 spec implies answers 404.
+// - TIME: a relative `earliest` is seconds-ago with no sign (`"86400s"`) or epoch milliseconds. A
+//   signed `"-24h"` answers 200 with ZERO results - it hid real events - so buildMetricsQueryBody
+//   refuses any other relative form. `latest: "now"` works.
+// - ANSWER: `{results: [...], metrics, info}`; an input row is labelled `<type>:<id>`.
+// One app sent `filterExpr`/`metricNameFilter` (not keys) and read `.items` (not the envelope); its
+// card most likely never rendered and nothing said so (inferred from the code against the spec).
 //
 // Declare in policies.yml:  - object: '/system/metrics/query'   actions: ['POST']   (leader route)
 

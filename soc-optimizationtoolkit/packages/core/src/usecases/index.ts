@@ -16,6 +16,8 @@ export * from "./discover-event-hubs";
 export * from "./eventhub-target";
 // AZR-3: read Defender state subscription-wide; create-only deploy.
 export * from "./defender-export";
+// DBT-301: insert routes into a routing table without touching the others.
+export * from "./route-insert";
 export * from "./guided-deploy";
 // DBT-152: create-or-update a named text secret, updating only one that is ours.
 export * from "./ensure-secret";

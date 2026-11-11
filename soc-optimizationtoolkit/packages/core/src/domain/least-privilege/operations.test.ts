@@ -103,10 +103,13 @@ function statesAction(text: string, action: string): boolean {
 }
 
 /**
- * Audit rows with no registry operation, each with why. None of them needs a
- * permission of its own, which is the only admissible reason.
+ * Audit rows with no registry operation, each with why. Two reasons are
+ * admissible: the row needs no permission of its own, or the code no longer
+ * makes the call (the operation that replaced it says so in its auditGap).
  */
 const NOT_REGISTERED: Readonly<Record<string, string>> = {
+  "PUT /m/{groupId}/routes":
+    "no longer sent: the source wiring writes PATCH /m/{groupId}/routes/{tableId} (cribl.routes.write, whose auditGap says why)",
   "{caller-supplied} {CRIBL_API_URL}[/m/{groupId}]{path} - PlatformCriblClient.request":
     "the Cribl transport; every path it carries is its own row",
   "GET {nextLink} absolute https://management.azure.com/... (listAllPages)":

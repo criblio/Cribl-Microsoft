@@ -3211,11 +3211,13 @@ export function IntegrateScreen({
   );
 
   // ---- Source connection on the existing path (GEN-21) ------------------
-  // DECIDED 2026-10-29: ROUTE ONLY, and SHOWN, not written. The app's route
-  // writer (guided-deploy wire-source) still commits every pending change in
-  // the group with no file scope and filters on the bare input id, which
-  // matches no event - so the operator adds this route by hand, and a
-  // QuickConnected source is warned about, never rewritten.
+  // DECIDED 2026-10-29: ROUTE ONLY, and SHOWN, not written. At the time the
+  // app's route writer (guided-deploy wire-source) committed every pending
+  // change in the group with no file scope and filtered on the bare input id,
+  // which matches no event - so the operator adds this route by hand, and a
+  // QuickConnected source is warned about, never rewritten. DBT-301 rebuilt
+  // that writer (usecases/route-insert: scoped commit, <type>:<id> filter);
+  // whether this path should now write through it is AZR-35's decision.
   // The installed id only while it is still THIS pack: a renamed pack is a
   // different pack, and its route must not name the old one.
   const installedPackId =

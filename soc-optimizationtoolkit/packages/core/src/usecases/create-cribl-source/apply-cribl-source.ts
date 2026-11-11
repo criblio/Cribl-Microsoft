@@ -29,7 +29,8 @@
  * never in the input body, the outcome, the KV record or a log line.
  *
  * Every non-deployed kit outcome is kept BY NAME; the literal 'committed' is
- * never produced (contrast wire-source.ts, a filed bug card). No input PATCH
+ * never produced (as wire-source.ts once did; DBT-301 moved it onto the kit
+ * through usecases/route-insert). No input PATCH
  * or DELETE exists here.
  */
 

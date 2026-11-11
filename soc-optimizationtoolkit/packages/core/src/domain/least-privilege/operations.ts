@@ -1921,19 +1921,22 @@ const OPERATIONS = {
   },
   "cribl.routes.write": {
     id: "cribl.routes.write",
+    // DBT-301: the route-insert writer reads the one table and PATCHes it
+    // whole (the spec's documented write; it has no PUT /routes).
     calls: [
-      { method: "PUT", path: "/m/{groupId}/routes", api: "cribl" },
+      { method: "GET", path: "/m/{groupId}/routes/{tableId}", api: "cribl" },
+      { method: "PATCH", path: "/m/{groupId}/routes/{tableId}", api: "cribl" },
     ],
-    operation: "policies.yml '/m/:gid/routes' GET,PUT",
+    operation: "policies.yml '/m/:gid/routes/:id' GET,PATCH",
     leastRole: "App user",
     alsoGrantedBy: [],
     scope: "cribl-group",
     scopeNote: "the selected worker group",
     citation: "https://docs.cribl.io/apps/admin-guide/",
     confidence: "high",
-    audit: [
-      "PUT /m/{groupId}/routes",
-    ],
+    audit: [],
+    auditGap:
+      "Changed after the 2026-11-03 audit, which recorded PUT /m/{groupId}/routes: that write could delete every other route in the group, and the source wiring now reads GET /m/{groupId}/routes/{tableId} and writes PATCH /m/{groupId}/routes/{tableId} through the shared route-insert writer. Same app-scoped grant model as the audited row (policies.yml, App user).",
   },
   "cribl.commit": {
     id: "cribl.commit",
