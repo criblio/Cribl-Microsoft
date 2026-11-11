@@ -28,9 +28,16 @@
  *   - the Lake route exists ONLY for cloud deployments with federation enabled
  *     and a dataset.
  *
+ * THE FILTER (DBT-301) selects the input by the `<type>:<id>` value its events
+ * carry (capture-filter/input-id.ts inputRouteFilter), never the bare id: a
+ * bare `__inputId=='<id>'` was verified to match nothing live. So the plan
+ * takes the input's TYPE as well as its id.
+ *
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random. The plan is data;
- * the guided-deploy usecase applies it through the CriblClient port.
+ * wire-source.ts applies it through the shared route-insert writer.
  */
+
+import { inputRouteFilter } from "../../domain/capture-filter/input-id";
 
 /** Cribl deployment flavor - Lake is a CLOUD-only capability. */
 export type CriblDeploymentType = "cloud" | "onprem";
@@ -63,31 +70,30 @@ export interface LakeFederation {
 
 /** Input for {@link planSourceWiring}. */
 export interface SourceWiringInput {
-  /** The Cribl input id the routes filter on (`__inputId=='...'`). */
+  /** The Cribl input's id, as configured (no type prefix). */
   sourceId: string;
+  /** The Cribl input's type (`syslog`, `http`, ...): the first `__inputId` segment. */
+  sourceType: string;
   /** The deployed pack name (drives route ids, names, and the pipeline). */
   packName: string;
-  /** Worker groups the committed config is deployed to (order preserved). */
-  workerGroups: readonly string[];
   /** Lake federation, when the operator turned it on. */
   lake?: LakeFederation;
 }
 
 /** The pure wiring plan the usecase applies. */
 export interface SourceWiringPlan {
-  /** The shared route filter (`__inputId=='{sourceId}'`). */
+  /** The shared route filter (input-id.ts inputRouteFilter of `<type>:<id>`). */
   filter: string;
   /**
-   * Routes in FINAL EVALUATION ORDER: index 0 evaluates first. The usecase
-   * prepends these (in this order) ahead of the group's existing routes, which
-   * reproduces the legacy successive-unshift result. `position` on each entry is
-   * its index here, surfaced explicitly so the order contract is assertable.
+   * Routes in FINAL EVALUATION ORDER: index 0 evaluates first. wire-source
+   * inserts these (in this order) at the TOP of the group's routing table,
+   * which reproduces the legacy successive-unshift result. `position` on each
+   * entry is its index here, surfaced explicitly so the order contract is
+   * assertable.
    */
   routes: Array<RouteEntry & { position: number }>;
   /** The commit message (mentions Lake only when a Lake route was planned). */
   commitMessage: string;
-  /** Worker groups to deploy the committed config to (input order). */
-  deployGroups: string[];
   /** Whether a create-dataset step is needed first (dataset id, when new). */
   createDataset: string | null;
 }
@@ -154,11 +160,14 @@ export function planSourceWiring(input: SourceWiringInput): SourceWiringPlan {
   if (input.sourceId.trim() === "") {
     throw new Error("planSourceWiring: sourceId must be a non-empty string");
   }
+  if (input.sourceType.trim() === "") {
+    throw new Error("planSourceWiring: sourceType must be a non-empty string");
+  }
   if (input.packName.trim() === "") {
     throw new Error("planSourceWiring: packName must be a non-empty string");
   }
 
-  const filter = `__inputId=='${input.sourceId}'`;
+  const filter = inputRouteFilter({ type: input.sourceType, id: input.sourceId });
   const sentinel = sentinelRoute(input.sourceId, input.packName, filter);
 
   const ordered: RouteEntry[] = [];
@@ -182,32 +191,6 @@ export function planSourceWiring(input: SourceWiringInput): SourceWiringPlan {
     filter,
     routes,
     commitMessage,
-    deployGroups: [...input.workerGroups],
     createDataset,
   };
-}
-
-/**
- * Prepend the plan's routes (in evaluation order) ahead of a worker group's
- * EXISTING routes, skipping any whose id already exists (the legacy
- * already-exists guard, auth.ts 1772). Returns the new routes array in final
- * order. Pure - the usecase feeds this the live config's routes and PUTs the
- * result.
- */
-export function prependRoutes(
-  existing: readonly { id?: string }[],
-  planRoutes: ReadonlyArray<RouteEntry & { position: number }>,
-): RouteEntry[] {
-  const existingIds = new Set(
-    existing.map((route) => route.id).filter((id): id is string => id !== undefined),
-  );
-  const toAdd: RouteEntry[] = [];
-  for (const route of planRoutes) {
-    if (!existingIds.has(route.id)) {
-      const { position: _position, ...entry } = route;
-      void _position;
-      toAdd.push(entry);
-    }
-  }
-  return [...toAdd, ...(existing as RouteEntry[])];
 }

@@ -1,25 +1,24 @@
 import { describe, expect, it } from "vitest";
-import {
-  planSourceWiring,
-  prependRoutes,
-  type RouteEntry,
-} from "./source-wiring";
+import { parseRouteFilterInputs } from "../../domain/live-architecture/live-architecture";
+import { matchInputIdFilter } from "../../domain/capture-filter/input-id";
+import { planSourceWiring } from "./source-wiring";
 
 const BASE = {
   sourceId: "in_syslog_paloalto",
+  sourceType: "syslog",
   packName: "paloalto-sentinel",
-  workerGroups: ["wg-1", "wg-2"],
 };
 
 describe("planSourceWiring - ROUTE ORDER SEMANTICS (a regression silently drops data)", () => {
   it("no Lake: a single Sentinel route, final:true, at position 0", () => {
     const plan = planSourceWiring(BASE);
-    expect(plan.filter).toBe("__inputId=='in_syslog_paloalto'");
+    // DBT-301: the typed form Cribl's events carry; syslog adds the sender segment.
+    expect(plan.filter).toBe("__inputId.startsWith('syslog:in_syslog_paloalto:')");
     expect(plan.routes).toHaveLength(1);
     const [sentinel] = plan.routes;
     expect(sentinel).toMatchObject({
       id: "paloalto-sentinel-sentinel",
-      filter: "__inputId=='in_syslog_paloalto'",
+      filter: "__inputId.startsWith('syslog:in_syslog_paloalto:')",
       pipeline: "pack:paloalto-sentinel",
       output: "default",
       final: true,
@@ -27,7 +26,6 @@ describe("planSourceWiring - ROUTE ORDER SEMANTICS (a regression silently drops 
     });
     expect(plan.createDataset).toBeNull();
     expect(plan.commitMessage).not.toContain("Lake");
-    expect(plan.deployGroups).toEqual(["wg-1", "wg-2"]);
   });
 
   it("Lake (cloud): Lake route NON-final at position 0, Sentinel final at position 1", () => {
@@ -96,38 +94,35 @@ describe("planSourceWiring - ROUTE ORDER SEMANTICS (a regression silently drops 
     ).toHaveLength(1);
   });
 
-  it("throws on a blank source id or pack name", () => {
+  it("throws on a blank source id, source type or pack name", () => {
     expect(() => planSourceWiring({ ...BASE, sourceId: " " })).toThrow();
+    expect(() => planSourceWiring({ ...BASE, sourceType: " " })).toThrow();
     expect(() => planSourceWiring({ ...BASE, packName: "" })).toThrow();
   });
 });
 
-describe("prependRoutes", () => {
-  const existing: Array<{ id: string; name: string }> = [
-    { id: "other-route", name: "pre-existing" },
-  ];
+// DBT-301 replaced the bare-id filter pin (`__inputId=='<id>'`, recorded in
+// input-id.ts as matching nothing live) with these: every route's filter
+// selects the input by `<type>:<id>`, and reads back as a `match`, never
+// `legacy`.
+describe("planSourceWiring - the filter selects the input by <type>:<id>", () => {
+  it("a non-segmented type writes an equality on <type>:<id>", () => {
+    const plan = planSourceWiring({ ...BASE, sourceType: "tcpjson", sourceId: "in_tcp" });
+    expect(plan.filter).toBe("__inputId=='tcpjson:in_tcp'");
+  });
 
-  it("prepends plan routes (evaluation order) ahead of existing routes", () => {
+  it("every route, Lake included, carries the one filter, and it reads back as a typed match", () => {
     const plan = planSourceWiring({
       ...BASE,
       lake: { enabled: true, dataset: "ds", deploymentType: "cloud" },
     });
-    const merged = prependRoutes(existing, plan.routes);
-    // Lake, then Sentinel, then the pre-existing route - order preserved.
-    expect(merged.map((r) => (r as { id: string }).id)).toEqual([
-      "paloalto-sentinel-lake",
-      "paloalto-sentinel-sentinel",
-      "other-route",
-    ]);
-    // Emitted route entries drop the synthetic `position` field.
-    expect((merged[0] as RouteEntry & { position?: number }).position).toBeUndefined();
-  });
-
-  it("skips a plan route whose id already exists (the already-exists guard)", () => {
-    const plan = planSourceWiring(BASE);
-    const withDup = [{ id: "paloalto-sentinel-sentinel", name: "already there" }];
-    const merged = prependRoutes(withDup, plan.routes);
-    expect(merged).toHaveLength(1);
-    expect((merged[0] as { name: string }).name).toBe("already there");
+    for (const route of plan.routes) {
+      expect(route.filter).toBe(plan.filter);
+      expect(route.filter).not.toBe("__inputId=='in_syslog_paloalto'");
+      const parsed = parseRouteFilterInputs(route.filter);
+      expect(parsed.kind).not.toBe("unparsed");
+      if (parsed.kind === "unparsed") return;
+      expect(matchInputIdFilter(parsed, { type: "syslog", id: "in_syslog_paloalto" })).toBe("match");
+    }
   });
 });

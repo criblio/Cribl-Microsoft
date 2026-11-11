@@ -70,10 +70,7 @@ export {
 } from "./secret-provisioning";
 
 // Source wiring - the ROUTE ORDER SEMANTICS
-export {
-  planSourceWiring,
-  prependRoutes,
-} from "./source-wiring";
+export { planSourceWiring } from "./source-wiring";
 export type {
   CriblDeploymentType,
   LakeFederation,
@@ -82,15 +79,24 @@ export type {
   SourceWiringPlan,
 } from "./source-wiring";
 
-// The wiring applier
+// The wiring: plan (read-only) then apply, through the shared route-insert
+// writer (DBT-301).
 export {
-  wireSource,
-  ROUTES_API_PATH,
+  applyWireSource,
+  parseSourceEntry,
+  planWireSource,
   LAKE_DATASETS_API_PATH,
-  COMMIT_API_PATH,
-  deployApiPath,
+  WIRE_INPUTS_API_PATH,
 } from "./wire-source";
-export type { WireSourcePorts, WireSourceResult } from "./wire-source";
+export type {
+  ApplyWireSourceResult,
+  LakeDatasetResult,
+  PlanWireSourceInput,
+  PlanWireSourceResult,
+  ReadyWireSource,
+  WireSourcePorts,
+  WireSourceRefusalReason,
+} from "./wire-source";
 
 // Air-gap export
 export {

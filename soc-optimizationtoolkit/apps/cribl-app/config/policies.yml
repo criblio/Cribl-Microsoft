@@ -42,11 +42,18 @@
 #
 # Unit 20 (guided deploy: post-deploy SOURCE WIRING + the connected-path secret)
 # ADDS exactly the paths its code calls, and nothing more:
-#   /m/{groupId}/routes (get/put)            - wireSource GETs the group's
-#                                              routes, prepends the Sentinel
-#                                              (+ optional Lake) routes in
-#                                              evaluation order, and PUTs the
-#                                              merged config back
+#   /m/{groupId}/routes (get)                - the route-insert plan lists
+#                                              the routing table (and its id)
+#   /m/{groupId}/routes/{id} (get/patch)     - the route-insert writer (wire
+#                                              source, DBT-301): the kit reads
+#                                              the one table, then PATCHes it
+#                                              whole with the Sentinel (+
+#                                              optional Lake) routes inserted
+#                                              at the top and every other key
+#                                              and route round-tripped. The
+#                                              spec has no PUT /routes.
+#   /m/{groupId}/system/inputs (get)         - the wiring plan reads the
+#                                              source's type (declared below)
 #   /m/{groupId}/system/secrets (post)       - ensure-secret create of the named
 #                                              text secret sentinel_client_secret
 #   /m/{groupId}/system/secrets/{id} (patch) - ensure-secret update on a 409,
@@ -61,9 +68,9 @@
 #   /system/lake/datasets (post)            - CLOUD-ONLY Cribl Lake dataset
 #                                              create (409/exists is success); a
 #                                              leader route, no /m/ prefix
-# The wiring's commit (/m/{groupId}/version/commit) and deploy
-# (/master/groups/{groupId}/deploy) reuse the routes ALREADY declared below and
-# are not redeclared.
+# The wiring's commit and deploy are the kit's commitAndDeploy (status, commit,
+# HEAD, products deploy with the master fallback), all ALREADY declared below
+# and not redeclared.
 #
 # Azure Native Source Onboarding (AZR-33, AZR-34; ADR 0007) ADDS exactly the
 # paths its code calls. Live input creation IS now shipped, CREATE-ONLY: the
@@ -201,11 +208,17 @@ policies:
   # DELETE is the last-resort conflict cleanup.
   - object: '/m/:gid/packs/*'
     actions: ['PATCH', 'DELETE']
-  # Unit 20 source wiring: read the group's routes and PUT the merged config
-  # back (wireSource prepends the Sentinel + optional Lake routes in evaluation
-  # order). GET + PUT only - the wiring never deletes a route.
+  # The routes listing: Live Architecture, the onboarding Cribl side, and the
+  # route-insert plan (which table, DBT-301). GET only: nothing PUTs /routes
+  # any more (the spec documents no PUT /routes).
   - object: '/m/:gid/routes'
-    actions: ['GET', 'PUT']
+    actions: ['GET']
+  # The route-insert writer (source wiring, DBT-301): the kit's re-read and
+  # read-back of one routing table, and the documented PATCH /routes/{id},
+  # which replaces the table whole - so the app sends every key and route it
+  # read back, and voids the write if the table moved since the confirm.
+  - object: '/m/:gid/routes/:id'
+    actions: ['GET', 'PATCH']
   # Unit 20 ensure-secret (connected path): create the named text secret
   # sentinel_client_secret the Sentinel destination references. POST only.
   # Also onboard-table (DBT-155): the per-destination client secret the
