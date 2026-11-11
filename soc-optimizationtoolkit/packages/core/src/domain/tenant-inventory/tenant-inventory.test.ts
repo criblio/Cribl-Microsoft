@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readDiagnosticSetting } from "../activity-log-export/diagnostic-setting";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
+import type { DefenderAutomation } from "../defender-export/defender-automation";
+import { DEFENDER_EXPORT_ITEM_ID } from "../defender-export/defender-automation";
 import { toListing } from "../inventory-listing/inventory-listing";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
-import { activityLogCells, destinationsOf, entraCells } from "./tenant-inventory";
-import type { EntraRead, SubscriptionSettingsRead } from "./tenant-inventory";
+import { activityLogCells, defenderCells, DEFENDER_EXPORT_TYPES, destinationsOf, entraCells } from "./tenant-inventory";
+import type { EntraRead, SubscriptionAutomationsRead, SubscriptionSettingsRead } from "./tenant-inventory";
 
 function setting(props: Record<string, unknown>, name = "s1") {
   return readDiagnosticSetting({ name, id: `/x/${name}`, properties: props });
@@ -176,5 +178,105 @@ describe("activityLogCells", () => {
     ]);
     expect(cells).toHaveLength(8);
     expect(cells.every((c) => c.state.kind === "collected")).toBe(true);
+  });
+});
+
+describe("defenderCells", () => {
+  const auto = (
+    name: string,
+    sources: string[],
+    over: Partial<DefenderAutomation> = {},
+  ): DefenderAutomation => ({
+    id: `/x/${name}`,
+    name,
+    resourceGroup: "rg",
+    isEnabled: true,
+    sources,
+    scopePaths: [],
+    actions: [{ actionType: "EventHub", eventHubResourceId: "/hub", workspaceResourceId: "" }],
+    eventHubTargets: ["/hub"],
+    ...over,
+  });
+  const sub = (id: string, ...autos: DefenderAutomation[]): SubscriptionAutomationsRead => ({
+    subscriptionId: id,
+    kind: "read",
+    automations: toListing(autos),
+  });
+  const unreadSub = (id: string): SubscriptionAutomationsRead => ({
+    subscriptionId: id,
+    kind: "unread",
+    reason: "403 Forbidden",
+  });
+  const pick = (reads: SubscriptionAutomationsRead[], logType: string) =>
+    defenderCells(reads).find((c) => c.logType === logType)!;
+
+  it("returns one cell per export type in order, in the Defender category", () => {
+    const cells = defenderCells([sub("a")]);
+    expect(cells.map((c) => c.logType)).toEqual(DEFENDER_EXPORT_TYPES.map((t) => t.logType));
+    expect(cells.every((c) => c.category === DEFENDER_EXPORT_ITEM_ID)).toBe(true);
+  });
+
+  it("collects alerts through an Event Hub action", () => {
+    const c = pick([sub("a", auto("exp", ["Alerts"]))], "alerts");
+    expect(c.state).toEqual({ kind: "collected", scopes: { collected: 1, read: 1, unread: 0 } });
+    expect(c.collectors).toEqual([
+      {
+        kind: "security-automation",
+        name: "exp",
+        scope: "a",
+        destinations: [{ kind: "event-hub", resourceId: "/hub" }],
+      },
+    ]);
+    expect(pick([sub("a", auto("exp", ["Alerts"]))], "secureScore").state).toEqual({ kind: "not-collected" });
+  });
+
+  it("gives a Workspace action a workspace destination and ignores other action types", () => {
+    const a = auto("w", ["Alerts"], {
+      actions: [
+        { actionType: "Workspace", eventHubResourceId: "", workspaceResourceId: "/ws" },
+        { actionType: "LogicApp", eventHubResourceId: "", workspaceResourceId: "" },
+      ],
+    });
+    expect(pick([sub("a", a)], "alerts").collectors[0]!.destinations).toEqual([
+      { kind: "workspace", resourceId: "/ws" },
+    ]);
+  });
+
+  it("matches eventSource case-insensitively across each types sources", () => {
+    expect(pick([sub("a", auto("e", ["subassessments"]))], "recommendations").state.kind).toBe("collected");
+    expect(pick([sub("a", auto("e", ["REGULATORYCOMPLIANCEASSESSMENT"]))], "compliance").state.kind).toBe(
+      "collected",
+    );
+  });
+
+  it("does not collect through a disabled automation but lists it", () => {
+    const c = pick([sub("a", auto("off", ["Alerts"], { isEnabled: false }))], "alerts");
+    expect(c.state).toEqual({ kind: "not-collected" });
+    expect(c.collectors.map((x) => x.name)).toEqual(["off (disabled)"]);
+  });
+
+  it("is partly when 1 of 2 subscriptions has it, and partly when 1 has it and 1 is unread", () => {
+    expect(pick([sub("a", auto("e", ["Alerts"])), sub("b")], "alerts").state).toEqual({
+      kind: "partly",
+      scopes: { collected: 1, read: 2, unread: 0 },
+    });
+    expect(pick([sub("a", auto("e", ["Alerts"])), unreadSub("b")], "alerts").state).toEqual({
+      kind: "partly",
+      scopes: { collected: 1, read: 1, unread: 1 },
+    });
+  });
+
+  it("is could-not-check, never not-collected, when nothing found and a subscription is unread", () => {
+    const s = pick([sub("a"), unreadSub("b")], "alerts").state;
+    expect(s.kind).toBe("could-not-check");
+    expect(s.kind === "could-not-check" && s.reason).toContain("403 Forbidden");
+  });
+
+  it("is could-not-check when every subscription is unread or none is visible", () => {
+    expect(pick([unreadSub("a"), unreadSub("b")], "alerts").state).toEqual({
+      kind: "could-not-check",
+      reason: "403 Forbidden",
+    });
+    expect(pick([], "alerts").state.kind).toBe("could-not-check");
   });
 });

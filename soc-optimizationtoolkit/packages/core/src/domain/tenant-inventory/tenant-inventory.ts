@@ -13,6 +13,8 @@ import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-se
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
+import type { DefenderAutomation } from "../defender-export/defender-automation";
+import { DEFENDER_EXPORT_ITEM_ID } from "../defender-export/defender-automation";
 import type { Listing } from "../inventory-listing/inventory-listing";
 import { listingRows } from "../inventory-listing/inventory-listing";
 
@@ -192,6 +194,107 @@ export function activityLogCells(reads: readonly SubscriptionSettingsRead[]): re
       category: "activityLog",
       logType: category,
       title: category,
+      collectors,
+      state,
+      archive: ARCHIVE_NOT_CLASSIFIED,
+    };
+  });
+}
+
+/**
+ * The Defender for Cloud export types and the Azure Security automation
+ * `eventSource` values that carry each. Documented values, NOT measured against
+ * a live subscription.
+ */
+export const DEFENDER_EXPORT_TYPES: readonly {
+  readonly logType: "alerts" | "recommendations" | "secureScore" | "compliance";
+  readonly title: string;
+  readonly eventSources: readonly string[];
+}[] = [
+  { logType: "alerts", title: "Security alerts", eventSources: ["Alerts"] },
+  {
+    logType: "recommendations",
+    title: "Security recommendations",
+    eventSources: ["Assessments", "AssessmentsSnapshot", "SubAssessments", "SubAssessmentsSnapshot"],
+  },
+  {
+    logType: "secureScore",
+    title: "Secure score",
+    eventSources: ["SecureScores", "SecureScoresSnapshot", "SecureScoreControls", "SecureScoreControlsSnapshot"],
+  },
+  {
+    logType: "compliance",
+    title: "Regulatory compliance",
+    eventSources: ["RegulatoryComplianceAssessment", "RegulatoryComplianceAssessmentSnapshot"],
+  },
+];
+
+export type SubscriptionAutomationsRead = { readonly subscriptionId: string } & (
+  | { readonly kind: "read"; readonly automations: Listing<DefenderAutomation> }
+  | { readonly kind: "unread"; readonly reason: string }
+);
+
+/** Event Hub and Workspace actions become destinations; other action types are ignored. */
+function automationDestinations(a: DefenderAutomation): readonly Destination[] {
+  const out: Destination[] = [];
+  for (const action of a.actions) {
+    const type = action.actionType.toLowerCase();
+    if (type === "eventhub" && action.eventHubResourceId !== "") {
+      out.push({ kind: "event-hub", resourceId: action.eventHubResourceId });
+    } else if (type === "workspace" && action.workspaceResourceId !== "") {
+      out.push({ kind: "workspace", resourceId: action.workspaceResourceId });
+    }
+  }
+  return out;
+}
+
+/**
+ * One cell per Defender export type, in DEFENDER_EXPORT_TYPES order, counted
+ * across subscriptions with the same ladder as {@link activityLogCells}. Only an
+ * enabled automation collects; a disabled one is still listed as a collector,
+ * named with a " (disabled)" suffix, so the operator sees it exists.
+ */
+export function defenderCells(reads: readonly SubscriptionAutomationsRead[]): readonly LogTypeCell[] {
+  const unreadReasons = reads.flatMap((r) => (r.kind === "unread" ? [r.reason] : []));
+  return DEFENDER_EXPORT_TYPES.map((type): LogTypeCell => {
+    const sources = type.eventSources.map((e) => e.toLowerCase());
+    const collectors: Collector[] = [];
+    let collected = 0;
+    let readCount = 0;
+    for (const r of reads) {
+      if (r.kind !== "read") continue;
+      readCount += 1;
+      const matching = listingRows(r.automations).filter((a) =>
+        a.sources.some((s) => sources.includes(s.toLowerCase())),
+      );
+      if (matching.some((a) => a.isEnabled)) collected += 1;
+      for (const a of matching) {
+        collectors.push({
+          kind: "security-automation",
+          name: a.isEnabled ? a.name : `${a.name} (disabled)`,
+          scope: r.subscriptionId,
+          destinations: automationDestinations(a),
+        });
+      }
+    }
+    const unread = reads.length - readCount;
+    const scopes = { collected, read: readCount, unread };
+    let state: CellState;
+    if (reads.length === 0) state = { kind: "could-not-check", reason: NO_SUBSCRIPTION_VISIBLE };
+    else if (readCount === 0) {
+      state = { kind: "could-not-check", reason: unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE };
+    } else if (collected === readCount && unread === 0) state = { kind: "collected", scopes };
+    else if (collected > 0) state = { kind: "partly", scopes };
+    else if (unread > 0) {
+      state = {
+        kind: "could-not-check",
+        reason: `${unread} of ${reads.length} subscriptions could not be read: ${unreadReasons[0]}`,
+      };
+    } else state = { kind: "not-collected" };
+    return {
+      category: DEFENDER_EXPORT_ITEM_ID,
+      logType: type.logType,
+      title: type.title,
       collectors,
       state,
       archive: ARCHIVE_NOT_CLASSIFIED,
