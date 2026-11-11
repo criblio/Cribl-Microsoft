@@ -4,6 +4,7 @@ import { otherNameAlsoFound, type StepVerdict } from "../onboarding-howto/check-
 import {
   emptyProgress,
   withCriblSource,
+  withLakeRoute,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -507,5 +508,35 @@ describe("a source whose Cribl source exists (AZR-94)", () => {
   it("a chosen lane is marked chosen", () => {
     const lanes = buildOnboardingLanes(input({ progress: manual(plan(emptyProgress()), "entraId") }));
     expect(lanes.lanes.map((l) => l.chosen)).toEqual([true]);
+  });
+});
+
+describe("the app's Lake route (AZR-35): read-only display from the record", () => {
+  const RECORD_DEF = { groupId: "g1", inputId: "in_def", inputType: "eventhub" as const, secretId: "s1" };
+  const LAKE = { groupId: "g1", datasetId: "azure_defender_alerts", pipelineId: "azure_onb_unroll_records", routeId: "azure_onb_defender_alerts_lake" };
+
+  it("names the created route, pipeline and dataset on the Route and Destination cards", () => {
+    const progress = withLakeRoute(withCriblSource(manual(plan(emptyProgress()), "defenderExport"), "defenderExport", RECORD_DEF), "defenderExport", LAKE);
+    const lanes = buildOnboardingLanes(input({ progress }));
+    expect(card(lanes, "defenderExport", "route")?.facts).toEqual([
+      "created by this app: route azure_onb_defender_alerts_lake",
+      "pipeline azure_onb_unroll_records",
+    ]);
+    expect(card(lanes, "defenderExport", "destination")?.facts).toEqual([
+      "Cribl Lake dataset azure_defender_alerts (created or reused by this app)",
+    ]);
+    // The record never stands in for a read: the status is still "not read".
+    expect(card(lanes, "defenderExport", "route")?.status.kind).toBe("not-read");
+  });
+
+  it("a record whose route was not written adds nothing", () => {
+    const progress = withLakeRoute(
+      withCriblSource(manual(plan(emptyProgress()), "defenderExport"), "defenderExport", RECORD_DEF),
+      "defenderExport",
+      { ...LAKE, routeId: null },
+    );
+    const lanes = buildOnboardingLanes(input({ progress }));
+    expect(card(lanes, "defenderExport", "route")?.facts).toEqual([]);
+    expect(card(lanes, "defenderExport", "destination")?.facts).toEqual([]);
   });
 });

@@ -742,13 +742,24 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
       ],
       info: `The Cribl ${source.criblInputType} source the app creates for this lane, behind a confirm. Its credential is kept in a Cribl secret, never in the source itself.`,
     };
+    // AZR-35: what the app recorded creating to route this source to Cribl
+    // Lake. Shown as the app's record, read-only; the status still comes from
+    // the last Cribl-side read, never from the record.
+    const lakeRoute = progress.criblLakeRoutes?.[sid];
+    const lakeRouteFacts =
+      lakeRoute?.routeId != null
+        ? [`created by this app: route ${lakeRoute.routeId}`, ...(lakeRoute.pipelineId !== null ? [`pipeline ${lakeRoute.pipelineId}`] : [])]
+        : [];
     const routeCard: LaneCard = {
       id: ids.route,
       kind: "route",
       title: "Route",
       status: route.status,
-      facts: route.route === null ? [] : [`route ${route.route}`],
-      info: "The Cribl route that sends this source's events on. This screen reads routes; it does not write them.",
+      facts: [...(route.route === null ? [] : [`route ${route.route}`]), ...lakeRouteFacts],
+      info:
+        lakeRoute?.routeId != null
+          ? "The Cribl route that sends this source's events on. The app created its route to Cribl Lake (named here from the app's own record); the status comes from the last Cribl-side read."
+          : "The Cribl route that sends this source's events on. This screen reads routes; for the Defender for Cloud export and the Activity Log it can create a route to Cribl Lake, under Cribl Stream source.",
     };
     // Only inputs and routes are read (D17), never outputs, so a destination
     // the route names is "named by route", not "present": it may not exist.
@@ -762,8 +773,11 @@ export function buildOnboardingLanes(input: BuildOnboardingLanesInput): Onboardi
           : route.status.kind === "consumes"
             ? { kind: "unknown", label: "cannot check: the route names no destination" }
             : { kind: "not-read", label: "not read" },
-      facts: route.destination !== null ? [`destination ${route.destination}`] : [],
-      info: "Where the route sends the events, such as the Microsoft Sentinel destination. This screen reads the route that names it, not the destination itself, so it does not confirm the destination exists.",
+      facts: [
+        ...(route.destination !== null ? [`destination ${route.destination}`] : []),
+        ...(lakeRoute?.routeId != null ? [`Cribl Lake dataset ${lakeRoute.datasetId} (created or reused by this app)`] : []),
+      ],
+      info: "Where the route sends the events, such as the Microsoft Sentinel destination or a Cribl Lake dataset. This screen reads the route that names it, not the destination itself, so it does not confirm the destination exists.",
     };
 
     const cards: LaneCard[] = [];
