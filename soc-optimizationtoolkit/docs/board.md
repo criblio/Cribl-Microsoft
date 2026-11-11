@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 37 in progress, 203 done.**
+**105 in the backlog, 38 in progress, 203 done.**
 
 ## By menu item
 
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (37)
+## In progress (38)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -723,6 +723,30 @@ Started. Anything here with an unfinished dependency is called out on its card.
   in Live Preview what the wizard and capability chips show when Cribl is
   unreachable - the behaviour change is that they finally notice.
 
+- **DBT-301** Wire source would replace a worker group's whole routes table with only the app's routes: it reads routes from body.routes, but the leader answers {items:[{id, groups, routes}]}
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-11-10 by the AZR-35 exploration, MEASURED the same day.
+  wireSource (packages/core/src/usecases/guided-deploy/wire-source.ts) GETs
+  /routes, reads the existing table with existingRoutesOf, which looks only at
+  body.routes, prepends the app's routes, and PUTs /routes with {id, routes}.
+  Read-only on a Cribl.Cloud leader (DatacenterEast, read with Cribl Stream's
+  own request options): GET /m/<g>/routes answered 200 {items:[{id, groups,
+  routes:[37 routes]}], count:1} - no top-level routes. So existingRoutesOf
+  returns [] and the PUT would carry ONLY the app's routes: the other 37
+  routes are deleted, and `groups` (route groups) is dropped too. The tests
+  feed only the bare {id, routes} shape (wire-source.test.ts), which is why
+  they pass. NOT run live: no write was made to measure what the PUT then
+  does. Reachable from the Integrate screen's source wiring (WiringSection).
+  Breaks config-plane-writes rules 2, 4 and 5 (read-modify-write, a stripped
+  key is a deleted key, merge nested), and DBT-149 (no commit scope) compounds
+  it: the wipe would be committed with everyone else's pending work. FIX: read
+  the table through the same envelope rule read-onboarding-cribl-side uses
+  (items[0] or the bare object), REFUSE when the shape is anything else rather
+  than treat it as empty, and round-trip every key of the table object (groups
+  included). Better: move the write onto the kit's planChange / writeApproved
+  with an ArrayPolicy byId on routes, which AZR-35 needs anyway. Pin with the
+  measured {items:[{id, groups, routes}]} fixture.
+
 - **DBT-151** Cribl secret writers send `type`, where the API schema names the field `secretType`
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -1067,7 +1091,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
   reversed form; true wording for endsWith; repin the includes case.
 
 - **AZR-35** Route the onboarding Cribl source to the Sentinel destination, with diagnostic records unrolled
-  `AZR-F9` `story` `settled` `blocked by AZR-34`
+  `AZR-F9` `story` `settled` `blocked by AZR-34, DBT-301`
   FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 creates the
   `eventhub` / `azure_blob` input but writes no route: the onboarding screen
   only READS GET /system/inputs and GET /routes and reports whether an
@@ -1079,7 +1103,20 @@ Started. Anything here with an unfinished dependency is called out on its card.
   confirm, read-modify-write, create-only and kit commit-and-deploy discipline
   AZR-34 uses. A route is a shared, ordered table other admins own, so the
   insert position and the refusal when an equal filter already exists need
-  deciding first.
+  deciding first. DECISIONS (operator 2026-11-10): (1) build on ONE safe
+  routes writer shared with the [[DBT-301]] fix (kit read-modify-write, rows
+  merged by id, groups round-tripped, unknown shape refused), DBT-301 first;
+  (2) INSERT POSITION: the operator picks it in the confirm, shown against the
+  current table; (3) an EQUAL FILTER already present (same input) is REFUSED
+  and the existing route named with where it sends the data - the app never
+  edits a route it cannot prove it created; (4) FIRST SLICE: Defender alerts
+  -> SecurityAlert and Activity Log -> AzureActivity (one table each); Entra
+  and the diagnostic-settings initiative pick the table per record category
+  and come later. The filter written is exactly
+  inputRouteFilter({type:'eventhub', id}) so read-onboarding-cribl-side
+  recognises it. Open: whether the Logs Ingestion API accepts SecurityAlert
+  and AzureActivity as native tables (to verify before building the
+  destination step).
 
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
@@ -1200,7 +1237,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (17)
+## Backlog - now (16)
 
 Next to pick up. Nothing blocks these.
 
@@ -1296,30 +1333,6 @@ Next to pick up. Nothing blocks these.
   with the commit, with every non-deployed outcome kept by name. FIX: move all
   three onto the adopted kit's commitAndDeploy and deployedVersion, and render
   each outcome distinctly. Live-verify on a test group.
-
-- **DBT-301** Wire source would replace a worker group's whole routes table with only the app's routes: it reads routes from body.routes, but the leader answers {items:[{id, groups, routes}]}
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-11-10 by the AZR-35 exploration, MEASURED the same day.
-  wireSource (packages/core/src/usecases/guided-deploy/wire-source.ts) GETs
-  /routes, reads the existing table with existingRoutesOf, which looks only at
-  body.routes, prepends the app's routes, and PUTs /routes with {id, routes}.
-  Read-only on a Cribl.Cloud leader (DatacenterEast, read with Cribl Stream's
-  own request options): GET /m/<g>/routes answered 200 {items:[{id, groups,
-  routes:[37 routes]}], count:1} - no top-level routes. So existingRoutesOf
-  returns [] and the PUT would carry ONLY the app's routes: the other 37
-  routes are deleted, and `groups` (route groups) is dropped too. The tests
-  feed only the bare {id, routes} shape (wire-source.test.ts), which is why
-  they pass. NOT run live: no write was made to measure what the PUT then
-  does. Reachable from the Integrate screen's source wiring (WiringSection).
-  Breaks config-plane-writes rules 2, 4 and 5 (read-modify-write, a stripped
-  key is a deleted key, merge nested), and DBT-149 (no commit scope) compounds
-  it: the wipe would be committed with everyone else's pending work. FIX: read
-  the table through the same envelope rule read-onboarding-cribl-side uses
-  (items[0] or the bare object), REFUSE when the shape is anything else rather
-  than treat it as empty, and round-trip every key of the table object (groups
-  included). Better: move the write onto the kit's planChange / writeApproved
-  with an ArrayPolicy byId on routes, which AZR-35 needs anyway. Pin with the
-  measured {items:[{id, groups, routes}]} fixture.
 
 - **DBT-150** The Dataflow screen animates every edge from configuration, with no metrics read
   `DBT-F3` `bug` `settled`
