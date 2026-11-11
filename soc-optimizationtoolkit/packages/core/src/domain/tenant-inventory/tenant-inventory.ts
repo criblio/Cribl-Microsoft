@@ -12,6 +12,7 @@
 import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-setting";
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
+import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
 import type { Listing } from "../inventory-listing/inventory-listing";
 import { listingRows } from "../inventory-listing/inventory-listing";
 
@@ -77,11 +78,11 @@ export function destinationsOf(setting: DiagnosticSettingRead): readonly Destina
 const ALL_LOGS = "alllogs";
 const ARCHIVE_NOT_CLASSIFIED: ArchiveState = { kind: "unknown", reason: "not classified yet" };
 
-function collectorOf(setting: DiagnosticSettingRead): Collector {
+function collectorOf(setting: DiagnosticSettingRead, scope: string): Collector {
   return {
     kind: "diagnostic-setting",
     name: setting.name,
-    scope: "tenant",
+    scope,
     destinations: destinationsOf(setting),
   };
 }
@@ -92,6 +93,15 @@ function collectsCategory(setting: DiagnosticSettingRead, category: string): boo
     setting.enabled.some((c) => c.toLowerCase() === want) ||
     setting.enabledGroups.some((g) => g.toLowerCase() === ALL_LOGS)
   );
+}
+
+/** The settings that collect a category, as collectors at one scope. */
+function collectorsFor(
+  settings: readonly DiagnosticSettingRead[],
+  category: string,
+  scope: string,
+): readonly Collector[] {
+  return settings.filter((s) => collectsCategory(s, category)).map((s) => collectorOf(s, scope));
 }
 
 /** The first enabled category group this reading does not recognise, or null. */
@@ -114,7 +124,7 @@ export function entraCells(read: EntraRead): readonly LogTypeCell[] {
   const settings = read.kind === "read" ? listingRows(read.settings) : [];
   const group = unrecognisedGroup(settings);
   return ENTRA_CATEGORIES.map((c): LogTypeCell => {
-    const collectors = settings.filter((s) => collectsCategory(s, c.name)).map(collectorOf);
+    const collectors = collectorsFor(settings, c.name, "tenant");
     let state: CellState;
     if (read.kind === "unread") state = { kind: "could-not-check", reason: read.reason };
     else if (collectors.length > 0) state = { kind: "collected", scopes: { collected: 1, read: 1, unread: 0 } };
@@ -128,6 +138,60 @@ export function entraCells(read: EntraRead): readonly LogTypeCell[] {
       category: "entraId",
       logType: c.name,
       title: c.name,
+      collectors,
+      state,
+      archive: ARCHIVE_NOT_CLASSIFIED,
+    };
+  });
+}
+
+export type SubscriptionSettingsRead = { readonly subscriptionId: string } & (
+  | { readonly kind: "read"; readonly settings: Listing<DiagnosticSettingRead> }
+  | { readonly kind: "unread"; readonly reason: string }
+);
+
+const NO_SUBSCRIPTION_VISIBLE = "no subscription was visible to this connection";
+
+/**
+ * One cell per Activity Log category, in ACTIVITY_LOG_CATEGORIES order,
+ * counted across subscriptions. Collected only when every subscription was
+ * read and has a setting collecting the category; a subscription that could
+ * not be read makes the cell at best partly, and a cell with nothing found and
+ * a subscription unread is could-not-check, never not-collected. An empty
+ * subscription list is could-not-check: a permission-filtered list is not
+ * "no subscriptions".
+ */
+export function activityLogCells(reads: readonly SubscriptionSettingsRead[]): readonly LogTypeCell[] {
+  const unreadReasons = reads.flatMap((r) => (r.kind === "unread" ? [r.reason] : []));
+  return ACTIVITY_LOG_CATEGORIES.map((category): LogTypeCell => {
+    const collectors: Collector[] = [];
+    let collected = 0;
+    let readCount = 0;
+    for (const r of reads) {
+      if (r.kind !== "read") continue;
+      readCount += 1;
+      const found = collectorsFor(listingRows(r.settings), category, r.subscriptionId);
+      if (found.length > 0) collected += 1;
+      collectors.push(...found);
+    }
+    const unread = reads.length - readCount;
+    const scopes = { collected, read: readCount, unread };
+    let state: CellState;
+    if (reads.length === 0) state = { kind: "could-not-check", reason: NO_SUBSCRIPTION_VISIBLE };
+    else if (readCount === 0) {
+      state = { kind: "could-not-check", reason: unreadReasons[0] ?? NO_SUBSCRIPTION_VISIBLE };
+    } else if (collected === readCount && unread === 0) state = { kind: "collected", scopes };
+    else if (collected > 0) state = { kind: "partly", scopes };
+    else if (unread > 0) {
+      state = {
+        kind: "could-not-check",
+        reason: `${unread} of ${reads.length} subscriptions could not be read: ${unreadReasons[0]}`,
+      };
+    } else state = { kind: "not-collected" };
+    return {
+      category: "activityLog",
+      logType: category,
+      title: category,
       collectors,
       state,
       archive: ARCHIVE_NOT_CLASSIFIED,
