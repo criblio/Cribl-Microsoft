@@ -78,7 +78,7 @@ describe("the Activity Log setting requests", () => {
 });
 
 describe("readDiagnosticSetting", () => {
-  it("reads rule, hub and enabled categories (or category groups), dropping disabled ones", () => {
+  it("reads rule, hub, enabled categories and enabled category groups apart, dropping disabled ones", () => {
     const read = readDiagnosticSetting({
       id: "/x/diagnosticSettings/a",
       name: "a",
@@ -92,12 +92,55 @@ describe("readDiagnosticSetting", () => {
         ],
       },
     });
-    expect(read).toEqual({ id: "/x/diagnosticSettings/a", name: "a", ruleId: RULE_ID, hub: "hub", enabled: ["Administrative", "allLogs"] });
+    expect(read).toEqual({
+      id: "/x/diagnosticSettings/a",
+      name: "a",
+      ruleId: RULE_ID,
+      hub: "hub",
+      workspaceId: "",
+      storageAccountId: "",
+      partnerId: "",
+      enabled: ["Administrative"],
+      enabledGroups: ["allLogs"],
+    });
+  });
+
+  it("reads every destination of a diagnostic setting", () => {
+    const s = readDiagnosticSetting({
+      id: "x",
+      name: "aad",
+      properties: {
+        workspaceId: "/subscriptions/s/resourceGroups/r/providers/Microsoft.OperationalInsights/workspaces/law",
+        storageAccountId: "/subscriptions/s/resourceGroups/r/providers/Microsoft.Storage/storageAccounts/st",
+        eventHubAuthorizationRuleId: "",
+        marketplacePartnerId: "/partner/p",
+        logs: [
+          { category: "SignInLogs", enabled: true },
+          { categoryGroup: "allLogs", enabled: true },
+          { category: "AuditLogs", enabled: false },
+        ],
+      },
+    });
+    expect(s.workspaceId).toMatch(/workspaces\/law$/);
+    expect(s.storageAccountId).toMatch(/storageAccounts\/st$/);
+    expect(s.partnerId).toBe("/partner/p");
+    expect(s.enabled).toEqual(["SignInLogs"]);
+    expect(s.enabledGroups).toEqual(["allLogs"]);
   });
 
   it("takes the name from the id when the item omits it; a non-object reads as an empty setting", () => {
     expect(readDiagnosticSetting({ id: activityLogSettingPath(SUB) }).name).toBe("cribl-activity-log");
-    expect(readDiagnosticSetting("nope")).toEqual({ id: "", name: "", ruleId: "", hub: "", enabled: [] });
+    expect(readDiagnosticSetting("nope")).toEqual({
+      id: "",
+      name: "",
+      ruleId: "",
+      hub: "",
+      workspaceId: "",
+      storageAccountId: "",
+      partnerId: "",
+      enabled: [],
+      enabledGroups: [],
+    });
   });
 
   it("parseDiagnosticSettings drops nameless id-less items; zero items is the unverified empty", () => {
