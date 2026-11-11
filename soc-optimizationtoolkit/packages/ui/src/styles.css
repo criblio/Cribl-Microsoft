@@ -3426,6 +3426,10 @@ button.readiness-pill:focus-visible {
 .allowance-cards {
   margin: 10px 0;
 }
+/* The window totals strip at the top of the results (MIG-33). */
+.allowance-window-strip {
+  margin: 10px 0;
+}
 .allowance-card-grid {
   display: grid;
   /* min(): a card narrower than 300px takes the full width instead of overflowing it. */

@@ -11,3 +11,13 @@ export function formatMB(mb: number): string {
   if (mb > 0) return `${(mb * 1_000).toFixed(1)} KB`;
   return "0 MB";
 }
+
+/**
+ * A window total, always in decimal GB so totals compare at a glance. A
+ * figure too small for two decimals says so rather than rounding to 0.00 GB.
+ */
+export function formatGB(mb: number): string {
+  if (mb === 0) return "0 GB";
+  if (mb > 0 && mb < 5) return "less than 0.01 GB";
+  return `${(mb / 1_000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB`;
+}

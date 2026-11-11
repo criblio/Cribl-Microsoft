@@ -31,6 +31,7 @@ import { InfoTip } from "../../components/info-tip";
 import { SearchableSelect } from "../../components/searchable-select";
 import { AllowanceCards, AllowanceQueries, AllowanceTagCell } from "./allowance-cards";
 import { BySourceView } from "./by-source-view";
+import { WindowSummaryStrip } from "./window-summary-strip";
 import {
   ALLOWANCE_TIPS,
   afterAllowancesText,
@@ -258,6 +259,7 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
   // Narrowed on kind, never counted: an unverified empty Usage answer has no
   // table count to show (docs/inventory-standard.md).
   const tableRows = inventory !== null && inventory.tables.kind === "rows" ? inventory.tables.rows : null;
+  const shownAllowances = tenant ?? allowances;
 
   return (
     <section className="panel">
@@ -350,6 +352,8 @@ export function WorkspaceInventoryPanel({ onOpenChangeRequest }: WorkspaceInvent
             last {inventory.windowDays} complete UTC days.
           </p>
           {staleNote !== null && <p className="match-warning">{staleNote}</p>}
+          {/* The window totals follow the allowance result on screen: the tenant comparison while it is shown. */}
+          {shownAllowances !== null && <WindowSummaryStrip allowances={shownAllowances.result} />}
           <div className="match-stat-grid">
             <div className="match-stat match-stat-info">
               <span className="match-stat-value">

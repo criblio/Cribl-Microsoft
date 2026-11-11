@@ -15,6 +15,9 @@ import {
   grantCardText,
   grantedTip,
   grantedUnknownReason,
+  grantWindowArithmetic,
+  grantWindowLine,
+  licenceCountText,
   licenceNote,
   meterOf,
   noGrantsText,
@@ -26,8 +29,17 @@ import {
   sentinelWorkspaceIds,
   tagLabel,
   tenantDiscoveryNote,
+  windowStripText,
 } from "./allowance-state";
-import { allowances, grantView, servers as serversBlock, usage } from "./allowance-test-fixture";
+import {
+  allowances,
+  grantView,
+  grantWindow,
+  servers as serversBlock,
+  usage,
+  windowTotals,
+} from "./allowance-test-fixture";
+import { formatGB } from "./format-mb";
 import { inventoryCsv } from "./workspace-inventory-state";
 
 describe("tagLabel", () => {
@@ -602,5 +614,162 @@ describe("grantedTip", () => {
     expect(grantedTip(servers, tenant)).toBe(ALLOWANCE_TIPS.grantedServersTenant);
     expect(ALLOWANCE_TIPS.grantedServersTenant).not.toMatch(/this workspace/);
     expect(grantedTip(grantView({ grant: "e5" }), tenant)).toBe(ALLOWANCE_TIPS.grantedE5);
+  });
+});
+
+describe("formatGB (window totals)", () => {
+  it("always reads GB with two decimals, says when a figure is too small, and never rounds to 0.00", () => {
+    expect(formatGB(15000)).toBe("15.00 GB");
+    expect(formatGB(1_234_567)).toBe("1,234.57 GB");
+    expect(formatGB(90)).toBe("0.09 GB");
+    expect(formatGB(4)).toBe("less than 0.01 GB");
+    expect(formatGB(0)).toBe("0 GB");
+  });
+});
+
+describe("licence counts and window totals on the card face", () => {
+  const serversWindow = grantWindow({
+    grant: "servers-p2",
+    licences: { kind: "machines", dailyAverage: 1.5, isFloor: false },
+    perDayMB: 750,
+    multiplier: 30,
+    basis: "window-average",
+    allowanceMB: 22500,
+    eligibleMB: 30000,
+    appliedMB: 20000,
+  });
+
+  it("names the seats (assigned and purchased) and the machines, 'at least' for a floor", () => {
+    const a = allowances();
+    expect(licenceCountText(grantView(), a)).toBe("2,400 E5 seats assigned (2,400 purchased)");
+    expect(licenceCountText(grantView({ grant: "servers-p2", window: serversWindow }), a)).toBe(
+      "1.5 Defender for Servers P2 machines a day on average",
+    );
+    const floored = grantWindow({
+      grant: "servers-p2",
+      licences: { kind: "machines", dailyAverage: 2, isFloor: true },
+    });
+    expect(licenceCountText(grantView({ grant: "servers-p2", window: floored }), a)).toBe(
+      "at least 2 Defender for Servers P2 machines a day on average",
+    );
+  });
+
+  it("an unread licence count is 'not read' or 'not known' with the reason, never 0", () => {
+    const a = allowances({ servers: serversBlock([], { heartbeatComplete: false }) });
+    const notRead = grantWindow({ licences: { kind: "not-read" } });
+    expect(licenceCountText(grantView({ window: notRead }), a)).toBe("E5 seats not read");
+    expect(licenceCountText(grantView({ grant: "servers-p2", window: { ...notRead, grant: "servers-p2" } }), a)).toBe(
+      "Defender for Servers P2 machines not known - reporting machines were not read",
+    );
+  });
+
+  it("states the window arithmetic literally: seats x 5 MB x days, machines x 500 MB x days", () => {
+    expect(grantWindowArithmetic(grantWindow())).toBe("2,400 seats x 5 MB x 30 days = 360.00 GB");
+    expect(grantWindowArithmetic(serversWindow)).toBe(
+      "1.5 machines a day on average x 500 MB x 30 days = 22.50 GB",
+    );
+    // Fewer complete days: the actual count, and the result reads at least.
+    expect(grantWindowArithmetic(grantWindow({ multiplier: 12, allowanceMB: 144000, allowanceIsFloor: true }))).toBe(
+      "2,400 seats x 5 MB x 12 days = at least 144.00 GB",
+    );
+    expect(grantWindowArithmetic(grantWindow({ allowanceMB: null, perDayMB: null, unknown: "licences-not-read" }))).toBeNull();
+  });
+
+  it("the card's window line: eligible, allowance and applied over the window", () => {
+    const a = allowances();
+    expect(grantWindowLine(grantView(), a)).toBe(
+      "last 30 days: eligible 0.10 GB, allowance 360.00 GB, Microsoft applied 0.08 GB",
+    );
+    const floors = grantWindow({ eligibleIsFloor: true, appliedIsFloor: true, allowanceIsFloor: true });
+    expect(grantWindowLine(grantView({ window: floors }), a)).toBe(
+      "last 30 days: eligible at least 0.10 GB, allowance at least 360.00 GB, Microsoft applied at least 0.08 GB",
+    );
+    const unread = grantWindow({ eligibleMB: null, appliedMB: null, allowanceMB: null, perDayMB: null, unknown: "licences-not-read" });
+    expect(grantWindowLine(grantView({ window: unread }), a)).toBe(
+      "last 30 days: eligible not read, allowance not known - licence counts were not read, " +
+        "Microsoft applied known only for all grants together",
+    );
+  });
+});
+
+describe("windowStripText", () => {
+  it("one workspace, every figure exact", () => {
+    const a = allowances({
+      grants: [grantView()],
+      window: windowTotals({
+        billableMB: 400000,
+        allowanceMB: 360000,
+        allowanceUnknown: null,
+        appliedMB: 350000,
+        net: { kind: "over", mb: 40000, bound: "exact" },
+      }),
+    });
+    expect(windowStripText(a)).toEqual({
+      heading: "This workspace, last 30 complete days",
+      billable: "400.00 GB",
+      allowance: "360.00 GB",
+      applied: "350.00 GB",
+      net: "40.00 GB over the allowance",
+      licences: ["2,400 E5 seats assigned (2,400 purchased)"],
+      daysNote: null,
+    });
+  });
+
+  it("fewer complete days: says how many, and the allowance and net read at least", () => {
+    const a = allowances({
+      grants: [grantView()],
+      window: windowTotals({
+        days: { days: 12, windowDays: 30, isFloor: true },
+        billableMB: 3000,
+        allowanceMB: 144000,
+        allowanceIsFloor: true,
+        allowanceUnknown: null,
+        net: { kind: "under", mb: 141000, bound: "at-least" },
+      }),
+    });
+    const t = windowStripText(a);
+    expect(t.allowance).toBe("at least 144.00 GB");
+    expect(t.net).toBe("at least 141.00 GB under the allowance");
+    expect(t.daysNote).toBe(
+      'Data on 12 of the last 30 complete days (the busiest table\'s count): the E5 allowance counts ' +
+        'those 12 days, and reads "at least" because the workspace may have had data on more.',
+    );
+  });
+
+  it("tenant comparison with a workspace not read: names how many were read, billable at least", () => {
+    const a = allowances({
+      grants: [grantView()],
+      sumsAreFloors: true,
+      scope: { kind: "tenant", workspaces: ["/w1", "/w2", "/w3"], notRead: [{ id: "/w3", error: "x" }] },
+      window: windowTotals({
+        billableIsFloor: true,
+        appliedIsFloor: true,
+        allowanceMB: 360000,
+        allowanceUnknown: null,
+        appliedMB: 1000,
+        net: { kind: "not-known", reason: "the billable total is a lower bound, so it may be over" },
+      }),
+    });
+    const t = windowStripText(a);
+    expect(t.heading).toBe("Whole tenant, last 30 complete days - 2 of 3 Sentinel workspaces read");
+    expect(t.billable).toBe("at least 6.00 GB");
+    expect(t.applied).toBe("at least 1.00 GB");
+    expect(t.net).toBe("not known - the billable total is a lower bound, so it may be over");
+  });
+
+  it("no grant: never a 0 allowance - none in use, or not known when eligible was not read", () => {
+    expect(windowStripText(allowances()).allowance).toBe("none in use - no table a grant covers had billable volume");
+    expect(windowStripText(allowances({ eligibleKnown: false })).allowance).toBe(
+      "not known - eligible volume was not read",
+    );
+    expect(windowStripText(allowances()).licences).toEqual([]);
+  });
+
+  it("even reads level", () => {
+    const a = allowances({
+      grants: [grantView()],
+      window: windowTotals({ allowanceMB: 6000, allowanceUnknown: null, net: { kind: "even", mb: 0, bound: "exact" } }),
+    });
+    expect(windowStripText(a).net).toBe("level with the allowance");
   });
 });
