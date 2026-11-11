@@ -1621,7 +1621,18 @@ Next to pick up. Nothing blocks these.
   STILL OPEN: the ticket must either ask for register/action at the
   subscription and Reader or Network Contributor on NetworkWatcherRG, or tell
   the admin to pre-register the provider and create the watcher; the lab
-  preflight should check both.
+  preflight should check both. DIAGNOSED 2026-11-11 (read-only, two refuters
+  agreed): STILL REAL. rolePlanForSetupPath("lab-byo-rg") still asks only RG
+  Contributor + RBAC Admin; labRequiredActions never checks
+  Microsoft.EventGrid/register/action (subscription) or networkWatchers/read
+  on NetworkWatcherRG, so the preflight passes and deploy fails; storage-phase
+  POSTs register after a 403 GET and flowlogs-phase PUTs a duplicate watcher
+  after a 403 on NetworkWatcherRG. azure-connect-section.tsx:82-84 and
+  feature-catalog.md:238 still claim no subscription-scope rights. Proposed:
+  admin prerequisite items (register Microsoft.EventGrid; Reader/Network
+  Contributor on NetworkWatcherRG), scope-tagged preflight, and 403 handling
+  in both phases. Size M. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-82** Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads
   `AZR-F10` `bug` `settled`
@@ -1635,7 +1646,14 @@ Next to pick up. Nothing blocks these.
   asks for Management Group Reader or the aadiam read, whose least privilege
   for a service principal is undocumented (low confidence). FIX: per-tenant
   feature rows for both, the aadiam one marked unverified and optional, and
-  Validate reporting a 403 there as unknown, never red.
+  Validate reporting a 403 there as unknown, never red. DIAGNOSED 2026-11-11:
+  PARTLY REAL. The ticket catalog cannot express management-group scope
+  (rbacScopeOf throws), and the aadiam read needs an Entra directory role that
+  fits neither kind. Refuter correction (accepted): scopeCovers must not let a
+  subscription grant cover a managementGroup need, or the new row is
+  suppressed; the coverage pin must match role name AND scope level. Size M.
+  Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
   `AZR-F10` `bug` `settled`
@@ -1648,7 +1666,12 @@ Next to pick up. Nothing blocks these.
   measured manage right; skip the probes until a group is chosen (unknown, not
   denied); state in the change requests that the Cribl-side least privilege is
   'App user plus Org-admin install-time approval of policies.yml', with every
-  group in scope.
+  group in scope. DIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts
+  come from the approved policies.yml, so the detail should say "granted by
+  app policy", not "by platform"; the local branch (not reachable in the
+  shipped app) should report unknown, not 403, when no group is chosen. Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
   `AZR-F10` `bug` `settled`
@@ -1659,7 +1682,12 @@ Next to pick up. Nothing blocks these.
   read the Event Hub namespace, its rules and consumer groups, which may sit
   in another subscription. FIX: name each as a resource-scoped feature row in
   words (as listKeys is), and have the preflight report those scopes as
-  unknown rather than denied.
+  unknown rather than denied. DIAGNOSED 2026-11-11 (two refuters agreed):
+  STILL REAL. Cross-scope operations (AMPLS scoped resource write, DCE read,
+  Event Hub namespace read, ...) are in the least-privilege registry but never
+  reached FEATURE_ROLES, and scopeCovers treats a subscription grant as
+  covering any resource. Size M. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 ---
 
@@ -2360,7 +2388,14 @@ Settled and unblocked, sequenced behind now.
   branches against one org; a customer hits it with an old bundle open in
   another tab during the upgrade. FIX: decide whether the screen should report
   legacy records it did not adopt (read-only) rather than silently ignore
-  them.
+  them. DIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a
+  pre-tenant bundle cannot save over the migration marker, so the likely lab
+  path is that the scoped document was created while the legacy key was absent
+  and an old bundle later wrote a fresh legacy document. Fix: a read-only
+  readStrandedLegacyDocument that reports stranded (claim names this tenant)
+  AND unattributed (no claim) records, never adopting. Size S. Full diagnosis,
+  fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-97** No way to adopt a Cribl input the app created earlier with a credential it now refuses
   `AZR-F9` `bug` `settled`
@@ -2377,7 +2412,15 @@ Settled and unblocked, sequenced behind now.
   cribl-listen. FIX: let the plan READ the existing input before refusing the
   credential, and when it is ours, report it by name with its credential
   problem (Manage key: replace and rotate) instead of a plain refusal - never
-  rewrite it.
+  rewrite it. DIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL.
+  planCriblSource refuses a Manage-capable credential before the read that
+  tells create from already-ours, so an input created earlier with that
+  credential can never be classified. Fix: defer the refusal past
+  classifyExistingInput; on ours-matching return already-applied with a
+  credential warning; absent / differs / foreign still refuse with zero
+  writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
   `AZR-F9` `story` `settled` `blocked by AZR-98`
@@ -2587,6 +2630,18 @@ Settled and unblocked, sequenced behind now.
   Summiting the Pyramid / Mappings Explorer and Splunk Security Essentials.
   Microsoft built-in detections count as a labelled vendor marker. Operator
   answers on tiles only feed the gap list. Reasoning in backlog.md section 26.
+  MAPPING RESEARCH 2026-11-11 (record:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json): FEASIBLE and
+  small - ATT&CK v20.1 has 4,209 log source references over 271 distinct
+  names, about 30 most common names cover ~84%; no maintained public mapping
+  to Sentinel tables exists, so the app owns a version-keyed bridge (log
+  source -> tables, fit exact/equivalent/partial/none) built at build time
+  from the pinned STIX bundle, with a gate that fails on any unclassified new
+  name. OPEN before scoping: pin v18 vs v20.x; table plan tier
+  (Basic/Auxiliary tables cannot run scheduled rules, Usage ignores plan); XDR
+  tables only in advanced hunting; per-tenant _CL / ASIM aliases for
+  Cribl-routed data (central for this product); seed-source licences (OSSEM,
+  SMAP); auditd (555 references) deferral.
   DECISION: What makes an ATT&CK technique 'covered' on the heat map?
     [ ] `rules` Analytics rules over ingested tables - A technique is covered when an analytics rule (enabled in the workspace, or available from installed content) tags it AND every table the rule queries carries data. Uses data the app already parses; measures detection that exists, not detection that is possible.
     [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
