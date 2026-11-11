@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import {
   armErrorCode,
   asString,
+  attemptArm,
+  classifyArmFailure,
   httpErrorText,
   is2xx,
   isErrorCode,
@@ -104,5 +106,48 @@ describe("mergedTags", () => {
     expect(mergedTags({ tags: { n: 3, ok: "1" } }, { a: "b" })).toEqual({ ok: "1", a: "b" });
     expect(mergedTags({}, { a: "b" })).toEqual({ a: "b" });
     expect(mergedTags(undefined, { a: "b" })).toEqual({ a: "b" });
+  });
+});
+
+describe("classifyArmFailure", () => {
+  const answer = (status: number, body: unknown) => ({ ok: true as const, response: { status, body } });
+
+  it("puts MissingSubscriptionRegistration before 403, so the fix named is registration", () => {
+    const r = classifyArmFailure(
+      answer(403, { error: { code: "MissingSubscriptionRegistration", message: "register it" } }),
+      "List things",
+    );
+    expect(r).toEqual({
+      kind: "unregistered",
+      status: 403,
+      code: "MissingSubscriptionRegistration",
+      message: "List things: HTTP 403 - register it",
+    });
+  });
+
+  it("a plain 403 is denied, any other non-2xx is failed, no answer is failed with a null status", () => {
+    expect(classifyArmFailure(answer(403, { error: { code: "AuthorizationFailed" } }), "X").kind).toBe("denied");
+    expect(classifyArmFailure(answer(500, {}), "X")).toEqual({
+      kind: "failed",
+      status: 500,
+      code: "",
+      message: "X: HTTP 500",
+    });
+    expect(classifyArmFailure({ ok: false, error: "socket hang up" }, "X")).toEqual({
+      kind: "failed",
+      status: null,
+      code: "",
+      message: "X: socket hang up",
+    });
+  });
+});
+
+describe("attemptArm", () => {
+  it("turns a rejection into ok:false with its text, and never rejects", async () => {
+    await expect(attemptArm(() => Promise.reject(new Error("dns")))).resolves.toEqual({ ok: false, error: "dns" });
+    await expect(attemptArm(() => Promise.resolve({ status: 204, body: null }))).resolves.toEqual({
+      ok: true,
+      response: { status: 204, body: null },
+    });
   });
 });

@@ -163,3 +163,53 @@ export function safeAzureManagement(
     },
   };
 }
+
+/** The ARM error code Azure returns when a resource provider is not registered. */
+export const MISSING_REGISTRATION_CODE = "MissingSubscriptionRegistration";
+
+/** Why one ARM call produced no usable answer, classified for the operator. */
+export interface ArmReadFailure {
+  /** 403, provider not registered, or anything else (incl. no answer at all). */
+  readonly kind: "denied" | "unregistered" | "failed";
+  /** Azure's status, or null when the transport produced no answer. */
+  readonly status: number | null;
+  /** Azure's error code, "" when there was none. */
+  readonly code: string;
+  /** Azure's message, or ours. */
+  readonly message: string;
+}
+
+/**
+ * Classify a non-2xx answer (or no answer) of one {@link ArmAttempt} as
+ * `<what>: HTTP <status> - <Azure's message>`. Registration is checked BEFORE
+ * 403: an unregistered provider can come back as a 403 carrying
+ * MissingSubscriptionRegistration, and "register the provider" is the fix the
+ * operator needs there, not "ask for a role". Shared by the create-only
+ * deploys (Defender export, Activity Log setting) so the wording and the
+ * precedence are decided once.
+ */
+export function classifyArmFailure(result: ArmAttempt, what: string): ArmReadFailure {
+  if (!result.ok) {
+    return { kind: "failed", status: null, code: "", message: `${what}: ${result.error}` };
+  }
+  const { status, body } = result.response;
+  const code = armErrorCode(body);
+  const azureMessage = asString(prop(prop(body, "error"), "message")) || asString(prop(body, "message"));
+  const message = `${what}: HTTP ${status}${azureMessage !== "" ? ` - ${azureMessage}` : ""}`;
+  if (code.toLowerCase() === MISSING_REGISTRATION_CODE.toLowerCase()) {
+    return { kind: "unregistered", status, code, message };
+  }
+  if (status === 403) {
+    return { kind: "denied", status, code, message };
+  }
+  return { kind: "failed", status, code, message };
+}
+
+/** Run one call so it never rejects; the rejection text is kept, never thrown. */
+export async function attemptArm(run: () => Promise<PortHttpResponse>): Promise<ArmAttempt> {
+  try {
+    return { ok: true, response: await run() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
