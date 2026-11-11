@@ -232,7 +232,7 @@ export function ActivityLogSection({
                     <td>{s.name}</td>
                     <td>{s.ruleId || "none"}</td>
                     <td>{s.hub || (s.ruleId !== "" ? `${ACTIVITY_LOG_AUTO_HUB} (chosen by Azure)` : "none")}</td>
-                    <td>{s.enabled.length === 0 ? "none" : s.enabled.join(", ")}</td>
+                    <td>{s.enabled.length + s.enabledGroups.length === 0 ? "none" : [...s.enabled, ...s.enabledGroups].join(", ")}</td>
                     <td>
                       {duplicates.has(s.id || s.name)
                         ? "Possible duplicate - already sends to the chosen namespace"

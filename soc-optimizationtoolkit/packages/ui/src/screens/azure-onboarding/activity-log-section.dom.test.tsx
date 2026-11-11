@@ -260,6 +260,34 @@ describe("Activity Log section - refusals disable Deploy and write nothing", () 
     expect(azure.puts()).toEqual([]);
   });
 
+  it("lists a category group in Categories enabled, and none only when neither a category nor a group is on", async () => {
+    const groupOnly = {
+      id: `${SETTINGS}/group-only`,
+      name: "group-only",
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_ID}/authorizationRules/RootManageSharedAccessKey`,
+        logs: [{ categoryGroup: "allLogs", enabled: true }],
+      },
+    };
+    const nothing = {
+      id: `${SETTINGS}/nothing-on`,
+      name: "nothing-on",
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_ID}/authorizationRules/RootManageSharedAccessKey`,
+        logs: [{ categoryGroup: "allLogs", enabled: false }],
+      },
+    };
+    mount(new RoutingAzure([groupOnly, nothing]));
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    const table = within(block()).getByRole("table", { name: "Existing diagnostic settings" });
+    const cells = (name: string): string[] =>
+      Array.from(within(table).getByText(name).closest("tr")?.querySelectorAll("td") ?? []).map((td) => td.textContent ?? "");
+    expect(cells("group-only")[3]).toBe("allLogs");
+    expect(cells("nothing-on")[3]).toBe("none");
+  });
+
   it("a subscription already at Azure's limit of five settings", async () => {
     const other = "/subscriptions/sub-1/resourceGroups/x/providers/Microsoft.EventHub/namespaces/other/authorizationRules/R";
     const azure = mount(new RoutingAzure([1, 2, 3, 4, 5].map((n) => setting(`s${n}`, other))));
