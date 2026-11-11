@@ -239,7 +239,9 @@ longer than the adapter default; the right value is not measured.
 
 Added: `/m/:gid/system/inputs` POST (beside GET), `/m/:gid/system/inputs/:id`
 GET, `/m/:gid/system/secrets/:id` GET, `/m/:gid/version/status` GET,
-`/m/:gid/version` GET, `/m/:gid/system/metrics/query` POST,
+`/m/:gid/version` GET, `/m/:gid/system/metrics/query` POST (corrected
+2026-11-10, AZR-95: that path is a 404 on Cribl.Cloud; the grant is now the
+leader route `/system/metrics/query` POST),
 `/products/stream/groups/:id/deploy` PATCH and `/products/stream/groups/:id`
 GET. The existing `/master` grants stay, as the kit's 404 fallback and for the
 older callers.
@@ -287,7 +289,11 @@ through the new `PollRegistry` into App's single `useConsolidatedPolling`
 (60s, priority 5, 30 a minute). `main.tsx` wraps `<App/>` in
 `PollRegistryProvider` so App's hook sees screen registrations. Each run sends
 exactly ONE `POST /m/<g>/system/metrics/query`, splitting `total.in_events`
-by input.
+by input. (Corrected 2026-11-10, AZR-95, measured: the query is the LEADER
+route `POST /system/metrics/query` with the group in `where`
+(`__worker_group=="<g>" && __dist_mode=="worker"`), and a relative
+`earliest` must be `"<N>s"` - a signed `-24h` answers 200 with zero rows.
+Item 6 of the live list passed on that basis: the hop read flowing.)
 
 The first run asks a cumulative 24-hour lookback; later runs ask a 300-second
 window. A failed lookback is retried every fifth run. Lane states are

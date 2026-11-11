@@ -10,7 +10,8 @@
  * Label matching follows kit/metrics/counting.ts parseEndpointLabel: an input
  * label is `<type>:<id>`, `<type>:<id>:<extra>...`, or inside a pack
  * `<type>:<packId>.<id>` (Measured 2026-08-25 / 2026-09-24 in the kit). The
- * form for a new eventhub / azure_blob input is NOT measured live yet (ADR 0007
+ * form for a new eventhub input is MEASURED (2026-11-10, AZR-95: `eventhub:<inputId>`);
+ * the azure_blob form is NOT measured live yet (ADR 0007
  * live-verification list).
  */
 
@@ -239,7 +240,11 @@ export const NOT_MEASURED_REASON_LABEL: Readonly<Record<NotMeasuredReason, strin
   "lookback-failed": "lookback failed",
 };
 
-function lookbackPhrase(lookback: string): string {
+/**
+ * A lookback token in words: "-24h" -> "the last 24 hours", "-1h" -> "the last
+ * hour". The ONE spelling: the lane sentence and the diagram toolbar both use it.
+ */
+export function lookbackPhrase(lookback: string): string {
   const m = /^-(\d+)h$/.exec(lookback);
   if (m) return m[1] === "1" ? "the last hour" : `the last ${m[1]} hours`;
   return lookback;

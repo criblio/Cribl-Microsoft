@@ -289,16 +289,28 @@ export const CLIENT_SECRET_IS_CONNECTION_STRING =
 
 const ENTRA_SECRET_NEEDED = "Paste the Cribl service principal's client secret.";
 
-/** Why an Entra ID lane cannot plan yet, or null. */
-function entraDisabledReason(g: CreateGateInput): string | null {
+/**
+ * Why the Cribl principal's ids cannot be used yet, or null: a missing id, or
+ * this app's own client id (ADR 0008 section 2, AZR-66). ONE check for the
+ * Entra ID and blob lanes; only Entra ID reads the role, so only it needs the
+ * object id.
+ */
+function principalIdsReason(g: CreateGateInput, needObjectId: boolean): string | null {
   const ids = g.entra;
   const missing: string[] = [];
   if (ids === undefined || ids.tenantId.trim() === "") missing.push("tenant ID");
   if (ids === undefined || ids.clientId.trim() === "") missing.push("client ID");
-  if (ids === undefined || ids.objectId.trim() === "") missing.push("object ID");
+  if (needObjectId && (ids === undefined || ids.objectId.trim() === "")) missing.push("object ID");
   if (missing.length > 0) return `Enter the Cribl service principal's ${missing.join(", ")}.`;
   const app = g.appClientId?.trim().toLowerCase() ?? "";
   if (ids !== undefined && app !== "" && ids.clientId.trim().toLowerCase() === app) return PLAN_REFUSAL_COPY["app-principal"];
+  return null;
+}
+
+/** Why an Entra ID lane cannot plan yet, or null. */
+function entraDisabledReason(g: CreateGateInput): string | null {
+  const idsReason = principalIdsReason(g, true);
+  if (idsReason !== null) return idsReason;
   if (g.hasClientSecret !== true) return ENTRA_SECRET_NEEDED;
   return g.secretIsConnectionString === true ? CLIENT_SECRET_IS_CONNECTION_STRING : null;
 }
@@ -312,13 +324,8 @@ export function createDisabledReason(g: CreateGateInput): string | null {
     if (g.credentialKind !== "client-secret") return PLAN_REFUSAL_COPY["credential-mismatch"];
     // AZR-66: the blob lane signs in as the Cribl principal too, never as
     // this app's own registration. Its role is not read here, so no object id.
-    const ids = g.entra;
-    const missing: string[] = [];
-    if (ids === undefined || ids.tenantId.trim() === "") missing.push("tenant ID");
-    if (ids === undefined || ids.clientId.trim() === "") missing.push("client ID");
-    if (missing.length > 0) return `Enter the Cribl service principal's ${missing.join(", ")}.`;
-    const app = g.appClientId?.trim().toLowerCase() ?? "";
-    if (ids !== undefined && app !== "" && ids.clientId.trim().toLowerCase() === app) return PLAN_REFUSAL_COPY["app-principal"];
+    const idsReason = principalIdsReason(g, false);
+    if (idsReason !== null) return idsReason;
     if (g.hasClientSecret !== true) return "Paste the service principal's client secret.";
     return g.secretIsConnectionString === true ? CLIENT_SECRET_IS_CONNECTION_STRING : null;
   }

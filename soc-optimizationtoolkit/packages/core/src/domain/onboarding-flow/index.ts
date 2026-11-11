@@ -23,6 +23,7 @@ export {
   NOT_MEASURED_REASON_LABEL,
   classifyLaneFlow,
   describeLaneFlow,
+  lookbackPhrase,
   matchInputLabel,
   shouldAnimate,
   unmatchedInputLabels,
