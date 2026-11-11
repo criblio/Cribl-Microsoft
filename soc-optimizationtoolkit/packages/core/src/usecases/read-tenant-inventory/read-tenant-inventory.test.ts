@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { emptyProgress } from "../../domain/onboarding-howto/progress-document";
 import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-management";
 import type { PortHttpResponse } from "../../ports/http";
+import { ACTIVITY_LOG_CATEGORIES } from "../../domain/activity-log-export/activity-log-setting";
+import { DEFENDER_EXPORT_TYPES } from "../../domain/tenant-inventory/tenant-inventory";
+import { DEFENDER_EXPORT_ITEM_ID } from "../../domain/defender-export/defender-automation";
 import { readTenantInventory } from "./read-tenant-inventory";
 
 const SUB_A = "00000000-0000-0000-0000-00000000000a";
@@ -53,7 +56,7 @@ describe("readTenantInventory", () => {
     expect(inv.cards).toHaveLength(7);
     expect(inv.cells.filter((c) => c.category === "entraId")).toHaveLength(15);
     expect(inv.cells.some((c) => c.category === "activityLog")).toBe(true);
-    expect(inv.cells.some((c) => c.category === "defenderExport")).toBe(true);
+    expect(inv.cells.some((c) => c.category === DEFENDER_EXPORT_ITEM_ID)).toBe(true);
     expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
     expect(inv.subscriptions.kind).toBe("rows");
     // 1 subscriptions + 1 Entra + 2 x (settings + pricings + automations)
@@ -87,7 +90,9 @@ describe("readTenantInventory", () => {
   it("an empty subscription list is could-not-check for Activity Log and Defender, not not-collected", async () => {
     const inv = await run(router(healthy([])));
     expect(inv.subscriptions.kind).not.toBe("rows");
-    for (const c of inv.cells.filter((x) => x.category !== "entraId")) {
+    const nonEntra = inv.cells.filter((x) => x.category !== "entraId");
+    expect(nonEntra.length).toBeGreaterThan(0);
+    for (const c of nonEntra) {
       expect(c.state.kind).toBe("could-not-check");
     }
   });
@@ -97,7 +102,9 @@ describe("readTenantInventory", () => {
     routes["/subscriptions"] = () => forbidden;
     const inv = await run(router(routes));
     expect(inv.subscriptions).toEqual({ kind: "unread", reason: expect.stringContaining("no access") });
-    for (const c of inv.cells.filter((x) => x.category !== "entraId")) {
+    const nonEntra = inv.cells.filter((x) => x.category !== "entraId");
+    expect(nonEntra.length).toBeGreaterThan(0);
+    for (const c of nonEntra) {
       expect(c.state.kind).toBe("could-not-check");
     }
   });
@@ -121,7 +128,7 @@ describe("readTenantInventory", () => {
     const routes = healthy();
     routes[`/subscriptions/${SUB_A}/providers/Microsoft.Security/automations`] = () => forbidden;
     const inv = await run(router(routes));
-    const defender = inv.cells.filter((c) => c.category === "defenderExport");
+    const defender = inv.cells.filter((c) => c.category === DEFENDER_EXPORT_ITEM_ID);
     expect(defender.length).toBeGreaterThan(0);
     for (const c of defender) expect(c.state.kind).toBe("could-not-check");
   });
@@ -132,5 +139,42 @@ describe("readTenantInventory", () => {
     expect(inv.readAt).toBe(NOW);
     expect(seen.at(-1)).toEqual([6, 6]);
     expect(seen).toHaveLength(6);
+  });
+  it("one collecting subscription and one refused is partly (1 collected, 1 read, 1 unread), not not-collected", async () => {
+    const routes = healthy();
+    const hub = "/subscriptions/x/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns/authorizationRules/r";
+    routes[`/subscriptions/${SUB_A}/providers/Microsoft.Insights/diagnosticSettings`] = () =>
+      ok([
+        {
+          id: `/subscriptions/${SUB_A}/providers/Microsoft.Insights/diagnosticSettings/s1`,
+          name: "s1",
+          properties: {
+            eventHubAuthorizationRuleId: hub,
+            logs: ACTIVITY_LOG_CATEGORIES.map((category) => ({ category, enabled: true })),
+          },
+        },
+      ]);
+    routes[`/subscriptions/${SUB_B}/providers/Microsoft.Insights/diagnosticSettings`] = () => forbidden;
+    routes[`/subscriptions/${SUB_A}/providers/Microsoft.Security/automations`] = () =>
+      ok([
+        {
+          id: `/subscriptions/${SUB_A}/resourceGroups/rg/providers/Microsoft.Security/automations/a1`,
+          name: "a1",
+          properties: {
+            isEnabled: true,
+            scopes: [{ description: "s", scopePath: `/subscriptions/${SUB_A}` }],
+            sources: DEFENDER_EXPORT_TYPES.flatMap((t) => t.eventSources).map((eventSource) => ({ eventSource })),
+            actions: [{ actionType: "EventHub", eventHubResourceId: hub }],
+          },
+        },
+      ]);
+    routes[`/subscriptions/${SUB_B}/providers/Microsoft.Security/automations`] = () => forbidden;
+    const inv = await run(router(routes));
+    const scopes = { collected: 1, read: 1, unread: 1 };
+    for (const category of ["activityLog", DEFENDER_EXPORT_ITEM_ID] as const) {
+      const cells = inv.cells.filter((c) => c.category === category);
+      expect(cells.length).toBeGreaterThan(0);
+      for (const c of cells) expect(c.state).toEqual({ kind: "partly", scopes });
+    }
   });
 });
