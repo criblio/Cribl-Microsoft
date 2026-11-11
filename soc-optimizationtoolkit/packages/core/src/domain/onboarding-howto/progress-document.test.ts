@@ -10,6 +10,7 @@ import {
   readProgressDocument,
   tickState,
   withCriblSource,
+  withLakeRoute,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -201,5 +202,31 @@ describe("transitions", () => {
     p = withPlanValues(p, { ...p.planValues, namespace: "ns2" });
     const back = progressFrom(readProgressDocument(value(JSON.parse(encodeProgress(p)))))!;
     expect(tickState(back, "P1", ["namespace"])).toEqual({ status: "stale", changedKeys: ["namespace"] });
+  });
+});
+
+describe("Lake route records (AZR-35)", () => {
+  const RECORD = { groupId: "default", datasetId: "azure_activity_log", pipelineId: "azure_onb_unroll_records", routeId: "azure_onb_activity_log_lake" };
+
+  it("round-trips a record, a null step included", () => {
+    let p = withLakeRoute(sample(), "activityLog", RECORD);
+    p = withLakeRoute(p, "defenderExport", { ...RECORD, datasetId: "azure_defender_alerts", routeId: null });
+    const doc = readProgressDocument(value(encodeProgress(p)));
+    const back = progressFrom(doc);
+    expect(doc.status === "ok" ? doc.decoded.dropped : null).toEqual([]);
+    expect(back?.criblLakeRoutes?.activityLog).toEqual(RECORD);
+    expect(back?.criblLakeRoutes?.defenderExport).toEqual({ ...RECORD, datasetId: "azure_defender_alerts", routeId: null });
+  });
+
+  it("a document with no Lake route encodes exactly as before AZR-35 (no new key)", () => {
+    expect(JSON.parse(encodeProgress(sample()))).not.toHaveProperty("criblLakeRoutes");
+  });
+
+  it("drops and reports a malformed record, never invents one", () => {
+    const raw = JSON.parse(encodeProgress(sample()));
+    raw.criblLakeRoutes = { activityLog: { groupId: "g", datasetId: 7, pipelineId: null, routeId: null }, notASource: RECORD };
+    const { progress, dropped } = decodeProgress(raw);
+    expect([...dropped].sort()).toEqual(["criblLakeRoutes.activityLog", "criblLakeRoutes.notASource"]);
+    expect(progress.criblLakeRoutes).toBeUndefined();
   });
 });

@@ -6,7 +6,8 @@
  * strips unknown keys and drops ids outside the coverage catalog, so How-to
  * progress written into it would vanish on the next Save. This document holds
  * the How-to side: which sources are chosen and in which mode, the plan values,
- * the done ticks, the Cribl inputs the app created, and the worker group.
+ * the done ticks, the Cribl inputs the app created, the Lake routes it created
+ * for them (AZR-35), and the worker group.
  *
  * THE GATE MIRRORS readCoverageDocument. {@link readProgressDocument} answers
  * the two questions claude-kit standards/cribl-kv-store.md keeps apart - is it
@@ -78,6 +79,22 @@ export interface CriblSourceRecord {
   readonly secretId: string;
 }
 
+/**
+ * What the app created in Cribl to route one source to Cribl Lake (AZR-35).
+ * Ids only. Written after an apply that created (or proved its own) at least
+ * one object, so the app can later prove it created them and the dataflow can
+ * draw the route hop. A null id is a step that did not complete.
+ */
+export interface LakeRouteRecord {
+  readonly groupId: string;
+  /** The Lake dataset the route sends to (created by the app, or one that already existed). */
+  readonly datasetId: string;
+  /** The unroll pipeline the app created or proved its own; null when that step did not complete. */
+  readonly pipelineId: string | null;
+  /** The route the app wrote into the group's routing table; null when it was not written. */
+  readonly routeId: string | null;
+}
+
 export interface OnboardingProgress {
   readonly sources: Readonly<Partial<Record<OnboardingSourceId, SourceProgress>>>;
   readonly planValues: PlanValues;
@@ -85,6 +102,12 @@ export interface OnboardingProgress {
   readonly ticks: Readonly<Record<string, StepTick>>;
   readonly criblSources: Readonly<Partial<Record<OnboardingSourceId, CriblSourceRecord>>>;
   readonly workerGroup: string | null;
+  /**
+   * AZR-35: the Lake routes the app created, by source. Optional so a document
+   * (and every literal) from before AZR-35 still reads; absent reads as none.
+   * An older release decodes this key as dropped, and its next save omits it.
+   */
+  readonly criblLakeRoutes?: Readonly<Partial<Record<OnboardingSourceId, LakeRouteRecord>>>;
 }
 
 /** The progress a first run starts from. */
@@ -142,6 +165,13 @@ export function encodeProgress(progress: OnboardingProgress): string {
       };
     }
   }
+  const criblLakeRoutes: Record<string, LakeRouteRecord> = {};
+  for (const s of ONBOARDING_SOURCES) {
+    const r = progress.criblLakeRoutes?.[s.id];
+    if (r !== undefined) {
+      criblLakeRoutes[s.id] = { groupId: r.groupId, datasetId: r.datasetId, pipelineId: r.pipelineId, routeId: r.routeId };
+    }
+  }
   return JSON.stringify({
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
@@ -150,6 +180,9 @@ export function encodeProgress(progress: OnboardingProgress): string {
     ticks,
     criblSources,
     workerGroup: progress.workerGroup,
+    // Written only when there is one, so a document without Lake routes
+    // encodes exactly as it did before AZR-35.
+    ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
   });
 }
 
@@ -255,16 +288,47 @@ export function decodeProgress(raw: unknown): DecodedProgress {
 
   const workerGroup = str(raw["workerGroup"]);
 
+  const criblLakeRoutes: Partial<Record<OnboardingSourceId, LakeRouteRecord>> = {};
+  if (isRecord(raw["criblLakeRoutes"])) {
+    for (const [id, v] of Object.entries(raw["criblLakeRoutes"])) {
+      const nullableStr = (x: unknown): x is string | null => x === null || typeof x === "string";
+      const ok =
+        isOnboardingSourceId(id) &&
+        isRecord(v) &&
+        str(v["groupId"]) !== null &&
+        str(v["datasetId"]) !== null &&
+        nullableStr(v["pipelineId"]) &&
+        nullableStr(v["routeId"]);
+      if (!ok) {
+        dropped.push(`criblLakeRoutes.${id}`);
+        continue;
+      }
+      criblLakeRoutes[id as OnboardingSourceId] = {
+        groupId: v["groupId"] as string,
+        datasetId: v["datasetId"] as string,
+        pipelineId: v["pipelineId"] as string | null,
+        routeId: v["routeId"] as string | null,
+      };
+    }
+  }
+
   for (const k of Object.keys(raw)) {
     if (
-      !["kind", "version", "sources", "planValues", "ticks", "criblSources", "workerGroup"].includes(k)
+      !["kind", "version", "sources", "planValues", "ticks", "criblSources", "workerGroup", "criblLakeRoutes"].includes(k)
     ) {
       dropped.push(k);
     }
   }
 
   return {
-    progress: { sources, planValues, ticks, criblSources, workerGroup },
+    progress: {
+      sources,
+      planValues,
+      ticks,
+      criblSources,
+      workerGroup,
+      ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
+    },
     dropped,
   };
 }
@@ -384,6 +448,15 @@ export function withCriblSource(
   record: CriblSourceRecord,
 ): OnboardingProgress {
   return { ...p, criblSources: { ...p.criblSources, [id]: record } };
+}
+
+/** Record what the app created to route a source to Cribl Lake (AZR-35). */
+export function withLakeRoute(
+  p: OnboardingProgress,
+  id: OnboardingSourceId,
+  record: LakeRouteRecord,
+): OnboardingProgress {
+  return { ...p, criblLakeRoutes: { ...(p.criblLakeRoutes ?? {}), [id]: record } };
 }
 
 /** Remember the worker group the operator picked. */
