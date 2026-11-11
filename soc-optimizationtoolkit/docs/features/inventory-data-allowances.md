@@ -1,6 +1,6 @@
 # Data allowances on the workspace inventory
 
-Status: Living - built on feature/data-volume-inventory (MIG-10..20, PR #198) and seen in Live Preview 2026-11-03; MIG-17 (benefit strings and bases) still open.
+Status: Living - built on feature/data-volume-inventory (MIG-10..20, PR #198) and seen in Live Preview 2026-11-03; window totals and licence counts on the card face added by MIG-33 (pins only - not yet seen live); MIG-17 (benefit strings and bases) still open.
 
 ## Intent
 
@@ -116,6 +116,59 @@ moved out of SIEM Migration by MIG-10):
    `lower bound` (a workspace not read, a partial Usage answer, or a partial
    benefit read), or why a cell is empty (eligible volume not read, a benefit
    known only in total). An unknown figure is an empty cell, never 0.
+7. **Window totals strip** (MIG-33, operator 2026-11-11) at the top of the
+   results, following whichever allowance result is shown (this workspace, or
+   the tenant comparison): billable over the last 30 complete days, the
+   allowance over the same days, the benefit Microsoft applied over them, and
+   the net (billable minus allowance) - all in GB - with the licence counts
+   the allowance rests on. Each grant card also gains, on its face, its
+   licence count (`100 E5 seats assigned (120 purchased)`, `1.5 Defender for
+   Servers P2 machines a day on average`) and a window line (`last 30 days:
+   eligible X GB, allowance Y GB, Microsoft applied Z GB`); the per-day lines
+   stay, and the drill-down adds the window arithmetic
+   (`over the window: 100 seats x 5 MB x 30 days = 15.00 GB`). See "The
+   window totals" below.
+
+### The window totals
+
+The arithmetic lives in core
+(`packages/core/src/domain/data-allowances/window-totals.ts`, pure, assembled
+by the data-allowances usecase); the words in `allowance-state.ts`.
+
+- **Billable** = `Usage` billable MB summed over the window (the billable
+  daily average x 30); summed over the workspaces read in a tenant comparison.
+- **Allowance** per grant = the daily grant from licence counts x the days it
+  covers. E5: assigned qualifying seats x 5 MB x the complete days with data.
+  Servers P2: the per-day machine count is already averaged over the window,
+  so the total is that average x 30, which is machine-days x 500 MB. The
+  strip sums the grants that have a card.
+- **Complete days**: the most days any one table had data (`Usage`
+  DaysWithData), at most 30. Below 30 the strip says how many, and the E5
+  allowance reads `at least` (the busiest table can understate the days the
+  workspace had any data).
+- **Applied** = the `Operation` benefit summed over the window, shown beside
+  the allowance: what the licences could cover against what Microsoft
+  actually took off.
+- **Net** = billable - allowance: `X GB over` or `X GB under the allowance`.
+  A grant covers only its eligible tables, so being under does not mean
+  nothing is billed - the bill is billable minus applied (the per-day
+  "daily billable after allowances" tile).
+
+Honesty, per `docs/inventory-standard.md`:
+
+- Refused licence counts make the E5 allowance `not known - licence counts
+  were not read`; the largest applied day (the per-day floor) is never
+  multiplied up. The applied figure still shows.
+- A floored billable (a workspace not read, a partial `Usage` answer) keeps
+  an overage as `at least X GB over` and cannot claim an underage (`not
+  known`); a floored allowance keeps an underage as `at least` and cannot
+  claim an overage; both floored, the net is not known.
+- In one workspace's view the E5 grant is tenant-wide: unless this is the
+  tenant's only Sentinel workspace the net is withheld with that reason, and
+  the operator compares against the whole tenant instead, where the tenant
+  sums read `at least` while any workspace was not read.
+- No grant card: the allowance reads `none in use` only when eligible volume
+  was read, otherwise `not known`; never a 0.
 
 ### Without the new permission
 
@@ -123,7 +176,8 @@ The E5 drill-down says licence counts were not read, names
 `LicenseAssignment.Read.All`, says it reads SKUs and seat counts only (not who
 holds them), and offers the change request. Granted is shown as `at least X` -
 the largest benefit Microsoft applied on any day in the window - and headroom
-is not shown. Used and Over are unaffected.
+is not shown. Used and Over are unaffected. The window allowance is not known
+(see "The window totals"); the benefit applied over the window still shows.
 
 ## Constraints
 

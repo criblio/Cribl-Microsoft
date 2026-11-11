@@ -23,8 +23,20 @@ function inventory(
   billableDailyAverageMB: number,
   workspaceId = WS,
   usageWarning: string | null = null,
+  /** The tables' Usage DaysWithData; none means no table rows (the whole window). */
+  daysWithData: number[] = [],
 ): WorkspaceInventory {
-  return { workspaceId, usageWarning, totals: { billableDailyAverageMB } } as unknown as WorkspaceInventory;
+  const tables =
+    daysWithData.length === 0
+      ? { kind: "none" }
+      : { kind: "rows", rows: daysWithData.map((d, i) => ({ table: `T${i}`, daysWithData: d })) };
+  return {
+    workspaceId,
+    usageWarning,
+    windowDays: INVENTORY_WINDOW_DAYS,
+    tables,
+    totals: { billableDailyAverageMB, billableMB: billableDailyAverageMB * INVENTORY_WINDOW_DAYS },
+  } as unknown as WorkspaceInventory;
 }
 
 function queryResult(columns: string[], rows: unknown[][]): PortHttpResponse {
@@ -972,5 +984,110 @@ describe("readDataAllowances - honesty edge cases (MIG-21)", () => {
       /\(type =~ 'microsoft\.hybridcompute\/machines' and tostring\(properties\.status\) =~ 'Connected'\)/,
     );
     expect(query).toMatch(/summarize Machines = count\(\) by subscriptionId$/);
+  });
+});
+
+describe("window totals: licence counts and the allowance over the window", () => {
+  const DAY = "2026-10-20";
+  // 100 assigned seats (120 purchased) = 500 MB/day; Microsoft applied 0.5 GB on one day.
+  const e5Script = (): Script => ({
+    benefit: { "*": benefit([DAY, "M365 E5", 0.5]) },
+    eligible: eligible([DAY, "SigninLogs", 900]),
+  });
+  const seats = () => graphWith(skusBody({ enabled: 120, consumed: 100 }));
+
+  it("one workspace: seats x 5 MB x 30 days against 30 days of billable, with what Microsoft applied", async () => {
+    const r = await readDataAllowances(routedAzure(e5Script()).azure, seats(), WS, inventory(200, WS, null, [30, 7]), OPTS);
+    const w = view(r, "e5").window;
+    expect(w.licences).toEqual({ kind: "seats", assigned: 100, purchased: 120, isFloor: false });
+    expect(w.allowanceMB).toBe(15000);
+    expect(w.allowanceIsFloor).toBe(false);
+    expect(w.eligibleMB).toBe(900);
+    expect(w.appliedMB).toBe(500);
+    expect(r.window.days).toEqual({ days: 30, windowDays: 30, isFloor: false });
+    expect(r.window.billableMB).toBe(6000); // 200 MB/day x 30
+    expect(r.window.allowanceMB).toBe(15000);
+    expect(r.window.appliedMB).toBe(500);
+    expect(r.window.net).toEqual({ kind: "under", mb: 9000, bound: "exact" });
+  });
+
+  it("refused licence counts: the window allowance is not known while the applied benefit still shows", async () => {
+    const graph = graphWith({ kind: "denied", status: 403, detail: "HTTP 403" });
+    const r = await readDataAllowances(routedAzure(e5Script()).azure, graph, WS, inventory(200), OPTS);
+    const w = view(r, "e5").window;
+    // The per-day card still shows the largest applied day as a floor; the window does not borrow it.
+    expect(view(r, "e5").grantedMB).toBe(500);
+    expect(w.allowanceMB).toBeNull();
+    expect(w.unknown).toBe("licences-not-read");
+    expect(w.licences).toEqual({ kind: "not-read" });
+    expect(r.window.allowanceUnknown).toEqual({ grant: "e5", why: "licences-not-read" });
+    expect(r.window.appliedMB).toBe(500);
+    expect(r.window.net).toEqual({ kind: "not-known", reason: "the allowance is not known" });
+  });
+
+  it("a workspace with data on fewer days multiplies by those days and reads the allowance as a floor", async () => {
+    const r = await readDataAllowances(routedAzure(e5Script()).azure, seats(), WS, inventory(100, WS, null, [12, 5]), OPTS);
+    expect(r.window.days).toEqual({ days: 12, windowDays: 30, isFloor: true });
+    expect(view(r, "e5").window.allowanceMB).toBe(6000); // 500 x 12
+    expect(r.window.allowanceIsFloor).toBe(true);
+    // 3,000 billable against at least 6,000: under by at least 3,000.
+    expect(r.window.net).toEqual({ kind: "under", mb: 3000, bound: "at-least" });
+  });
+
+  it("Servers P2: machines reporting x 500 MB, summed over the machine-days", async () => {
+    const { azure } = routedAzure({
+      benefit: { "*": benefit([DAY, "Defender for Servers", 0.5]) },
+      eligible: eligible([DAY, "SecurityEvent", 800]),
+      heartbeat: heartbeat(["vm1", "sub-a"], ["vm2", "sub-a"]),
+      pricings: { "sub-a": pricings("Standard", "P2") },
+    });
+    const r = await readDataAllowances(azure, undefined, WS, inventory(100), OPTS);
+    const w = view(r, "servers-p2").window;
+    expect(w.licences).toEqual({ kind: "machines", dailyAverage: 2, isFloor: false });
+    expect(w.allowanceMB).toBe(30000); // 2 machines x 500 MB x 30 days
+    expect(r.window.allowanceMB).toBe(30000);
+    expect(r.window.net).toEqual({ kind: "under", mb: 27000, bound: "exact" });
+  });
+
+  it("several Sentinel workspaces withhold the net when an E5 card is shown: the grant is shared", async () => {
+    const r = await readDataAllowances(routedAzure(e5Script()).azure, seats(), WS, inventory(200), {
+      ...OPTS,
+      sentinelWorkspaces: 3,
+    });
+    expect(r.window.allowanceMB).toBe(15000);
+    expect(r.window.net).toEqual({
+      kind: "not-known",
+      reason:
+        "the E5 grant is tenant-wide and shared across 3 Sentinel workspaces - use Compare against the whole tenant",
+    });
+  });
+
+  it("tenant comparison with a workspace not read: billable is a floor, so only an overage can be claimed", async () => {
+    const script = (): Script => ({
+      benefit: { [WS]: benefit([DAY, "M365 E5", 0.5]), [WS2]: DENIED },
+      eligible: eligible([DAY, "SigninLogs", 900]),
+    });
+    const run = (billablePerDay: number) =>
+      compareTenant(
+        routedAzure(script()).azure,
+        seats(),
+        [WS, WS2],
+        new Map([
+          [WS, inventory(billablePerDay, WS)],
+          [WS2, inventory(700, WS2)],
+        ]),
+        { readAt: OPTS.readAt },
+      );
+    const under = await run(100);
+    expect(under.window.billableIsFloor).toBe(true);
+    expect(under.window.billableMB).toBe(3000); // only the workspace read
+    expect(under.window.allowanceMB).toBe(15000);
+    expect(under.window.appliedIsFloor).toBe(true);
+    expect(under.window.net).toEqual({
+      kind: "not-known",
+      reason: "the billable total is a lower bound, so it may be over",
+    });
+    const over = await run(1000);
+    expect(over.window.net).toEqual({ kind: "over", mb: 15000, bound: "at-least" });
   });
 });

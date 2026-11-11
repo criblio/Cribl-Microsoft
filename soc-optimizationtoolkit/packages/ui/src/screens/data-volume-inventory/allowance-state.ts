@@ -20,9 +20,11 @@ import type {
   DataAllowances,
   GrantId,
   GrantView,
+  GrantWindowTotals,
+  WindowNet,
   WorkspaceDiscovery,
 } from "@soc/core";
-import { formatMB } from "./format-mb";
+import { formatGB, formatMB } from "./format-mb";
 
 export const GRANT_LABEL: Record<GrantId, string> = {
   e5: "E5 5 MB/user",
@@ -507,6 +509,134 @@ export function allowanceCsvCells(
   return [label, eligible, view.usage.usedDailyMB.toFixed(3), over, status];
 }
 
+// ---------------------------------------------------------------------------
+// Window totals: the licence counts and the 30-day figures (core window-totals.ts)
+// ---------------------------------------------------------------------------
+
+const floorText = (isFloor: boolean): string => (isFloor ? "at least " : "");
+
+/** The licence count a grant rests on, for its card face and the summary strip. */
+export function licenceCountText(view: GrantView, a: DataAllowances): string {
+  const l = view.window.licences;
+  if (l.kind === "seats") {
+    return (
+      `${floorText(l.isFloor)}${l.assigned.toLocaleString("en-US")} E5 seats assigned ` +
+      `(${l.purchased.toLocaleString("en-US")} purchased)`
+    );
+  }
+  if (l.kind === "machines") {
+    return `${floorText(l.isFloor)}${countText(l.dailyAverage)} Defender for Servers P2 machines a day on average`;
+  }
+  return view.grant === "e5"
+    ? "E5 seats not read"
+    : `Defender for Servers P2 machines not known - ${grantedUnknownReason(view, a)}`;
+}
+
+/** Why a grant's window allowance is not known - never a zero. */
+function windowAllowanceUnknown(view: GrantView, a: DataAllowances): string {
+  return view.grant === "e5" ? "licence counts were not read" : grantedUnknownReason(view, a);
+}
+
+/** One grant's window allowance: a GB figure, "at least", or "not known" with the reason. */
+export function grantWindowAllowanceText(view: GrantView, a: DataAllowances): string {
+  const w = view.window;
+  if (w.allowanceMB === null) return `not known - ${windowAllowanceUnknown(view, a)}`;
+  return `${floorText(w.allowanceIsFloor)}${formatGB(w.allowanceMB)}`;
+}
+
+/**
+ * The literal arithmetic behind a grant's window allowance, so the operator
+ * can redo it: `100 seats x 5 MB x 30 days = 15.00 GB`. Null when not known.
+ */
+export function grantWindowArithmetic(w: GrantWindowTotals): string | null {
+  if (w.allowanceMB === null || w.perDayMB === null) return null;
+  const atLeast = floorText(w.allowanceIsFloor);
+  const result = `${atLeast}${formatGB(w.allowanceMB)}`;
+  if (w.licences.kind === "seats") {
+    return `${w.licences.assigned.toLocaleString("en-US")} seats x ${E5_MB_PER_SEAT_PER_DAY} MB x ${w.multiplier} days = ${result}`;
+  }
+  if (w.licences.kind === "machines") {
+    return (
+      `${countText(w.licences.dailyAverage)} machines a day on average x ` +
+      `${SERVERS_MB_PER_MACHINE_PER_DAY} MB x ${w.multiplier} days = ${result}`
+    );
+  }
+  return `${formatMB(w.perDayMB)}/day x ${w.multiplier} days = ${result}`;
+}
+
+/** The card face's window line: eligible, allowance and applied over the window. */
+export function grantWindowLine(view: GrantView, a: DataAllowances): string {
+  const w = view.window;
+  const eligible = w.eligibleMB === null ? "not read" : `${floorText(w.eligibleIsFloor)}${formatGB(w.eligibleMB)}`;
+  const applied =
+    w.appliedMB === null ? "known only for all grants together" : `${floorText(w.appliedIsFloor)}${formatGB(w.appliedMB)}`;
+  return (
+    `last ${a.window.days.windowDays} days: eligible ${eligible}, allowance ` +
+    `${grantWindowAllowanceText(view, a)}, Microsoft applied ${applied}`
+  );
+}
+
+export interface WindowStripText {
+  heading: string;
+  billable: string;
+  allowance: string;
+  applied: string;
+  net: string;
+  /** The licence counts the allowance rests on, one per grant shown; empty when no grant applies. */
+  licences: string[];
+  /** Said when the allowance covers fewer days than the window; null otherwise. */
+  daysNote: string | null;
+}
+
+function netText(net: WindowNet): string {
+  if (net.kind === "not-known") return `not known - ${net.reason}`;
+  if (net.kind === "even") return "level with the allowance";
+  const atLeast = net.bound === "at-least" ? "at least " : "";
+  return `${atLeast}${formatGB(net.mb)} ${net.kind} the allowance`;
+}
+
+/** The summary strip: billable against allowance over the window, the applied benefit and the net. */
+export function windowStripText(a: DataAllowances): WindowStripText {
+  const w = a.window;
+  const tenant = a.scope.kind === "tenant" ? a.scope : null;
+  const windowDays = w.days.windowDays;
+  const heading =
+    tenant === null
+      ? `This workspace, last ${windowDays} complete days`
+      : tenant.notRead.length > 0
+        ? `Whole tenant, last ${windowDays} complete days - ${tenant.workspaces.length - tenant.notRead.length} of ${tenant.workspaces.length} Sentinel workspaces read`
+        : `Whole tenant, last ${windowDays} complete days - ${tenant.workspaces.length} Sentinel workspaces`;
+
+  let allowance: string;
+  if (w.allowanceUnknown === null) {
+    allowance = `${floorText(w.allowanceIsFloor)}${formatGB(w.allowanceMB ?? 0)}`;
+  } else if (w.allowanceUnknown.grant === null) {
+    allowance = a.eligibleKnown ? "none in use - no table a grant covers had billable volume" : "not known - eligible volume was not read";
+  } else {
+    const grant = w.allowanceUnknown.grant;
+    const view = a.grants.find((g) => g.grant === grant);
+    allowance = `not known - ${view === undefined ? "a grant's allowance could not be established" : `${GRANT_LABEL[grant]}: ${windowAllowanceUnknown(view, a)}`}`;
+  }
+
+  const e5Days = a.grants.some((g) => g.grant === "e5");
+  const daysNote =
+    w.days.days < windowDays && e5Days
+      ? `Data on ${w.days.days} of the last ${windowDays} complete days (the busiest table's count): ` +
+        `the E5 allowance counts those ${w.days.days} days, and reads "at least" because the workspace ` +
+        "may have had data on more."
+      : null;
+
+  return {
+    heading,
+    billable: `${floorText(w.billableIsFloor)}${formatGB(w.billableMB)}`,
+    allowance,
+    applied: `${floorText(w.appliedIsFloor)}${formatGB(w.appliedMB)}`,
+    net: netText(w.net),
+    licences: a.grants.map((g) => licenceCountText(g, a)),
+    daysNote,
+  };
+}
+
 /** The Granted line's tip: the Servers P2 count is per workspace, or across a tenant comparison. */
 export function grantedTip(view: GrantView, a: DataAllowances): string {
   if (view.grant === "e5") return ALLOWANCE_TIPS.grantedE5;
@@ -559,6 +689,34 @@ export const ALLOWANCE_TIPS = {
     "One row per subscription seen in Heartbeat._SubscriptionId. Plan from Microsoft.Security " +
     "pricings (VirtualMachines); machines in the subscription from Resource Graph; machines " +
     "reporting here counted per day and averaged over the 30 days.",
+  windowBillable:
+    "Billable MB from the Usage table (IsBillable), summed over the last 30 complete UTC days: " +
+    "the billable daily average times 30. In a tenant comparison, summed over the workspaces " +
+    "read; 'at least' when one was not read or a Usage answer was partial.",
+  windowAllowance:
+    "Each grant's daily figure from licence counts times the days it covers, summed over the " +
+    "grants shown: E5 = assigned qualifying seats x 5 MB x the complete days with data; " +
+    "Defender for Servers P2 = machines on Plan 2 reporting each day x 500 MB, summed over the " +
+    "days (the daily average x 30). Without seat counts the E5 allowance is not known - the " +
+    "largest benefit applied on one day is never multiplied up.",
+  windowApplied:
+    "The benefit Microsoft actually applied, from the workspace's Operation table ('Benefit " +
+    "amount used'), summed over the same days. This is what reduced the bill; the allowance is " +
+    "what the licences could cover.",
+  windowNet:
+    "Billable over the window minus the allowance over the window. A grant covers only its " +
+    "eligible tables, so being under the allowance does not mean nothing is billed: the bill " +
+    "is billable minus what Microsoft applied. With a lower bound on one side only the " +
+    "direction it cannot change is stated; otherwise the net is not known.",
+  licenceCount:
+    "E5: qualifying seats assigned (consumedUnits) and purchased (prepaidUnits.enabled) from " +
+    "Microsoft Graph subscribedSkus; the allowance uses assigned. Servers P2: machines on " +
+    "Defender for Servers Plan 2 subscriptions that sent Heartbeat, counted per day and " +
+    "averaged over the 30 days.",
+  grantWindow:
+    "Over the last 30 complete days: eligible = this grant's billable MB from Usage, summed; " +
+    "allowance = the daily grant from licence counts x the days it covers; applied = the " +
+    "benefit Microsoft applied to this grant, from Operation, summed.",
   serversTenant:
     "One row per subscription seen in Heartbeat._SubscriptionId. Plan from Microsoft.Security " +
     "pricings (VirtualMachines); machines in the subscription from Resource Graph; machines " +

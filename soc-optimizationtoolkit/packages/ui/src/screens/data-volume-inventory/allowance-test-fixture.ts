@@ -4,7 +4,14 @@
  */
 
 import { serversGranted } from "@soc/core";
-import type { DataAllowances, GrantUsage, GrantView, ServersSubscriptionRow } from "@soc/core";
+import type {
+  DataAllowances,
+  GrantUsage,
+  GrantView,
+  GrantWindowTotals,
+  ServersSubscriptionRow,
+  WindowTotals,
+} from "@soc/core";
 
 export function usage(partial: Partial<GrantUsage> = {}): GrantUsage {
   return {
@@ -19,6 +26,42 @@ export function usage(partial: Partial<GrantUsage> = {}): GrantUsage {
   };
 }
 
+/** An E5 grant's window: 2,400 seats x 5 MB x 30 days, eligible 100 MB, applied 80 MB (as usage()). */
+export function grantWindow(partial: Partial<GrantWindowTotals> = {}): GrantWindowTotals {
+  return {
+    grant: "e5",
+    licences: { kind: "seats", assigned: 2400, purchased: 2400, isFloor: false },
+    eligibleMB: 100,
+    eligibleIsFloor: false,
+    appliedMB: 80,
+    appliedIsFloor: false,
+    perDayMB: 12000,
+    multiplier: 30,
+    basis: "per-complete-day",
+    allowanceMB: 360000,
+    allowanceIsFloor: false,
+    unknown: null,
+    ...partial,
+  };
+}
+
+/** The strip's window: 30 full days, 6 GB billable, no grant unless given. */
+export function windowTotals(partial: Partial<WindowTotals> = {}): WindowTotals {
+  return {
+    days: { days: 30, windowDays: 30, isFloor: false },
+    billableMB: 6000,
+    billableIsFloor: false,
+    allowanceMB: null,
+    allowanceIsFloor: false,
+    allowanceUnknown: { grant: null, why: "no-grant" },
+    appliedMB: 0,
+    appliedIsFloor: false,
+    net: { kind: "not-known", reason: "no grant covers a table with billable volume here" },
+    grants: [],
+    ...partial,
+  };
+}
+
 export function grantView(partial: Partial<GrantView> = {}): GrantView {
   return {
     grant: "e5",
@@ -27,6 +70,7 @@ export function grantView(partial: Partial<GrantView> = {}): GrantView {
     eligibleKnown: true,
     grantedIsFloor: false,
     crossCheck: { kind: "no-capped-day" },
+    window: grantWindow(),
     eligibleTables: [],
     ...partial,
   };
@@ -50,6 +94,7 @@ export function allowances(partial: Partial<DataAllowances> = {}): DataAllowance
     sumsAreFloors: false,
     usedIsFloor: false,
     licences: { kind: "not-bound" },
+    window: windowTotals(),
     servers: servers(),
     scope: { kind: "workspace", sentinelWorkspaces: 1, sentinelWorkspacesAtLeast: false },
     queries: {
