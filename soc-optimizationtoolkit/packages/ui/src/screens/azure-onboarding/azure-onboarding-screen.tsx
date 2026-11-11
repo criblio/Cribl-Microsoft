@@ -76,6 +76,7 @@ import {
   listingRows,
   onboardingSource,
   paceAzureManagement,
+  readTenantInventory,
   parseNamespaceAuthRules,
   planCriblSource,
   planLakeRoute,
@@ -92,6 +93,7 @@ import {
   withWorkerGroup,
 } from "@soc/core";
 import type {
+  TenantInventory,
   ApplyCredential,
   ApplyCriblSourceOutcome,
   ApplyLakeRouteOutcome,
@@ -150,6 +152,7 @@ import { EventHubPrerequisiteSection, PickerLine } from "./eventhub-prerequisite
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
+import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
 import {
   applyPlanValues,
@@ -437,6 +440,18 @@ export function AzureOnboardingScreen({
     [],
   );
 
+  // Tenant inventory heat map: the last read, kept in state only.
+  const [inventory, setInventory] = useState<TenantInventory | null>(null);
+  const [inventoryReading, setInventoryReading] = useState(false);
+  const inventoryBusy = useRef(false);
+  const screenMounted = useRef(true);
+  useEffect(() => {
+    screenMounted.current = true;
+    return () => {
+      screenMounted.current = false;
+    };
+  }, []);
+
   const unknown = useMemo(() => {
     const map = new Map<OnboardingItemId, string>();
     if (defenderState?.unknownReason !== undefined) {
@@ -655,6 +670,34 @@ export function AzureOnboardingScreen({
       logger?.warn(`${LOG} validate failed`, { error: errorText(error) });
     } finally {
       if (runAbort.current === controller) runAbort.current = null;
+    }
+  }
+
+  const inventoryDisabledReason: string | null =
+    ports.azure === undefined
+      ? "No Azure connection is configured, so the tenant cannot be read."
+      : progress === null
+        ? "The onboarding progress has not loaded yet, so the tenant cannot be read."
+        : pacing === undefined
+          ? "The shell gave no request pacing, so the tenant is not read."
+          : null;
+
+  async function onReadInventory(): Promise<void> {
+    if (inventoryDisabledReason !== null || inventoryBusy.current) return;
+    if (progress === null || pacing === undefined) return;
+    inventoryBusy.current = true;
+    setInventoryReading(true);
+    const azure = paceAzureManagement(ports.azure, { ...pacing, maxRequestsPerMinute: VALIDATE_REQUESTS_PER_MINUTE });
+    logger?.info(`${LOG} tenant inventory read started`);
+    try {
+      const result = await readTenantInventory({ azure, progress, now: () => new Date().toISOString() });
+      if (screenMounted.current) setInventory(result);
+      logger?.info(`${LOG} tenant inventory read finished`);
+    } catch (error) {
+      logger?.warn(`${LOG} tenant inventory read failed`, { error: errorText(error) });
+    } finally {
+      inventoryBusy.current = false;
+      if (screenMounted.current) setInventoryReading(false);
     }
   }
 
@@ -935,6 +978,13 @@ export function AzureOnboardingScreen({
       </div>
       {saveMessage !== null && <PickerLine message={saveMessage} />}
       <p className="field-hint">{PAGE_TIP}</p>
+
+      <TenantInventoryHeatmap
+        inventory={inventory}
+        reading={inventoryReading}
+        disabledReason={inventoryDisabledReason}
+        onRead={() => void onReadInventory()}
+      />
 
       <EventHubPrerequisiteSection number={1} value={target} onChange={setTarget} />
 

@@ -47,6 +47,7 @@ import {
 } from "@soc/core";
 import type {
   AzureConfig,
+  BatchPacing,
   AzureManagement,
   AzureManagementRequest,
   CapabilityContext,
@@ -226,12 +227,16 @@ function mount(opts: {
   /** The shell's current audit key and clock (AZR-60). */
   permissionsAuditKey?: string;
   permissionsNow?: () => string;
+  /** The shell's pacing; the tenant inventory read is disabled without it. */
+  pacing?: BatchPacing;
+  /** Mount with no Azure connection wired at all. */
+  noAzure?: boolean;
 } = {}) {
   const azure = opts.azure ?? new RoutingAzure();
   const store = opts.store === undefined ? new FakeKvDocumentStore() : opts.store;
   const logger = opts.logger ?? new FakeLogger(() => "t");
   const ports = {
-    azure,
+    ...(opts.noAzure === true ? {} : { azure }),
     logger,
     ...(store === null ? {} : { kvDocuments: store }),
   } as unknown as UiPorts;
@@ -246,6 +251,7 @@ function mount(opts: {
         onRecheckPermissions={opts.onRecheckPermissions}
         permissionsAuditKey={opts.permissionsAuditKey}
         permissionsNow={opts.permissionsNow}
+        pacing={opts.pacing}
       />
     </PortsProvider>,
   );
@@ -1078,5 +1084,34 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     expect(block?.textContent).toContain("On the Event Hub namespace");
     expect(block?.textContent).toMatch(/listKeys\/action/);
     expect(block?.querySelector("[data-permission-action]")).toBeNull();
+  });
+});
+
+
+describe("the tenant inventory heat map on the screen", () => {
+  const PACING: BatchPacing = { now: () => 1_000_000, sleep: async () => {} };
+
+  it("renders above the Event Hub section, and reading issues only GET requests", async () => {
+    const { azure } = mount({ pacing: PACING });
+    await loaded();
+    const read = button("Read the tenant's logging");
+    const hub = screen.getByText("Event Hub the sources send to");
+    expect(read.compareDocumentPosition(hub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(read.disabled).toBe(false);
+    expect(azure.calls).toHaveLength(0);
+    fireEvent.click(read);
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Activity Log/ }).length).toBeGreaterThan(0);
+    });
+    expect(azure.calls.length).toBeGreaterThan(0);
+    expect(azure.calls.every((c) => c.method === "GET" || c.path === "/providers/Microsoft.ResourceGraph/resources")).toBe(true);
+    expect(azure.puts()).toHaveLength(0);
+  });
+
+  it("is disabled with its reason when there is no Azure connection", async () => {
+    mount({ noAzure: true, pacing: PACING });
+    await loaded();
+    expect(button("Read the tenant's logging").disabled).toBe(true);
+    expect(screen.getByText(/No Azure connection/)).toBeTruthy();
   });
 });
