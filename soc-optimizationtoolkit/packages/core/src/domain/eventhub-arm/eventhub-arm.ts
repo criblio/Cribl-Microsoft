@@ -91,6 +91,14 @@ export function eventHubResourceId(ns: NamespaceRef, hubName: string): string {
   return `${eventHubNamespacePath(ns)}/eventhubs/${hubName}`;
 }
 
+/**
+ * The ARM resource id of one NAMESPACE-level authorization rule - what a
+ * diagnostic setting names as its eventHubAuthorizationRuleId.
+ */
+export function namespaceRuleResourceId(ns: NamespaceRef, ruleName: string): string {
+  return `${eventHubNamespacePath(ns)}/authorizationRules/${ruleName}`;
+}
+
 /** GET one namespace (existence + provisioningState). */
 export function buildNamespaceGetRequest(ns: NamespaceRef): AzureManagementRequest {
   return {

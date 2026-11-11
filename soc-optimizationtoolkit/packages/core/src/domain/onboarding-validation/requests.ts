@@ -59,6 +59,7 @@ import {
   buildNetworkWatcherGetRequest,
 } from "../labs/lab-flowlogs";
 import { metricsRequest } from "../eventhub-discovery/eventhub-discovery";
+import { buildSubscriptionDiagnosticSettingsListRequest } from "../activity-log-export/activity-log-setting";
 import type { CheckKind } from "../onboarding-howto/check-kinds";
 import { missingValues, type PlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
 import { onboardingSource, type OnboardingSourceId } from "../onboarding-howto/sources";
@@ -68,13 +69,6 @@ import {
   managementGroupDefinitionId,
   managementGroupDefinitionsPath,
 } from "../onboarding-howto-steps/policy-steps";
-
-/**
- * api-version for subscription diagnostic settings (the Activity Log export).
- * INFERRED: the current stable Microsoft.Insights diagnosticSettings version;
- * on the live-verification list.
- */
-export const SUBSCRIPTION_DIAGNOSTIC_SETTINGS_API_VERSION = "2021-05-01-preview";
 
 /** api-version for Microsoft.PolicyInsights remediations. INFERRED; live list. */
 export const POLICY_REMEDIATIONS_API_VERSION = "2021-10-01";
@@ -359,14 +353,8 @@ function requestList(kind: CheckKind, values: PlanValues, ex: CheckExpectations)
       return [list(listSettingsRequest(), "Entra ID diagnostic settings")];
     case "activity-log-setting":
       return [
-        list(
-          {
-            method: "GET",
-            path: `/subscriptions/${sub}/providers/Microsoft.Insights/diagnosticSettings`,
-            apiVersion: SUBSCRIPTION_DIAGNOSTIC_SETTINGS_API_VERSION,
-          },
-          `Activity Log diagnostic settings on ${sub}`,
-        ),
+        // The same request the Activity Log deploy re-lists with (AZR-98).
+        list(buildSubscriptionDiagnosticSettingsListRequest(sub), `Activity Log diagnostic settings on ${sub}`),
       ];
     case "policy-assignment":
       return ex.policy === undefined

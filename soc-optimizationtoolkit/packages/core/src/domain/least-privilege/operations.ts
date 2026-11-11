@@ -393,6 +393,8 @@ const OPERATIONS = {
     id: "activityLog.diagnosticSettings.read",
     calls: [
       { method: "GET", path: "/subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings", api: "arm" },
+      // AZR-98: the Activity Log deploy reads its own setting back by name.
+      { method: "GET", path: "/subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name}", api: "arm" },
     ],
     operation: "Microsoft.Insights/diagnosticSettings/read",
     leastRole: "Monitoring Reader",
@@ -404,6 +406,27 @@ const OPERATIONS = {
     audit: [
       "GET /subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings",
     ],
+  },
+  "activityLog.diagnosticSetting.write": {
+    id: "activityLog.diagnosticSetting.write",
+    calls: [
+      { method: "PUT", path: "/subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "Microsoft.Insights/diagnosticSettings/write",
+    // Azure also checks the caller may use the rule the setting names, though
+    // no key is returned to the caller (Azure Monitor documentation).
+    extraActions: [
+      "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action on the rule the setting names",
+    ],
+    leastRole: "Monitoring Contributor",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "subscription",
+    scopeNote: "the subscription whose Activity Log is exported",
+    citation: "https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/diagnostic-settings",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit (AZR-98): the Activity Log deploy creates one subscription diagnostic setting. Documented, not measured - the role and the rule permission come from Azure Monitor documentation; no call has been made with a reduced identity.",
   },
   "resourceGraph.query": {
     id: "resourceGraph.query",
