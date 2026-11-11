@@ -75,7 +75,7 @@ export function TenantInventoryHeatmap({ inventory, reading, disabledReason, onR
                 onClick={() => setOpen(open === card.id ? null : card.id)}
               >
                 <span className="tih-card-title">{card.title}</span>
-                <span className="tih-card-state">{COLOUR_WORD[card.colour]}</span>
+                <span className="tih-card-state">{card.notChecked !== null ? "not checked yet" : COLOUR_WORD[card.colour]}</span>
                 <span className="tih-card-summary">{cardSummary(card)}</span>
                 {card.notChecked === null && (
                   <>

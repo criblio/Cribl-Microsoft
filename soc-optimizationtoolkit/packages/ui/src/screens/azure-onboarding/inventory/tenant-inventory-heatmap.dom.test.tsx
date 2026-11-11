@@ -76,6 +76,17 @@ describe("TenantInventoryHeatmap", () => {
     expect(screen.getByText(/2026-01-02T03:04:05Z/)).toBeTruthy();
   });
 
+  it("a not-built card says not checked yet and never could not check", () => {
+    const inv = inventory();
+    const { container } = render(<TenantInventoryHeatmap inventory={inv} reading={false} disabledReason={null} onRead={() => {}} />);
+    const notBuilt = Array.from(container.querySelectorAll("button.tih-card")).filter((b) => b.textContent!.includes("Not checked yet"));
+    expect(notBuilt).toHaveLength(4);
+    for (const b of notBuilt) {
+      expect(b.textContent).toContain("not checked yet");
+      expect(b.textContent!.toLowerCase()).not.toContain("could not check");
+    }
+  });
+
   it("opens Entra ID to 15 tiles with the collector and destination", () => {
     render(<TenantInventoryHeatmap inventory={inventory()} reading={false} disabledReason={null} onRead={() => {}} />);
     const card = screen.getByRole("button", { name: /Entra ID/ });
@@ -110,6 +121,18 @@ describe("tenant-inventory-state", () => {
 
   it("destinationLabel is the last segment plus the kind", () => {
     expect(destinationLabel({ kind: "workspace", resourceId: "/a/b/law-soc-prod" })).toBe("workspace law-soc-prod");
+  });
+
+  it("cellLabel states a partly cell with its scope counts", () => {
+    const cell = {
+      category: "activityLog",
+      logType: "Write",
+      title: "Write",
+      collectors: [],
+      state: { kind: "partly", scopes: { collected: 2, read: 3, unread: 1 } },
+      archive: { kind: "not-archived" },
+    } as const;
+    expect(cellLabel(cell)).toBe("Partly collected (2 of 3 read), not archived, 1 could not be read");
   });
 
   it("cellLabel and cardSummary state the state in words", () => {
