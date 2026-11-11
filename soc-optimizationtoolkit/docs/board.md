@@ -1127,7 +1127,35 @@ Started. Anything here with an unfinished dependency is called out on its card.
   and search). THE UNROLL IS AN APP-CREATED PIPELINE (ownership-stamped, a
   JSON Unroll on records, referenced by the route, reusable by every Azure
   onboarding route and removable by the app) - not an event breaker on the
-  input.
+  input. BUILT 2026-11-10, PINS ONLY (nothing run against a leader; PR merged
+  to main). Domain onboarding-lake-route (fixed ids: datasets
+  azure_defender_alerts / azure_activity_log, routes
+  azure_onb_defender_alerts_lake / azure_onb_activity_log_lake, shared
+  pipeline azure_onb_unroll_records with one json_unroll on records,
+  ownership-stamped), usecase planLakeRoute / applyLakeRoute (commit-scope
+  check before any write, then dataset, pipeline, route through route-insert
+  with one commit carrying the pipeline's files), progress criblLakeRoutes, a
+  LakeRoutePanel under each Defender / Activity Log Cribl source row with the
+  native-connector sentence and a position picker, and the Route / Destination
+  dataflow cards naming the recorded objects. Every object is create-only; a
+  foreign or edited pipeline is refused. Policies: POST /m/:gid/pipelines and
+  POST /products/lake/lakes/:lakeId/datasets. STAYS IN-PROGRESS until measured
+  live, one approved write per object: (1) POST
+  /products/lake/lakes/default/datasets - the spec route (wire-source still
+  POSTs the non-spec /system/lake/datasets); does it answer 409 for an
+  existing id, and what id format it accepts; (2) POST /m/<g>/pipelines with
+  the stamped json_unroll body - does the read-back hold every field sent; (3)
+  the route output cribl_lake:<dataset> - house convention, never measured
+  (docs/zscaler-lake-lab.md used a cribl_lake destination with destPath); (4)
+  which pending files the pipeline and the routes PATCH produce (markers
+  local/cribl/pipelines/azure_onb_unroll_records/ and
+  local/cribl/pipelines/route.yml are assumed) - this also settles DBT-301's
+  unmeasured commit marker; (5) the unrolled event: is each record at the top
+  level. OPEN: Defender for Cloud continuous export may not wrap alerts in a
+  records[] envelope; capture one event before trusting the unroll for that
+  source. Datasets use server defaults (no retention or format set); no
+  Pause/Remove exists yet for the three objects (they are recorded in progress
+  so a remove can prove ownership).
 
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
