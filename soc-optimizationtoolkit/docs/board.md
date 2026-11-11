@@ -1121,7 +1121,13 @@ Started. Anything here with an unfinished dependency is called out on its card.
   route to a Cribl Lake dataset (Cribl.Cloud); no Sentinel destination, no _CL
   table, no DCR. The screen states, for each, that Sentinel gets this data
   through the native connector. Other destinations (beyond Lake) are a later
-  slice. The unroll of records[] still applies before Lake.
+  slice. The unroll of records[] still applies before Lake. DECISIONS
+  (operator 2026-11-10, design): ONE LAKE DATASET PER SOURCE (Defender alerts
+  and Activity Log each get their own, created by the app; separate retention
+  and search). THE UNROLL IS AN APP-CREATED PIPELINE (ownership-stamped, a
+  JSON Unroll on records, referenced by the route, reusable by every Azure
+  onboarding route and removable by the app) - not an event breaker on the
+  input.
 
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
