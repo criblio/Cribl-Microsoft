@@ -168,7 +168,9 @@ describe('config/policies.yml grants exactly what the app calls', () => {
     expect(actions('/m/:gid/system/secrets/:id')).toEqual(['GET']);
     expect(actions('/m/:gid/version/status')).toEqual(['GET']);
     expect(actions('/m/:gid/version')).toEqual(['GET']);
-    expect(actions('/m/:gid/system/metrics/query')).toEqual(['POST']);
+    expect(actions('/system/metrics/query')).toEqual(['POST']);
+    // AZR-95: the group-scoped form answers 404 on Cribl.Cloud and must not come back.
+    expect(actions('/m/:gid/system/metrics/query')).toBeUndefined();
     expect(actions('/products/stream/groups/:id/deploy')).toEqual(['PATCH']);
     expect(actions('/products/stream/groups/:id')).toEqual(['GET']);
     // The kit's 404 fallbacks stay granted.

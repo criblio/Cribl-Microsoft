@@ -3,9 +3,11 @@
  * live-flow poll run makes for the onboarding diagram.
  *
  * It calls the adopted kit's queryMetrics through criblRequestFor, so the
- * request is exactly one POST to '/m/<g>/system/metrics/query', which the
- * adapter maps to {groupId: g, path: '/system/metrics/query'}. The body is
- * domain/onboarding-flow's flowQuery(kind): total.in_events split by input.
+ * request is exactly one LEADER-level POST /system/metrics/query (the adapter
+ * sends it with no group) whose `where` scopes the worker group (AZR-95,
+ * measured 2026-11-10; the group-scoped /m/<g>/... form is a 404 on
+ * Cribl.Cloud). The body is domain/onboarding-flow's flowQuery(kind):
+ * total.in_events split by input, plus that scope.
  *
  * NEVER THROWS. Every outcome is a FlowAnswer the lane classifier can tell
  * apart (claude-kit standards/cribl-metrics.md, inventory-honesty.md):
@@ -18,9 +20,7 @@
  *  - failed                  - a transport rejection, an abort, or no worker
  *                              group (nothing is sent then).
  *
- * Provenance: the request and response shapes are Documented (kit
- * metricsQuery.ts header), NOT measured live; ADR 0007's live-verification
- * list carries the first real answer.
+ * Provenance: MEASURED live 2026-11-10 (kit metricsQuery.ts header).
  *
  * Pure orchestration over the CriblClient port: no clock, no timers.
  */

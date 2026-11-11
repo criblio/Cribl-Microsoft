@@ -12,16 +12,17 @@ import {
 import * as barrel from "./index";
 
 describe("readSourceFlow", () => {
-  it("sends exactly one POST to the group's metrics query with splitBys ['input']", async () => {
+  it("sends exactly one LEADER POST, scoped to the group in where, with splitBys ['input'] (AZR-95)", async () => {
     const cribl = new FakeCriblClient();
     cribl.respondWith({ status: 200, body: { results: [{ input: "eventhub:a", in_events: 3 }] } });
     const answer = await readSourceFlow(cribl, "g", "window");
     expect(cribl.calls).toHaveLength(1);
     const call = cribl.calls[0]!;
     expect(call.method).toBe("POST");
-    expect(call.groupId).toBe("g");
+    expect(call.groupId).toBeUndefined();
     expect(call.path).toBe("/system/metrics/query");
-    expect(call.body).toEqual(flowQueryBody("window"));
+    expect(call.body).toEqual(flowQueryBody("window", "g"));
+    expect((call.body as { where: string }).where).toBe('__worker_group=="g" && __dist_mode=="worker"');
     expect((call.body as { aggs: { splitBys: string[] } }).aggs.splitBys).toEqual(["input"]);
     expect(answer).toEqual({ kind: "rows", rows: [{ input: "eventhub:a", in_events: 3 }] });
   });
@@ -30,8 +31,8 @@ describe("readSourceFlow", () => {
     const cribl = new FakeCriblClient();
     cribl.respondWith({ status: 200, body: { results: [] } });
     const answer = await readSourceFlow(cribl, "g", "lookback");
-    expect(cribl.calls[0]!.body).toEqual(flowQueryBody("lookback"));
-    expect((cribl.calls[0]!.body as { earliest: string }).earliest).toBe("-24h");
+    expect(cribl.calls[0]!.body).toEqual(flowQueryBody("lookback", "g"));
+    expect((cribl.calls[0]!.body as { earliest: string }).earliest).toBe("86400s");
     expect(answer).toEqual({ kind: "empty" });
   });
 

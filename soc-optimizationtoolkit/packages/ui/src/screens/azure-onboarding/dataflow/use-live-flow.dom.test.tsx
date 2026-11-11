@@ -180,18 +180,20 @@ describe("useLiveFlow - registration", () => {
 });
 
 describe("useLiveFlow - runs", () => {
-  it("each run sends exactly one POST to the group's metrics query; lookback first, then the window", async () => {
+  it("each run sends exactly one LEADER POST scoped to the group; lookback first, then the window", async () => {
     const { client, calls } = fakeCribl(() => rows(0));
     const { cap } = setup(client, true);
     await runOnce(cap);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ method: "POST", groupId: "g1", path: "/system/metrics/query" });
-    expect(calls.map(earliestOf)).toEqual(["-24h"]);
+    expect(calls[0]).toMatchObject({ method: "POST", path: "/system/metrics/query" });
+    expect(calls[0]!.groupId).toBeUndefined();
+    expect((calls[0]!.body as { where: string }).where).toBe('__worker_group=="g1" && __dist_mode=="worker"');
+    expect(calls.map(earliestOf)).toEqual(["86400s"]);
     expect(cap.live?.lookbackStatus).toBe("answered");
 
     await runOnce(cap);
     expect(calls).toHaveLength(2);
-    expect(calls.map(earliestOf)).toEqual(["-24h", "-300s"]);
+    expect(calls.map(earliestOf)).toEqual(["86400s", "300s"]);
     expect(cap.live?.lastQuery).toBe("window");
     expect(cap.live?.asOf).toBe(1_000);
   });
@@ -203,10 +205,10 @@ describe("useLiveFlow - runs", () => {
     const { client, calls } = fakeCribl(() => rows(5));
     const { cap } = setup(client, true);
     await runOnce(cap);
-    expect(calls.map(earliestOf)).toEqual(["-24h"]);
+    expect(calls.map(earliestOf)).toEqual(["86400s"]);
     expect(cap.live?.states?.entraId?.kind).toBe("idle");
     await runOnce(cap);
-    expect(calls.map(earliestOf)).toEqual(["-24h", "-300s"]);
+    expect(calls.map(earliestOf)).toEqual(["86400s", "300s"]);
     expect(cap.live?.states?.entraId).toEqual({ kind: "flowing", events: 5 });
   });
 
@@ -260,7 +262,7 @@ describe("useLiveFlow - runs", () => {
     // The lookback is retried on the 5th run after the failure.
     for (let i = 0; i < 4; i++) await runOnce(cap);
     const earliest = calls.map(earliestOf);
-    expect(earliest).toEqual(["-24h", "-300s", "-300s", "-300s", "-300s", "-24h"]);
+    expect(earliest).toEqual(["86400s", "300s", "300s", "300s", "300s", "86400s"]);
   });
 
   it("a lane in another worker group is not measured, and says why", async () => {

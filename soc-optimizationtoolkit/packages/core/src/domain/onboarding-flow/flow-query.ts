@@ -13,28 +13,42 @@
  *  - if the lookback FAILED, runs use the window query and the lookback is
  *    retried on every LOOKBACK_RETRY_EVERY-th run until it answers.
  *
+ * The worker group is NOT in the path: the query is a leader-level POST
+ * /system/metrics/query and the kit adds `__worker_group=="<g>"` to its
+ * `where` (AZR-95, measured 2026-11-10).
+ *
  * The counter is intake: `total.in_events` split by `input`
  * (claude-kit standards/cribl-metrics.md; kit/metrics/counting.ts
  * INTAKE_AGGREGATION). Never `pipe.in_events`, which counts once per pipeline
- * path. No `where`: one query covers every onboarding input, and the labels are
- * matched client-side (flow-state.ts matchInputLabel).
+ * path. No `where` of its own beyond the group scope: one query covers every
+ * onboarding input in the group, and the labels are matched client-side
+ * (flow-state.ts matchInputLabel).
  *
- * Provenance: the request shape is Documented (kit metricsQuery.ts header), NOT
- * measured live; the label form for a new eventhub / azure_blob input is on the
- * ADR 0007 live-verification list.
+ * Provenance: MEASURED 2026-11-10 (kit metricsQuery.ts header): the leader path,
+ * the group scope, the {results} answer, and the eventhub label form
+ * `eventhub:<inputId>`. The azure_blob label form is still unmeasured.
  */
 
 import {
   buildMetricsQueryBody,
   describeMetricsRequest,
+  scopedToGroup,
+  secondsAgo,
   type MetricsQuery,
 } from "../../kit/metrics/metricsQuery";
 import { INTAKE_AGGREGATION } from "../../kit/metrics/counting";
 
 /** The window that decides flowing versus idle, in seconds. */
 export const FLOW_WINDOW_SECONDS = 300;
-/** The lookback that decides idle versus never seen. Shown to the operator as-is. */
+/**
+ * The lookback that decides idle versus never seen, as the DISPLAY token the
+ * operator copy parses ("the last 24 hours"). It is NOT sent: the metrics API
+ * answers a signed "-24h" with zero rows (AZR-95, measured), so the query uses
+ * FLOW_LOOKBACK_SECONDS. A pin holds the two to the same span.
+ */
 export const FLOW_LOOKBACK = "-24h";
+/** The lookback the query sends, in seconds (sent as "86400s"). */
+export const FLOW_LOOKBACK_SECONDS = 24 * 60 * 60;
 /** After a failed lookback, retry it on every Nth run (the others are window runs). */
 export const LOOKBACK_RETRY_EVERY = 5;
 
@@ -71,7 +85,8 @@ export function flowQuery(kind: FlowQueryKind): MetricsQuery {
     aggregations: [INTAKE_AGGREGATION, FLOW_BYTES_AGGREGATION],
     splitBys: ["input"],
     window: { cumulative: true },
-    earliest: kind === "window" ? `-${FLOW_WINDOW_SECONDS}s` : FLOW_LOOKBACK,
+    // "<N>s", never a signed "-300s" or "-24h": those answer 200 with zero rows (AZR-95, measured).
+    earliest: secondsAgo(kind === "window" ? FLOW_WINDOW_SECONDS : FLOW_LOOKBACK_SECONDS),
     latest: "now",
   };
 }
@@ -84,14 +99,14 @@ export function flowQuery(kind: FlowQueryKind): MetricsQuery {
  * so that literal is written once. Kept here rather than in a test helper
  * because both test folders need it and it must track flowQuery exactly.
  */
-export function flowQueryBody(kind: FlowQueryKind): Record<string, unknown> {
-  return buildMetricsQueryBody(flowQuery(kind));
+export function flowQueryBody(kind: FlowQueryKind, groupId: string): Record<string, unknown> {
+  return buildMetricsQueryBody(scopedToGroup(groupId, flowQuery(kind)));
 }
 
 /**
  * Method, path and body for the diagram's (i) popover. Null when there is no
  * worker group yet: nothing is sent then, so there is no request to describe
- * (the kit's metricsQueryPath throws on an empty group).
+ * (the kit's groupScopeWhere throws on an empty group).
  */
 export function describeFlowRequest(
   groupId: string,

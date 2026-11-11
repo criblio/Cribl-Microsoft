@@ -11,6 +11,9 @@
  *                                     (metricsQueryPath; <g> is URI-decoded)
  *   '/products/...', '/master/...' -> {groupId: undefined, path} - leader level
  *                                     (commitDeploy's deploy and deployedVersion)
+ *   '/system/metrics/query'        -> {groupId: undefined, path} - leader level
+ *                                     (AZR-95, measured: the group is chosen in the
+ *                                     body's where; /m/<g>/... answers 404)
  *   any other path                 -> {groupId: boundGroup, path}
  *                                     (commitDeploy's '/version/status',
  *                                     readModifyWrite's '/system/inputs/...')
@@ -45,6 +48,8 @@ import { abortError, type ApiResponse, type Request } from './config-writes/tran
 const METHODS: ReadonlySet<string> = new Set<HttpMethod>(['GET', 'PUT', 'POST', 'PATCH', 'DELETE']);
 
 const LEADER_PREFIXES = ['/products/', '/master/'] as const;
+/** Exact leader-level paths a bound group must not capture (AZR-95). */
+const LEADER_PATHS: ReadonlySet<string> = new Set(['/system/metrics/query']);
 
 /** Where one kit path goes, or why it cannot be sent. Exported for the tests and the request scan. */
 export type CriblRoute =
@@ -95,7 +100,9 @@ export function routeCriblPath(rawPath: string, boundGroup?: string): CriblRoute
     if (!group) return { kind: 'refused', error: 'bad-path' };
     return withQuery(group, m[2] ?? '/');
   }
-  if (LEADER_PREFIXES.some((p) => pathname.startsWith(p))) return withQuery(undefined, pathname);
+  if (LEADER_PREFIXES.some((p) => pathname.startsWith(p)) || LEADER_PATHS.has(pathname)) {
+    return withQuery(undefined, pathname);
+  }
   if (!boundGroup) return { kind: 'refused', error: 'no-group' };
   return withQuery(boundGroup, pathname);
 }

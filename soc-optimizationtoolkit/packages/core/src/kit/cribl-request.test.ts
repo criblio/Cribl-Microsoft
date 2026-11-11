@@ -15,6 +15,8 @@ describe('routeCriblPath', () => {
   it('sends /products/ and /master/ to the leader', () => {
     expect(routeCriblPath('/products/stream/groups/g1/deploy', 'g1')).toEqual({ kind: 'ok', groupId: undefined, path: '/products/stream/groups/g1/deploy' });
     expect(routeCriblPath('/master/groups/g1', 'g1')).toEqual({ kind: 'ok', groupId: undefined, path: '/master/groups/g1' });
+    expect(routeCriblPath('/system/metrics/query', 'g1')).toEqual({ kind: 'ok', groupId: undefined, path: '/system/metrics/query' });
+    expect(routeCriblPath('/system/metrics/query')).toEqual({ kind: 'ok', groupId: undefined, path: '/system/metrics/query' });
   });
 
   it('binds a bare path to the bound group, and refuses it without one', () => {
@@ -42,22 +44,27 @@ describe('routeCriblPath', () => {
 });
 
 describe('criblRequestFor', () => {
-  it('turns a kit metrics call into one group-scoped CriblRequest', async () => {
+  // AZR-95: the metrics query is a leader route even when a group is bound; the group rides in where.
+  it('turns a kit metrics call into one LEADER CriblRequest whose where scopes the group', async () => {
     const cribl = new FakeCriblClient();
     cribl.respondWith({ status: 200, body: { results: [] } });
     const answer = await queryMetrics(criblRequestFor(cribl), 'g1', {
       aggregations: ['sum("total.in_events").as(in_events)'],
       window: { cumulative: true },
-      earliest: '-24h',
+      earliest: '86400s',
       latest: 'now',
     });
     expect(answer).toEqual({ kind: 'empty' });
     expect(cribl.calls).toEqual([
       {
         method: 'POST',
-        groupId: 'g1',
         path: '/system/metrics/query',
-        body: { aggs: { aggregations: ['sum("total.in_events").as(in_events)'], cumulative: true }, earliest: '-24h', latest: 'now' },
+        body: {
+          aggs: { aggregations: ['sum("total.in_events").as(in_events)'], cumulative: true },
+          earliest: '86400s',
+          latest: 'now',
+          where: '__worker_group=="g1" && __dist_mode=="worker"',
+        },
       },
     ]);
   });

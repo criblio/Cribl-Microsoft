@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 38 in progress, 201 done.**
+**106 in the backlog, 36 in progress, 203 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 11 | 3 | 1 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 38 | 10 |
+| Azure Native Source Onboarding | 30 | 40 | 8 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 144.
+Open work totals 142.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 50% (43/86)
+### `AZR` Azure native source onboarding - 52% (45/86)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 28/45 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 30/45 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -150,7 +150,7 @@ RAISED BY THE USER 2026-10-29. SIEM Migration reads a Splunk or QRadar export an
 
 ---
 
-## In progress (38)
+## In progress (36)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -368,81 +368,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   [[AZR-54]] (the auto-hub consumer-group check reads the named hub, a false
   'as expected') and [[AZR-55]] (two checks of one step render as the same
   sentence).
-
-- **AZR-33** Diagram shows a new live flow when data arrives in Cribl
-  `AZR-F9` `story` `settled`
-  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
-  Onboarding page to show the dataflows of how these logs work from each
-  perspective. Also a How to experience for customers that do not want to use
-  the app to automate the Azure configurations. It should walk them through
-  how to configure each aspect the app would have done: choose what to
-  onboard, popup instructions, check box when done. Then a read-only option to
-  validate the configuration, and a dataflow updated to show a new flow when
-  the data is coming into Cribl. The Cribl side should be automated to create
-  the source needed to onboard the data from Blob or Event Hub as needed."
-  SCOPE: per lane, read Cribl's own metrics for the Cribl source the lane maps
-  to (claude-kit standards/cribl-metrics.md) and draw the Azure -> Cribl hop
-  as flowing only when events were measured in the window; idle, never-seen
-  and unmeasurable are distinct states, and polling respects the shared proxy
-  budget. Animation is allowed only on a measured flow. NOTE 2026-10-26
-  (implementation, AZR-30..34 build): BUILT, not verified live. Flow query
-  planning and lane flow states in `domain/onboarding-flow/`: a 24h cumulative
-  lookback first, then a 300s window, with a failed lookback retried every 5th
-  run. flowing is the only animated state; idle, never seen, and not measured
-  (waiting, no-permission, http-error, unexpected-shape, no-source,
-  lookback-failed) are distinct, and a 403 is never 0.
-  `usecases/read-source-flow/` sends exactly one POST
-  /m/<g>/system/metrics/query per run through the adopted kit metricsQuery
-  (`packages/core/src/kit/metrics/`) and the kit-to-CriblClient adapter
-  `kit/cribl-request.ts`. The UI poll is opt-in (Watch for data) and registers
-  through the new PollRegistry (`packages/ui/src/polling/poll-registry.tsx`)
-  into App's single useConsolidatedPolling, with main.tsx wrapping App in
-  PollRegistryProvider: 60s, priority 5, paused when the tab is hidden.
-  policies.yml grants `/m/:gid/system/metrics/query` POST. Pins:
-  flow-query.test.ts, flow-state.test.ts (the full state table),
-  metrics-subset.test.ts, read-source-flow.test.ts,
-  poll-registry.dom.test.tsx, use-document-visible.dom.test.tsx,
-  use-live-flow.dom.test.tsx and main-provider.test.ts. The metrics label form
-  for the new input is UNMEASURED until a real answer is captured as a
-  fixture. ADR 0007 section 9. Live verification is OUTSTANDING (ADR 0007,
-  "Live verification"): the card stays in-progress until the operator runs
-  that list in Cribl Live Preview and records verified live or both. LIVE
-  2026-10-28 (Live Preview, branch feature/azure-onboarding-screen, operator's
-  admin account, lab subscription): not exercised: no Cribl source exists to
-  watch, and the toggle says so instead of polling. The metrics label form is
-  still unmeasured. LIVE 2026-11-03 (Live Preview on the working tree,
-  operator's admin account, lab subscription, namespace ehnsjpedersoneastus /
-  hub ehjpedersoneastus, rule RootManageSharedAccessKey only): ADR 0007 item 6
-  not exercised: no Cribl source exists to watch. The lane drew 'not measured'
-  on the namespace-to-Cribl hop and 'not created yet' on the source, with no
-  metrics call. NOTE 2026-11-04 (Live Preview): with data now arriving at the
-  named-hub input (AZR-34), the section 7 diagram still drew only the default
-  Microsoft Audit lane (insights-logs-* hubs, input azure_onb_eh_fa882ef2...),
-  even after ticking Defender for Cloud alert export on screen; the named-hub
-  input that received the event was not drawn, so Watch for data had nothing
-  to watch. Not yet diagnosed whether this is a defect or the Defender lane
-  needing Automate mode plus a Cribl side read. DIAGNOSED 2026-11-10: a
-  defect, carded and fixed as [[AZR-94]]. The diagram drew a lane only for a
-  CHOSEN source, and a source in How-to mode is chosen only by the How-to list
-  tick, so the catalog tick did nothing for it; the Defender lane with the
-  live input therefore had no lane. Now any source with a created Cribl source
-  is drawn, marked not chosen. AZR-33 itself stays in-progress until ADR 0007
-  item 6 (watching a real flow) is run in Live Preview. LIVE 2026-11-10 (Live
-  Preview on main 460422a9, DatacenterEast, operator approved each write):
-  ticked Defender in the How-to list, set the plan values listen rule
-  cribl-listen and consumer group cribl-onb (Apply), created consumer group
-  cribl-onb on ehjpedersoneastus (az CLI), and created input
-  azure_onb_eh_fa882ef2_ehnsjpedersoneastus_ehjpedersoneastus with listKeys on
-  cribl-listen: "Created and running: worker group DatacenterEast runs commit
-  0b4cc67". The rule picker offered only cribl-listen (AZR-58 live). Validate
-  read every Defender check as expected; the hub had 64 IncomingMessages in
-  the window. The diagram drew the Defender lane with the source created.
-  Watch for data sent ONE POST /m/DatacenterEast/system/metrics/query, which
-  answered 404, and the hop read "not measured: lookback failed" with the 404
-  body - honest, never 0 or idle. ADR 0007 item 6 is therefore still NOT
-  passed: carded as [[AZR-95]]. Also carded [[AZR-96]] and [[AZR-97]]. Left in
-  the lab: consumer group cribl-onb and the new input, beside the old input
-  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus on consumer group cribl.
 
 - **AZR-34** Create the Cribl source for each onboarded source (Azure Event Hub or Azure Blob)
   `AZR-F9` `story` `settled`
@@ -1257,24 +1182,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `entra-oauth` Entra ID OAuth only - Service principal plus a hub-scoped Azure Event Hubs Data Receiver role, as the Blob lane already does. No shared key leaves Azure.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
-
-- **AZR-95** Watch for data never measures: the worker-group metrics query POST /m/<group>/system/metrics/query answers 404 on Cribl.Cloud
-  `AZR-F9` `bug` `settled`
-  FOUND LIVE 2026-11-10 (Live Preview on main 460422a9, DatacenterEast). With
-  the Defender lane drawn and its Cribl source created and running, ticking
-  Watch for data sent POST
-  /api/v1/a/__dev__soc-optimizationtoolkit/m/DatacenterEast/system/metrics/query
-  and got 404 with body "Cannot POST /api/v1/system/metrics/query". The
-  diagram stayed honest: the hop read "not measured: lookback failed" with the
-  HTTP 404 in its (i). So the flow state is never measured on Cribl.Cloud and
-  no lane can ever animate. The path came from the vendored spec and the
-  claude-kit cribl-metrics standard, both Documented and never measured; this
-  is the first live measurement and it contradicts them. FIX: find the path
-  Cribl.Cloud serves for Cribl's own metrics (leader-level
-  /system/metrics/query with a group filter, or the per-group form the leader
-  UI itself calls - capture it from the Stream UI network log), capture one
-  real response as a fixture, update policies.yml and the claude-kit
-  standard's provenance.
 
 ---
 
@@ -2816,7 +2723,7 @@ Settled, gated on something above.
   new deploy with `already-exists`.
 
 - **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
-  `AZR-F9` `story` `settled` `blocked by AZR-33`
+  `AZR-F9` `story` `settled`
   FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's
   own metrics for each lane: a 300s window for 'flowing' / 'idle' and a
   cumulative -24h lookback for 'never seen in the last 24 hours'. Anything
@@ -2847,7 +2754,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (201)
+## Done (203)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3120,6 +3027,89 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   a plan-value change. Closed: pins plus live. One layout note, not carded:
   the instructions dialog opens pinned to the frame's left edge rather than
   centred.
+
+- **AZR-33** Diagram shows a new live flow when data arrives in Cribl
+  `AZR-F9` `story` `settled` `verified: both`
+  OPERATOR REQUEST 2026-10-26: "a diagram in the Azure Native Source
+  Onboarding page to show the dataflows of how these logs work from each
+  perspective. Also a How to experience for customers that do not want to use
+  the app to automate the Azure configurations. It should walk them through
+  how to configure each aspect the app would have done: choose what to
+  onboard, popup instructions, check box when done. Then a read-only option to
+  validate the configuration, and a dataflow updated to show a new flow when
+  the data is coming into Cribl. The Cribl side should be automated to create
+  the source needed to onboard the data from Blob or Event Hub as needed."
+  SCOPE: per lane, read Cribl's own metrics for the Cribl source the lane maps
+  to (claude-kit standards/cribl-metrics.md) and draw the Azure -> Cribl hop
+  as flowing only when events were measured in the window; idle, never-seen
+  and unmeasurable are distinct states, and polling respects the shared proxy
+  budget. Animation is allowed only on a measured flow. NOTE 2026-10-26
+  (implementation, AZR-30..34 build): BUILT, not verified live. Flow query
+  planning and lane flow states in `domain/onboarding-flow/`: a 24h cumulative
+  lookback first, then a 300s window, with a failed lookback retried every 5th
+  run. flowing is the only animated state; idle, never seen, and not measured
+  (waiting, no-permission, http-error, unexpected-shape, no-source,
+  lookback-failed) are distinct, and a 403 is never 0.
+  `usecases/read-source-flow/` sends exactly one POST
+  /m/<g>/system/metrics/query per run through the adopted kit metricsQuery
+  (`packages/core/src/kit/metrics/`) and the kit-to-CriblClient adapter
+  `kit/cribl-request.ts`. The UI poll is opt-in (Watch for data) and registers
+  through the new PollRegistry (`packages/ui/src/polling/poll-registry.tsx`)
+  into App's single useConsolidatedPolling, with main.tsx wrapping App in
+  PollRegistryProvider: 60s, priority 5, paused when the tab is hidden.
+  policies.yml grants `/m/:gid/system/metrics/query` POST. Pins:
+  flow-query.test.ts, flow-state.test.ts (the full state table),
+  metrics-subset.test.ts, read-source-flow.test.ts,
+  poll-registry.dom.test.tsx, use-document-visible.dom.test.tsx,
+  use-live-flow.dom.test.tsx and main-provider.test.ts. The metrics label form
+  for the new input is UNMEASURED until a real answer is captured as a
+  fixture. ADR 0007 section 9. Live verification is OUTSTANDING (ADR 0007,
+  "Live verification"): the card stays in-progress until the operator runs
+  that list in Cribl Live Preview and records verified live or both. LIVE
+  2026-10-28 (Live Preview, branch feature/azure-onboarding-screen, operator's
+  admin account, lab subscription): not exercised: no Cribl source exists to
+  watch, and the toggle says so instead of polling. The metrics label form is
+  still unmeasured. LIVE 2026-11-03 (Live Preview on the working tree,
+  operator's admin account, lab subscription, namespace ehnsjpedersoneastus /
+  hub ehjpedersoneastus, rule RootManageSharedAccessKey only): ADR 0007 item 6
+  not exercised: no Cribl source exists to watch. The lane drew 'not measured'
+  on the namespace-to-Cribl hop and 'not created yet' on the source, with no
+  metrics call. NOTE 2026-11-04 (Live Preview): with data now arriving at the
+  named-hub input (AZR-34), the section 7 diagram still drew only the default
+  Microsoft Audit lane (insights-logs-* hubs, input azure_onb_eh_fa882ef2...),
+  even after ticking Defender for Cloud alert export on screen; the named-hub
+  input that received the event was not drawn, so Watch for data had nothing
+  to watch. Not yet diagnosed whether this is a defect or the Defender lane
+  needing Automate mode plus a Cribl side read. DIAGNOSED 2026-11-10: a
+  defect, carded and fixed as [[AZR-94]]. The diagram drew a lane only for a
+  CHOSEN source, and a source in How-to mode is chosen only by the How-to list
+  tick, so the catalog tick did nothing for it; the Defender lane with the
+  live input therefore had no lane. Now any source with a created Cribl source
+  is drawn, marked not chosen. AZR-33 itself stays in-progress until ADR 0007
+  item 6 (watching a real flow) is run in Live Preview. LIVE 2026-11-10 (Live
+  Preview on main 460422a9, DatacenterEast, operator approved each write):
+  ticked Defender in the How-to list, set the plan values listen rule
+  cribl-listen and consumer group cribl-onb (Apply), created consumer group
+  cribl-onb on ehjpedersoneastus (az CLI), and created input
+  azure_onb_eh_fa882ef2_ehnsjpedersoneastus_ehjpedersoneastus with listKeys on
+  cribl-listen: "Created and running: worker group DatacenterEast runs commit
+  0b4cc67". The rule picker offered only cribl-listen (AZR-58 live). Validate
+  read every Defender check as expected; the hub had 64 IncomingMessages in
+  the window. The diagram drew the Defender lane with the source created.
+  Watch for data sent ONE POST /m/DatacenterEast/system/metrics/query, which
+  answered 404, and the hop read "not measured: lookback failed" with the 404
+  body - honest, never 0 or idle. ADR 0007 item 6 is therefore still NOT
+  passed: carded as [[AZR-95]]. Also carded [[AZR-96]] and [[AZR-97]]. Left in
+  the lab: consumer group cribl-onb and the new input, beside the old input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus on consumer group cribl.
+  DONE 2026-11-10 (both): ADR 0007 item 6 PASSED live after [[AZR-95]]. Live
+  Preview, DatacenterEast, Defender lane input
+  azure_onb_eh_fa882ef2_ehnsjpedersoneastus_ehjpedersoneastus: Watch for data
+  sent one leader POST /system/metrics/query per minute; the lookback read the
+  hop idle, then the window read it "flowing: 13 events in the window" and
+  animated it. The Microsoft Audit lane, with no input created, stayed "not
+  measured" (never 0). Still unmeasured: the azure_blob label form (no Blob
+  lane in the lab).
 
 - **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
   `AZR-F9` `enabler` `settled` `verified: none`
@@ -7930,6 +7920,46 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   list). The not-chosen-with-a-record path itself was not exercised live,
   because this tenant's document held no record (AZR-96), so verified stays
   pins.
+
+- **AZR-95** Watch for data never measures: the worker-group metrics query POST /m/<group>/system/metrics/query answers 404 on Cribl.Cloud
+  `AZR-F9` `bug` `settled` `verified: both`
+  FOUND LIVE 2026-11-10 (Live Preview on main 460422a9, DatacenterEast). With
+  the Defender lane drawn and its Cribl source created and running, ticking
+  Watch for data sent POST
+  /api/v1/a/__dev__soc-optimizationtoolkit/m/DatacenterEast/system/metrics/query
+  and got 404 with body "Cannot POST /api/v1/system/metrics/query". The
+  diagram stayed honest: the hop read "not measured: lookback failed" with the
+  HTTP 404 in its (i). So the flow state is never measured on Cribl.Cloud and
+  no lane can ever animate. The path came from the vendored spec and the
+  claude-kit cribl-metrics standard, both Documented and never measured; this
+  is the first live measurement and it contradicts them. FIX: find the path
+  Cribl.Cloud serves for Cribl's own metrics (leader-level
+  /system/metrics/query with a group filter, or the per-group form the leader
+  UI itself calls - capture it from the Stream UI network log), capture one
+  real response as a fixture, update policies.yml and the claude-kit
+  standard's provenance. DONE 2026-11-10 (both). TWO measured defects, not
+  one. (1) PATH: Cribl's own Monitoring page sends a LEADER-level POST
+  /api/v1/system/metrics/query and picks the group in where
+  (`__worker_group=="DatacenterEast" && __dist_mode=="worker"`); the app's
+  /m/<g>/system/metrics/query is a 404. (2) TIME: once the path was fixed the
+  query answered 200 with ZERO rows and the hop read "never seen" while Cribl
+  counted 158 events on the input. Variants sent read-only from a Stream tab:
+  earliest "-24h" (with latest "now" or an epoch) -> 0 rows; "86400s" (latest
+  "now", omitted, or epoch) and epoch earliest -> 23 rows incl. the input;
+  "300s" -> 3 events. Aliases quoted or not made no difference. FIX: kit
+  metricsQuery sends METRICS_QUERY_PATH with scopedToGroup's where;
+  cribl-request routes /system/metrics/query to the leader even with a bound
+  group; buildMetricsQueryBody REFUSES any relative time not "<N>s" (latest
+  may be "now") so the silent empty cannot return; flowQuery sends
+  secondsAgo(300) and secondsAgo(86400) (FLOW_LOOKBACK_SECONDS; the display
+  token FLOW_LOOKBACK stays "-24h", pinned to the same span); policies.yml
+  grants POST /system/metrics/query (leader) and the coverage pin refuses the
+  /m/ form; least-privilege operation moved to cribl-leader. Measured answer
+  kept as a fixture (metrics-subset.test.ts): {results, metrics, info}, input
+  label `eventhub:<inputId>`. LIVE (Live Preview, working tree): Watch for
+  data -> lookback 200, hop idle (seen in 24h), then the window run ->
+  "flowing: 13 events in the window", animated. Mutation-checked: dropping the
+  leader route fails 3 pins.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`
