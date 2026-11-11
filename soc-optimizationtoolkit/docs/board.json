@@ -1850,6 +1850,18 @@
       "detail": "FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and NOT fixed by that work. packages/core/src/usecases/guided-deploy/wire-source.ts:124-154, onboard-table/onboard-table.ts:981-1035 and provision-lab/deploy-flowlog-pack.ts:99-126 each POST /version/commit with only a message - no `files` scope, no read of /version/status first, no HEAD check - so they commit EVERY pending change in the worker group, including another admin's unfinished edits. A commit or deploy failure is pushed as a warning or a 'nonfatal' step and the run carries on. wire-source.ts:134 falls back to the literal string 'committed' when the commit response has no version, then deploys `{version: 'committed'}`. None reads configVersion back, so 'deployed' is a 2xx, not a fact. claude-kit standards/config-plane-writes.md and the cribl-config-writes kit (adopted into core by the AZR-34 work) define the honest sequence: scoped commit of the files this write dirtied, HEAD re-read, deploy, configVersion compared with the commit, with every non-deployed outcome kept by name. FIX: move all three onto the adopted kit's commitAndDeploy and deployedVersion, and render each outcome distinctly. Live-verify on a test group."
     },
     {
+      "id": "DBT-301",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Wire source would replace a worker group's whole routes table with only the app's routes: it reads routes from body.routes, but the leader answers {items:[{id, groups, routes}]}",
+      "detail": "FOUND 2026-11-10 by the AZR-35 exploration, MEASURED the same day. wireSource (packages/core/src/usecases/guided-deploy/wire-source.ts) GETs /routes, reads the existing table with existingRoutesOf, which looks only at body.routes, prepends the app's routes, and PUTs /routes with {id, routes}. Read-only on a Cribl.Cloud leader (DatacenterEast, read with Cribl Stream's own request options): GET /m/<g>/routes answered 200 {items:[{id, groups, routes:[37 routes]}], count:1} - no top-level routes. So existingRoutesOf returns [] and the PUT would carry ONLY the app's routes: the other 37 routes are deleted, and `groups` (route groups) is dropped too. The tests feed only the bare {id, routes} shape (wire-source.test.ts), which is why they pass. NOT run live: no write was made to measure what the PUT then does. Reachable from the Integrate screen's source wiring (WiringSection). Breaks config-plane-writes rules 2, 4 and 5 (read-modify-write, a stripped key is a deleted key, merge nested), and DBT-149 (no commit scope) compounds it: the wipe would be committed with everyone else's pending work.\n\nFIX: read the table through the same envelope rule read-onboarding-cribl-side uses (items[0] or the bare object), REFUSE when the shape is anything else rather than treat it as empty, and round-trip every key of the table object (groups included). Better: move the write onto the kit's planChange / writeApproved with an ArrayPolicy byId on routes, which AZR-35 needs anyway. Pin with the measured {items:[{id, groups, routes}]} fixture."
+    },
+    {
       "id": "DBT-150",
       "epic": "DBT",
       "feature": "DBT-F3",
