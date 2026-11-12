@@ -7,7 +7,7 @@
 
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EMPTY_AZURE_CONFIG } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
@@ -97,6 +97,28 @@ describe("useSectionFolding", () => {
     // setCollapsed alone is not a move (a header's opening click adds one,
     // DBT-257), so nothing else folded; and the load fold stopped.
     expect([state("one"), state("two"), state("three")]).toEqual(["open", "open", "folded"]);
+  });
+
+  it("an explicit open ends the load fold too: stored pins arriving late do not shut it (DBT-298)", async () => {
+    // The root cause of the setup-fold flake: the pin read resolves on its own
+    // schedule, and its arrival re-ran the load fold, which re-folded a section
+    // the operator had just opened. Held here so the open always lands first.
+    let identify!: (u: { id: string }) => void;
+    const store = new Map<string, unknown>([["fixture-pinned:u-1", JSON.stringify(["three"])]]);
+    const ports = makePorts({ store });
+    (ports.user as { current: () => Promise<{ id: string }> }).current = () =>
+      new Promise((resolve) => {
+        identify = resolve;
+      });
+    mount(ports, <Page currentId="one" />);
+    fireEvent.click(screen.getByTestId("open-two"));
+    expect([state("one"), state("two"), state("three")]).toEqual(["open", "open", "folded"]);
+    identify({ id: "u-1" });
+    // The stored pin landing is observable (three opens); two stayed open through it.
+    await waitFor(() => expect(state("three")).toBe("open"));
+    // Flush the effects that arrival schedules: the load fold ran in one of them.
+    await act(async () => {});
+    expect([state("one"), state("two"), state("three")]).toEqual(["open", "open", "open"]);
   });
 
   it("stops following current after the first move, and the move folds the others", () => {
