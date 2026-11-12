@@ -5,7 +5,8 @@ import type { PortHttpResponse } from "../../ports/http";
 import { ACTIVITY_LOG_CATEGORIES } from "../../domain/activity-log-export/activity-log-setting";
 import { DEFENDER_EXPORT_TYPES } from "../../domain/tenant-inventory/tenant-inventory";
 import { DEFENDER_EXPORT_ITEM_ID } from "../../domain/defender-export/defender-automation";
-import { readTenantInventory } from "./read-tenant-inventory";
+import { NO_APP_ARCHIVE_EVIDENCE } from "../../domain/tenant-inventory/tenant-inventory";
+import { cancellableAzure, READ_CANCELLED, readTenantInventory } from "./read-tenant-inventory";
 
 const SUB_A = "00000000-0000-0000-0000-00000000000a";
 const SUB_B = "00000000-0000-0000-0000-00000000000b";
@@ -40,7 +41,6 @@ function healthy(subs: string[] = [SUB_A, SUB_B]): Record<string, Route> {
   };
   for (const id of subs) {
     routes[`/subscriptions/${id}/providers/Microsoft.Insights/diagnosticSettings`] = () => ok([]);
-    routes[`/subscriptions/${id}/providers/Microsoft.Security/pricings`] = () => ok([]);
     routes[`/subscriptions/${id}/providers/Microsoft.Security/automations`] = () => ok([]);
   }
   return routes;
@@ -59,9 +59,76 @@ describe("readTenantInventory", () => {
     expect(inv.cells.some((c) => c.category === DEFENDER_EXPORT_ITEM_ID)).toBe(true);
     expect(azure.calls.every((c) => c.method === "GET")).toBe(true);
     expect(inv.subscriptions.kind).toBe("rows");
-    // 1 subscriptions + 1 Entra + 2 x (settings + pricings + automations)
-    expect(inv.requests).toBe(8);
+    // 1 subscriptions + 1 Entra + 2 x (settings + automations)
+    expect(inv.requests).toBe(6);
     expect(inv.requests).toBe(azure.calls.length);
+  });
+
+  it("costs two requests per subscription and never reads Defender pricings", async () => {
+    const subs = ["1", "2", "3", "4", "5"].map((n) => `00000000-0000-0000-0000-00000000000${n}`);
+    const azure = router(healthy(subs));
+    const inv = await run(azure);
+    expect(inv.requests).toBe(2 + 2 * subs.length);
+    for (const id of subs) {
+      expect(azure.calls.filter((c) => c.path.startsWith(`/subscriptions/${id}/`))).toHaveLength(2);
+    }
+    expect(azure.calls.some((c) => c.path.toLowerCase().includes("pricings"))).toBe(false);
+  });
+
+  it("reads a Warned or PastDue subscription and skips Disabled and Deleted ones", async () => {
+    const routes = healthy();
+    routes["/subscriptions"] = () =>
+      ok([
+        { subscriptionId: SUB_A, displayName: "warned", state: "Warned" },
+        { id: `/subscriptions/${SUB_B}`, displayName: "past due", state: "PastDue" },
+        { subscriptionId: "dead", displayName: "gone", state: "Deleted" },
+        { subscriptionId: "off", displayName: "off", state: "Disabled" },
+      ]);
+    const azure = router(routes);
+    const inv = await run(azure);
+    expect(inv.subscriptions).toEqual({
+      kind: "rows",
+      rows: [
+        { id: SUB_A, name: "warned" },
+        { id: SUB_B, name: "past due" },
+      ],
+    });
+    expect(azure.calls.some((c) => c.path.includes(`/subscriptions/${SUB_A}/`))).toBe(true);
+    expect(azure.calls.some((c) => c.path.includes("/subscriptions/dead/") || c.path.includes("/subscriptions/off/"))).toBe(false);
+  });
+
+  it("issues no request once cancelled", async () => {
+    const azure = router(healthy());
+    let stop = false;
+    const inv = await readTenantInventory({
+      azure,
+      progress: emptyProgress(),
+      now: () => NOW,
+      // Cancel after the Entra read: the subscriptions and Entra lists were sent.
+      onProgress: (done) => {
+        if (done === 2) stop = true;
+      },
+      cancelled: () => stop,
+    });
+    expect(azure.calls.map((c) => c.path)).toEqual(["/subscriptions", "/providers/microsoft.aadiam/diagnosticSettings"]);
+    expect(inv.requests).toBe(2);
+    const activity = inv.cells.filter((c) => c.category === "activityLog");
+    expect(activity).toHaveLength(ACTIVITY_LOG_CATEGORIES.length);
+    for (const c of activity) {
+      expect(c.state).toEqual({ kind: "could-not-check", reason: READ_CANCELLED });
+    }
+  });
+
+  it("cancellableAzure refuses a request issued after the flag is set", async () => {
+    const azure = router(healthy());
+    let stop = false;
+    const guarded = cancellableAzure(azure, () => stop);
+    await guarded.request({ method: "GET", path: "/subscriptions", apiVersion: "x" });
+    stop = true;
+    await expect(guarded.request({ method: "GET", path: "/subscriptions", apiVersion: "x" })).rejects.toThrow(
+      READ_CANCELLED,
+    );
+    expect(azure.calls).toHaveLength(1);
   });
 
   it("reads in order: subscriptions, Entra, then per subscription settings before Defender", async () => {
@@ -80,7 +147,7 @@ describe("readTenantInventory", () => {
     routes[`/subscriptions/${SUB_B}/providers/Microsoft.Insights/diagnosticSettings`] = () => forbidden;
     const inv = await run(router(routes));
     const activity = inv.cells.filter((c) => c.category === "activityLog");
-    expect(activity.length).toBeGreaterThan(0);
+    expect(activity).toHaveLength(ACTIVITY_LOG_CATEGORIES.length);
     for (const c of activity) {
       expect(c.state.kind).toBe("could-not-check");
       if (c.state.kind === "could-not-check") expect(c.state.reason).toContain("no access");
@@ -91,7 +158,7 @@ describe("readTenantInventory", () => {
     const inv = await run(router(healthy([])));
     expect(inv.subscriptions.kind).not.toBe("rows");
     const nonEntra = inv.cells.filter((x) => x.category !== "entraId");
-    expect(nonEntra.length).toBeGreaterThan(0);
+    expect(nonEntra).toHaveLength(ACTIVITY_LOG_CATEGORIES.length + DEFENDER_EXPORT_TYPES.length);
     for (const c of nonEntra) {
       expect(c.state.kind).toBe("could-not-check");
     }
@@ -103,7 +170,7 @@ describe("readTenantInventory", () => {
     const inv = await run(router(routes));
     expect(inv.subscriptions).toEqual({ kind: "unread", reason: expect.stringContaining("no access") });
     const nonEntra = inv.cells.filter((x) => x.category !== "entraId");
-    expect(nonEntra.length).toBeGreaterThan(0);
+    expect(nonEntra).toHaveLength(ACTIVITY_LOG_CATEGORIES.length + DEFENDER_EXPORT_TYPES.length);
     for (const c of nonEntra) {
       expect(c.state.kind).toBe("could-not-check");
     }
@@ -129,7 +196,7 @@ describe("readTenantInventory", () => {
     routes[`/subscriptions/${SUB_A}/providers/Microsoft.Security/automations`] = () => forbidden;
     const inv = await run(router(routes));
     const defender = inv.cells.filter((c) => c.category === DEFENDER_EXPORT_ITEM_ID);
-    expect(defender.length).toBeGreaterThan(0);
+    expect(defender).toHaveLength(DEFENDER_EXPORT_TYPES.length);
     for (const c of defender) expect(c.state.kind).toBe("could-not-check");
   });
 
@@ -140,7 +207,9 @@ describe("readTenantInventory", () => {
     expect(seen.at(-1)).toEqual([6, 6]);
     expect(seen).toHaveLength(6);
   });
-  it("one collecting subscription and one refused is partly (1 collected, 1 read, 1 unread), not not-collected", async () => {
+
+  /** SUB_A collects every Activity Log category and Defender type to an Event Hub; SUB_B refuses both lists. */
+  function oneHubOneRefused(): Record<string, Route> {
     const routes = healthy();
     const hub = "/subscriptions/x/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns/authorizationRules/r";
     routes[`/subscriptions/${SUB_A}/providers/Microsoft.Insights/diagnosticSettings`] = () =>
@@ -169,12 +238,27 @@ describe("readTenantInventory", () => {
         },
       ]);
     routes[`/subscriptions/${SUB_B}/providers/Microsoft.Security/automations`] = () => forbidden;
-    const inv = await run(router(routes));
+    return routes;
+  }
+
+  const LENGTHS = { activityLog: ACTIVITY_LOG_CATEGORIES.length, [DEFENDER_EXPORT_ITEM_ID]: DEFENDER_EXPORT_TYPES.length };
+
+  it("one collecting subscription and one refused is partly (1 collected, 1 read, 1 unread), not not-collected", async () => {
+    const inv = await run(router(oneHubOneRefused()));
     const scopes = { collected: 1, read: 1, unread: 1 };
     for (const category of ["activityLog", DEFENDER_EXPORT_ITEM_ID] as const) {
       const cells = inv.cells.filter((c) => c.category === category);
-      expect(cells.length).toBeGreaterThan(0);
+      expect(cells).toHaveLength(LENGTHS[category]);
       for (const c of cells) expect(c.state).toEqual({ kind: "partly", scopes });
+    }
+  });
+
+  it("with no progress record an Event Hub archive is unknown with the reason, never archived", async () => {
+    const inv = await readTenantInventory({ azure: router(oneHubOneRefused()), progress: null, now: () => NOW });
+    for (const category of ["activityLog", DEFENDER_EXPORT_ITEM_ID] as const) {
+      const cells = inv.cells.filter((c) => c.category === category);
+      expect(cells).toHaveLength(LENGTHS[category]);
+      for (const c of cells) expect(c.archive).toEqual({ kind: "unknown", reason: NO_APP_ARCHIVE_EVIDENCE });
     }
   });
 });

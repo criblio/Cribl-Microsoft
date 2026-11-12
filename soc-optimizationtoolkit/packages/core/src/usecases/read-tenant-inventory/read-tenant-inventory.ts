@@ -4,7 +4,17 @@
  *
  * GET only. Order: the subscription list, the Entra diagnostic-settings list
  * once, then per subscription its diagnostic-settings list and its Defender
- * state.
+ * automations list - two requests per subscription (plus nextLink pages).
+ *
+ * Every subscription is read except Disabled and Deleted ones: a Warned or
+ * PastDue subscription still holds settings, and dropping it silently would
+ * shrink the denominator.
+ *
+ * Cancellation is a flag, not an AbortSignal (the platform fetch bridge
+ * ignores signals): once `cancelled()` is true no further request is issued
+ * through this usecase. Wrap the RAW port with {@link cancellableAzure}
+ * before pacing it, so a request already waiting in the pacer is also
+ * stopped.
  *
  * HONESTY: a read that is refused, fails, is truncated or has an unexpected
  * shape reaches the domain as `unread` with its reason, never as an empty
@@ -46,9 +56,8 @@ import {
   type SubscriptionAutomationsRead,
   type SubscriptionSettingsRead,
 } from "../../domain/tenant-inventory/tenant-inventory";
-import { asString, prop } from "../arm-http";
-import { SUBSCRIPTIONS_API_VERSION } from "../azure-discovery";
-import { readDefenderState } from "../defender-export";
+import { SUBSCRIPTIONS_API_VERSION, subscriptionFromItem } from "../azure-discovery";
+import { listSubscriptionAutomations } from "../defender-export";
 import { readAllPages } from "../read-logging-map/arm-pager";
 
 export interface TenantInventory {
@@ -63,10 +72,37 @@ export interface TenantInventory {
 
 export interface ReadTenantInventoryInput {
   readonly azure: AzureManagement;
-  readonly progress: OnboardingProgress;
+  /**
+   * The app's own progress record, the evidence for "archived through Cribl";
+   * null when it could not be read - Event Hub destinations are then unknown.
+   */
+  readonly progress: OnboardingProgress | null;
   readonly now: () => string;
   /** Called after each read. `total` is known once the subscription list is. */
   readonly onProgress?: (done: number, total: number) => void;
+  /** True once the caller is gone (unmounted); no request is issued after that. */
+  readonly cancelled?: () => boolean;
+}
+
+/** The reason a read that was never sent because the caller went away carries. */
+export const READ_CANCELLED = "the read was cancelled before this request was sent";
+
+/**
+ * The port, refusing every request once `cancelled()` is true. The refusal is
+ * a rejection, which every read here turns into could-not-check.
+ */
+export function cancellableAzure(azure: AzureManagement, cancelled: () => boolean): AzureManagement {
+  const inner = azure.requestUrl?.bind(azure);
+  return {
+    request: (r: AzureManagementRequest): Promise<PortHttpResponse> =>
+      cancelled() ? Promise.reject(new Error(READ_CANCELLED)) : azure.request(r),
+    ...(inner === undefined
+      ? {}
+      : {
+          requestUrl: (r: AzureManagementUrlRequest): Promise<PortHttpResponse> =>
+            cancelled() ? Promise.reject(new Error(READ_CANCELLED)) : inner(r),
+        }),
+  };
 }
 
 type SettingsRead =
@@ -79,16 +115,6 @@ function reasonOf(error: unknown): string {
 
 function refusedReason(read: Extract<ListRead<unknown>, { state: "refused" }>): string {
   return read.refusal.text !== "" ? read.refusal.text : `${read.refusal.reason}: ${read.refusal.request}`;
-}
-
-function subscriptionIdOf(item: unknown): string {
-  const direct = asString(prop(item, "subscriptionId"));
-  if (direct !== "") return direct;
-  const segments = asString(prop(item, "id"))
-    .split("/")
-    .filter((s) => s !== "");
-  const i = segments.findIndex((s) => s.toLowerCase() === "subscriptions");
-  return i >= 0 && i + 1 < segments.length ? segments[i + 1] : "";
 }
 
 /** Counts every request issued through it; the inner port is untouched. */
@@ -140,7 +166,8 @@ type SubscriptionsRead =
 
 export async function readTenantInventory(input: ReadTenantInventoryInput): Promise<TenantInventory> {
   const tally = { n: 0 };
-  const azure = counting(input.azure, tally);
+  const cancelled = input.cancelled ?? ((): boolean => false);
+  const azure = counting(cancellableAzure(input.azure, cancelled), tally);
   let done = 0;
   let total = 0;
   const tick = (): void => {
@@ -152,7 +179,7 @@ export async function readTenantInventory(input: ReadTenantInventoryInput): Prom
     }
   };
 
-  // 1. Subscriptions (enabled only, as the discovery listing does).
+  // 1. Subscriptions: every readable state, not only Enabled.
   const subRead = await guarded<SubscriptionsRead>(
     async () => {
       const read = await readAllPages(
@@ -163,9 +190,8 @@ export async function readTenantInventory(input: ReadTenantInventoryInput): Prom
       if (read.state === "refused") return { kind: "unread", reason: refusedReason(read) };
       const rows: { id: string; name: string }[] = [];
       for (const item of read.rows) {
-        if (asString(prop(item, "state")) !== "Enabled") continue;
-        const id = subscriptionIdOf(item);
-        if (id !== "") rows.push({ id, name: asString(prop(item, "displayName")) });
+        const sub = subscriptionFromItem(item, "readable");
+        if (sub !== null) rows.push({ id: sub.subscriptionId, name: sub.displayName });
       }
       return { kind: "read", rows };
     },
@@ -179,10 +205,15 @@ export async function readTenantInventory(input: ReadTenantInventoryInput): Prom
   const entraRead: EntraRead = await readSettings(azure, listSettingsRequest(), "list Entra diagnostic settings");
   tick();
 
-  // 3. Per subscription: its diagnostic settings, then its Defender state.
+  // 3. Per subscription: its diagnostic settings, then its Defender automations.
   const settingsReads: SubscriptionSettingsRead[] = [];
   const automationReads: SubscriptionAutomationsRead[] = [];
   for (const sub of subs) {
+    if (cancelled()) {
+      settingsReads.push({ subscriptionId: sub.id, kind: "unread", reason: READ_CANCELLED });
+      automationReads.push({ subscriptionId: sub.id, kind: "unread", reason: READ_CANCELLED });
+      continue;
+    }
     const settings = await readSettings(
       azure,
       buildSubscriptionDiagnosticSettingsListRequest(sub.id),
@@ -193,10 +224,10 @@ export async function readTenantInventory(input: ReadTenantInventoryInput): Prom
 
     const automations = await guarded<SubscriptionAutomationsRead>(
       async () => {
-        const state = await readDefenderState(azure, sub.id);
-        return state.automations.kind === "listed"
-          ? { subscriptionId: sub.id, kind: "read", automations: state.automations.listing }
-          : { subscriptionId: sub.id, kind: "unread", reason: state.automations.failure.message };
+        const listed = await listSubscriptionAutomations(azure, sub.id);
+        return listed.kind === "listed"
+          ? { subscriptionId: sub.id, kind: "read", automations: listed.listing }
+          : { subscriptionId: sub.id, kind: "unread", reason: listed.failure.message };
       },
       (reason) => ({ subscriptionId: sub.id, kind: "unread", reason }),
     );
@@ -206,7 +237,7 @@ export async function readTenantInventory(input: ReadTenantInventoryInput): Prom
 
   const cells = withArchive(
     [...entraCells(entraRead), ...activityLogCells(settingsReads), ...defenderCells(automationReads)],
-    archiveEvidenceFrom(input.progress),
+    input.progress === null ? null : archiveEvidenceFrom(input.progress),
   );
   return {
     readAt: input.now(),

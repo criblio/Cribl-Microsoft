@@ -9,6 +9,7 @@ export {
   DEFENDER_EXPORT_ITEM_ID,
   MISSING_REGISTRATION_CODE,
   deployDefenderExport,
+  listSubscriptionAutomations,
   readDefenderState,
 } from "./defender-export";
 export type {

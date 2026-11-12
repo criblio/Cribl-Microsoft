@@ -198,7 +198,7 @@ export type DefenderDeployOutcome =
  * not an object with a `value` array (an empty body, a proxy's HTML page) is
  * unread too: it was answered, but it is not a listing.
  */
-async function listSubscriptionAutomations(
+export async function listSubscriptionAutomations(
   azure: AzureManagement,
   subscriptionId: string,
 ): Promise<DefenderAutomationsState> {
