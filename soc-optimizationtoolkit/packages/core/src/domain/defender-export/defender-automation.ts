@@ -87,6 +87,8 @@ export interface AutomationAction {
   readonly actionType: string;
   /** "" when the action has no eventHubResourceId (a Logic App or workspace action). */
   readonly eventHubResourceId: string;
+  /** "" unless the action is a Workspace action (Defender writing straight to Log Analytics). */
+  readonly workspaceResourceId: string;
 }
 
 /** One `Microsoft.Security/automations` resource, as this app reads it. */
@@ -275,9 +277,12 @@ export function parseAutomation(item: unknown): DefenderAutomation | null {
   const actions: AutomationAction[] = [];
   for (const a of Array.isArray(props["actions"]) ? props["actions"] : []) {
     if (!isRecord(a)) continue;
+    const actionType = str(a["actionType"]);
     actions.push({
-      actionType: str(a["actionType"]),
+      actionType,
       eventHubResourceId: str(a["eventHubResourceId"]),
+      workspaceResourceId:
+        actionType.toLowerCase() === "workspace" ? str(a["workspaceResourceId"]) : "",
     });
   }
 

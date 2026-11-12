@@ -21,6 +21,7 @@ import {
   listResourceGroupChoices,
   listResourceGroups,
   listSubscriptions,
+  subscriptionFromItem,
   listWorkspaces,
 } from "./azure-discovery";
 
@@ -889,5 +890,37 @@ describe("commitTargetScope", () => {
       clearToken: false,
       clearPermissionResults: false,
     });
+  });
+});
+
+describe("subscriptionFromItem", () => {
+  const item = (state: string, over: Record<string, unknown> = {}) => ({
+    subscriptionId: SUB,
+    displayName: "Prod",
+    state,
+    ...over,
+  });
+
+  it("enabled-only keeps exactly Enabled", () => {
+    expect(subscriptionFromItem(item("Enabled"), "enabled-only")).toEqual({ subscriptionId: SUB, displayName: "Prod" });
+    for (const state of ["Warned", "PastDue", "Disabled", "Deleted", "enabled"]) {
+      expect(subscriptionFromItem(item(state), "enabled-only")).toBeNull();
+    }
+  });
+
+  it("readable keeps every state except Disabled and Deleted", () => {
+    for (const state of ["Enabled", "Warned", "PastDue"]) {
+      expect(subscriptionFromItem(item(state), "readable")).toEqual({ subscriptionId: SUB, displayName: "Prod" });
+    }
+    for (const state of ["Disabled", "Deleted", "deleted"]) {
+      expect(subscriptionFromItem(item(state), "readable")).toBeNull();
+    }
+  });
+
+  it("falls back to the id path, and drops an item with neither", () => {
+    expect(
+      subscriptionFromItem(item("Warned", { subscriptionId: undefined, id: `/subscriptions/${SUB}` }), "readable"),
+    ).toEqual({ subscriptionId: SUB, displayName: "Prod" });
+    expect(subscriptionFromItem(item("Enabled", { subscriptionId: undefined }), "enabled-only")).toBeNull();
   });
 });

@@ -166,6 +166,21 @@ describe("parseAutomation", () => {
     expect(parsed.scopePaths).toEqual([`/subscriptions/${SUB}`]);
   });
 
+  it("reads a Defender workspace action; other actions carry no workspace id", () => {
+    const parsed = automation(
+      item({
+        properties: {
+          actions: [
+            { actionType: "Workspace", workspaceResourceId: "/subscriptions/s/resourceGroups/r/providers/Microsoft.OperationalInsights/workspaces/law" },
+            { actionType: "EventHub", eventHubResourceId: HUB_ID, workspaceResourceId: "/ignored" },
+          ],
+        },
+      }),
+    );
+    expect(parsed.actions[0]?.workspaceResourceId).toMatch(/workspaces\/law$/);
+    expect(parsed.actions[1]?.workspaceResourceId).toBe("");
+  });
+
   it("gives an empty listing (unverified), not a measured none, for zero items", () => {
     expect(parseAutomations([])).toEqual({ kind: "empty" });
   });

@@ -233,19 +233,8 @@ export async function listSubscriptions(
 
       const subscriptions: AzureSubscription[] = [];
       for (const item of items) {
-        if (asString(prop(item, "state")) !== "Enabled") {
-          continue;
-        }
-        const direct = asString(prop(item, "subscriptionId"));
-        const subscriptionId =
-          direct !== "" ? direct : parseSubscriptionIdFromResourceId(prop(item, "id"));
-        if (subscriptionId === "") {
-          continue;
-        }
-        subscriptions.push({
-          subscriptionId,
-          displayName: asString(prop(item, "displayName")),
-        });
+        const subscription = subscriptionFromItem(item, "enabled-only");
+        if (subscription !== null) subscriptions.push(subscription);
       }
       return toListing(subscriptions);
     },
@@ -254,6 +243,33 @@ export async function listSubscriptions(
       count: listingCount(subscriptions, 0),
     }),
   );
+}
+
+/**
+ * Which subscription states a listing keeps.
+ * - `enabled-only`: state exactly `Enabled` - the targeting picker, where a
+ *   Warned or PastDue subscription is not a place to deploy to.
+ * - `readable`: every state except `Disabled` and `Deleted` - a read-only
+ *   inventory, where a Warned or PastDue subscription still holds settings
+ *   and dropping it would hide them.
+ */
+export type SubscriptionStateRule = "enabled-only" | "readable";
+
+const UNREADABLE_STATES: readonly string[] = ["disabled", "deleted"];
+
+/**
+ * One `GET /subscriptions` item as a subscription, or null when the state
+ * rule drops it or it carries no id. `subscriptionId` falls back to parsing
+ * the `id` resource path; a missing `displayName` maps to ''.
+ */
+export function subscriptionFromItem(item: unknown, rule: SubscriptionStateRule): AzureSubscription | null {
+  const state = asString(prop(item, "state"));
+  const kept = rule === "enabled-only" ? state === "Enabled" : !UNREADABLE_STATES.includes(state.toLowerCase());
+  if (!kept) return null;
+  const direct = asString(prop(item, "subscriptionId"));
+  const subscriptionId = direct !== "" ? direct : parseSubscriptionIdFromResourceId(prop(item, "id"));
+  if (subscriptionId === "") return null;
+  return { subscriptionId, displayName: asString(prop(item, "displayName")) };
 }
 
 /** `/subscriptions/{id}` -> `{id}`, '' when unparseable. */

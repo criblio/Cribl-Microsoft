@@ -44,6 +44,8 @@ export const AZURE_ONBOARDING_COPY_FILES = [
   "validate/validate-panel.tsx",
   "cribl-source/cribl-source-panel.tsx",
   "dataflow/onboarding-dataflow.tsx",
+  "inventory/tenant-inventory-heatmap.tsx",
+  "inventory/tenant-inventory-state.ts",
 ];
 
 /** Comments out, line breaks kept, so a failure names the real line. */

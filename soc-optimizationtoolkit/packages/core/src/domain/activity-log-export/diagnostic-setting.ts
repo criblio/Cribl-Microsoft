@@ -28,8 +28,16 @@ export interface DiagnosticSettingRead {
   readonly ruleId: string;
   /** `eventHubName`, "" when Azure picks the hub (the auto-created one). */
   readonly hub: string;
-  /** Every enabled `category` (or `categoryGroup`), in response order. */
+  /** Every enabled named `category`, in response order. Category groups are in {@link enabledGroups}. */
   readonly enabled: readonly string[];
+  /** Every enabled `categoryGroup` (for example "allLogs"), in response order. */
+  readonly enabledGroups: readonly string[];
+  /** `workspaceId`, "" when the setting does not send to a Log Analytics workspace. */
+  readonly workspaceId: string;
+  /** `storageAccountId`, "" when the setting does not write to a storage account. */
+  readonly storageAccountId: string;
+  /** `marketplacePartnerId`, "" when the setting does not send to a partner solution. */
+  readonly partnerId: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -39,6 +47,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function str(value: unknown, key: string): string {
   const inner = isRecord(value) ? value[key] : undefined;
   return typeof inner === "string" ? inner : "";
+}
+
+function enabledOf(logs: readonly unknown[], key: "category" | "categoryGroup"): string[] {
+  return logs
+    .filter((l) => isRecord(l) && l["enabled"] === true)
+    .map((l) => str(l, key))
+    .filter((c) => c !== "");
 }
 
 /**
@@ -56,10 +71,11 @@ export function readDiagnosticSetting(row: unknown): DiagnosticSettingRead {
     name,
     ruleId: str(props, "eventHubAuthorizationRuleId"),
     hub: str(props, "eventHubName"),
-    enabled: logs
-      .filter((l) => isRecord(l) && l["enabled"] === true)
-      .map((l) => str(l, "category") || str(l, "categoryGroup"))
-      .filter((c) => c !== ""),
+    workspaceId: str(props, "workspaceId"),
+    storageAccountId: str(props, "storageAccountId"),
+    partnerId: str(props, "marketplacePartnerId"),
+    enabled: enabledOf(logs, "category"),
+    enabledGroups: enabledOf(logs, "categoryGroup"),
   };
 }
 

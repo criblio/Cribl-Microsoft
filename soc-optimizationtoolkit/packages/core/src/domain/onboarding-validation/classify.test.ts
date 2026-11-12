@@ -349,6 +349,17 @@ describe("Defender, Entra, Activity Log, policy, XDR", () => {
     expect(classifyCheck("activity-log-setting", FULL, [readRows([ours])])).toEqual({ kind: "as-expected" });
   });
 
+  it("activity-log-setting: a setting that enables only a category group still counts as having logs enabled", () => {
+    const s = {
+      name: "x",
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_PATH}/authorizationRules/sender`,
+        logs: [{ categoryGroup: "allLogs", enabled: true }],
+      },
+    };
+    expect(classifyCheck("activity-log-setting", FULL, [readRows([s])])).toEqual({ kind: "as-expected" });
+  });
+
   it("policy-assignment: Cribl-AU-Central is as-expected; a family name is present-other-name", () => {
     const assignment = (name: string) => ({
       name,

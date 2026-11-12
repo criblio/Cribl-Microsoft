@@ -263,7 +263,7 @@ function automation(over: Partial<DefenderAutomation>): DefenderAutomation {
     isEnabled: true,
     sources: ["Alerts"],
     scopePaths: [`/subscriptions/${SUB}`],
-    actions: [{ actionType: "EventHub", eventHubResourceId: HUB_ID }],
+    actions: [{ actionType: "EventHub", eventHubResourceId: HUB_ID, workspaceResourceId: "" }],
     eventHubTargets: [HUB_ID],
     ...over,
   };

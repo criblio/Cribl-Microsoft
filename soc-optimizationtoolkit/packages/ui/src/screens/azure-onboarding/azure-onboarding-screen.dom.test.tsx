@@ -47,6 +47,7 @@ import {
 } from "@soc/core";
 import type {
   AzureConfig,
+  BatchPacing,
   AzureManagement,
   AzureManagementRequest,
   CapabilityContext,
@@ -130,6 +131,8 @@ interface Scenario {
   hubs?: string[];
   /** When true the hub listing carries a nextLink (first page only). */
   hubsTruncated?: boolean;
+  /** GET answers by exact path, checked first (the tenant inventory reads). */
+  gets?: Record<string, () => PortHttpResponse | Promise<PortHttpResponse>>;
 }
 
 /**
@@ -153,6 +156,8 @@ class RoutingAzure implements AzureManagement {
   async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
     const s = this.scenario;
+    const held = r.method === "GET" ? s.gets?.[r.path] : undefined;
+    if (held !== undefined) return held();
     if (r.method === "POST" && r.path === "/providers/Microsoft.ResourceGraph/resources") {
       return ok({
         data: [
@@ -226,12 +231,16 @@ function mount(opts: {
   /** The shell's current audit key and clock (AZR-60). */
   permissionsAuditKey?: string;
   permissionsNow?: () => string;
+  /** The shell's pacing; the tenant inventory read is disabled without it. */
+  pacing?: BatchPacing;
+  /** Mount with no Azure connection wired at all. */
+  noAzure?: boolean;
 } = {}) {
   const azure = opts.azure ?? new RoutingAzure();
   const store = opts.store === undefined ? new FakeKvDocumentStore() : opts.store;
   const logger = opts.logger ?? new FakeLogger(() => "t");
   const ports = {
-    azure,
+    ...(opts.noAzure === true ? {} : { azure }),
     logger,
     ...(store === null ? {} : { kvDocuments: store }),
   } as unknown as UiPorts;
@@ -246,6 +255,7 @@ function mount(opts: {
         onRecheckPermissions={opts.onRecheckPermissions}
         permissionsAuditKey={opts.permissionsAuditKey}
         permissionsNow={opts.permissionsNow}
+        pacing={opts.pacing}
       />
     </PortsProvider>,
   );
@@ -1078,5 +1088,101 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     expect(block?.textContent).toContain("On the Event Hub namespace");
     expect(block?.textContent).toMatch(/listKeys\/action/);
     expect(block?.querySelector("[data-permission-action]")).toBeNull();
+  });
+});
+
+
+describe("the tenant inventory heat map on the screen", () => {
+  const PACING: BatchPacing = { now: () => 1_000_000, sleep: async () => {} };
+
+  it("renders above the Event Hub section, and reading issues only GET requests", async () => {
+    const { azure } = mount({ pacing: PACING });
+    await loaded();
+    const read = button("Read the tenant's logging");
+    const hub = screen.getByText("Event Hub the sources send to");
+    expect(read.compareDocumentPosition(hub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(read.disabled).toBe(false);
+    expect(azure.calls).toHaveLength(0);
+    fireEvent.click(read);
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Activity Log/ }).length).toBeGreaterThan(0);
+    });
+    expect(azure.calls.length).toBeGreaterThan(0);
+    expect(azure.calls.filter((c) => c.method !== "GET")).toEqual([]);
+    expect(azure.puts()).toHaveLength(0);
+  });
+
+  const ENTRA_PATH = "/providers/microsoft.aadiam/diagnosticSettings";
+  const SUB_SETTINGS = `/subscriptions/${SUB}/providers/Microsoft.Insights/diagnosticSettings`;
+  /** A response held until release() is called. */
+  function heldResponse(body: unknown): { answer: () => Promise<PortHttpResponse>; release: () => void } {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return {
+      answer: async () => {
+        await gate;
+        return ok(body);
+      },
+      release: () => release(),
+    };
+  }
+
+  it("reads with no document store, and a Cribl-dependent archive says the app's own setup could not be read", async () => {
+    const hubRule = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n/authorizationRules/a";
+    const azure = new RoutingAzure({
+      gets: {
+        "/subscriptions": () => ok({ value: [] }),
+        [ENTRA_PATH]: () =>
+          ok({
+            value: [
+              {
+                name: "to-hub",
+                id: "/x/to-hub",
+                properties: { eventHubAuthorizationRuleId: hubRule, logs: [{ category: "SignInLogs", enabled: true }] },
+              },
+            ],
+          }),
+      },
+    });
+    mount({ azure, store: null, pacing: PACING });
+    const read = button("Read the tenant's logging");
+    expect(read.disabled).toBe(false);
+    expect(screen.queryByText(/still loading/)).toBeNull();
+    fireEvent.click(read);
+    const entra = await screen.findByRole("button", { name: /Entra ID/ });
+    fireEvent.click(entra);
+    const signIn = screen.getAllByRole("listitem").find((t) => within(t).queryByText("SignInLogs") !== null)!;
+    expect(signIn.textContent).toContain("archive not known (this app's own Cribl setup could not be read)");
+  });
+
+  it("shows N of M reads while reading, and sends no request after the screen unmounts", async () => {
+    const entra = heldResponse({ value: [] });
+    const azure = new RoutingAzure({
+      gets: {
+        "/subscriptions": () => ok({ value: [{ subscriptionId: SUB, displayName: "one", state: "Enabled" }] }),
+        [ENTRA_PATH]: entra.answer,
+        [SUB_SETTINGS]: () => ok({ value: [] }),
+      },
+    });
+    const { view } = mount({ azure, pacing: PACING });
+    await loaded();
+    fireEvent.click(button("Read the tenant's logging"));
+    // The subscription list is done; the Entra read is held. 2 + 2 x 1 subscription.
+    expect(await screen.findByText("1 of 4 reads")).toBeTruthy();
+    expect(azure.calls.map((c) => c.path)).toEqual(["/subscriptions", ENTRA_PATH]);
+    view.unmount();
+    entra.release();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(azure.calls.map((c) => c.path)).toEqual(["/subscriptions", ENTRA_PATH]);
+  });
+
+  it("is disabled with its reason when there is no Azure connection", async () => {
+    mount({ noAzure: true, pacing: PACING });
+    await loaded();
+    expect(button("Read the tenant's logging").disabled).toBe(true);
+    expect(screen.getByText(/No Azure connection/)).toBeTruthy();
   });
 });

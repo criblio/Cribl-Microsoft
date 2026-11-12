@@ -9,6 +9,7 @@ export {
   MAX_LIST_PAGES,
   listAllPages,
   listSubscriptions,
+  subscriptionFromItem,
   listWorkspaces,
   listResourceGroups,
   listResourceGroupChoices,
@@ -20,6 +21,7 @@ export {
 } from "./azure-discovery";
 export type {
   AzureSubscription,
+  SubscriptionStateRule,
   AzureWorkspace,
   ResourceGroupChoices,
   ResourceGroupChoicesSource,

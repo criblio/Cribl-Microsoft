@@ -386,7 +386,7 @@ function settingDiffs(
     if (off.length > 0) {
       diffs.push({ field: "logs", expected: expectedCategories.join(", "), actual: `not enabled: ${off.join(", ")}` });
     }
-  } else if (setting.enabled.length === 0) {
+  } else if (setting.enabled.length === 0 && setting.enabledGroups.length === 0) {
     diffs.push({ field: "logs", expected: "at least one category enabled", actual: "none enabled" });
   }
   return diffs;
