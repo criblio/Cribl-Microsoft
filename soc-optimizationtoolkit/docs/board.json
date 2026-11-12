@@ -1887,25 +1887,27 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
       "title": "Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes",
-      "detail": "FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use case calls them (only its own test). The least-privilege registry still carries cribl.breakers.create (Worker Group Editor, 'not declared in policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So the registry describes a write the app never sends, and the AZR-83 ticket statement ('App user covers every Cribl write') is true only because the code is dead. FIX: either delete the request builder and the registry row (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and then declare POST in policies.yml and name the exception in the change request."
+      "detail": "FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use case calls them (only its own test). The least-privilege registry still carries cribl.breakers.create (Worker Group Editor, 'not declared in policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So the registry describes a write the app never sends, and the AZR-83 ticket statement ('App user covers every Cribl write') is true only because the code is dead. FIX: either delete the request builder and the registry row (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and then declare POST in policies.yml and name the exception in the change request.\n\nDONE 2026-11-12 (7d26fde3, 73db3ae6): the keep condition was false - buildCrowdStrikeFdrBreaker had no caller either (the pack path builds its own tuning in domain/pack-assembly/breakers.ts). Deleted fdr-breaker.ts and its test, the cribl.breakers.create registry row and its function entry. Pins: the registry carries no Cribl call missing from policies.yml paths except the four app-scoped kvstore calls, and the barrels export none of the removed names. docs/porting-plan.md (Status Record) still mentions the extracted literal as history.",
+      "verified": "pins"
     },
     {
       "id": "DBT-304",
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
       "title": "Local preflight's hasRequiredAccess still passes the Cribl deploy gate on a GET 2xx",
-      "detail": "FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer records a manage capability, but runCriblPreflight's hasRequiredAccess still counts a 2xx read on packs and outputs as enough to deploy. The doc comment notes it. FIX: on the local branch, hasRequiredAccess should not claim write access from a read; derive it from the capability verdicts (unknown, not granted).",
-      "priorityWhy": "Unreachable in the product: the only shipped shell hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel), where the grant really comes from the approved policies.yml. Only tests run the local branch; it matters only if a customer-managed leader shell returns."
+      "detail": "FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer records a manage capability, but runCriblPreflight's hasRequiredAccess still counts a 2xx read on packs and outputs as enough to deploy. The doc comment notes it. FIX: on the local branch, hasRequiredAccess should not claim write access from a read; derive it from the capability verdicts (unknown, not granted).\n\nDONE 2026-11-12 (3bae3ff1, 3c7b74e9): criblProbeGrantsManage(mode, probe) is the one rule - only cloud grants manage. Local hasRequiredAccess is built from it, so a local GET 2xx never reads ready; the panel says write access is not measured from the local shell, with an unverified (warn) tone instead of failed. Cloud unchanged. Only tests run the local branch.",
+      "priorityWhy": "Unreachable in the product: the only shipped shell hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel), where the grant really comes from the approved policies.yml. Only tests run the local branch; it matters only if a customer-managed leader shell returns.",
+      "verified": "pins"
     },
     {
       "id": "DBT-150",
@@ -4211,12 +4213,13 @@
       "epic": "DBT",
       "feature": "DBT-F2",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
-      "title": "setup-fold.dom.test.tsx fails intermittently: it queries Sentinel content's Refresh button before it renders",
-      "detail": "FOUND 2026-11-04 merging #199 and #200 (feature DBT-248, merged in #197). 'the Next action button opens its folded target' failed in full-suite runs on both branches and once in three isolated runs (Unable to find an accessible element with the role \"button\" and name \"Refresh\"); CI passed the same commits. The section bodies stay mounted when folded, so the Refresh button is missing only because it renders after Sentinel content's data load. Four tests query it synchronously (getByRole) right after expanding.\n\nFIX (settled): await findByRole at all four sites. Pin: the file passes repeatedly in isolation and in the full suite.\n\nPARTIAL 2026-11-04: findByRole at the four sites cut the isolated failure rate from about 1 in 3 to 1 in 30 (measured: 1 failure in 30 runs, the same test, \"Refresh\" still absent after the 1 s default wait). Only that test mounts with no GitHub token (hasPat: false), so the remaining delay is in the component path for that state; not yet pinned. Stays in-progress.\n\nRENUMBERED 2026-11-04 from DBT-254, which a PR merged to main first (\"Two copies of is this an ASim table\"). DBT-298 sits outside the sequence parallel sessions number from."
+      "title": "setup-fold test flaked because the late stored-pins read re-folded a section the test had just opened",
+      "detail": "FOUND 2026-11-04 merging #199 and #200 (feature DBT-248, merged in #197). 'the Next action button opens its folded target' failed in full-suite runs on both branches and once in three isolated runs (Unable to find an accessible element with the role \"button\" and name \"Refresh\"); CI passed the same commits. The section bodies stay mounted when folded, so the Refresh button is missing only because it renders after Sentinel content's data load. Four tests query it synchronously (getByRole) right after expanding.\n\nFIX (settled): await findByRole at all four sites. Pin: the file passes repeatedly in isolation and in the full suite.\n\nPARTIAL 2026-11-04: findByRole at the four sites cut the isolated failure rate from about 1 in 3 to 1 in 30 (measured: 1 failure in 30 runs, the same test, \"Refresh\" still absent after the 1 s default wait). Only that test mounts with no GitHub token (hasPat: false), so the remaining delay is in the component path for that state; not yet pinned. Stays in-progress.\n\nRENUMBERED 2026-11-04 from DBT-254, which a PR merged to main first (\"Two copies of is this an ASim table\"). DBT-298 sits outside the sequence parallel sessions number from.\n\nROOT CAUSE 2026-11-12 (708bfac1): the cause stated above was wrong. Refresh renders on the first paint. The stored-pins read resolved on its own schedule and re-ran the load fold, which re-folded the section the test had just opened, so Refresh sat in a hidden body. The product fix was already in from DBT-256 (touchedRef) and DBT-257 (opening is a move), merged after the PARTIAL measurement. There were TWO Refresh query sites, not four (the 708bfac1 message says four). Both now use a synchronous getByRole so a re-fold fails at once; use-section-folding.dom.test.tsx pins the late-pins race at the hook, mutation-checked against the touchedRef guard. Isolated runs: 0/30 failures at HEAD.",
+      "verified": "pins"
     },
     {
       "id": "DBT-299",
@@ -4508,15 +4511,16 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
         "AZR-96"
       ],
       "title": "Tenant Logging Gaps still reports a stranded legacy Cribl source as not created",
-      "detail": "FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has the same short-circuit as loadTenantDocument: once the tenant's own progress document exists, the legacy key is never read, so a Cribl source recorded there by a pre-tenant build shows as not created on the gap dashboard. AZR-96 added the read-only readStrandedLegacyDocument (usecases/tenant-documents); FIX: call it from the gap scan and show stranded/unattributed records as 'recorded by an earlier app version, not adopted', with an unknown read as could-not-check. Never adopt.",
-      "priorityWhy": "Same root as AZR-96, which now reports the stranded record on the Azure onboarding screen where the operator acts on it; the gap dashboard only repeats the wrong 'not created', and the input keeps running. Reachable only after a lab ran two app versions against one org, or a pre-upgrade tab saved during an upgrade."
+      "detail": "FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has the same short-circuit as loadTenantDocument: once the tenant's own progress document exists, the legacy key is never read, so a Cribl source recorded there by a pre-tenant build shows as not created on the gap dashboard. AZR-96 added the read-only readStrandedLegacyDocument (usecases/tenant-documents); FIX: call it from the gap scan and show stranded/unattributed records as 'recorded by an earlier app version, not adopted', with an unknown read as could-not-check. Never adopt.\n\nDONE 2026-11-12 (62b8814a, db9a559a): the gap scan reads the legacy key read-only through readStrandedLegacyDocument and strandedCriblSources (inputId and groupId). A source with no own record but a legacy one reads unknown, recorded by an earlier app version and not adopted, naming the input and group. A refused, thrown or undecodable legacy read makes sources without their own record unknown (could not be checked), never red. Every path asserts zero saves. Not checked in Live Preview.",
+      "priorityWhy": "Same root as AZR-96, which now reports the stranded record on the Azure onboarding screen where the operator acts on it; the gap dashboard only repeats the wrong 'not created', and the input keeps running. Reachable only after a lab ran two app versions against one org, or a pre-upgrade tab saved during an upgrade.",
+      "verified": "pins"
     },
     {
       "id": "AZR-97",

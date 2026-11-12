@@ -9,7 +9,7 @@ import type { GraphDirectory } from "../../ports/graph-directory";
 import { ONBOARDING_PROGRESS_KEY, encodeProgress, emptyProgress, withCriblSource, withPlanValues } from "../../domain/onboarding-howto/progress-document";
 import { COVERAGE_SELECTION_KEY } from "../../domain/coverage-model/coverage-selection";
 import { TENANT_CRIBL_MAPPING_KEY, encodeTenantCriblMapping } from "../../domain/tenant-cribl-mapping";
-import { tenantMigrationMarker } from "../../domain/tenancy";
+import { tenantMigrationClaimKey, tenantMigrationMarker } from "../../domain/tenancy";
 import { GAP_SOURCES } from "../../domain/tenant-gap";
 
 const TENANT = "1a2b3c4d-0000-0000-0000-000000000001";
@@ -356,5 +356,132 @@ describe("scanTenantGap", () => {
     expect(row.cancelled).toBe(true);
     expect(row.status.state).toBe("unknown");
     expect(row.status.reason).toContain("cancelled");
+  });
+
+  // AZR-108: loadReadOnly stopped at the tenant's own document, so a Cribl
+  // source an earlier app version recorded under the legacy key afterwards
+  // showed as "not created".
+  describe("Cribl sources stranded under the legacy key (AZR-108)", () => {
+    const OLD = { groupId: "grp-old", inputId: "in_activity_old", inputType: "eventhub", secretId: "s0" } as const;
+    function legacyWithActivity(): KvDocumentLoad {
+      const p = withCriblSource(emptyProgress({ subscriptionId: "sub-1", resourceGroup: "rg-1" }), "activityLog", OLD);
+      return { kind: "value", value: JSON.parse(encodeProgress(p)) };
+    }
+    const claimKey = tenantMigrationClaimKey(ONBOARDING_PROGRESS_KEY);
+
+    it("a record claimed for this tenant shows as earlier-version, not adopted - unknown, not red - and writes nothing", async () => {
+      const cribl = criblAnswering([{ id: RECORD.inputId, type: "eventhub" }]);
+      const docs = new Docs({
+        [progressKey]: progressWithEntraRecord(),
+        [ONBOARDING_PROGRESS_KEY]: legacyWithActivity(),
+        [claimKey]: { kind: "value", value: tenantMigrationMarker(TENANT) },
+      });
+      const row = await scanTenantGap(ports({ cribl, documents: docs }), PROFILE);
+      const activity = row.cells.find((c) => c.sourceId === "activityLog")!;
+      expect(activity.cribl.state).toBe("unknown");
+      expect(activity.cribl.reason).toContain("in_activity_old in worker group grp-old for this tenant");
+      expect(activity.cribl.reason).toContain("not adopted");
+      // Only the stranded source changed; the rest stay as they were.
+      expect(row.cells.filter((c) => c.cribl.state === "red").length).toBe(GAP_SOURCES.length - 2);
+      expect(row.cells.find((c) => c.sourceId === "entraId")!.cribl.state).toBe("green");
+      expect(row.warnings).toEqual([
+        "1 Cribl source record was recorded by an earlier app version for this tenant and not adopted. " +
+          "It is not counted here; review it on Azure Native Source Onboarding.",
+      ]);
+      expect(docs.saves).toEqual([]);
+      // The stranded record's group is not read: it is reported, not confirmed.
+      expect(cribl.sent).toEqual([{ method: "GET", path: "/system/inputs", groupId: "grp-a" }]);
+    });
+
+    it("an unclaimed legacy record is shown with no tenant named", async () => {
+      const row = await scanTenantGap(
+        ports({ documents: new Docs({ [progressKey]: progressWithEntraRecord(), [ONBOARDING_PROGRESS_KEY]: legacyWithActivity() }) }),
+        PROFILE,
+      );
+      const activity = row.cells.find((c) => c.sourceId === "activityLog")!;
+      expect(activity.cribl.state).toBe("unknown");
+      expect(activity.cribl.reason).toContain("with no tenant named");
+      expect(row.warnings[0]).toContain("with no tenant named");
+    });
+
+    it("a legacy record claimed by ANOTHER tenant is never shown here", async () => {
+      const row = await scanTenantGap(
+        ports({
+          documents: new Docs({
+            [progressKey]: progressWithEntraRecord(),
+            [ONBOARDING_PROGRESS_KEY]: legacyWithActivity(),
+            [claimKey]: { kind: "value", value: tenantMigrationMarker("99999999-0000-0000-0000-000000000000") },
+          }),
+        }),
+        PROFILE,
+      );
+      expect(row.cells.find((c) => c.sourceId === "activityLog")!.cribl.state).toBe("red");
+      expect(row.warnings).toEqual([]);
+    });
+
+    it("an unreadable legacy key is could-not-check: no-record cells unknown, never red", async () => {
+      const docs = new Docs({
+        [progressKey]: progressWithEntraRecord(),
+        [ONBOARDING_PROGRESS_KEY]: { kind: "unknown", reason: "HTTP 503" },
+      });
+      const cribl = criblAnswering([{ id: RECORD.inputId, type: "eventhub" }]);
+      const row = await scanTenantGap(ports({ cribl, documents: docs }), PROFILE);
+      expect(row.cells.filter((c) => c.cribl.state === "red")).toEqual([]);
+      expect(row.cells.filter((c) => c.cribl.state === "unknown").length).toBe(GAP_SOURCES.length - 1);
+      const activity = row.cells.find((c) => c.sourceId === "activityLog")!;
+      expect(activity.cribl.reason).toContain("could not be checked");
+      expect(activity.cribl.reason).toContain("HTTP 503");
+      expect(row.cells.find((c) => c.sourceId === "entraId")!.cribl.state).toBe("green");
+      expect(row.warnings.join(" ")).toContain(
+        "could not be checked (the earlier single-tenant copy could not be read (HTTP 503))",
+      );
+      expect(docs.saves).toEqual([]);
+    });
+
+    it.each([
+      ["cut short", "{\"kind\":\"azure-onboarding-progr", "it holds a value this app cannot read (it may be cut short or hand-edited)"],
+      ["another kind", { kind: "something-else", version: 1 }, "it holds a document this app did not write"],
+      ["a newer version", { kind: "azure-onboarding-progress", version: 2 }, "it was written by a release this one cannot read"],
+    ])("a legacy value that does not decode (%s) is could-not-check, never 'nothing there'", async (_label, value, why) => {
+      const docs = new Docs({ [progressKey]: progressWithEntraRecord(), [ONBOARDING_PROGRESS_KEY]: { kind: "value", value } });
+      const cribl = criblAnswering([{ id: RECORD.inputId, type: "eventhub" }]);
+      const row = await scanTenantGap(ports({ cribl, documents: docs }), PROFILE);
+      expect(row.cells.filter((c) => c.cribl.state === "red")).toEqual([]);
+      expect(row.cells.filter((c) => c.cribl.state === "unknown").length).toBe(GAP_SOURCES.length - 1);
+      expect(row.cells.find((c) => c.sourceId === "entraId")!.cribl.state).toBe("green");
+      expect(row.cells.find((c) => c.sourceId === "activityLog")!.cribl.reason).toContain(
+        `could not be checked: the earlier single-tenant copy could not be read (${why})`,
+      );
+      expect(row.warnings).toEqual([
+        `Cribl sources an earlier app version may have recorded for this tenant could not be checked (the earlier single-tenant copy could not be read (${why})), ` +
+          "so a source this app has no record of is unknown, not missing.",
+      ]);
+      expect(docs.saves).toEqual([]);
+    });
+
+    it("a legacy load that throws is could-not-check too", async () => {
+      const docs = new Docs({ [progressKey]: progressWithEntraRecord() });
+      const load = docs.load.bind(docs);
+      docs.load = (key: string) =>
+        key === ONBOARDING_PROGRESS_KEY ? Promise.reject(new Error("socket hang up")) : load(key);
+      const row = await scanTenantGap(ports({ documents: docs }), PROFILE);
+      expect(row.cells.filter((c) => c.cribl.state === "red")).toEqual([]);
+      expect(row.warnings.join(" ")).toContain("socket hang up");
+    });
+
+    it("a legacy record matching the tenant's own (input AND group) is not reported", async () => {
+      const row = await scanTenantGap(
+        ports({
+          documents: new Docs({
+            [progressKey]: progressWithEntraRecord(),
+            [ONBOARDING_PROGRESS_KEY]: progressWithEntraRecord(),
+            [claimKey]: { kind: "value", value: tenantMigrationMarker(TENANT) },
+          }),
+        }),
+        PROFILE,
+      );
+      expect(row.warnings).toEqual([]);
+      expect(row.cells.find((c) => c.sourceId === "activityLog")!.cribl.state).toBe("red");
+    });
   });
 });

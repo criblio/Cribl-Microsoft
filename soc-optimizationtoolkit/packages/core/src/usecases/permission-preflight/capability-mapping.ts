@@ -51,7 +51,7 @@ import {
   DEFENDER_PRICINGS_READ,
 } from "../../domain/defender-export/defender-permissions";
 import type { AzurePreflight, CriblPreflight, PermissionReport } from "./permission-preflight";
-import { checkedAzureActions } from "./permission-preflight";
+import { checkedAzureActions, criblProbeGrantsManage } from "./permission-preflight";
 
 // ---------------------------------------------------------------------------
 // Mapping tables (exported as DATA)
@@ -243,7 +243,7 @@ function applyCriblProbes(preflight: CriblPreflight, into: Verdicts): void {
     if (capability === undefined || probe.status === "unknown") {
       continue;
     }
-    if (probe.status === "granted" && preflight.mode !== "cloud") {
+    if (probe.status === "granted" && !criblProbeGrantsManage(preflight.mode, probe)) {
       // A GET never claims a manage right (rule 1).
       continue;
     }

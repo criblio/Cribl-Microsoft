@@ -32,6 +32,7 @@
 
 import {
   CRIBL_CAPABILITY_PROBES,
+  CRIBL_LOCAL_WRITE_UNMEASURED,
   REQUIRED_ACTIONS,
 } from "@soc/core";
 import type {
@@ -298,9 +299,31 @@ function criblNote(state: CriblSideState): string {
   if (result.mode === "cloud") {
     return "Cribl capabilities are granted by app policy (policies.yml), approved by the Org admin at install.";
   }
-  return result.hasRequiredAccess
-    ? "All required Cribl capabilities are granted."
-    : "Some required Cribl capabilities are missing.";
+  if (result.hasRequiredAccess) {
+    return "All required Cribl capabilities are granted.";
+  }
+  if (localReadsOnly(result)) {
+    return CRIBL_LOCAL_READS_ONLY_NOTE;
+  }
+  return "Some required Cribl capabilities are missing.";
+}
+
+/**
+ * The local-shell note when every required read passed (DBT-304). A GET proves
+ * the read only; the write a deploy needs was not measured, which is neither a
+ * grant nor a denial - so the side is not ready, but nothing is "missing".
+ */
+export const CRIBL_LOCAL_READS_ONLY_NOTE =
+  "Required Cribl reads are confirmed; write access is not measured from the local shell.";
+
+/** Local shell, and every REQUIRED probe's read passed: only the write is unmeasured. */
+function localReadsOnly(result: CriblPreflight): boolean {
+  const required = result.probes.filter((probe) => probe.required);
+  return (
+    result.mode === "local" &&
+    required.length > 0 &&
+    required.every((probe) => probe.status === "granted")
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +394,9 @@ export interface PreflightViewInput {
   grantedRoles?: { azure?: readonly string[]; cribl?: readonly string[] };
 }
 
+/** The tone of the combined summary line. */
+export type PreflightSummaryTone = "running" | "ok" | "unverified" | "failed";
+
 /** The full panel view. */
 export interface PreflightView {
   /** The Azure side. */
@@ -389,6 +415,12 @@ export interface PreflightView {
   hasRequiredAccess: boolean;
   /** One-line summary, honest about pending/partial state. */
   summary: string;
+  /**
+   * The summary's tone: `running` while a side is pending, `ok` when all access
+   * is verified, `unverified` when nothing is missing but a requirement was not
+   * measured (local Cribl write, DBT-304), otherwise `failed`.
+   */
+  summaryTone: PreflightSummaryTone;
   /** RETRY / SWITCH ACCOUNT enablement. */
   actions: PreflightActionsView;
 }
@@ -425,32 +457,68 @@ function firstCriblIssue(result: CriblPreflight): string | null {
       return `cannot ${probe.label.toLowerCase()}`;
     }
   }
+  if (localReadsOnly(result)) {
+    return CRIBL_LOCAL_WRITE_UNMEASURED;
+  }
   return "Cribl access missing";
 }
 
+/**
+ * The summary's prefix for an UNMEASURED requirement (DBT-304). The local
+ * shell's Cribl write is neither granted nor denied, so it is reported as not
+ * verified - never under "Missing required access".
+ */
+export const PREFLIGHT_UNVERIFIED_PREFIX = "Not yet verified";
+
+/** The summary's prefix for a requirement that is actually missing or failed. */
+export const PREFLIGHT_MISSING_PREFIX = "Missing required access";
+
+/** The summary text and whether anything in it is genuinely missing. */
+interface PreflightSummary {
+  text: string;
+  /** True when some requirement is missing/failed (not merely unmeasured). */
+  hasMissing: boolean;
+  /** True when some requirement was not measured. */
+  hasUnverified: boolean;
+}
+
 /** Compose the honest one-line summary. */
-function summarize(input: PreflightViewInput): string {
+function summarize(input: PreflightViewInput): PreflightSummary {
   const azureDone = input.azure.phase === "done" && input.azure.result !== null;
   const criblDone = input.cribl.phase === "done" && input.cribl.result !== null;
   if (!azureDone || !criblDone) {
-    return "Checking required access...";
+    return { text: "Checking required access...", hasMissing: false, hasUnverified: false };
   }
   // Both done here (the null-guards above narrow the results).
   const azureResult = input.azure.result as AzurePreflight;
   const criblResult = input.cribl.result as CriblPreflight;
   if (azureResult.hasRequiredAccess && criblResult.hasRequiredAccess) {
-    return "All required access verified.";
+    return { text: "All required access verified.", hasMissing: false, hasUnverified: false };
   }
-  const issues: string[] = [];
+  const missing: string[] = [];
+  const unverified: string[] = [];
   const azureIssue = firstAzureIssue(azureResult);
   if (azureIssue !== null) {
-    issues.push(`Azure: ${azureIssue}`);
+    missing.push(`Azure: ${azureIssue}`);
   }
   const criblIssue = firstCriblIssue(criblResult);
-  if (criblIssue !== null) {
-    issues.push(`Cribl: ${criblIssue}`);
+  if (criblIssue === CRIBL_LOCAL_WRITE_UNMEASURED) {
+    unverified.push(`Cribl: ${criblIssue}`);
+  } else if (criblIssue !== null) {
+    missing.push(`Cribl: ${criblIssue}`);
   }
-  return `Missing required access - ${issues.join("; ")}`;
+  const parts: string[] = [];
+  if (missing.length > 0) {
+    parts.push(`${PREFLIGHT_MISSING_PREFIX} - ${missing.join("; ")}`);
+  }
+  if (unverified.length > 0) {
+    parts.push(`${PREFLIGHT_UNVERIFIED_PREFIX} - ${unverified.join("; ")}`);
+  }
+  return {
+    text: parts.join(". "),
+    hasMissing: missing.length > 0,
+    hasUnverified: unverified.length > 0,
+  };
 }
 
 /**
@@ -493,17 +561,25 @@ export function derivePreflightView(input: PreflightViewInput): PreflightView {
   const anyPending =
     input.azure.phase === "pending" || input.cribl.phase === "pending";
   const bothDone = azureDone && criblDone;
+  const hasRequiredAccess =
+    bothDone && azureView.hasRequiredAccess && criblView.hasRequiredAccess;
+  const summary = summarize(input);
+  const summaryTone: PreflightSummaryTone = anyPending
+    ? "running"
+    : hasRequiredAccess
+      ? "ok"
+      : summary.hasUnverified && !summary.hasMissing
+        ? "unverified"
+        : "failed";
 
   return {
     azure: azureView,
     cribl: criblView,
     anyPending,
     bothDone,
-    hasRequiredAccess:
-      bothDone &&
-      azureView.hasRequiredAccess &&
-      criblView.hasRequiredAccess,
-    summary: summarize(input),
+    hasRequiredAccess,
+    summary: summary.text,
+    summaryTone,
     actions: preflightActions(anyPending, input.switchAccountAvailable),
   };
 }

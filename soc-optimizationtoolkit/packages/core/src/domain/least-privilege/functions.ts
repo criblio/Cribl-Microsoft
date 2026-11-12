@@ -360,7 +360,7 @@ const FUNCTIONS = [
     id: "cribl-packs",
     label: "Install, upgrade and remove packs",
     necessity: "feature",
-    operations: ["cribl.packs.manage", "cribl.pack.update", "cribl.breakers.create"],
+    operations: ["cribl.packs.manage", "cribl.pack.update"],
   },
   {
     id: "cribl-samples",

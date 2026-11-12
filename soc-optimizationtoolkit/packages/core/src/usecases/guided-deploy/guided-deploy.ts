@@ -62,7 +62,7 @@ export const GUIDED_DEPLOY_STEP_PREFIX = "source:";
 export interface GuidedDeploySource {
   /** Stable source id (the Cribl input id and the resume key per source). */
   id: string;
-  /** Vendor/solution name (research key, FDR-breaker gate, pack naming). */
+  /** Vendor/solution name (research key, pack naming). */
   vendor: string;
   /** The pack name built and installed for this source. */
   packName: string;
@@ -149,8 +149,8 @@ export interface GuidedDeployCollaborators {
     ctx: GuidedDeployContext,
   ) => Promise<BuildSourcePackResult>;
   /**
-   * Publish the built pack to Cribl (ensure-secret, FDR breaker, two-step
-   * upload). Called only when Cribl is not skipped and worker groups exist.
+   * Publish the built pack to Cribl (ensure-secret, two-step upload). Called
+   * only when Cribl is not skipped and worker groups exist.
    */
   publishPack?: (
     source: GuidedDeploySource,
