@@ -255,6 +255,14 @@ describe("strandedCriblSources (AZR-96)", () => {
     expect(strandedCriblSources(p, JSON.parse(encodeProgress(p)))).toEqual([]);
   });
 
+  it("returns the legacy record when the current one has the same input id in another worker group", () => {
+    const current = withCriblSource(emptyProgress(), "defenderExport", { ...STRANDED, groupId: "other-group" });
+    const legacy = JSON.parse(encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED)));
+    const out = strandedCriblSources(current, legacy);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.record.groupId).toBe("default");
+  });
+
   it("returns the legacy record when the current one names a different input", () => {
     const current = sample(); // defenderExport -> azure_onb_eh_ns1_h1
     const legacy = JSON.parse(encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED)));

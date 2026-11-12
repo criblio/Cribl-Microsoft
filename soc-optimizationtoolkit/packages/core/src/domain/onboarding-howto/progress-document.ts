@@ -460,7 +460,8 @@ export interface StrandedCriblSource {
 /**
  * The Cribl source records a legacy unscoped progress document holds that the
  * tenant's current progress does not (AZR-96): the source id is missing from
- * `current.criblSources`, or it is there with a different input id. A record
+ * `current.criblSources`, or it is there with a different input id or worker
+ * group. A record
  * an earlier app version wrote to the legacy key after the tenant's own
  * document existed is otherwise never read again.
  *
@@ -480,7 +481,8 @@ export function strandedCriblSources(current: OnboardingProgress, legacyRaw: unk
     const record = doc.decoded.progress.criblSources[s.id];
     if (record === undefined) continue;
     const mine = current.criblSources[s.id];
-    if (mine === undefined || mine.inputId !== record.inputId) out.push({ sourceId: s.id, record });
+    // Input ids are unique only within a worker group, so the group decides too.
+    if (mine === undefined || mine.inputId !== record.inputId || mine.groupId !== record.groupId) out.push({ sourceId: s.id, record });
   }
   return out;
 }

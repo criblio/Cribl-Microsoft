@@ -296,7 +296,7 @@ function criblNote(state: CriblSideState): string {
     return result.error;
   }
   if (result.mode === "cloud") {
-    return "Cribl capabilities are granted by the platform on this shell.";
+    return "Cribl capabilities are granted by app policy (policies.yml), approved by the Org admin at install.";
   }
   return result.hasRequiredAccess
     ? "All required Cribl capabilities are granted."

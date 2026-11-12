@@ -249,6 +249,24 @@ describe("planCriblSource", () => {
     expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
   });
 
+  // AZR-97 review: a deferred Manage refusal outranks the consumer-group
+  // refusals, so the operator hears about the credential first, as before AZR-97.
+  it("refuses a Manage rule ahead of a missing consumer group", async () => {
+    const h = harness();
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), ok(RULES), status(404, { error: { code: "NotFound" } }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "admin" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+  });
+
+  it("refuses a Manage rule ahead of an unreadable consumer group", async () => {
+    const h = harness();
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), ok(RULES), status(403, { error: { code: "AuthorizationFailed" } }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "admin" }));
+    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+  });
+
   it("refuses a listKeys rule without Listen before any write", async () => {
     const h = harness();
     scriptAzurePlan(h);

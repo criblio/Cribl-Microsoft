@@ -754,6 +754,9 @@ export async function planCriblSource(
           missing.push(hub);
           continue;
         }
+        // A deferred Manage refusal outranks the consumer-group refusals: the
+        // credential is the first thing the operator must change (AZR-97).
+        if (deferred !== null) return deferred;
         return refused(
           "consumer-group-unreadable",
           `The consumer group ${consumerGroup} on hub ${hub} could not be read (${cgRead.refusal.text}), so whether the source could read is unknown.`,
@@ -761,6 +764,7 @@ export async function planCriblSource(
       }
     }
     if (missing.length > 0) {
+      if (deferred !== null) return deferred;
       return refused(
         "consumer-group-missing",
         `The consumer group ${consumerGroup} does not exist on ${missing.length === 1 ? "hub" : "hubs"} ${missing.join(", ")}, so the source would be created but could not read. ` +
