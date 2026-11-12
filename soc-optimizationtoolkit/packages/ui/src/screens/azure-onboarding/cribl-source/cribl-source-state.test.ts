@@ -447,6 +447,15 @@ describe("planResultView and refusal copy", () => {
     expect(planResultView({ kind: "already-applied", record: RECORD }).headline).toContain(RECORD.inputId);
   });
 
+  it("renders an already-applied input with a credential warning as a warning, the warning as detail (AZR-97)", () => {
+    const warning = "Input x already exists. You chose rule admin, which can Manage the namespace.";
+    const view = planResultView({ kind: "already-applied", record: RECORD, credentialWarning: warning });
+    expect(view.tone).toBe("warning");
+    expect(view.detail).toBe(warning);
+    expect(view.headline).toContain(RECORD.inputId);
+    expect(planResultView({ kind: "already-applied", record: RECORD }).tone).toBe("ok");
+  });
+
   it("gives every plan refusal distinct copy", () => {
     const copies = Object.values(PLAN_REFUSAL_COPY);
     expect(new Set(copies).size).toBe(copies.length);

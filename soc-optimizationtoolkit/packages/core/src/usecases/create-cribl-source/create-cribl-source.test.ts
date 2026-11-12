@@ -258,25 +258,115 @@ describe("planCriblSource", () => {
   });
 
   // AZR-58: listKeys on a Manage rule would put namespace control in a Cribl secret.
-  it("refuses a Manage-capable rule for listKeys before any Cribl call, naming the rule", async () => {
+  // AZR-97 (intended spec change): the refusal no longer comes before every
+  // Cribl call. The plan now READS the inputs list, so an input this app made
+  // earlier with that credential can be adopted; the pins below hold that the
+  // only Cribl call is that GET and nothing is ever written.
+  const manageMatching = () =>
+    buildEventHubInputBody({
+      id: INPUT_ID,
+      namespace: "ns1",
+      topics: ["h1"],
+      consumerGroup: "cribl",
+      secretId: SECRET_ID,
+      sourceId: "defenderExport",
+      sourceTitle: defender().title,
+      connectionTenantId: TENANT,
+    });
+  const manageRecord = { groupId: G, inputId: INPUT_ID, inputType: "eventhub" as const, secretId: SECRET_ID };
+  const onlyInputsRead = (h: ReturnType<typeof harness>) =>
+    expect(h.log.filter((e) => e.port === "cribl").map((e) => e.label)).toEqual([`GET /m/${G}/system/inputs`]);
+  const MANAGE_CREDENTIALS: readonly [string, PlanCredential][] = [
+    ["listKeys rule admin", { kind: "listKeys", rule: "admin" }],
+    ["pasted key admin", { kind: "paste", descriptor: { host: "ns1.servicebus.windows.net", keyName: "admin" }, attested: false }],
+  ];
+
+  for (const [label, credential] of MANAGE_CREDENTIALS) {
+    it(`refuses a Manage-capable credential (${label}) when no input exists, reading inputs and writing nothing`, async () => {
+      const h = harness();
+      scriptAzurePlan(h);
+      scriptCriblPlan(h);
+      const plan = await planCriblSource(h.ports, planInput(credential, { kvRecord: manageRecord }));
+      expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+      expect(JSON.stringify(plan)).toContain("admin");
+      onlyInputsRead(h);
+      expect(h.writes()).toEqual([]);
+    });
+
+    it(`refuses a Manage-capable credential (${label}) on a differing input, writing nothing`, async () => {
+      const h = harness();
+      scriptAzurePlan(h);
+      h.cribl.respondWith(ok({ items: [{ ...manageMatching(), topics: ["other-hub"] }] }));
+      const plan = await planCriblSource(h.ports, planInput(credential, { kvRecord: manageRecord }));
+      expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+      onlyInputsRead(h);
+      expect(h.writes()).toEqual([]);
+    });
+
+    it(`refuses a Manage-capable credential (${label}) on a foreign input, writing nothing`, async () => {
+      const h = harness();
+      scriptAzurePlan(h);
+      h.cribl.respondWith(ok({ items: [manageMatching()] }));
+      const plan = await planCriblSource(h.ports, planInput(credential, { kvRecord: null }));
+      expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+      onlyInputsRead(h);
+      expect(h.writes()).toEqual([]);
+    });
+
+    it(`refuses a Manage-capable credential (${label}) when Cribl's inputs cannot be read, writing nothing`, async () => {
+      const h = harness();
+      scriptAzurePlan(h);
+      h.cribl.respondWith(status(500));
+      const plan = await planCriblSource(h.ports, planInput(credential, { kvRecord: manageRecord }));
+      expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
+      onlyInputsRead(h);
+      expect(h.writes()).toEqual([]);
+    });
+
+    it(`adopts an ours-matching input made with a Manage-capable credential (${label}), warning and writing nothing`, async () => {
+      const h = harness();
+      scriptAzurePlan(h);
+      h.cribl.respondWith(ok({ items: [manageMatching()] }));
+      const plan = await planCriblSource(h.ports, planInput(credential, { kvRecord: manageRecord }));
+      expect(plan.kind).toBe("already-applied");
+      if (plan.kind !== "already-applied") return;
+      expect(plan.record).toEqual(manageRecord);
+      expect(plan.credentialWarning).toContain(INPUT_ID);
+      expect(plan.credentialWarning).toContain("rule admin");
+      expect(plan.credentialWarning).toContain("Listen-only");
+      expect(plan.credentialWarning).toContain("rotate");
+      onlyInputsRead(h);
+      expect(h.writes()).toEqual([]);
+    });
+  }
+
+  it("adopts an ours-matching input for a pasted RootManageSharedAccessKey even when the rules are unreadable", async () => {
+    // The paste check refuses Azure's own Manage rule by NAME, before the
+    // rules-refused/attested branch, so this path defers too.
     const h = harness();
-    scriptAzurePlan(h);
-    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "admin" }));
-    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
-    expect(JSON.stringify(plan)).toContain("admin");
-    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+    h.azure.respondWith(ok({ name: "ns1", sku: { name: "Standard" } }), status(403, { error: { code: "AuthorizationFailed" } }), ok({ name: "cribl" }));
+    h.cribl.respondWith(ok({ items: [manageMatching()] }));
+    const plan = await planCriblSource(
+      h.ports,
+      planInput(
+        { kind: "paste", descriptor: { host: "ns1.servicebus.windows.net", keyName: "RootManageSharedAccessKey" }, attested: false },
+        { kvRecord: manageRecord },
+      ),
+    );
+    expect(plan.kind).toBe("already-applied");
+    if (plan.kind !== "already-applied") return;
+    expect(plan.credentialWarning).toContain(INPUT_ID);
+    expect(plan.credentialWarning).toContain("RootManageSharedAccessKey");
+    onlyInputsRead(h);
     expect(h.writes()).toEqual([]);
   });
 
-  it("refuses a pasted Manage-capable key name before any write", async () => {
+  it("a Listen-only ours-matching input carries no credential warning", async () => {
     const h = harness();
     scriptAzurePlan(h);
-    const plan = await planCriblSource(
-      h.ports,
-      planInput({ kind: "paste", descriptor: { host: "ns1.servicebus.windows.net", keyName: "admin" }, attested: false }),
-    );
-    expect(plan).toMatchObject({ kind: "refused", reason: "rule-can-manage" });
-    expect(h.log.filter((e) => e.port === "cribl")).toEqual([]);
+    h.cribl.respondWith(ok({ items: [manageMatching()] }));
+    const plan = await planCriblSource(h.ports, planInput({ kind: "listKeys", rule: "reader" }, { kvRecord: manageRecord }));
+    expect(plan).toEqual({ kind: "already-applied", record: manageRecord });
   });
 
   it("refuses when the rules list is denied (listKeys)", async () => {
