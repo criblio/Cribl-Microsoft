@@ -110,6 +110,8 @@ function statesAction(text: string, action: string): boolean {
 const NOT_REGISTERED: Readonly<Record<string, string>> = {
   "PUT /m/{groupId}/routes":
     "no longer sent: the source wiring writes PATCH /m/{groupId}/routes/{tableId} (cribl.routes.write, whose auditGap says why)",
+  "POST /m/{groupId}/lib/breakers":
+    "never sent: its only builder, buildFdrBreakerRequest, had no caller and was deleted (DBT-303); the audit itself recorded it as not wired",
   "{caller-supplied} {CRIBL_API_URL}[/m/{groupId}]{path} - PlatformCriblClient.request":
     "the Cribl transport; every path it carries is its own row",
   "GET {nextLink} absolute https://management.azure.com/... (listAllPages)":

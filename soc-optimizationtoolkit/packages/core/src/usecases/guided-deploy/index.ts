@@ -52,10 +52,8 @@ export { bumpPackVersion, DEFAULT_PACK_VERSION } from "./pack-version";
 // CrowdStrike FDR breaker literal (core data)
 export {
   buildCrowdStrikeFdrBreaker,
-  buildFdrBreakerRequest,
   isCrowdStrikeVendor,
   CROWDSTRIKE_FDR_BREAKER_ID,
-  BREAKERS_API_PATH,
 } from "./fdr-breaker";
 export type {
   CrowdStrikeFdrBreaker,

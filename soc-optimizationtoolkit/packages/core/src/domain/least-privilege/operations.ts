@@ -2167,22 +2167,6 @@ const OPERATIONS = {
       "POST/GET /m/{searchGroupId}/search/jobs; /m/{searchGroupId}/search/jobs/{id}/status; /m/{searchGroupId}/search/jobs/{id}/results",
     ],
   },
-  "cribl.breakers.create": {
-    id: "cribl.breakers.create",
-    calls: [
-      { method: "POST", path: "/m/{groupId}/lib/breakers", api: "cribl" },
-    ],
-    operation: "Cribl Stream: GroupEdit",
-    leastRole: "Worker Group Editor",
-    alsoGrantedBy: [],
-    scope: "cribl-group",
-    scopeNote: "the selected worker group (not declared in policies.yml, so the App user path does not cover it)",
-    citation: "https://docs.cribl.io/iam/permissions/",
-    confidence: "high",
-    audit: [
-      "POST /m/{groupId}/lib/breakers",
-    ],
-  },
   "sentinel.solution.read": {
     id: "sentinel.solution.read",
     calls: [

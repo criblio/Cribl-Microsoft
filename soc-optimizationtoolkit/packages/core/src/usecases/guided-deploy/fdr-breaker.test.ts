@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CROWDSTRIKE_MAX_EVENT_BYTES } from "../../domain/pack-assembly";
 import {
   buildCrowdStrikeFdrBreaker,
-  buildFdrBreakerRequest,
   isCrowdStrikeVendor,
-  BREAKERS_API_PATH,
-  CROWDSTRIKE_FDR_BREAKER_ID,
 } from "./fdr-breaker";
 
 describe("buildCrowdStrikeFdrBreaker (verbatim literal)", () => {
@@ -54,15 +51,5 @@ describe("isCrowdStrikeVendor", () => {
     expect(isCrowdStrikeVendor("CrowdStrike Falcon")).toBe(true);
     expect(isCrowdStrikeVendor("crowdstrike_fdr")).toBe(true);
     expect(isCrowdStrikeVendor("Palo Alto Networks")).toBe(false);
-  });
-});
-
-describe("buildFdrBreakerRequest", () => {
-  it("shapes a POST to /lib/breakers scoped to the worker group", () => {
-    const request = buildFdrBreakerRequest("wg-prod");
-    expect(request.method).toBe("POST");
-    expect(request.path).toBe(BREAKERS_API_PATH);
-    expect(request.groupId).toBe("wg-prod");
-    expect((request.body as { id: string }).id).toBe(CROWDSTRIKE_FDR_BREAKER_ID);
   });
 });

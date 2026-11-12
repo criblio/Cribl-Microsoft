@@ -14,8 +14,6 @@
  * Pure: no IO, no fetch, no React, no Date/crypto/Math.random.
  */
 
-import type { CriblRequest } from "../../ports/cribl-client";
-
 /** The breaker id/ruleset name the legacy created (stable, referenced by tag). */
 export const CROWDSTRIKE_FDR_BREAKER_ID = "CrowdStrike_FDR";
 
@@ -31,7 +29,7 @@ export interface CrowdStrikeFdrBreakerRule {
   jsonExtractAll: boolean;
 }
 
-/** The CrowdStrike FDR event-breaker ruleset (POST /lib/breakers body). */
+/** The CrowdStrike FDR event-breaker ruleset (a /lib/breakers ruleset body). */
 export interface CrowdStrikeFdrBreaker {
   id: string;
   lib: "custom";
@@ -77,21 +75,4 @@ export function buildCrowdStrikeFdrBreaker(): CrowdStrikeFdrBreaker {
  */
 export function isCrowdStrikeVendor(vendor: string): boolean {
   return vendor.toLowerCase().includes("crowdstrike");
-}
-
-/** Cribl API path the FDR breaker is created on (porting-plan external surface). */
-export const BREAKERS_API_PATH = "/lib/breakers";
-
-/**
- * Shape the CriblClient request that creates the FDR breaker on a worker group.
- * The shell performs the call (and any create-vs-update conflict handling); this
- * only composes the request so the path and body stay identical across shells.
- */
-export function buildFdrBreakerRequest(groupId: string): CriblRequest {
-  return {
-    method: "POST",
-    path: BREAKERS_API_PATH,
-    groupId,
-    body: buildCrowdStrikeFdrBreaker(),
-  };
 }
