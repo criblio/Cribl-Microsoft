@@ -581,3 +581,41 @@ describe("appRegistrationRequest justification follows the request (C1)", () => 
     expect(justification).toMatch(/no Azure permissions/);
   });
 });
+
+describe("AZR-83 - both permission tickets state the Cribl-side least privilege", () => {
+  const permissionTickets = [appRegistrationRequest, roleAssignmentRequest] as const;
+  const paths: AzureSetupPath[] = ["existing", "lab-new-rg", "lab-byo-rg"];
+
+  it("names App user, the Org admin's policies.yml approval, and every worker group in scope", () => {
+    for (const gen of permissionTickets) {
+      for (const path of paths) {
+        // Joined to one line so the pin holds wherever the prose wraps.
+        const flat = gen(ctxFor(path)).replace(/\s+/g, " ");
+        expect(flat).toContain("Cribl side (stated, not requested)");
+        expect(flat).toContain(
+          "Cribl-side least privilege: App user, plus the Organization " +
+            "administrator's install-time approval of the app's policies.yml.",
+        );
+        expect(flat).toContain("That approval covers every worker group in scope");
+      }
+    }
+  });
+
+  it("reads the role from the least-privilege registry, not a second copy", () => {
+    // If the registry's Cribl role changed, the ticket must change with it.
+    const role = privilegeOperation("cribl.pack.update").leastRole;
+    expect(role).toBe("App user");
+    expect(roleAssignmentRequest(ctxFor("existing"))).toContain(
+      "Cribl-side least privilege: " + role + ", plus the",
+    );
+  });
+
+  it("states it on a ticket that asks for no Azure role at all", () => {
+    // The Cribl half is held regardless of the Azure connectivity choice.
+    const out = roleAssignmentRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: [] }),
+    );
+    expect(out).toContain("No roles are requested");
+    expect(out).toContain("Cribl side (stated, not requested)");
+  });
+});

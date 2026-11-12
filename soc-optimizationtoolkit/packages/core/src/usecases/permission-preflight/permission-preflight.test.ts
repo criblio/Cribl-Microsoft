@@ -161,7 +161,7 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
       },
     );
 
-    expect(report.cribl.hasRequiredAccess).toBe(true); // granted by platform
+    expect(report.cribl.hasRequiredAccess).toBe(true); // granted by app policy (policies.yml)
     expect(report.azure.hasRequiredAccess).toBe(false);
     expect(report.hasRequiredAccess).toBe(false);
     expect(report.summary).toContain("Cannot deploy");
@@ -337,13 +337,15 @@ describe("checked actions exported as data", () => {
 // ---------------------------------------------------------------------------
 
 describe("Cribl side", () => {
-  it("cloud probe is near-vacuous: granted by platform, no request issued", async () => {
+  it("cloud probe issues no request: granted by app policy (policies.yml)", async () => {
     const cribl = new FakeCriblClient();
     const result = await runCriblPreflight(cribl, "cloud", "wg-a");
     expect(result.hasRequiredAccess).toBe(true);
     expect(result.probes).toHaveLength(CRIBL_CAPABILITY_PROBES.length);
     expect(result.probes.every((p) => p.status === "granted")).toBe(true);
-    expect(result.probes.every((p) => p.detail === "granted by platform")).toBe(true);
+    // AZR-83: the grant is the Org admin's install-time approval of policies.yml,
+    // not "the platform" and not a measurement.
+    expect(result.probes.every((p) => p.detail === "granted by app policy (policies.yml)")).toBe(true);
     expect(cribl.calls).toHaveLength(0);
   });
 
@@ -361,6 +363,9 @@ describe("Cribl side", () => {
     expect(result.hasRequiredAccess).toBe(true);
     const inputs = result.probes.find((p) => p.capability === "inputs");
     expect(inputs?.status).toBe("denied");
+    // A 2xx GET confirms the read only; it never claims the write (AZR-83).
+    const packs = result.probes.find((p) => p.capability === "packs");
+    expect(packs?.detail).toBe("read confirmed; write granted by app policy, not measured");
     // Group-scoped probes carry the worker group.
     expect(cribl.calls.every((c) => c.groupId === "wg-a")).toBe(true);
   });
@@ -372,6 +377,29 @@ describe("Cribl side", () => {
     expect(result.hasRequiredAccess).toBe(false);
     expect(result.error).toBe("Cribl leader not reachable");
   });
+
+  it.each([undefined, ""])(
+    "local with no worker group (%j) issues no request and resolves unknown",
+    async (workerGroup) => {
+      // AZR-83. The probe paths are declared in policies.yml only under
+      // /m/:gid; without a group they would hit undeclared leader-level paths
+      // and a 403 would be recorded as a measured denial.
+      const cribl = new FakeCriblClient();
+      cribl.respondWith(
+        { status: 403, body: {} },
+        { status: 403, body: {} },
+        { status: 403, body: {} },
+        { status: 403, body: {} },
+      );
+      const result = await runCriblPreflight(cribl, "local", workerGroup);
+      expect(cribl.calls).toHaveLength(0);
+      expect(result.probes).toHaveLength(CRIBL_CAPABILITY_PROBES.length);
+      expect(result.probes.every((p) => p.status === "unknown")).toBe(true);
+      expect(result.probes.every((p) => p.detail === "no worker group chosen")).toBe(true);
+      expect(result.hasRequiredAccess).toBe(false);
+      expect(result.error).toBe("choose a worker group");
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -473,7 +501,7 @@ describe("parallel composition", () => {
         throw new Error("boom");
       },
     };
-    const cribl = new FakeCriblClient(); // cloud -> granted by platform
+    const cribl = new FakeCriblClient(); // cloud -> granted by app policy (policies.yml)
 
     const report = await runPermissionPreflight(
       { azure, cribl },

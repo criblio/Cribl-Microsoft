@@ -26,6 +26,7 @@ import {
 } from "./capability-mapping";
 import {
   runAzurePreflight,
+  runCriblPreflight,
   runPermissionPreflight,
   CRIBL_CAPABILITY_PROBES,
 } from "./index";
@@ -172,6 +173,28 @@ describe("mapping tables", () => {
     // prove a write. If this ever fails, a write is being granted by a read.
     for (const capability of Object.values(AZURE_PROBE_CAPABILITIES)) {
       expect(capability.endsWith(".read")).toBe(true);
+    }
+    // The Cribl map targets MANAGE capabilities, but its local probes are GETs
+    // too (AZR-83). So the same rule is enforced on what a local probe RECORDS:
+    // a local 2xx on every Cribl probe establishes no capability at all.
+    const local = capabilitiesFromReport(
+      report(
+        {},
+        {
+          mode: "local",
+          probes: CRIBL_CAPABILITY_PROBES.map((spec) => ({
+            capability: spec.capability,
+            label: spec.label,
+            required: spec.required,
+            status: "granted" as const,
+            detail: "read confirmed; write granted by app policy, not measured",
+          })),
+        },
+      ),
+      META,
+    );
+    for (const capability of Object.values(CRIBL_PROBE_CAPABILITIES)) {
+      expect(local.verdicts[capability]).toBeUndefined();
     }
   });
 
@@ -484,13 +507,16 @@ describe("writes come from effective actions, never from a probe", () => {
 // ---------------------------------------------------------------------------
 
 describe("Cribl side gets identical treatment", () => {
-  it("maps granted and denied probes onto the same verdicts", () => {
+  it("records a local denial, but never a manage grant from a local GET", () => {
+    // AZR-83. This pin used to expect pack.manage "granted" from a local 2xx -
+    // a GET claiming a write. A local 2xx now records nothing (unknown); a
+    // local 403 is still a measured denial.
     const set = capabilitiesFromReport(
       report(
         {},
         {
           probes: [
-            { capability: "packs", label: "Manage packs", required: true, status: "granted", detail: "" },
+            { capability: "packs", label: "Manage packs", required: true, status: "granted", detail: "read confirmed; write granted by app policy, not measured" },
             { capability: "outputs", label: "Manage destinations", required: true, status: "denied", detail: "HTTP 403" },
             { capability: "inputs", label: "Manage sources", required: false, status: "unknown", detail: "HTTP 500" },
           ],
@@ -498,14 +524,47 @@ describe("Cribl side gets identical treatment", () => {
       ),
       META,
     );
-    expect(set.verdicts["pack.manage"]).toBe("granted");
+    expect(set.verdicts["pack.manage"]).toBeUndefined();
     expect(set.verdicts["destination.manage"]).toBe("denied");
     expect(set.verdicts["source.manage"]).toBeUndefined();
   });
 
-  it("treats the cloud shell's platform grant as a real measurement", async () => {
-    // The app runs inside the leader under the approved policies.yml, so
-    // "granted by platform" is a fact about a real grant, not an assumption.
+  it("records the cloud grant by MODE, not by the detail text", () => {
+    // Guards the fix from going too far: a cloud probe still records granted,
+    // and the decision reads preflight.mode - the detail string is copy and
+    // may change without moving a verdict.
+    const probes = CRIBL_CAPABILITY_PROBES.map((spec) => ({
+      capability: spec.capability,
+      label: spec.label,
+      required: spec.required,
+      status: "granted" as const,
+      detail: "any wording at all",
+    }));
+    const cloud = capabilitiesFromReport(report({}, { mode: "cloud", probes }), META);
+    const local = capabilitiesFromReport(report({}, { mode: "local", probes }), META);
+    for (const capability of CRIBL_CAPABILITIES) {
+      expect(cloud.verdicts[capability]).toBe("granted");
+      expect(local.verdicts[capability]).toBeUndefined();
+    }
+  });
+
+  it("resolves unknown, never denied, when no worker group is chosen", async () => {
+    // AZR-83. Without a group the local probes would hit undeclared
+    // leader-level paths; the preflight now issues no request instead.
+    const cribl = new FakeCriblClient();
+    const side = await runCriblPreflight(cribl, "local", undefined);
+    expect(cribl.calls).toHaveLength(0);
+    const set = capabilitiesFromSides(azurePreflight(), side, META);
+    for (const capability of CRIBL_CAPABILITIES) {
+      expect(set.verdicts[capability]).toBeUndefined();
+    }
+  });
+
+  it("treats the cloud shell's app-policy grant as the grant", async () => {
+    // The app runs inside the leader under the policies.yml the Org admin
+    // approved at install. That approval is what grants the manage rights, so
+    // "granted by app policy (policies.yml)" names a real grant - it is not a
+    // measurement the preflight made.
     const azure = new FakeAzureManagement();
     azure.respondWith(permsResponse(OWNER), OK, OK, OK);
     const cloud = await runPermissionPreflight(

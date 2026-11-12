@@ -125,7 +125,14 @@ export const AZURE_PROBE_CAPABILITIES: Readonly<Record<string, AzureCapability>>
     "resource-graph-query": "resourcegraph.read",
   });
 
-/** Cribl probe key -> capability. One probe per Cribl capability, exactly. */
+/**
+ * Cribl probe key -> capability. One probe per Cribl capability, exactly.
+ *
+ * Every target is a MANAGE capability, yet the local probe behind it is a GET.
+ * Rule 1 therefore holds by construction in {@link applyCriblProbes}, not here:
+ * a local 2xx records nothing, only a local denial is recorded, and a grant is
+ * recorded only from the cloud shell's app-policy grant.
+ */
 export const CRIBL_PROBE_CAPABILITIES: Readonly<Record<string, CriblCapability>> =
   Object.freeze({
     packs: "pack.manage",
@@ -214,22 +221,30 @@ function applyAzureProbes(preflight: AzurePreflight, into: Verdicts): void {
 }
 
 /**
- * Cribl verdicts from the capability probes.
+ * Cribl verdicts from the capability probes. Every Cribl capability is a
+ * MANAGE right, so rule 1 decides what may be recorded:
  *
- * The plan's symmetry decision: identical treatment to the Azure side, same
- * four-value verdict, same omit-when-unmeasured discipline. That last part is
- * what makes an unreachable leader read correctly - every probe degrades to
- * `unknown`, nothing is recorded, and the domain resolves `unreachable` from
- * `criblReachable: false` instead of asserting a permission denial.
- *
- * On the cloud shell every probe reads "granted by platform", which is a real
- * measurement of a real fact: the app runs inside the leader under the approved
- * policies.yml.
+ * - CLOUD: no request is issued; every capability is granted by the app's
+ *   policies.yml, which the Org admin approved at install. That is the real
+ *   source of the write grant, so `granted` is recorded. Keyed off
+ *   `preflight.mode`, never off the probe's detail text.
+ * - LOCAL: the probe is a GET. A 2xx proves the read only and records NOTHING,
+ *   so the manage capability resolves `unknown`. A 401/403 is recorded as
+ *   `denied`: if policies.yml or the role does not cover the GET, the write on
+ *   the same path cannot work either.
+ * - `unknown` is never recorded (rule 3). That is what makes an unreachable
+ *   leader read correctly - the domain resolves `unreachable` from
+ *   `criblReachable: false` instead of asserting a permission denial - and why
+ *   "no worker group chosen" resolves unknown rather than denied.
  */
 function applyCriblProbes(preflight: CriblPreflight, into: Verdicts): void {
   for (const probe of preflight.probes) {
     const capability = CRIBL_PROBE_CAPABILITIES[probe.capability];
     if (capability === undefined || probe.status === "unknown") {
+      continue;
+    }
+    if (probe.status === "granted" && preflight.mode !== "cloud") {
+      // A GET never claims a manage right (rule 1).
       continue;
     }
     into[capability] = probe.status;
