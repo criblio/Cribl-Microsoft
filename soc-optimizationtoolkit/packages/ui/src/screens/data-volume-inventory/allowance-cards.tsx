@@ -28,7 +28,10 @@ import {
   grantCardText,
   grantedTip,
   grantedUnknownReason,
+  grantWindowArithmetic,
+  grantWindowLine,
   isPermissionRefusal,
+  licenceCountText,
   licenceNote,
   countText,
   meterOf,
@@ -159,6 +162,12 @@ function PooledSummary({ a }: { a: DataAllowances }) {
   );
 }
 
+/** The window line's tip: the rule, then this card's own arithmetic when the allowance is known. */
+function grantWindowTip(view: GrantView): string {
+  const arithmetic = grantWindowArithmetic(view.window);
+  return arithmetic === null ? ALLOWANCE_TIPS.grantWindow : `${ALLOWANCE_TIPS.grantWindow} Here: ${arithmetic}.`;
+}
+
 interface GrantCardProps {
   view: GrantView;
   a: DataAllowances;
@@ -178,7 +187,13 @@ function GrantCard({ view, a, readAt, onOpenChangeRequest }: GrantCardProps) {
         granted {text.granted} <InfoTip text={grantedTip(view, a)} />
       </div>
       <div className="allowance-card-line">
+        licences: {licenceCountText(view, a)} <InfoTip text={ALLOWANCE_TIPS.licenceCount} />
+      </div>
+      <div className="allowance-card-line">
         {text.eligibleUsed} <InfoTip text={ALLOWANCE_TIPS.eligibleUsed} />
+      </div>
+      <div className="allowance-card-line">
+        {grantWindowLine(view, a)} <InfoTip text={grantWindowTip(view)} />
       </div>
       {meter !== null && (
         <div
@@ -212,6 +227,9 @@ function GrantCard({ view, a, readAt, onOpenChangeRequest }: GrantCardProps) {
               {arithmeticLine(f, a.scope.kind === "tenant")}
             </div>
           ))}
+          {grantWindowArithmetic(view.window) !== null && (
+            <div className="allowance-arithmetic">over the window: {grantWindowArithmetic(view.window)}</div>
+          )}
           {otherBasisNote(view, a) !== null && <p className="field-hint">{otherBasisNote(view, a)}</p>}
 
           <h4 className="allowance-detail-heading">

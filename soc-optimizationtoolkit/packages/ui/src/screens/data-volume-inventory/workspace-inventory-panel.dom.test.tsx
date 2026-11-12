@@ -115,6 +115,11 @@ async function discoverAndInventory() {
   fireEvent.click(screen.getByText("Inventory this workspace"));
 }
 
+/** The inventory's own per-day tiles, not the window totals strip above them. */
+const INVENTORY_TILES = "section.panel > .match-stat-grid .match-stat-value";
+/** The window totals strip's tiles: billable, allowance, applied, net. */
+const STRIP_TILES = ".allowance-window-strip .match-stat-value";
+
 const USAGE_COLS = ["DataType", "TotalMB", "BillableMB", "DaysWithData", "Solutions"];
 
 describe("WorkspaceInventoryPanel", () => {
@@ -139,7 +144,7 @@ describe("WorkspaceInventoryPanel", () => {
     // MIG-15: the after-allowances tile waits for the allowance read; no benefit
     // was applied in this stub, so it equals billable.
     await waitFor(() =>
-      expect([...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent)).toEqual([
+      expect([...document.querySelectorAll(INVENTORY_TILES)].map((e) => e.textContent)).toEqual([
         "4.0 MB", "3.0 MB", "3.0 MB", "120.0 MB", "2",
       ]),
     );
@@ -364,7 +369,7 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
     expect(screen.getByText("Syslog")).toBeTruthy();
     expect(screen.getByText("Download inventory CSV")).toBeTruthy();
     expect(document.querySelector(".allowance-card")).toBeNull();
-    const tiles = [...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent);
+    const tiles = [...document.querySelectorAll(INVENTORY_TILES)].map((e) => e.textContent);
     expect(tiles[2]).toBe("not read");
   });
 
@@ -383,7 +388,7 @@ describe("WorkspaceInventoryPanel - data allowances (MIG-15)", () => {
     });
     renderPanel(request as unknown as ReturnType<typeof armStub>);
     await discoverAndInventory();
-    const tiles = () => [...document.querySelectorAll(".match-stat-value")].map((e) => e.textContent);
+    const tiles = () => [...document.querySelectorAll(INVENTORY_TILES)].map((e) => e.textContent);
     await waitFor(() => expect(tiles()[2]).toMatch(/MB$/));
     // Billable 90 MB / 30 = 3.0 MB a day; minus 1.0 MB applied.
     expect(tiles()[1]).toBe("3.0 MB");
@@ -627,5 +632,133 @@ describe("WorkspaceInventoryPanel - change request pass-through (MIG-25)", () =>
     await screen.findByText("Compared across 2 Sentinel workspaces, 2 read.");
     fireEvent.click(await screen.findByRole("button", CHANGE_REQUEST));
     expect(open).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("WorkspaceInventoryPanel - window totals strip and licence counts (MIG-33)", () => {
+  // Billable 90 MB over the window; SigninLogs 900 MB eligible; Microsoft applied 0.5 GB.
+  const USAGE_OK: Answer = { status: 200, body: table(USAGE_COLS, [["Syslog", 90, 90, 30, "[]"]]) };
+
+  function withE5(base: ReturnType<typeof vi.fn>) {
+    return vi.fn(async (req: AzureManagementRequest) => {
+      const query = (req.body as { query?: string } | undefined)?.query ?? "";
+      if (query.includes("Benefit amount used")) {
+        return { status: 200, body: table(["Day", "BenefitType", "BenefitUsedGB"], [["2026-10-20", "M365 E5", 0.5]]) };
+      }
+      if (query.includes("EligibleMB")) {
+        return { status: 200, body: table(["Day", "DataType", "EligibleMB"], [["2026-10-20", "SigninLogs", 900]]) };
+      }
+      return base(req);
+    });
+  }
+
+  /** 100 assigned (120 purchased) Microsoft 365 E5 seats = 500 MB a day. */
+  const graphSeats = () => ({
+    readSubscribedSkus: vi.fn().mockResolvedValue({
+      kind: "read",
+      body: {
+        value: [
+          {
+            skuId: "06ebc4ee-1bb5-47dd-8120-11324bc54e06",
+            skuPartNumber: "SPE_E5",
+            capabilityStatus: "Enabled",
+            appliesTo: "User",
+            consumedUnits: 100,
+            prepaidUnits: { enabled: 120, warning: 0, suspended: 0, lockedOut: 0 },
+          },
+        ],
+      },
+    }),
+  });
+
+  const strip = () => [...document.querySelectorAll(STRIP_TILES)].map((e) => e.textContent);
+  const stripHeading = () => document.querySelector(".allowance-window-strip .panel-desc")?.textContent;
+  /** A line's visible words, without the info tip's icon and popover text. */
+  const visible = (e: Element) => {
+    const copy = e.cloneNode(true) as Element;
+    copy.querySelectorAll(".info-tip").forEach((t) => t.remove());
+    return copy.textContent?.trim();
+  };
+  const cardLines = () => [...document.querySelectorAll(".allowance-card-line")].map(visible);
+
+  it("shows 30-day billable against 30-day allowance, the applied benefit, the net and the seats", async () => {
+    renderPanel(withE5(armStub(USAGE_OK)) as unknown as ReturnType<typeof armStub>, { graph: graphSeats() });
+    await discoverAndInventory();
+    await waitFor(() => expect(strip()).toHaveLength(4));
+    expect(stripHeading()).toBe("This workspace, last 30 complete days");
+    // 90 MB billable; 100 seats x 5 MB x 30 days = 15,000 MB; 0.5 GB applied; 15,000 - 90 = 14,910 under.
+    expect(strip()).toEqual(["0.09 GB", "15.00 GB", "0.50 GB", "14.91 GB under the allowance"]);
+    expect(document.querySelector(".allowance-window-strip")?.textContent).toContain(
+      "Licences: 100 E5 seats assigned (120 purchased)",
+    );
+    // The card face keeps its per-day lines and gains the licence count and the window totals.
+    expect(cardLines()).toEqual([
+      "granted 500.0 MB/day",
+      "licences: 100 E5 seats assigned (120 purchased)",
+      "eligible 30.0 MB/day, used 16.7 MB/day",
+      "last 30 days: eligible 0.90 GB, allowance 15.00 GB, Microsoft applied 0.50 GB",
+    ]);
+    expect(document.querySelector(".allowance-arithmetic")?.parentElement?.textContent).toContain(
+      "over the window: 100 seats x 5 MB x 30 days = 15.00 GB",
+    );
+  });
+
+  it("refused licence counts: the allowance is not known with its reason, the applied benefit still shows", async () => {
+    const graph = {
+      readSubscribedSkus: vi.fn().mockResolvedValue({ kind: "denied", detail: "Graph subscribedSkus: HTTP 403" }),
+    };
+    renderPanel(withE5(armStub(USAGE_OK)) as unknown as ReturnType<typeof armStub>, { graph });
+    await discoverAndInventory();
+    await waitFor(() => expect(strip()).toHaveLength(4));
+    expect(strip()).toEqual([
+      "0.09 GB",
+      "not known - E5 5 MB/user: licence counts were not read",
+      "0.50 GB",
+      "not known - the allowance is not known",
+    ]);
+    expect(cardLines()).toContain("licences: E5 seats not read");
+    expect(cardLines()).toContain(
+      "last 30 days: eligible 0.90 GB, allowance not known - licence counts were not read, Microsoft applied 0.50 GB",
+    );
+  });
+
+  it("follows the tenant comparison, and a workspace not read leaves only an overage claimable", async () => {
+    const base = armStub(USAGE_OK, { status: 403, body: { error: { code: "AuthorizationFailed" } } });
+    const request = withE5(
+      vi.fn(async (req: AzureManagementRequest) => {
+        if (req.path.endsWith("/Microsoft.OperationsManagement/solutions")) {
+          return {
+            status: 200,
+            body: {
+              value: [
+                { name: "SecurityInsights(law-1)", properties: { workspaceResourceId: WS_ID } },
+                { name: "SecurityInsights(law-2)", properties: { workspaceResourceId: WS2_ID } },
+              ],
+            },
+          };
+        }
+        return base(req);
+      }),
+    );
+    renderPanel(request as unknown as ReturnType<typeof armStub>, { graph: graphSeats() });
+    fireEvent.click(screen.getByText("Discover workspaces"));
+    await screen.findByText(/Found 2 workspace\(s\) across 1 subscription\(s\), 2 with Sentinel/);
+    fireEvent.click(screen.getByText("Inventory this workspace"));
+    const compare = await screen.findByText("Compare against the whole tenant");
+    // One workspace's billable is never netted against a tenant-wide grant it shares.
+    expect(strip()[3]).toBe(
+      "not known - the E5 grant is tenant-wide and shared across 2 Sentinel workspaces - use Compare against the whole tenant",
+    );
+    fireEvent.click(compare);
+    await screen.findByText("Compared across 2 Sentinel workspaces, 1 read.");
+    expect(stripHeading()).toBe("Whole tenant, last 30 complete days - 1 of 2 Sentinel workspaces read");
+    expect(strip()).toEqual([
+      "at least 0.09 GB",
+      "15.00 GB",
+      "at least 0.50 GB",
+      "not known - the billable total is a lower bound, so it may be over",
+    ]);
+    fireEvent.click(screen.getByText("Back to this workspace"));
+    expect(stripHeading()).toBe("This workspace, last 30 complete days");
   });
 });
