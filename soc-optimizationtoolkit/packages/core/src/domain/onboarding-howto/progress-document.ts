@@ -451,6 +451,40 @@ export function withCriblSource(
   return { ...p, criblSources: { ...p.criblSources, [id]: record } };
 }
 
+/** A Cribl source record found in the legacy unscoped document but not in the tenant's own (AZR-96). */
+export interface StrandedCriblSource {
+  readonly sourceId: OnboardingSourceId;
+  readonly record: CriblSourceRecord;
+}
+
+/**
+ * The Cribl source records a legacy unscoped progress document holds that the
+ * tenant's current progress does not (AZR-96): the source id is missing from
+ * `current.criblSources`, or it is there with a different input id. A record
+ * an earlier app version wrote to the legacy key after the tenant's own
+ * document existed is otherwise never read again.
+ *
+ * REPORT ONLY. Nothing here merges the records into `current`; the caller
+ * shows them and leaves them where they are.
+ *
+ * The legacy body is classified with {@link readProgressDocument} first, so a
+ * body that is not ours (a migration marker, a foreign kind) or a version this
+ * release cannot read yields no records rather than an empty decode posing as
+ * one. Never throws.
+ */
+export function strandedCriblSources(current: OnboardingProgress, legacyRaw: unknown): readonly StrandedCriblSource[] {
+  const doc = readProgressDocument({ kind: "value", value: legacyRaw });
+  if (doc.status !== "ok") return [];
+  const out: StrandedCriblSource[] = [];
+  for (const s of ONBOARDING_SOURCES) {
+    const record = doc.decoded.progress.criblSources[s.id];
+    if (record === undefined) continue;
+    const mine = current.criblSources[s.id];
+    if (mine === undefined || mine.inputId !== record.inputId) out.push({ sourceId: s.id, record });
+  }
+  return out;
+}
+
 /** Record what the app created to route a source to Cribl Lake (AZR-35). */
 export function withLakeRoute(
   p: OnboardingProgress,

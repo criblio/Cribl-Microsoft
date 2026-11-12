@@ -54,6 +54,7 @@ export {
   encodeProgress,
   progressFrom,
   readProgressDocument,
+  strandedCriblSources,
   tickState,
   withCriblSource,
   withLakeRoute,
@@ -73,5 +74,6 @@ export type {
   SourceMode,
   SourceProgress,
   StepTick,
+  StrandedCriblSource,
   TickState,
 } from "./progress-document";

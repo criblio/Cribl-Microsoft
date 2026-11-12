@@ -14,7 +14,10 @@
  *
  *   - MOUNT makes exactly THREE kvDocuments loads - the saved selection and
  *     the How-to progress document (ADR 0007 D1), each guarded by a cancelled
- *     flag, and the app-wide tenant to Cribl mapping (AZR-64) - and ZERO
+ *     flag, and the app-wide tenant to Cribl mapping (AZR-64) - plus, only
+ *     when the tenant's own progress document exists, the read-only check of
+ *     the legacy progress key and its claim for stranded Cribl source records
+ *     (AZR-96) - and ZERO
  *     Azure or Cribl calls. Nothing is read from Azure or
  *     Cribl until the operator asks (Find namespaces, Read Defender state,
  *     Load resource groups, Validate, Load worker groups, Read the namespace's
@@ -84,6 +87,7 @@ import {
   planValidation,
   readAllPages,
   readOnboardingCriblSide,
+  readStrandedLegacyDocument,
   readTenantCriblMapping,
   stepsFor,
   TENANT_CRIBL_MAPPING_KEY,
@@ -125,6 +129,7 @@ import type {
   RoutePosition,
   SectionStatus,
   SourceMode,
+  StrandedLegacyRead,
   TenantCriblMappingRead,
   ValidationPlan,
   ValidationResult,
@@ -182,6 +187,8 @@ import {
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
 import { onboardingGroupChoice, onboardingGroupResolution } from "./cribl-source/group-choice";
+import { StrandedSourcesNotice } from "./cribl-source/stranded-sources-notice";
+import { strandedNoticeOf } from "./cribl-source/stranded-sources-state";
 import { OnboardingDataflow } from "./dataflow/onboarding-dataflow";
 import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
 
@@ -307,8 +314,12 @@ export function AzureOnboardingScreen({
   // records of the Cribl sources this app created. They live under
   // `{key}.{tenantId}`; the legacy single-tenant document is moved under the
   // active tenant the first time it is read (loadTenantDocument), and is never
-  // read as a document again. Null when the connection has no tenant id, which
-  // reads as an unknown load and blocks every save.
+  // read as a document to use again. The one later read is a REPORT (AZR-96):
+  // once the tenant's progress has loaded, readStrandedLegacyDocument looks at
+  // the legacy progress key for Cribl source records an earlier app version
+  // wrote there afterwards, and the Cribl source section names them as not
+  // adopted - nothing is merged or written. Null when the connection has no
+  // tenant id, which reads as an unknown load and blocks every save.
   const activeTenant = config.tenantId;
   const selectionKey = tenantDocumentKey(COVERAGE_SELECTION_KEY, activeTenant);
   const progressKey = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, activeTenant);
@@ -332,6 +343,8 @@ export function AzureOnboardingScreen({
   const latestProgressLoad = useRef<ProgressLoadState>(progressLoad);
   const progressChain = useRef<Promise<void>>(Promise.resolve());
   const [progressMessage, setProgressMessage] = useState<PickerMessage | null>(null);
+  // AZR-96: the read-only report on the legacy progress key. Null until it is read.
+  const [legacyRead, setLegacyRead] = useState<StrandedLegacyRead | null>(null);
   // The save-failure message currently shown, so a later successful save
   // clears that message and nothing else.
   const progressSaveFailure = useRef<PickerMessage | null>(null);
@@ -387,6 +400,7 @@ export function AzureOnboardingScreen({
   useEffect(() => {
     if (store === undefined) return;
     let cancelled = false;
+    setLegacyRead(null);
     void loadTenantDocument(store, ONBOARDING_PROGRESS_KEY, activeTenant)
       .then(
         (answer: KvDocumentLoad): ProgressLoadState => progressLoadStateFrom(answer),
@@ -402,6 +416,21 @@ export function AzureOnboardingScreen({
         const saved = loadedProgress(seeded)?.workerGroup ?? "";
         if (saved !== "") setGroupId((g) => (g === "" ? saved : g));
         logger?.info(`${LOG} progress loaded`, { load: seeded.status });
+        // AZR-96: only once the tenant's OWN document has loaded. On a first
+        // run (absent) loadTenantDocument has just read the legacy key and
+        // either moved it here, found nothing, or found it claimed by another
+        // tenant, so there is nothing stranded to report and no reason to
+        // spend two more KV reads.
+        if (next.status !== "ready") return;
+        return readStrandedLegacyDocument(store, ONBOARDING_PROGRESS_KEY, activeTenant).then(
+          (read) => read,
+          (error: unknown): StrandedLegacyRead => ({ kind: "unknown", reason: errorText(error) }),
+        );
+      })
+      .then((read) => {
+        if (cancelled || read === undefined) return;
+        setLegacyRead(read);
+        logger?.info(`${LOG} legacy progress checked`, { result: read.kind });
       });
     return () => {
       cancelled = true;
@@ -482,6 +511,7 @@ export function AzureOnboardingScreen({
   const saveAllowed = store !== undefined && selection !== null && canSave(load, { dirty, saving });
 
   const progress = loadedProgress(progressLoad);
+  const strandedNotice = useMemo(() => strandedNoticeOf(legacyRead, progress), [legacyRead, progress]);
   const values: PlanValues | null = progress?.planValues ?? null;
   // The last run's answers, only while they are about the current plan (AZR-42).
   const lastResult =
@@ -1103,6 +1133,7 @@ export function AzureOnboardingScreen({
 
       <NumberedSection number={firstExtra + 3} title={HOWTO_SECTION_TITLES.cribl} status="available" infoTip={CRIBL_TIP}>
         {rulesMessage !== null && <PickerLine message={rulesMessage} />}
+        <StrandedSourcesNotice notice={strandedNotice} />
         {progress === null || values === null ? (
           <p className="field-hint">The Cribl source can be created once your How-to progress is loaded.</p>
         ) : (

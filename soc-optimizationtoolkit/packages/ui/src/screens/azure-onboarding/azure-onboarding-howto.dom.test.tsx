@@ -31,6 +31,8 @@ import {
   TENANT_CRIBL_MAPPING_KEY,
   TENANT_CRIBL_MAPPING_KIND,
   TENANT_CRIBL_MAPPING_VERSION,
+  tenantMigrationClaimKey,
+  tenantMigrationMarker,
 } from "@soc/core";
 import type {
   AzureConfig,
@@ -745,5 +747,76 @@ describe("AzureOnboardingScreen - the tenant to Cribl mapping (AZR-64)", () => {
     await loaded();
     expect(await screen.findByText(/Which worker group this tenant uses is unknown/)).toBeTruthy();
     expect(store.saves.filter((s) => s.key === TENANT_CRIBL_MAPPING_KEY)).toEqual([]);
+  });
+});
+
+describe("AzureOnboardingScreen - Cribl sources stranded in the legacy progress key (AZR-96)", () => {
+  // The lab case: the tenant's own progress has no Cribl source, while an
+  // earlier app version wrote one to the unscoped key after the tenant's
+  // document existed. loadTenantDocument never reads that key again.
+  const STRANDED_INPUT = "azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus";
+  const LEGACY = progressDoc({
+    criblSources: {
+      defenderExport: {
+        groupId: "lab-group",
+        inputId: STRANDED_INPUT,
+        inputType: "eventhub",
+        secretId: `${STRANDED_INPUT}_cs`,
+      },
+    },
+  });
+  const CLAIM = tenantMigrationClaimKey(ONBOARDING_PROGRESS_KEY);
+
+  function notice(): HTMLElement {
+    return screen.getByTestId("azo-stranded-sources");
+  }
+
+  it("names the stranded input and its worker group as not adopted, and writes nothing", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [ONBOARDING_PROGRESS_KEY]: LEGACY,
+      [CLAIM]: tenantMigrationMarker(CONFIG.tenantId),
+    });
+    mount({ store });
+    await loaded();
+    await waitFor(() => expect(notice().textContent).toContain(STRANDED_INPUT));
+    expect(notice().textContent).toContain("worker group lab-group");
+    expect(notice().textContent).toContain("Recorded by an earlier app version and not adopted");
+    expect(notice().textContent).not.toContain("tenant unknown");
+    expect(store.saves).toEqual([]);
+  });
+
+  it("names a record with no claim as tenant unknown", async () => {
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc(), [ONBOARDING_PROGRESS_KEY]: LEGACY });
+    mount({ store });
+    await loaded();
+    await waitFor(() => expect(notice().textContent).toContain(STRANDED_INPUT));
+    expect(notice().textContent).toContain("tenant unknown");
+    expect(store.saves).toEqual([]);
+  });
+
+  it("shows nothing for a legacy document another tenant claimed", async () => {
+    const store = new FakeKvDocumentStore({
+      [PROGRESS_KEY]: progressDoc(),
+      [ONBOARDING_PROGRESS_KEY]: LEGACY,
+      [CLAIM]: tenantMigrationMarker("some-other-tenant"),
+    });
+    mount({ store });
+    await loaded();
+    await waitFor(() => expect(store.loads).toContain(CLAIM));
+    expect(screen.queryByTestId("azo-stranded-sources")).toBeNull();
+    expect(screen.queryByText(new RegExp(STRANDED_INPUT))).toBeNull();
+  });
+
+  it("says it could not check, with the reason, when the legacy read fails - never silence", async () => {
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }).scriptLoad(ONBOARDING_PROGRESS_KEY, {
+      kind: "unknown",
+      reason: "HTTP 502",
+      status: 502,
+    });
+    mount({ store });
+    await loaded();
+    await waitFor(() => expect(notice().textContent).toMatch(/could not check/i));
+    expect(notice().textContent).toContain("HTTP 502");
   });
 });

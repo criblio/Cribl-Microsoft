@@ -8,7 +8,9 @@
  * upgrade, by whichever tenant is active then, adopts the legacy document and
  * overwrites it with a marker naming that tenant, so no second tenant adopts
  * it too. After that the legacy key is never read as a document again: one
- * shape, read once.
+ * shape, read once. The one exception is {@link readStrandedLegacyDocument},
+ * which only REPORTS what an earlier app version wrote there later (AZR-96)
+ * and never adopts or merges it.
  *
  * THE CLAIM. The marker over the legacy key is not enough on its own: a tab
  * still running the pre-upgrade bundle keeps saving the whole single-tenant
@@ -118,4 +120,70 @@ export async function loadTenantDocument(
     // tenant whose own copy is absent tries the marker again.
   }
   return { kind: "value", value: legacy.value };
+}
+
+/**
+ * What the legacy unscoped document holds for a tenant whose own document
+ * already exists (AZR-96). Discriminated on `kind`:
+ *
+ *   none          nothing to report: no legacy document, only the migration
+ *                 marker, or a document the claim gives to ANOTHER tenant
+ *   stranded      a document the claim gives to THIS tenant, written after the
+ *                 migration (a tab still running the pre-upgrade bundle)
+ *   unattributed  a document with no claim at all, so no tenant is known to
+ *                 own it - written by an earlier app version after a first run
+ *                 that had nothing to migrate. The caller shows it as "tenant
+ *                 unknown" and never as this tenant's own state
+ *   unknown       the legacy document or the claim could not be read
+ */
+export type StrandedLegacyRead =
+  | { kind: "none" }
+  | { kind: "stranded"; value: unknown }
+  | { kind: "unattributed"; value: unknown }
+  | { kind: "unknown"; reason: string; status?: number };
+
+/**
+ * Read the legacy unscoped document `base` for a report, never for adoption
+ * (AZR-96). {@link loadTenantDocument} stops reading `base` once the tenant's
+ * own document exists, so a record an earlier app version saved there
+ * afterwards is otherwise invisible. STRICTLY READ-ONLY: it writes no claim,
+ * no marker and no copy, and it does not touch the tenant's own document.
+ * Never rejects.
+ */
+export async function readStrandedLegacyDocument(
+  store: KvDocumentStore,
+  base: string,
+  tenantId: string,
+): Promise<StrandedLegacyRead> {
+  const me = normalizeTenantId(tenantId);
+  if (me === "") {
+    return {
+      kind: "unknown",
+      reason: "the active connection has no tenant id, so whose earlier records these are cannot be told",
+    };
+  }
+  const legacy = await store.load(base);
+  if (legacy.kind === "unknown") {
+    return {
+      kind: "unknown",
+      reason: `the earlier single-tenant copy could not be read (${legacy.reason})`,
+      ...(legacy.status !== undefined ? { status: legacy.status } : {}),
+    };
+  }
+  if (legacy.kind === "absent" || isTenantMigrationMarker(legacy.value)) return { kind: "none" };
+
+  const claim = await store.load(tenantMigrationClaimKey(base));
+  if (claim.kind === "unknown") {
+    return {
+      kind: "unknown",
+      reason: `which tenant the earlier single-tenant copy belongs to could not be read (${claim.reason})`,
+      ...(claim.status !== undefined ? { status: claim.status } : {}),
+    };
+  }
+  if (claim.kind === "absent" || !isTenantMigrationMarker(claim.value)) {
+    return { kind: "unattributed", value: legacy.value };
+  }
+  // Multi-tenant isolation: a document claimed by another tenant is never shown here.
+  if (normalizeTenantId(claim.value.tenantId) !== me) return { kind: "none" };
+  return { kind: "stranded", value: legacy.value };
 }
