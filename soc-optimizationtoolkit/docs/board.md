@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**116 in the backlog, 39 in progress, 205 done.**
+**116 in the backlog, 39 in progress, 208 done.**
 
 ## By menu item
 
@@ -27,16 +27,16 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 53 | 100 | 24 |
+| Sentinel Integration | 55 | 100 | 24 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 3 | 2 | 2 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 11 | 3 | 1 |
+| Permission Verification | 10 | 4 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 39 | 41 | 11 |
+| Azure Native Source Onboarding | 38 | 43 | 11 |
 | Azure Logging Map | 4 | 1 | 2 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 48% (46/96)
+### `AZR` Azure native source onboarding - 51% (49/97)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,8 +64,8 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 31/55 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 13/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 33/56 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 14/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -117,13 +117,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 61% (109/179)
+### `DBT` Quality and technical debt _(enabler)_ - 60% (109/181)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 46/95 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 46/97 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 51/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -1347,7 +1347,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (18)
+## Backlog - now (17)
 
 Next to pick up. Nothing blocks these.
 
@@ -1655,24 +1655,6 @@ Next to pick up. Nothing blocks these.
   Full diagnosis, fix plan and pins:
   docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
-- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
-  `AZR-F10` `bug` `settled`
-  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
-  medium). A GET 2xx proves read only; the writes the features need (outputs,
-  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
-  user-based mode they are granted by policies.yml. With no worker group
-  chosen the probes hit undeclared leader paths and a non-admin's 403 is
-  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
-  measured manage right; skip the probes until a group is chosen (unknown, not
-  denied); state in the change requests that the Cribl-side least privilege is
-  'App user plus Org-admin install-time approval of policies.yml', with every
-  group in scope. DIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts
-  come from the approved policies.yml, so the detail should say "granted by
-  app policy", not "by platform"; the local branch (not reachable in the
-  shipped app) should report unknown, not 403, when no group is chosen. Size
-  S. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
 - **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
   `AZR-F10` `bug` `settled`
   FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
@@ -1691,7 +1673,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (59)
+## Backlog - next (58)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2368,59 +2350,21 @@ Settled and unblocked, sequenced behind now.
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
 
-- **AZR-96** Cribl source records saved to the legacy single-tenant progress document after the tenant document exists are never adopted
+- **AZR-108** Tenant Logging Gaps still reports a stranded legacy Cribl source as not created
   `AZR-F9` `bug` `settled`
-  Not now because: Inferred from a lab that ran two app versions against one
-  org at once; a customer reaches it only with a pre-upgrade tab saving during
-  the upgrade, and the input itself keeps running - the app's record of it is
-  lost, not the data.
-  FOUND LIVE 2026-11-10. The Defender input
-  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (no tenant component, so
-  created before ADR 0009) exists in DatacenterEast and received data on
-  2026-11-04, but the progress document this tenant loads
-  (azure-onboarding-progress.fa882ef2-..., read 200) holds no Cribl source
-  record (Watch for data: "No Cribl source has been created yet").
-  loadTenantDocument (usecases/tenant-documents) reads the legacy key only
-  when the tenant document is ABSENT, so a record written to the legacy key by
-  a pre-tenant build after the tenant document existed is stranded. INFERRED,
-  not measured: reading the legacy key needs the session token, which was not
-  taken from the page. The lab hit it by running pre- and post-multi-tenant
-  branches against one org; a customer hits it with an old bundle open in
-  another tab during the upgrade. FIX: decide whether the screen should report
-  legacy records it did not adopt (read-only) rather than silently ignore
-  them. DIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a
-  pre-tenant bundle cannot save over the migration marker, so the likely lab
-  path is that the scoped document was created while the legacy key was absent
-  and an old bundle later wrote a fresh legacy document. Fix: a read-only
-  readStrandedLegacyDocument that reports stranded (claim names this tenant)
-  AND unattributed (no claim) records, never adopting. Size S. Full diagnosis,
-  fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
-- **AZR-97** No way to adopt a Cribl input the app created earlier with a credential it now refuses
-  `AZR-F9` `bug` `settled`
-  Not now because: The input still runs and is visible in Cribl; what is lost
-  is the app knowing about it, and the workaround (a second input on a new
-  consumer group) is recorded on this card.
-  FOUND LIVE 2026-11-10. The 2026-11-04 Defender input reads with
-  RootManageSharedAccessKey. Since AZR-58 the plan refuses a Manage-capable
-  rule for listKeys and paste BEFORE any Cribl call, and an Entra ID plan
-  builds a different body, so the existing input reads input-differs. Neither
-  path reaches already-applied, so the app cannot record (AZR-96) or report
-  the input it created. The live check worked around it by creating a second
-  input on a new consumer group (cribl-onb) with the Listen-only rule
-  cribl-listen. FIX: let the plan READ the existing input before refusing the
-  credential, and when it is ours, report it by name with its credential
-  problem (Manage key: replace and rotate) instead of a plain refusal - never
-  rewrite it. DIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL.
-  planCriblSource refuses a Manage-capable credential before the read that
-  tells create from already-ours, so an input created earlier with that
-  credential can never be classified. Fix: defer the refusal past
-  classifyExistingInput; on ours-matching return already-applied with a
-  credential warning; absent / differs / foreign still refuse with zero
-  writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
-  S. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+  Not now because: Same root as AZR-96, which now reports the stranded record
+  on the Azure onboarding screen where the operator acts on it; the gap
+  dashboard only repeats the wrong 'not created', and the input keeps running.
+  Reachable only after a lab ran two app versions against one org, or a
+  pre-upgrade tab saved during an upgrade.
+  FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has
+  the same short-circuit as loadTenantDocument: once the tenant's own progress
+  document exists, the legacy key is never read, so a Cribl source recorded
+  there by a pre-tenant build shows as not created on the gap dashboard.
+  AZR-96 added the read-only readStrandedLegacyDocument
+  (usecases/tenant-documents); FIX: call it from the gap scan and show
+  stranded/unattributed records as 'recorded by an earlier app version, not
+  adopted', with an unknown read as could-not-check. Never adopt.
 
 - **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
   `AZR-F9` `story` `settled` `blocked by AZR-98`
@@ -2649,7 +2593,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (39)
+## Backlog - later (41)
 
 Settled, gated on something above.
 
@@ -3094,6 +3038,34 @@ Settled, gated on something above.
   WorkerGroupsState["kind"], so a state added to the hook would not reach the
   badge logic. Fix: import the type.
 
+- **DBT-303** Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes
+  `DBT-F1` `story` `settled`
+  FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts
+  exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use
+  case calls them (only its own test). The least-privilege registry still
+  carries cribl.breakers.create (Worker Group Editor, 'not declared in
+  policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So
+  the registry describes a write the app never sends, and the AZR-83 ticket
+  statement ('App user covers every Cribl write') is true only because the
+  code is dead. FIX: either delete the request builder and the registry row
+  (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and
+  then declare POST in policies.yml and name the exception in the change
+  request.
+
+- **DBT-304** Local preflight's hasRequiredAccess still passes the Cribl deploy gate on a GET 2xx
+  `DBT-F1` `bug` `settled`
+  Not now because: Unreachable in the product: the only shipped shell
+  hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel),
+  where the grant really comes from the approved policies.yml. Only tests run
+  the local branch; it matters only if a customer-managed leader shell
+  returns.
+  FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer
+  records a manage capability, but runCriblPreflight's hasRequiredAccess still
+  counts a 2xx read on packs and outputs as enough to deploy. The doc comment
+  notes it. FIX: on the local branch, hasRequiredAccess should not claim write
+  access from a read; derive it from the capability verdicts (unknown, not
+  granted).
+
 - **AZR-24** Persist the Event Hub prerequisite choice
   `AZR-F9` `story` `settled` `blocked by AZR-11`
   FILED 2026-10-21 as a follow-up of AZR-18
@@ -3174,7 +3146,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (205)
+## Done (208)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8430,6 +8402,60 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   "flowing: 13 events in the window", animated. Mutation-checked: dropping the
   leader route fails 3 pins.
 
+- **AZR-96** Cribl source records saved to the legacy single-tenant progress document after the tenant document exists are never adopted
+  `AZR-F9` `bug` `settled` `verified: pins`
+  Not now because: Inferred from a lab that ran two app versions against one
+  org at once; a customer reaches it only with a pre-upgrade tab saving during
+  the upgrade, and the input itself keeps running - the app's record of it is
+  lost, not the data.
+  FOUND LIVE 2026-11-10. The Defender input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (no tenant component, so
+  created before ADR 0009) exists in DatacenterEast and received data on
+  2026-11-04, but the progress document this tenant loads
+  (azure-onboarding-progress.fa882ef2-..., read 200) holds no Cribl source
+  record (Watch for data: "No Cribl source has been created yet").
+  loadTenantDocument (usecases/tenant-documents) reads the legacy key only
+  when the tenant document is ABSENT, so a record written to the legacy key by
+  a pre-tenant build after the tenant document existed is stranded. INFERRED,
+  not measured: reading the legacy key needs the session token, which was not
+  taken from the page. The lab hit it by running pre- and post-multi-tenant
+  branches against one org; a customer hits it with an old bundle open in
+  another tab during the upgrade. FIX: decide whether the screen should report
+  legacy records it did not adopt (read-only) rather than silently ignore
+  them. DIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a
+  pre-tenant bundle cannot save over the migration marker, so the likely lab
+  path is that the scoped document was created while the legacy key was absent
+  and an old bundle later wrote a fresh legacy document. Fix: a read-only
+  readStrandedLegacyDocument that reports stranded (claim names this tenant)
+  AND unattributed (no claim) records, never adopting. Size S. Full diagnosis,
+  fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
+- **AZR-97** No way to adopt a Cribl input the app created earlier with a credential it now refuses
+  `AZR-F9` `bug` `settled` `verified: pins`
+  Not now because: The input still runs and is visible in Cribl; what is lost
+  is the app knowing about it, and the workaround (a second input on a new
+  consumer group) is recorded on this card.
+  FOUND LIVE 2026-11-10. The 2026-11-04 Defender input reads with
+  RootManageSharedAccessKey. Since AZR-58 the plan refuses a Manage-capable
+  rule for listKeys and paste BEFORE any Cribl call, and an Entra ID plan
+  builds a different body, so the existing input reads input-differs. Neither
+  path reaches already-applied, so the app cannot record (AZR-96) or report
+  the input it created. The live check worked around it by creating a second
+  input on a new consumer group (cribl-onb) with the Listen-only rule
+  cribl-listen. FIX: let the plan READ the existing input before refusing the
+  credential, and when it is ours, report it by name with its credential
+  problem (Manage key: replace and rotate) instead of a plain refusal - never
+  rewrite it. DIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL.
+  planCriblSource refuses a Manage-capable credential before the read that
+  tells create from already-ours, so an input created earlier with that
+  credential can never be classified. Fix: defer the refusal past
+  classifyExistingInput; on ours-matching return already-applied with a
+  credential warning; absent / differs / foreign still refuse with zero
+  writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`
   Plan: docs/tenant-inventory-heatmap-phase1-plan.md (design
@@ -8593,6 +8619,24 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   a296663 on feature/multi-tenant-azure: built test-first, adversarially
   reviewed (every confirmed finding fixed and its pin mutation-checked), and
   every CI gate re-run green by the operator's session after the last commit.
+
+- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
+  medium). A GET 2xx proves read only; the writes the features need (outputs,
+  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
+  user-based mode they are granted by policies.yml. With no worker group
+  chosen the probes hit undeclared leader paths and a non-admin's 403 is
+  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
+  measured manage right; skip the probes until a group is chosen (unknown, not
+  denied); state in the change requests that the Cribl-side least privilege is
+  'App user plus Org-admin install-time approval of policies.yml', with every
+  group in scope. DIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts
+  come from the approved policies.yml, so the detail should say "granted by
+  app policy", not "by platform"; the local branch (not reachable in the
+  shipped app) should report unknown, not 403, when no group is chosen. Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
   `AZR-F10` `bug` `settled` `verified: pins`

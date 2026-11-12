@@ -196,8 +196,11 @@ export function deriveAzureDots(
  * fixed capability catalog renders as `pending` dots. Once done, each probe maps
  * `granted`/`denied`/`unknown` straight through (a probe that could not complete
  * degrades to `unknown`, never a false `missing`). On the CLOUD shell every
- * capability reads granted-by-platform; on LOCAL the probes are genuinely
- * informative - the projection is identical either way.
+ * capability reads "granted by app policy (policies.yml)" - the Org admin's
+ * install-time approval, not a measurement. On LOCAL a granted dot means the
+ * READ was confirmed ("read confirmed; write granted by app policy, not
+ * measured"), and with no worker group every dot is unknown ("no worker group
+ * chosen") - the projection is identical either way.
  */
 export function deriveCriblDots(state: CriblSideState): CapabilityDot[] {
   if (state.phase !== "done" || state.result === null) {
@@ -293,7 +296,7 @@ function criblNote(state: CriblSideState): string {
     return result.error;
   }
   if (result.mode === "cloud") {
-    return "Cribl capabilities are granted by the platform on this shell.";
+    return "Cribl capabilities are granted by app policy (policies.yml), approved by the Org admin at install.";
   }
   return result.hasRequiredAccess
     ? "All required Cribl capabilities are granted."

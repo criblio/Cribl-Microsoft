@@ -30,6 +30,12 @@
  * (tenant-requests.ts, AZR-62, ADR 0009 decision 1), built on this generator
  * rather than beside it.
  *
+ * THE CRIBL SIDE IS STATED, NOT REQUESTED (AZR-83). Both permission tickets
+ * carry one {@link criblLeastPrivilegeSection}: App user, plus the Org admin's
+ * install-time approval of the app's policies.yml, covering every worker group
+ * in scope. It asks for nothing - the grant happens at install - but without it
+ * an approver sees only the Azure half of what the app holds.
+ *
  * Any blank context field renders as a clear placeholder (for example
  * `<tenant id>`), so a partially filled request is visibly incomplete.
  *
@@ -45,6 +51,7 @@ import {
   requestedRoleNames,
 } from "../azure-connectivity";
 import type { AppPermission } from "../app-permissions";
+import { leastRoleFor } from "../least-privilege";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
@@ -89,6 +96,27 @@ interface RoleRequest {
 /** Render a heading followed by an ASCII underline and a body block. */
 function section(heading: string, body: string): string {
   return heading + "\n" + "-".repeat(heading.length) + "\n" + body;
+}
+
+/**
+ * The Cribl-side least privilege, one statement shared by both permission
+ * tickets (AZR-83). The role is READ from the least-privilege registry - the
+ * row for a Cribl write the app makes - so the ticket cannot drift from the
+ * registry's `leastRole: "App user"`. Deliberately not routed through
+ * app-permissions, whose RBAC catalog is Azure-only and throws for Cribl scope.
+ */
+function criblLeastPrivilegeSection(): string {
+  const role = leastRoleFor("cribl.pack.update");
+  return section(
+    "Cribl side (stated, not requested)",
+    [
+      "What the app holds in Cribl, so this request shows both halves.",
+      "Cribl-side least privilege: " + role + ", plus the Organization",
+      "administrator's install-time approval of the app's policies.yml. That",
+      "approval covers every worker group in scope. There is no Azure step for",
+      "it, and nothing on the Cribl side to grant through this ticket.",
+    ].join("\n"),
+  );
 }
 
 /** The identity header block shared by every ticket. */
@@ -465,6 +493,7 @@ export function appRegistrationRequest(
   }
 
   parts.push(
+    criblLeastPrivilegeSection(),
     section(
       "Hand back (tenant " + n.tenantId + ")",
       [
@@ -566,6 +595,7 @@ export function roleAssignmentRequest(
     requestHeader(n),
     section("What is requested", requested.join("\n")),
     section("Justification", justifications.join("\n")),
+    criblLeastPrivilegeSection(),
     section(
       "Specifics",
       [

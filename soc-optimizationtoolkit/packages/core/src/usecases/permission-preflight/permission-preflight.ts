@@ -36,10 +36,15 @@
  * Cribl role is decoration. Graceful degradation is mandatory: a probe that
  * cannot complete (non-2xx that is not an explicit 401/403, or a transport
  * failure) degrades to `unknown` and NEVER crashes the report. On the CLOUD
- * shell the probe is near-vacuous - the app runs inside the leader under the
- * approved policies.yml, so every capability reads "granted by platform"; on the
- * LOCAL shell the same probes are genuinely informative against the configured
- * leader. THE REPORT SHAPE IS IDENTICAL in both shells.
+ * shell no request is issued: the grant is the app's policies.yml, which the
+ * Org admin approved at install, so every capability reads "granted by app
+ * policy (policies.yml)" - a statement of where the grant comes from, not a
+ * measurement. On the LOCAL shell the probes are group-scoped GETs against the
+ * configured leader: a 2xx confirms the READ only (the write is granted by app
+ * policy and is not measured), a 401/403 is a measured denial. With no worker
+ * group chosen the local shell issues no request at all - the probe paths are
+ * declared only under /m/:gid, so a leader-level 403 would be a false denial.
+ * THE REPORT SHAPE IS IDENTICAL in both shells.
  *
  * BOTH SIDES RUN IN PARALLEL and PARTIAL RESULTS ALWAYS RENDER: one side failing
  * or slow never blanks the other. Each side runner is total (it catches its own
@@ -325,7 +330,7 @@ export interface CriblCapabilityProbe {
   label: string;
   /** Whether the capability is required for a deploy. */
   required: boolean;
-  /** granted = 2xx (or platform-granted on cloud); denied = 401/403; unknown otherwise. */
+  /** granted = 2xx read (or granted by app policy on cloud); denied = 401/403; unknown otherwise. */
   status: CriblProbeStatus;
   /** Short greppable detail. */
   detail: string;
@@ -635,7 +640,24 @@ export async function runAzurePreflight(
 // Cribl side
 // ---------------------------------------------------------------------------
 
-/** Probe one Cribl capability; never rejects (graceful degradation). */
+/** Detail on every cloud Cribl probe: where the grant actually comes from. */
+const CRIBL_CLOUD_GRANT_DETAIL = "granted by app policy (policies.yml)";
+
+/** Detail on a local Cribl probe that returned 2xx: the read only. */
+const CRIBL_LOCAL_READ_DETAIL =
+  "read confirmed; write granted by app policy, not measured";
+
+/** Detail on every local Cribl probe when no worker group was chosen. */
+const CRIBL_NO_GROUP_DETAIL = "no worker group chosen";
+
+/** The local-shell error when no worker group was chosen. */
+const CRIBL_NO_GROUP_ERROR = "choose a worker group";
+
+/**
+ * Probe one Cribl capability; never rejects (graceful degradation). The group
+ * is always set - runCriblPreflight short-circuits before probing without one,
+ * because policies.yml declares these paths only under /m/:gid.
+ */
 async function probeCribl(
   cribl: CriblClient,
   spec: CriblCapabilitySpec,
@@ -650,10 +672,12 @@ async function probeCribl(
     const response = await cribl.request({
       method: "GET",
       path: spec.path,
-      groupId: workerGroup !== "" ? workerGroup : undefined,
+      groupId: workerGroup,
     });
     if (is2xx(response.status)) {
-      return { ...base, status: "granted", detail: "access confirmed" };
+      // A GET proves the read, never the write. The capability mapping records
+      // nothing from a local 2xx, so a manage right is never claimed from it.
+      return { ...base, status: "granted", detail: CRIBL_LOCAL_READ_DETAIL };
     }
     if (response.status === 401 || response.status === 403) {
       return { ...base, status: "denied", detail: `HTTP ${response.status}` };
@@ -668,12 +692,20 @@ async function probeCribl(
 /**
  * The Cribl half. TOTAL - always returns a populated {@link CriblPreflight}.
  *
- * On CLOUD the app runs inside the leader under the approved policies.yml, so
- * the probe is near-vacuous: every capability reads "granted by platform" and
- * no request is issued. On LOCAL each capability is genuinely probed against the
- * configured leader; graceful degradation keeps a failed probe from crashing the
- * report. hasRequiredAccess is true only when every REQUIRED capability is
- * granted (an `unknown` required probe is NOT granted).
+ * On CLOUD no request is issued: the app runs inside the leader under the
+ * policies.yml the Org admin approved at install, so every capability reads
+ * "granted by app policy (policies.yml)". That names the source of the grant;
+ * it is not a measurement. On LOCAL each capability is probed with a
+ * group-scoped GET; graceful degradation keeps a failed probe from crashing the
+ * report. With no worker group chosen, LOCAL issues no request: every probe is
+ * `unknown` ("no worker group chosen") and the error is "choose a worker group",
+ * never "Cribl leader not reachable" and never a denial.
+ *
+ * hasRequiredAccess is true only when every REQUIRED capability is granted (an
+ * `unknown` required probe is NOT granted). KNOWN GAP, local shell only (which
+ * no shipped shell runs): that gate still reads the GET probes, so a 2xx read
+ * passes it although the write was not measured. The capability mapping does
+ * not make the same leap - it records nothing from a local 2xx.
  */
 export async function runCriblPreflight(
   cribl: CriblClient,
@@ -684,7 +716,7 @@ export async function runCriblPreflight(
   const group = workerGroup ?? "";
 
   if (mode === "cloud") {
-    logger?.info("permission-preflight: cribl granted by platform (cloud)", {
+    logger?.info("permission-preflight: cribl granted by app policy (cloud)", {
       workerGroup: group,
     });
     const probes: CriblCapabilityProbe[] = CRIBL_CAPABILITY_PROBES.map((spec) => ({
@@ -692,9 +724,30 @@ export async function runCriblPreflight(
       label: spec.label,
       required: spec.required,
       status: "granted",
-      detail: "granted by platform",
+      detail: CRIBL_CLOUD_GRANT_DETAIL,
     }));
     return { mode, workerGroup: group, probes, hasRequiredAccess: true, error: "" };
+  }
+
+  if (group === "") {
+    // The probe paths are declared in policies.yml only under /m/:gid. Without
+    // a group they would hit undeclared leader-level paths, and the 403 that
+    // comes back is a fact about the path, not about the caller's access.
+    logger?.info("permission-preflight: cribl skipped (local, no worker group)", {});
+    const probes: CriblCapabilityProbe[] = CRIBL_CAPABILITY_PROBES.map((spec) => ({
+      capability: spec.capability,
+      label: spec.label,
+      required: spec.required,
+      status: "unknown",
+      detail: CRIBL_NO_GROUP_DETAIL,
+    }));
+    return {
+      mode,
+      workerGroup: group,
+      probes,
+      hasRequiredAccess: false,
+      error: CRIBL_NO_GROUP_ERROR,
+    };
   }
 
   const probes = await Promise.all(

@@ -1979,7 +1979,8 @@ function App() {
   // runs the @soc/core side-runners over THIS shell's ports (Azure effective
   // actions + live probes; Cribl capability probes) and renders per-capability
   // dots + Retry / Switch account. On the CLOUD shell the Cribl side is
-  // granted-by-platform (mode 'cloud'), so criblShellMode is 'cloud'. Switch
+  // granted by app policy - the policies.yml the Org admin approved at
+  // install (mode 'cloud') - so criblShellMode is 'cloud'. Switch
   // account clears the live secret for this session and returns to the Setup
   // page's connect section. requires 'azure' - the Azure side is the
   // informative half here; INFORMATIONAL, it never gates the deploy partition.

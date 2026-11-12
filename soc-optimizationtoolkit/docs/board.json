@@ -1883,6 +1883,31 @@
       "detail": "FOUND 2026-11-11 by the architecture audit (range cac80aa3..61fc6c6b). Two code paths create the same kind of object and can disagree: guided-deploy/wire-source.ts POSTs the non-spec /system/lake/datasets (LAKE_DATASETS_API_PATH, 409 = success), while usecases/onboarding-lake-route POSTs the spec route /products/lake/lakes/default/datasets after a listing GET. The route output form is also built twice: source-wiring.ts:143 and domain/onboarding-lake-route lake-route.ts (lakeOutput), and parsed a third time in live-architecture.ts. Whichever create route is wrong on a real leader fails in only one of the two features. FIX after AZR-35 measures the routes live: one dataset create helper (listing read, create-only, 409 handling) and one cribl_lake:<dataset> builder/parser in domain, used by wire-source, the Lake route and live-architecture; drop the losing route from policies.yml and the least-privilege registry."
     },
     {
+      "id": "DBT-303",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes",
+      "detail": "FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use case calls them (only its own test). The least-privilege registry still carries cribl.breakers.create (Worker Group Editor, 'not declared in policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So the registry describes a write the app never sends, and the AZR-83 ticket statement ('App user covers every Cribl write') is true only because the code is dead. FIX: either delete the request builder and the registry row (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and then declare POST in policies.yml and name the exception in the change request."
+    },
+    {
+      "id": "DBT-304",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Local preflight's hasRequiredAccess still passes the Cribl deploy gate on a GET 2xx",
+      "detail": "FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer records a manage capability, but runCriblPreflight's hasRequiredAccess still counts a 2xx read on packs and outputs as enough to deploy. The doc comment notes it. FIX: on the local branch, hasRequiredAccess should not claim write access from a read; derive it from the capability verdicts (unknown, not granted).",
+      "priorityWhy": "Unreachable in the product: the only shipped shell hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel), where the grant really comes from the approved policies.yml. Only tests run the local branch; it matters only if a customer-managed leader shell returns."
+    },
+    {
       "id": "DBT-150",
       "epic": "DBT",
       "feature": "DBT-F3",
@@ -4469,26 +4494,43 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
       "title": "Cribl source records saved to the legacy single-tenant progress document after the tenant document exists are never adopted",
       "detail": "FOUND LIVE 2026-11-10. The Defender input azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (no tenant component, so created before ADR 0009) exists in DatacenterEast and received data on 2026-11-04, but the progress document this tenant loads (azure-onboarding-progress.fa882ef2-..., read 200) holds no Cribl source record (Watch for data: \"No Cribl source has been created yet\"). loadTenantDocument (usecases/tenant-documents) reads the legacy key only when the tenant document is ABSENT, so a record written to the legacy key by a pre-tenant build after the tenant document existed is stranded. INFERRED, not measured: reading the legacy key needs the session token, which was not taken from the page. The lab hit it by running pre- and post-multi-tenant branches against one org; a customer hits it with an old bundle open in another tab during the upgrade. FIX: decide whether the screen should report legacy records it did not adopt (read-only) rather than silently ignore them.\n\nDIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a pre-tenant bundle cannot save over the migration marker, so the likely lab path is that the scoped document was created while the legacy key was absent and an old bundle later wrote a fresh legacy document. Fix: a read-only readStrandedLegacyDocument that reports stranded (claim names this tenant) AND unattributed (no claim) records, never adopting. Size S. Full diagnosis, fix plan and pins: docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.",
-      "priorityWhy": "Inferred from a lab that ran two app versions against one org at once; a customer reaches it only with a pre-upgrade tab saving during the upgrade, and the input itself keeps running - the app's record of it is lost, not the data."
+      "priorityWhy": "Inferred from a lab that ran two app versions against one org at once; a customer reaches it only with a pre-upgrade tab saving during the upgrade, and the input itself keeps running - the app's record of it is lost, not the data.",
+      "verified": "pins"
     },
     {
-      "id": "AZR-97",
+      "id": "AZR-108",
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
       "status": "backlog",
       "priority": "next",
       "settled": "settled",
+      "dependsOn": [
+        "AZR-96"
+      ],
+      "title": "Tenant Logging Gaps still reports a stranded legacy Cribl source as not created",
+      "detail": "FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has the same short-circuit as loadTenantDocument: once the tenant's own progress document exists, the legacy key is never read, so a Cribl source recorded there by a pre-tenant build shows as not created on the gap dashboard. AZR-96 added the read-only readStrandedLegacyDocument (usecases/tenant-documents); FIX: call it from the gap scan and show stranded/unattributed records as 'recorded by an earlier app version, not adopted', with an unknown read as could-not-check. Never adopt.",
+      "priorityWhy": "Same root as AZR-96, which now reports the stranded record on the Azure onboarding screen where the operator acts on it; the gap dashboard only repeats the wrong 'not created', and the input keeps running. Reachable only after a lab ran two app versions against one org, or a pre-upgrade tab saved during an upgrade."
+    },
+    {
+      "id": "AZR-97",
+      "epic": "AZR",
+      "feature": "AZR-F9",
+      "type": "bug",
+      "status": "done",
+      "priority": "next",
+      "settled": "settled",
       "dependsOn": [],
       "title": "No way to adopt a Cribl input the app created earlier with a credential it now refuses",
       "detail": "FOUND LIVE 2026-11-10. The 2026-11-04 Defender input reads with RootManageSharedAccessKey. Since AZR-58 the plan refuses a Manage-capable rule for listKeys and paste BEFORE any Cribl call, and an Entra ID plan builds a different body, so the existing input reads input-differs. Neither path reaches already-applied, so the app cannot record (AZR-96) or report the input it created. The live check worked around it by creating a second input on a new consumer group (cribl-onb) with the Listen-only rule cribl-listen. FIX: let the plan READ the existing input before refusing the credential, and when it is ours, report it by name with its credential problem (Manage key: replace and rotate) instead of a plain refusal - never rewrite it.\n\nDIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL. planCriblSource refuses a Manage-capable credential before the read that tells create from already-ours, so an input created earlier with that credential can never be classified. Fix: defer the refusal past classifyExistingInput; on ours-matching return already-applied with a credential warning; absent / differs / foreign still refuse with zero writes. Risk medium (must not let a Manage key reach a Cribl secret). Size S. Full diagnosis, fix plan and pins: docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.",
-      "priorityWhy": "The input still runs and is visible in Cribl; what is lost is the app knowing about it, and the workaround (a second input on a new consumer group) is recorded on this card."
+      "priorityWhy": "The input still runs and is visible in Cribl; what is lost is the app knowing about it, and the workaround (a second input on a new consumer group) is recorded on this card.",
+      "verified": "pins"
     },
     {
       "id": "AZR-98",
@@ -4790,7 +4832,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
@@ -4800,7 +4842,8 @@
       "id": "AZR-83",
       "menu": "preflight",
       "title": "The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen",
-      "detail": "FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14 medium). A GET 2xx proves read only; the writes the features need (outputs, inputs, secrets, routes, commit, deploy, packs) are not measured, and under user-based mode they are granted by policies.yml. With no worker group chosen the probes hit undeclared leader paths and a non-admin's 403 is recorded as denied. FIX: say 'granted by app policy' instead of claiming a measured manage right; skip the probes until a group is chosen (unknown, not denied); state in the change requests that the Cribl-side least privilege is 'App user plus Org-admin install-time approval of policies.yml', with every group in scope.\n\nDIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts come from the approved policies.yml, so the detail should say \"granted by app policy\", not \"by platform\"; the local branch (not reachable in the shipped app) should report unknown, not 403, when no group is chosen. Size S. Full diagnosis, fix plan and pins: docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json."
+      "detail": "FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14 medium). A GET 2xx proves read only; the writes the features need (outputs, inputs, secrets, routes, commit, deploy, packs) are not measured, and under user-based mode they are granted by policies.yml. With no worker group chosen the probes hit undeclared leader paths and a non-admin's 403 is recorded as denied. FIX: say 'granted by app policy' instead of claiming a measured manage right; skip the probes until a group is chosen (unknown, not denied); state in the change requests that the Cribl-side least privilege is 'App user plus Org-admin install-time approval of policies.yml', with every group in scope.\n\nDIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts come from the approved policies.yml, so the detail should say \"granted by app policy\", not \"by platform\"; the local branch (not reachable in the shipped app) should report unknown, not 403, when no group is chosen. Size S. Full diagnosis, fix plan and pins: docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",

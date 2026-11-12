@@ -258,7 +258,16 @@ export type PrincipalCheck = "matched" | "not-cross-checked";
 
 export type PlanCriblSourceResult =
   | { readonly kind: "ready"; readonly ready: ReadyCriblSource }
-  | { readonly kind: "already-applied"; readonly record: CriblSourceRecord }
+  | {
+      readonly kind: "already-applied";
+      readonly record: CriblSourceRecord;
+      /**
+       * AZR-97: set when the operator chose a Manage-capable credential and the
+       * input it would describe already exists and is ours. The plan adopts the
+       * input (nothing is written) and says to replace the credential.
+       */
+      readonly credentialWarning?: string;
+    }
   | {
       readonly kind: "refused";
       readonly reason: PlanRefusalReason;
@@ -266,6 +275,19 @@ export type PlanCriblSourceResult =
       /** For input-differs: the identity fields that differ. */
       readonly fields?: readonly string[];
     };
+
+/**
+ * AZR-97: the warning on an adopted input when the operator chose a
+ * Manage-capable rule. The plan cannot read the secret's value, so it speaks
+ * to the operator's choice, not to what the secret holds.
+ */
+function manageAdoptionWarning(inputId: string, ruleName: string): string {
+  return (
+    `Input ${inputId} already exists and this app created it. You chose rule ${ruleName}, which can Manage the namespace; ` +
+    "if its secret was built from that rule's key, anyone who can read the worker group's secrets can reconfigure or delete the namespace. " +
+    "Replace the secret's value with a Listen-only rule's connection string in Cribl, then rotate that rule's key in Azure."
+  );
+}
 
 function refused(reason: PlanRefusalReason, detail: string, fields?: readonly string[]): PlanCriblSourceResult {
   return fields === undefined ? { kind: "refused", reason, detail } : { kind: "refused", reason, detail, fields };
@@ -615,6 +637,14 @@ export async function planCriblSource(
   let readsFrom: ReadyCriblSource["readsFrom"] = null;
   let entraPrincipal: ReadyCriblSource["entraPrincipal"] = null;
   let auth: EventHubAuth = { kind: "sas" };
+  // AZR-97: a Manage-capable credential (AZR-58) is held here instead of
+  // refusing at once, so the existing input can still be read and classified.
+  // Only ours-matching turns it into already-applied (a report, no write);
+  // every other verdict returns it. INVARIANT: while `deferred` is set, the
+  // secret read, the scope read and `ready` are unreachable, so a Manage key
+  // never reaches a Cribl write.
+  let deferred: PlanCriblSourceResult | null = null;
+  let manageRuleName = "";
 
   if (credential.kind === "client-secret") {
     const tenantId = credential.tenantId.trim();
@@ -685,7 +715,10 @@ export async function planCriblSource(
         );
       }
       // AZR-58: never listKeys a Manage rule into a Cribl secret.
-      if (ruleCanManage(rule.rights)) return refused("rule-can-manage", manageRefusalDetail(rule.name));
+      if (ruleCanManage(rule.rights)) {
+        deferred = refused("rule-can-manage", manageRefusalDetail(rule.name));
+        manageRuleName = rule.name;
+      }
       keyNameOrPrincipal = rule.name;
     } else {
       const rules = await readRules(ports.azure, namespace);
@@ -695,8 +728,13 @@ export async function planCriblSource(
         rules,
         attested: credential.attested,
       });
-      if (!check.ok) return refused(check.reason, check.detail);
-      attested = check.attested;
+      if (!check.ok) {
+        if (check.reason !== "rule-can-manage") return refused(check.reason, check.detail);
+        deferred = refused(check.reason, check.detail);
+        manageRuleName = credential.descriptor.keyName;
+      } else {
+        attested = check.attested;
+      }
       descriptor = credential.descriptor;
       keyNameOrPrincipal = credential.descriptor.keyName;
     }
@@ -716,6 +754,9 @@ export async function planCriblSource(
           missing.push(hub);
           continue;
         }
+        // A deferred Manage refusal outranks the consumer-group refusals: the
+        // credential is the first thing the operator must change (AZR-97).
+        if (deferred !== null) return deferred;
         return refused(
           "consumer-group-unreadable",
           `The consumer group ${consumerGroup} on hub ${hub} could not be read (${cgRead.refusal.text}), so whether the source could read is unknown.`,
@@ -723,6 +764,7 @@ export async function planCriblSource(
       }
     }
     if (missing.length > 0) {
+      if (deferred !== null) return deferred;
       return refused(
         "consumer-group-missing",
         `The consumer group ${consumerGroup} does not exist on ${missing.length === 1 ? "hub" : "hubs"} ${missing.join(", ")}, so the source would be created but could not read. ` +
@@ -758,6 +800,16 @@ export async function planCriblSource(
 
   const inputs = await readInputs(request);
   const inputVerdict = classifyExistingInput({ read: inputs, expected: inputBody, recorded: input.kvRecord });
+  if (deferred !== null) {
+    // AZR-97: see the invariant where `deferred` is declared. Nothing below
+    // this block may run for a Manage-capable credential.
+    if (inputVerdict.kind !== "ours-matching") return deferred;
+    return {
+      kind: "already-applied",
+      record: { groupId, inputId, inputType: source.criblInputType, secretId },
+      credentialWarning: manageAdoptionWarning(inputId, manageRuleName),
+    };
+  }
   switch (inputVerdict.kind) {
     case "unknown":
       return refused("inputs-unreadable", `Cribl's inputs could not be read (${inputVerdict.detail}), so whether ${inputId} exists is unknown.`);

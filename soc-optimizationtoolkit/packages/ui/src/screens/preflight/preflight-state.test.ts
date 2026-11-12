@@ -315,6 +315,17 @@ describe("derivePreflightView", () => {
     expect(view.cribl.grantedRoles).toEqual(["admin"]);
   });
 
+  it("attributes the cloud Cribl grant to app policy, matching the probe details (AZR-83)", () => {
+    const view = derivePreflightView({
+      setupPath: SETUP_PATH,
+      azure: azureState("done", azureReady()),
+      cribl: criblState("done", criblReady({ mode: "cloud" })),
+      switchAccountAvailable: true,
+    });
+    expect(view.cribl.note).toContain("granted by app policy (policies.yml)");
+    expect(view.cribl.note).not.toContain("platform");
+  });
+
   it("names the readiness field distinctly from canDeploy (never conflated)", () => {
     const view = derivePreflightView({
       setupPath: SETUP_PATH,

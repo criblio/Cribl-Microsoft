@@ -178,6 +178,14 @@ one named capability and can be refused independently.
                     gives the portal steps for someone who holds the role.  
                     Reading which Defender plans are on is unaffected.  
 
+Cribl side (stated, not requested)  
+----------------------------------  
+What the app holds in Cribl, so this request shows both halves.  
+Cribl-side least privilege: App user, plus the Organization  
+administrator's install-time approval of the app's policies.yml. That  
+approval covers every worker group in scope. There is no Azure step for  
+it, and nothing on the Cribl side to grant through this ticket.  
+
 Hand back (tenant aaaaaaaa-1111-4111-8111-111111111111)  
 -------------------------------------------------------  
 Return these values to the requester through a secrets manager or vault -  

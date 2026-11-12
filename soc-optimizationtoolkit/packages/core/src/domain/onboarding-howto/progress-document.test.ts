@@ -8,6 +8,7 @@ import {
   encodeProgress,
   progressFrom,
   readProgressDocument,
+  strandedCriblSources,
   tickState,
   withCriblSource,
   withLakeRoute,
@@ -228,5 +229,53 @@ describe("Lake route records (AZR-35)", () => {
     const { progress, dropped } = decodeProgress(raw);
     expect([...dropped].sort()).toEqual(["criblLakeRoutes.activityLog", "criblLakeRoutes.notASource"]);
     expect(progress.criblLakeRoutes).toBeUndefined();
+  });
+});
+
+describe("strandedCriblSources (AZR-96)", () => {
+  const STRANDED = {
+    groupId: "default",
+    inputId: "azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus",
+    inputType: "eventhub" as const,
+    secretId: "azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus_cs",
+  };
+
+  it("returns exactly the record the legacy body holds and the current progress does not", () => {
+    const current = emptyProgress();
+    const legacy = JSON.parse(encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED)));
+    const out = strandedCriblSources(current, legacy);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.sourceId).toBe("defenderExport");
+    expect(out[0]?.record.inputId).toBe("azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus");
+    expect(out[0]?.record.groupId).toBe("default");
+  });
+
+  it("returns nothing when both hold the same record", () => {
+    const p = withCriblSource(emptyProgress(), "defenderExport", STRANDED);
+    expect(strandedCriblSources(p, JSON.parse(encodeProgress(p)))).toEqual([]);
+  });
+
+  it("returns the legacy record when the current one has the same input id in another worker group", () => {
+    const current = withCriblSource(emptyProgress(), "defenderExport", { ...STRANDED, groupId: "other-group" });
+    const legacy = JSON.parse(encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED)));
+    const out = strandedCriblSources(current, legacy);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.record.groupId).toBe("default");
+  });
+
+  it("returns the legacy record when the current one names a different input", () => {
+    const current = sample(); // defenderExport -> azure_onb_eh_ns1_h1
+    const legacy = JSON.parse(encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED)));
+    const out = strandedCriblSources(current, legacy);
+    expect(out.map((r) => r.record.inputId)).toEqual(["azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus"]);
+  });
+
+  it("reads a string-encoded legacy body, and nothing from one that is not a readable progress document", () => {
+    const legacy = encodeProgress(withCriblSource(emptyProgress(), "defenderExport", STRANDED));
+    expect(strandedCriblSources(emptyProgress(), legacy)).toHaveLength(1);
+    const foreign = { ...JSON.parse(legacy), kind: "something-else" };
+    expect(strandedCriblSources(emptyProgress(), foreign)).toEqual([]);
+    const wrongVersion = { ...JSON.parse(legacy), version: 2 };
+    expect(strandedCriblSources(emptyProgress(), wrongVersion)).toEqual([]);
   });
 });
