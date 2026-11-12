@@ -187,6 +187,56 @@ describe("criblGapIndicator", () => {
   });
 });
 
+describe("criblGapIndicator with the legacy key (AZR-108)", () => {
+  const OLD = { groupId: "grp-old", inputId: "in_entra_old", inputType: "eventhub", secretId: "s0" } as const;
+
+  it("no own record but one recorded by an earlier version is unknown, not red, and names it as not adopted", () => {
+    const i = criblGapIndicator(
+      cribl({ record: null, inputs: null, legacy: { kind: "record", record: OLD, attribution: "this-tenant" } }),
+    );
+    expect(i.state).toBe("unknown");
+    expect(i.reason).toBe(
+      "This app holds no Cribl source for Entra ID under this tenant. An earlier app version recorded input " +
+        "in_entra_old in worker group grp-old for this tenant. It was recorded by an earlier app version and not " +
+        "adopted: this dashboard does not count it, and nothing here moves it. Review it on Azure Native Source Onboarding.",
+    );
+  });
+
+  it("an unattributed earlier record says whose it is is unknown", () => {
+    const i = criblGapIndicator(
+      cribl({ record: null, inputs: null, legacy: { kind: "record", record: OLD, attribution: "unattributed" } }),
+    );
+    expect(i.state).toBe("unknown");
+    expect(i.reason).toContain("with no tenant named, so whose it is is unknown");
+    expect(i.reason).not.toContain("for this tenant.");
+  });
+
+  it("an unreadable legacy key makes a no-record cell could-not-check, never red", () => {
+    const i = criblGapIndicator(
+      cribl({
+        record: null,
+        inputs: null,
+        legacy: { kind: "unknown", reason: "the earlier single-tenant copy could not be read (HTTP 503)" },
+      }),
+    );
+    expect(i.state).toBe("unknown");
+    expect(i.reason).toContain("could not be checked: the earlier single-tenant copy could not be read (HTTP 503)");
+  });
+
+  it("an unreadable legacy key does not change a cell this app has its own record for", () => {
+    const withLegacy = criblGapIndicator(cribl({ legacy: { kind: "unknown", reason: "HTTP 503" } }));
+    expect(withLegacy).toEqual(criblGapIndicator(cribl({})));
+    expect(withLegacy.state).toBe("green");
+  });
+
+  it("an own record keeps its colour and also names a differing earlier record", () => {
+    const i = criblGapIndicator(cribl({ legacy: { kind: "record", record: OLD, attribution: "this-tenant" } }));
+    expect(i.state).toBe("green");
+    expect(i.reason.startsWith(`Onboarded: input ${RECORD.inputId}`)).toBe(true);
+    expect(i.reason).toContain("in_entra_old in worker group grp-old");
+  });
+});
+
 describe("rowUnknown", () => {
   it("makes every cell of the row unknown, both indicators, with the reason", () => {
     const cells = rowUnknown("the tenant proof failed");

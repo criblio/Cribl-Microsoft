@@ -15,7 +15,18 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { FakeKvDocumentStore, FakeLogger, GAP_SOURCES, rowUnknown } from "@soc/core";
+import {
+  FakeKvDocumentStore,
+  FakeLogger,
+  GAP_SOURCES,
+  ONBOARDING_PROGRESS_KEY,
+  emptyProgress,
+  encodeProgress,
+  rowUnknown,
+  tenantMigrationClaimKey,
+  tenantMigrationMarker,
+  withCriblSource,
+} from "@soc/core";
 import type {
   AzureConfig,
   AzureManagement,
@@ -108,11 +119,12 @@ function mount(
     failProofFor?: string;
     azure?: CountingAzure;
     profiles?: typeof PROFILES;
+    store?: FakeKvDocumentStore;
   } = {},
 ) {
   const azure = opts.azure ?? new CountingAzure();
   const session = opts.session === null ? undefined : (opts.session ?? new FakeSession(azure, opts.failProofFor ?? null));
-  const store = new FakeKvDocumentStore();
+  const store = opts.store ?? new FakeKvDocumentStore();
   const cribl = new CountingCribl();
   const ports = { azure, cribl, kvDocuments: store, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
   const cache = opts.cache ?? new TenantGapCache();
@@ -189,6 +201,54 @@ describe("TenantGapScreen", () => {
     }
     // The other tenant's Cribl side was read: no record there is a measured gap.
     expect(indicators("pa", "cribl").every((c) => c.dataset.state === "red")).toBe(true);
+  });
+
+  // AZR-108: a Cribl source an earlier app version recorded under the legacy
+  // key, after this tenant's own progress existed, showed as "not created".
+  it("a Cribl source stranded under the legacy key shows as recorded by an earlier version, not adopted, and nothing is written", async () => {
+    const own = emptyProgress({ subscriptionId: "sub-a", resourceGroup: "rg" });
+    const legacy = withCriblSource(own, "activityLog", {
+      groupId: "grp-old",
+      inputId: "in_activity_old",
+      inputType: "eventhub",
+      secretId: "s0",
+    });
+    const store = new FakeKvDocumentStore({
+      [`${ONBOARDING_PROGRESS_KEY}.${TA}`]: JSON.parse(encodeProgress(own)),
+      [ONBOARDING_PROGRESS_KEY]: JSON.parse(encodeProgress(legacy)),
+      [tenantMigrationClaimKey(ONBOARDING_PROGRESS_KEY)]: tenantMigrationMarker(TA),
+    });
+    mount({ store });
+    const row = document.querySelector<HTMLElement>('[data-profile="pa"]')!;
+    fireEvent.click(within(row).getByRole("button", { name: "Read Contoso" }));
+    await waitFor(() => expect(within(row).getByText(/^Read at /)).toBeTruthy());
+    const cribl = indicators("pa", "cribl");
+    const activity = cribl.find((c) => c.dataset.source === "activityLog")!;
+    expect(activity.dataset.state).toBe("unknown");
+    expect(activity.querySelector('[role="tooltip"]')?.textContent).toContain(
+      "in_activity_old in worker group grp-old for this tenant. It was recorded by an earlier app version and not adopted",
+    );
+    expect(cribl.filter((c) => c.dataset.state === "red").length).toBe(GAP_SOURCES.length - 1);
+    expect([...row.querySelectorAll(".tgap-warning")].map((w) => w.textContent)).toEqual([
+      "1 Cribl source record was recorded by an earlier app version for this tenant and not adopted. " +
+        "It is not counted here; review it on Azure Native Source Onboarding.",
+    ]);
+    expect(store.saves).toEqual([]);
+  });
+
+  it("an unreadable legacy key reads as could-not-check, never as not created", async () => {
+    const own = emptyProgress({ subscriptionId: "sub-a", resourceGroup: "rg" });
+    const store = new FakeKvDocumentStore({ [`${ONBOARDING_PROGRESS_KEY}.${TA}`]: JSON.parse(encodeProgress(own)) });
+    store.scriptLoad(ONBOARDING_PROGRESS_KEY, { kind: "unknown", reason: "HTTP 503" });
+    mount({ store });
+    const row = document.querySelector<HTMLElement>('[data-profile="pa"]')!;
+    fireEvent.click(within(row).getByRole("button", { name: "Read Contoso" }));
+    await waitFor(() => expect(within(row).getByText(/^Read at /)).toBeTruthy());
+    const cribl = indicators("pa", "cribl");
+    expect(cribl.length).toBe(GAP_SOURCES.length);
+    expect(cribl.filter((c) => c.dataset.state === "unknown").length).toBe(GAP_SOURCES.length);
+    expect(row.querySelector(".tgap-warning")?.textContent).toContain("could not be checked");
+    expect(store.saves).toEqual([]);
   });
 
   it("shows a cached answer with its time on mount, without reading", () => {

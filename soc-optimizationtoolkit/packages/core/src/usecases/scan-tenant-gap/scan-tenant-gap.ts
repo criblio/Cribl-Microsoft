@@ -13,7 +13,12 @@
  * - write KV. The tenant documents are read with `store.load` under the
  *   tenant's key, never through loadTenantDocument, which migrates (writes)
  *   the legacy document; a legacy document not yet filed under any tenant is
- *   UNKNOWN here, not a first run;
+ *   UNKNOWN here, not a first run. Once the tenant's own progress exists,
+ *   the legacy key is still READ (readStrandedLegacyDocument, AZR-108) for
+ *   Cribl source records an earlier app version saved there afterwards:
+ *   they are reported as recorded by an earlier version and not adopted, and
+ *   an unreadable legacy key makes a "not created" cell unknown. Nothing is
+ *   adopted, claimed or merged;
  * - send an Azure request outside `ports.session`, or unpaced: the work's
  *   reads AND the session's own proof reads and token mints spend
  *   `ports.pacer`, which the caller makes once per run so its cap spans every
@@ -50,8 +55,10 @@ import {
   emptyProgress,
   progressFrom,
   readProgressDocument,
+  strandedCriblSources,
   type OnboardingProgress,
 } from "../../domain/onboarding-howto/progress-document";
+import { readStrandedLegacyDocument, type StrandedLegacyRead } from "../tenant-documents";
 import type { OnboardingSourceId } from "../../domain/onboarding-howto/sources";
 import type { ExistingRead } from "../../domain/cribl-onboarding-source/classify-existing";
 import {
@@ -68,6 +75,7 @@ import {
   rowUnknown,
   type GapCell,
   type GapIndicator,
+  type LegacyCriblEvidence,
 } from "../../domain/tenant-gap";
 import { criblRequestFor } from "../../kit/cribl-request";
 import { readInputs } from "../create-cribl-source/plan-cribl-source";
@@ -173,6 +181,48 @@ async function safeLoad(store: KvDocumentStore, key: string): Promise<KvDocument
   } catch (err) {
     return { kind: "unknown", reason: errText(err) };
   }
+}
+
+/**
+ * What the legacy key holds that this tenant's own progress does not, per
+ * source (AZR-108). Read only when the tenant's own document was found: when
+ * it is absent, {@link loadReadOnly} has already judged the legacy key. A
+ * refused or failed read is unknown for every source, never "nothing there".
+ */
+async function legacyEvidence(
+  store: KvDocumentStore,
+  tenantId: string,
+  progress: OnboardingProgress,
+): Promise<{ bySource: Map<OnboardingSourceId, LegacyCriblEvidence>; warning: string | null }> {
+  let read: StrandedLegacyRead;
+  try {
+    read = await readStrandedLegacyDocument(store, ONBOARDING_PROGRESS_KEY, tenantId);
+  } catch (err) {
+    read = { kind: "unknown", reason: `the earlier single-tenant copy could not be read (${errText(err)})` };
+  }
+  const bySource = new Map<OnboardingSourceId, LegacyCriblEvidence>();
+  if (read.kind === "none") return { bySource, warning: null };
+  if (read.kind === "unknown") {
+    for (const s of GAP_SOURCES) bySource.set(s.id, { kind: "unknown", reason: read.reason });
+    return {
+      bySource,
+      warning:
+        `Cribl sources an earlier app version may have recorded for this tenant could not be checked (${read.reason}), ` +
+        "so a source this app has no record of is unknown, not missing.",
+    };
+  }
+  const attribution = read.kind === "stranded" ? "this-tenant" : "unattributed";
+  const records = strandedCriblSources(progress, read.value);
+  for (const r of records) bySource.set(r.sourceId, { kind: "record", record: r.record, attribution });
+  if (records.length === 0) return { bySource, warning: null };
+  const n = records.length;
+  const owner = attribution === "this-tenant" ? "for this tenant" : "with no tenant named";
+  return {
+    bySource,
+    warning:
+      `${n} Cribl source ${n === 1 ? "record was" : "records were"} recorded by an earlier app version ${owner} ` +
+      `and not adopted. ${n === 1 ? "It is" : "They are"} not counted here; review ${n === 1 ? "it" : "them"} on Azure Native Source Onboarding.`,
+  };
 }
 
 function inputsFor(
@@ -314,6 +364,14 @@ export async function scanTenantGap(
     listings.set(record.groupId, await inputsFor(ports, cache, record.groupId));
   }
 
+  // The tenant's own document exists only when the load found a value:
+  // loadReadOnly never returns the legacy document itself.
+  const legacy =
+    progressLoad.kind === "value"
+      ? await legacyEvidence(ports.documents, tenantId, progress)
+      : { bySource: new Map<OnboardingSourceId, LegacyCriblEvidence>(), warning: null };
+  if (legacy.warning !== null) warnings.push(legacy.warning);
+
   const cells: GapCell[] = GAP_SOURCES.map((source) => {
     const id: OnboardingSourceId = source.id;
     let azure: GapIndicator;
@@ -334,6 +392,7 @@ export async function scanTenantGap(
       record,
       group,
       inputs: record === null ? null : (listings.get(record.groupId) ?? null),
+      legacy: legacy.bySource.get(id) ?? null,
     });
     return { sourceId: id, azure, cribl };
   });

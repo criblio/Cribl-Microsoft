@@ -160,6 +160,45 @@ export interface CriblGapInput {
   readonly group: TenantGroupResolution;
   /** Cribl's input listing of the record's group; null when it was not read. */
   readonly inputs: ExistingRead | null;
+  /**
+   * What the legacy single-tenant progress key holds for this source that the
+   * tenant's own record does not (AZR-108), from the READ-ONLY stranded read.
+   * Omitted or null: nothing there. Never adopted: it only changes the words,
+   * and turns a "not created" red into unknown.
+   */
+  readonly legacy?: LegacyCriblEvidence | null;
+}
+
+/**
+ * The legacy unscoped progress key, as one source's Cribl indicator sees it
+ * (AZR-108).
+ *
+ *   record   an earlier app version recorded this Cribl source there, and the
+ *            tenant's own document does not hold it (same input id AND
+ *            worker group); `attribution` says whether the migration claim
+ *            names this tenant or no tenant at all
+ *   unknown  the legacy key (or its claim) could not be read, so whether such
+ *            a record exists could not be checked
+ */
+export type LegacyCriblEvidence =
+  | {
+      readonly kind: "record";
+      readonly record: CriblSourceRecord;
+      readonly attribution: "this-tenant" | "unattributed";
+    }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/** The sentence for a record found under the legacy key. */
+export function legacyRecordSentence(evidence: Extract<LegacyCriblEvidence, { kind: "record" }>): string {
+  const owner =
+    evidence.attribution === "this-tenant"
+      ? "for this tenant"
+      : "with no tenant named, so whose it is is unknown";
+  return (
+    `An earlier app version recorded input ${evidence.record.inputId} in worker group ${evidence.record.groupId} ` +
+    `${owner}. It was recorded by an earlier app version and not adopted: this dashboard does not count it, ` +
+    "and nothing here moves it. Review it on Azure Native Source Onboarding."
+  );
 }
 
 function groupSentence(group: TenantGroupResolution): string {
@@ -183,6 +222,18 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  */
 export function criblGapIndicator(input: CriblGapInput): GapIndicator {
   const { record, inputs, group } = input;
+  const legacy = input.legacy ?? null;
+  if (record === null && legacy !== null) {
+    if (legacy.kind === "record") return unknown(`This app holds no Cribl source for ${input.title} under this tenant. ${legacyRecordSentence(legacy)}`);
+    return unknown(
+      `This app holds no Cribl source for ${input.title} under this tenant, but whether an earlier app version ` +
+        `recorded one could not be checked: ${legacy.reason}. ${groupSentence(group)}`,
+    );
+  }
+  if (record !== null && legacy?.kind === "record") {
+    const own = criblGapIndicator({ ...input, legacy: null });
+    return { state: own.state, reason: `${own.reason} ${legacyRecordSentence(legacy)}` };
+  }
   if (record === null) {
     return {
       state: "red",
