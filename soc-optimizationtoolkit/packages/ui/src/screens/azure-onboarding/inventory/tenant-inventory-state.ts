@@ -12,9 +12,31 @@ const KIND_WORD: Readonly<Record<Destination["kind"], string>> = {
   partner: "partner",
 };
 
-/** The last path segment plus the kind, for example "workspace law-soc-prod". */
+/**
+ * An event hub id names a namespace (and maybe a hub) before its last segment:
+ * a diagnostic setting carries the namespace authorization rule id, so the last
+ * segment is the rule, not the destination. Null when the id has no namespace.
+ */
+function eventHubLabel(segments: readonly string[]): string | null {
+  const lower = segments.map((s) => s.toLowerCase());
+  const n = lower.lastIndexOf("namespaces");
+  const ns = n >= 0 ? segments[n + 1] : undefined;
+  if (ns === undefined) return null;
+  const hubKey = lower.indexOf("eventhubs", n + 2);
+  const hub = hubKey === n + 2 ? segments[hubKey + 1] : undefined;
+  return hub !== undefined ? `event hub ${hub} in namespace ${ns}` : `event hub namespace ${ns}`;
+}
+
+/**
+ * The last path segment plus the kind, for example "workspace law-soc-prod".
+ * An event hub names its namespace, and the hub when the id names one.
+ */
 export function destinationLabel(d: Destination): string {
   const segments = d.resourceId.split("/").filter((s) => s !== "");
+  if (d.kind === "event-hub") {
+    const hubLabel = eventHubLabel(segments);
+    if (hubLabel !== null) return hubLabel;
+  }
   const last = segments[segments.length - 1] ?? d.resourceId;
   return `${KIND_WORD[d.kind]} ${last}`;
 }

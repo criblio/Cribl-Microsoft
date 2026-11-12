@@ -143,6 +143,17 @@ describe("tenant-inventory-state", () => {
     expect(destinationLabel({ kind: "workspace", resourceId: "/a/b/law-soc-prod" })).toBe("workspace law-soc-prod");
   });
 
+  it("destinationLabel names the namespace for an event hub", () => {
+    const base = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/ns";
+    const label = (resourceId: string) => destinationLabel({ kind: "event-hub", resourceId });
+    expect(label(`${base}/authorizationRules/RootManageSharedAccessKey`)).toBe("event hub namespace ns");
+    expect(label(`${base}/eventhubs/h`)).toBe("event hub h in namespace ns");
+    expect(label(base)).toBe("event hub namespace ns");
+    expect(label(base.replace("namespaces", "NameSpaces") + "/EventHubs/h")).toBe("event hub h in namespace ns");
+    expect(label("/a/b/hub-x")).toBe("event hub hub-x");
+    expect(destinationLabel({ kind: "storage", resourceId: `${base}/authorizationRules/x` })).toBe("storage x");
+  });
+
   it("cellLabel states a partly cell with its scope counts", () => {
     const cell = {
       category: "activityLog",
