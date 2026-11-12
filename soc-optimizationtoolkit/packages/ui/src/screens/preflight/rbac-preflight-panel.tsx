@@ -328,9 +328,7 @@ export function RbacPreflightPanel({
       </div>
 
       <div
-        className={`preflight-summary status-${
-          view.anyPending ? "running" : view.hasRequiredAccess ? "ok" : "failed"
-        }`}
+        className={`preflight-summary status-${view.summaryTone}`}
       >
         {view.summary}
       </div>

@@ -4391,6 +4391,9 @@ button.readiness-pill:focus-visible {
 .preflight-summary.status-running {
   border-color: var(--running);
 }
+.preflight-summary.status-unverified {
+  border-color: var(--warn);
+}
 .preflight-sides {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

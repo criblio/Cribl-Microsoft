@@ -243,6 +243,7 @@ describe("derivePreflightView", () => {
     expect(view.bothDone).toBe(false);
     expect(view.hasRequiredAccess).toBe(false);
     expect(view.summary).toBe("Checking required access...");
+    expect(view.summaryTone).toBe("running");
   });
 
   it("reports ready only when BOTH sides are done and granted", () => {
@@ -255,6 +256,7 @@ describe("derivePreflightView", () => {
     expect(view.bothDone).toBe(true);
     expect(view.hasRequiredAccess).toBe(true);
     expect(view.summary).toBe("All required access verified.");
+    expect(view.summaryTone).toBe("ok");
   });
 
   it("Reader-only (all reads pass, writes denied) is NOT ready", () => {
@@ -351,15 +353,45 @@ describe("derivePreflightView", () => {
     expect(view.cribl.note).toBe(
       "Required Cribl reads are confirmed; write access is not measured from the local shell.",
     );
+    // Unmeasured is not missing: the summary says "not yet verified" and the
+    // tone is the neutral `unverified`, never the red `failed` (DBT-304).
     expect(view.summary).toBe(
-      "Missing required access - Cribl: write access not measured from the local shell",
+      "Not yet verified - Cribl: write access not measured from the local shell",
     );
+    expect(view.summary).not.toContain("Missing");
+    expect(view.summaryTone).toBe("unverified");
     // The read dots still render as the truth they are; nothing is called missing.
     expect(view.cribl.dots.filter((d) => d.status === "granted")).toHaveLength(
       CRIBL_CAPABILITY_PROBES.length,
     );
     // Informational only: retry stays available, nothing new is disabled.
     expect(view.actions.canRetry).toBe(true);
+  });
+
+  it("local reads-only beside a real Azure gap keeps missing and unverified apart (DBT-304)", () => {
+    const localReads = criblReady({ mode: "local", hasRequiredAccess: false });
+    const readerAzure = azureReady({
+      hasRequiredAccess: false,
+      checks: REQUIRED_ACTIONS[SETUP_PATH].map((req) => ({
+        action: req.action,
+        label: req.label,
+        granted: false,
+        necessity: "core",
+      })),
+    });
+    const firstLabel = REQUIRED_ACTIONS[SETUP_PATH][0]?.label.toLowerCase();
+    const view = derivePreflightView({
+      setupPath: SETUP_PATH,
+      azure: azureState("done", readerAzure),
+      cribl: criblState("done", localReads),
+      switchAccountAvailable: true,
+    });
+    expect(view.summary).toBe(
+      `Missing required access - Azure: cannot ${firstLabel}. ` +
+        "Not yet verified - Cribl: write access not measured from the local shell",
+    );
+    // A genuine gap anywhere keeps the summary failed.
+    expect(view.summaryTone).toBe("failed");
   });
 
   it("local with a required denial still names the denied capability", () => {
@@ -381,6 +413,7 @@ describe("derivePreflightView", () => {
     expect(view.summary).toBe(
       `Missing required access - Cribl: cannot ${packs?.label.toLowerCase()}`,
     );
+    expect(view.summaryTone).toBe("failed");
   });
 
   it("names the readiness field distinctly from canDeploy (never conflated)", () => {
