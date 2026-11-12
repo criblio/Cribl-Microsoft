@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**116 in the backlog, 39 in progress, 205 done.**
+**113 in the backlog, 42 in progress, 205 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (39)
+## In progress (42)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1282,6 +1282,60 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-96** Cribl source records saved to the legacy single-tenant progress document after the tenant document exists are never adopted
+  `AZR-F9` `bug` `settled`
+  Not now because: Inferred from a lab that ran two app versions against one
+  org at once; a customer reaches it only with a pre-upgrade tab saving during
+  the upgrade, and the input itself keeps running - the app's record of it is
+  lost, not the data.
+  FOUND LIVE 2026-11-10. The Defender input
+  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (no tenant component, so
+  created before ADR 0009) exists in DatacenterEast and received data on
+  2026-11-04, but the progress document this tenant loads
+  (azure-onboarding-progress.fa882ef2-..., read 200) holds no Cribl source
+  record (Watch for data: "No Cribl source has been created yet").
+  loadTenantDocument (usecases/tenant-documents) reads the legacy key only
+  when the tenant document is ABSENT, so a record written to the legacy key by
+  a pre-tenant build after the tenant document existed is stranded. INFERRED,
+  not measured: reading the legacy key needs the session token, which was not
+  taken from the page. The lab hit it by running pre- and post-multi-tenant
+  branches against one org; a customer hits it with an old bundle open in
+  another tab during the upgrade. FIX: decide whether the screen should report
+  legacy records it did not adopt (read-only) rather than silently ignore
+  them. DIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a
+  pre-tenant bundle cannot save over the migration marker, so the likely lab
+  path is that the scoped document was created while the legacy key was absent
+  and an old bundle later wrote a fresh legacy document. Fix: a read-only
+  readStrandedLegacyDocument that reports stranded (claim names this tenant)
+  AND unattributed (no claim) records, never adopting. Size S. Full diagnosis,
+  fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
+- **AZR-97** No way to adopt a Cribl input the app created earlier with a credential it now refuses
+  `AZR-F9` `bug` `settled`
+  Not now because: The input still runs and is visible in Cribl; what is lost
+  is the app knowing about it, and the workaround (a second input on a new
+  consumer group) is recorded on this card.
+  FOUND LIVE 2026-11-10. The 2026-11-04 Defender input reads with
+  RootManageSharedAccessKey. Since AZR-58 the plan refuses a Manage-capable
+  rule for listKeys and paste BEFORE any Cribl call, and an Entra ID plan
+  builds a different body, so the existing input reads input-differs. Neither
+  path reaches already-applied, so the app cannot record (AZR-96) or report
+  the input it created. The live check worked around it by creating a second
+  input on a new consumer group (cribl-onb) with the Listen-only rule
+  cribl-listen. FIX: let the plan READ the existing input before refusing the
+  credential, and when it is ours, report it by name with its credential
+  problem (Manage key: replace and rotate) instead of a plain refusal - never
+  rewrite it. DIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL.
+  planCriblSource refuses a Manage-capable credential before the read that
+  tells create from already-ours, so an input created earlier with that
+  credential can never be classified. Fix: defer the refusal past
+  classifyExistingInput; on ours-matching return already-applied with a
+  credential warning; absent / differs / foreign still refuse with zero
+  writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
 - **AZR-98** Automate the Activity Log source: create the subscription diagnostic setting that streams it to the chosen Event Hub
   `AZR-F9` `story` `settled`
   FILED 2026-11-11 by the operator's question 'what else do we need to enable
@@ -1333,6 +1387,24 @@ Started. Anything here with an unfinished dependency is called out on its card.
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
 
+- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
+  `AZR-F10` `bug` `settled`
+  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
+  medium). A GET 2xx proves read only; the writes the features need (outputs,
+  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
+  user-based mode they are granted by policies.yml. With no worker group
+  chosen the probes hit undeclared leader paths and a non-admin's 403 is
+  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
+  measured manage right; skip the probes until a group is chosen (unknown, not
+  denied); state in the change requests that the Cribl-side least privilege is
+  'App user plus Org-admin install-time approval of policies.yml', with every
+  group in scope. DIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts
+  come from the approved policies.yml, so the detail should say "granted by
+  app policy", not "by platform"; the local branch (not reachable in the
+  shipped app) should report unknown, not 403, when no group is chosen. Size
+  S. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
 - **MIG-33** Data Volume Inventory: licence counts on the card face and 30-day totals, billable versus allowance
   `MIG-F2` `story` `settled`
   RAISED BY THE OPERATOR 2026-11-11. Every allowance figure is per day
@@ -1347,7 +1419,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (18)
+## Backlog - now (17)
 
 Next to pick up. Nothing blocks these.
 
@@ -1655,24 +1727,6 @@ Next to pick up. Nothing blocks these.
   Full diagnosis, fix plan and pins:
   docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
-- **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
-  `AZR-F10` `bug` `settled`
-  FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
-  medium). A GET 2xx proves read only; the writes the features need (outputs,
-  inputs, secrets, routes, commit, deploy, packs) are not measured, and under
-  user-based mode they are granted by policies.yml. With no worker group
-  chosen the probes hit undeclared leader paths and a non-admin's 403 is
-  recorded as denied. FIX: say 'granted by app policy' instead of claiming a
-  measured manage right; skip the probes until a group is chosen (unknown, not
-  denied); state in the change requests that the Cribl-side least privilege is
-  'App user plus Org-admin install-time approval of policies.yml', with every
-  group in scope. DIAGNOSED 2026-11-11: PARTLY REAL. Cloud *.manage verdicts
-  come from the approved policies.yml, so the detail should say "granted by
-  app policy", not "by platform"; the local branch (not reachable in the
-  shipped app) should report unknown, not 403, when no group is chosen. Size
-  S. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
 - **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
   `AZR-F10` `bug` `settled`
   FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
@@ -1691,7 +1745,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (59)
+## Backlog - next (57)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2367,60 +2421,6 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
-
-- **AZR-96** Cribl source records saved to the legacy single-tenant progress document after the tenant document exists are never adopted
-  `AZR-F9` `bug` `settled`
-  Not now because: Inferred from a lab that ran two app versions against one
-  org at once; a customer reaches it only with a pre-upgrade tab saving during
-  the upgrade, and the input itself keeps running - the app's record of it is
-  lost, not the data.
-  FOUND LIVE 2026-11-10. The Defender input
-  azure_onb_eh_ehnsjpedersoneastus_ehjpedersoneastus (no tenant component, so
-  created before ADR 0009) exists in DatacenterEast and received data on
-  2026-11-04, but the progress document this tenant loads
-  (azure-onboarding-progress.fa882ef2-..., read 200) holds no Cribl source
-  record (Watch for data: "No Cribl source has been created yet").
-  loadTenantDocument (usecases/tenant-documents) reads the legacy key only
-  when the tenant document is ABSENT, so a record written to the legacy key by
-  a pre-tenant build after the tenant document existed is stranded. INFERRED,
-  not measured: reading the legacy key needs the session token, which was not
-  taken from the page. The lab hit it by running pre- and post-multi-tenant
-  branches against one org; a customer hits it with an old bundle open in
-  another tab during the upgrade. FIX: decide whether the screen should report
-  legacy records it did not adopt (read-only) rather than silently ignore
-  them. DIAGNOSED 2026-11-11: STILL REAL, mechanism corrected by a refuter: a
-  pre-tenant bundle cannot save over the migration marker, so the likely lab
-  path is that the scoped document was created while the legacy key was absent
-  and an old bundle later wrote a fresh legacy document. Fix: a read-only
-  readStrandedLegacyDocument that reports stranded (claim names this tenant)
-  AND unattributed (no claim) records, never adopting. Size S. Full diagnosis,
-  fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
-- **AZR-97** No way to adopt a Cribl input the app created earlier with a credential it now refuses
-  `AZR-F9` `bug` `settled`
-  Not now because: The input still runs and is visible in Cribl; what is lost
-  is the app knowing about it, and the workaround (a second input on a new
-  consumer group) is recorded on this card.
-  FOUND LIVE 2026-11-10. The 2026-11-04 Defender input reads with
-  RootManageSharedAccessKey. Since AZR-58 the plan refuses a Manage-capable
-  rule for listKeys and paste BEFORE any Cribl call, and an Entra ID plan
-  builds a different body, so the existing input reads input-differs. Neither
-  path reaches already-applied, so the app cannot record (AZR-96) or report
-  the input it created. The live check worked around it by creating a second
-  input on a new consumer group (cribl-onb) with the Listen-only rule
-  cribl-listen. FIX: let the plan READ the existing input before refusing the
-  credential, and when it is ours, report it by name with its credential
-  problem (Manage key: replace and rotate) instead of a plain refusal - never
-  rewrite it. DIAGNOSED 2026-11-11 (two refuters agreed): STILL REAL.
-  planCriblSource refuses a Manage-capable credential before the read that
-  tells create from already-ours, so an input created earlier with that
-  credential can never be classified. Fix: defer the refusal past
-  classifyExistingInput; on ours-matching return already-applied with a
-  credential warning; absent / differs / foreign still refuse with zero
-  writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
-  S. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
 
 - **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
   `AZR-F9` `story` `settled` `blocked by AZR-98`
