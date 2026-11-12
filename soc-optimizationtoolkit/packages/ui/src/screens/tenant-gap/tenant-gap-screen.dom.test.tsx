@@ -280,6 +280,19 @@ describe("TenantGapScreen", () => {
     for (const t of tiles) expect(t.querySelector(".info-tip")).not.toBeNull();
   });
 
+  // AZR-108 review: the tip said a cell with an earlier-version record is
+  // always unknown, but a source with its own record keeps that record's colour.
+  it("the Cribl tile tip says a legacy record makes the cell unknown only when this app holds none of its own", () => {
+    mount();
+    const tile = [...document.querySelectorAll(".tgap-tile")].find((t) => t.textContent?.includes("Onboarded to Cribl"))!;
+    const text = tile.querySelector('[role="tooltip"]')?.textContent ?? "";
+    expect(text).toContain(
+      "where this app holds no record of its own for that source the cell is unknown, and where it does the cell " +
+        "keeps the colour of its own record.",
+    );
+    expect(text).not.toContain("(that cell is unknown)");
+  });
+
   it("without a tenant session the reads are disabled and say why", () => {
     mount({ session: null });
     expect((screen.getByRole("button", { name: "Read all tenants" }) as HTMLButtonElement).disabled).toBe(true);

@@ -81,8 +81,9 @@ const AZURE_TILE_TIP =
 const CRIBL_TILE_TIP =
   "How many cells of the tenants read so far have a Cribl source this app created and Cribl still lists (green), " +
   "have none or one Cribl no longer has (red), or could not be told (unknown). A source created in Cribl by hand " +
-  "is not counted, and neither is one an earlier app version recorded but this one has not adopted (that cell " +
-  "is unknown). Tenants not read yet are not counted.";
+  "is not counted, and neither is one an earlier app version recorded but this one has not adopted: where this app " +
+  "holds no record of its own for that source the cell is unknown, and where it does the cell keeps the colour of " +
+  "its own record. Tenants not read yet are not counted.";
 
 const NO_SESSION =
   "This build cannot read tenants: it has no tenant session to put each tenant's credential in the Azure slot.";

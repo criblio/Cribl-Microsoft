@@ -183,6 +183,16 @@ async function safeLoad(store: KvDocumentStore, key: string): Promise<KvDocument
   }
 }
 
+function legacyUndecodableReason(doc: ReturnType<typeof readProgressDocument>): string {
+  const why =
+    doc.status === "foreign"
+      ? "it holds a document this app did not write"
+      : doc.status === "unreadable"
+        ? "it was written by a release this one cannot read"
+        : CANNOT_READ;
+  return `the earlier single-tenant copy could not be read (${why})`;
+}
+
 /**
  * What the legacy key holds that this tenant's own progress does not, per
  * source (AZR-108). Read only when the tenant's own document was found: when
@@ -202,6 +212,13 @@ async function legacyEvidence(
   }
   const bySource = new Map<OnboardingSourceId, LegacyCriblEvidence>();
   if (read.kind === "none") return { bySource, warning: null };
+  // A legacy value that is there but does not decode (cut short, hand-edited,
+  // another kind, a version this release cannot read) may still hold Cribl
+  // sources an earlier version recorded: could-not-check, never "none".
+  if (read.kind !== "unknown") {
+    const doc = readProgressDocument({ kind: "value", value: read.value });
+    if (doc.status !== "ok") read = { kind: "unknown", reason: legacyUndecodableReason(doc) };
+  }
   if (read.kind === "unknown") {
     for (const s of GAP_SOURCES) bySource.set(s.id, { kind: "unknown", reason: read.reason });
     return {

@@ -438,6 +438,27 @@ describe("scanTenantGap", () => {
       expect(docs.saves).toEqual([]);
     });
 
+    it.each([
+      ["cut short", "{\"kind\":\"azure-onboarding-progr", "it holds a value this app cannot read (it may be cut short or hand-edited)"],
+      ["another kind", { kind: "something-else", version: 1 }, "it holds a document this app did not write"],
+      ["a newer version", { kind: "azure-onboarding-progress", version: 2 }, "it was written by a release this one cannot read"],
+    ])("a legacy value that does not decode (%s) is could-not-check, never 'nothing there'", async (_label, value, why) => {
+      const docs = new Docs({ [progressKey]: progressWithEntraRecord(), [ONBOARDING_PROGRESS_KEY]: { kind: "value", value } });
+      const cribl = criblAnswering([{ id: RECORD.inputId, type: "eventhub" }]);
+      const row = await scanTenantGap(ports({ cribl, documents: docs }), PROFILE);
+      expect(row.cells.filter((c) => c.cribl.state === "red")).toEqual([]);
+      expect(row.cells.filter((c) => c.cribl.state === "unknown").length).toBe(GAP_SOURCES.length - 1);
+      expect(row.cells.find((c) => c.sourceId === "entraId")!.cribl.state).toBe("green");
+      expect(row.cells.find((c) => c.sourceId === "activityLog")!.cribl.reason).toContain(
+        `could not be checked: the earlier single-tenant copy could not be read (${why})`,
+      );
+      expect(row.warnings).toEqual([
+        `Cribl sources an earlier app version may have recorded for this tenant could not be checked (the earlier single-tenant copy could not be read (${why})), ` +
+          "so a source this app has no record of is unknown, not missing.",
+      ]);
+      expect(docs.saves).toEqual([]);
+    });
+
     it("a legacy load that throws is could-not-check too", async () => {
       const docs = new Docs({ [progressKey]: progressWithEntraRecord() });
       const load = docs.load.bind(docs);
