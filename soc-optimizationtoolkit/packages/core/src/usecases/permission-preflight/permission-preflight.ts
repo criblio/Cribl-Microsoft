@@ -344,7 +344,10 @@ export interface CriblPreflight {
   workerGroup: string;
   /** Per-capability probe results, in fixed priority order. */
   probes: CriblCapabilityProbe[];
-  /** True when every REQUIRED capability probe is granted. */
+  /**
+   * True when every REQUIRED capability's manage right is granted
+   * ({@link criblProbeGrantsManage}). Always false on local: a GET proves a read.
+   */
   hasRequiredAccess: boolean;
   /** Raw greppable error text ('' when none). */
   error: string;
@@ -654,6 +657,28 @@ const CRIBL_NO_GROUP_DETAIL = "no worker group chosen";
 const CRIBL_NO_GROUP_ERROR = "choose a worker group";
 
 /**
+ * Whether a Cribl probe establishes the MANAGE right its capability names. The
+ * single rule both the deploy-readiness gate ({@link runCriblPreflight}) and the
+ * capability mapping read, so the two can never disagree about a probe:
+ *
+ * - CLOUD: `granted` is the app-policy grant (policies.yml) - a real write grant.
+ * - LOCAL: the probe is a GET. A 2xx proves the read only, so the manage right
+ *   is unknown, never granted (AZR-83, DBT-304).
+ */
+export function criblProbeGrantsManage(
+  mode: CriblShellMode,
+  probe: Pick<CriblCapabilityProbe, "status">,
+): boolean {
+  return mode === "cloud" && probe.status === "granted";
+}
+
+/**
+ * The summary phrase for a local side whose required reads all passed: the
+ * write was not measured, which is neither a grant nor a denial.
+ */
+export const CRIBL_LOCAL_WRITE_UNMEASURED = "write access not measured from the local shell";
+
+/**
  * Probe one Cribl capability; never rejects (graceful degradation). The group
  * is always set - runCriblPreflight short-circuits before probing without one,
  * because policies.yml declares these paths only under /m/:gid.
@@ -701,11 +726,12 @@ async function probeCribl(
  * `unknown` ("no worker group chosen") and the error is "choose a worker group",
  * never "Cribl leader not reachable" and never a denial.
  *
- * hasRequiredAccess is true only when every REQUIRED capability is granted (an
- * `unknown` required probe is NOT granted). KNOWN GAP, local shell only (which
- * no shipped shell runs): that gate still reads the GET probes, so a 2xx read
- * passes it although the write was not measured. The capability mapping does
- * not make the same leap - it records nothing from a local 2xx.
+ * hasRequiredAccess is true only when every REQUIRED capability's MANAGE right
+ * is granted, judged by {@link criblProbeGrantsManage} - the same rule the
+ * capability mapping records verdicts by. On cloud that is the app-policy grant.
+ * On local a probe is a GET, so a 2xx proves the read only: the manage right is
+ * unknown, not granted, and the local side never reports ready (DBT-304). The
+ * summary then says the write was not measured rather than calling it missing.
  */
 export async function runCriblPreflight(
   cribl: CriblClient,
@@ -754,9 +780,11 @@ export async function runCriblPreflight(
     CRIBL_CAPABILITY_PROBES.map((spec) => probeCribl(cribl, spec, group)),
   );
   const requiredProbes = probes.filter((probe) => probe.required);
+  // DBT-304. A local GET 2xx is a read, never the write a deploy needs, so the
+  // gate reads the manage verdict, not the probe status.
   const hasRequiredAccess =
     requiredProbes.length > 0 &&
-    requiredProbes.every((probe) => probe.status === "granted");
+    requiredProbes.every((probe) => criblProbeGrantsManage(mode, probe));
   // Only when NO probe could complete do we call the leader unreachable; a mix
   // of denied/granted is a real permission answer, not a connection failure.
   const error = probes.every((probe) => probe.status === "unknown")
@@ -786,6 +814,10 @@ function firstCriblIssue(cribl: CriblPreflight): string | null {
     if (probe.required && probe.status !== "granted") {
       return `Cribl: cannot ${probe.label.toLowerCase()} (${probe.status})`;
     }
+  }
+  if (cribl.mode === "local") {
+    // Every required read passed; only the unmeasured write keeps it not-ready.
+    return `Cribl: ${CRIBL_LOCAL_WRITE_UNMEASURED}`;
   }
   return "Cribl: required access missing";
 }

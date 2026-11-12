@@ -32,6 +32,7 @@
 
 import {
   CRIBL_CAPABILITY_PROBES,
+  CRIBL_LOCAL_WRITE_UNMEASURED,
   REQUIRED_ACTIONS,
 } from "@soc/core";
 import type {
@@ -298,9 +299,31 @@ function criblNote(state: CriblSideState): string {
   if (result.mode === "cloud") {
     return "Cribl capabilities are granted by app policy (policies.yml), approved by the Org admin at install.";
   }
-  return result.hasRequiredAccess
-    ? "All required Cribl capabilities are granted."
-    : "Some required Cribl capabilities are missing.";
+  if (result.hasRequiredAccess) {
+    return "All required Cribl capabilities are granted.";
+  }
+  if (localReadsOnly(result)) {
+    return CRIBL_LOCAL_READS_ONLY_NOTE;
+  }
+  return "Some required Cribl capabilities are missing.";
+}
+
+/**
+ * The local-shell note when every required read passed (DBT-304). A GET proves
+ * the read only; the write a deploy needs was not measured, which is neither a
+ * grant nor a denial - so the side is not ready, but nothing is "missing".
+ */
+export const CRIBL_LOCAL_READS_ONLY_NOTE =
+  "Required Cribl reads are confirmed; write access is not measured from the local shell.";
+
+/** Local shell, and every REQUIRED probe's read passed: only the write is unmeasured. */
+function localReadsOnly(result: CriblPreflight): boolean {
+  const required = result.probes.filter((probe) => probe.required);
+  return (
+    result.mode === "local" &&
+    required.length > 0 &&
+    required.every((probe) => probe.status === "granted")
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +447,9 @@ function firstCriblIssue(result: CriblPreflight): string | null {
     if (probe.required && probe.status !== "granted") {
       return `cannot ${probe.label.toLowerCase()}`;
     }
+  }
+  if (localReadsOnly(result)) {
+    return CRIBL_LOCAL_WRITE_UNMEASURED;
   }
   return "Cribl access missing";
 }

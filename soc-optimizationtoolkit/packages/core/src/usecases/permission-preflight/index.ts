@@ -7,6 +7,8 @@ export {
   checkedAzureActions,
   leastPrivilegeRoleDefinition,
   CRIBL_CAPABILITY_PROBES,
+  CRIBL_LOCAL_WRITE_UNMEASURED,
+  criblProbeGrantsManage,
   RBAC_PERMISSIONS_API_VERSION,
 } from "./permission-preflight";
 export type {

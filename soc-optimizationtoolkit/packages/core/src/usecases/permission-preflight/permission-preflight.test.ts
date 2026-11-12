@@ -26,6 +26,7 @@ import {
   leastPrivilegeRoleDefinition,
   CRIBL_CAPABILITY_PROBES,
   RBAC_PERMISSIONS_API_VERSION,
+  criblProbeGrantsManage,
 } from "./index";
 import type { PermissionPreflightInput } from "./index";
 import { RESOURCE_GRAPH_PROBE_QUERY } from "./permission-preflight";
@@ -359,8 +360,10 @@ describe("Cribl side", () => {
       { status: 200, body: [] },
     );
     const result = await runCriblPreflight(cribl, "local", "wg-a");
-    // Both REQUIRED capabilities (packs, outputs) granted -> ready.
-    expect(result.hasRequiredAccess).toBe(true);
+    // DBT-304. Both REQUIRED reads (packs, outputs) passed, but a GET proves the
+    // read only: the manage right is unknown, so the side is NOT ready.
+    expect(result.hasRequiredAccess).toBe(false);
+    expect(result.error).toBe("");
     const inputs = result.probes.find((p) => p.capability === "inputs");
     expect(inputs?.status).toBe("denied");
     // A 2xx GET confirms the read only; it never claims the write (AZR-83).
@@ -368,6 +371,42 @@ describe("Cribl side", () => {
     expect(packs?.detail).toBe("read confirmed; write granted by app policy, not measured");
     // Group-scoped probes carry the worker group.
     expect(cribl.calls.every((c) => c.groupId === "wg-a")).toBe(true);
+  });
+
+  it("local all-2xx is not ready and the summary says the write was not measured", async () => {
+    // DBT-304. Every Cribl read passes and Azure is fully granted, so the only
+    // thing keeping the report not-ready is the unmeasured Cribl write.
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK);
+    const cribl = new FakeCriblClient();
+    cribl.respondWith(
+      { status: 200, body: [] },
+      { status: 200, body: [] },
+      { status: 200, body: [] },
+      { status: 200, body: [] },
+    );
+    const report = await runPermissionPreflight(
+      { azure, cribl },
+      { setupPath: "existing-rg", azure: FULL_TARGET, cribl: { mode: "local", workerGroup: "wg-a" } },
+    );
+    expect(cribl.calls).toHaveLength(CRIBL_CAPABILITY_PROBES.length);
+    expect(report.cribl.probes.map((p) => p.status)).toEqual(
+      CRIBL_CAPABILITY_PROBES.map(() => "granted"),
+    );
+    expect(report.azure.hasRequiredAccess).toBe(true);
+    expect(report.cribl.hasRequiredAccess).toBe(false);
+    expect(report.hasRequiredAccess).toBe(false);
+    expect(report.summary).toBe(
+      "Cannot deploy: Cribl: write access not measured from the local shell",
+    );
+  });
+
+  it("criblProbeGrantsManage: only a cloud grant establishes the manage right", () => {
+    expect(criblProbeGrantsManage("cloud", { status: "granted" })).toBe(true);
+    expect(criblProbeGrantsManage("local", { status: "granted" })).toBe(false);
+    expect(criblProbeGrantsManage("cloud", { status: "denied" })).toBe(false);
+    expect(criblProbeGrantsManage("cloud", { status: "unknown" })).toBe(false);
+    expect(criblProbeGrantsManage("local", { status: "denied" })).toBe(false);
   });
 
   it("degrades a failed probe to unknown and never crashes (graceful degradation)", async () => {
