@@ -131,6 +131,8 @@ interface Scenario {
   hubs?: string[];
   /** When true the hub listing carries a nextLink (first page only). */
   hubsTruncated?: boolean;
+  /** GET answers by exact path, checked first (the tenant inventory reads). */
+  gets?: Record<string, () => PortHttpResponse | Promise<PortHttpResponse>>;
 }
 
 /**
@@ -154,6 +156,8 @@ class RoutingAzure implements AzureManagement {
   async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
     const s = this.scenario;
+    const held = r.method === "GET" ? s.gets?.[r.path] : undefined;
+    if (held !== undefined) return held();
     if (r.method === "POST" && r.path === "/providers/Microsoft.ResourceGraph/resources") {
       return ok({
         data: [
@@ -1104,8 +1108,75 @@ describe("the tenant inventory heat map on the screen", () => {
       expect(screen.getAllByRole("button", { name: /Activity Log/ }).length).toBeGreaterThan(0);
     });
     expect(azure.calls.length).toBeGreaterThan(0);
-    expect(azure.calls.every((c) => c.method === "GET" || c.path === "/providers/Microsoft.ResourceGraph/resources")).toBe(true);
+    expect(azure.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(azure.puts()).toHaveLength(0);
+  });
+
+  const ENTRA_PATH = "/providers/microsoft.aadiam/diagnosticSettings";
+  const SUB_SETTINGS = `/subscriptions/${SUB}/providers/Microsoft.Insights/diagnosticSettings`;
+  /** A response held until release() is called. */
+  function heldResponse(body: unknown): { answer: () => Promise<PortHttpResponse>; release: () => void } {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return {
+      answer: async () => {
+        await gate;
+        return ok(body);
+      },
+      release: () => release(),
+    };
+  }
+
+  it("reads with no document store, and a Cribl-dependent archive says the app's own setup could not be read", async () => {
+    const hubRule = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n/authorizationRules/a";
+    const azure = new RoutingAzure({
+      gets: {
+        "/subscriptions": () => ok({ value: [] }),
+        [ENTRA_PATH]: () =>
+          ok({
+            value: [
+              {
+                name: "to-hub",
+                id: "/x/to-hub",
+                properties: { eventHubAuthorizationRuleId: hubRule, logs: [{ category: "SignInLogs", enabled: true }] },
+              },
+            ],
+          }),
+      },
+    });
+    mount({ azure, store: null, pacing: PACING });
+    const read = button("Read the tenant's logging");
+    expect(read.disabled).toBe(false);
+    expect(screen.queryByText(/still loading/)).toBeNull();
+    fireEvent.click(read);
+    const entra = await screen.findByRole("button", { name: /Entra ID/ });
+    fireEvent.click(entra);
+    const signIn = screen.getAllByRole("listitem").find((t) => within(t).queryByText("SignInLogs") !== null)!;
+    expect(signIn.textContent).toContain("archive not known (this app's own Cribl setup could not be read)");
+  });
+
+  it("shows N of M reads while reading, and sends no request after the screen unmounts", async () => {
+    const entra = heldResponse({ value: [] });
+    const azure = new RoutingAzure({
+      gets: {
+        "/subscriptions": () => ok({ value: [{ subscriptionId: SUB, displayName: "one", state: "Enabled" }] }),
+        [ENTRA_PATH]: entra.answer,
+        [SUB_SETTINGS]: () => ok({ value: [] }),
+      },
+    });
+    const { view } = mount({ azure, pacing: PACING });
+    await loaded();
+    fireEvent.click(button("Read the tenant's logging"));
+    // The subscription list is done; the Entra read is held. 2 + 2 x 1 subscription.
+    expect(await screen.findByText("1 of 4 reads")).toBeTruthy();
+    expect(azure.calls.map((c) => c.path)).toEqual(["/subscriptions", ENTRA_PATH]);
+    view.unmount();
+    entra.release();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(azure.calls.map((c) => c.path)).toEqual(["/subscriptions", ENTRA_PATH]);
   });
 
   it("is disabled with its reason when there is no Azure connection", async () => {

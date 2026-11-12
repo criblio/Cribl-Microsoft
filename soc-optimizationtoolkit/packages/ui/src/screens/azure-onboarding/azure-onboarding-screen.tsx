@@ -77,6 +77,7 @@ import {
   onboardingSource,
   paceAzureManagement,
   readTenantInventory,
+  cancellableAzure,
   parseNamespaceAuthRules,
   planCriblSource,
   planLakeRoute,
@@ -443,6 +444,7 @@ export function AzureOnboardingScreen({
   // Tenant inventory heat map: the last read, kept in state only.
   const [inventory, setInventory] = useState<TenantInventory | null>(null);
   const [inventoryReading, setInventoryReading] = useState(false);
+  const [inventoryProgress, setInventoryProgress] = useState<{ done: number; total: number } | null>(null);
   const inventoryBusy = useRef(false);
   const screenMounted = useRef(true);
   useEffect(() => {
@@ -673,26 +675,46 @@ export function AzureOnboardingScreen({
     }
   }
 
+  // Blocked only while the progress record is still loading. When it could not
+  // be read (no KV store, unreadable, another tenant's), the read still runs:
+  // only "archived through Cribl" needs that record, and without it those
+  // archive states say "unknown" with the reason.
   const inventoryDisabledReason: string | null =
     ports.azure === undefined
       ? "No Azure connection is configured, so the tenant cannot be read."
-      : progress === null
-        ? "The onboarding progress has not loaded yet, so the tenant cannot be read."
+      : progressLoad.status === "loading"
+        ? "The onboarding progress is still loading, so the tenant cannot be read yet."
         : pacing === undefined
           ? "The shell gave no request pacing, so the tenant is not read."
           : null;
 
   async function onReadInventory(): Promise<void> {
     if (inventoryDisabledReason !== null || inventoryBusy.current) return;
-    if (progress === null || pacing === undefined) return;
+    if (pacing === undefined) return;
     inventoryBusy.current = true;
     setInventoryReading(true);
-    const azure = paceAzureManagement(ports.azure, { ...pacing, maxRequestsPerMinute: VALIDATE_REQUESTS_PER_MINUTE });
-    logger?.info(`${LOG} tenant inventory read started`);
+    setInventoryProgress(null);
+    // A flag, not an AbortSignal: the platform fetch bridge ignores signals.
+    // Checked inside the pacer, so a request still waiting for its slot when
+    // the screen unmounts is never sent.
+    const cancelled = (): boolean => !screenMounted.current;
+    const azure = paceAzureManagement(cancellableAzure(ports.azure, cancelled), {
+      ...pacing,
+      maxRequestsPerMinute: VALIDATE_REQUESTS_PER_MINUTE,
+    });
+    logger?.info(`${LOG} tenant inventory read started`, { progressRecord: progress !== null });
     try {
-      const result = await readTenantInventory({ azure, progress, now: () => new Date().toISOString() });
+      const result = await readTenantInventory({
+        azure,
+        progress,
+        now: () => new Date().toISOString(),
+        cancelled,
+        onProgress: (done, total) => {
+          if (screenMounted.current) setInventoryProgress({ done, total });
+        },
+      });
       if (screenMounted.current) setInventory(result);
-      logger?.info(`${LOG} tenant inventory read finished`);
+      logger?.info(`${LOG} tenant inventory read finished`, { requests: result.requests });
     } catch (error) {
       logger?.warn(`${LOG} tenant inventory read failed`, { error: errorText(error) });
     } finally {
@@ -983,6 +1005,7 @@ export function AzureOnboardingScreen({
         inventory={inventory}
         reading={inventoryReading}
         disabledReason={inventoryDisabledReason}
+        progress={inventoryProgress}
         onRead={() => void onReadInventory()}
       />
 
