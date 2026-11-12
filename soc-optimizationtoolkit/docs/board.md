@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**116 in the backlog, 39 in progress, 208 done.**
+**113 in the backlog, 42 in progress, 208 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (39)
+## In progress (42)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -731,6 +731,34 @@ Started. Anything here with an unfinished dependency is called out on its card.
   in Live Preview what the wizard and capability chips show when Cribl is
   unreachable - the behaviour change is that they finally notice.
 
+- **DBT-303** Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes
+  `DBT-F1` `story` `settled`
+  FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts
+  exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use
+  case calls them (only its own test). The least-privilege registry still
+  carries cribl.breakers.create (Worker Group Editor, 'not declared in
+  policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So
+  the registry describes a write the app never sends, and the AZR-83 ticket
+  statement ('App user covers every Cribl write') is true only because the
+  code is dead. FIX: either delete the request builder and the registry row
+  (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and
+  then declare POST in policies.yml and name the exception in the change
+  request.
+
+- **DBT-304** Local preflight's hasRequiredAccess still passes the Cribl deploy gate on a GET 2xx
+  `DBT-F1` `bug` `settled`
+  Not now because: Unreachable in the product: the only shipped shell
+  hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel),
+  where the grant really comes from the approved policies.yml. Only tests run
+  the local branch; it matters only if a customer-managed leader shell
+  returns.
+  FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer
+  records a manage capability, but runCriblPreflight's hasRequiredAccess still
+  counts a 2xx read on packs and outputs as enough to deploy. The doc comment
+  notes it. FIX: on the local branch, hasRequiredAccess should not claim write
+  access from a read; derive it from the capability verdicts (unknown, not
+  granted).
+
 - **DBT-151** Cribl secret writers send `type`, where the API schema names the field `secretType`
   `DBT-F1` `bug` `settled`
   FOUND 2026-10-26 by the AZR-30..34 plan critique; filed before any fix, and
@@ -1282,6 +1310,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
     [ ] `sas-listen-only` SAS, Listen-only rule - Keep SAS but refuse any rule with Manage and steer to a hub-scoped Listen-only rule.
     [x] `both` Offer both - Entra ID OAuth as the default, Listen-only SAS as the fallback for customers who cannot grant RBAC; Manage-capable rules refused in both.
 
+- **AZR-108** Tenant Logging Gaps still reports a stranded legacy Cribl source as not created
+  `AZR-F9` `bug` `settled`
+  Not now because: Same root as AZR-96, which now reports the stranded record
+  on the Azure onboarding screen where the operator acts on it; the gap
+  dashboard only repeats the wrong 'not created', and the input keeps running.
+  Reachable only after a lab ran two app versions against one org, or a
+  pre-upgrade tab saved during an upgrade.
+  FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has
+  the same short-circuit as loadTenantDocument: once the tenant's own progress
+  document exists, the legacy key is never read, so a Cribl source recorded
+  there by a pre-tenant build shows as not created on the gap dashboard.
+  AZR-96 added the read-only readStrandedLegacyDocument
+  (usecases/tenant-documents); FIX: call it from the gap scan and show
+  stranded/unattributed records as 'recorded by an earlier app version, not
+  adopted', with an unknown read as could-not-check. Never adopt.
+
 - **AZR-98** Automate the Activity Log source: create the subscription diagnostic setting that streams it to the chosen Event Hub
   `AZR-F9` `story` `settled`
   FILED 2026-11-11 by the operator's question 'what else do we need to enable
@@ -1673,7 +1717,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (58)
+## Backlog - next (57)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2350,22 +2394,6 @@ Settled and unblocked, sequenced behind now.
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
 
-- **AZR-108** Tenant Logging Gaps still reports a stranded legacy Cribl source as not created
-  `AZR-F9` `bug` `settled`
-  Not now because: Same root as AZR-96, which now reports the stranded record
-  on the Azure onboarding screen where the operator acts on it; the gap
-  dashboard only repeats the wrong 'not created', and the input keeps running.
-  Reachable only after a lab ran two app versions against one org, or a
-  pre-upgrade tab saved during an upgrade.
-  FOUND 2026-11-12 while fixing AZR-96. scan-tenant-gap.ts loadReadOnly has
-  the same short-circuit as loadTenantDocument: once the tenant's own progress
-  document exists, the legacy key is never read, so a Cribl source recorded
-  there by a pre-tenant build shows as not created on the gap dashboard.
-  AZR-96 added the read-only readStrandedLegacyDocument
-  (usecases/tenant-documents); FIX: call it from the gap scan and show
-  stranded/unattributed records as 'recorded by an earlier app version, not
-  adopted', with an unknown read as could-not-check. Never adopt.
-
 - **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
   `AZR-F9` `story` `settled` `blocked by AZR-98`
   FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
@@ -2593,7 +2621,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (41)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -3037,34 +3065,6 @@ Settled, gated on something above.
   | "loading" | "failed" | "loaded" union rather than
   WorkerGroupsState["kind"], so a state added to the hook would not reach the
   badge logic. Fix: import the type.
-
-- **DBT-303** Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes
-  `DBT-F1` `story` `settled`
-  FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts
-  exports buildFdrBreakerRequest and BREAKERS_API_PATH, but no shell or use
-  case calls them (only its own test). The least-privilege registry still
-  carries cribl.breakers.create (Worker Group Editor, 'not declared in
-  policies.yml'), and policies.yml declares only GET /m/:gid/lib/breakers. So
-  the registry describes a write the app never sends, and the AZR-83 ticket
-  statement ('App user covers every Cribl write') is true only because the
-  code is dead. FIX: either delete the request builder and the registry row
-  (keep buildCrowdStrikeFdrBreaker if the pack path uses it), or wire it and
-  then declare POST in policies.yml and name the exception in the change
-  request.
-
-- **DBT-304** Local preflight's hasRequiredAccess still passes the Cribl deploy gate on a GET 2xx
-  `DBT-F1` `bug` `settled`
-  Not now because: Unreachable in the product: the only shipped shell
-  hardcodes cloud mode (App.tsx useCapabilityAudit and RbacPreflightPanel),
-  where the grant really comes from the approved policies.yml. Only tests run
-  the local branch; it matters only if a customer-managed leader shell
-  returns.
-  FOUND 2026-11-12 while fixing AZR-83. After AZR-83 a local GET 2xx no longer
-  records a manage capability, but runCriblPreflight's hasRequiredAccess still
-  counts a 2xx read on packs and outputs as enough to deploy. The doc comment
-  notes it. FIX: on the local branch, hasRequiredAccess should not claim write
-  access from a read; derive it from the capability verdicts (unknown, not
-  granted).
 
 - **AZR-24** Persist the Event Hub prerequisite choice
   `AZR-F9` `story` `settled` `blocked by AZR-11`
