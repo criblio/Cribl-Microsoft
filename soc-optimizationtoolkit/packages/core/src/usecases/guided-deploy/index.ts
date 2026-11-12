@@ -49,17 +49,6 @@ export type {
 // Pack-name auto version bump
 export { bumpPackVersion, DEFAULT_PACK_VERSION } from "./pack-version";
 
-// CrowdStrike FDR breaker literal (core data)
-export {
-  buildCrowdStrikeFdrBreaker,
-  isCrowdStrikeVendor,
-  CROWDSTRIKE_FDR_BREAKER_ID,
-} from "./fdr-breaker";
-export type {
-  CrowdStrikeFdrBreaker,
-  CrowdStrikeFdrBreakerRule,
-} from "./fdr-breaker";
-
 // The one secret convention + ensure-secret
 export {
   SENTINEL_CLIENT_SECRET_DESCRIPTION,
