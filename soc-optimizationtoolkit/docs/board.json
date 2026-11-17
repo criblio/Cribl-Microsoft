@@ -4565,7 +4565,7 @@
     {
       "id": "AZR-100",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "dependsOn": [],
       "title": "Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice",
@@ -4577,7 +4577,7 @@
     {
       "id": "AZR-101",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "dependsOn": [],
       "title": "Azure Activity Log is listed under 'Azure Policy - built-in initiatives', but it is a subscription diagnostic setting, not a policy",
