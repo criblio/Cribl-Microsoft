@@ -135,8 +135,10 @@ read `progress.chosen` for every source in How-to mode. The operator ruled
 - **Review follow-up (same day).** Switching a How-to source to Automate is
   refused while the selection cannot be used (loading, refused, not ours,
   unreadable, no storage): the How-to choice could not be carried into it, and
-  a stale entry would decide instead. The chooser disables that option and says
-  why. Both deploy sections gate on the source's choice (chosen AND Automate),
+  a stale entry would decide instead. The reverse move, an Automate source to
+  How-to, is refused too: its choice lives in the unread selection, so it would
+  be written to progress as a confident "not chosen". The chooser disables
+  both options and says why. Both deploy sections gate on the source's choice (chosen AND Automate),
   never on `selection.enabled`, so an unknown choice keeps Deploy off with the
   reason. A failed selection write keeps its own line in section 2 until a
   selection write succeeds; a successful progress write clears every earlier
