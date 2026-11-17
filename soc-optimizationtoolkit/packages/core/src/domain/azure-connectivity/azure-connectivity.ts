@@ -39,13 +39,16 @@ export function requestedPermissions(
   if (connectivity === "disconnected") return [];
   const plan = appPermissionPlan(effectiveSetupPath(connectivity, saved));
   if (connectivity === "full") return plan;
-  return plan.filter((p) => allowed.includes(p.name));
+  // By key, not name: Reader at the subscription and Reader on an Event Hub
+  // namespace elsewhere are ticked separately (AZR-84).
+  return plan.filter((p) => allowed.includes(p.key));
 }
 
 /**
- * The Azure RBAC role names a connectivity choice asks for - the filter the
- * role-assignment ticket and the az CLI script apply, so neither names a role
- * the operator did not tick.
+ * The Azure RBAC entries a connectivity choice asks for, by
+ * {@link AppPermission.key} - the filter the role-assignment ticket and the az
+ * CLI script apply, so neither names a role the operator did not tick. A
+ * setup-path role's key is its role name, which is what the script matches.
  */
 export function requestedRoleNames(
   connectivity: AzureConnectivity,
@@ -53,7 +56,7 @@ export function requestedRoleNames(
   saved: AzureSetupPath,
 ): string[] {
   return rbacPermissions(requestedPermissions(connectivity, allowed, saved)).map(
-    (p) => p.name,
+    (p) => p.key,
   );
 }
 
@@ -67,7 +70,9 @@ export function scopeNeed(
   if (connectivity === "disconnected" || requested.length === 0) return "none";
   if (requested.some((p) => p.scopeLevel === "resourceGroup")) return "full";
   if (requested.some((p) => p.scopeLevel === "subscription")) return "subscription";
-  // Tenant-only Graph entries need no Azure scope.
+  // Tenant-only entries (Graph, an Entra directory role), and grants at a
+  // management group or on a resource the configuration does not name, need
+  // no configured subscription or resource group.
   return "none";
 }
 
@@ -77,7 +82,7 @@ export function checklistEntries(): {
   others: AppPermission[];
 } {
   const plan = appPermissionPlan("existing");
-  const readOnly = plan.find((p) => p.name === READ_ONLY_PERMISSION);
+  const readOnly = plan.find((p) => p.key === READ_ONLY_PERMISSION);
   if (!readOnly) {
     throw new Error(
       `${READ_ONLY_PERMISSION} is missing from the existing-path permission plan`,

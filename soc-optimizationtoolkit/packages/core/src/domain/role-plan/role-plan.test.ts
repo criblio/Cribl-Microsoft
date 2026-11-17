@@ -12,8 +12,15 @@
  *      condition - rather than by restating either.
  */
 import { describe, expect, it } from "vitest";
-import { LAB_RBAC_CONDITION, renderRoleAssignmentCli, rolePlanForSetupPath } from "./index";
-import { leastRoleFor } from "../least-privilege";
+import {
+  LAB_RBAC_CONDITION,
+  NETWORK_WATCHER_RESOURCE_GROUP,
+  adminStepsForSetupPath,
+  renderRoleAssignmentCli,
+  rolePlanForSetupPath,
+} from "./index";
+import { leastRoleFor, privilegeOperation } from "../least-privilege";
+import { AZURE_NETWORK_WATCHER_RG } from "../labs/lab-flowlogs";
 import type { RoleAssignmentCliParams } from "./index";
 
 const BLANK: RoleAssignmentCliParams = {
@@ -127,7 +134,7 @@ describe("rolePlanForSetupPath", () => {
         role: "Contributor",
         scopeLevel: "resourceGroup",
         justification:
-          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it: the Event Grid provider registration (subscription) and the regional Network Watcher (NetworkWatcherRG) need rights there, or an admin who registers the provider and creates the watcher first.",
+          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it; the two lab steps that do - flow logs on the regional Network Watcher, and the Event Grid provider registration - are asked for separately.",
         feature: "Deploy the lab environment",
         withoutIt:
           "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
@@ -144,7 +151,35 @@ describe("rolePlanForSetupPath", () => {
         withoutIt:
           "The deploy stops at the TTL step: a lab with no working self-destruct is never left running.",
       },
+      // AZR-81: the flow logs are written on the region's watcher, which
+      // Azure keeps in NetworkWatcherRG, outside the lab group.
+      {
+        role: "Network Contributor",
+        scopeLevel: "resourceGroup",
+        resourceGroup: "NetworkWatcherRG",
+        necessity: "feature",
+        justification:
+          "Read the region's Network Watcher and write the lab's flow logs on it. Azure keeps one watcher per region per subscription, normally in NetworkWatcherRG, so the lab cannot create its own in the lab resource group.",
+        feature: "Lab vNet flow logs",
+        withoutIt:
+          "The flow-logs step fails with a message naming NetworkWatcherRG; the rest of the lab deploys.",
+      },
     ]);
+    expect(leastRoleFor("flowLog.write")).toBe("Network Contributor");
+    expect(NETWORK_WATCHER_RESOURCE_GROUP).toBe(AZURE_NETWORK_WATCHER_RG);
+  });
+
+  it("asks the byo lab's admin to register Event Grid once, instead of a subscription role (AZR-81)", () => {
+    expect(adminStepsForSetupPath("lab-byo-rg").map((s) => s.command)).toEqual([
+      "az provider register --namespace Microsoft.EventGrid --subscription <subscriptionId>",
+    ]);
+    expect(adminStepsForSetupPath("lab-byo-rg")[0]?.justification).toContain(
+      privilegeOperation("eventGrid.provider.register").operation,
+    );
+    expect(adminStepsForSetupPath("lab-new-rg")).toEqual([]);
+    expect(adminStepsForSetupPath("existing")).toEqual([]);
+    // No subscription-scope ROLE on the byo path: that is the point of it.
+    expect(rolePlanForSetupPath("lab-byo-rg").some((r) => r.scopeLevel === "subscription")).toBe(false);
   });
 
   it("reads every role name it can from the least-privilege registry (AZR-61)", () => {
@@ -204,12 +239,17 @@ describe("renderRoleAssignmentCli - characterization", () => {
     ]);
   });
 
-  it("lab-byo-rg: one resource-group Contributor command; the RBAC Administrator grant is a portal comment", () => {
+  it("lab-byo-rg: lab-group Contributor, Network Contributor on NetworkWatcherRG, and the Event Grid registration; RBAC Administrator is a portal comment", () => {
+    // RE-PINNED (AZR-81): the two lab steps outside the group are in the script.
     expect(commandLines(renderRoleAssignmentCli("lab-byo-rg", BLANK))).toEqual([
       'az role assignment create --assignee <clientId> --role "Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<labRg>',
+      'az role assignment create --assignee <clientId> --role "Network Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/NetworkWatcherRG',
+      "az provider register --namespace Microsoft.EventGrid --subscription <subscriptionId>",
     ]);
     expect(commandLines(renderRoleAssignmentCli("lab-byo-rg", FILLED))).toEqual([
       'az role assignment create --assignee CID --role "Contributor" --scope /subscriptions/SUB/resourceGroups/RG',
+      'az role assignment create --assignee CID --role "Network Contributor" --scope /subscriptions/SUB/resourceGroups/NetworkWatcherRG',
+      "az provider register --namespace Microsoft.EventGrid --subscription SUB",
     ]);
   });
 

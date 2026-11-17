@@ -46,6 +46,11 @@ import {
 /** ARM error code when a storage account name is globally taken. */
 const STORAGE_NAME_TAKEN = "StorageAccountAlreadyTaken";
 
+/** What to do when the subscription has not registered Event Grid (AZR-81). */
+export const EVENT_GRID_REGISTRATION_REMEDY =
+  "ask a subscription admin to register Microsoft.EventGrid once " +
+  "(az provider register --namespace Microsoft.EventGrid)";
+
 /** Run the storage phase (the sequencer guards on hasStep). */
 export async function runStoragePhase(ctx: LabPhaseContext): Promise<void> {
   const { azure, input, result, errors, sub, rg } = ctx;
@@ -252,10 +257,16 @@ export async function runStoragePhase(ctx: LabPhaseContext): Promise<void> {
 
   // Provider registration (legacy Register-AzResourceProvider path).
   const provider = await azure.request(buildEventGridProviderGetRequest(sub));
+  // AZR-81: a 403 means the caller cannot read the subscription (the
+  // bring-your-own lab), not that the provider is unregistered. Registering
+  // would 403 too and fail a step that may not need it, so go on to the topic
+  // PUT: an unregistered subscription answers that with
+  // MissingSubscriptionRegistration, which is reported with the remedy.
+  const providerUnreadable = provider.status === 403;
   let registration = is2xx(provider.status)
     ? parseProviderRegistrationState(provider.body)
     : "";
-  if (registration !== "Registered") {
+  if (registration !== "Registered" && !providerUnreadable) {
     const register = await azure.request(buildEventGridProviderRegisterRequest(sub));
     if (!is2xx(register.status)) {
       egFailed = httpErrorText(
@@ -293,6 +304,9 @@ export async function runStoragePhase(ctx: LabPhaseContext): Promise<void> {
     });
     if (ensured.status === "failed") {
       egFailed = ensured.error ?? "";
+      if (egFailed.includes("MissingSubscriptionRegistration")) {
+        egFailed += ` - ${EVENT_GRID_REGISTRATION_REMEDY}`;
+      }
     }
   }
   if (egFailed === "") {

@@ -29,6 +29,7 @@ import {
   deriveResourceGroup,
   effectiveSetupPath,
   renderRoleAssignmentCli,
+  requestedPermissions,
   requestedRoleNames,
   resourceCreationRequest,
   roleAssignmentRequest,
@@ -51,6 +52,7 @@ import {
   parseSubscriptionOptions,
   parseWorkspaceOptions,
   permissionScopeChecks,
+  unmeasuredGrantLines,
   resourceGroupSelectOptions,
   resourcesSummary,
   scriptCopyFeedback,
@@ -399,6 +401,11 @@ export function AzureResourcesSection({
             ...evaluateScopeLines(check.label, res.status, res.body, check.required),
           );
         }
+        validationLines.push(
+          ...unmeasuredGrantLines(
+            requestedPermissions(connectivity, allowedPermissions, savedSetupPath),
+          ),
+        );
       } catch (err) {
         validationLines.push(`Permission validation error: ${String(err)}`);
         setRecheckFailed(true);
@@ -410,7 +417,16 @@ export function AzureResourcesSection({
     } finally {
       setValidating(false);
     }
-  }, [ports, buildKvReport, setupPath, subscriptionId, rgName]);
+  }, [
+    ports,
+    buildKvReport,
+    setupPath,
+    subscriptionId,
+    rgName,
+    connectivity,
+    allowedPermissions,
+    savedSetupPath,
+  ]);
 
   // The az role-assignment script for the selected setup path, built from the
   // SELECTED (or bootstrap-typed) subscription and the derived/selected resource

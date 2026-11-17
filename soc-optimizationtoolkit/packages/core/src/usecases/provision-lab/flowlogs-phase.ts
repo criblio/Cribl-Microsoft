@@ -18,9 +18,15 @@ import {
   labFlowLogName,
 } from "../../domain/labs/lab-flowlogs";
 import { DEFAULT_LAB_SUBNETS } from "../../domain/labs/lab-naming";
-import { httpErrorText, is2xx } from "../arm-http";
+import { httpErrorText, is2xx, isErrorCode } from "../arm-http";
 import type { LabPhaseContext } from "./lab-phase-context";
 import type { LabFlowLogsOutcome } from "./provision-lab-types";
+
+/**
+ * The error code Azure answers a second Network Watcher in one region with
+ * (one watcher per region per subscription).
+ */
+export const WATCHER_LIMIT_CODE = "NetworkWatcherCountLimitReached";
 
 /** Run the flow-logs phase (the sequencer guards on hasStep). */
 export async function runFlowLogsPhase(ctx: LabPhaseContext): Promise<void> {
@@ -54,15 +60,26 @@ export async function runFlowLogsPhase(ctx: LabPhaseContext): Promise<void> {
       watcherRg = AZURE_NETWORK_WATCHER_RG;
       watcherName = azureDefaultNetworkWatcherName(input.location);
     } else {
+      // A 404 means no regional watcher; a 403 (AZR-81) hides whether one
+      // exists, because ARM refuses before it looks. Either way try the lab
+      // group: a subscription that opted out of automatic watchers has none,
+      // and the PUT succeeds. Azure allows one watcher per region per
+      // subscription, so when one exists it refuses this PUT - no duplicate is
+      // ever created - and that refusal is reported with the remedy.
       const createWatcher = await azure.request(
         buildNetworkWatcherPutRequest(sub, rg, watcherName, input.location),
       );
       if (!is2xx(createWatcher.status)) {
-        flError = httpErrorText(
-          `create Network Watcher '${watcherName}'`,
-          createWatcher.status,
-          createWatcher.body,
-        );
+        flError = isErrorCode(createWatcher.body, WATCHER_LIMIT_CODE)
+          ? `the region's existing Network Watcher, usually in ${AZURE_NETWORK_WATCHER_RG}, ` +
+            `could not be ${defaultWatcher.status === 403 ? "read (HTTP 403)" : "used"}, and Azure allows only one per region. ` +
+            `Grant the app Network Contributor on that watcher's resource group (usually ${AZURE_NETWORK_WATCHER_RG}), ` +
+            "or have an admin create the flow logs."
+          : httpErrorText(
+              `create Network Watcher '${watcherName}'`,
+              createWatcher.status,
+              createWatcher.body,
+            );
       }
     }
   }

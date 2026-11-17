@@ -261,12 +261,27 @@ describe("roleAssignmentRequest role selection", () => {
     const grant = out.slice(out.indexOf(`- Security Admin at ${rg}`));
     expect(grant.slice(0, grant.indexOf("[feature]"))).toContain("Defender section");
     expect(out).toContain(
-      `- Azure Event Hubs Data Owner at ${privilegeOperation("eventhub.rule.listKeys").scopeNote}  [feature]`,
+      `- Azure Event Hubs Data Owner at ${privilegeOperation("eventhub.rule.listKeys").scopeNote} (skip if a role above already covers it)  [feature]`,
     );
     expect(out).toContain("Condition: Constrain roles and principal types: only Monitoring Metrics Publisher");
     expect(out).toContain("[feature] roles each unlock one named capability");
     // A justification per feature role too.
-    expect(out).toContain(`- Security Admin (${rg} (the default; `);
+    // One pair of parentheses, never two (review of AZR-84): a scope with a
+    // note is written "at <scope> - <note>".
+    expect(out).toContain(`- Security Admin at ${rg} - the default; `);
+  });
+
+  it("writes no justification line with nested parentheses", () => {
+    for (const path of ["existing", "lab-new-rg", "lab-byo-rg"] as const) {
+      const out = roleAssignmentRequest(ctxFor(path));
+      const justification = out.slice(out.indexOf("Justification\n"), out.indexOf("Cribl side"));
+      for (const line of justification.split("\n").filter((l) => l.startsWith("- "))) {
+        expect(line, `${path}: ${line}`).not.toMatch(/\([^)]*\(/);
+      }
+    }
+    expect(roleAssignmentRequest(ctxFor("existing"))).toContain(
+      "- Reader on the Event Hub namespace - skip if a role above already covers it: Validate,",
+    );
   });
 
   it("lab-new-rg: subscription Contributor + RBAC Administrator with the constraint condition", () => {
@@ -280,8 +295,9 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain(
       "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
-    // Not scoped to a resource group on this path.
-    expect(out).not.toContain("Reader at");
+    // Not the existing path's roles: no Reader at the subscription. (Reader on
+    // an Event Hub namespace outside it is asked, AZR-84.)
+    expect(out).not.toContain("- Reader at /subscriptions");
   });
 
   it("lab-byo-rg: Contributor plus conditioned RBAC Administrator on the pre-created RG (AZR-61 audit)", () => {
@@ -294,7 +310,7 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain(
       "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
-    expect(out).not.toContain("- Reader at");
+    expect(out).not.toContain("- Reader at /subscriptions");
   });
 
   it("embeds both the deploy and ingestion flows, and renders placeholders when blank", () => {
@@ -482,10 +498,13 @@ describe("AZR-61 - the app-registration ticket asks for what the audit found mis
   });
 
   it("asks a subscription-Contributor lab path for none of them", () => {
+    // RE-PINNED BACK (review of AZR-84): a lab creates its namespace in its
+    // own group, so the outside-scope rows are the existing path's alone.
     const out = appRegistrationRequest(ctxFor("lab-new-rg"));
     expect(out).not.toContain("Azure Event Hubs Data Owner");
-    expect(out).not.toContain("Security Admin");
-    expect(out).not.toContain("Security Reader");
+    // Exact lines: "Security Administrator" (the Entra role, AZR-82) contains "Security Admin".
+    expect(out).not.toContain("- Security Admin  [feature]");
+    expect(out).not.toContain("- Security Reader  [feature]");
   });
 });
 
@@ -617,5 +636,80 @@ describe("AZR-83 - both permission tickets state the Cribl-side least privilege"
     );
     expect(out).toContain("No roles are requested");
     expect(out).toContain("Cribl side (stated, not requested)");
+  });
+});
+
+describe("AZR-84 - the tickets name grants on resources outside the configured scope", () => {
+  it("renders each in words with its skip caveat, in the role ticket", () => {
+    const out = roleAssignmentRequest(ctxFor("existing"));
+    for (const id of ["ampls.scopedResource.write", "dce.read", "eventhub.namespace.read"] as const) {
+      const op = privilegeOperation(id);
+      expect(out).toContain(
+        `- ${op.leastRole} at ${op.scopeNote} (skip if a role above already covers it)  [feature]`,
+      );
+    }
+  });
+
+  it("lets a partial request tick the namespace Reader apart from the subscription Reader", () => {
+    const onlySub = roleAssignmentRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: ["Reader"] }),
+    );
+    expect(onlySub).not.toContain("- Reader at the Event Hub namespace");
+    const both = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader", "Reader (Event Hub namespace)"],
+      }),
+    );
+    expect(both).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
+    expect(both).toContain("- Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]");
+  });
+});
+
+describe("AZR-82 - the tickets ask for the management-group and Entra reads", () => {
+  it("names the management group scope as a path, not the resource group it would otherwise fall through to", () => {
+    const out = roleAssignmentRequest(ctxFor("existing"));
+    expect(out).toContain(
+      "- Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]",
+    );
+  });
+
+  it("puts the Entra directory role in its own section, apart from Graph consent", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    const graphAt = out.indexOf("Microsoft Graph API permissions (admin consent required)");
+    const entraAt = out.indexOf("Entra ID directory roles (optional)");
+    expect(graphAt).toBeGreaterThan(-1);
+    expect(entraAt).toBeGreaterThan(graphAt);
+    const entra = out.slice(entraAt, out.indexOf("Cribl side (stated, not requested)"));
+    expect(entra).toContain("- Security Administrator  [feature, unverified]");
+    expect(entra).toContain("Entra ID > Roles and administrators");
+    expect(out.slice(graphAt, entraAt)).not.toContain("Security Administrator");
+  });
+
+  it("lets a partial request tick the management group Reader on its own", () => {
+    const only = roleAssignmentRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: ["Reader (management group)"] }),
+    );
+    expect(only).toContain("- Reader at /providers/Microsoft.Management/managementGroups/");
+    expect(only).not.toContain("- Reader at /subscriptions");
+  });
+});
+
+describe("AZR-81 - the byo lab tickets ask for the steps outside the lab group", () => {
+  it("asks for Network Contributor on NetworkWatcherRG and the Event Grid registration, in both tickets", () => {
+    const watcher =
+      "/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/NetworkWatcherRG";
+    const command =
+      "    Command:        az provider register --namespace Microsoft.EventGrid --subscription 33333333-3333-3333-3333-333333333333";
+    const roles = roleAssignmentRequest(ctxFor("lab-byo-rg"));
+    expect(roles).toContain(`- Network Contributor at ${watcher}  [feature]`);
+    expect(roles).toContain("Admin steps (setup path: lab-byo-rg)");
+    expect(roles).toContain(command);
+    const registration = appRegistrationRequest(ctxFor("lab-byo-rg"));
+    expect(registration).toContain(`Scope:          ${watcher}`);
+    expect(registration).toContain(command);
+    // Not on the paths whose subscription grant already reaches both.
+    expect(roleAssignmentRequest(ctxFor("lab-new-rg"))).not.toContain("NetworkWatcherRG");
+    expect(roleAssignmentRequest(ctxFor("lab-new-rg"))).not.toContain("Admin steps");
   });
 });

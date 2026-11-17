@@ -39,6 +39,23 @@ export const LAB_PERMISSIONS_API_VERSION = "2022-04-01";
 /** The action the TTL grant needs (checked separately for ABAC conditions). */
 export const ROLE_ASSIGNMENTS_WRITE_ACTION = operationAction("lab.roleAssignment.write");
 
+/**
+ * Where a lab action is decided, when it is not the scope the resource-group
+ * mode operates on (AZR-81). The bring-your-own lab holds rights on its own
+ * group only, and two steps reach outside it:
+ *
+ * - `subscription`: registering the Event Grid provider is per subscription.
+ * - `network-watcher-rg`: Azure keeps one Network Watcher per region per
+ *   subscription, normally in NetworkWatcherRG, and the flow logs go there.
+ */
+export type LabActionScope = "subscription" | "network-watcher-rg";
+
+/** A required lab action, tagged with the scope it is decided at when that differs. */
+export interface LabRequiredAction extends RequiredAction {
+  /** Absent: the scope the resource-group mode operates on. */
+  scope?: LabActionScope;
+}
+
 /** GET the caller's effective permissions at an ARM scope. */
 export function buildLabPermissionsGetRequest(
   scopePath: string,
@@ -62,8 +79,8 @@ export function buildLabPermissionsGetRequest(
 export function labRequiredActions(
   flags: LabComponentFlags,
   rgMode: "create-new" | "bring-your-own",
-): RequiredAction[] {
-  const actions: RequiredAction[] = [];
+): LabRequiredAction[] {
+  const actions: LabRequiredAction[] = [];
   if (rgMode === "create-new") {
     actions.push({
       action: operationAction("resourceGroup.create"),
@@ -95,6 +112,17 @@ export function labRequiredActions(
         action: operationAction("eventGrid.systemTopic.write"),
         label: "Wire Event Grid blob notifications",
       });
+      // A create-new lab is evaluated at the subscription, where this is
+      // already decided; bring-your-own must check the subscription itself.
+      if (rgMode === "bring-your-own") {
+        actions.push({
+          action: operationAction("eventGrid.provider.register"),
+          label:
+            "Register the Event Grid provider on the subscription (not needed if an admin already did)",
+          scope: "subscription",
+          necessity: "feature",
+        });
+      }
     }
   }
   if (isLabPhaseRequired(3, flags)) {
@@ -154,6 +182,23 @@ export function labRequiredActions(
       action: operationAction("networkWatcher.write"),
       label: "Configure vNet flow logs",
     });
+    if (rgMode === "bring-your-own") {
+      actions.push(
+        {
+          action: operationAction("networkWatcher.read"),
+          label: "Read the region's Network Watcher in NetworkWatcherRG",
+          scope: "network-watcher-rg",
+          // Feature, as the role plan asks for it: only the flow logs need it.
+          necessity: "feature",
+        },
+        {
+          action: operationAction("flowLog.write"),
+          label: "Write flow logs on the region's Network Watcher in NetworkWatcherRG",
+          scope: "network-watcher-rg",
+          necessity: "feature",
+        },
+      );
+    }
   }
   if (flags.virtualMachines.deployVMs) {
     actions.push(

@@ -334,7 +334,11 @@ describe("checklist tips name the permission first (I6)", () => {
     expect(tips).toHaveLength(entries.length);
     entries.forEach((entry, i) => {
       const prefix =
-        entry.kind === "graph-api" ? "Graph permission: " : "Role: ";
+        entry.kind === "graph-api"
+          ? "Graph permission: "
+          : entry.kind === "entra-directory-role"
+            ? "Entra directory role: "
+            : "Role: ";
       const tip = tips[i] ?? "";
       expect(tip.startsWith(prefix + entry.name)).toBe(true);
       expect(tip.indexOf(entry.justification)).toBeGreaterThan(
@@ -358,5 +362,33 @@ describe("the Disconnected stored-identity actions are buttons (L3)", () => {
     for (const name of ["Clear stored identity", "Use Partially Connected"]) {
       expect(screen.getByRole("button", { name }).className).toBe("run-button");
     }
+  });
+});
+
+describe("the bring-your-own lab note (AZR-81)", () => {
+  it("names the two steps outside the lab group and never claims no subscription-scope rights", () => {
+    const config = { ...EMPTY_AZURE_CONFIG, connectivity: "full" as const, setupPath: "lab-byo-rg" as const };
+    const { container } = render(
+      <PortsProvider ports={{} as unknown as UiPorts} config={config}>
+        <AzureConnectSection
+          tenantId=""
+          onTenantIdChange={vi.fn()}
+          clientId=""
+          onClientIdChange={vi.fn()}
+          setupPath="lab-byo-rg"
+          onSetupPathChange={vi.fn()}
+          secretLive={false}
+          ctx={{ appName: "test", config }}
+          onConnect={vi.fn()}
+          storageNote="note"
+        />
+      </PortsProvider>,
+    );
+    const tips = Array.from(container.querySelectorAll(".info-tip-pop")).map((n) => n.textContent ?? "");
+    const note = tips.find((t) => t.startsWith("Least privilege for labs"));
+    expect(note).toBeDefined();
+    expect(note).not.toMatch(/no subscription-scope/i);
+    expect(note).toContain("Network Contributor on NetworkWatcherRG");
+    expect(note).toContain("Event Grid needs the provider registered on the subscription once");
   });
 });

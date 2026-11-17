@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**111 in the backlog, 38 in progress, 214 done.**
+**110 in the backlog, 38 in progress, 217 done.**
 
 ## By menu item
 
@@ -27,22 +27,22 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 5 | 5 | 2 |
-| Sentinel Integration | 52 | 103 | 23 |
+| Sentinel Integration | 53 | 103 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
-| Labs | 3 | 2 | 2 |
+| Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 4 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 35 | 46 | 9 |
-| Azure Logging Map | 4 | 1 | 2 |
+| Azure Native Source Onboarding | 35 | 47 | 9 |
+| Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 149.
+Open work totals 148.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 54% (52/97)
+### `AZR` Azure native source onboarding - 56% (55/98)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,8 +64,8 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 36/56 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 14/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 36/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 17/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -117,13 +117,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 62% (112/181)
+### `DBT` Quality and technical debt _(enabler)_ - 62% (112/182)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 48/97 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 48/98 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 52/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -1328,7 +1328,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (15)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1553,67 +1553,18 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
-- **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
-  `AZR-F10` `bug` `settled`
-  FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
-  Labs GET and PUT the Event Grid provider registration at the subscription
-  (Microsoft.EventGrid/register/action), read NetworkWatcherRG and may write
-  the flow log on the watcher there, and the byo plan asked for Contributor on
-  the lab RG only while saying 'no subscription-scope rights are needed'.
-  AZR-61 review corrected the claim (role-plan justification, CLI header, and
-  a pin that no plan says it while asking for a subscription-scope role).
-  STILL OPEN: the ticket must either ask for register/action at the
-  subscription and Reader or Network Contributor on NetworkWatcherRG, or tell
-  the admin to pre-register the provider and create the watcher; the lab
-  preflight should check both. DIAGNOSED 2026-11-11 (read-only, two refuters
-  agreed): STILL REAL. rolePlanForSetupPath("lab-byo-rg") still asks only RG
-  Contributor + RBAC Admin; labRequiredActions never checks
-  Microsoft.EventGrid/register/action (subscription) or networkWatchers/read
-  on NetworkWatcherRG, so the preflight passes and deploy fails; storage-phase
-  POSTs register after a 403 GET and flowlogs-phase PUTs a duplicate watcher
-  after a 403 on NetworkWatcherRG. azure-connect-section.tsx:82-84 and
-  feature-catalog.md:238 still claim no subscription-scope rights. Proposed:
-  admin prerequisite items (register Microsoft.EventGrid; Reader/Network
-  Contributor on NetworkWatcherRG), scope-tagged preflight, and 403 handling
-  in both phases. Size M. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
-- **AZR-82** Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads
-  `AZR-F10` `bug` `settled`
-  FOUND by the AZR-61 audit (discrepancies 10 and 11, medium,
-  missing-from-plan). Policy assignments, definitions, exemptions and
-  remediations, and managementGroups/descendants, are read at the customer's
-  management group (logging-map-requests.ts,
-  onboarding-validation/requests.ts, read-logging-map.ts); the Entra
-  diagnostic settings read (GET
-  /providers/microsoft.aadiam/diagnosticSettings) is tenant-level. No plan
-  asks for Management Group Reader or the aadiam read, whose least privilege
-  for a service principal is undocumented (low confidence). FIX: per-tenant
-  feature rows for both, the aadiam one marked unverified and optional, and
-  Validate reporting a 403 there as unknown, never red. DIAGNOSED 2026-11-11:
-  PARTLY REAL. The ticket catalog cannot express management-group scope
-  (rbacScopeOf throws), and the aadiam read needs an Entra directory role that
-  fits neither kind. Refuter correction (accepted): scopeCovers must not let a
-  subscription grant cover a managementGroup need, or the new row is
-  suppressed; the coverage pin must match role name AND scope level. Size M.
-  Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
-
-- **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
-  `AZR-F10` `bug` `settled`
-  FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
-  onboard-batch associates the DCE with an AMPLS at its own subscription and
-  RG (Monitoring Contributor there); deployment-preview reads the DCE a DCR
-  names, which may sit elsewhere; Validate, Create Cribl source and Defender
-  read the Event Hub namespace, its rules and consumer groups, which may sit
-  in another subscription. FIX: name each as a resource-scoped feature row in
-  words (as listKeys is), and have the preflight report those scopes as
-  unknown rather than denied. DIAGNOSED 2026-11-11 (two refuters agreed):
-  STILL REAL. Cross-scope operations (AMPLS scoped resource write, DCE read,
-  Event Hub namespace read, ...) are in the least-privilege registry but never
-  reached FEATURE_ROLES, and scopeCovers treats a subscription grant as
-  covering any resource. Size M. Full diagnosis, fix plan and pins:
-  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+- **AZR-109** Direct configuration repeats an unattributed How-to note per source, and the page description names only the Defender export
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after
+  AZR-100/101. Section 5 Direct configuration showed "This source is set to
+  How-to, so the app does not deploy it. Follow its steps under How to set it
+  up yourself, or switch it back to Automate under Choose what to onboard."
+  twice - once for the Azure Activity Log and once for the Defender export -
+  with neither naming its source, and the Activity Log one shown although it
+  is Not chosen. The route description above the screen still reads "... and
+  deploy the Defender for Cloud alert export", though the Activity Log is
+  deployable too (AZR-98). FIX: name the source in the note and show it only
+  for a chosen How-to source; update the route description.
 
 ---
 
@@ -1685,12 +1636,14 @@ Settled and unblocked, sequenced behind now.
   existing Splunk/Elastic flow with redacted data this should match. Nothing
   in the current app or the map mockup draws Splunk or Elastic flows; the only
   candidate found is the deprecated Electron SiemMigration page. Until that is
-  answered the redaction behaviour is unspecified.
-  DECISION (unanswered): Which existing Splunk/Elastic end-to-end flow (with
-  redacted data) should the Lakehouse lane match?
+  answered the redaction behaviour is unspecified. ANSWERED 2026-11-17 by the
+  operator: design the redacted flow fresh for the map (not settled until the
+  reasoning reaches backlog.md).
+  DECISION: Which existing Splunk/Elastic end-to-end flow (with redacted data)
+  should the Lakehouse lane match?
     [ ] `electron-siem` The deprecated Electron SIEM Migration page - deprecated/Cribl-Microsoft_IntegrationSolution/src/renderer/pages/SiemMigration.tsx - the only Splunk/Elastic flow page found in the repo.
     [ ] `outside-repo` A flow outside this repo - The operator links the page or deck; its redaction behaviour becomes the spec.
-    [ ] `design-new` Design the redacted flow fresh for the map - Sample events per lane with sensitive fields masked, drawn on the where-data-goes lines; Splunk and Elastic lanes get the same treatment.
+    [x] `design-new` Design the redacted flow fresh for the map - Sample events per lane with sensitive fields masked, drawn on the where-data-goes lines; Splunk and Elastic lanes get the same treatment.
 
 - **DBT-4** Name inline breaker rulesets instead of showing "Default selection"
   `DBT-F3` `story` `settled`
@@ -2521,7 +2474,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (39)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -2734,7 +2687,8 @@ Settled, gated on something above.
   format the Lake copy is written in. The app never sets a Lake format at all
   - wire-source.ts POSTs only { id: dataset } - so it inherits Cribl's
   default, which is a different and more actionable gap than "Parquet was
-  chosen silently".
+  chosen silently". OPERATOR 2026-11-17: measure later - run the live
+  comparison when WIN-5 is picked up; the Parquet default stays until then.
 
 - **D-6** `PK-2` source of truth: does maintenance re-analyse, or read a stored analysis? Re-analysing ne
   `PK-F1` `decision` `settled`
@@ -3044,9 +2998,22 @@ Settled, gated on something above.
   between cells, Enter opens the reason) so the Read buttons are a few
   keystrokes away. Reasoning in backlog.md section 6i.
 
+- **DBT-305** feature-catalog.md: rows after the Setup-path gating paragraph render outside their table, and the paragraph still says byo is RG-scoped Contributor only
+  `DBT-F1` `bug` `settled`
+  Not now because: Documentation only: no operator sees feature-catalog.md in
+  the product, and the change requests and Labs card already say what
+  bring-your-own needs. It outranks nothing that changes what the app asks an
+  approver for.
+  FOUND 2026-11-17 by the AZR-81/82/84 review. In docs/feature-catalog.md the
+  KQL validation, AD user lookups and O365 validation rows follow the
+  "Setup-path gating" paragraph, so they render as plain text, not table rows;
+  the paragraph still says lab bring-your-own-RG needs RG-scoped Contributor
+  only, which AZR-81 made false (NetworkWatcherRG and the Event Grid admin
+  step). FIX: move the rows into the table and correct the paragraph.
+
 ---
 
-## Done (214)
+## Done (217)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8662,6 +8629,73 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   reviewed (every confirmed finding fixed and its pin mutation-checked), and
   every CI gate re-run green by the operator's session after the last commit.
 
+- **AZR-81** Bring-your-own lab: resource-group Contributor does not reach the Event Grid provider registration or NetworkWatcherRG, which the lab calls
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (comparison discrepancy 7, medium, wrong-scope).
+  Labs GET and PUT the Event Grid provider registration at the subscription
+  (Microsoft.EventGrid/register/action), read NetworkWatcherRG and may write
+  the flow log on the watcher there, and the byo plan asked for Contributor on
+  the lab RG only while saying 'no subscription-scope rights are needed'.
+  AZR-61 review corrected the claim (role-plan justification, CLI header, and
+  a pin that no plan says it while asking for a subscription-scope role).
+  STILL OPEN: the ticket must either ask for register/action at the
+  subscription and Reader or Network Contributor on NetworkWatcherRG, or tell
+  the admin to pre-register the provider and create the watcher; the lab
+  preflight should check both. DIAGNOSED 2026-11-11 (read-only, two refuters
+  agreed): STILL REAL. rolePlanForSetupPath("lab-byo-rg") still asks only RG
+  Contributor + RBAC Admin; labRequiredActions never checks
+  Microsoft.EventGrid/register/action (subscription) or networkWatchers/read
+  on NetworkWatcherRG, so the preflight passes and deploy fails; storage-phase
+  POSTs register after a 403 GET and flowlogs-phase PUTs a duplicate watcher
+  after a 403 on NetworkWatcherRG. azure-connect-section.tsx:82-84 and
+  feature-catalog.md:238 still claim no subscription-scope rights. Proposed:
+  admin prerequisite items (register Microsoft.EventGrid; Reader/Network
+  Contributor on NetworkWatcherRG), scope-tagged preflight, and 403 handling
+  in both phases. Size M. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json. DONE
+  2026-11-17 (2fbe1066, 0101ac65): lab-byo-rg asks for Network Contributor on
+  NetworkWatcherRG and a one-time admin step to register Microsoft.EventGrid
+  (CLI line, both tickets, Labs card); still no subscription-scope role. Lab
+  preflight tags rows by scope, reads the Event Grid registration state when
+  the register right is absent (Registered satisfied, unreadable unknown), and
+  reports unreadable scopes as UNKNOWN. Runtime: no register POST after a 403;
+  a 403 on NetworkWatcherRG tries the lab-group watcher PUT and fails with the
+  NetworkWatcherRG remedy only on NetworkWatcherCountLimitReached. UNVERIFIED
+  live: the RG-only 403 shape on the provider GET and the duplicate-watcher
+  error code.
+
+- **AZR-82** Validate and the Logging Map read at management-group and tenant scope, and no change request asks for those reads
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (discrepancies 10 and 11, medium,
+  missing-from-plan). Policy assignments, definitions, exemptions and
+  remediations, and managementGroups/descendants, are read at the customer's
+  management group (logging-map-requests.ts,
+  onboarding-validation/requests.ts, read-logging-map.ts); the Entra
+  diagnostic settings read (GET
+  /providers/microsoft.aadiam/diagnosticSettings) is tenant-level. No plan
+  asks for Management Group Reader or the aadiam read, whose least privilege
+  for a service principal is undocumented (low confidence). FIX: per-tenant
+  feature rows for both, the aadiam one marked unverified and optional, and
+  Validate reporting a 403 there as unknown, never red. DIAGNOSED 2026-11-11:
+  PARTLY REAL. The ticket catalog cannot express management-group scope
+  (rbacScopeOf throws), and the aadiam read needs an Entra directory role that
+  fits neither kind. Refuter correction (accepted): scopeCovers must not let a
+  subscription grant cover a managementGroup need, or the new row is
+  suppressed; the coverage pin must match role name AND scope level. Size M.
+  Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json. DONE
+  2026-11-17 (2c37b8b3, ee7e7342): existing path only. Reader at the
+  management group (operator chose Reader plus the narrower option
+  2026-11-17), naming a custom role with the six management-group read actions
+  the registry lists for Validate and the Logging Map; a subscription grant
+  never covers a management-group need. Security Administrator as an optional,
+  warned Entra directory role (operator chose optional and warned):
+  privileged, tenant-wide, only for the Entra diagnostic-settings check,
+  recommended to refuse unless needed. Both read [unknown] in preflight; a 403
+  at those scopes reads unknown. NOT VERIFIED: that the six actions cover
+  everything those features call at a management group (e.g. policy set
+  definitions) - only as complete as the registry. Not checked live.
+
 - **AZR-83** The Cribl permission probes are GET reads but record manage capabilities, and the leader-level probes 403 for a non-admin when no group is chosen
   `AZR-F10` `bug` `settled` `verified: pins`
   FOUND by the AZR-61 audit (discrepancies 12 and 13 medium/low, and 14
@@ -8679,6 +8713,32 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   shipped app) should report unknown, not 403, when no group is chosen. Size
   S. Full diagnosis, fix plan and pins:
   docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
+- **AZR-84** Cross-scope Azure Monitor and Event Hub targets need roles outside the configured resource group, and no plan asks for them
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND by the AZR-61 audit (discrepancy 15, medium, missing-from-plan).
+  onboard-batch associates the DCE with an AMPLS at its own subscription and
+  RG (Monitoring Contributor there); deployment-preview reads the DCE a DCR
+  names, which may sit elsewhere; Validate, Create Cribl source and Defender
+  read the Event Hub namespace, its rules and consumer groups, which may sit
+  in another subscription. FIX: name each as a resource-scoped feature row in
+  words (as listKeys is), and have the preflight report those scopes as
+  unknown rather than denied. DIAGNOSED 2026-11-11 (two refuters agreed):
+  STILL REAL. Cross-scope operations (AMPLS scoped resource write, DCE read,
+  Event Hub namespace read, ...) are in the least-privilege registry but never
+  reached FEATURE_ROLES, and scopeCovers treats a subscription grant as
+  covering any resource. Size M. Full diagnosis, fix plan and pins:
+  docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json. DONE
+  2026-11-17 (0058016a, ee7e7342): on the existing-resources path the plan now
+  asks for Monitoring Contributor on the Azure Monitor Private Link Scope,
+  Monitoring Reader on the DCE a DCR names, and Reader on the Event Hub
+  namespace, each worded per resource with "skip if a role above already
+  covers it". An outsideConfiguredScope flag keeps a grant the setup path
+  holds from suppressing them; lab paths are unchanged from before.
+  AppPermission gained a key (role name, or "Role (scope)" when a role appears
+  at two scopes) so saved Partially Connected choices keep their meaning.
+  Setup preflight lists the requested ones as [unknown], never missing. Not
+  checked live.
 
 - **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
   `AZR-F10` `bug` `settled` `verified: pins`

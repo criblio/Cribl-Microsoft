@@ -30,7 +30,12 @@ export const CONNECTIVITY_SECTION_ID = "azure-connectivity";
  * withoutIt strings, reused verbatim.
  */
 function tipText(entry: AppPermission): string {
-  const kind = entry.kind === "graph-api" ? "Graph permission" : "Role";
+  const kind =
+    entry.kind === "graph-api"
+      ? "Graph permission"
+      : entry.kind === "entra-directory-role"
+        ? "Entra directory role"
+        : "Role";
   return `${kind}: ${entry.name}\n${entry.justification}\n${entry.withoutIt}`;
 }
 
@@ -87,12 +92,13 @@ export function AzureConnectivitySection({
     onChange({ ...config, connectivity: value });
   };
 
-  // Written in checklist order (Reader, then the others in plan order), no duplicates.
+  // Written in checklist order (Reader, then the others in plan order), no
+  // duplicates, by key: one role asked at two scopes is two checkboxes.
   const toggle = (name: string, on: boolean) => {
     const next = new Set(config.allowedPermissions);
     if (on) next.add(name);
     else next.delete(name);
-    const order = [readOnly.name, ...others.map((o) => o.name)];
+    const order = [readOnly.key, ...others.map((o) => o.key)];
     const known = order.filter((n) => next.has(n));
     const extra = config.allowedPermissions.filter(
       (n) => next.has(n) && !order.includes(n),
@@ -126,12 +132,12 @@ export function AzureConnectivitySection({
           <div className="connectivity-others">
             <span className="field-label">Also allow the app to</span>
             {others.map((entry) => (
-              <div key={entry.name} className="connectivity-row">
+              <div key={entry.key} className="connectivity-row">
                 <label className="connectivity-check">
                   <input
                     type="checkbox"
-                    checked={has(entry.name)}
-                    onChange={(e) => toggle(entry.name, e.target.checked)}
+                    checked={has(entry.key)}
+                    onChange={(e) => toggle(entry.key, e.target.checked)}
                   />
                   <span>{entry.feature}</span>
                 </label>

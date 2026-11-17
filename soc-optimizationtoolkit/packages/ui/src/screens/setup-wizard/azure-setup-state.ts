@@ -18,9 +18,11 @@ import {
   allGranted,
   coreGranted,
   missingFeatureActions,
+  preflightUnmeasuredGrants,
   REQUIRED_ACTIONS,
 } from "@soc/core";
 import type {
+  AppPermission,
   AzureSetupPath,
   PermissionsResponse,
   RequiredAction,
@@ -411,6 +413,25 @@ export function evaluateScopeLines(
     lines.push(`  [${state}] ${result.label} (${result.action})`);
   }
   return lines;
+}
+
+/**
+ * The REQUESTED grants the preflight cannot measure (AZR-84): roles on
+ * resources outside the configured scopes, which no permissions read above
+ * reaches. Reported as unknown - never as missing, because nothing measured
+ * them. Empty when the plan has none.
+ */
+export function unmeasuredGrantLines(requested: readonly AppPermission[]): string[] {
+  // Only what the saved connectivity choice asks for: a Partially Connected
+  // request never lists a grant nobody ticked.
+  const grants = preflightUnmeasuredGrants(requested);
+  if (grants.length === 0) {
+    return [];
+  }
+  return [
+    "Not measured: these grants sit outside the scopes above, so they read as unknown.",
+    ...grants.map((g) => `  [unknown] ${g.name} on ${g.where} - ${g.feature}`),
+  ];
 }
 
 /** The stored-credentials report derived from a secrets-store key listing. */

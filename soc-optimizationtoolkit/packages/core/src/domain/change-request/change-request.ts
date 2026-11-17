@@ -44,7 +44,12 @@
  */
 
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
-import { appPermissionPlan, graphPermissions, rbacPermissions } from "../app-permissions";
+import {
+  appPermissionPlan,
+  entraDirectoryRoles,
+  graphPermissions,
+  rbacPermissions,
+} from "../app-permissions";
 import {
   effectiveSetupPath,
   requestedPermissions,
@@ -52,6 +57,7 @@ import {
 } from "../azure-connectivity";
 import type { AppPermission } from "../app-permissions";
 import { leastRoleFor } from "../least-privilege";
+import { adminStepsForSetupPath } from "../role-plan";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
@@ -85,6 +91,8 @@ interface RoleRequest {
   role: string;
   /** The fully-qualified scope the role is assigned at, or the resource in words. */
   scope: string;
+  /** The scope as the justification line writes it, after the role name. */
+  justificationScope: string;
   /** One-line justification for this specific role. */
   justification: string;
   /** Optional assignment condition (the lab paths' RBAC Administrator, the DCR grant). */
@@ -158,11 +166,12 @@ function rolesForSetupPath(
   // The registry plan (AZR-61), kept to the roles the connectivity choice
   // ticked (DBT-246).
   return rbacPermissions(appPermissionPlan(path))
-    .filter((permission) => onlyRoles.includes(permission.name))
+    .filter((permission) => onlyRoles.includes(permission.key))
     .map((permission) => {
       const request: RoleRequest = {
         role: permission.name,
         scope: permissionScope(permission, n),
+        justificationScope: justificationScope(permission, n),
         justification: permission.justification,
         necessity: permission.necessity,
       };
@@ -186,28 +195,113 @@ function diagramFor(
 }
 
 /**
+ * A permission's scope in two parts: where it is granted, and an optional
+ * note a reader needs beside it (which management group, when to skip a
+ * resource grant, that the Defender group follows the operator's choice).
+ * `onResource` says the base is a resource in words, not a path.
+ */
+interface ScopeParts {
+  base: string;
+  note?: string;
+  onResource: boolean;
+}
+
+function scopeParts(permission: AppPermission, n: ResolvedNames): ScopeParts {
+  if (permission.kind === "entra-directory-role") {
+    return { base: "tenant-wide (an Entra ID directory role, not consent or IAM)", onResource: false };
+  }
+  if (permission.scopeLevel === "tenant") {
+    return { base: "tenant-wide (consented on the app registration)", onResource: false };
+  }
+  if (permission.scopeLevel === "managementGroup") {
+    // The configuration names no management group, so the id is a
+    // placeholder and the registry's words say which group (AZR-82).
+    return {
+      base: "/providers/Microsoft.Management/managementGroups/<management group id>",
+      note: permission.resource ?? "the management group",
+      onResource: false,
+    };
+  }
+  if (permission.scopeLevel === "resource") {
+    // A resource the config does not name (an Event Hub namespace may sit in
+    // any resource group or subscription), so the ticket says which, in
+    // words, and when a role above already reaches it (AZR-84).
+    const parts: ScopeParts = { base: permission.resource ?? "<resource>", onResource: true };
+    if (permission.scopeCaveat !== undefined) {
+      parts.note = permission.scopeCaveat;
+    }
+    return parts;
+  }
+  if (permission.scopeLevel === "subscription") {
+    return { base: subscriptionScope(n), onResource: false };
+  }
+  // A named group other than the configured one (NetworkWatcherRG, AZR-81).
+  const group =
+    permission.resourceGroup === undefined
+      ? resourceGroupScope(n)
+      : "/subscriptions/" + n.subscriptionId + "/resourceGroups/" + permission.resourceGroup;
+  // A group the operator may choose elsewhere (the Defender export's): the
+  // configured one is the default, and the caveat says the role follows the choice.
+  const parts: ScopeParts = { base: group, onResource: false };
+  if (permission.scopeCaveat !== undefined) {
+    parts.note = permission.scopeCaveat;
+  }
+  return parts;
+}
+
+/**
  * The scope a permission is granted at, written for a ticket reader rather than
  * as an ARM resource id. Graph permissions are tenant-wide by nature; RBAC
  * scopes resolve to the concrete subscription or resource group so the approver
  * can act without looking anything up.
  */
 function permissionScope(permission: AppPermission, n: ResolvedNames): string {
-  if (permission.scopeLevel === "tenant") {
-    return "tenant-wide (consented on the app registration)";
+  const parts = scopeParts(permission, n);
+  return parts.note === undefined ? parts.base : parts.base + " (" + parts.note + ")";
+}
+
+/**
+ * The scope as a role ticket's justification line writes it, after the role:
+ * ` (<scope>)`, or - when the scope carries a note, which would nest a second
+ * pair of parentheses - ` on <resource> - <note>` / ` at <path> - <note>`.
+ */
+function justificationScope(permission: AppPermission, n: ResolvedNames): string {
+  const parts = scopeParts(permission, n);
+  if (parts.note === undefined) {
+    return " (" + parts.base + ")";
   }
-  if (permission.scopeLevel === "resource") {
-    // A resource the config does not name (an Event Hub namespace may sit in
-    // any resource group), so the ticket says which, in words.
-    return permission.resource ?? "<resource>";
+  return (parts.onResource ? " on " : " at ") + parts.base + " - " + parts.note;
+}
+
+/**
+ * The setup path's one-time admin steps (AZR-81), or `null` when it has
+ * none: what an administrator does instead of granting a subscription role.
+ */
+function adminStepsSection(path: AzureSetupPath, n: ResolvedNames): string | null {
+  const steps = adminStepsForSetupPath(path);
+  if (steps.length === 0) {
+    return null;
   }
-  if (permission.scopeLevel === "subscription") {
-    return subscriptionScope(n);
-  }
-  // A group the operator may choose elsewhere (the Defender export's): the
-  // configured one is the default, and the caveat says the role follows the choice.
-  return permission.scopeCaveat === undefined
-    ? resourceGroupScope(n)
-    : resourceGroupScope(n) + " (" + permission.scopeCaveat + ")";
+  return section(
+    "Admin steps (setup path: " + path + ")",
+    [
+      "One-time steps for a subscription administrator. Each replaces the",
+      "subscription-scope role its action would otherwise need: registering",
+      "Event Grid here means no role holding Microsoft.EventGrid/register/action",
+      "is asked for at the subscription.",
+      "",
+      ...steps.map((step) =>
+        [
+          "- " + step.step + "  [feature]",
+          // One line, never wrapped: it is pasted into a shell.
+          "    Command:        " + step.command.replace("<subscriptionId>", n.subscriptionId),
+          field("Needed for:", step.feature),
+          field("Why:", step.justification),
+          field("If not done:", step.withoutIt),
+        ].join("\n"),
+      ),
+    ].join("\n"),
+  );
 }
 
 /** Column the permission-block values start at, and the wrap width. */
@@ -261,7 +355,12 @@ function field(label: string, value: string): string {
  */
 function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
   const lines: string[] = [
-    "- " + permission.name + "  [" + permission.necessity + "]",
+    "- " +
+      permission.name +
+      "  [" +
+      permission.necessity +
+      (permission.unverified === true ? ", unverified" : "") +
+      "]",
     field("Scope:", permissionScope(permission, n)),
     field("Needed for:", permission.feature),
     field("Why:", permission.justification),
@@ -280,7 +379,9 @@ function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
         "Where:",
         permission.kind === "graph-api"
           ? "Entra ID > App registrations > this app > API permissions > Grant admin consent."
-          : permission.condition !== undefined
+          : permission.kind === "entra-directory-role"
+            ? "Entra ID > Roles and administrators > this role > Add assignments, for this app's service principal."
+            : permission.condition !== undefined
             ? "Azure portal, not the CLI - the condition above cannot be set from the CLI."
             : "Azure portal.",
       ),
@@ -367,6 +468,7 @@ export function appRegistrationRequest(
   );
   const graph = graphPermissions(plan);
   const rbac = rbacPermissions(plan);
+  const directoryRoles = entraDirectoryRoles(plan);
   // A partial request always names the "existing" path, so a saved lab path
   // never reads as a request for lab roles.
   const setupPath = effectiveSetupPath(connectivity, ctx.config.setupPath);
@@ -391,6 +493,12 @@ export function appRegistrationRequest(
   if (rbac.length > 0) {
     steps.push([
       "Assign the Azure RBAC roles listed below to this app's service principal.",
+    ]);
+  }
+  if (directoryRoles.length > 0) {
+    steps.push([
+      "Optionally, assign the Entra ID directory role listed below to this app's",
+      "   service principal.",
     ]);
   }
   steps.push([
@@ -492,6 +600,30 @@ export function appRegistrationRequest(
     );
   }
 
+  // A third system (AZR-82): an Entra directory role is granted in Roles and
+  // administrators, by neither the consent approver nor the IAM owner.
+  if (directoryRoles.length > 0) {
+    parts.push(
+      section(
+        "Entra ID directory roles (optional)",
+        [
+          "Granted by an Entra administrator in Roles and administrators - not admin",
+          "consent and not Azure IAM. These are privileged roles: read each Why",
+          "before granting. [unverified] means Microsoft documents no",
+          "narrower role for the call and none was measured; refusing costs only the",
+          "one check named.",
+          "",
+          ...directoryRoles.map((permission) => permissionBlock(permission, n)),
+        ].join("\n"),
+      ),
+    );
+  }
+
+  const adminSteps = adminStepsSection(setupPath, n);
+  if (adminSteps !== null) {
+    parts.push(adminSteps);
+  }
+
   parts.push(
     criblLeastPrivilegeSection(),
     section(
@@ -583,7 +715,7 @@ export function roleAssignmentRequest(
     roles.length === 0
       ? ["No roles are requested, so there is nothing to justify."]
       : roles.map(
-          (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
+          (r) => "- " + r.role + r.justificationScope + ": " + r.justification,
         );
 
   const parts: string[] = [
@@ -595,6 +727,14 @@ export function roleAssignmentRequest(
     requestHeader(n),
     section("What is requested", requested.join("\n")),
     section("Justification", justifications.join("\n")),
+  ];
+  // The byo lab's one-time admin steps (AZR-81): the subscription owner this
+  // ticket goes to is the one who can take them.
+  const adminSteps = adminStepsSection(setupPath, n);
+  if (adminSteps !== null) {
+    parts.push(adminSteps);
+  }
+  parts.push(
     criblLeastPrivilegeSection(),
     section(
       "Specifics",
@@ -606,7 +746,7 @@ export function roleAssignmentRequest(
         "Resource group:                " + n.resourceGroup,
       ].join("\n"),
     ),
-  ];
+  );
 
   const deploy = diagramFor(ctx, options, dcrDeployFlowMermaid);
   const exported = diagramFor(ctx, options, dataExportFlowMermaid);
@@ -698,20 +838,29 @@ export function requestSummary(config: AzureConfig): string {
   );
   const roles = rbacPermissions(plan);
   const graph = graphPermissions(plan);
-  if (roles.length === 0 && graph.length === 0) return "nothing selected";
+  const directoryRoles = entraDirectoryRoles(plan);
+  if (roles.length === 0 && graph.length === 0 && directoryRoles.length === 0) {
+    return "nothing selected";
+  }
   const parts: string[] = [];
   if (roles.length > 0) {
     parts.push(
       String(roles.length) +
         (roles.length === 1 ? " role" : " roles") +
         " - " +
-        roles.map((r) => r.name).join(", "),
+        roles.map((r) => r.key).join(", "),
     );
   }
   if (graph.length > 0) {
     parts.push(
       String(graph.length) +
         (graph.length === 1 ? " Graph permission" : " Graph permissions"),
+    );
+  }
+  if (directoryRoles.length > 0) {
+    parts.push(
+      String(directoryRoles.length) +
+        (directoryRoles.length === 1 ? " directory role" : " directory roles"),
     );
   }
   return parts.join("; ");

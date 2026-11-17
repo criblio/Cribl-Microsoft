@@ -42,7 +42,7 @@ import {
   validateLabSubnetLayout,
 } from "./lab-validation";
 import type { LabTtlSettings } from "./lab-foundation";
-import { rolePlanForSetupPath } from "../role-plan";
+import { adminStepsForSetupPath, rolePlanForSetupPath } from "../role-plan";
 
 /**
  * How the lab resource group is obtained (feature-catalog permission design):
@@ -114,11 +114,22 @@ export function labPermissionRequirements(
   resourceGroupName: string,
 ): LabPermissionRequirement[] {
   const path = rgMode === "create-new" ? "lab-new-rg" : "lab-byo-rg";
-  return rolePlanForSetupPath(path).map((req) => ({
-    scope: req.scopeLevel === "subscription" ? "Subscription" : `Resource group '${resourceGroupName}'`,
+  const roles = rolePlanForSetupPath(path).map((req) => ({
+    scope:
+      req.scopeLevel === "subscription"
+        ? "Subscription"
+        : `Resource group '${req.resourceGroup ?? resourceGroupName}'`,
     role: req.condition === undefined ? req.role : `${req.role} (constrained)`,
     reason: req.condition === undefined ? req.justification : `${req.justification} ${req.condition}`,
   }));
+  // The byo lab's one-time subscription step (AZR-81), asked for instead of
+  // a subscription role.
+  const steps = adminStepsForSetupPath(path).map((step) => ({
+    scope: "Subscription (admin step)",
+    role: step.command,
+    reason: `${step.step} ${step.justification}`,
+  }));
+  return [...roles, ...steps];
 }
 
 /**

@@ -194,3 +194,36 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
     expect(analysis.kind).toBe("not-granted");
   });
 });
+
+describe("labRequiredActions - scopes outside the bring-your-own group (AZR-81)", () => {
+  // The byo lab holds rights on its own group only. Registering Event Grid is
+  // decided at the subscription, and flow logs at NetworkWatcherRG.
+  const scoped = (mode: "create-new" | "bring-your-own") =>
+    labRequiredActions(labDeploymentConfig("CompleteLab", "public"), mode)
+      .filter((a) => a.scope !== undefined)
+      .map((a) => [a.action, a.scope]);
+
+  it("asks bring-your-own for exactly the register action at the subscription and the watcher read and flow-log write at NetworkWatcherRG", () => {
+    expect(scoped("bring-your-own")).toEqual([
+      [operationAction("eventGrid.provider.register"), "subscription"],
+      [operationAction("networkWatcher.read"), "network-watcher-rg"],
+      [operationAction("flowLog.write"), "network-watcher-rg"],
+    ]);
+    expect(operationAction("eventGrid.provider.register")).toBe("Microsoft.EventGrid/register/action");
+    expect(operationAction("networkWatcher.read")).toBe("Microsoft.Network/networkWatchers/read");
+  });
+
+  it("asks create-new for none: it is evaluated at the subscription, which decides both", () => {
+    expect(scoped("create-new")).toEqual([]);
+  });
+
+  it("asks only for what the profile deploys", () => {
+    const flowOnly = labRequiredActions(labDeploymentConfig("FlowLogLab", "public"), "bring-your-own")
+      .filter((a) => a.scope !== undefined)
+      .map((a) => a.scope);
+    expect(flowOnly).toEqual(["network-watcher-rg", "network-watcher-rg"]);
+    const none = labRequiredActions(labDeploymentConfig("SentinelLab", "public"), "bring-your-own")
+      .filter((a) => a.scope !== undefined);
+    expect(none).toEqual([]);
+  });
+});

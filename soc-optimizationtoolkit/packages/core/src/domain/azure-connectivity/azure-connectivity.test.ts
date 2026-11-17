@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appPermissionPlan } from "../app-permissions";
+import { EMPTY_AZURE_CONFIG } from "../azure-config";
 import {
   checklistEntries,
   effectiveSetupPath,
@@ -81,8 +82,20 @@ describe("azure connectivity (setup-pages-plan)", () => {
   it("checklistEntries splits Reader from the other existing entries", () => {
     const { readOnly, others } = checklistEntries();
     expect(readOnly.name).toBe("Reader");
-    expect(names(others)).toEqual(
-      names(appPermissionPlan("existing")).filter((n) => n !== "Reader"),
+    // By key: the namespace Reader (AZR-84) is its own checkbox.
+    expect(others.map((p) => p.key)).toEqual(
+      appPermissionPlan("existing").map((p) => p.key).filter((k) => k !== "Reader"),
     );
+    expect(others.map((p) => p.key)).toContain("Reader (Event Hub namespace)");
+  });
+});
+
+describe("privileged and broad rows start unticked (review of AZR-82)", () => {
+  it("a new Partially Connected config asks for neither Security Administrator nor the management group Reader", () => {
+    expect(EMPTY_AZURE_CONFIG.allowedPermissions).toEqual(["Reader"]);
+    const keys = requestedPermissions("partial", EMPTY_AZURE_CONFIG.allowedPermissions, "existing").map((p) => p.key);
+    expect(keys).toEqual(["Reader"]);
+    expect(keys).not.toContain("Security Administrator");
+    expect(keys).not.toContain("Reader (management group)");
   });
 });
