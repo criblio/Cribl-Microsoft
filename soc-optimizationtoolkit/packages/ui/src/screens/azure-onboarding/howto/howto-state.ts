@@ -8,7 +8,7 @@
  *     read of the PROGRESS document (`azure-onboarding-progress`, ADR 0007 D1)
  *     means, and when a tick, a mode change or a choice may be written. It
  *     mirrors the AZR-18 selection gate (azure-onboarding-state.ts
- *     loadStateFrom/canSave): only an `absent` load or a readable document of
+ *     loadStateFrom/canWriteSelection): only an `absent` load or a readable document of
  *     ours may be overwritten, so a FAILED read is never treated as a first run
  *     (claude-kit standards/cribl-kv-store.md). Every transition below returns
  *     null while writes are blocked, so the panel cannot write by mistake.
@@ -75,6 +75,7 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { withItem } from "../azure-onboarding-state";
+import type { ChoiceUnknownCause, RowChoice } from "../azure-onboarding-state";
 
 // ---------------------------------------------------------------------------
 // Load gate
@@ -261,6 +262,62 @@ export function chosenSourceIds(
   selection: CoverageSelection | null,
 ): OnboardingSourceId[] {
   return ONBOARDING_SOURCES.map((s) => s.id).filter((id) => isChosen(progress, selection, id));
+}
+
+/**
+ * Why the progress document cannot be used, or null when it is loaded.
+ * `hasStore` false means the shell wired no store: no storage, not a failed
+ * read.
+ */
+export function progressUnknownCause(load: ProgressLoadState, hasStore: boolean): ChoiceUnknownCause | null {
+  if (!hasStore) return "no-storage";
+  switch (load.status) {
+    case "absent":
+    case "ready":
+      return null;
+    case "loading":
+      return "loading";
+    case "read-unknown":
+      return "not-read";
+    case "doc-foreign":
+      return "not-ours";
+    case "doc-unreadable":
+      return "unreadable-format";
+  }
+}
+
+/**
+ * The chooser's answer for every onboarding source, as the method sections
+ * show it (ADR 0007 section 2: one visible choice per source). Derived from
+ * {@link isChosen} and {@link effectiveMode} only, so a saved selection entry
+ * for a How-to source can never tick a method-section row. UNKNOWN, never
+ * "not chosen", when the progress document cannot be used, or an Automated
+ * source's selection cannot: `selectionCause` says why the selection is
+ * missing (azure-onboarding-state selectionUnknownCause) and is read only
+ * when `selection` is null.
+ */
+export function rowChoices(
+  load: ProgressLoadState,
+  selection: CoverageSelection | null,
+  selectionCause: ChoiceUnknownCause,
+  hasStore = true,
+): ReadonlyMap<OnboardingSourceId, RowChoice> {
+  const progress = loadedProgress(load);
+  const progressCause = progressUnknownCause(load, hasStore);
+  const out = new Map<OnboardingSourceId, RowChoice>();
+  for (const { id } of ONBOARDING_SOURCES) {
+    if (progress === null) {
+      out.set(id, { kind: "unknown", doc: "progress", cause: progressCause ?? "not-read" });
+      continue;
+    }
+    const mode = effectiveMode(progress, id);
+    if (mode === "automate" && selection === null) {
+      out.set(id, { kind: "unknown", doc: "selection", cause: selectionCause });
+      continue;
+    }
+    out.set(id, isChosen(progress, selection, id) ? { kind: "chosen", mode } : { kind: "not-chosen" });
+  }
+  return out;
 }
 
 /** The chosen How-to sources only: the ones whose steps the panel lists. */
@@ -578,26 +635,28 @@ export function toggleTick(
 /**
  * What a mode change produces. `progress` is written at once (D3).
  * `selection`, when not null, is the AZR-18 selection with the source's
- * choice carried over, for the screen to STAGE behind its explicit Save
- * (ADR 0005) - the same way setChosen hands back a selection. `notice` is
- * visible text when the choice could not be carried over.
+ * choice carried over, which the screen also writes at once when it differs
+ * from the one shown (ADR 0007 section 2) - the same way setChosen hands back
+ * a selection. A move to How-to returns no selection: the source's saved
+ * entry is left as it is, ignored on screen, and is rewritten only by that
+ * source's own next choice or mode change.
  */
 export interface ModeChange {
   readonly progress: OnboardingProgress;
   readonly selection: CoverageSelection | null;
-  readonly notice: string | null;
 }
 
-/** Shown when a source moves to Automated but the saved selection was not loaded. */
-export const MODE_CHOICE_NOT_CARRIED =
-  "The saved selection could not be loaded, so this source's choice was not carried over. It now follows the saved selection.";
-
 /**
- * Change a source's mode. Null when writes are blocked, or when `automate` is
- * asked of a source the app cannot deploy (refused, not silently coerced).
- * The row's chosen state is carried across in BOTH directions: to How-to it
- * goes into the progress document; to Automated it comes back as a staged
- * selection (withItem), so a chosen How-to source does not silently drop out.
+ * Change a source's mode. Null when writes are blocked, when `automate` is
+ * asked of a source the app cannot deploy (refused, not silently coerced),
+ * and, while the selection is not loaded, any move across it: to `automate`
+ * the How-to choice could not be carried into it, so a stale selection entry
+ * would decide "chosen" instead; from `automate` the choice lives in the
+ * unread selection, so it would be written to progress as a confident "not
+ * chosen" (the chooser disables both options and says why). The row's chosen state is carried across in BOTH directions: to
+ * How-to it goes into the progress document; to Automated it comes back as a
+ * selection for the screen to write (withItem), so a chosen How-to source
+ * does not silently drop out, and an unchosen one does not come back chosen.
  */
 export function setMode(
   state: ProgressLoadState,
@@ -608,15 +667,17 @@ export function setMode(
   const progress = loadedProgress(state);
   if (progress === null || !canWriteProgress(state)) return null;
   if (mode === "automate" && !isAutomatable(id)) return null;
+  // Either direction across the selection needs it loaded: to Automate the
+  // How-to choice is carried INTO it, and from Automate the choice is READ
+  // from it. With it unread, the first would let a stale entry decide and the
+  // second would write an unknown choice as a confident "not chosen".
+  if (selection === null && (mode === "automate" || effectiveMode(progress, id) === "automate")) return null;
   const wasChosen = isChosen(progress, selection, id);
   const moded = withSourceMode(progress, id, mode);
   if (mode === "manual") {
-    return { progress: withSourceChosen(moded, id, wasChosen), selection: null, notice: null };
+    return { progress: withSourceChosen(moded, id, wasChosen), selection: null };
   }
-  if (selection === null) {
-    return { progress: moded, selection: null, notice: wasChosen ? MODE_CHOICE_NOT_CARRIED : null };
-  }
-  return { progress: moded, selection: withItem(selection, id, wasChosen), notice: null };
+  return { progress: moded, selection: selection === null ? null : withItem(selection, id, wasChosen) };
 }
 
 /** Where a choose click lands (D2). */
@@ -627,8 +688,9 @@ export type ChooseResult =
 
 /**
  * Choose or unchoose a source. A How-to source is written to the progress
- * document; an Automated source is the AZR-18 selection's tick, returned for
- * the screen's explicit Save and never written to progress.
+ * document; an Automated source is the AZR-18 selection's entry, returned for
+ * the screen to write to the selection document at once, and never written to
+ * progress.
  */
 export function setChosen(
   state: ProgressLoadState,

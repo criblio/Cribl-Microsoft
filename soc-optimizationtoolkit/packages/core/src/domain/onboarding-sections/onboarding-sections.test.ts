@@ -64,13 +64,15 @@ describe("ONBOARDING_SECTIONS layout", () => {
     expect(none[none.length - 1]).toBe(xdr);
   });
 
-  it("shows every catalog id exactly once, each in its own method's section", () => {
+  it("shows every catalog id exactly once, each in its own method's section but the one named override", () => {
     const itemRows = allRows.filter((r) => r.kind === "item");
     const counts = new Map<string, number>();
     for (const r of itemRows) counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
+    // AZR-101: the only item listed outside its (verbatim legacy) method.
+    const OVERRIDES: Readonly<Record<string, string>> = { activityLog: "script" };
     for (const item of COVERAGE_CATALOG) {
       expect(counts.get(item.id), item.id).toBe(1);
-      const home = section(item.method);
+      const home = section((OVERRIDES[item.id] ?? item.method) as typeof item.method);
       expect(home.rows.some((r) => r.kind === "item" && r.id === item.id), item.id).toBe(true);
     }
     expect(itemRows).toHaveLength(COVERAGE_CATALOG.length);
@@ -144,13 +146,11 @@ describe("sectionAvailability", () => {
     expect(sectionAvailability(script)).toBe("available");
   });
 
-  it("makes the built-in-policy section available through activityLog while the initiative is not built", () => {
-    const policy = section("built-in-policy");
-    expect(policy.rows.map((r) => r.id)).toEqual(
-      expect.arrayContaining(["diagnosticSettingsInitiative", "activityLog"]),
-    );
+  it("lists the Activity Log under direct configuration, not under a policy heading (AZR-101)", () => {
+    expect(section("built-in-policy").rows.map((r) => r.id)).toEqual(["diagnosticSettingsInitiative"]);
+    expect(section("script").rows.map((r) => r.id)).toEqual(["activityLog", "entraId", "defenderExport"]);
     expect(itemAvailability("diagnosticSettingsInitiative").status).toBe("not-built");
-    expect(sectionAvailability(policy)).toBe("available");
+    expect(sectionAvailability(section("built-in-policy"))).toBe("not-built");
   });
 
   it("marks sections with only unbuilt items as not-built, and the reference section as reference", () => {

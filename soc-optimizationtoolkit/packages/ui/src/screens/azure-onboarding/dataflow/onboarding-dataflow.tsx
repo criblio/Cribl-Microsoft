@@ -309,7 +309,7 @@ export function OnboardingDataflow({
         <ul className="azo-flow-popover-facts">
           {!lane.chosen && (
             <li>
-              Not chosen to onboard. Shown because its Cribl source exists, so data may still arrive there. Tick it to
+              Not chosen to onboard. Shown because its Cribl source exists, so data may still arrive there. Choose it to
               onboard it, or remove the source in Cribl.
             </li>
           )}

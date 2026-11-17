@@ -1,8 +1,8 @@
 /**
  * DefenderExportSection - the Defender for Cloud alert export (AZR-3, on the
  * AZR-18 Azure Native Source Onboarding screen). Rendered inside the
- * "Direct configuration" section, under the catalog row whose checkbox the
- * screen binds to the saved selection.
+ * "Direct configuration" section, under the catalog row (status only: the
+ * source is chosen in the chooser, which writes the saved selection).
  *
  * WHAT IT READS. "Read Defender state" makes the readDefenderState usecase's
  * reads (pricings, and the SUBSCRIPTION-WIDE automations list) and renders:
@@ -40,7 +40,7 @@
  * button honest. The outcome is shown in Azure's words with the delivery
  * caveat. The connection string never reaches this component.
  *
- * WHAT IT DOES NOT DO. Untick makes no Azure call (the checkbox only edits the
+ * WHAT IT DOES NOT DO. Unchoosing makes no Azure call (the chooser only edits the
  * selection). Remove and the extra Defender sources (recommendations, secure
  * score, regulatory compliance) are visible and disabled. The automation goes
  * into an EXISTING resource group the operator picks; nothing creates one.
@@ -63,7 +63,6 @@ import type {
   AutomationPermissionView,
   AutomationPermissions,
   AzureResourceGroup,
-  CoverageSelection,
   DefenderDeployForValidation,
   DefenderDeployOutcome,
   DefenderState,
@@ -84,7 +83,7 @@ import {
   deployOutcomeMessage,
   planSummary,
 } from "./azure-onboarding-state";
-import type { PickerMessage } from "./azure-onboarding-state";
+import type { PickerMessage, RowChoice } from "./azure-onboarding-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { AutomationPermissionBanner } from "./automation-permission-banner";
@@ -104,11 +103,11 @@ export const PERMISSIONS_LIST_TIP =
   "export's resource group is invisible to it, and Azure answers at deploy.";
 
 const REMOVE_NOT_AVAILABLE =
-  "Removing the export from here is not available yet. Unticking it does not remove it from Azure.";
+  "Removing the export from here is not available yet. Unchoosing it does not remove it from Azure.";
 
 export interface DefenderExportSectionProps {
-  /** The loaded selection, or null when none was loaded. */
-  selection: CoverageSelection | null;
+  /** The source's choice as the chooser answers it; Deploy runs only when it is chosen in Automate mode. */
+  choice: RowChoice;
   /** The chosen delivery target, from the Event Hub section. */
   target: EventHubTarget;
   /** The last Defender state read, owned by the screen (its rows read it too). */
@@ -138,7 +137,7 @@ function joined(values: readonly string[]): string {
 }
 
 export function DefenderExportSection({
-  selection,
+  choice,
   target,
   state,
   onState,
@@ -218,7 +217,7 @@ export function DefenderExportSection({
   const namespace = target.namespace;
   const reason = defenderDeployDisabledReason({
     running,
-    selection,
+    choice,
     state,
     namespace,
     hubName: target.hubName,
@@ -233,7 +232,7 @@ export function DefenderExportSection({
     namespace === null ? null : [namespace.subscriptionId, namespace.resourceGroup, namespace.name],
     target.hubName,
     target.rule?.name ?? "",
-    selection?.enabled ?? null,
+    choice,
     readSeq,
   ]);
   const armed = reason === null && armedFor === armKey;
