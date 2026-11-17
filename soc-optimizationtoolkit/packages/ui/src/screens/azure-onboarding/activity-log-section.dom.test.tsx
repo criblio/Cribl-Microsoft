@@ -23,7 +23,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import {
   ACTIVITY_LOG_CATEGORIES,
   FakeKvDocumentStore,
-  defaultSelection,
   FakeLogger,
   LAKE_ROUTE_SOURCES,
 } from "@soc/core";
@@ -323,7 +322,7 @@ describe("Activity Log section - after a write", () => {
       const [state, setState] = useState<ActivityLogState | null>(null);
       return (
         <ActivityLogSection
-          selection={{ ...defaultSelection(), enabled: ["activityLog"] }}
+          choice={{ kind: "chosen", mode: "automate" }}
           target={{
             namespace: { subscriptionId: SUB, resourceGroup: EH_RG, name: NS_NAME },
             hubName: "",

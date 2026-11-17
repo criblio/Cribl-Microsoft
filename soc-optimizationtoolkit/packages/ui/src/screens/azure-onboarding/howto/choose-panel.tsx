@@ -1,7 +1,7 @@
 /**
  * ChoosePanel - "Choose what to onboard", its own numbered section on Azure
  * Native Source Onboarding, straight after the Event Hub. It is the ONE place
- * a source is chosen (ADR 0007 section 2, amended 2026-11-17): every source
+ * a source is chosen (ADR 0007 section 2): every source
  * row with its Automate | How-to toggle, info tip and transport
  * (SourceChooser). The method sections below only say what was chosen here.
  *
@@ -21,6 +21,7 @@
  */
 
 import type { CoverageSelection, OnboardingSourceId, SourceMode } from "@soc/core";
+import type { ChoiceUnknownCause } from "../azure-onboarding-state";
 import { PickerLine } from "../eventhub-prerequisite-section";
 import { SourceChooser } from "./source-chooser";
 import { canWriteProgress, chooserRows, loadedProgress, progressBanners } from "./howto-state";
@@ -31,6 +32,11 @@ export interface ChoosePanelProps {
   readonly load: ProgressLoadState;
   /** The saved selection, or null when it is not loaded or its read failed. */
   readonly selection: CoverageSelection | null;
+  /**
+   * Why the selection is null (azure-onboarding-state selectionUnknownCause);
+   * read only when it is. Absent = the read failed.
+   */
+  readonly selectionCause?: ChoiceUnknownCause | null;
   /** A reason of the screen's own to block writes (shown); null or absent otherwise. */
   readonly writesBlockedReason?: string | null;
   readonly onSetMode: (id: OnboardingSourceId, mode: SourceMode) => void;
@@ -43,6 +49,7 @@ export const CHOICES_LOADING_TEXT = "Loading your saved choices.";
 export function ChoosePanel({
   load,
   selection,
+  selectionCause = null,
   writesBlockedReason = null,
   onSetMode,
   onSetChosen,
@@ -62,7 +69,7 @@ export function ChoosePanel({
         <SourceChooser
           rows={chooserRows(progress, selection)}
           disabled={!canWrite}
-          selectionUnknown={selection === null}
+          selectionUnknownCause={selection === null ? (selectionCause ?? "not-read") : null}
           onSetChosen={onSetChosen}
           onSetMode={onSetMode}
         />

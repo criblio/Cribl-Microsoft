@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ACTIVITY_LOG_CATEGORIES, defaultSelection, parseDiagnosticSettings } from "@soc/core";
-import type { ActivityLogDeployOutcome, ActivityLogState, CoverageSelection } from "@soc/core";
+import { ACTIVITY_LOG_CATEGORIES, parseDiagnosticSettings } from "@soc/core";
+import type { ActivityLogDeployOutcome, ActivityLogState } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
 import {
   ACTIVITY_LOG_DELIVERY_NOT_VERIFIED,
@@ -20,7 +20,6 @@ const SUB = "sub-1";
 const NS = { subscriptionId: SUB, resourceGroup: "rg-eh", name: "ns-a" };
 const NS_PATH = `/subscriptions/${SUB}/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/ns-a`;
 const MANAGE = { name: "DiagManage", rights: ["Listen", "Manage", "Send"] };
-const TICKED: CoverageSelection = { ...defaultSelection(), enabled: ["activityLog"] };
 const ELSEWHERE = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/o/authorizationRules/R";
 
 function setting(name: string, ruleId: string): unknown {
@@ -45,7 +44,7 @@ function listed(...items: unknown[]): ActivityLogState {
 
 const READY: ActivityLogDeployGate = {
   running: false,
-  selection: TICKED,
+  choice: { kind: "chosen", mode: "automate" },
   state: listed(),
   subscriptionId: SUB,
   namespace: NS,
@@ -60,9 +59,15 @@ describe("activityLogDeployDisabledReason", () => {
   it("names one reason, in priority order", () => {
     expect(activityLogDeployDisabledReason({ ...READY, running: true })).toBe("A deploy is already running.");
     expect(activityLogDeployDisabledReason({ ...READY, subscriptionId: "" })).toMatch(/No Azure subscription/);
-    expect(activityLogDeployDisabledReason({ ...READY, selection: null })).toMatch(/has not loaded/);
-    expect(activityLogDeployDisabledReason({ ...READY, selection: { ...TICKED, enabled: [] } })).toBe(
+    expect(
+      activityLogDeployDisabledReason({ ...READY, choice: { kind: "unknown", doc: "selection", cause: "loading" } }),
+    ).toBe("Choice not loaded yet - the saved selection is still loading. Deploy is off until it is known.");
+    expect(activityLogDeployDisabledReason({ ...READY, choice: { kind: "not-chosen" } })).toBe(
       "Choose the Azure Activity Log under Choose what to onboard to deploy it.",
+    );
+    // Chosen, but in How-to mode: a stale selection entry never deploys it.
+    expect(activityLogDeployDisabledReason({ ...READY, choice: { kind: "chosen", mode: "manual" } })).toBe(
+      "The Azure Activity Log is set to How-to, so the app does not deploy it.",
     );
     expect(activityLogDeployDisabledReason({ ...READY, state: null })).toBe(
       "Read the subscription's diagnostic settings first.",

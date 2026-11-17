@@ -35,7 +35,9 @@ import type { HowToPanelProps } from "./howto-panel";
 import { ChoosePanel } from "./choose-panel";
 import type { ChoosePanelProps } from "./choose-panel";
 import { CREDENTIAL_REFUSED_NOTE, UNAPPLIED_NOTE } from "./plan-values-form";
-import { SELECTION_UNKNOWN_NOTE } from "./source-chooser";
+import { automateUnavailableNote, selectionUnknownNote } from "./source-chooser";
+
+const SELECTION_UNKNOWN_NOTE = selectionUnknownNote("not-read");
 import { COPY_DONE, COPY_UNAVAILABLE } from "./step-dialog";
 
 afterEach(() => {
@@ -251,6 +253,26 @@ describe("chooser and mode toggle", () => {
     expect(entraBox.disabled).toBe(false);
     expect(entraBox.indeterminate).toBe(false);
     expect(entra.textContent).not.toContain(SELECTION_UNKNOWN_NOTE);
+  });
+
+  it("an unread selection disables a How-to row's Automate option and says why", () => {
+    const manualLog = withSourceMode(manualEntra(), "activityLog", "manual");
+    const { container, props } = renderChooser({ load: ready(manualLog), selection: null, selectionCause: "loading" });
+    const log = sourceRow(container, "activityLog");
+    const automate = within(log).getByRole("radio", { name: /Automate/ }) as HTMLInputElement;
+    expect(automate.disabled).toBe(true);
+    expect(log.textContent).toContain(automateUnavailableNote("loading"));
+    expect(automateUnavailableNote("loading")).toBe("Automate is not available while the saved selection is still loading.");
+    fireEvent.click(automate);
+    expect(props.onSetMode).not.toHaveBeenCalled();
+    // The Automated row's unknown note uses the method row's words for the same cause.
+    expect(sourceRow(container, "defenderExport").textContent).toContain(
+      "Choice not loaded yet - the saved selection is still loading.",
+    );
+    // With the selection loaded the option is back.
+    cleanup();
+    const again = renderChooser({ load: ready(manualLog) });
+    expect((within(sourceRow(again.container, "activityLog")).getByRole("radio", { name: /Automate/ }) as HTMLInputElement).disabled).toBe(false);
   });
 
   it("a loaded selection shows no unknown note", () => {

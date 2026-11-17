@@ -1,7 +1,7 @@
 /**
  * SourceChooser - "Choose what to onboard" on Azure Native Source Onboarding
- * (AZR-31), the ONE control per source that chooses it (ADR 0007 section 2,
- * amended 2026-11-17). One row per onboarding source (howto-state
+ * (AZR-31), the ONE control per source that chooses it (ADR 0007 section
+ * 2). One row per onboarding source (howto-state
  * chooserRows), each with:
  *
  *   - a choose checkbox. WHERE the choice lands depends on the mode (ADR 0007
@@ -11,7 +11,9 @@
  *   - an Automate | How-to toggle. A source the app cannot deploy has the
  *     Automate option DISABLED and the reason shown as visible text beside it,
  *     not only in a tip (claude-kit standards/info-affordances.md: a disabled
- *     control says why).
+ *     control says why). So is the Automate option of a How-to row while the
+ *     selection cannot be used: the row's How-to choice could not be carried
+ *     into it, and a stale entry would decide instead.
  *   - an (i) explaining how the logs travel and that the Cribl source is
  *     created by the app after a confirm.
  *
@@ -20,6 +22,8 @@
 
 import type { OnboardingSourceId, SourceMode } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
+import { choiceLabel, unknownReason } from "../azure-onboarding-state";
+import type { ChoiceUnknownCause } from "../azure-onboarding-state";
 import type { ChooserRow } from "./howto-state";
 import { howtoModeRadioId, howtoRowAnchorId } from "./howto-state";
 
@@ -28,12 +32,13 @@ export interface SourceChooserProps {
   /** True when progress cannot be written: every control is disabled. */
   readonly disabled: boolean;
   /**
-   * True when the AZR-18 selection is not loaded or its read failed. An
-   * Automated row's choice lives in that selection, so it is UNKNOWN, not
-   * "not chosen": its box is disabled, indeterminate and says why
-   * (claude-kit standards/inventory-honesty.md).
+   * Why the AZR-18 selection cannot be used, or null/absent when it is
+   * loaded. An Automated row's choice lives in that selection, so it is
+   * UNKNOWN, not "not chosen": its box is disabled, indeterminate and says why
+   * in the same words its method-section row uses (claude-kit
+   * standards/inventory-honesty.md). A How-to row cannot switch to Automate.
    */
-  readonly selectionUnknown?: boolean;
+  readonly selectionUnknownCause?: ChoiceUnknownCause | null;
   readonly onSetChosen: (id: OnboardingSourceId, chosen: boolean) => void;
   readonly onSetMode: (id: OnboardingSourceId, mode: SourceMode) => void;
 }
@@ -41,21 +46,30 @@ export interface SourceChooserProps {
 /** The hint under an Automated row: the app deploys it from its own section. */
 export const AUTOMATE_CHOICE_HINT = "Automate: the app sets this source up from its section below.";
 
-/** Shown on an Automated row while the AZR-18 selection could not be read. */
-export const SELECTION_UNKNOWN_NOTE =
-  "The saved selection could not be read, so this choice is unknown.";
+/** Shown on an Automated row while the selection cannot be used: the method row's words. */
+export function selectionUnknownNote(cause: ChoiceUnknownCause): string {
+  return choiceLabel({ kind: "unknown", doc: "selection", cause });
+}
+
+/** Shown beside a How-to row's disabled Automate option while the selection cannot be used. */
+export function automateUnavailableNote(cause: ChoiceUnknownCause): string {
+  return `Automate is not available while ${unknownReason("selection", cause)}.`;
+}
 
 export function SourceChooser({
   rows,
   disabled,
-  selectionUnknown = false,
+  selectionUnknownCause = null,
   onSetChosen,
   onSetMode,
 }: SourceChooserProps) {
   return (
     <ul className="azo-howto-chooser">
       {rows.map((row) => {
-        const unknown = selectionUnknown && row.chosenBy === "selection";
+        const unknown = selectionUnknownCause !== null && row.chosenBy === "selection";
+        // A How-to row cannot move to Automate while the selection its choice
+        // would be carried into cannot be used (setMode refuses it too).
+        const automateBlocked = selectionUnknownCause !== null && row.chosenBy === "progress" && !row.modeLocked;
         return (
         <li
           key={row.id}
@@ -91,7 +105,7 @@ export function SourceChooser({
                 name={`azo-mode-${row.id}`}
                 aria-label={`Automate ${row.title}`}
                 checked={row.mode === "automate"}
-                disabled={disabled || row.modeLocked}
+                disabled={disabled || row.modeLocked || automateBlocked}
                 onChange={() => onSetMode(row.id, "automate")}
               />
               <span>Automate</span>
@@ -114,9 +128,14 @@ export function SourceChooser({
               {row.modeLockedReason}
             </span>
           )}
-          {unknown && (
+          {unknown && selectionUnknownCause !== null && (
             <span className="field-hint" data-testid={`azo-choice-unknown-${row.id}`}>
-              {SELECTION_UNKNOWN_NOTE}
+              {selectionUnknownNote(selectionUnknownCause)}
+            </span>
+          )}
+          {automateBlocked && selectionUnknownCause !== null && (
+            <span className="field-hint" data-testid={`azo-automate-unavailable-${row.id}`}>
+              {automateUnavailableNote(selectionUnknownCause)}
             </span>
           )}
           {row.chosenBy === "selection" && !unknown && (

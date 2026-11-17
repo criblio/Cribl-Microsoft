@@ -51,7 +51,6 @@ import type {
   ActivityLogDeployForValidation,
   ActivityLogDeployOutcome,
   ActivityLogState,
-  CoverageSelection,
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
@@ -59,6 +58,7 @@ import { verifiedNoneInventoryMessage } from "../../capabilities/empty-inventory
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { AutomationPermissionBanner } from "./automation-permission-banner";
+import type { RowChoice } from "./azure-onboarding-state";
 import {
   activityLogDeployDisabledReason,
   activityLogOutcomeMessage,
@@ -71,8 +71,8 @@ const REMOVE_NOT_AVAILABLE =
   "Removing the setting from here is not available yet. Unchoosing the Activity Log does not remove it from Azure.";
 
 export interface ActivityLogSectionProps {
-  /** The loaded selection, or null when none was loaded. */
-  selection: CoverageSelection | null;
+  /** The source's choice as the chooser answers it; Deploy runs only when it is chosen in Automate mode. */
+  choice: RowChoice;
   /** The chosen delivery target, from the Event Hub section. Its hub is not used. */
   target: EventHubTarget;
   /** The last read, owned by the screen (its row label reads it too). */
@@ -87,7 +87,7 @@ export interface ActivityLogSectionProps {
 }
 
 export function ActivityLogSection({
-  selection,
+  choice,
   target,
   state,
   onState,
@@ -131,12 +131,12 @@ export function ActivityLogSection({
 
   const namespace = target.namespace;
   const rule = target.rule;
-  const reason = activityLogDeployDisabledReason({ running, selection, state, subscriptionId, namespace, rule });
+  const reason = activityLogDeployDisabledReason({ running, choice, state, subscriptionId, namespace, rule });
   const armKey = JSON.stringify([
     subscriptionId,
     namespace === null ? null : [namespace.subscriptionId, namespace.resourceGroup, namespace.name],
     rule?.name ?? "",
-    selection?.enabled ?? null,
+    choice,
     readSeq,
   ]);
   const armed = reason === null && armedFor === armKey;

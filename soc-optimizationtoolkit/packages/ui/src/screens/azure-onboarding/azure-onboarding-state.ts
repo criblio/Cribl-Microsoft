@@ -11,16 +11,16 @@
  *     document of ours may ever be overwritten, so `read-unknown`,
  *     `doc-foreign` and `doc-unreadable` block every write outright. An
  *     `absent` load shows the defaults and writes nothing until the operator
- *     changes a choice (ADR 0007 section 2, amended 2026-11-17: the choice
- *     saves at once; there is no separate Save).
+ *     changes a choice (ADR 0007 section 2: the choice saves at once; there
+ *     is no separate Save).
  *   - {@link loadBanners}: what the load has to say out loud - ids the decode
  *     dropped, defaults in use, and the three blocked states.
  *   - {@link buildSections}: the catalog layout from core (onboarding-sections)
  *     with a label per row. The rows are STATUS ONLY: whether a source is
  *     chosen and how is the chooser's own answer (a {@link RowChoice} per id,
  *     from howto-state rowChoices over isChosen/effectiveMode), never read
- *     from the selection directly, so the two places cannot disagree. A row whose deployment state could not be READ
- *     takes the `unknown` overlay's label ahead of {@link itemState}'s, because
+ *     from the selection directly, so the two places cannot disagree. A row
+ *     whose deployment state could not be READ takes the `unknown` overlay's label ahead of {@link itemState}'s, because
  *     itemState has only four states and with `deployed: []` it would turn a
  *     failed measurement into "will be deployed" or "Not selected" - the
  *     confident negative this screen exists not to show. A `deployed` of null
@@ -66,7 +66,6 @@
 
 import {
   DEFAULT_NAMESPACE_RULE,
-  DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   ONBOARDING_SECTIONS,
   anyStandard,
@@ -78,7 +77,6 @@ import {
   readCoverageDocument,
   ruleCanSend,
   sectionAvailability,
-  selectedItemIds,
 } from "@soc/core";
 import type {
   CollectionMethod,
@@ -258,25 +256,59 @@ export function withItem(
 // ---------------------------------------------------------------------------
 
 /**
+ * Why a document a choice depends on cannot be used, one word per load state
+ * so the copy says what actually happened: still loading, a read that failed,
+ * a value that is not ours, ours in a format this version cannot read, or a
+ * build with no storage at all.
+ */
+export type ChoiceUnknownCause = "loading" | "not-read" | "not-ours" | "unreadable-format" | "no-storage";
+
+/** The document a choice depends on: the selection (Automate) or the How-to progress (mode, How-to choice). */
+export type ChoiceDocument = "selection" | "progress";
+
+/**
  * Whether one source is chosen, and how, as the chooser answers it (howto-state
- * rowChoices). `unknown` when the answer depends on a document that has not
- * loaded (`pending`) or could not be read: never shown as "not chosen".
+ * rowChoices). `unknown` when the answer depends on a document that cannot be
+ * used yet, with which one and why: never shown as "not chosen".
  */
 export type RowChoice =
   | { readonly kind: "chosen"; readonly mode: SourceMode }
   | { readonly kind: "not-chosen" }
-  | { readonly kind: "unknown"; readonly pending: boolean };
+  | { readonly kind: "unknown"; readonly doc: ChoiceDocument; readonly cause: ChoiceUnknownCause };
 
-/** The words a method-section row shows for its {@link RowChoice}. */
+/** The words a method-section row shows for a known {@link RowChoice}. */
 export const CHOICE_LABELS = {
   automate: "Chosen - Automate",
   manual: "Chosen - How-to",
   notChosen: "Not chosen",
-  loading: "Choice not loaded yet",
-  unknown: "Choice not known - the saved choices could not be read",
 } as const;
 
-/** The visible words for one {@link RowChoice}. */
+const DOC_NOUN: Readonly<Record<ChoiceDocument, string>> = {
+  selection: "selection",
+  progress: "How-to progress",
+};
+
+/** Why `doc` cannot be used, as a clause ("the saved selection could not be read"). */
+export function unknownReason(doc: ChoiceDocument, cause: ChoiceUnknownCause): string {
+  const noun = DOC_NOUN[doc];
+  switch (cause) {
+    case "loading":
+      return `the saved ${noun} is still loading`;
+    case "not-read":
+      return `the saved ${noun} could not be read`;
+    case "not-ours":
+      return `the stored ${noun} was not written by this app`;
+    case "unreadable-format":
+      return `the saved ${noun} is in a format this version cannot read`;
+    case "no-storage":
+      return `this build of the app has no storage for the ${noun}`;
+  }
+}
+
+/**
+ * The visible words for one {@link RowChoice}. The chooser shows the same
+ * words for an unknown choice, so the two places agree.
+ */
 export function choiceLabel(choice: RowChoice): string {
   switch (choice.kind) {
     case "chosen":
@@ -284,12 +316,51 @@ export function choiceLabel(choice: RowChoice): string {
     case "not-chosen":
       return CHOICE_LABELS.notChosen;
     case "unknown":
-      return choice.pending ? CHOICE_LABELS.loading : CHOICE_LABELS.unknown;
+      return `${choice.cause === "loading" ? "Choice not loaded yet" : "Choice not known"} - ${unknownReason(choice.doc, choice.cause)}.`;
+  }
+}
+
+/**
+ * Why the selection cannot be used, or null when it is loaded (`absent` or
+ * ours). `hasStore` false means the shell wired no store: no storage, not a
+ * failed read.
+ */
+export function selectionUnknownCause(load: OnboardingLoadState, hasStore: boolean): ChoiceUnknownCause | null {
+  if (!hasStore) return "no-storage";
+  switch (load.status) {
+    case "absent":
+    case "ready":
+      return null;
+    case "loading":
+      return "loading";
+    case "read-unknown":
+      return "not-read";
+    case "doc-foreign":
+      return "not-ours";
+    case "doc-unreadable":
+      return "unreadable-format";
+  }
+}
+
+/**
+ * Why Deploy is off for a source with this choice, or null when the source is
+ * chosen in Automate mode. Both deploy sections gate on this (and never on the
+ * selection directly), so a stale selection entry for a How-to source, or a
+ * choice the screen cannot read, never deploys.
+ */
+export function choiceDeployBlock(choice: RowChoice, noun: string): string | null {
+  switch (choice.kind) {
+    case "unknown":
+      return `${choiceLabel(choice)} Deploy is off until it is known.`;
+    case "not-chosen":
+      return `Choose the ${noun} under Choose what to onboard to deploy it.`;
+    case "chosen":
+      return choice.mode === "automate" ? null : `The ${noun} is set to How-to, so the app does not deploy it.`;
   }
 }
 
 /** Used for an item id the chooser has no answer for. */
-const NO_CHOICE: RowChoice = { kind: "unknown", pending: false };
+const NO_CHOICE: RowChoice = { kind: "unknown", doc: "progress", cause: "not-read" };
 
 /**
  * One row as the screen renders it. No row has a control: a source is chosen
@@ -473,8 +544,8 @@ export const ZERO_PLANS_DEPLOY_ALLOWED = true;
 export interface DefenderDeployGate {
   /** A deploy is in flight. */
   readonly running: boolean;
-  /** The loaded selection, or null when none was loaded. */
-  readonly selection: CoverageSelection | null;
+  /** The source's choice as the chooser answers it (rowChoices). */
+  readonly choice: RowChoice;
   /** The last Defender state read, or null when none has been made. */
   readonly state: DefenderState | null;
   /** The chosen namespace, or null. */
@@ -498,12 +569,8 @@ export interface DefenderDeployGate {
  */
 export function defenderDeployDisabledReason(gate: DefenderDeployGate): string | null {
   if (gate.running) return "A deploy is already running.";
-  if (gate.selection === null) {
-    return "The saved selection has not loaded, so whether the alert export is chosen is not known.";
-  }
-  if (!selectedItemIds(gate.selection).includes(DEFENDER_EXPORT_ITEM_ID)) {
-    return "Choose the Defender for Cloud alert export under Choose what to onboard to deploy it.";
-  }
+  const blocked = choiceDeployBlock(gate.choice, "Defender for Cloud alert export");
+  if (blocked !== null) return blocked;
   const state = gate.state;
   if (state !== null && state.ours.kind === "present-matching") {
     const rg = state.ours.automation.resourceGroup || "an unknown resource group";

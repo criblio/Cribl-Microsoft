@@ -132,6 +132,17 @@ read `progress.chosen` for every source in How-to mode. The operator ruled
   How-to returns no selection, and a move back to Automate carries the How-to
   choice into the selection with `withItem`. Every selection write carries the
   whole document, so such an entry is copied through as it is.
+- **Review follow-up (same day).** Switching a How-to source to Automate is
+  refused while the selection cannot be used (loading, refused, not ours,
+  unreadable, no storage): the How-to choice could not be carried into it, and
+  a stale entry would decide instead. The chooser disables that option and says
+  why. Both deploy sections gate on the source's choice (chosen AND Automate),
+  never on `selection.enabled`, so an unknown choice keeps Deploy off with the
+  reason. A failed selection write keeps its own line in section 2 until a
+  selection write succeeds; a successful progress write clears every earlier
+  progress failure, since each write carries the whole document. An unknown
+  choice says which document and why, in the same words in the chooser and the
+  method row.
 
 ### 3. Validate is read-only by construction (D16)
 

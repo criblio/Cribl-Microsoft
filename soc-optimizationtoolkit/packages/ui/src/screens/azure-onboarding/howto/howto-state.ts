@@ -75,7 +75,7 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { withItem } from "../azure-onboarding-state";
-import type { RowChoice } from "../azure-onboarding-state";
+import type { ChoiceUnknownCause, RowChoice } from "../azure-onboarding-state";
 
 // ---------------------------------------------------------------------------
 // Load gate
@@ -265,28 +265,54 @@ export function chosenSourceIds(
 }
 
 /**
+ * Why the progress document cannot be used, or null when it is loaded.
+ * `hasStore` false means the shell wired no store: no storage, not a failed
+ * read.
+ */
+export function progressUnknownCause(load: ProgressLoadState, hasStore: boolean): ChoiceUnknownCause | null {
+  if (!hasStore) return "no-storage";
+  switch (load.status) {
+    case "absent":
+    case "ready":
+      return null;
+    case "loading":
+      return "loading";
+    case "read-unknown":
+      return "not-read";
+    case "doc-foreign":
+      return "not-ours";
+    case "doc-unreadable":
+      return "unreadable-format";
+  }
+}
+
+/**
  * The chooser's answer for every onboarding source, as the method sections
- * show it (ADR 0007 section 2, amended 2026-11-17: one visible choice per
- * source). Derived from {@link isChosen} and {@link effectiveMode} only, so a
- * saved selection entry for a How-to source can never tick a method-section
- * row. UNKNOWN, never "not chosen", when the progress document is not loaded
- * (pending while it loads) or an Automated source's selection is not.
+ * show it (ADR 0007 section 2: one visible choice per source). Derived from
+ * {@link isChosen} and {@link effectiveMode} only, so a saved selection entry
+ * for a How-to source can never tick a method-section row. UNKNOWN, never
+ * "not chosen", when the progress document cannot be used, or an Automated
+ * source's selection cannot: `selectionCause` says why the selection is
+ * missing (azure-onboarding-state selectionUnknownCause) and is read only
+ * when `selection` is null.
  */
 export function rowChoices(
   load: ProgressLoadState,
   selection: CoverageSelection | null,
-  selectionPending: boolean,
+  selectionCause: ChoiceUnknownCause,
+  hasStore = true,
 ): ReadonlyMap<OnboardingSourceId, RowChoice> {
   const progress = loadedProgress(load);
+  const progressCause = progressUnknownCause(load, hasStore);
   const out = new Map<OnboardingSourceId, RowChoice>();
   for (const { id } of ONBOARDING_SOURCES) {
     if (progress === null) {
-      out.set(id, { kind: "unknown", pending: load.status === "loading" });
+      out.set(id, { kind: "unknown", doc: "progress", cause: progressCause ?? "not-read" });
       continue;
     }
     const mode = effectiveMode(progress, id);
     if (mode === "automate" && selection === null) {
-      out.set(id, { kind: "unknown", pending: selectionPending });
+      out.set(id, { kind: "unknown", doc: "selection", cause: selectionCause });
       continue;
     }
     out.set(id, isChosen(progress, selection, id) ? { kind: "chosen", mode } : { kind: "not-chosen" });
@@ -610,29 +636,26 @@ export function toggleTick(
  * What a mode change produces. `progress` is written at once (D3).
  * `selection`, when not null, is the AZR-18 selection with the source's
  * choice carried over, which the screen also writes at once when it differs
- * from the one shown (ADR 0007 section 2, amended 2026-11-17) - the same way
- * setChosen hands back a selection. A move to How-to returns no selection:
- * the source's saved entry is left as it is, ignored on screen, and is
- * rewritten only by that source's own next choice or mode change. `notice` is
- * visible text when the choice could not be carried over.
+ * from the one shown (ADR 0007 section 2) - the same way setChosen hands back
+ * a selection. A move to How-to returns no selection: the source's saved
+ * entry is left as it is, ignored on screen, and is rewritten only by that
+ * source's own next choice or mode change.
  */
 export interface ModeChange {
   readonly progress: OnboardingProgress;
   readonly selection: CoverageSelection | null;
-  readonly notice: string | null;
 }
 
-/** Shown when a source moves to Automated but the saved selection was not loaded. */
-export const MODE_CHOICE_NOT_CARRIED =
-  "The saved selection could not be loaded, so this source's choice was not carried over. It now follows the saved selection.";
-
 /**
- * Change a source's mode. Null when writes are blocked, or when `automate` is
- * asked of a source the app cannot deploy (refused, not silently coerced).
- * The row's chosen state is carried across in BOTH directions: to How-to it
- * goes into the progress document; to Automated it comes back as a selection
- * for the screen to write (withItem), so a chosen How-to source does not
- * silently drop out.
+ * Change a source's mode. Null when writes are blocked, when `automate` is
+ * asked of a source the app cannot deploy (refused, not silently coerced),
+ * and when `automate` is asked while the selection is not loaded: the How-to
+ * choice could not be carried into it, so a stale selection entry for the
+ * source would decide "chosen" instead (the chooser disables that option and
+ * says why). The row's chosen state is carried across in BOTH directions: to
+ * How-to it goes into the progress document; to Automated it comes back as a
+ * selection for the screen to write (withItem), so a chosen How-to source
+ * does not silently drop out, and an unchosen one does not come back chosen.
  */
 export function setMode(
   state: ProgressLoadState,
@@ -642,16 +665,13 @@ export function setMode(
 ): ModeChange | null {
   const progress = loadedProgress(state);
   if (progress === null || !canWriteProgress(state)) return null;
-  if (mode === "automate" && !isAutomatable(id)) return null;
+  if (mode === "automate" && (!isAutomatable(id) || selection === null)) return null;
   const wasChosen = isChosen(progress, selection, id);
   const moded = withSourceMode(progress, id, mode);
   if (mode === "manual") {
-    return { progress: withSourceChosen(moded, id, wasChosen), selection: null, notice: null };
+    return { progress: withSourceChosen(moded, id, wasChosen), selection: null };
   }
-  if (selection === null) {
-    return { progress: moded, selection: null, notice: wasChosen ? MODE_CHOICE_NOT_CARRIED : null };
-  }
-  return { progress: moded, selection: withItem(selection, id, wasChosen), notice: null };
+  return { progress: moded, selection: selection === null ? null : withItem(selection, id, wasChosen) };
 }
 
 /** Where a choose click lands (D2). */

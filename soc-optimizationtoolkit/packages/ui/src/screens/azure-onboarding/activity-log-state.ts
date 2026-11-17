@@ -17,7 +17,6 @@
 
 import {
   ACTIVITY_LOG_AUTO_HUB,
-  ACTIVITY_LOG_ITEM_ID,
   ACTIVITY_LOG_SETTING_NAME,
   MAX_SUBSCRIPTION_DIAGNOSTIC_SETTINGS,
   classifyOursSetting,
@@ -25,25 +24,24 @@ import {
   expectedActivityLogSetting,
   findSameNamespaceSettings,
   ruleCanManage,
-  selectedItemIds,
   subscriptionSettingsFull,
 } from "@soc/core";
 import type {
   ActivityLogDeployOutcome,
   ActivityLogDeployStep,
   ActivityLogState,
-  CoverageSelection,
   NamespaceRef,
   OursSettingState,
 } from "@soc/core";
 import { unmeasuredInventoryMessage } from "../../capabilities/empty-inventory";
-import type { PickerMessage } from "./azure-onboarding-state";
+import { choiceDeployBlock } from "./azure-onboarding-state";
+import type { PickerMessage, RowChoice } from "./azure-onboarding-state";
 
 /** Everything the gate looks at. No capability set, on purpose: the audit never forbids. */
 export interface ActivityLogDeployGate {
   readonly running: boolean;
-  /** The loaded selection, or null when none was loaded. */
-  readonly selection: CoverageSelection | null;
+  /** The source's choice as the chooser answers it (rowChoices). */
+  readonly choice: RowChoice;
   /** The last read, or null when none has been made. */
   readonly state: ActivityLogState | null;
   /** The subscription the setting is written to; "" when none is configured. */
@@ -93,12 +91,8 @@ export function oursForTarget(
 export function activityLogDeployDisabledReason(gate: ActivityLogDeployGate): string | null {
   if (gate.running) return "A deploy is already running.";
   if (gate.subscriptionId === "") return "No Azure subscription is configured for this connection.";
-  if (gate.selection === null) {
-    return "The saved selection has not loaded, so whether the Activity Log is chosen is not known.";
-  }
-  if (!selectedItemIds(gate.selection).includes(ACTIVITY_LOG_ITEM_ID)) {
-    return "Choose the Azure Activity Log under Choose what to onboard to deploy it.";
-  }
+  const blocked = choiceDeployBlock(gate.choice, "Azure Activity Log");
+  if (blocked !== null) return blocked;
   const state = gate.state;
   if (state !== null && state.settings.kind === "listed") {
     const listing = state.settings.listing;

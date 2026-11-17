@@ -3,7 +3,7 @@
  * (AZR-31). It composes the plan values form, the step list with its done
  * ticks, and the step dialog, over the pure decisions in howto-state.ts. The
  * chooser (what to onboard, Automate | How-to per source) is its own section
- * above (choose-panel.tsx, ADR 0007 section 2 amended 2026-11-17); this panel
+ * above (choose-panel.tsx, ADR 0007 section 2); this panel
  * lists steps only for the How-to sources chosen there.
  *
  * WHAT IT OWNS: which step dialog is open. Nothing else. The progress document

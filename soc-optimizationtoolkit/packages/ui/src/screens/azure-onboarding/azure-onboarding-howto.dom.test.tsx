@@ -49,8 +49,7 @@ import type {
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen, DEFENDER_HOWTO_NOTE } from "./azure-onboarding-screen";
-import { CHOICE_LABELS } from "./azure-onboarding-state";
-import { MODE_CHOICE_NOT_CARRIED } from "./howto/howto-state";
+import { CHOICE_LABELS, choiceLabel } from "./azure-onboarding-state";
 
 /** The four sections the screen adds after the catalog sections. */
 const NEW_SECTION_TITLES = [
@@ -334,29 +333,32 @@ describe("AzureOnboardingScreen - progress writes", () => {
     // The method sections have no control of their own, and say the choice is
     // not known rather than "Not chosen".
     expect(screen.queryAllByRole("checkbox", { name: DEFENDER_TITLE })).toEqual([]);
-    expect(screen.getByTestId("azo-choice-defenderExport").textContent).toBe(CHOICE_LABELS.unknown);
-    expect(screen.getByTestId("azo-choice-entraId").textContent).toBe(CHOICE_LABELS.unknown);
+    const unreadable = choiceLabel({ kind: "unknown", doc: "progress", cause: "not-read" });
+    expect(screen.getByTestId("azo-choice-defenderExport").textContent).toBe(unreadable);
+    expect(screen.getByTestId("azo-choice-entraId").textContent).toBe(unreadable);
+    // The deploy sections render, but Deploy is off and says why in the same words.
+    expect(screen.getAllByText(`${unreadable} Deploy is off until it is known.`).length).toBe(2);
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
     expect(store.saves).toEqual([]);
   });
 
-  it("the 'choice not carried over' notice outlives the progress save that its mode change queued", async () => {
-    // The saved selection could not be read, and Defender is chosen in How-to mode.
+  it("with the selection unread, a How-to source cannot switch to Automate, and nothing is written", async () => {
+    // Defender is chosen in How-to mode; the saved selection could not be read.
     const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }).scriptLoad(
       SELECTION_KEY,
       { kind: "unknown", reason: "HTTP 403", status: 403 },
     );
     mount({ store });
     await loaded();
-    fireEvent.click(screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }));
-    // The mode change is written...
-    await waitFor(() => expect(progressSaves(store).length).toBe(1));
-    const doc = progressSaves(store)[0]?.value as { sources: Record<string, { mode?: string }> };
-    expect(doc.sources["defenderExport"]?.mode).toBe("automate");
-    // ...and after that write has resolved, the operator is still told the choice was dropped.
-    await Promise.resolve();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.getByText(MODE_CHOICE_NOT_CARRIED)).toBeTruthy();
+    const automate = screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }) as HTMLInputElement;
+    expect(automate.disabled).toBe(true);
+    expect(screen.getByTestId("azo-automate-unavailable-defenderExport").textContent).toBe(
+      "Automate is not available while the saved selection could not be read.",
+    );
+    fireEvent.click(automate);
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    expect(store.saves).toEqual([]);
+    expect(screen.getByTestId("azo-choice-defenderExport").textContent).toBe(CHOICE_LABELS.manual);
   });
 
   it("a successful progress save clears an earlier save failure", async () => {
@@ -374,6 +376,27 @@ describe("AzureOnboardingScreen - progress writes", () => {
     store.failSaves(null);
     fireEvent.click(ticks[0] as HTMLElement);
     await waitFor(() => expect(screen.queryByText(/Your How-to progress was not saved/)).toBeNull());
+  });
+
+  it("any successful progress write clears every earlier progress failure, in both sections", async () => {
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
+    mount({ store });
+    await loaded();
+    const ticks = await waitFor(() => {
+      const found = screen.getAllByRole("checkbox", { name: /^Done: / });
+      expect(found.length).toBeGreaterThan(0);
+      return found;
+    });
+    store.failSaves();
+    // A tick fails (How-to section), then a choice fails (chooser section).
+    fireEvent.click(ticks[0] as HTMLElement);
+    await waitFor(() => expect(screen.getAllByText(/Your How-to progress was not saved/)).toHaveLength(1));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Onboard Azure Activity Log" }));
+    await waitFor(() => expect(screen.getAllByText(/Your How-to progress was not saved/)).toHaveLength(2));
+    store.failSaves(null);
+    // One successful write carries the whole document, so both lines go.
+    fireEvent.click(screen.getByRole("checkbox", { name: "Onboard Azure Activity Log" }));
+    await waitFor(() => expect(screen.queryAllByText(/Your How-to progress was not saved/)).toHaveLength(0));
   });
 
   it("a source in How-to mode hides the Defender deploy controls behind a note", async () => {

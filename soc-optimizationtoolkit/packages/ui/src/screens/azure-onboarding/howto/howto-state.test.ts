@@ -27,11 +27,11 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { findHistoryInCopy, describeViolations } from "../../../components/copy-rules";
+import { automateUnavailableNote, selectionUnknownNote } from "./source-chooser";
 import type { CopyEntry } from "../../../components/copy-rules";
 import {
   AGGREGATE_VERDICT_WORD,
   AUTOMATE_LOCKED_REASON,
-  MODE_CHOICE_NOT_CARRIED,
   PROGRESS_FAILED_REASON,
   PROGRESS_LOADING_REASON,
   UNVERIFIED_TAG,
@@ -215,17 +215,25 @@ describe("chooser rows (D2)", () => {
     const change = setMode(s, SELECTION, "defenderExport", "automate")!;
     expect(change.progress.sources.defenderExport?.mode).toBe("automate");
     expect(change.selection?.enabled).toEqual(["defenderExport"]);
-    expect(change.notice).toBeNull();
     // The selection keeps the row chosen once the screen writes it.
     const row = chooserRows(change.progress, change.selection).find((r) => r.id === "defenderExport")!;
     expect(row.chosen).toBe(true);
     // An unchosen How-to source stays unchosen.
     const unchosen = setMode(ready(withSourceMode(emptyProgress(), "defenderExport", "manual")), SELECTION, "defenderExport", "automate")!;
     expect(unchosen.selection?.enabled).toEqual([]);
-    // Without a loaded selection the choice cannot be carried, and it says so.
-    const noSel = setMode(s, null, "defenderExport", "automate")!;
-    expect(noSel.selection).toBeNull();
-    expect(noSel.notice).toBe(MODE_CHOICE_NOT_CARRIED);
+  });
+
+  it("setMode refuses Automate while the selection is not loaded, so a stale entry cannot decide", () => {
+    // Unchosen in How-to mode; the selection (unread here) may still hold a
+    // stale entry enabling it. Switching would let that entry decide.
+    const unchosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "defenderExport", "manual"), "defenderExport", false));
+    expect(setMode(unchosen, null, "defenderExport", "automate")).toBeNull();
+    const chosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "defenderExport", "manual"), "defenderExport", true));
+    expect(setMode(chosen, null, "defenderExport", "automate")).toBeNull();
+    // Moving to How-to needs no selection write, so it is still allowed.
+    expect(setMode(ready(emptyProgress()), null, "defenderExport", "manual")?.progress.sources.defenderExport?.mode).toBe(
+      "manual",
+    );
   });
 
   it("setChosen writes progress for How-to and the selection for Automated", () => {
@@ -423,7 +431,10 @@ describe("visible copy carries no history", () => {
     const blocked = setChosen(progressLoadStateFrom(null), SELECTION, "entraId", true);
     if (blocked.kind === "blocked") add("setChosen", blocked.reason);
     add("blocked failed", PROGRESS_FAILED_REASON);
-    add("mode notice", MODE_CHOICE_NOT_CARRIED);
+    for (const cause of ["loading", "not-read", "not-ours", "unreadable-format", "no-storage"] as const) {
+      add(`automate unavailable ${cause}`, automateUnavailableNote(cause));
+      add(`selection unknown ${cause}`, selectionUnknownNote(cause));
+    }
     for (const w of Object.values(AGGREGATE_VERDICT_WORD)) add("verdict word", w);
     expect(entries.length).toBeGreaterThan(50);
     const violations = findHistoryInCopy(entries);
@@ -435,29 +446,41 @@ describe("rowChoices - the method sections read the chooser's answer, never the 
   it("a How-to source the saved selection has enabled is not chosen unless progress says so", () => {
     const withEntra: CoverageSelection = { ...SELECTION, enabled: ["entraId", "activityLog"] };
     const notChosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "entraId", "manual"), "entraId", false));
-    const choices = rowChoices(notChosen, withEntra, false);
+    const choices = rowChoices(notChosen, withEntra, "not-read");
     expect(choices.get("entraId")).toEqual({ kind: "not-chosen" });
     // The Automated source follows the selection.
     expect(choices.get("activityLog")).toEqual({ kind: "chosen", mode: "automate" });
     const chosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "entraId", "manual"), "entraId", true));
-    expect(rowChoices(chosen, { ...SELECTION, enabled: [] }, false).get("entraId")).toEqual({
+    expect(rowChoices(chosen, { ...SELECTION, enabled: [] }, "not-read").get("entraId")).toEqual({
       kind: "chosen",
       mode: "manual",
     });
   });
 
-  it("an unread document makes the choice unknown, never not chosen", () => {
-    const loading = rowChoices({ status: "loading" }, SELECTION, false);
-    expect(loading.get("entraId")).toEqual({ kind: "unknown", pending: true });
-    const failed = rowChoices(progressLoadStateFrom({ kind: "unknown", reason: "HTTP 403" }), SELECTION, false);
-    expect(failed.get("defenderExport")).toEqual({ kind: "unknown", pending: false });
-    // Progress loaded but the selection did not: only Automated sources are unknown.
-    const noSel = rowChoices(ready(emptyProgress()), null, true);
-    expect(noSel.get("defenderExport")).toEqual({ kind: "unknown", pending: true });
-    expect(noSel.get("entraId")).toEqual({ kind: "not-chosen" });
-    expect(rowChoices(ready(emptyProgress()), null, false).get("defenderExport")).toEqual({
+  it("an unusable document makes the choice unknown, naming the document and why", () => {
+    expect(rowChoices({ status: "loading" }, SELECTION, "not-read").get("entraId")).toEqual({
       kind: "unknown",
-      pending: false,
+      doc: "progress",
+      cause: "loading",
+    });
+    const failed = rowChoices(progressLoadStateFrom({ kind: "unknown", reason: "HTTP 403" }), SELECTION, "not-read");
+    expect(failed.get("defenderExport")).toEqual({ kind: "unknown", doc: "progress", cause: "not-read" });
+    const foreign = rowChoices({ status: "doc-foreign", kind: "x" }, SELECTION, "not-read");
+    expect(foreign.get("defenderExport")).toEqual({ kind: "unknown", doc: "progress", cause: "not-ours" });
+    // No store at all is no storage, not a failed read.
+    expect(rowChoices({ status: "read-unknown", reason: "r" }, null, "no-storage", false).get("entraId")).toEqual({
+      kind: "unknown",
+      doc: "progress",
+      cause: "no-storage",
+    });
+    // Progress loaded but the selection did not: only Automated sources are unknown, with the selection's cause.
+    const noSel = rowChoices(ready(emptyProgress()), null, "loading");
+    expect(noSel.get("defenderExport")).toEqual({ kind: "unknown", doc: "selection", cause: "loading" });
+    expect(noSel.get("entraId")).toEqual({ kind: "not-chosen" });
+    expect(rowChoices(ready(emptyProgress()), null, "not-ours").get("defenderExport")).toEqual({
+      kind: "unknown",
+      doc: "selection",
+      cause: "not-ours",
     });
   });
 });

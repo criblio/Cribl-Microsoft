@@ -52,6 +52,8 @@ import {
   ZERO_PLANS_DEPLOY_ALLOWED,
   buildSections,
   canWriteSelection,
+  choiceLabel,
+  selectionUnknownCause,
   CHOICE_LABELS,
   NOT_AVAILABLE_LABEL,
   STATE_LABELS,
@@ -161,6 +163,8 @@ describe("withItem", () => {
   });
 });
 
+const NOT_READ: RowChoice = { kind: "unknown", doc: "selection", cause: "not-read" };
+
 function itemRow(sections: ReturnType<typeof buildSections>, id: string): Extract<OnboardingRowView, { kind: "item" }> {
   for (const s of sections) {
     for (const r of s.rows) if (r.kind === "item" && r.id === id) return r;
@@ -244,10 +248,31 @@ describe("buildSections - an unread state is never a confident negative", () => 
     expect(at({ kind: "chosen", mode: "automate" })).toBe("Chosen - Automate");
     expect(at({ kind: "chosen", mode: "manual" })).toBe("Chosen - How-to");
     expect(at({ kind: "not-chosen" })).toBe("Not chosen");
-    expect(at({ kind: "unknown", pending: true })).toBe(CHOICE_LABELS.loading);
-    expect(at({ kind: "unknown", pending: false })).toBe(CHOICE_LABELS.unknown);
+    // An unknown choice says which document and why, in words per state.
+    const texts = (["loading", "not-read", "not-ours", "unreadable-format", "no-storage"] as const).map((cause) =>
+      at({ kind: "unknown", doc: "selection", cause }),
+    );
+    expect(texts).toEqual([
+      "Choice not loaded yet - the saved selection is still loading.",
+      "Choice not known - the saved selection could not be read.",
+      "Choice not known - the stored selection was not written by this app.",
+      "Choice not known - the saved selection is in a format this version cannot read.",
+      "Choice not known - this build of the app has no storage for the selection.",
+    ]);
+    expect(at({ kind: "unknown", doc: "progress", cause: "not-read" })).toBe(
+      "Choice not known - the saved How-to progress could not be read.",
+    );
     // An id the chooser has no answer for is unknown, never "Not chosen".
-    expect(itemRow(buildSections(new Map(), [], new Map()), "entraId").choiceLabel).toBe(CHOICE_LABELS.unknown);
+    expect(itemRow(buildSections(new Map(), [], new Map()), "entraId").choiceLabel).toMatch(/^Choice not known/);
+  });
+
+  it("selectionUnknownCause names each load state, and no storage before any", () => {
+    expect(selectionUnknownCause({ status: "loading" }, true)).toBe("loading");
+    expect(selectionUnknownCause({ status: "read-unknown", reason: "r" }, true)).toBe("not-read");
+    expect(selectionUnknownCause({ status: "doc-foreign", kind: "k" }, true)).toBe("not-ours");
+    expect(selectionUnknownCause({ status: "doc-unreadable", version: 9 }, true)).toBe("unreadable-format");
+    expect(selectionUnknownCause(loadStateFrom({ kind: "absent", why: "not-found" }), true)).toBeNull();
+    expect(selectionUnknownCause({ status: "loading" }, false)).toBe("no-storage");
   });
 
   it("keeps core's layout: every section, the unsupported rows and the XDR row", () => {
@@ -315,7 +340,7 @@ function state(over: Partial<DefenderState> = {}): DefenderState {
 // deployable. Its uncertainty is surfaced by defenderStateNote, not the gate.
 const READY: DefenderDeployGate = {
   running: false,
-  selection: { ...defaultSelection(), enabled: [DEFENDER_EXPORT_ITEM_ID] },
+  choice: { kind: "chosen", mode: "automate" },
   state: state(),
   namespace: NS,
   hubName: "defender",
@@ -331,7 +356,7 @@ describe("defenderDeployDisabledReason", () => {
   it("reads the tick by core's DEFENDER_EXPORT_ITEM_ID, and declares no id of its own (AZR-38)", () => {
     expect(DEFENDER_EXPORT_ITEM_ID).toBe("defenderExport");
     expect(Object.keys(onboardingState)).not.toContain("DEFENDER_ITEM_ID");
-    expect(defenderDeployDisabledReason({ ...READY, selection: { ...defaultSelection(), enabled: ["entraId"] } })).toBe(
+    expect(defenderDeployDisabledReason({ ...READY, choice: { kind: "not-chosen" } })).toBe(
       "Choose the Defender for Cloud alert export under Choose what to onboard to deploy it.",
     );
   });
@@ -378,9 +403,10 @@ describe("defenderDeployDisabledReason", () => {
     // Each step breaks one more input than the next, so each must report the
     // highest-priority reason among those broken.
     const cases: Array<[Partial<DefenderDeployGate>, RegExp]> = [
-      [{ running: true, selection: null, state: null, hubName: "", rule: null, resourceGroup: "" }, /already running/],
-      [{ selection: null, state: null, hubName: "", rule: null, resourceGroup: "" }, /has not loaded/],
-      [{ selection: { ...defaultSelection(), enabled: [] }, state: null }, /Choose the Defender/],
+      [{ running: true, choice: NOT_READ, state: null, hubName: "", rule: null, resourceGroup: "" }, /already running/],
+      [{ choice: NOT_READ, state: null, hubName: "", rule: null, resourceGroup: "" }, /Choice not known - the saved selection could not be read/],
+      [{ choice: { kind: "not-chosen" }, state: null }, /Choose the Defender/],
+      [{ choice: { kind: "chosen", mode: "manual" }, state: null }, /is set to How-to/],
       // The duplicate and present-differs refusals outrank every later input:
       // with the same-target export listed, a missing rule or resource group
       // (or an unread ours) must not hide the duplicate.
@@ -595,7 +621,6 @@ describe("visible copy carries no project history", () => {
     ];
     for (const l of loads) for (const b of loadBanners(l)) add(`banner.${l.status}`, b.text);
 
-    const sel = defaultSelection();
     for (const deployed of [[], [DEFENDER_EXPORT_ITEM_ID], null]) {
       for (const s of buildSections(choicesOf({ defenderExport: "automate", entraId: "manual" }), deployed, new Map())) {
         add(`section.${s.key}`, s.title);
@@ -613,12 +638,18 @@ describe("visible copy carries no project history", () => {
       }
     }
     for (const [k, t] of Object.entries(CHOICE_LABELS)) add(`choice.${k}`, t);
+    for (const cause of ["loading", "not-read", "not-ours", "unreadable-format", "no-storage"] as const) {
+      for (const doc of ["selection", "progress"] as const) {
+        add(`choice.unknown.${doc}.${cause}`, choiceLabel({ kind: "unknown", doc, cause }));
+      }
+    }
     add("unknown-label", itemRow(buildSections(choicesOf(), [], new Map([[DEFENDER_EXPORT_ITEM_ID, "r"]])), DEFENDER_EXPORT_ITEM_ID).label);
 
     const gates: Partial<DefenderDeployGate>[] = [
       { running: true },
-      { selection: null },
-      { selection: { ...sel, enabled: [] } },
+      { choice: NOT_READ },
+      { choice: { kind: "not-chosen" } },
+      { choice: { kind: "chosen", mode: "manual" } },
       { state: state({ ours: { kind: "present-matching", automation: automation({ name: DEFENDER_EXPORT_NAME }) } }) },
       { state: state({ ours: { kind: "present-differs", automation: automation({}), diffs: ["d"] } }) },
       { state: state({ automations: { kind: "listed", listing: toListing([automation({ name: "o" })]) } }) },

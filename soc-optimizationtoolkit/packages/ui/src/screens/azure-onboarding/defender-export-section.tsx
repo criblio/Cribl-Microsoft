@@ -63,7 +63,6 @@ import type {
   AutomationPermissionView,
   AutomationPermissions,
   AzureResourceGroup,
-  CoverageSelection,
   DefenderDeployForValidation,
   DefenderDeployOutcome,
   DefenderState,
@@ -84,7 +83,7 @@ import {
   deployOutcomeMessage,
   planSummary,
 } from "./azure-onboarding-state";
-import type { PickerMessage } from "./azure-onboarding-state";
+import type { PickerMessage, RowChoice } from "./azure-onboarding-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { AutomationPermissionBanner } from "./automation-permission-banner";
@@ -107,8 +106,8 @@ const REMOVE_NOT_AVAILABLE =
   "Removing the export from here is not available yet. Unchoosing it does not remove it from Azure.";
 
 export interface DefenderExportSectionProps {
-  /** The loaded selection, or null when none was loaded. */
-  selection: CoverageSelection | null;
+  /** The source's choice as the chooser answers it; Deploy runs only when it is chosen in Automate mode. */
+  choice: RowChoice;
   /** The chosen delivery target, from the Event Hub section. */
   target: EventHubTarget;
   /** The last Defender state read, owned by the screen (its rows read it too). */
@@ -138,7 +137,7 @@ function joined(values: readonly string[]): string {
 }
 
 export function DefenderExportSection({
-  selection,
+  choice,
   target,
   state,
   onState,
@@ -218,7 +217,7 @@ export function DefenderExportSection({
   const namespace = target.namespace;
   const reason = defenderDeployDisabledReason({
     running,
-    selection,
+    choice,
     state,
     namespace,
     hubName: target.hubName,
@@ -233,7 +232,7 @@ export function DefenderExportSection({
     namespace === null ? null : [namespace.subscriptionId, namespace.resourceGroup, namespace.name],
     target.hubName,
     target.rule?.name ?? "",
-    selection?.enabled ?? null,
+    choice,
     readSeq,
   ]);
   const armed = reason === null && armedFor === armKey;

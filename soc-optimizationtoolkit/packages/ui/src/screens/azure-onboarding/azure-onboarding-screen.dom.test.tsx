@@ -296,6 +296,30 @@ class HeldSaveStore extends FakeKvDocumentStore {
   }
 }
 
+/** A document store whose load of one key waits for {@link release}. */
+class HeldLoadStore extends FakeKvDocumentStore {
+  private readonly held: string;
+  private gate: Promise<void>;
+  private open: () => void = () => {};
+
+  constructor(held: string, seed: Record<string, unknown>) {
+    super(seed);
+    this.held = held;
+    this.gate = new Promise<void>((resolve) => {
+      this.open = resolve;
+    });
+  }
+
+  release(): void {
+    this.open();
+  }
+
+  override async load(key: string) {
+    if (key === this.held) await this.gate;
+    return super.load(key);
+  }
+}
+
 /** Wait for both documents to land (the loading lines go away). */
 async function loaded(): Promise<void> {
   await waitFor(() => {
@@ -473,15 +497,19 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     // Both documents say why: the selection and the How-to progress.
     expect(screen.getAllByText(/no tenant id/).length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByRole("checkbox", { name: `Onboard ${DEFENDER_TITLE}` })).toBeNull();
-    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.unknown);
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toMatch(/^Choice not known - /);
     await settle();
     expect(store?.loads).toEqual([]);
     expect(store?.saves).toEqual([]);
   });
 
-  // (e) A refused selection load blocks the write: the Automated choice is
-  // unknown, its box cannot be clicked, and no path writes the selection.
-  it("a REFUSED selection load blocks every selection write, from a choice or a mode change", async () => {
+  // (e) A refused selection load: the Automated choice is unknown and its box
+  // cannot be clicked, and once the source is in How-to it cannot come back
+  // to Automate, so neither the selection nor progress records an Automate
+  // choice the selection never confirmed. (commitSelection's own
+  // canWriteSelection guard is pinned at the unit level; the screen never
+  // reaches it with a null selection.)
+  it("a REFUSED selection load: no selection write, and a How-to source cannot return to Automate", async () => {
     const store = new FakeKvDocumentStore().scriptLoad(SELECTION_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
@@ -494,14 +522,85 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     expect(box.disabled).toBe(true);
     expect(box.indeterminate).toBe(true);
     fireEvent.click(box);
-    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.unknown);
-    // A round trip through How-to would carry a choice back into the
-    // selection; with the selection unread it must not.
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe("Choice not known - the saved selection could not be read.");
+    // The chooser says the same thing as the method row.
+    expect(screen.getByTestId("azo-choice-unknown-defenderExport").textContent).toBe(
+      choiceText(DEFENDER_EXPORT_ITEM_ID),
+    );
+    // Moving to How-to needs no selection write and is allowed...
     fireEvent.click(screen.getByRole("radio", { name: `How-to ${DEFENDER_TITLE}` }));
-    fireEvent.click(screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }));
+    await waitFor(() => expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toHaveLength(1));
+    // ...but coming back to Automate is refused, and says why.
+    const automate = screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }) as HTMLInputElement;
+    expect(automate.disabled).toBe(true);
+    fireEvent.click(automate);
     await settle();
     expect(selectionSaves(store)).toEqual([]);
-    expect(store.saves.every((s) => s.key !== SELECTION_KEY)).toBe(true);
+    const modes = store.saves
+      .filter((s) => s.key === PROGRESS_KEY)
+      .map((s) => (s.value as { sources: Record<string, { mode?: string }> }).sources["defenderExport"]?.mode);
+    expect(modes).toEqual(["manual"]);
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
+    expect(screen.queryByRole("button", { name: "Deploy alert export" })).toBeNull();
+  });
+
+  // Major: a How-to source unchosen while the selection was still loading
+  // must not come back "Chosen - Automate" from a stale selection entry.
+  it("a stale selection entry never makes an unchosen How-to source Chosen - Automate", async () => {
+    const store = new HeldLoadStore(SELECTION_KEY, {
+      [SELECTION_KEY]: { kind: COVERAGE_SELECTION_KIND, version: COVERAGE_SELECTION_VERSION, enabled: ["defenderExport"] },
+      [PROGRESS_KEY]: JSON.parse(
+        encodeProgress(withSourceChosen(withSourceMode(emptyProgress(), "defenderExport", "manual"), "defenderExport", false)),
+      ),
+    });
+    mount({ store });
+    await waitFor(() => expect(screen.queryByText(CHOICES_LOADING_TEXT)).toBeNull());
+    // The selection is still loading: Automate is not offered, and a click does nothing.
+    const automate = screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }) as HTMLInputElement;
+    expect(automate.disabled).toBe(true);
+    expect(screen.getByTestId("azo-automate-unavailable-defenderExport").textContent).toBe(
+      "Automate is not available while the saved selection is still loading.",
+    );
+    fireEvent.click(automate);
+    await settle();
+    expect(store.saves).toEqual([]);
+    store.release();
+    await loaded();
+    // The stale entry is ignored: the source is still How-to and not chosen.
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(false);
+    expect(screen.queryByRole("button", { name: "Deploy alert export" })).toBeNull();
+    // Now Automate is offered, and carries "not chosen" into the selection.
+    fireEvent.click(screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }));
+    await waitFor(() => expect(selectionSaves(store)).toHaveLength(1));
+    expect(selectionSaves(store)[0]?.enabled).not.toContain("defenderExport");
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
+  });
+
+  // Major: a failed selection write keeps its own line until a selection
+  // write succeeds; other messages and progress saves never replace it.
+  it("a selection failure line survives other chooser messages and successful progress writes", async () => {
+    const store = new FakeKvDocumentStore();
+    mount({ store });
+    await loaded();
+    store.failSaves(new Error("PUT kvstore: HTTP 500"));
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    await waitFor(() => expect(screen.getByText(/Your choice was not saved/)).toBeTruthy());
+    store.failSaves(null);
+    // A How-to choice writes progress successfully, in the same section.
+    fireEvent.click(chooseBox(ENTRA_TITLE));
+    await waitFor(() => expect(store.saves.some((s) => s.key === PROGRESS_KEY)).toBe(true));
+    await settle();
+    expect(screen.getByText(/Your choice was not saved/)).toBeTruthy();
+    // A failed progress write shows its own line beside it, not over it.
+    store.failSaves(new Error("PUT kvstore: HTTP 503"));
+    fireEvent.click(chooseBox(ENTRA_TITLE));
+    await waitFor(() => expect(screen.getByText(/Your How-to progress was not saved/)).toBeTruthy());
+    expect(screen.getByText(/Your choice was not saved/)).toBeTruthy();
+    // Only a successful selection write clears it.
+    store.failSaves(null);
+    fireEvent.click(chooseBox(ACTIVITY_LOG_TITLE));
+    await waitFor(() => expect(screen.queryByText(/Your choice was not saved/)).toBeNull());
   });
 
   it("a missing document store is a visible gap and nothing can be chosen", async () => {

@@ -8,7 +8,7 @@
  * the How-to path (guided steps with done ticks), the read-only Validate, and
  * the Cribl Stream source the app creates.
  *
- * ONE VISIBLE CHOICE PER SOURCE (ADR 0007 section 2, amended 2026-11-17).
+ * ONE VISIBLE CHOICE PER SOURCE (ADR 0007 section 2).
  * Section 2, "Choose what to onboard", is the only place a source is chosen,
  * with its Automate | How-to toggle. The method sections after it are status
  * only: each row says whether its source is chosen and how (howto-state
@@ -159,12 +159,14 @@ import {
   loadStateFrom,
   loadedSelection,
   measuredHubsOf,
+  selectionUnknownCause,
 } from "./azure-onboarding-state";
 import type {
   OnboardingLoadState,
   OnboardingRowView,
   OnboardingSectionView,
   PickerMessage,
+  RowChoice,
 } from "./azure-onboarding-state";
 import { EventHubPrerequisiteSection, PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
@@ -356,9 +358,10 @@ export function AzureOnboardingScreen({
   // clicks in one render never build on the same stale value.
   const latestSelection = useRef<CoverageSelection | null>(null);
   const selectionChain = useRef<Promise<void>>(Promise.resolve());
-  // The selection save-failure message currently shown, so a later successful
-  // selection save clears that message and nothing else.
-  const selectionSaveFailure = useRef<PickerMessage | null>(null);
+  // A failed selection write has its OWN line in the chooser section: no other
+  // message replaces it, and only a successful selection write clears it, so
+  // an unsaved Automated choice is never shown without its "not saved" line.
+  const [selectionFailure, setSelectionFailure] = useState<PickerMessage | null>(null);
   const [target, setTarget] = useState<EventHubTarget>(EMPTY_EVENTHUB_TARGET);
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
   const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
@@ -377,9 +380,10 @@ export function AzureOnboardingScreen({
   });
   // AZR-96: the read-only report on the legacy progress key. Null until it is read.
   const [legacyRead, setLegacyRead] = useState<StrandedLegacyRead | null>(null);
-  // The progress save-failure message currently shown, and where, so a later
-  // successful save clears that message and nothing else.
-  const progressSaveFailure = useRef<{ readonly at: MessageArea; readonly message: PickerMessage } | null>(null);
+  // Every progress save-failure message shown, and where. Each write carries
+  // the whole document, so ANY successful progress write saves what every
+  // earlier failure lost, and clears all of them (and nothing else).
+  const progressSaveFailures = useRef<{ readonly at: MessageArea; readonly message: PickerMessage }[]>([]);
 
   // Validate (D16).
   const [run, dispatchRun] = useReducer(validateRunReducer, VALIDATE_IDLE);
@@ -535,12 +539,16 @@ export function AzureOnboardingScreen({
       ]),
     [defenderState, activityLogState],
   );
+  const selectionCause = selectionUnknownCause(load, store !== undefined);
   // The chooser's answer per source: the ONLY input the method sections'
-  // "chosen" status is read from (ADR 0007 section 2, amended 2026-11-17).
+  // "chosen" status is read from (ADR 0007 section 2).
   const choices = useMemo(
-    () => rowChoices(progressLoad, selection, store !== undefined && load.status === "loading"),
-    [progressLoad, selection, store, load.status],
+    () => rowChoices(progressLoad, selection, selectionCause ?? "not-read", store !== undefined),
+    [progressLoad, selection, selectionCause, store],
   );
+  // A deploy section gates on its source's choice, never on the selection.
+  const choiceOf = (id: OnboardingSourceId): RowChoice =>
+    choices.get(id) ?? { kind: "unknown", doc: "progress", cause: "not-read" };
   const sections = useMemo(
     () => buildSections(choices, deployed, unknown),
     [choices, deployed, unknown],
@@ -604,9 +612,7 @@ export function AzureOnboardingScreen({
         };
         latestLoad.current = saved;
         setLoad(saved);
-        const failure = selectionSaveFailure.current;
-        selectionSaveFailure.current = null;
-        if (failure !== null) clearMessage("chooser", failure);
+        setSelectionFailure(null);
         logger?.info(`${LOG} selection saved`, { change: what, enabled: next.enabled.length });
       } catch (error) {
         const message = errorText(error);
@@ -614,8 +620,7 @@ export function AzureOnboardingScreen({
           tone: "error",
           text: `Your choice was not saved - ${message}. The next change tries again with everything shown here.`,
         };
-        selectionSaveFailure.current = failure;
-        showMessage("chooser", failure);
+        setSelectionFailure(failure);
         logger?.warn(`${LOG} selection save failed`, { change: what, error: message });
       }
     });
@@ -644,9 +649,9 @@ export function AzureOnboardingScreen({
         // A save clears only its own earlier failure. Any other message - a
         // notice set by the click that queued this write, such as a choice not
         // carried over between modes - must outlive the write it explains.
-        const failure = progressSaveFailure.current;
-        progressSaveFailure.current = null;
-        if (failure !== null) clearMessage(failure.at, failure.message);
+        const failures = progressSaveFailures.current;
+        progressSaveFailures.current = [];
+        for (const f of failures) clearMessage(f.at, f.message);
         logger?.info(`${LOG} progress saved`, { change: what });
       } catch (error) {
         const message = errorText(error);
@@ -654,7 +659,7 @@ export function AzureOnboardingScreen({
           tone: "error",
           text: `Your How-to progress was not saved - ${message}. The next change tries again with everything shown here.`,
         };
-        progressSaveFailure.current = { at, message: failure };
+        progressSaveFailures.current = [...progressSaveFailures.current, { at, message: failure }];
         showMessage(at, failure);
         logger?.warn(`${LOG} progress save failed`, { change: what, error: message });
       }
@@ -676,7 +681,6 @@ export function AzureOnboardingScreen({
     if (change.selection !== null && change.selection !== latestSelection.current) {
       commitSelection(change.selection, "mode");
     }
-    if (change.notice !== null) showMessage("chooser", { tone: "info", text: change.notice });
   }
 
   function onSetChosen(id: OnboardingSourceId, isChosen: boolean): void {
@@ -1080,9 +1084,16 @@ export function AzureOnboardingScreen({
         status="available"
         infoTip={CHOOSER_TIP}
       >
+        {selectionFailure !== null && <PickerLine message={selectionFailure} />}
         {messages.chooser !== null && <PickerLine message={messages.chooser} />}
         <div id={CHOOSER_ANCHOR_ID} tabIndex={-1}>
-          <ChoosePanel load={progressLoad} selection={selection} onSetMode={onSetMode} onSetChosen={onSetChosen} />
+          <ChoosePanel
+            load={progressLoad}
+            selection={selection}
+            selectionCause={selectionCause}
+            onSetMode={onSetMode}
+            onSetChosen={onSetChosen}
+          />
         </div>
       </NumberedSection>
 
@@ -1105,7 +1116,7 @@ export function AzureOnboardingScreen({
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
               ) : (
                 <ActivityLogSection
-                  selection={selection}
+                  choice={choiceOf(ACTIVITY_LOG_ITEM_ID)}
                   target={target}
                   state={activityLogState}
                   onState={setActivityLogState}
@@ -1119,7 +1130,7 @@ export function AzureOnboardingScreen({
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
               ) : (
                 <DefenderExportSection
-                  selection={selection}
+                  choice={choiceOf(DEFENDER_EXPORT_ITEM_ID)}
                   target={target}
                   state={defenderState}
                   onState={setDefenderState}
