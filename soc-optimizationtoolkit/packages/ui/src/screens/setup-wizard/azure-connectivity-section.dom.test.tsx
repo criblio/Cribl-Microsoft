@@ -334,7 +334,11 @@ describe("checklist tips name the permission first (I6)", () => {
     expect(tips).toHaveLength(entries.length);
     entries.forEach((entry, i) => {
       const prefix =
-        entry.kind === "graph-api" ? "Graph permission: " : "Role: ";
+        entry.kind === "graph-api"
+          ? "Graph permission: "
+          : entry.kind === "entra-directory-role"
+            ? "Entra directory role: "
+            : "Role: ";
       const tip = tips[i] ?? "";
       expect(tip.startsWith(prefix + entry.name)).toBe(true);
       expect(tip.indexOf(entry.justification)).toBeGreaterThan(

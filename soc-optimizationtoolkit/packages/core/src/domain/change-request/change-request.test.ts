@@ -487,8 +487,9 @@ describe("AZR-61 - the app-registration ticket asks for what the audit found mis
     // listKeys is asked on every path, caveated; the Defender roles are not.
     const out = appRegistrationRequest(ctxFor("lab-new-rg"));
     expect(out).toContain("- Azure Event Hubs Data Owner  [feature]");
-    expect(out).not.toContain("Security Admin");
-    expect(out).not.toContain("Security Reader");
+    // Exact lines: "Security Administrator" (the Entra role, AZR-82) contains "Security Admin".
+    expect(out).not.toContain("- Security Admin  [feature]");
+    expect(out).not.toContain("- Security Reader  [feature]");
   });
 });
 
@@ -647,5 +648,34 @@ describe("AZR-84 - the tickets name grants on resources outside the configured s
     );
     expect(both).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
     expect(both).toContain("- Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]");
+  });
+});
+
+describe("AZR-82 - the tickets ask for the management-group and Entra reads", () => {
+  it("names the management group scope as a path, not the resource group it would otherwise fall through to", () => {
+    const out = roleAssignmentRequest(ctxFor("existing"));
+    expect(out).toContain(
+      "- Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]",
+    );
+  });
+
+  it("puts the Entra directory role in its own section, apart from Graph consent", () => {
+    const out = appRegistrationRequest(ctxFor("existing"));
+    const graphAt = out.indexOf("Microsoft Graph API permissions (admin consent required)");
+    const entraAt = out.indexOf("Entra ID directory roles (optional)");
+    expect(graphAt).toBeGreaterThan(-1);
+    expect(entraAt).toBeGreaterThan(graphAt);
+    const entra = out.slice(entraAt, out.indexOf("Cribl side (stated, not requested)"));
+    expect(entra).toContain("- Security Administrator  [feature, unverified]");
+    expect(entra).toContain("Entra ID > Roles and administrators");
+    expect(out.slice(graphAt, entraAt)).not.toContain("Security Administrator");
+  });
+
+  it("lets a partial request tick the management group Reader on its own", () => {
+    const only = roleAssignmentRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: ["Reader (management group)"] }),
+    );
+    expect(only).toContain("- Reader at /providers/Microsoft.Management/managementGroups/");
+    expect(only).not.toContain("- Reader at /subscriptions");
   });
 });

@@ -25,6 +25,7 @@ import {
   GRAPH_PERMISSIONS,
   OUTSIDE_SCOPE_CAVEAT,
   appPermissionPlan,
+  entraDirectoryRoles,
   preflightUnmeasuredGrants,
   scopeCovers,
   graphPermissions,
@@ -33,7 +34,11 @@ import {
 import { rolePlanForSetupPath } from "../role-plan";
 import { REQUIRED_ACTIONS, preflightPathForSetupPath } from "../azure-permissions";
 import type { AzureSetupPath } from "../azure-config";
-import { leastRoleFor, privilegeOperation } from "../least-privilege";
+import {
+  LEAST_PRIVILEGE_FUNCTIONS,
+  leastRoleFor,
+  privilegeOperation,
+} from "../least-privilege";
 
 const PATHS: AzureSetupPath[] = ["existing", "lab-new-rg", "lab-byo-rg"];
 
@@ -191,11 +196,16 @@ describe("appPermissionPlan - suppression (over-asking)", () => {
     // Subscription Contributor + RBAC Admin cover every in-subscription
     // feature role; what is left is on a resource that may sit elsewhere
     // (AZR-84), each caveated so an approver skips it when it is local.
+    // The management group sits ABOVE the subscription, so it is asked too.
     const outside = appPermissionPlan("lab-new-rg").filter((p) => p.necessity === "feature" && p.kind === "azure-rbac");
     for (const p of outside) {
+      if (p.scopeLevel === "managementGroup") continue;
       expect(p.scopeLevel, p.key).toBe("resource");
       expect(p.scopeCaveat, p.key).toBe(OUTSIDE_SCOPE_CAVEAT);
     }
+    expect(outside.filter((p) => p.scopeLevel === "managementGroup").map((p) => p.key)).toEqual([
+      "Reader (management group)",
+    ]);
     const found = names("lab-new-rg");
     expect(found).not.toContain("Microsoft Sentinel Contributor");
     // Present once, from the setup plan itself - not added a second time.
@@ -248,11 +258,13 @@ describe("appPermissionPlan - shape", () => {
     }
   });
 
-  it("splits cleanly into the two systems, and they are granted differently", () => {
+  it("splits cleanly into the three systems, and they are granted differently", () => {
     const plan = appPermissionPlan("existing");
-    expect(graphPermissions(plan).length + rbacPermissions(plan).length).toBe(
-      plan.length,
-    );
+    expect(
+      graphPermissions(plan).length +
+        rbacPermissions(plan).length +
+        entraDirectoryRoles(plan).length,
+    ).toBe(plan.length);
     // Graph permissions are tenant-wide by nature; conflating them with a
     // scoped RBAC role is what sends an operator to the wrong approver.
     for (const permission of graphPermissions(plan)) {
@@ -311,7 +323,7 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
     // literal, and two already disagreed with no pin (Sentinel content and
     // the DCR grant are registry 'resource' scope, asked at the RG). A
     // registry scope correction must reach the ticket, or be argued against.
-    const breadth = { resource: 0, resourceGroup: 1, subscription: 2 } as const;
+    const breadth = { resource: 0, resourceGroup: 1, subscription: 2, managementGroup: 3 } as const;
     for (const role of FEATURE_ROLES) {
       const registry = privilegeOperation(role.operationId).scope;
       if (role.broaderScopeWhy === undefined) {
@@ -423,7 +435,7 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
   });
 
   it("reports those grants to the preflight as not measured, with the ticket's words", () => {
-    expect(preflightUnmeasuredGrants("existing")).toEqual([
+    expect(preflightUnmeasuredGrants("existing").slice(0, 4)).toEqual([
       { name: "Azure Event Hubs Data Owner", where: "the Event Hub namespace that holds the rule", feature: "Read an Event Hub rule's connection string" },
       { name: "Monitoring Contributor", where: privilegeOperation("ampls.scopedResource.write").scopeNote, feature: "Associate a new DCE with an Azure Monitor Private Link Scope" },
       { name: "Monitoring Reader", where: privilegeOperation("dce.read").scopeNote, feature: "Show the ingestion endpoint of a DCE-based DCR" },
@@ -438,5 +450,89 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
     for (const id of ["ampls.scopedResource.write", "dce.read", "eventhub.namespace.read"] as const) {
       expect(actions.has(privilegeOperation(id).operation), id).toBe(false);
     }
+  });
+});
+
+describe("AZR-82 - management-group and tenant reads are asked for", () => {
+  // Validate and the Logging Map read policy and the management group tree at
+  // the customer's management group, and Validate reads the tenant's Entra
+  // diagnostic settings. No plan asked for either.
+
+  it("covers every management-group and tenant read of Validate and the Logging Map, by role AND scope", () => {
+    // Refuter correction: matching on the role name alone passes today,
+    // because Reader is already held - at the SUBSCRIPTION. The grant must be
+    // at the scope the registry names.
+    const fns = LEAST_PRIVILEGE_FUNCTIONS.filter((f) => f.id === "validate" || f.id === "logging-map");
+    expect(fns).toHaveLength(2);
+    const needs = new Set(
+      fns.flatMap((f) => f.operations).filter((id) => {
+        const scope = privilegeOperation(id).scope;
+        return scope === "managementGroup" || scope === "tenant";
+      }),
+    );
+    expect([...needs].sort()).toEqual([
+      "entra.diagnosticSettings.read",
+      "managementGroup.read",
+      "managementGroups.descendants.read",
+      "managementGroups.list",
+      "policy.assignments.read",
+      "policy.definition.read",
+      "policy.exemptions.read",
+      "policy.mgDefinitions.list",
+      "policy.remediations.read",
+    ]);
+    for (const path of PATHS) {
+      const plan = appPermissionPlan(path);
+      for (const id of needs) {
+        const op = privilegeOperation(id);
+        const grants = [op.leastRole, ...op.alsoGrantedBy];
+        const asked = plan.some((p) => grants.includes(p.name) && p.scopeLevel === op.scope);
+        expect(asked, `${path}: ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("asks for Reader at the management group, a separate choice from subscription Reader", () => {
+    const row = appPermissionPlan("existing").find((p) => p.scopeLevel === "managementGroup");
+    expect(row).toEqual({
+      kind: "azure-rbac",
+      name: "Reader",
+      key: "Reader (management group)",
+      scopeLevel: "managementGroup",
+      feature: "Read policy and the management group tree",
+      justification: expect.stringContaining("Management Group Reader alone misses remediations and the tree"),
+      withoutIt: expect.stringContaining("could not be read"),
+      necessity: "feature",
+      resource: "the highest management group the customer will grant, not the Tenant Root Group",
+    });
+  });
+
+  it("never lets a subscription grant cover a management-group need", () => {
+    expect(scopeCovers("subscription", { scopeLevel: "managementGroup" })).toBe(false);
+    expect(scopeCovers("resourceGroup", { scopeLevel: "managementGroup" })).toBe(false);
+  });
+
+  it("asks for the Entra diagnostic-settings read as an optional, unverified directory role", () => {
+    for (const path of PATHS) {
+      const roles = entraDirectoryRoles(appPermissionPlan(path));
+      expect(roles.map((r) => [r.name, r.scopeLevel, r.necessity, r.unverified]), path).toEqual([
+        ["Security Administrator", "tenant", "feature", true],
+      ]);
+    }
+    expect(leastRoleFor("entra.diagnosticSettings.read")).toBe("Security Administrator");
+  });
+
+  it("reports both to the preflight as not measured", () => {
+    const grants = preflightUnmeasuredGrants("existing");
+    expect(grants).toContainEqual({
+      name: "Reader",
+      where: "the management group: the highest management group the customer will grant, not the Tenant Root Group",
+      feature: "Read policy and the management group tree",
+    });
+    expect(grants).toContainEqual({
+      name: "Security Administrator",
+      where: "the tenant (Entra ID directory role)",
+      feature: "Check the Entra ID diagnostic settings",
+    });
   });
 });

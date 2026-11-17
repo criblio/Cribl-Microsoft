@@ -14,7 +14,9 @@ What is requested
 3. Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT  
    them.  
 4. Assign the Azure RBAC roles listed below to this app's service principal.  
-5. Securely share the tenant id, application (client) id, and the client  
+5. Optionally, assign the Entra ID directory role listed below to this app's  
+   service principal.  
+6. Securely share the tenant id, application (client) id, and the client  
    secret with the requester (use a secrets manager or vault, not email or  
    chat) - see Hand back below.  
 
@@ -199,6 +201,20 @@ one named capability and can be refused independently.
                     subscription, which subscription Reader does not reach.  
     If not granted: Those reads show as could not be read for that namespace.  
                     Nothing is changed in Azure.  
+- Reader  [feature]  
+    Scope:          /providers/Microsoft.Management/managementGroups/`<management group id>`  
+                    (the highest management group the customer will grant, not  
+                    the Tenant Root Group)  
+    Needed for:     Read policy and the management group tree  
+    Why:            Validate's policy checks and the Logging Map read policy  
+                    assignments, exemptions, definitions and remediations, and  
+                    the management group tree, at your management group.  
+                    Reader there covers all of them; Management Group Reader  
+                    alone misses remediations and the tree. It reaches every  
+                    subscription beneath the group.  
+    If not granted: Validate's policy checks read as could not be read, and  
+                    the Logging Map lists subscriptions without the management  
+                    group tree.  
 - Security Admin  [feature]  
     Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel  
                     (the default; the role is needed on whichever resource  
@@ -213,6 +229,27 @@ one named capability and can be refused independently.
     If not granted: The export cannot be deployed from the app; the How-to  
                     gives the portal steps for someone who holds the role.  
                     Reading which Defender plans are on is unaffected.  
+
+Entra ID directory roles (optional)  
+-----------------------------------  
+Granted by an Entra administrator in Roles and administrators - not admin  
+consent and not Azure IAM. [unverified] means Microsoft documents no  
+narrower role for the call and none was measured; refusing costs only the  
+one check named.  
+
+- Security Administrator  [feature, unverified]  
+    Scope:          tenant-wide (an Entra ID directory role, not consent or  
+                    IAM)  
+    Needed for:     Check the Entra ID diagnostic settings  
+    Why:            Validate reads the tenant's Entra ID diagnostic settings  
+                    (GET /providers/microsoft.aadiam/diagnosticSettings).  
+                    Microsoft documents no read-only role for that call, and  
+                    none was measured; this is the least role known to grant  
+                    it.  
+    If not granted: That one check reads as could not be read. Nothing else is  
+                    affected.  
+    Where:          Entra ID > Roles and administrators > this role > Add  
+                    assignments, for this app's service principal.  
 
 Cribl side (stated, not requested)  
 ----------------------------------  

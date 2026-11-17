@@ -70,8 +70,9 @@ export function scopeNeed(
   if (connectivity === "disconnected" || requested.length === 0) return "none";
   if (requested.some((p) => p.scopeLevel === "resourceGroup")) return "full";
   if (requested.some((p) => p.scopeLevel === "subscription")) return "subscription";
-  // Tenant-only entries, and grants on a resource the configuration does not
-  // name, need no configured subscription or resource group.
+  // Tenant-only entries (Graph, an Entra directory role), and grants at a
+  // management group or on a resource the configuration does not name, need
+  // no configured subscription or resource group.
   return "none";
 }
 

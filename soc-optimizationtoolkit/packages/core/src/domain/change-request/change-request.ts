@@ -44,7 +44,12 @@
  */
 
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
-import { appPermissionPlan, graphPermissions, rbacPermissions } from "../app-permissions";
+import {
+  appPermissionPlan,
+  entraDirectoryRoles,
+  graphPermissions,
+  rbacPermissions,
+} from "../app-permissions";
 import {
   effectiveSetupPath,
   requestedPermissions,
@@ -192,8 +197,20 @@ function diagramFor(
  * can act without looking anything up.
  */
 function permissionScope(permission: AppPermission, n: ResolvedNames): string {
+  if (permission.kind === "entra-directory-role") {
+    return "tenant-wide (an Entra ID directory role, not consent or IAM)";
+  }
   if (permission.scopeLevel === "tenant") {
     return "tenant-wide (consented on the app registration)";
+  }
+  if (permission.scopeLevel === "managementGroup") {
+    // The configuration names no management group, so the id is a
+    // placeholder and the registry's words say which group (AZR-82).
+    return (
+      "/providers/Microsoft.Management/managementGroups/<management group id> (" +
+      (permission.resource ?? "the management group") +
+      ")"
+    );
   }
   if (permission.scopeLevel === "resource") {
     // A resource the config does not name (an Event Hub namespace may sit in
@@ -265,7 +282,12 @@ function field(label: string, value: string): string {
  */
 function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
   const lines: string[] = [
-    "- " + permission.name + "  [" + permission.necessity + "]",
+    "- " +
+      permission.name +
+      "  [" +
+      permission.necessity +
+      (permission.unverified === true ? ", unverified" : "") +
+      "]",
     field("Scope:", permissionScope(permission, n)),
     field("Needed for:", permission.feature),
     field("Why:", permission.justification),
@@ -284,7 +306,9 @@ function permissionBlock(permission: AppPermission, n: ResolvedNames): string {
         "Where:",
         permission.kind === "graph-api"
           ? "Entra ID > App registrations > this app > API permissions > Grant admin consent."
-          : permission.condition !== undefined
+          : permission.kind === "entra-directory-role"
+            ? "Entra ID > Roles and administrators > this role > Add assignments, for this app's service principal."
+            : permission.condition !== undefined
             ? "Azure portal, not the CLI - the condition above cannot be set from the CLI."
             : "Azure portal.",
       ),
@@ -371,6 +395,7 @@ export function appRegistrationRequest(
   );
   const graph = graphPermissions(plan);
   const rbac = rbacPermissions(plan);
+  const directoryRoles = entraDirectoryRoles(plan);
   // A partial request always names the "existing" path, so a saved lab path
   // never reads as a request for lab roles.
   const setupPath = effectiveSetupPath(connectivity, ctx.config.setupPath);
@@ -395,6 +420,12 @@ export function appRegistrationRequest(
   if (rbac.length > 0) {
     steps.push([
       "Assign the Azure RBAC roles listed below to this app's service principal.",
+    ]);
+  }
+  if (directoryRoles.length > 0) {
+    steps.push([
+      "Optionally, assign the Entra ID directory role listed below to this app's",
+      "   service principal.",
     ]);
   }
   steps.push([
@@ -491,6 +522,24 @@ export function appRegistrationRequest(
           "one named capability and can be refused independently.",
           "",
           ...featureRoles.map((permission) => permissionBlock(permission, n)),
+        ].join("\n"),
+      ),
+    );
+  }
+
+  // A third system (AZR-82): an Entra directory role is granted in Roles and
+  // administrators, by neither the consent approver nor the IAM owner.
+  if (directoryRoles.length > 0) {
+    parts.push(
+      section(
+        "Entra ID directory roles (optional)",
+        [
+          "Granted by an Entra administrator in Roles and administrators - not admin",
+          "consent and not Azure IAM. [unverified] means Microsoft documents no",
+          "narrower role for the call and none was measured; refusing costs only the",
+          "one check named.",
+          "",
+          ...directoryRoles.map((permission) => permissionBlock(permission, n)),
         ].join("\n"),
       ),
     );
@@ -702,7 +751,10 @@ export function requestSummary(config: AzureConfig): string {
   );
   const roles = rbacPermissions(plan);
   const graph = graphPermissions(plan);
-  if (roles.length === 0 && graph.length === 0) return "nothing selected";
+  const directoryRoles = entraDirectoryRoles(plan);
+  if (roles.length === 0 && graph.length === 0 && directoryRoles.length === 0) {
+    return "nothing selected";
+  }
   const parts: string[] = [];
   if (roles.length > 0) {
     parts.push(
@@ -716,6 +768,12 @@ export function requestSummary(config: AzureConfig): string {
     parts.push(
       String(graph.length) +
         (graph.length === 1 ? " Graph permission" : " Graph permissions"),
+    );
+  }
+  if (directoryRoles.length > 0) {
+    parts.push(
+      String(directoryRoles.length) +
+        (directoryRoles.length === 1 ? " directory role" : " directory roles"),
     );
   }
   return parts.join("; ");

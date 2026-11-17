@@ -30,7 +30,12 @@ export const CONNECTIVITY_SECTION_ID = "azure-connectivity";
  * withoutIt strings, reused verbatim.
  */
 function tipText(entry: AppPermission): string {
-  const kind = entry.kind === "graph-api" ? "Graph permission" : "Role";
+  const kind =
+    entry.kind === "graph-api"
+      ? "Graph permission"
+      : entry.kind === "entra-directory-role"
+        ? "Entra directory role"
+        : "Role";
   return `${kind}: ${entry.name}\n${entry.justification}\n${entry.withoutIt}`;
 }
 

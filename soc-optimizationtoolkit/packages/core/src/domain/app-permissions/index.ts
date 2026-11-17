@@ -7,6 +7,7 @@
 export {
   OUTSIDE_SCOPE_CAVEAT,
   appPermissionPlan,
+  entraDirectoryRoles,
   graphPermissions,
   preflightUnmeasuredGrants,
   rbacPermissions,

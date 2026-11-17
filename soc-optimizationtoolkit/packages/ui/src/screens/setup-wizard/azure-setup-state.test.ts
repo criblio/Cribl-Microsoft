@@ -364,7 +364,11 @@ describe("unmeasuredGrantLines (AZR-84)", () => {
     expect(lines).toContain(
       "  [unknown] Monitoring Reader on the DCE, which a DCR may name in another resource group or subscription - Show the ingestion endpoint of a DCE-based DCR",
     );
-    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(4);
+    // AZR-82: the management group Reader and the Entra directory role too.
+    expect(lines).toContain(
+      "  [unknown] Security Administrator on the tenant (Entra ID directory role) - Check the Entra ID diagnostic settings",
+    );
+    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(6);
     expect(lines.join("\n")).not.toMatch(/\[(missing|optional)\]/);
   });
 });
