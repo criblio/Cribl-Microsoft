@@ -158,7 +158,7 @@ function rolesForSetupPath(
   // The registry plan (AZR-61), kept to the roles the connectivity choice
   // ticked (DBT-246).
   return rbacPermissions(appPermissionPlan(path))
-    .filter((permission) => onlyRoles.includes(permission.name))
+    .filter((permission) => onlyRoles.includes(permission.key))
     .map((permission) => {
       const request: RoleRequest = {
         role: permission.name,
@@ -197,8 +197,12 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
   }
   if (permission.scopeLevel === "resource") {
     // A resource the config does not name (an Event Hub namespace may sit in
-    // any resource group), so the ticket says which, in words.
-    return permission.resource ?? "<resource>";
+    // any resource group or subscription), so the ticket says which, in
+    // words, and when a role above already reaches it (AZR-84).
+    const resource = permission.resource ?? "<resource>";
+    return permission.scopeCaveat === undefined
+      ? resource
+      : resource + " (" + permission.scopeCaveat + ")";
   }
   if (permission.scopeLevel === "subscription") {
     return subscriptionScope(n);
@@ -705,7 +709,7 @@ export function requestSummary(config: AzureConfig): string {
       String(roles.length) +
         (roles.length === 1 ? " role" : " roles") +
         " - " +
-        roles.map((r) => r.name).join(", "),
+        roles.map((r) => r.key).join(", "),
     );
   }
   if (graph.length > 0) {

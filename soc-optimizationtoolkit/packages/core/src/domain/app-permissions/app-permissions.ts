@@ -53,6 +53,13 @@ import type { OperationId } from "../least-privilege";
 export type PermissionScopeLevel = RoleScopeLevel | "resource" | "tenant";
 
 /**
+ * What a ticket prints after the resource of a grant that may sit outside the
+ * configured subscription and resource group: when the resource is local, a
+ * role already in the ticket reaches it and the approver can skip the line.
+ */
+export const OUTSIDE_SCOPE_CAVEAT = "skip if a role above already covers it";
+
+/**
  * How much is lost without a permission - re-exported from azure-permissions
  * rather than redefined.
  *
@@ -74,6 +81,14 @@ export interface AppPermission {
   kind: "graph-api" | "azure-rbac";
   /** Graph permission name, or the Azure built-in role name. */
   name: string;
+  /**
+   * The entry's identity within a plan - what the Partially Connected
+   * checklist stores and the ticket filters on. Equal to {@link name} except
+   * where the same role is asked for twice at different scopes (Reader at the
+   * subscription, and Reader on an Event Hub namespace in another one), which
+   * an approver must be able to tick or refuse separately.
+   */
+  key: string;
   scopeLevel: PermissionScopeLevel;
   /** The app capability that needs it - the "which". */
   feature: string;
@@ -116,6 +131,7 @@ export const GRAPH_PERMISSIONS: readonly AppPermission[] = Object.freeze([
   Object.freeze({
     kind: "graph-api" as const,
     name: leastRoleFor("graph.servicePrincipals.read"),
+    key: leastRoleFor("graph.servicePrincipals.read"),
     scopeLevel: "tenant" as const,
     feature: "Pick the Cribl ingestion identity by name",
     justification:
@@ -128,6 +144,7 @@ export const GRAPH_PERMISSIONS: readonly AppPermission[] = Object.freeze([
   Object.freeze({
     kind: "graph-api" as const,
     name: leastRoleFor("graph.subscribedSkus.read"),
+    key: leastRoleFor("graph.subscribedSkus.read"),
     scopeLevel: "tenant" as const,
     feature: "Show how much of the E5 data allowance is granted",
     justification:
@@ -172,13 +189,23 @@ interface FeatureRole extends AppPermission {
    * Bookkeeping: it never reaches a ticket.
    */
   broaderScopeWhy?: string;
+  /**
+   * True when the resource may sit outside the configured subscription and
+   * resource group (a DCR's DCE, a private link scope, an Event Hub
+   * namespace). No grant the setup path holds can then be assumed to reach it,
+   * so the row is never suppressed; its ticket line says to skip it when a
+   * role above already covers the resource. Bookkeeping: never reaches a ticket.
+   */
+  outsideConfiguredScope?: true;
 }
 
 /** The fields a feature role states itself; everything else is read from the registry. */
 type FeatureRoleFields = Omit<
   FeatureRole,
-  "kind" | "name" | "coveredBy" | "operationId" | "scopeLevel" | "broaderScopeWhy"
+  "kind" | "name" | "key" | "coveredBy" | "operationId" | "scopeLevel" | "broaderScopeWhy"
 > & {
+  /** A distinct {@link AppPermission.key}, when the role name alone repeats in a plan. */
+  key?: string;
   /** Ask at a broader scope than the registry's, and why. */
   broaderScope?: { level: RoleScopeLevel; why: string };
 };
@@ -202,11 +229,12 @@ function rbacScopeOf(operationId: OperationId): RoleScopeLevel | "resource" {
  */
 function featureRole(operationId: OperationId, fields: FeatureRoleFields): FeatureRole {
   const op = privilegeOperation(operationId);
-  const { broaderScope, ...rest } = fields;
+  const { broaderScope, key, ...rest } = fields;
   const scopeLevel = broaderScope?.level ?? rbacScopeOf(operationId);
   const role: FeatureRole = {
     kind: "azure-rbac" as const,
     name: op.leastRole,
+    key: key ?? op.leastRole,
     coveredBy: Object.freeze([op.leastRole, ...op.alsoGrantedBy]),
     operationId,
     scopeLevel,
@@ -214,6 +242,9 @@ function featureRole(operationId: OperationId, fields: FeatureRoleFields): Featu
   };
   if (scopeLevel === "resource" && role.resource === undefined) {
     role.resource = op.scopeNote;
+  }
+  if (role.outsideConfiguredScope === true && role.scopeCaveat === undefined) {
+    role.scopeCaveat = OUTSIDE_SCOPE_CAVEAT;
   }
   if (broaderScope !== undefined) {
     role.broaderScopeWhy = broaderScope.why;
@@ -259,8 +290,48 @@ export const FEATURE_ROLES: readonly FeatureRole[] = Object.freeze([
     withoutIt:
       "Paste the connection string into the source instead, or use the Entra ID credential; the Defender export cannot be deployed from the app. Validate and discovery are unaffected.",
     necessity: "feature" as const,
+    outsideConfiguredScope: true,
     unmeasured:
       "listKeys can be granted on the namespace alone, so a subscription or resource-group evaluation would read it as denied (CAP-7b); it is never probed, because a probe would return a key.",
+  }),
+  // AZR-61 audit discrepancy 15 (AZR-84): three resources the app reads or
+  // writes may sit outside the configured subscription and resource group,
+  // where no role a setup path holds reaches them. Named in words, as listKeys
+  // is, and reported by the preflight as not measured rather than denied.
+  featureRole("ampls.scopedResource.write", {
+    key: "Monitoring Contributor (private link scope)",
+    feature: "Associate a new DCE with an Azure Monitor Private Link Scope",
+    justification:
+      "When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.",
+    withoutIt:
+      "The DCE still deploys, but a private-only workspace cannot be reached through it until someone associates it with the scope.",
+    necessity: "feature" as const,
+    outsideConfiguredScope: true,
+    unmeasured:
+      "On a resource the configuration does not name, so no preflight scope reaches it.",
+  }),
+  featureRole("dce.read", {
+    feature: "Show the ingestion endpoint of a DCE-based DCR",
+    justification:
+      "The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.",
+    withoutIt:
+      "The preview cannot show that DCR's endpoint. Deploying is unaffected.",
+    necessity: "feature" as const,
+    outsideConfiguredScope: true,
+    unmeasured:
+      "On a resource the configuration does not name, so no preflight scope reaches it.",
+  }),
+  featureRole("eventhub.namespace.read", {
+    key: "Reader (Event Hub namespace)",
+    feature: "Read an Event Hub namespace, its rules and consumer groups",
+    justification:
+      "Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.",
+    withoutIt:
+      "Those reads show as could not be read for that namespace. Nothing is changed in Azure.",
+    necessity: "feature" as const,
+    outsideConfiguredScope: true,
+    unmeasured:
+      "On a resource the configuration does not name, so no preflight scope reaches it.",
   }),
   // AZR-61 audit discrepancy 2 (high): the preflight measured the Defender
   // export's actions and no ticket asked for a role that grants them.
@@ -289,12 +360,28 @@ export const FEATURE_ROLES: readonly FeatureRole[] = Object.freeze([
 ]);
 
 /**
- * True when `held` is at least as broad a scope as `needed`. A resource-group
- * grant does NOT cover a `resource` grant: the resource (an Event Hub
- * namespace) may sit in a different resource group from the one the plan names.
+ * True when a setup-path grant at `held` reaches what `role` needs.
+ *
+ * - A role flagged {@link FeatureRole.outsideConfiguredScope} is covered by
+ *   nothing the setup path holds: the configured subscription is not every
+ *   subscription (AZR-84).
+ * - A resource-group grant does NOT cover a `resource` grant: the resource
+ *   may sit in a different resource group from the one the plan names.
+ * - A subscription grant covers its resource groups and their resources, and
+ *   an equal scope covers itself. Nothing below a management group covers it.
  */
-function scopeCovers(held: RoleScopeLevel, needed: RoleScopeLevel | "resource"): boolean {
-  return held === "subscription" || held === needed;
+export function scopeCovers(
+  held: RoleScopeLevel,
+  role: Pick<FeatureRole, "scopeLevel" | "outsideConfiguredScope">,
+): boolean {
+  if (role.outsideConfiguredScope === true) {
+    return false;
+  }
+  const needed = role.scopeLevel;
+  if (held === needed) {
+    return true;
+  }
+  return held === "subscription" && (needed === "resourceGroup" || needed === "resource");
 }
 
 /**
@@ -319,6 +406,7 @@ export function appPermissionPlan(path: AzureSetupPath): AppPermission[] {
     const entry: AppPermission = {
       kind: "azure-rbac",
       name: req.role,
+      key: req.role,
       scopeLevel: req.scopeLevel,
       feature: req.feature,
       justification: req.justification,
@@ -337,8 +425,7 @@ export function appPermissionPlan(path: AzureSetupPath): AppPermission[] {
   const covered = (role: FeatureRole): boolean =>
     plan.some(
       (held) =>
-        role.coveredBy.includes(held.role) &&
-        scopeCovers(held.scopeLevel, role.scopeLevel),
+        role.coveredBy.includes(held.role) && scopeCovers(held.scopeLevel, role),
     );
 
   // `coveredBy` is suppression bookkeeping, not something a ticket should show,
@@ -349,6 +436,7 @@ export function appPermissionPlan(path: AzureSetupPath): AppPermission[] {
     const entry: AppPermission = {
       kind: role.kind,
       name: role.name,
+      key: role.key,
       scopeLevel: role.scopeLevel,
       feature: role.feature,
       justification: role.justification,
@@ -381,4 +469,26 @@ export function graphPermissions(plan: readonly AppPermission[]): AppPermission[
 /** The Azure RBAC half of a plan, in plan order. */
 export function rbacPermissions(plan: readonly AppPermission[]): AppPermission[] {
   return plan.filter((p) => p.kind === "azure-rbac");
+}
+
+/** A grant the setup preflight cannot measure, because no scope it reads reaches it. */
+export interface UnmeasuredGrant {
+  /** The role or directory role asked for. */
+  name: string;
+  /** Where it is granted, in the ticket's words. */
+  where: string;
+  /** The capability that needs it. */
+  feature: string;
+}
+
+/**
+ * The plan's grants the setup preflight cannot measure (AZR-84): every entry
+ * on a resource the configuration does not name. The preflight reads
+ * effective permissions only at the configured subscription and resource
+ * group, so these are reported as not measured - unknown, never denied.
+ */
+export function preflightUnmeasuredGrants(path: AzureSetupPath): UnmeasuredGrant[] {
+  return appPermissionPlan(path)
+    .filter((p) => p.kind !== "graph-api" && p.scopeLevel === "resource")
+    .map((p) => ({ name: p.name, where: p.resource ?? "<resource>", feature: p.feature }));
 }

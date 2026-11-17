@@ -5,11 +5,14 @@
 // roles its Contributor grant already covers. The module's own tests import them
 // from "./app-permissions" directly.
 export {
+  OUTSIDE_SCOPE_CAVEAT,
   appPermissionPlan,
   graphPermissions,
+  preflightUnmeasuredGrants,
   rbacPermissions,
 } from "./app-permissions";
 export type {
   AppPermission,
   PermissionScopeLevel,
+  UnmeasuredGrant,
 } from "./app-permissions";

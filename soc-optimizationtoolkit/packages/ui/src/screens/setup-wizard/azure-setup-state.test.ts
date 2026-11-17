@@ -24,6 +24,7 @@ import {
   workspaceSelectOptions,
   wrapRoleScript,
   dependentListingStatus,
+  unmeasuredGrantLines,
 } from "./azure-setup-state";
 
 describe("parseSubscriptionOptions", () => {
@@ -348,5 +349,22 @@ describe("dependentListingStatus - an empty list is not a zero", () => {
     const rg = dependentListingStatus("resource-groups", 2);
     expect(rg).toBe("Found 2 resource group(s). Selecting one sets the resource group.");
     expect(rg).not.toContain("Cannot confirm");
+  });
+});
+
+describe("unmeasuredGrantLines (AZR-84)", () => {
+  it("lists grants outside the configured scopes as unknown, never missing", () => {
+    const lines = unmeasuredGrantLines("existing");
+    expect(lines[0]).toBe(
+      "Not measured: these grants sit outside the scopes above, so they read as unknown.",
+    );
+    expect(lines).toContain(
+      "  [unknown] Reader on the Event Hub namespace - Read an Event Hub namespace, its rules and consumer groups",
+    );
+    expect(lines).toContain(
+      "  [unknown] Monitoring Reader on the DCE, which a DCR may name in another resource group or subscription - Show the ingestion endpoint of a DCE-based DCR",
+    );
+    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(4);
+    expect(lines.join("\n")).not.toMatch(/\[(missing|optional)\]/);
   });
 });

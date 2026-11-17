@@ -81,8 +81,10 @@ describe("azure connectivity (setup-pages-plan)", () => {
   it("checklistEntries splits Reader from the other existing entries", () => {
     const { readOnly, others } = checklistEntries();
     expect(readOnly.name).toBe("Reader");
-    expect(names(others)).toEqual(
-      names(appPermissionPlan("existing")).filter((n) => n !== "Reader"),
+    // By key: the namespace Reader (AZR-84) is its own checkbox.
+    expect(others.map((p) => p.key)).toEqual(
+      appPermissionPlan("existing").map((p) => p.key).filter((k) => k !== "Reader"),
     );
+    expect(others.map((p) => p.key)).toContain("Reader (Event Hub namespace)");
   });
 });

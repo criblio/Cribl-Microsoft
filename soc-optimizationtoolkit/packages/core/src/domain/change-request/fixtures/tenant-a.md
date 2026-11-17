@@ -147,7 +147,8 @@ one named capability and can be refused independently.
     Where:          Azure portal, not the CLI - the condition above cannot be  
                     set from the CLI.  
 - Azure Event Hubs Data Owner  [feature]  
-    Scope:          the Event Hub namespace that holds the rule  
+    Scope:          the Event Hub namespace that holds the rule (skip if a  
+                    role above already covers it)  
     Needed for:     Read an Event Hub rule's connection string  
     Why:            Creating the Cribl Event Hub source with the listKeys  
                     credential, and deploying the Defender continuous export,  
@@ -163,6 +164,41 @@ one named capability and can be refused independently.
                     use the Entra ID credential; the Defender export cannot be  
                     deployed from the app. Validate and discovery are  
                     unaffected.  
+- Monitoring Contributor  [feature]  
+    Scope:          the Azure Monitor Private Link Scope, which may sit in  
+                    another resource group or subscription (skip if a role  
+                    above already covers it)  
+    Needed for:     Associate a new DCE with an Azure Monitor Private Link  
+                    Scope  
+    Why:            When the workspace accepts data only over private link,  
+                    onboarding associates each new DCE with the private link  
+                    scope (PUT  
+                    .../privateLinkScopes/{scope}/scopedResources/{name}), a  
+                    write on the scope itself. The scope may sit in another  
+                    resource group or subscription.  
+    If not granted: The DCE still deploys, but a private-only workspace cannot  
+                    be reached through it until someone associates it with the  
+                    scope.  
+- Monitoring Reader  [feature]  
+    Scope:          the DCE, which a DCR may name in another resource group or  
+                    subscription (skip if a role above already covers it)  
+    Needed for:     Show the ingestion endpoint of a DCE-based DCR  
+    Why:            The deployment preview reads the Data Collection Endpoint  
+                    a DCR names (GET on its resource id) to show where Cribl  
+                    sends data. A DCR may name a DCE in another resource group  
+                    or subscription.  
+    If not granted: The preview cannot show that DCR's endpoint. Deploying is  
+                    unaffected.  
+- Reader  [feature]  
+    Scope:          the Event Hub namespace (skip if a role above already  
+                    covers it)  
+    Needed for:     Read an Event Hub namespace, its rules and consumer groups  
+    Why:            Validate, Create Cribl source and the Defender export read  
+                    the namespace, its shared access rules and its consumer  
+                    groups. The namespace may sit in another resource group or  
+                    subscription, which subscription Reader does not reach.  
+    If not granted: Those reads show as could not be read for that namespace.  
+                    Nothing is changed in Azure.  
 - Security Admin  [feature]  
     Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel  
                     (the default; the role is needed on whichever resource  

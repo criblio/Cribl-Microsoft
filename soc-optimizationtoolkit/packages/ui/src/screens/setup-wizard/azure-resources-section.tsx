@@ -51,6 +51,7 @@ import {
   parseSubscriptionOptions,
   parseWorkspaceOptions,
   permissionScopeChecks,
+  unmeasuredGrantLines,
   resourceGroupSelectOptions,
   resourcesSummary,
   scriptCopyFeedback,
@@ -399,6 +400,7 @@ export function AzureResourcesSection({
             ...evaluateScopeLines(check.label, res.status, res.body, check.required),
           );
         }
+        validationLines.push(...unmeasuredGrantLines(setupPath));
       } catch (err) {
         validationLines.push(`Permission validation error: ${String(err)}`);
         setRecheckFailed(true);

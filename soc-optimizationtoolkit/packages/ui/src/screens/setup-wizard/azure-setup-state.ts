@@ -18,6 +18,7 @@ import {
   allGranted,
   coreGranted,
   missingFeatureActions,
+  preflightUnmeasuredGrants,
   REQUIRED_ACTIONS,
 } from "@soc/core";
 import type {
@@ -411,6 +412,23 @@ export function evaluateScopeLines(
     lines.push(`  [${state}] ${result.label} (${result.action})`);
   }
   return lines;
+}
+
+/**
+ * The grants the preflight cannot measure for a setup path (AZR-84): roles on
+ * resources outside the configured scopes, which no permissions read above
+ * reaches. Reported as unknown - never as missing, because nothing measured
+ * them. Empty when the plan has none.
+ */
+export function unmeasuredGrantLines(path: AzureSetupPath): string[] {
+  const grants = preflightUnmeasuredGrants(path);
+  if (grants.length === 0) {
+    return [];
+  }
+  return [
+    "Not measured: these grants sit outside the scopes above, so they read as unknown.",
+    ...grants.map((g) => `  [unknown] ${g.name} on ${g.where} - ${g.feature}`),
+  ];
 }
 
 /** The stored-credentials report derived from a secrets-store key listing. */

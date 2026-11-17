@@ -261,7 +261,7 @@ describe("roleAssignmentRequest role selection", () => {
     const grant = out.slice(out.indexOf(`- Security Admin at ${rg}`));
     expect(grant.slice(0, grant.indexOf("[feature]"))).toContain("Defender section");
     expect(out).toContain(
-      `- Azure Event Hubs Data Owner at ${privilegeOperation("eventhub.rule.listKeys").scopeNote}  [feature]`,
+      `- Azure Event Hubs Data Owner at ${privilegeOperation("eventhub.rule.listKeys").scopeNote} (skip if a role above already covers it)  [feature]`,
     );
     expect(out).toContain("Condition: Constrain roles and principal types: only Monitoring Metrics Publisher");
     expect(out).toContain("[feature] roles each unlock one named capability");
@@ -280,8 +280,9 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain(
       "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
-    // Not scoped to a resource group on this path.
-    expect(out).not.toContain("Reader at");
+    // Not the existing path's roles: no Reader at the subscription. (Reader on
+    // an Event Hub namespace outside it is asked, AZR-84.)
+    expect(out).not.toContain("- Reader at /subscriptions");
   });
 
   it("lab-byo-rg: Contributor plus conditioned RBAC Administrator on the pre-created RG (AZR-61 audit)", () => {
@@ -294,7 +295,7 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain(
       "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
-    expect(out).not.toContain("- Reader at");
+    expect(out).not.toContain("- Reader at /subscriptions");
   });
 
   it("embeds both the deploy and ingestion flows, and renders placeholders when blank", () => {
@@ -481,9 +482,11 @@ describe("AZR-61 - the app-registration ticket asks for what the audit found mis
     expect(out).toContain("- Security Admin  [feature]");
   });
 
-  it("asks a subscription-Contributor lab path for none of them", () => {
+  it("asks a subscription-Contributor lab path only for what sits outside its subscription", () => {
+    // RE-PINNED (AZR-84): the namespace may be in another subscription, so
+    // listKeys is asked on every path, caveated; the Defender roles are not.
     const out = appRegistrationRequest(ctxFor("lab-new-rg"));
-    expect(out).not.toContain("Azure Event Hubs Data Owner");
+    expect(out).toContain("- Azure Event Hubs Data Owner  [feature]");
     expect(out).not.toContain("Security Admin");
     expect(out).not.toContain("Security Reader");
   });
@@ -617,5 +620,32 @@ describe("AZR-83 - both permission tickets state the Cribl-side least privilege"
     );
     expect(out).toContain("No roles are requested");
     expect(out).toContain("Cribl side (stated, not requested)");
+  });
+});
+
+describe("AZR-84 - the tickets name grants on resources outside the configured scope", () => {
+  it("renders each in words with its skip caveat, in the role ticket", () => {
+    const out = roleAssignmentRequest(ctxFor("existing"));
+    for (const id of ["ampls.scopedResource.write", "dce.read", "eventhub.namespace.read"] as const) {
+      const op = privilegeOperation(id);
+      expect(out).toContain(
+        `- ${op.leastRole} at ${op.scopeNote} (skip if a role above already covers it)  [feature]`,
+      );
+    }
+  });
+
+  it("lets a partial request tick the namespace Reader apart from the subscription Reader", () => {
+    const onlySub = roleAssignmentRequest(
+      ctxFor("existing", { connectivity: "partial", allowedPermissions: ["Reader"] }),
+    );
+    expect(onlySub).not.toContain("- Reader at the Event Hub namespace");
+    const both = roleAssignmentRequest(
+      ctxFor("existing", {
+        connectivity: "partial",
+        allowedPermissions: ["Reader", "Reader (Event Hub namespace)"],
+      }),
+    );
+    expect(both).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
+    expect(both).toContain("- Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]");
   });
 });

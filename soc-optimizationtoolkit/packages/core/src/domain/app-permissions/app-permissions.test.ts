@@ -23,7 +23,10 @@ import { describe, expect, it } from "vitest";
 import {
   FEATURE_ROLES,
   GRAPH_PERMISSIONS,
+  OUTSIDE_SCOPE_CAVEAT,
   appPermissionPlan,
+  preflightUnmeasuredGrants,
+  scopeCovers,
   graphPermissions,
   rbacPermissions,
 } from "./app-permissions";
@@ -112,11 +115,11 @@ describe("what the ticket ASKS FOR is what the preflight MEASURES", () => {
     // out - asking for them is the AZR-61 fix, and pretending to measure them
     // would be the dishonest kind of green.
     const unmeasured = new Set(
-      FEATURE_ROLES.filter((r) => r.unmeasured !== undefined).map((r) => r.name),
+      FEATURE_ROLES.filter((r) => r.unmeasured !== undefined).map((r) => r.key),
     );
     for (const path of PATHS) {
       const asksForFeatureRole = appPermissionPlan(path).some(
-        (p) => p.kind === "azure-rbac" && p.necessity === "feature" && !unmeasured.has(p.name),
+        (p) => p.kind === "azure-rbac" && p.necessity === "feature" && !unmeasured.has(p.key),
       );
       const checksFeatureAction = REQUIRED_ACTIONS[
         preflightPathForSetupPath(path)
@@ -155,6 +158,19 @@ describe("what the ticket ASKS FOR is what the preflight MEASURES", () => {
 });
 
 describe("appPermissionPlan - suppression (over-asking)", () => {
+  it("gives every plan entry a distinct key, so one role at two scopes is two choices", () => {
+    // The Partially Connected checklist stores keys; two entries sharing one
+    // would be ticked and refused together (AZR-84 review).
+    for (const path of PATHS) {
+      const keys = appPermissionPlan(path).map((p) => p.key);
+      expect(new Set(keys).size, path).toBe(keys.length);
+    }
+    // A setup-path role keeps its name as its key, so saved choices still match.
+    for (const req of rolePlanForSetupPath("existing")) {
+      expect(appPermissionPlan("existing").find((p) => p.name === req.role && p.scopeLevel === req.scopeLevel)?.key).toBe(req.role);
+    }
+  });
+
   it("NEVER asks for the same role twice at the same scope", () => {
     for (const path of PATHS) {
       const rbac = rbacPermissions(appPermissionPlan(path));
@@ -171,7 +187,15 @@ describe("appPermissionPlan - suppression (over-asking)", () => {
     expect(found).toContain("RBAC Administrator");
   });
 
-  it("lab-new-rg: asks for NO feature roles - subscription Contributor + RBAC Admin already cover them", () => {
+  it("lab-new-rg: asks for no feature role its subscription grants reach - only those on resources outside it", () => {
+    // Subscription Contributor + RBAC Admin cover every in-subscription
+    // feature role; what is left is on a resource that may sit elsewhere
+    // (AZR-84), each caveated so an approver skips it when it is local.
+    const outside = appPermissionPlan("lab-new-rg").filter((p) => p.necessity === "feature" && p.kind === "azure-rbac");
+    for (const p of outside) {
+      expect(p.scopeLevel, p.key).toBe("resource");
+      expect(p.scopeCaveat, p.key).toBe(OUTSIDE_SCOPE_CAVEAT);
+    }
     const found = names("lab-new-rg");
     expect(found).not.toContain("Microsoft Sentinel Contributor");
     // Present once, from the setup plan itself - not added a second time.
@@ -324,10 +348,15 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
     // The ticket must warn that Validate's rule checks pass under Reader while
     // listKeys still fails - otherwise a green Validate reads as permission.
     expect(entry?.justification).toContain("Reader");
-    // Subscription Contributor already holds it; the byo lab's resource-group
-    // Contributor does not reach a namespace in another resource group.
-    expect(names("lab-new-rg")).not.toContain(role);
-    expect(names("lab-byo-rg")).toContain(role);
+    // RE-PINNED (AZR-84): the namespace may sit in another subscription, which
+    // no setup-path grant reaches - subscription Contributor included - so
+    // every path asks, and the ticket says to skip it when a role above
+    // already covers the namespace.
+    for (const path of PATHS) {
+      const asked = appPermissionPlan(path).find((p) => p.name === role);
+      expect(asked?.scopeLevel, path).toBe("resource");
+      expect(asked?.scopeCaveat, path).toBe(OUTSIDE_SCOPE_CAVEAT);
+    }
   });
 
   it("asks for the Defender export's automation write and list (audit discrepancy 2, high)", () => {
@@ -344,5 +373,70 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
     expect(names("lab-new-rg")).not.toContain(reader);
     // The byo lab holds nothing at the subscription.
     expect(names("lab-byo-rg")).toContain(reader);
+  });
+});
+
+describe("AZR-84 - grants on resources outside the configured scope", () => {
+  // The DCE a DCR names, the private link scope a DCE joins and the Event Hub
+  // namespace a source reads may each sit in another resource group or
+  // subscription. The registry knew; no plan asked.
+  const outsideRow = (path: AzureSetupPath, operationId: Parameters<typeof leastRoleFor>[0]) => {
+    const op = privilegeOperation(operationId);
+    return appPermissionPlan(path).find(
+      (p) => p.name === op.leastRole && p.scopeLevel === "resource" && p.resource === op.scopeNote,
+    );
+  };
+
+  it("asks for exactly these roles on exactly these resources, on every path", () => {
+    for (const path of PATHS) {
+      const rows = appPermissionPlan(path)
+        .filter((p) => p.scopeLevel === "resource")
+        .map((p) => `${p.name} @ ${p.resource ?? ""}`);
+      expect(rows, path).toEqual([
+        "Azure Event Hubs Data Owner @ the Event Hub namespace that holds the rule",
+        "Monitoring Contributor @ the Azure Monitor Private Link Scope, which may sit in another resource group or subscription",
+        "Monitoring Reader @ the DCE, which a DCR may name in another resource group or subscription",
+        "Reader @ the Event Hub namespace",
+      ]);
+    }
+  });
+
+  it("keeps the namespace Reader and the DCE read although the existing plan holds Reader at the subscription", () => {
+    // The suppression this card is about: subscription Reader is in both
+    // operations' coveredBy, and a subscription grant used to count as
+    // covering any resource. Matched on scope and resource words, not name -
+    // Reader is also the core subscription row.
+    const ns = outsideRow("existing", "eventhub.namespace.read");
+    expect(ns?.necessity).toBe("feature");
+    expect(ns?.key).toBe("Reader (Event Hub namespace)");
+    expect(ns?.scopeCaveat).toBe(OUTSIDE_SCOPE_CAVEAT);
+    expect(outsideRow("existing", "dce.read")?.name).toBe("Monitoring Reader");
+    const ampls = outsideRow("existing", "ampls.scopedResource.write");
+    expect(ampls?.name).toBe("Monitoring Contributor");
+    expect(ampls?.key).toBe("Monitoring Contributor (private link scope)");
+  });
+
+  it("does not let a subscription grant cover a resource that may sit outside it", () => {
+    expect(scopeCovers("subscription", { scopeLevel: "resource", outsideConfiguredScope: true })).toBe(false);
+    expect(scopeCovers("subscription", { scopeLevel: "resource" })).toBe(true);
+    expect(scopeCovers("resourceGroup", { scopeLevel: "resource" })).toBe(false);
+  });
+
+  it("reports those grants to the preflight as not measured, with the ticket's words", () => {
+    expect(preflightUnmeasuredGrants("existing")).toEqual([
+      { name: "Azure Event Hubs Data Owner", where: "the Event Hub namespace that holds the rule", feature: "Read an Event Hub rule's connection string" },
+      { name: "Monitoring Contributor", where: privilegeOperation("ampls.scopedResource.write").scopeNote, feature: "Associate a new DCE with an Azure Monitor Private Link Scope" },
+      { name: "Monitoring Reader", where: privilegeOperation("dce.read").scopeNote, feature: "Show the ingestion endpoint of a DCE-based DCR" },
+      { name: "Reader", where: "the Event Hub namespace", feature: "Read an Event Hub namespace, its rules and consumer groups" },
+    ]);
+  });
+
+  it("never measures them as denied: no preflight scope checks their actions", () => {
+    // Honesty pin: these grants are on resources no permissions read reaches,
+    // so a required action for them would read as denied without measuring.
+    const actions = new Set(Object.values(REQUIRED_ACTIONS).flat().map((a) => a.action));
+    for (const id of ["ampls.scopedResource.write", "dce.read", "eventhub.namespace.read"] as const) {
+      expect(actions.has(privilegeOperation(id).operation), id).toBe(false);
+    }
   });
 });
