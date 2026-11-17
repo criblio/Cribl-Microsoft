@@ -91,6 +91,8 @@ interface RoleRequest {
   role: string;
   /** The fully-qualified scope the role is assigned at, or the resource in words. */
   scope: string;
+  /** The scope as the justification line writes it, after the role name. */
+  justificationScope: string;
   /** One-line justification for this specific role. */
   justification: string;
   /** Optional assignment condition (the lab paths' RBAC Administrator, the DCR grant). */
@@ -169,6 +171,7 @@ function rolesForSetupPath(
       const request: RoleRequest = {
         role: permission.name,
         scope: permissionScope(permission, n),
+        justificationScope: justificationScope(permission, n),
         justification: permission.justification,
         necessity: permission.necessity,
       };
@@ -192,38 +195,45 @@ function diagramFor(
 }
 
 /**
- * The scope a permission is granted at, written for a ticket reader rather than
- * as an ARM resource id. Graph permissions are tenant-wide by nature; RBAC
- * scopes resolve to the concrete subscription or resource group so the approver
- * can act without looking anything up.
+ * A permission's scope in two parts: where it is granted, and an optional
+ * note a reader needs beside it (which management group, when to skip a
+ * resource grant, that the Defender group follows the operator's choice).
+ * `onResource` says the base is a resource in words, not a path.
  */
-function permissionScope(permission: AppPermission, n: ResolvedNames): string {
+interface ScopeParts {
+  base: string;
+  note?: string;
+  onResource: boolean;
+}
+
+function scopeParts(permission: AppPermission, n: ResolvedNames): ScopeParts {
   if (permission.kind === "entra-directory-role") {
-    return "tenant-wide (an Entra ID directory role, not consent or IAM)";
+    return { base: "tenant-wide (an Entra ID directory role, not consent or IAM)", onResource: false };
   }
   if (permission.scopeLevel === "tenant") {
-    return "tenant-wide (consented on the app registration)";
+    return { base: "tenant-wide (consented on the app registration)", onResource: false };
   }
   if (permission.scopeLevel === "managementGroup") {
     // The configuration names no management group, so the id is a
     // placeholder and the registry's words say which group (AZR-82).
-    return (
-      "/providers/Microsoft.Management/managementGroups/<management group id> (" +
-      (permission.resource ?? "the management group") +
-      ")"
-    );
+    return {
+      base: "/providers/Microsoft.Management/managementGroups/<management group id>",
+      note: permission.resource ?? "the management group",
+      onResource: false,
+    };
   }
   if (permission.scopeLevel === "resource") {
     // A resource the config does not name (an Event Hub namespace may sit in
     // any resource group or subscription), so the ticket says which, in
     // words, and when a role above already reaches it (AZR-84).
-    const resource = permission.resource ?? "<resource>";
-    return permission.scopeCaveat === undefined
-      ? resource
-      : resource + " (" + permission.scopeCaveat + ")";
+    const parts: ScopeParts = { base: permission.resource ?? "<resource>", onResource: true };
+    if (permission.scopeCaveat !== undefined) {
+      parts.note = permission.scopeCaveat;
+    }
+    return parts;
   }
   if (permission.scopeLevel === "subscription") {
-    return subscriptionScope(n);
+    return { base: subscriptionScope(n), onResource: false };
   }
   // A named group other than the configured one (NetworkWatcherRG, AZR-81).
   const group =
@@ -232,9 +242,35 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
       : "/subscriptions/" + n.subscriptionId + "/resourceGroups/" + permission.resourceGroup;
   // A group the operator may choose elsewhere (the Defender export's): the
   // configured one is the default, and the caveat says the role follows the choice.
-  return permission.scopeCaveat === undefined
-    ? group
-    : group + " (" + permission.scopeCaveat + ")";
+  const parts: ScopeParts = { base: group, onResource: false };
+  if (permission.scopeCaveat !== undefined) {
+    parts.note = permission.scopeCaveat;
+  }
+  return parts;
+}
+
+/**
+ * The scope a permission is granted at, written for a ticket reader rather than
+ * as an ARM resource id. Graph permissions are tenant-wide by nature; RBAC
+ * scopes resolve to the concrete subscription or resource group so the approver
+ * can act without looking anything up.
+ */
+function permissionScope(permission: AppPermission, n: ResolvedNames): string {
+  const parts = scopeParts(permission, n);
+  return parts.note === undefined ? parts.base : parts.base + " (" + parts.note + ")";
+}
+
+/**
+ * The scope as a role ticket's justification line writes it, after the role:
+ * ` (<scope>)`, or - when the scope carries a note, which would nest a second
+ * pair of parentheses - ` on <resource> - <note>` / ` at <path> - <note>`.
+ */
+function justificationScope(permission: AppPermission, n: ResolvedNames): string {
+  const parts = scopeParts(permission, n);
+  if (parts.note === undefined) {
+    return " (" + parts.base + ")";
+  }
+  return (parts.onResource ? " on " : " at ") + parts.base + " - " + parts.note;
 }
 
 /**
@@ -249,8 +285,10 @@ function adminStepsSection(path: AzureSetupPath, n: ResolvedNames): string | nul
   return section(
     "Admin steps (setup path: " + path + ")",
     [
-      "One-time steps for a subscription administrator, asked for instead of a",
-      "subscription-scope role.",
+      "One-time steps for a subscription administrator. Each replaces the",
+      "subscription-scope role its action would otherwise need: registering",
+      "Event Grid here means no role holding Microsoft.EventGrid/register/action",
+      "is asked for at the subscription.",
       "",
       ...steps.map((step) =>
         [
@@ -570,7 +608,8 @@ export function appRegistrationRequest(
         "Entra ID directory roles (optional)",
         [
           "Granted by an Entra administrator in Roles and administrators - not admin",
-          "consent and not Azure IAM. [unverified] means Microsoft documents no",
+          "consent and not Azure IAM. These are privileged roles: read each Why",
+          "before granting. [unverified] means Microsoft documents no",
           "narrower role for the call and none was measured; refusing costs only the",
           "one check named.",
           "",
@@ -676,7 +715,7 @@ export function roleAssignmentRequest(
     roles.length === 0
       ? ["No roles are requested, so there is nothing to justify."]
       : roles.map(
-          (r) => "- " + r.role + " (" + r.scope + "): " + r.justification,
+          (r) => "- " + r.role + r.justificationScope + ": " + r.justification,
         );
 
   const parts: string[] = [

@@ -211,7 +211,14 @@ one named capability and can be refused independently.
                     the management group tree, at your management group.  
                     Reader there covers all of them; Management Group Reader  
                     alone misses remediations and the tree. It reaches every  
-                    subscription beneath the group.  
+                    subscription beneath the group. A custom role with only  
+                    Microsoft.Authorization/policyAssignments/read,  
+                    Microsoft.Authorization/policyDefinitions/read,  
+                    Microsoft.Authorization/policyExemptions/read,  
+                    Microsoft.Management/managementGroups/descendants/read,  
+                    Microsoft.Management/managementGroups/read,  
+                    Microsoft.PolicyInsights/remediations/read at the  
+                    management group is narrower still.  
     If not granted: Validate's policy checks read as could not be read, and  
                     the Logging Map lists subscriptions without the management  
                     group tree.  
@@ -233,7 +240,8 @@ one named capability and can be refused independently.
 Entra ID directory roles (optional)  
 -----------------------------------  
 Granted by an Entra administrator in Roles and administrators - not admin  
-consent and not Azure IAM. [unverified] means Microsoft documents no  
+consent and not Azure IAM. These are privileged roles: read each Why  
+before granting. [unverified] means Microsoft documents no  
 narrower role for the call and none was measured; refusing costs only the  
 one check named.  
 
@@ -241,13 +249,15 @@ one check named.
     Scope:          tenant-wide (an Entra ID directory role, not consent or  
                     IAM)  
     Needed for:     Check the Entra ID diagnostic settings  
-    Why:            Validate reads the tenant's Entra ID diagnostic settings  
-                    (GET /providers/microsoft.aadiam/diagnosticSettings).  
-                    Microsoft documents no read-only role for that call, and  
-                    none was measured; this is the least role known to grant  
-                    it.  
-    If not granted: That one check reads as could not be read. Nothing else is  
-                    affected.  
+    Why:            Security Administrator is a privileged Entra directory  
+                    role: it can change security policy and Conditional Access  
+                    across the whole tenant. It is asked for only so  
+                    Validate's optional Entra ID diagnostic settings check can  
+                    read GET /providers/microsoft.aadiam/diagnosticSettings,  
+                    for which Microsoft documents no read-only role. We  
+                    recommend refusing it unless that check is needed.  
+    If not granted: Validate's Entra ID diagnostic settings check reads as  
+                    could not be read. Nothing else is affected.  
     Where:          Entra ID > Roles and administrators > this role > Add  
                     assignments, for this app's service principal.  
 

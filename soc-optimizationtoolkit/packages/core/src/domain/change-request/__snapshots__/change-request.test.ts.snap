@@ -214,7 +214,14 @@ one named capability and can be refused independently.
                     the management group tree, at your management group.
                     Reader there covers all of them; Management Group Reader
                     alone misses remediations and the tree. It reaches every
-                    subscription beneath the group.
+                    subscription beneath the group. A custom role with only
+                    Microsoft.Authorization/policyAssignments/read,
+                    Microsoft.Authorization/policyDefinitions/read,
+                    Microsoft.Authorization/policyExemptions/read,
+                    Microsoft.Management/managementGroups/descendants/read,
+                    Microsoft.Management/managementGroups/read,
+                    Microsoft.PolicyInsights/remediations/read at the
+                    management group is narrower still.
     If not granted: Validate's policy checks read as could not be read, and
                     the Logging Map lists subscriptions without the management
                     group tree.
@@ -236,7 +243,8 @@ one named capability and can be refused independently.
 Entra ID directory roles (optional)
 -----------------------------------
 Granted by an Entra administrator in Roles and administrators - not admin
-consent and not Azure IAM. [unverified] means Microsoft documents no
+consent and not Azure IAM. These are privileged roles: read each Why
+before granting. [unverified] means Microsoft documents no
 narrower role for the call and none was measured; refusing costs only the
 one check named.
 
@@ -244,13 +252,15 @@ one check named.
     Scope:          tenant-wide (an Entra ID directory role, not consent or
                     IAM)
     Needed for:     Check the Entra ID diagnostic settings
-    Why:            Validate reads the tenant's Entra ID diagnostic settings
-                    (GET /providers/microsoft.aadiam/diagnosticSettings).
-                    Microsoft documents no read-only role for that call, and
-                    none was measured; this is the least role known to grant
-                    it.
-    If not granted: That one check reads as could not be read. Nothing else is
-                    affected.
+    Why:            Security Administrator is a privileged Entra directory
+                    role: it can change security policy and Conditional Access
+                    across the whole tenant. It is asked for only so
+                    Validate's optional Entra ID diagnostic settings check can
+                    read GET /providers/microsoft.aadiam/diagnosticSettings,
+                    for which Microsoft documents no read-only role. We
+                    recommend refusing it unless that check is needed.
+    If not granted: Validate's Entra ID diagnostic settings check reads as
+                    could not be read. Nothing else is affected.
     Where:          Entra ID > Roles and administrators > this role > Add
                     assignments, for this app's service principal.
 
@@ -318,9 +328,7 @@ What is requested
 3. Grant the Microsoft Graph API permissions listed below and ADMIN-CONSENT
    them.
 4. Assign the Azure RBAC roles listed below to this app's service principal.
-5. Optionally, assign the Entra ID directory role listed below to this app's
-   service principal.
-6. Securely share the tenant id, application (client) id, and the client
+5. Securely share the tenant id, application (client) id, and the client
    secret with the requester (use a secrets manager or vault, not email or
    chat) - see Hand back below.
 
@@ -414,100 +422,6 @@ Assign each role to the service principal for Cribl SOC Toolkit (client id:
     Where:          Azure portal, not the CLI - the condition above cannot be
                     set from the CLI.
 
-Azure RBAC roles (setup path: lab-new-rg) - feature
----------------------------------------------------
-Assign these to the same service principal. [feature] roles each unlock
-one named capability and can be refused independently.
-
-- Azure Event Hubs Data Owner  [feature]
-    Scope:          the Event Hub namespace that holds the rule (skip if a
-                    role above already covers it)
-    Needed for:     Read an Event Hub rule's connection string
-    Why:            Creating the Cribl Event Hub source with the listKeys
-                    credential, and deploying the Defender continuous export,
-                    read the connection string of a namespace shared access
-                    rule (POST .../authorizationRules/{rule}/listKeys). That
-                    is an /action, which Reader does not grant: Reader passes
-                    every Event Hub rule check in Validate while listKeys
-                    still returns 403. A custom role with only
-                    authorizationRules/listKeys/action and
-                    authorizationRules/read on the namespace is narrower
-                    still.
-    If not granted: Paste the connection string into the source instead, or
-                    use the Entra ID credential; the Defender export cannot be
-                    deployed from the app. Validate and discovery are
-                    unaffected.
-- Monitoring Contributor  [feature]
-    Scope:          the Azure Monitor Private Link Scope, which may sit in
-                    another resource group or subscription (skip if a role
-                    above already covers it)
-    Needed for:     Associate a new DCE with an Azure Monitor Private Link
-                    Scope
-    Why:            When the workspace accepts data only over private link,
-                    onboarding associates each new DCE with the private link
-                    scope (PUT
-                    .../privateLinkScopes/{scope}/scopedResources/{name}), a
-                    write on the scope itself. The scope may sit in another
-                    resource group or subscription.
-    If not granted: The DCE still deploys, but a private-only workspace cannot
-                    be reached through it until someone associates it with the
-                    scope.
-- Monitoring Reader  [feature]
-    Scope:          the DCE, which a DCR may name in another resource group or
-                    subscription (skip if a role above already covers it)
-    Needed for:     Show the ingestion endpoint of a DCE-based DCR
-    Why:            The deployment preview reads the Data Collection Endpoint
-                    a DCR names (GET on its resource id) to show where Cribl
-                    sends data. A DCR may name a DCE in another resource group
-                    or subscription.
-    If not granted: The preview cannot show that DCR's endpoint. Deploying is
-                    unaffected.
-- Reader  [feature]
-    Scope:          the Event Hub namespace (skip if a role above already
-                    covers it)
-    Needed for:     Read an Event Hub namespace, its rules and consumer groups
-    Why:            Validate, Create Cribl source and the Defender export read
-                    the namespace, its shared access rules and its consumer
-                    groups. The namespace may sit in another resource group or
-                    subscription, which subscription Reader does not reach.
-    If not granted: Those reads show as could not be read for that namespace.
-                    Nothing is changed in Azure.
-- Reader  [feature]
-    Scope:          /providers/Microsoft.Management/managementGroups/<management group id>
-                    (the highest management group the customer will grant, not
-                    the Tenant Root Group)
-    Needed for:     Read policy and the management group tree
-    Why:            Validate's policy checks and the Logging Map read policy
-                    assignments, exemptions, definitions and remediations, and
-                    the management group tree, at your management group.
-                    Reader there covers all of them; Management Group Reader
-                    alone misses remediations and the tree. It reaches every
-                    subscription beneath the group.
-    If not granted: Validate's policy checks read as could not be read, and
-                    the Logging Map lists subscriptions without the management
-                    group tree.
-
-Entra ID directory roles (optional)
------------------------------------
-Granted by an Entra administrator in Roles and administrators - not admin
-consent and not Azure IAM. [unverified] means Microsoft documents no
-narrower role for the call and none was measured; refusing costs only the
-one check named.
-
-- Security Administrator  [feature, unverified]
-    Scope:          tenant-wide (an Entra ID directory role, not consent or
-                    IAM)
-    Needed for:     Check the Entra ID diagnostic settings
-    Why:            Validate reads the tenant's Entra ID diagnostic settings
-                    (GET /providers/microsoft.aadiam/diagnosticSettings).
-                    Microsoft documents no read-only role for that call, and
-                    none was measured; this is the least role known to grant
-                    it.
-    If not granted: That one check reads as could not be read. Nothing else is
-                    affected.
-    Where:          Entra ID > Roles and administrators > this role > Add
-                    assignments, for this app's service principal.
-
 Cribl side (stated, not requested)
 ----------------------------------
 What the app holds in Cribl, so this request shows both halves.
@@ -575,12 +489,12 @@ Justification
 - Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create custom Log Analytics tables and configure the workspace for ingestion.
 - Microsoft Sentinel Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Installing analytic rules and workbooks, and onboarding a workspace to Sentinel, WRITE Microsoft.SecurityInsights resources. Log Analytics Contributor grants read across the subscription but no Microsoft.SecurityInsights write, so without this role the install fails on the first rule.
 - RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Data only flows through a Data Collection Rule if the sending identity holds Monitoring Metrics Publisher ON THAT RULE, and creating a role assignment is itself a privileged action that Contributor does not include. Attach the condition below so this grant cannot be used to assign anything else.
-- Azure Event Hubs Data Owner (the Event Hub namespace that holds the rule (skip if a role above already covers it)): Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
-- Monitoring Contributor (the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)): When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.
-- Monitoring Reader (the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)): The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
-- Reader (the Event Hub namespace (skip if a role above already covers it)): Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
-- Reader (/providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)): Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group.
-- Security Admin (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab (the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section)): The export is a Microsoft.Security/automations resource (CriblDefenderExport) the app creates in the resource group chosen in the Defender section; creating it needs automations/write, which neither Reader nor the Monitoring and Log Analytics roles include.
+- Azure Event Hubs Data Owner on the Event Hub namespace that holds the rule - skip if a role above already covers it: Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
+- Monitoring Contributor on the Azure Monitor Private Link Scope, which may sit in another resource group or subscription - skip if a role above already covers it: When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.
+- Monitoring Reader on the DCE, which a DCR may name in another resource group or subscription - skip if a role above already covers it: The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
+- Reader on the Event Hub namespace - skip if a role above already covers it: Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
+- Reader at /providers/Microsoft.Management/managementGroups/<management group id> - the highest management group the customer will grant, not the Tenant Root Group: Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group. A custom role with only Microsoft.Authorization/policyAssignments/read, Microsoft.Authorization/policyDefinitions/read, Microsoft.Authorization/policyExemptions/read, Microsoft.Management/managementGroups/descendants/read, Microsoft.Management/managementGroups/read, Microsoft.PolicyInsights/remediations/read at the management group is narrower still.
+- Security Admin at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab - the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section: The export is a Microsoft.Security/automations resource (CriblDefenderExport) the app creates in the resource group chosen in the Defender section; creating it needs automations/write, which neither Reader nor the Monitoring and Log Analytics roles include.
 
 Cribl side (stated, not requested)
 ----------------------------------
@@ -635,11 +549,7 @@ Assign the following roles to the service principal for Cribl SOC Toolkit (clien
 - RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
     Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.
 - Network Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/NetworkWatcherRG  [feature]
-- Azure Event Hubs Data Owner at the Event Hub namespace that holds the rule (skip if a role above already covers it)  [feature]
-- Monitoring Contributor at the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)  [feature]
-- Monitoring Reader at the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)  [feature]
-- Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]
-- Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]
+- Azure Event Hubs Data Owner at the Event Hub namespace that holds the rule  [feature]
 - Security Reader at /subscriptions/33333333-3333-3333-3333-333333333333  [feature]
 
 [feature] roles each unlock one named capability and can be refused on
@@ -650,17 +560,15 @@ Justification
 - Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it; the two lab steps that do - flow logs on the regional Network Watcher, and the Event Grid provider registration - are asked for separately.
 - RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Assign the lab TTL self-destruct identity its delete role on the lab resource group at deploy time.
 - Network Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/NetworkWatcherRG): Read the region's Network Watcher and write the lab's flow logs on it. Azure keeps one watcher per region per subscription, normally in NetworkWatcherRG, so the lab cannot create its own in the lab resource group.
-- Azure Event Hubs Data Owner (the Event Hub namespace that holds the rule (skip if a role above already covers it)): Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
-- Monitoring Contributor (the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)): When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.
-- Monitoring Reader (the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)): The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
-- Reader (the Event Hub namespace (skip if a role above already covers it)): Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
-- Reader (/providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)): Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group.
+- Azure Event Hubs Data Owner (the Event Hub namespace that holds the rule): Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
 - Security Reader (/subscriptions/33333333-3333-3333-3333-333333333333): Before deploying the export the app reads which Defender plans are on (pricings/read) and lists the subscription's continuous exports (automations/read) so it never creates a duplicate.
 
 Admin steps (setup path: lab-byo-rg)
 ------------------------------------
-One-time steps for a subscription administrator, asked for instead of a
-subscription-scope role.
+One-time steps for a subscription administrator. Each replaces the
+subscription-scope role its action would otherwise need: registering
+Event Grid here means no role holding Microsoft.EventGrid/register/action
+is asked for at the subscription.
 
 - Register the Microsoft.EventGrid resource provider on the subscription (once; skip if already registered).  [feature]
     Command:        az provider register --namespace Microsoft.EventGrid --subscription 33333333-3333-3333-3333-333333333333
@@ -724,24 +632,11 @@ Assign the following roles to the service principal for Cribl SOC Toolkit (clien
 - Contributor at /subscriptions/33333333-3333-3333-3333-333333333333
 - RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333
     Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.
-- Azure Event Hubs Data Owner at the Event Hub namespace that holds the rule (skip if a role above already covers it)  [feature]
-- Monitoring Contributor at the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)  [feature]
-- Monitoring Reader at the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)  [feature]
-- Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]
-- Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]
-
-[feature] roles each unlock one named capability and can be refused on
-their own; the untagged roles are what this setup path needs to work at all.
 
 Justification
 -------------
 - Contributor (/subscriptions/33333333-3333-3333-3333-333333333333): Create the lab resource group and deploy the workspace, DCRs, and tables inside it (resource group creation is a subscription-level action, so no workspace-scoped roles are needed on this path).
 - RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333): Assign the lab TTL self-destruct identity its delete role at deploy time.
-- Azure Event Hubs Data Owner (the Event Hub namespace that holds the rule (skip if a role above already covers it)): Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
-- Monitoring Contributor (the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)): When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.
-- Monitoring Reader (the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)): The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
-- Reader (the Event Hub namespace (skip if a role above already covers it)): Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
-- Reader (/providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)): Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group.
 
 Cribl side (stated, not requested)
 ----------------------------------

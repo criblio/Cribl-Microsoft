@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { REQUIRED_ACTIONS } from "@soc/core";
+import { REQUIRED_ACTIONS, requestedPermissions } from "@soc/core";
 import {
   armFailureMessage,
   connectInputIssue,
@@ -354,7 +354,7 @@ describe("dependentListingStatus - an empty list is not a zero", () => {
 
 describe("unmeasuredGrantLines (AZR-84)", () => {
   it("lists grants outside the configured scopes as unknown, never missing", () => {
-    const lines = unmeasuredGrantLines("existing");
+    const lines = unmeasuredGrantLines(requestedPermissions("full", [], "existing"));
     expect(lines[0]).toBe(
       "Not measured: these grants sit outside the scopes above, so they read as unknown.",
     );
@@ -370,5 +370,22 @@ describe("unmeasuredGrantLines (AZR-84)", () => {
     );
     expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(6);
     expect(lines.join("\n")).not.toMatch(/\[(missing|optional)\]/);
+  });
+});
+
+describe("unmeasuredGrantLines follows the request (review of AZR-84)", () => {
+  it("lists only grants a Partially Connected request asked for", () => {
+    // Read-only (the default tick): no outside-scope grant was requested.
+    expect(unmeasuredGrantLines(requestedPermissions("partial", ["Reader"], "existing"))).toEqual([]);
+    const lines = unmeasuredGrantLines(
+      requestedPermissions("partial", ["Reader", "Reader (Event Hub namespace)"], "existing"),
+    );
+    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toEqual([
+      "  [unknown] Reader on the Event Hub namespace - Read an Event Hub namespace, its rules and consumer groups",
+    ]);
+  });
+
+  it("lists nothing when disconnected", () => {
+    expect(unmeasuredGrantLines(requestedPermissions("disconnected", [], "existing"))).toEqual([]);
   });
 });

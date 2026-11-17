@@ -5,6 +5,7 @@
 // roles its Contributor grant already covers. The module's own tests import them
 // from "./app-permissions" directly.
 export {
+  MANAGEMENT_GROUP_READ_ACTIONS,
   OUTSIDE_SCOPE_CAVEAT,
   appPermissionPlan,
   entraDirectoryRoles,

@@ -266,7 +266,22 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain("Condition: Constrain roles and principal types: only Monitoring Metrics Publisher");
     expect(out).toContain("[feature] roles each unlock one named capability");
     // A justification per feature role too.
-    expect(out).toContain(`- Security Admin (${rg} (the default; `);
+    // One pair of parentheses, never two (review of AZR-84): a scope with a
+    // note is written "at <scope> - <note>".
+    expect(out).toContain(`- Security Admin at ${rg} - the default; `);
+  });
+
+  it("writes no justification line with nested parentheses", () => {
+    for (const path of ["existing", "lab-new-rg", "lab-byo-rg"] as const) {
+      const out = roleAssignmentRequest(ctxFor(path));
+      const justification = out.slice(out.indexOf("Justification\n"), out.indexOf("Cribl side"));
+      for (const line of justification.split("\n").filter((l) => l.startsWith("- "))) {
+        expect(line, `${path}: ${line}`).not.toMatch(/\([^)]*\(/);
+      }
+    }
+    expect(roleAssignmentRequest(ctxFor("existing"))).toContain(
+      "- Reader on the Event Hub namespace - skip if a role above already covers it: Validate,",
+    );
   });
 
   it("lab-new-rg: subscription Contributor + RBAC Administrator with the constraint condition", () => {
@@ -482,11 +497,11 @@ describe("AZR-61 - the app-registration ticket asks for what the audit found mis
     expect(out).toContain("- Security Admin  [feature]");
   });
 
-  it("asks a subscription-Contributor lab path only for what sits outside its subscription", () => {
-    // RE-PINNED (AZR-84): the namespace may be in another subscription, so
-    // listKeys is asked on every path, caveated; the Defender roles are not.
+  it("asks a subscription-Contributor lab path for none of them", () => {
+    // RE-PINNED BACK (review of AZR-84): a lab creates its namespace in its
+    // own group, so the outside-scope rows are the existing path's alone.
     const out = appRegistrationRequest(ctxFor("lab-new-rg"));
-    expect(out).toContain("- Azure Event Hubs Data Owner  [feature]");
+    expect(out).not.toContain("Azure Event Hubs Data Owner");
     // Exact lines: "Security Administrator" (the Entra role, AZR-82) contains "Security Admin".
     expect(out).not.toContain("- Security Admin  [feature]");
     expect(out).not.toContain("- Security Reader  [feature]");
