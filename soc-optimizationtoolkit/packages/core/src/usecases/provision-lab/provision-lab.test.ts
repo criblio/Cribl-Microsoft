@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WATCHER_LIMIT_CODE } from "./flowlogs-phase";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeJobStore } from "../../testing/fake-job-store";
 import {
@@ -935,32 +936,60 @@ describe("provisionLab - a resource-group-only caller (AZR-81)", () => {
     expect(step?.detail).toContain("az provider register --namespace Microsoft.EventGrid");
   });
 
-  it("does not PUT a second Network Watcher when NetworkWatcherRG answers 403", async () => {
+  // A 403 on NetworkWatcherRG hides whether a regional watcher exists, so
+  // the lab-group PUT is tried: Azure refuses a second one per region.
+  const throughNetworking = [
+    ...FOUNDATION_OK,
+    { status: 200, body: {} }, // storage exists
+    { status: 404, body: {} },
+    { status: 201, body: {} },
+    { status: 404, body: {} },
+    { status: 201, body: {} },
+    { status: 404, body: {} },
+    { status: 201, body: {} },
+    { status: 200, body: { properties: { provisioningState: "Succeeded" } } }, // VNet
+    { status: 404, body: {} }, // GET lab watcher
+    { status: 403, body: { error: { code: "AuthorizationFailed" } } }, // GET NetworkWatcherRG default
+  ];
+
+  it("creates the lab-group watcher when NetworkWatcherRG answers 403 and the region has none, then continues", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(
-      ...FOUNDATION_OK,
-      { status: 200, body: {} }, // storage exists
-      { status: 404, body: {} },
-      { status: 201, body: {} },
-      { status: 404, body: {} },
-      { status: 201, body: {} },
-      { status: 404, body: {} },
-      { status: 201, body: {} },
-      { status: 200, body: { properties: { provisioningState: "Succeeded" } } }, // VNet
-      { status: 404, body: {} }, // GET lab watcher
-      { status: 403, body: { error: { code: "AuthorizationFailed" } } }, // GET NetworkWatcherRG default
+      ...throughNetworking,
+      { status: 201, body: {} }, // PUT lab-group watcher - accepted
+      { status: 200, body: {} }, // vnet-level flow log exists
+      { status: 200, body: {} },
+      { status: 200, body: {} },
+      { status: 200, body: {} },
+      { status: 200, body: {} },
     );
+    const jobs = new FakeJobStore();
+    const result = await provisionLab(
+      { azure, jobs },
+      input({ flags: labDeploymentConfig("FlowLogLab", "public") }),
+    );
+    const step = (await jobs.list())[0]?.steps.find((s) => s.name === "flow-logs");
+    expect(step?.status).toBe("succeeded");
+    expect(result.flowLogs?.networkWatcher).toBe(`${RG}/${NAMES.networkWatcher}`);
+  });
+
+  it("fails naming NetworkWatcherRG and Network Contributor when Azure refuses a second watcher", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(...throughNetworking, {
+      status: 400,
+      body: { error: { code: WATCHER_LIMIT_CODE, message: "Cannot create more than 1 network watchers for this subscription in this region." } },
+    });
     const jobs = new FakeJobStore();
     await provisionLab(
       { azure, jobs },
       input({ flags: labDeploymentConfig("FlowLogLab", "public") }),
     );
-    expect(
-      azure.calls.some((c) => c.method === "PUT" && /\/networkWatchers\/[^/]+$/.test(c.path)),
-    ).toBe(false);
+    // Exactly one watcher PUT, refused by Azure: never a duplicate.
+    expect(azure.calls.filter((c) => c.method === "PUT" && /\/networkWatchers\/[^/]+$/.test(c.path))).toHaveLength(1);
     const step = (await jobs.list())[0]?.steps.find((s) => s.name === "flow-logs");
     expect(step?.status).toBe("failed");
-    expect(step?.detail).toContain("NetworkWatcherRG");
+    expect(step?.detail).toContain("the region's existing Network Watcher, usually in NetworkWatcherRG");
     expect(step?.detail).toContain("Network Contributor");
+    expect(step?.detail).toContain("read (HTTP 403)");
   });
 });

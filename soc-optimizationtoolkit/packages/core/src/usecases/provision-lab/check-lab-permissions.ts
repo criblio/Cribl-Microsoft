@@ -40,6 +40,11 @@ import {
 } from "../../domain/labs/lab-permissions";
 import type { LabComponentFlags } from "../../domain/labs/lab-profiles";
 import { AZURE_NETWORK_WATCHER_RG } from "../../domain/labs/lab-flowlogs";
+import {
+  buildEventGridProviderGetRequest,
+  parseProviderRegistrationState,
+} from "../../domain/labs/lab-storage";
+import { operationAction } from "../../domain/least-privilege";
 import { httpErrorText, is2xx } from "../arm-http";
 
 /** Input for {@link checkLabPermissions}. */
@@ -83,6 +88,9 @@ export interface LabUnmeasuredCheck {
   /** Why, in words: the HTTP status. */
   reason: string;
 }
+
+/** The Event Grid registration action, whose row the provider's state can satisfy. */
+const REGISTER_ACTION = operationAction("eventGrid.provider.register");
 
 /**
  * Fetch and evaluate the caller's effective permissions for the selected lab
@@ -155,16 +163,46 @@ export async function checkLabPermissions(
       continue;
     }
     const evaluated = extra.get(action.scope);
-    if (evaluated === undefined || !evaluated.ok) {
+    const holds =
+      evaluated !== undefined && evaluated.ok
+        ? hasEffectiveAction(evaluated.parsed, action.action)
+        : undefined;
+    if (action.action === REGISTER_ACTION && holds !== true) {
+      // The registration is needed once, not the right to make it: an admin
+      // may already have registered the provider (AZR-81 review). Read the
+      // provider's state before calling the row missing.
+      const provider = await azure.request(buildEventGridProviderGetRequest(input.subscriptionId));
+      if (is2xx(provider.status) && parseProviderRegistrationState(provider.body) === "Registered") {
+        checks.push(checkResult(action, true));
+        continue;
+      }
+      if (!is2xx(provider.status) || holds === undefined) {
+        unmeasured.push({
+          action: action.action,
+          label: action.label,
+          scope: extraScopePath[action.scope],
+          reason: !is2xx(provider.status)
+            ? `the provider's registration could not be read (HTTP ${provider.status})`
+            : evaluated !== undefined && !evaluated.ok
+              ? evaluated.reason
+              : "not read",
+        });
+        continue;
+      }
+      // Not registered, and no right to register it: missing.
+      checks.push(checkResult(action, false));
+      continue;
+    }
+    if (holds === undefined) {
       unmeasured.push({
         action: action.action,
         label: action.label,
         scope: extraScopePath[action.scope],
-        reason: evaluated === undefined ? "not read" : evaluated.reason,
+        reason: evaluated !== undefined && !evaluated.ok ? evaluated.reason : "not read",
       });
       continue;
     }
-    checks.push(checkResult(action, hasEffectiveAction(evaluated.parsed, action.action)));
+    checks.push(checkResult(action, holds));
   }
 
   const roleAssignmentGrant = analyzeRoleAssignmentGrant(response.body);

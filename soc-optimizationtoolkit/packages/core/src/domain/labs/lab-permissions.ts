@@ -188,11 +188,14 @@ export function labRequiredActions(
           action: operationAction("networkWatcher.read"),
           label: "Read the region's Network Watcher in NetworkWatcherRG",
           scope: "network-watcher-rg",
+          // Feature, as the role plan asks for it: only the flow logs need it.
+          necessity: "feature",
         },
         {
           action: operationAction("flowLog.write"),
           label: "Write flow logs on the region's Network Watcher in NetworkWatcherRG",
           scope: "network-watcher-rg",
+          necessity: "feature",
         },
       );
     }

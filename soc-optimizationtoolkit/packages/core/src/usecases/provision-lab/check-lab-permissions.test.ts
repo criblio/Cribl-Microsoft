@@ -7,6 +7,8 @@ const SUB = "11111111-2222-3333-4444-555555555555";
 const RA_WRITE = "Microsoft.Authorization/roleAssignments/write";
 
 const ALL = { status: 200, body: { value: [{ actions: ["*"], notActions: [] }] } };
+const REGISTERED = { status: 200, body: { registrationState: "Registered" } };
+const NOT_REGISTERED = { status: 200, body: { registrationState: "NotRegistered" } };
 const NOTHING = { status: 200, body: { value: [{ actions: [], notActions: [] }] } };
 
 describe("checkLabPermissions", () => {
@@ -117,13 +119,15 @@ describe("checkLabPermissions - bring-your-own scopes outside the lab group (AZR
 
   it("reads each scope once and evaluates each row at its own scope", async () => {
     const azure = new FakeAzureManagement();
-    // Lab group: everything. Subscription and NetworkWatcherRG: nothing.
-    azure.respondWith(ALL, NOTHING, NOTHING);
+    // Lab group: everything. Subscription and NetworkWatcherRG: nothing. The
+    // provider is not registered, so the register row is a real gap.
+    azure.respondWith(ALL, NOTHING, NOTHING, NOT_REGISTERED);
     const outcome = await run(azure);
     expect(azure.calls.map((c) => c.path)).toEqual([
       `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Authorization/permissions`,
       `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`,
       `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG/providers/Microsoft.Authorization/permissions`,
+      `/subscriptions/${SUB}/providers/Microsoft.EventGrid`,
     ]);
     const granted = (action: string) => outcome.checks.find((c) => c.action === action)?.granted;
     expect(granted("Microsoft.EventGrid/register/action")).toBe(false);
@@ -136,7 +140,7 @@ describe("checkLabPermissions - bring-your-own scopes outside the lab group (AZR
 
   it("reports an unreadable scope as unknown, never as denied", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(ALL, { status: 403, body: {} }, { status: 403, body: {} });
+    azure.respondWith(ALL, { status: 403, body: {} }, { status: 403, body: {} }, { status: 403, body: {} });
     const outcome = await run(azure);
     for (const action of [
       "Microsoft.EventGrid/register/action",
@@ -146,7 +150,7 @@ describe("checkLabPermissions - bring-your-own scopes outside the lab group (AZR
       expect(outcome.checks.some((c) => c.action === action), action).toBe(false);
     }
     expect(outcome.unmeasured.map((u) => [u.action, u.scope, u.reason])).toEqual([
-      ["Microsoft.EventGrid/register/action", `/subscriptions/${SUB}`, "permissions at this scope could not be read (HTTP 403)"],
+      ["Microsoft.EventGrid/register/action", `/subscriptions/${SUB}`, "the provider's registration could not be read (HTTP 403)"],
       ["Microsoft.Network/networkWatchers/read", `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG`, "permissions at this scope could not be read (HTTP 403)"],
       ["Microsoft.Network/networkWatchers/flowLogs/write", `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG`, "permissions at this scope could not be read (HTTP 403)"],
     ]);
@@ -159,5 +163,58 @@ describe("checkLabPermissions - bring-your-own scopes outside the lab group (AZR
     // RG (404), subscription fallback, NetworkWatcherRG - no second subscription read.
     expect(azure.calls).toHaveLength(3);
     expect(outcome.checks.find((c) => c.action === "Microsoft.EventGrid/register/action")?.granted).toBe(true);
+  });
+});
+
+describe("checkLabPermissions - the Event Grid registration row reads the provider (AZR-81 review)", () => {
+  const register = "Microsoft.EventGrid/register/action";
+  const run = (azure: FakeAzureManagement) =>
+    checkLabPermissions(azure, {
+      subscriptionId: SUB,
+      resourceGroupName: "rg-preapproved",
+      rgMode: "bring-your-own",
+      flags: labDeploymentConfig("CompleteLab", "public"),
+    });
+
+  it("is satisfied when an admin already registered the provider, though the app cannot register", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, NOTHING, ALL, REGISTERED);
+    const outcome = await run(azure);
+    expect(outcome.checks.find((c) => c.action === register)?.granted).toBe(true);
+    expect(outcome.unmeasured).toEqual([]);
+  });
+
+  it("is missing when the provider is not registered and the app cannot register it", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, NOTHING, ALL, NOT_REGISTERED);
+    const outcome = await run(azure);
+    expect(outcome.checks.find((c) => c.action === register)?.granted).toBe(false);
+  });
+
+  it("is unknown when the provider's state cannot be read", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, NOTHING, ALL, { status: 403, body: {} });
+    const outcome = await run(azure);
+    expect(outcome.checks.some((c) => c.action === register)).toBe(false);
+    expect(outcome.unmeasured.map((u) => [u.action, u.reason])).toEqual([
+      [register, "the provider's registration could not be read (HTTP 403)"],
+    ]);
+  });
+
+  it("does not read the provider when the app holds the register right", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, ALL, ALL);
+    const outcome = await run(azure);
+    expect(azure.calls).toHaveLength(3);
+    expect(outcome.checks.find((c) => c.action === register)?.granted).toBe(true);
+  });
+
+  it("marks the NetworkWatcherRG rows feature, as the role plan asks for them", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, ALL, NOTHING);
+    const outcome = await run(azure);
+    for (const action of ["Microsoft.Network/networkWatchers/read", "Microsoft.Network/networkWatchers/flowLogs/write"]) {
+      expect(outcome.checks.find((c) => c.action === action)?.necessity, action).toBe("feature");
+    }
   });
 });
