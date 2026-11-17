@@ -649,10 +649,11 @@ export interface ModeChange {
 /**
  * Change a source's mode. Null when writes are blocked, when `automate` is
  * asked of a source the app cannot deploy (refused, not silently coerced),
- * and when `automate` is asked while the selection is not loaded: the How-to
- * choice could not be carried into it, so a stale selection entry for the
- * source would decide "chosen" instead (the chooser disables that option and
- * says why). The row's chosen state is carried across in BOTH directions: to
+ * and, while the selection is not loaded, any move across it: to `automate`
+ * the How-to choice could not be carried into it, so a stale selection entry
+ * would decide "chosen" instead; from `automate` the choice lives in the
+ * unread selection, so it would be written to progress as a confident "not
+ * chosen" (the chooser disables both options and says why). The row's chosen state is carried across in BOTH directions: to
  * How-to it goes into the progress document; to Automated it comes back as a
  * selection for the screen to write (withItem), so a chosen How-to source
  * does not silently drop out, and an unchosen one does not come back chosen.
@@ -665,7 +666,12 @@ export function setMode(
 ): ModeChange | null {
   const progress = loadedProgress(state);
   if (progress === null || !canWriteProgress(state)) return null;
-  if (mode === "automate" && (!isAutomatable(id) || selection === null)) return null;
+  if (mode === "automate" && !isAutomatable(id)) return null;
+  // Either direction across the selection needs it loaded: to Automate the
+  // How-to choice is carried INTO it, and from Automate the choice is READ
+  // from it. With it unread, the first would let a stale entry decide and the
+  // second would write an unknown choice as a confident "not chosen".
+  if (selection === null && (mode === "automate" || effectiveMode(progress, id) === "automate")) return null;
   const wasChosen = isChosen(progress, selection, id);
   const moded = withSourceMode(progress, id, mode);
   if (mode === "manual") {

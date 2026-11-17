@@ -12,8 +12,10 @@
  *     Automate option DISABLED and the reason shown as visible text beside it,
  *     not only in a tip (claude-kit standards/info-affordances.md: a disabled
  *     control says why). So is the Automate option of a How-to row while the
- *     selection cannot be used: the row's How-to choice could not be carried
- *     into it, and a stale entry would decide instead.
+ *     selection cannot be used (the row's How-to choice could not be carried
+ *     into it, and a stale entry would decide instead), and the How-to option
+ *     of an Automated row (its choice is in the selection, unknown, and must
+ *     not be written to progress as "not chosen").
  *   - an (i) explaining how the logs travel and that the Cribl source is
  *     created by the app after a confirm.
  *
@@ -49,6 +51,11 @@ export const AUTOMATE_CHOICE_HINT = "Automate: the app sets this source up from 
 /** Shown on an Automated row while the selection cannot be used: the method row's words. */
 export function selectionUnknownNote(cause: ChoiceUnknownCause): string {
   return choiceLabel({ kind: "unknown", doc: "selection", cause });
+}
+
+/** Shown beside an Automated row's disabled How-to option while the selection cannot be used. */
+export function howtoUnavailableNote(cause: ChoiceUnknownCause): string {
+  return `How-to is not available while ${unknownReason("selection", cause)}.`;
 }
 
 /** Shown beside a How-to row's disabled Automate option while the selection cannot be used. */
@@ -117,7 +124,7 @@ export function SourceChooser({
                 name={`azo-mode-${row.id}`}
                 aria-label={`How-to ${row.title}`}
                 checked={row.mode === "manual"}
-                disabled={disabled}
+                disabled={disabled || unknown}
                 onChange={() => onSetMode(row.id, "manual")}
               />
               <span>How-to</span>
@@ -131,6 +138,11 @@ export function SourceChooser({
           {unknown && selectionUnknownCause !== null && (
             <span className="field-hint" data-testid={`azo-choice-unknown-${row.id}`}>
               {selectionUnknownNote(selectionUnknownCause)}
+            </span>
+          )}
+          {unknown && selectionUnknownCause !== null && (
+            <span className="field-hint" data-testid={`azo-howto-unavailable-${row.id}`}>
+              {howtoUnavailableNote(selectionUnknownCause)}
             </span>
           )}
           {automateBlocked && selectionUnknownCause !== null && (

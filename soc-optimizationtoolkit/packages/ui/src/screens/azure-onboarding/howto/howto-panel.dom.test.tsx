@@ -35,7 +35,7 @@ import type { HowToPanelProps } from "./howto-panel";
 import { ChoosePanel } from "./choose-panel";
 import type { ChoosePanelProps } from "./choose-panel";
 import { CREDENTIAL_REFUSED_NOTE, UNAPPLIED_NOTE } from "./plan-values-form";
-import { automateUnavailableNote, selectionUnknownNote } from "./source-chooser";
+import { automateUnavailableNote, howtoUnavailableNote, selectionUnknownNote } from "./source-chooser";
 
 const SELECTION_UNKNOWN_NOTE = selectionUnknownNote("not-read");
 import { COPY_DONE, COPY_UNAVAILABLE } from "./step-dialog";
@@ -245,6 +245,12 @@ describe("chooser and mode toggle", () => {
     expect(box.getAttribute("aria-checked")).toBe("mixed");
     expect(defender.dataset.chosen).toBe("unknown");
     expect(defender.textContent).toContain(SELECTION_UNKNOWN_NOTE);
+    // Its How-to option is off too: moving would write the unknown choice as "not chosen".
+    const howto = within(defender).getByRole("radio", { name: /How-to/ }) as HTMLInputElement;
+    expect(howto.disabled).toBe(true);
+    expect(defender.textContent).toContain(howtoUnavailableNote("not-read"));
+    fireEvent.click(howto);
+    expect(props.onSetMode).not.toHaveBeenCalled();
     fireEvent.click(box);
     expect(props.onSetChosen).not.toHaveBeenCalled();
     // A How-to row reads its choice from progress, which did load.

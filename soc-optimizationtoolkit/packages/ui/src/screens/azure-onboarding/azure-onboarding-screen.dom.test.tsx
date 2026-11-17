@@ -503,13 +503,12 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     expect(store?.saves).toEqual([]);
   });
 
-  // (e) A refused selection load: the Automated choice is unknown and its box
-  // cannot be clicked, and once the source is in How-to it cannot come back
-  // to Automate, so neither the selection nor progress records an Automate
-  // choice the selection never confirmed. (commitSelection's own
+  // (e) A refused selection load: the Automated choice is unknown, and
+  // neither its box nor its How-to option can change it, so the unknown
+  // choice is never written anywhere as "not chosen". (commitSelection's own
   // canWriteSelection guard is pinned at the unit level; the screen never
   // reaches it with a null selection.)
-  it("a REFUSED selection load: no selection write, and a How-to source cannot return to Automate", async () => {
+  it("a REFUSED selection load: an Automated source's unknown choice cannot be changed or written", async () => {
     const store = new FakeKvDocumentStore().scriptLoad(SELECTION_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
@@ -527,21 +526,18 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     expect(screen.getByTestId("azo-choice-unknown-defenderExport").textContent).toBe(
       choiceText(DEFENDER_EXPORT_ITEM_ID),
     );
-    // Moving to How-to needs no selection write and is allowed...
-    fireEvent.click(screen.getByRole("radio", { name: `How-to ${DEFENDER_TITLE}` }));
-    await waitFor(() => expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toHaveLength(1));
-    // ...but coming back to Automate is refused, and says why.
-    const automate = screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }) as HTMLInputElement;
-    expect(automate.disabled).toBe(true);
-    fireEvent.click(automate);
+    // Moving to How-to would read the unknown choice as "not chosen" and
+    // write it to progress: refused, and the option says why.
+    const howto = screen.getByRole("radio", { name: `How-to ${DEFENDER_TITLE}` }) as HTMLInputElement;
+    expect(howto.disabled).toBe(true);
+    expect(screen.getByTestId("azo-howto-unavailable-defenderExport").textContent).toBe(
+      "How-to is not available while the saved selection could not be read.",
+    );
+    fireEvent.click(howto);
     await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toEqual([]);
     expect(selectionSaves(store)).toEqual([]);
-    const modes = store.saves
-      .filter((s) => s.key === PROGRESS_KEY)
-      .map((s) => (s.value as { sources: Record<string, { mode?: string }> }).sources["defenderExport"]?.mode);
-    expect(modes).toEqual(["manual"]);
-    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
-    expect(screen.queryByRole("button", { name: "Deploy alert export" })).toBeNull();
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe("Choice not known - the saved selection could not be read.");
   });
 
   // Major: a How-to source unchosen while the selection was still loading

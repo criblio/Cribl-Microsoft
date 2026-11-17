@@ -230,10 +230,21 @@ describe("chooser rows (D2)", () => {
     expect(setMode(unchosen, null, "defenderExport", "automate")).toBeNull();
     const chosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "defenderExport", "manual"), "defenderExport", true));
     expect(setMode(chosen, null, "defenderExport", "automate")).toBeNull();
-    // Moving to How-to needs no selection write, so it is still allowed.
-    expect(setMode(ready(emptyProgress()), null, "defenderExport", "manual")?.progress.sources.defenderExport?.mode).toBe(
-      "manual",
-    );
+  });
+
+  it("setMode refuses How-to for an Automated source while the selection is not loaded", () => {
+    // Defender starts Automated; its choice lives in the unread selection, so
+    // moving it would write an unknown choice to progress as "not chosen".
+    expect(setMode(ready(emptyProgress()), null, "defenderExport", "manual")).toBeNull();
+    // With the selection loaded the move carries the real choice.
+    const withDefender: CoverageSelection = { ...SELECTION, enabled: ["defenderExport"] };
+    expect(setMode(ready(emptyProgress()), withDefender, "defenderExport", "manual")?.progress.sources.defenderExport).toEqual({
+      chosen: true,
+      mode: "manual",
+    });
+    // A source already in How-to does not read the selection, so it may stay How-to.
+    const manual = ready(withSourceMode(emptyProgress(), "entraId", "manual"));
+    expect(setMode(manual, null, "entraId", "manual")?.progress.sources.entraId?.mode).toBe("manual");
   });
 
   it("setChosen writes progress for How-to and the selection for Automated", () => {
