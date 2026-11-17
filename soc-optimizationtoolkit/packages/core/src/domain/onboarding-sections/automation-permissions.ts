@@ -259,7 +259,10 @@ export interface AutomationPermissionInput {
   readonly capabilities: CapabilitySet | undefined;
   /** Connection facts; undefined is read as "an identity is configured". */
   readonly context: CapabilityContext | undefined;
-  /** The number of the How-to section on the screen, so the copy names it. */
+  /**
+   * The number of the screen's chooser section ("Choose what to onboard"),
+   * where a source is switched to How-to, so the copy names it.
+   */
   readonly howtoSection: number;
   /**
    * The CURRENT connection's audit key. When given, a set whose connectionId

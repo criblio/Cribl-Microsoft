@@ -3,10 +3,17 @@
  * AZR-30..34). Every Azure-native source the coverage catalog knows, grouped by
  * how it is collected, with the ones that can be deployed today - the Defender
  * for Cloud alert export and the subscription Activity Log setting (AZR-98) -
- * working end to end, and every other row visible with its control disabled
- * and the reason beside it. Below them: the
- * dataflow diagram per chosen source, the How-to path (guided steps with done
- * ticks), the read-only Validate, and the Cribl Stream source the app creates.
+ * working end to end, and every other row visible with the reason it cannot
+ * be deployed beside it. Below them: the dataflow diagram per chosen source,
+ * the How-to path (guided steps with done ticks), the read-only Validate, and
+ * the Cribl Stream source the app creates.
+ *
+ * ONE VISIBLE CHOICE PER SOURCE (ADR 0007 section 2).
+ * Section 2, "Choose what to onboard", is the only place a source is chosen,
+ * with its Automate | How-to toggle. The method sections after it are status
+ * only: each row says whether its source is chosen and how (howto-state
+ * rowChoices over isChosen/effectiveMode, never the selection directly), its
+ * deployment state and why it cannot be deployed yet.
  *
  * A THIN COMPOSER. Every decision lives in azure-onboarding-state.ts and the
  * howto/, validate/, cribl-source/ and dataflow/ state modules (pure,
@@ -24,17 +31,23 @@
  *     rules, Read Cribl side, Watch for data), because each read spends the
  *     shared proxy budget. Worker groups come from useStreamWorkerGroups with
  *     auto:false.
- *   - SAVE IS EXPLICIT for the selection. Only after an `absent` load or a
- *     readable document of ours, and only when the operator changed something
- *     (canSave). A read that FAILED, a foreign document and one this release
- *     cannot read all block it. A toggle made while a save is in flight keeps
- *     the screen dirty.
+ *   - THE SELECTION SAVES PER CLICK too. Choosing or unchoosing an Automated
+ *     source, or a mode change that carries a choice into the selection,
+ *     writes the selection document once, at once, serialized through its own
+ *     promise chain - exactly like progress below, including the failure
+ *     handling: the screen keeps showing the change, says it was NOT saved,
+ *     and the next change retries with everything shown. Only after an
+ *     `absent` load or a readable document of ours (canWriteSelection); a read
+ *     that FAILED, a foreign document, one this release cannot read and a
+ *     shell with no store all block it. Entries for How-to sources are
+ *     carried as they are and rewritten only by that source's own choice or
+ *     mode change.
  *   - PROGRESS SAVES PER CLICK (D3): a tick, a mode change, choosing a source,
  *     Apply on the plan values, the worker group and a created Cribl source
  *     each write the progress document once, serialized through one promise
  *     chain and a latest-state ref. Only after an `absent` or readable load
- *     (canWriteProgress); a failed progress load blocks those writes and
- *     leaves the selection's Save working.
+ *     (canWriteProgress); a failed progress load blocks those writes, and
+ *     with them every choice, because the mode lives in progress.
  *   - VALIDATE never runs unpaced: without a `pacing` prop it is disabled with
  *     its reason; with one, the Azure port is wrapped in paceAzureManagement at
  *     the Validate rate. The budget is per run.
@@ -50,7 +63,7 @@
  * PERMISSIONS TO AUTOMATE (AZR-60). The Defender section reads the CACHED
  * capability audit from the ports context and renders a banner over it; that
  * adds no load and no Azure call on mount. Its How-to button focuses the
- * source's How-to radio in the How-to section (the row is in Automate mode
+ * source's How-to radio in Choose what to onboard (the row is in Automate mode
  * while the section renders, and steps appear only once it is switched), and
  * its Re-check permissions is the shell's (the `onRecheckPermissions` prop) -
  * this screen never re-audits. The shell also passes its audit key, so a set
@@ -139,20 +152,21 @@ import { NumberedSection } from "../../components/numbered-section";
 import { useStreamWorkerGroups } from "../../components/worker-group-listing";
 import {
   buildSections,
-  canSave,
+  canWriteSelection,
   criblSideReadingOf,
   deployedFrom,
   loadBanners,
   loadStateFrom,
   loadedSelection,
   measuredHubsOf,
-  withItem,
+  selectionUnknownCause,
 } from "./azure-onboarding-state";
 import type {
   OnboardingLoadState,
   OnboardingRowView,
   OnboardingSectionView,
   PickerMessage,
+  RowChoice,
 } from "./azure-onboarding-state";
 import { EventHubPrerequisiteSection, PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
@@ -160,6 +174,7 @@ import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
+import { ChoosePanel } from "./howto/choose-panel";
 import {
   applyPlanValues,
   canWriteProgress,
@@ -169,6 +184,7 @@ import {
   howtoRowAnchorId,
   loadedProgress,
   progressLoadStateFrom,
+  rowChoices,
   setChosen,
   setMode,
   toggleTick,
@@ -194,22 +210,28 @@ import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
 
 /** Shown when the shell wires no document store: a wiring gap, not a first run. */
 export const SHELL_GAP_MESSAGE =
-  "This build of the app has no storage for the onboarding selection, so it cannot be loaded or saved. Saving is turned off.";
+  "This build of the app has no storage for the onboarding selection, so it cannot be loaded or saved. Choosing sources is turned off.";
 
 /** The progress load's reason when the shell wires no document store. */
 export const PROGRESS_SHELL_GAP_REASON = "this build of the app has no storage for it";
 
 const SECTION_TIPS: Readonly<Record<OnboardingSectionView["key"], string>> = {
   "built-in-policy":
-    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet. The Activity Log can be deployed from here as one subscription diagnostic setting, without a policy.",
+    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet.",
   "custom-initiative":
     "A community-maintained policy initiative that covers resource types the built-in one does not. Deploying it from here is not available yet.",
   script:
-    "Sources configured directly, without a policy. The Defender for Cloud alert export can be deployed from here; the others are shown for completeness.",
+    "Sources configured directly, without a policy. The Activity Log (one subscription diagnostic setting) and the Defender for Cloud alert export can be deployed from here once chosen in Automate mode; Entra ID is shown for completeness.",
   "guided-portal":
     "The Defender XDR streaming export is finished in the Microsoft Defender portal. Guidance for it is not available here yet.",
   none: "Sources that cannot stream to an Event Hub at all, with what to use instead. Nothing here is deployed.",
 };
+
+/** Section 2: the one place a source is chosen. */
+const CHOOSER_SECTION_NUMBER = 2;
+const CHOOSER_SECTION_TITLE = "Choose what to onboard";
+const CHOOSER_TIP =
+  "Choose each source to send to Cribl Stream, and whether the app sets it up (Automate) or you follow the steps yourself (How-to). Each choice is saved as you make it. The sections below show what you chose.";
 
 /** The four sections that follow the catalog sections. */
 const HOWTO_SECTION_TITLES = {
@@ -222,7 +244,7 @@ const HOWTO_SECTION_TITLES = {
 const DATAFLOW_TIP =
   "One lane per chosen source, from the Azure log emitter through the Event Hub or storage account to the Cribl source, route and destination. Read it from the Azure side, the Cribl side or end to end. A hop animates only when Cribl's metrics measured events arriving.";
 const HOWTO_TIP =
-  "For each source you would rather set up in Azure yourself: choose it, enter your names and ids, then follow each step's instructions and tick it when done. Ticks are saved as you make them.";
+  "For each source chosen in How-to mode: enter your names and ids, then follow each step's instructions and tick it when done. Ticks are saved as you make them.";
 const VALIDATE_TIP =
   "Reads the Azure side of every chosen source and compares it with your plan. It only reads: nothing in Azure is changed, and no key is read.";
 const CRIBL_TIP =
@@ -234,7 +256,7 @@ export const DATAFLOW_WAITING_TEXT =
 
 /** Shown in place of a source's deploy controls while it is in How-to mode (Defender export, Activity Log). */
 export const DEFENDER_HOWTO_NOTE =
-  "This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate there.";
+  "This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.";
 
 /** No Event Hub chosen yet. The choice is React state only; it is not persisted. */
 const EMPTY_EVENTHUB_TARGET: EventHubTarget = { namespace: null, hubName: "", rule: null };
@@ -242,9 +264,12 @@ const EMPTY_EVENTHUB_TARGET: EventHubTarget = { namespace: null, hubName: "", ru
 const NOT_BUILT_NOTE = "These sources are shown so you can see the full picture. They cannot be deployed from here yet.";
 
 const PAGE_TIP =
-  "Choose which Azure-native sources should send to Cribl Stream, then either deploy the ones the app can set up or follow the How-to steps. Your selection is saved only when you choose Save; How-to progress is saved as you go.";
+  "Choose which Azure-native sources should send to Cribl Stream, then either deploy the ones the app can set up or follow the How-to steps. Choices and How-to progress are saved as you go.";
 
 const LOG = "azure-onboarding:";
+
+/** Where a message line is shown: the chooser section or the How-to section. */
+type MessageArea = "chooser" | "howto";
 
 function sectionStatus(view: OnboardingSectionView): SectionStatus {
   if (view.availability === "available") return "available";
@@ -279,21 +304,23 @@ export interface AzureOnboardingScreenProps {
   readonly permissionsNow?: () => string;
 }
 
-/** The How-to section's wrapper, focused when the source's own row is not rendered. */
+/** The How-to section's wrapper. */
 const HOWTO_ANCHOR_ID = "azo-howto-section";
+/** The chooser section's wrapper, focused when the source's own row is not rendered. */
+const CHOOSER_ANCHOR_ID = "azo-choose-section";
 
 /**
  * Bring a source's How-to switch into view and focus it - the control the
  * banner tells the operator to use. Falls back to the row when the radio is
- * disabled (progress cannot be written), and to the How-to section itself when
- * the row is not rendered (the progress document has not loaded or could not
- * be read). DOM only - no state, no IO.
+ * disabled (progress cannot be written), and to the chooser section itself
+ * when the row is not rendered (the progress document has not loaded or could
+ * not be read). DOM only - no state, no IO.
  */
 function showHowto(id: OnboardingSourceId): void {
   const radio = document.getElementById(howtoModeRadioId(id));
   const usableRadio = radio instanceof HTMLInputElement && !radio.disabled ? radio : null;
   const el =
-    usableRadio ?? document.getElementById(howtoRowAnchorId(id)) ?? document.getElementById(HOWTO_ANCHOR_ID);
+    usableRadio ?? document.getElementById(howtoRowAnchorId(id)) ?? document.getElementById(CHOOSER_ANCHOR_ID);
   if (el === null) return;
   if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.focus({ preventScroll: true });
@@ -325,13 +352,16 @@ export function AzureOnboardingScreen({
   const progressKey = tenantDocumentKey(ONBOARDING_PROGRESS_KEY, activeTenant);
 
   const [load, setLoad] = useState<OnboardingLoadState>({ status: "loading" });
+  const latestLoad = useRef<OnboardingLoadState>(load);
   const [selection, setSelection] = useState<CoverageSelection | null>(null);
-  // The selection on screen right now, read by save() after its await: the
-  // `selection` it captured at the start is stale if a row was toggled since.
+  // The selection on screen right now: each transition starts from it, so two
+  // clicks in one render never build on the same stale value.
   const latestSelection = useRef<CoverageSelection | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<PickerMessage | null>(null);
+  const selectionChain = useRef<Promise<void>>(Promise.resolve());
+  // A failed selection write has its OWN line in the chooser section: no other
+  // message replaces it, and only a successful selection write clears it, so
+  // an unsaved Automated choice is never shown without its "not saved" line.
+  const [selectionFailure, setSelectionFailure] = useState<PickerMessage | null>(null);
   const [target, setTarget] = useState<EventHubTarget>(EMPTY_EVENTHUB_TARGET);
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
   const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
@@ -342,12 +372,18 @@ export function AzureOnboardingScreen({
   );
   const latestProgressLoad = useRef<ProgressLoadState>(progressLoad);
   const progressChain = useRef<Promise<void>>(Promise.resolve());
-  const [progressMessage, setProgressMessage] = useState<PickerMessage | null>(null);
+  // One message line per area: the chooser (choices, modes, and their saves)
+  // and the How-to section (ticks, plan values, Cribl records).
+  const [messages, setMessages] = useState<Readonly<Record<MessageArea, PickerMessage | null>>>({
+    chooser: null,
+    howto: null,
+  });
   // AZR-96: the read-only report on the legacy progress key. Null until it is read.
   const [legacyRead, setLegacyRead] = useState<StrandedLegacyRead | null>(null);
-  // The save-failure message currently shown, so a later successful save
-  // clears that message and nothing else.
-  const progressSaveFailure = useRef<PickerMessage | null>(null);
+  // Every progress save-failure message shown, and where. Each write carries
+  // the whole document, so ANY successful progress write saves what every
+  // earlier failure lost, and clears all of them (and nothing else).
+  const progressSaveFailures = useRef<{ readonly at: MessageArea; readonly message: PickerMessage }[]>([]);
 
   // Validate (D16).
   const [run, dispatchRun] = useReducer(validateRunReducer, VALIDATE_IDLE);
@@ -379,17 +415,17 @@ export function AzureOnboardingScreen({
     void loadTenantDocument(store, COVERAGE_SELECTION_KEY, activeTenant)
       .then(loadStateFrom, (error: unknown): OnboardingLoadState => ({
         // The port promises never to reject; if one does, it is a failed read,
-        // and a failed read must block Save, never pass as a first run.
+        // and a failed read must block every write, never pass as a first run.
         status: "read-unknown",
         reason: errorText(error),
       }))
       .then((next) => {
         if (cancelled) return;
+        latestLoad.current = next;
         setLoad(next);
         const loadedSel = loadedSelection(next);
         latestSelection.current = loadedSel;
         setSelection(loadedSel);
-        setDirty(false);
         logger?.info(`${LOG} selection loaded`, { load: next.status });
       });
     return () => {
@@ -503,12 +539,20 @@ export function AzureOnboardingScreen({
       ]),
     [defenderState, activityLogState],
   );
-  const sections = useMemo(
-    () => buildSections(selection, deployed, unknown),
-    [selection, deployed, unknown],
+  const selectionCause = selectionUnknownCause(load, store !== undefined);
+  // The chooser's answer per source: the ONLY input the method sections'
+  // "chosen" status is read from (ADR 0007 section 2).
+  const choices = useMemo(
+    () => rowChoices(progressLoad, selection, selectionCause ?? "not-read", store !== undefined),
+    [progressLoad, selection, selectionCause, store],
   );
-
-  const saveAllowed = store !== undefined && selection !== null && canSave(load, { dirty, saving });
+  // A deploy section gates on its source's choice, never on the selection.
+  const choiceOf = (id: OnboardingSourceId): RowChoice =>
+    choices.get(id) ?? { kind: "unknown", doc: "progress", cause: "not-read" };
+  const sections = useMemo(
+    () => buildSections(choices, deployed, unknown),
+    [choices, deployed, unknown],
+  );
 
   const progress = loadedProgress(progressLoad);
   const strandedNotice = useMemo(() => strandedNoticeOf(legacyRead, progress), [legacyRead, progress]);
@@ -531,57 +575,56 @@ export function AzureOnboardingScreen({
     [selection],
   );
 
+  function showMessage(at: MessageArea, message: PickerMessage | null): void {
+    setMessages((m) => ({ ...m, [at]: message }));
+  }
+
+  /** Clear `message` from `at` only if it is still the one shown there. */
+  function clearMessage(at: MessageArea, message: PickerMessage): void {
+    setMessages((m) => (m[at] === message ? { ...m, [at]: null } : m));
+  }
+
   // -------------------------------------------------------------------------
-  // Selection (AZR-18)
+  // Selection (AZR-18): one write per choice, serialized, like progress
   // -------------------------------------------------------------------------
 
-  /** Stage a selection change behind the explicit Save. */
-  function stageSelection(next: CoverageSelection): void {
+  /**
+   * Show `next` at once and queue its write behind any selection write in
+   * flight. Every write carries the whole document, so the last one queued is
+   * the latest. Returns false (and writes nothing) while selection writes are
+   * blocked: no store, no tenant key, or a load that was not `absent` or ours.
+   * A failed write is handled exactly as a failed progress write: the change
+   * stays on screen, a visible error says it was NOT saved, and the next
+   * change tries again with everything shown.
+   */
+  function commitSelection(next: CoverageSelection, what: string): boolean {
+    if (store === undefined || selectionKey === null || !canWriteSelection(latestLoad.current)) return false;
     latestSelection.current = next;
     setSelection(next);
-    setDirty(true);
-    setSaveMessage(null);
-  }
-
-  function toggle(id: OnboardingItemId, ticked: boolean): void {
-    if (selection === null) return;
-    const next = withItem(selection, id, ticked);
-    if (next === selection) return;
-    stageSelection(next);
-    // Unticking changes the selection only; nothing is removed from Azure.
-    logger?.info(`${LOG} item toggled`, { item: id, ticked });
-  }
-
-  async function save(): Promise<void> {
-    if (!saveAllowed || store === undefined || selection === null || selectionKey === null) return;
-    const written = selection;
-    setSaving(true);
-    try {
-      await store.save(selectionKey, JSON.parse(encodeSelection(written)) as unknown);
-      setLoad({ status: "ready", decoded: { selection: written, dropped: [], usedDefaults: false } });
-      // A row toggled while the save was in flight is NOT in the stored
-      // document, so the screen stays dirty and Save stays enabled for it.
-      // withItem returns a new object on every change, so reference equality
-      // is exactly "nothing was toggled since".
-      const unchanged = latestSelection.current === written;
-      if (unchanged) setDirty(false);
-      setSaveMessage({
-        tone: "info",
-        text: unchanged
-          ? "Selection saved."
-          : "The earlier selection was saved; the changes made since are not saved yet.",
-      });
-      logger?.info(`${LOG} selection saved`, {
-        enabled: written.enabled.length,
-        changedSince: !unchanged,
-      });
-    } catch (error) {
-      const message = errorText(error);
-      setSaveMessage({ tone: "error", text: `The selection was not saved - ${message}` });
-      logger?.warn(`${LOG} selection save failed`, { error: message });
-    } finally {
-      setSaving(false);
-    }
+    const body = JSON.parse(encodeSelection(next)) as unknown;
+    selectionChain.current = selectionChain.current.then(async () => {
+      try {
+        await store.save(selectionKey, body);
+        // What is stored now: a first run's defaults banner no longer applies.
+        const saved: OnboardingLoadState = {
+          status: "ready",
+          decoded: { selection: next, dropped: [], usedDefaults: false },
+        };
+        latestLoad.current = saved;
+        setLoad(saved);
+        setSelectionFailure(null);
+        logger?.info(`${LOG} selection saved`, { change: what, enabled: next.enabled.length });
+      } catch (error) {
+        const message = errorText(error);
+        const failure: PickerMessage = {
+          tone: "error",
+          text: `Your choice was not saved - ${message}. The next change tries again with everything shown here.`,
+        };
+        setSelectionFailure(failure);
+        logger?.warn(`${LOG} selection save failed`, { change: what, error: message });
+      }
+    });
+    return true;
   }
 
   // -------------------------------------------------------------------------
@@ -593,7 +636,7 @@ export function AzureOnboardingScreen({
    * write carries the whole document, so the last one queued is the latest.
    * Returns false (and writes nothing) while progress writes are blocked.
    */
-  function commitProgress(next: OnboardingProgress, what: string): boolean {
+  function commitProgress(next: OnboardingProgress, what: string, at: MessageArea = "howto"): boolean {
     const state = latestProgressLoad.current;
     if (store === undefined || progressKey === null || !canWriteProgress(state)) return false;
     const shown = withSavedProgress(state, next);
@@ -606,9 +649,9 @@ export function AzureOnboardingScreen({
         // A save clears only its own earlier failure. Any other message - a
         // notice set by the click that queued this write, such as a choice not
         // carried over between modes - must outlive the write it explains.
-        const failure = progressSaveFailure.current;
-        progressSaveFailure.current = null;
-        if (failure !== null) setProgressMessage((m) => (m === failure ? null : m));
+        const failures = progressSaveFailures.current;
+        progressSaveFailures.current = [];
+        for (const f of failures) clearMessage(f.at, f.message);
         logger?.info(`${LOG} progress saved`, { change: what });
       } catch (error) {
         const message = errorText(error);
@@ -616,8 +659,8 @@ export function AzureOnboardingScreen({
           tone: "error",
           text: `Your How-to progress was not saved - ${message}. The next change tries again with everything shown here.`,
         };
-        progressSaveFailure.current = failure;
-        setProgressMessage(failure);
+        progressSaveFailures.current = [...progressSaveFailures.current, { at, message: failure }];
+        showMessage(at, failure);
         logger?.warn(`${LOG} progress save failed`, { change: what, error: message });
       }
     });
@@ -632,16 +675,21 @@ export function AzureOnboardingScreen({
   function onSetMode(id: OnboardingSourceId, mode: SourceMode): void {
     const change = setMode(latestProgressLoad.current, latestSelection.current, id, mode);
     if (change === null) return;
-    commitProgress(change.progress, "mode");
-    if (change.selection !== null && change.selection !== latestSelection.current) stageSelection(change.selection);
-    if (change.notice !== null) setProgressMessage({ tone: "info", text: change.notice });
+    commitProgress(change.progress, "mode", "chooser");
+    // Only a selection the change actually altered is written: a move to
+    // How-to returns none, so that source's saved entry is left as it is.
+    if (change.selection !== null && change.selection !== latestSelection.current) {
+      commitSelection(change.selection, "mode");
+    }
   }
 
   function onSetChosen(id: OnboardingSourceId, isChosen: boolean): void {
     const result = setChosen(latestProgressLoad.current, latestSelection.current, id, isChosen);
-    if (result.kind === "progress") commitProgress(result.progress, "choose");
-    else if (result.kind === "selection") stageSelection(result.selection);
-    else setProgressMessage({ tone: "error", text: result.reason });
+    if (result.kind === "progress") commitProgress(result.progress, "choose", "chooser");
+    else if (result.kind === "selection") {
+      // Unchoosing changes the selection only; nothing is removed from Azure.
+      if (result.selection !== latestSelection.current) commitSelection(result.selection, "choose");
+    } else showMessage("chooser", { tone: "error", text: result.reason });
   }
 
   function onApplyPlanValues(next: PlanValues): void {
@@ -896,7 +944,7 @@ export function AzureOnboardingScreen({
         p !== null &&
         commitProgress(withWorkerGroup(withCriblSource(p, ready.sourceId, outcome.record), ready.groupId), "cribl source created");
       if (!recorded) {
-        setProgressMessage({
+        showMessage("howto", {
           tone: "warning",
           text: `The Cribl source ${outcome.record.inputId} was created, but your saved progress could not be updated, so this page will not remember it after a reload.`,
         });
@@ -927,7 +975,7 @@ export function AzureOnboardingScreen({
       const p = loadedProgress(latestProgressLoad.current);
       const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record), "lake route");
       if (!recorded) {
-        setProgressMessage({
+        showMessage("howto", {
           tone: "warning",
           text: `The route to Cribl Lake created objects in Cribl, but your saved progress could not be updated, so this page cannot prove it created them after a reload.`,
         });
@@ -997,16 +1045,17 @@ export function AzureOnboardingScreen({
   }, [selection, progress, lastResult, criblSideReading, config.tenantId]);
 
   const banners = store === undefined ? [] : loadBanners(load);
-  const firstExtra = sections.length + 2;
+  // Section 1 is the Event Hub, section 2 the chooser, then one per method.
+  const firstExtra = sections.length + CHOOSER_SECTION_NUMBER + 1;
 
   return (
     <div className="panel azure-onboarding">
       <h2 className="panel-title">Azure Native Source Onboarding</h2>
       <p className="panel-desc">
         Send Azure-native security sources to Cribl Stream through an Event Hub or Blob storage.
-        Choose the Event Hub first, then tick and deploy the sources that are available, or follow
-        the How-to steps further down to set a source up in Azure yourself. Sources that cannot be
-        deployed from here yet are listed with their checkboxes turned off.
+        Choose the Event Hub first, then choose what to onboard and whether the app sets each
+        source up or you follow the How-to steps. The sections after that show each source's
+        status and deploy the ones the app can set up.
       </p>
 
       {store === undefined && <PickerLine message={{ tone: "error", text: SHELL_GAP_MESSAGE }} />}
@@ -1017,18 +1066,6 @@ export function AzureOnboardingScreen({
         <PickerLine key={b.text} message={b} />
       ))}
 
-      <div className="panel-controls">
-        <button
-          type="button"
-          className="next-action-button"
-          disabled={!saveAllowed}
-          onClick={() => void save()}
-        >
-          {saving ? "Saving..." : "Save selection"}
-        </button>
-        {dirty && !saving && <span className="field-hint">Unsaved changes.</span>}
-      </div>
-      {saveMessage !== null && <PickerLine message={saveMessage} />}
       <p className="field-hint">{PAGE_TIP}</p>
 
       <TenantInventoryHeatmap
@@ -1041,13 +1078,32 @@ export function AzureOnboardingScreen({
 
       <EventHubPrerequisiteSection number={1} value={target} onChange={setTarget} />
 
+      <NumberedSection
+        number={CHOOSER_SECTION_NUMBER}
+        title={CHOOSER_SECTION_TITLE}
+        status="available"
+        infoTip={CHOOSER_TIP}
+      >
+        {selectionFailure !== null && <PickerLine message={selectionFailure} />}
+        {messages.chooser !== null && <PickerLine message={messages.chooser} />}
+        <div id={CHOOSER_ANCHOR_ID} tabIndex={-1}>
+          <ChoosePanel
+            load={progressLoad}
+            selection={selection}
+            selectionCause={selectionCause}
+            onSetMode={onSetMode}
+            onSetChosen={onSetChosen}
+          />
+        </div>
+      </NumberedSection>
+
       {sections.map((view, index) => {
         const status = sectionStatus(view);
-        const rows = <OnboardingRows rows={view.rows} onToggle={toggle} />;
+        const rows = <OnboardingRows rows={view.rows} />;
         return (
           <NumberedSection
             key={view.key}
-            number={index + 2}
+            number={index + CHOOSER_SECTION_NUMBER + 1}
             title={view.title}
             status={status}
             infoTip={SECTION_TIPS[view.key]}
@@ -1060,12 +1116,12 @@ export function AzureOnboardingScreen({
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
               ) : (
                 <ActivityLogSection
-                  selection={selection}
+                  choice={choiceOf(ACTIVITY_LOG_ITEM_ID)}
                   target={target}
                   state={activityLogState}
                   onState={setActivityLogState}
                   onDeployed={onActivityLogDeployed}
-                  howtoSection={firstExtra + 1}
+                  howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
                 />
               ))}
@@ -1074,12 +1130,12 @@ export function AzureOnboardingScreen({
                 <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
               ) : (
                 <DefenderExportSection
-                  selection={selection}
+                  choice={choiceOf(DEFENDER_EXPORT_ITEM_ID)}
                   target={target}
                   state={defenderState}
                   onState={setDefenderState}
                   onDeployed={onDefenderDeployed}
-                  howtoSection={firstExtra + 1}
+                  howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(DEFENDER_EXPORT_ITEM_ID)}
                   onRecheckPermissions={onRecheckPermissions}
                   recheckingPermissions={recheckingPermissions}
@@ -1106,18 +1162,16 @@ export function AzureOnboardingScreen({
       </NumberedSection>
 
       <NumberedSection number={firstExtra + 1} title={HOWTO_SECTION_TITLES.howto} status="available" infoTip={HOWTO_TIP}>
-        {progressMessage !== null && <PickerLine message={progressMessage} />}
+        {messages.howto !== null && <PickerLine message={messages.howto} />}
         <div id={HOWTO_ANCHOR_ID} tabIndex={-1}>
-        <HowToPanel
-          load={progressLoad}
-          selection={selection}
-          result={lastResult}
-          pickedValues={pickedValues}
-          onToggleTick={onToggleTick}
-          onSetMode={onSetMode}
-          onSetChosen={onSetChosen}
-          onApplyPlanValues={onApplyPlanValues}
-        />
+          <HowToPanel
+            load={progressLoad}
+            selection={selection}
+            result={lastResult}
+            pickedValues={pickedValues}
+            onToggleTick={onToggleTick}
+            onApplyPlanValues={onApplyPlanValues}
+          />
         </div>
       </NumberedSection>
 
@@ -1169,13 +1223,11 @@ export function AzureOnboardingScreen({
   );
 }
 
-function OnboardingRows({
-  rows,
-  onToggle,
-}: {
-  rows: readonly OnboardingRowView[];
-  onToggle: (id: OnboardingItemId, ticked: boolean) => void;
-}) {
+/**
+ * A method section's rows: STATUS ONLY. No row has a control; a source is
+ * chosen in Choose what to onboard, and its row says what was chosen.
+ */
+function OnboardingRows({ rows }: { rows: readonly OnboardingRowView[] }) {
   return (
     <ul className="azure-onboarding-rows">
       {rows.map((row) => {
@@ -1198,18 +1250,12 @@ function OnboardingRows({
           );
         }
         return (
-          <li key={row.id} className="azure-onboarding-row">
-            <label className="integrate-check">
-              <input
-                type="checkbox"
-                aria-label={row.title}
-                checked={row.selected}
-                disabled={!row.tickable}
-                onChange={(e) => onToggle(row.id, e.target.checked)}
-              />
-              <span className="integrate-check-text">{row.title}</span>
-            </label>
+          <li key={row.id} className="azure-onboarding-row" data-item={row.id}>
+            <span className="field-label">{row.title}</span>
             <span className="field-hint">{row.description}</span>
+            <span className="field-hint" data-testid={`azo-choice-${row.id}`} data-choice={row.choice.kind}>
+              {row.choiceLabel}
+            </span>
             <span className={`azure-onboarding-state azure-onboarding-state-${row.state}`}>
               {row.label}
             </span>

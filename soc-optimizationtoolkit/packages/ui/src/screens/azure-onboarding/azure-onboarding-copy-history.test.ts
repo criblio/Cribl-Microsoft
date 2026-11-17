@@ -37,6 +37,7 @@ export const AZURE_ONBOARDING_COPY_FILES = [
   "automation-permission-banner.tsx",
   // The How-to, Validate, Cribl source and dataflow sections the screen composes.
   "howto/howto-panel.tsx",
+  "howto/choose-panel.tsx",
   "howto/source-chooser.tsx",
   "howto/plan-values-form.tsx",
   "howto/step-list.tsx",
@@ -89,10 +90,10 @@ describe("Azure Native Source Onboarding copy carries no project history", () =>
     expect(texts.some((t) => t.startsWith("Every source on this page sends to an Event Hub"))).toBe(true);
     expect(texts.some((t) => t.startsWith("This build of the app has no storage"))).toBe(true);
     // The four sections the How-to path adds, and their (i) text, are read too.
-    for (const title of ["Dataflow", "How to set it up yourself", "Check the Azure configuration", "Cribl Stream source"]) {
+    for (const title of ["Choose what to onboard", "Dataflow", "How to set it up yourself", "Check the Azure configuration", "Cribl Stream source"]) {
       expect(texts).toContain(title);
     }
-    expect(texts.some((t) => t.startsWith("For each source you would rather set up in Azure yourself"))).toBe(true);
+    expect(texts.some((t) => t.startsWith("For each source chosen in How-to mode"))).toBe(true);
     expect(texts.some((t) => t.startsWith("Reads the Azure side of every chosen source"))).toBe(true);
     expect(texts.some((t) => t.startsWith("The app creates the Cribl source for each lane"))).toBe(true);
   });

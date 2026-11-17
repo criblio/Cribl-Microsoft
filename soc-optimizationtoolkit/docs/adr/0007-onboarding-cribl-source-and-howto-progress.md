@@ -62,7 +62,8 @@ kind is `foreign`, any version other than 1 is `unreadable`, and a refused
 load is `read-unknown`. A write is allowed only after an `absent` or `ok`
 load. Ticks, mode changes and choosing a source each save at once, serialized
 through one in-flight promise. Plan values save only on Apply. The selection
-document keeps its explicit Save.
+document keeps its explicit Save. (Superseded 2026-11-17: the selection now
+saves per choice too - see the amendment to section 2.)
 
 **Mount now makes TWO KV loads.** The AZR-18 pin at
 `azure-onboarding-screen.dom.test.tsx` was edited deliberately, that one
@@ -91,6 +92,59 @@ id decodes to `manual`. The How-to step catalog is data in
 builders and constants, never retyped. A step whose content is inferred
 rather than ported carries a visible "not yet confirmed against live Azure"
 tag.
+
+**Amendment (2026-11-17, AZR-100): one visible choice per source.** The
+screen showed two source pickers that could disagree: the method sections
+ticked a checkbox per catalog item from `selection.enabled` (so the defaults
+ticked the Microsoft Audit initiative and Entra ID), while the How-to chooser
+read `progress.chosen` for every source in How-to mode. The operator ruled
+"Chooser moves up":
+
+- **The chooser is the one place a source is chosen.** "Choose what to
+  onboard" (each source row, its Automate | How-to toggle, info tip and
+  transport) is its own numbered section, section 2, straight after the Event
+  Hub. The How-to section keeps only the plan values and the steps for the
+  chosen How-to sources. The row and How-to radio DOM ids are unchanged, so a
+  deploy section's "follow the How-to steps" jump still lands on the radio, and
+  the permission banner now names section 2.
+- **The method sections are status only.** No checkbox. Each item row says
+  whether its source is chosen and how ("Chosen - Automate", "Chosen - How-to",
+  "Not chosen", or unknown while a document is unread), derived from
+  `isChosen`/`effectiveMode` (`rowChoices`), never from `selection.enabled`
+  directly; then its deployment state ("Not deployed", "Deployed", ...) and why
+  it cannot be deployed yet. The Defender export and Activity Log deploy
+  controls stay in their section and render as before.
+- **The Automate choice saves immediately.** The separate "Save selection"
+  button, its unsaved-changes state and the staged flow are gone. A choose,
+  unchoose or mode change that produces a selection writes the selection
+  document once, at once, serialized through its own promise chain, with the
+  progress write's failure handling exactly: the change stays on screen, a
+  visible error says it was not saved, and the next change retries with
+  everything shown. The guards are unchanged: only after an `absent` load or a
+  readable document of ours, never after a refused, foreign or unreadable load,
+  never without a store or a tenant. Because the mode lives in progress, a
+  progress load that failed blocks every choice, including Automated ones.
+  Sub-selections (the community initiative tiers) have no editor on this
+  screen; `withItem` carries them through every write unchanged.
+- **Stale entries.** A saved selection entry for a source currently in How-to
+  mode is ignored on screen (`isChosen` reads progress for it) and is not
+  rewritten except by that source's own choice or mode change: a move to
+  How-to returns no selection, and a move back to Automate carries the How-to
+  choice into the selection with `withItem`. Every selection write carries the
+  whole document, so such an entry is copied through as it is.
+- **Review follow-up (same day).** Switching a How-to source to Automate is
+  refused while the selection cannot be used (loading, refused, not ours,
+  unreadable, no storage): the How-to choice could not be carried into it, and
+  a stale entry would decide instead. The reverse move, an Automate source to
+  How-to, is refused too: its choice lives in the unread selection, so it would
+  be written to progress as a confident "not chosen". The chooser disables
+  both options and says why. Both deploy sections gate on the source's choice (chosen AND Automate),
+  never on `selection.enabled`, so an unknown choice keeps Deploy off with the
+  reason. A failed selection write keeps its own line in section 2 until a
+  selection write succeeds; a successful progress write clears every earlier
+  progress failure, since each write carries the whole document. An unknown
+  choice says which document and why, in the same words in the chooser and the
+  method row.
 
 ### 3. Validate is read-only by construction (D16)
 

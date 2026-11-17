@@ -284,9 +284,9 @@ describe("AZR-44 - a refused Defender read quotes Azure's message outside the ba
       </PortsProvider>,
     );
     await waitFor(() => expect(screen.queryByText("Loading the saved selection...")).toBeNull());
-    const tick = screen.getByRole("checkbox", { name: "Defender for Cloud alert export" }) as HTMLInputElement;
-    if (!tick.checked) fireEvent.click(tick);
-    expect(tick.checked).toBe(true);
+    const tick = await screen.findByRole("checkbox", { name: "Onboard Defender for Cloud alert export" });
+    if (!(tick as HTMLInputElement).checked) fireEvent.click(tick);
+    expect((screen.getByRole("checkbox", { name: "Onboard Defender for Cloud alert export" }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Read Defender state" }));
     await waitFor(() => expect(screen.getByText(`Deployment state could not be read - ${QUOTED}`)).toBeTruthy());
 

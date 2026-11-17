@@ -4565,26 +4565,28 @@
     {
       "id": "AZR-100",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "now",
       "dependsOn": [],
       "title": "Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice",
-      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Seen live: sections 2-5 (the AZR-18 selection, staged behind Save selection, here the unsaved defaults) show Microsoft Audit initiative, Activity Log, community initiative and Entra ID as 'Selected - not available yet' and Defender for Cloud export UNticked, while section 8's chooser ('Choose what to onboard', the progress document, saved at once) has Microsoft Audit and Defender ticked and Activity Log and Entra unticked. ADR 0007 D2 routes the click by mode (Automated -> AZR-18 selection, How-to -> progress), but the screen still renders both lists, so an operator sees two answers to 'what am I onboarding'. Once [[AZR-98]] makes Activity Log automatable this becomes a daily problem: it would have to be ticked in two places. FIX DIRECTION: one visible choice per source (the chooser row, with its Automate | How-to toggle), and the Automate sections show deploy state only for sources chosen there; decide in an ADR 0007 amendment what happens to a saved AZR-18 selection that disagrees.",
+      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Seen live: sections 2-5 (the AZR-18 selection, staged behind Save selection, here the unsaved defaults) show Microsoft Audit initiative, Activity Log, community initiative and Entra ID as 'Selected - not available yet' and Defender for Cloud export UNticked, while section 8's chooser ('Choose what to onboard', the progress document, saved at once) has Microsoft Audit and Defender ticked and Activity Log and Entra unticked. ADR 0007 D2 routes the click by mode (Automated -> AZR-18 selection, How-to -> progress), but the screen still renders both lists, so an operator sees two answers to 'what am I onboarding'. Once [[AZR-98]] makes Activity Log automatable this becomes a daily problem: it would have to be ticked in two places. FIX DIRECTION: one visible choice per source (the chooser row, with its Automate | How-to toggle), and the Automate sections show deploy state only for sources chosen there; decide in an ADR 0007 amendment what happens to a saved AZR-18 selection that disagrees.\n\nDONE 2026-11-17 (10ea102d, fd829215, 187fc502; ADR 0007 section 2 amended): operator chose \"Chooser moves up\". Choose what to onboard is section 2, the only control; method sections show status only (Chosen - Automate / Chosen - How-to / Not chosen, or why the choice is unknown). Save selection is gone: an Automate choice writes the selection at once, a failed write keeps its own line until one succeeds. A saved entry for a How-to source is ignored on screen. Moves across the selection are refused while it is unread, in both directions. Activity Log and Defender Deploy gate on the row choice (chosen and Automate). Two review rounds, 8 findings fixed. Not checked in Live Preview: port 5173 was held by another project's dev server.",
       "epic": "AZR",
       "feature": "AZR-F9",
-      "settled": "settled"
+      "settled": "settled",
+      "verified": "pins"
     },
     {
       "id": "AZR-101",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "now",
       "dependsOn": [],
       "title": "Azure Activity Log is listed under 'Azure Policy - built-in initiatives', but it is a subscription diagnostic setting, not a policy",
-      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 2 'Azure Policy - built-in initiatives' lists the Microsoft Audit initiative AND Azure Activity Log. Activity Log reaches the Event Hub through a subscription diagnostic setting (sources.ts emitterKind 'activity-log-setting'; the How-to steps and [[AZR-98]]'s automation write Microsoft.Insights/diagnosticSettings at the subscription), the same kind of direct configuration as Entra ID and the Defender export in section 4 'Direct configuration - no policy'. The grouping comes from the coverage catalog's collection method (itemsByMethod in domain/onboarding-sections). Move it to the direct-configuration section, check the coverage-model method value it reads, and keep the order pins honest. Priority now because AZR-98 adds an Automate deploy for it, which would otherwise appear under a policy heading.",
+      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 2 'Azure Policy - built-in initiatives' lists the Microsoft Audit initiative AND Azure Activity Log. Activity Log reaches the Event Hub through a subscription diagnostic setting (sources.ts emitterKind 'activity-log-setting'; the How-to steps and [[AZR-98]]'s automation write Microsoft.Insights/diagnosticSettings at the subscription), the same kind of direct configuration as Entra ID and the Defender export in section 4 'Direct configuration - no policy'. The grouping comes from the coverage catalog's collection method (itemsByMethod in domain/onboarding-sections). Move it to the direct-configuration section, check the coverage-model method value it reads, and keep the order pins honest. Priority now because AZR-98 adds an Automate deploy for it, which would otherwise appear under a policy heading.\n\nDONE 2026-11-17 (6a8aad05): the Activity Log is listed under Direct configuration. The coverage catalog stays a verbatim port of the legacy file (method built-in-policy); onboarding-sections overrides that one item's section, and the layout pin names the override. Not checked in Live Preview.",
       "epic": "AZR",
       "feature": "AZR-F9",
-      "settled": "settled"
+      "settled": "settled",
+      "verified": "pins"
     },
     {
       "id": "AZR-102",
