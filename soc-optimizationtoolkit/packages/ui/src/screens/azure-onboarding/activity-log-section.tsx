@@ -27,7 +27,7 @@
  * AFTER A WRITE it calls `onDeployed`, so a Validate result read before the
  * deploy is brought up to date (applyOnboardingDeploy), and re-reads.
  *
- * WHAT IT DOES NOT DO. Untick makes no Azure call. Remove is visible and
+ * WHAT IT DOES NOT DO. Unchoosing makes no Azure call. Remove is visible and
  * disabled. The hub chosen in the Event Hub section is not used: Azure writes
  * the Activity Log to the hub it creates, insights-activity-logs.
  */
@@ -68,7 +68,7 @@ import {
 } from "./activity-log-state";
 
 const REMOVE_NOT_AVAILABLE =
-  "Removing the setting from here is not available yet. Unticking the Activity Log does not remove it from Azure.";
+  "Removing the setting from here is not available yet. Unchoosing the Activity Log does not remove it from Azure.";
 
 export interface ActivityLogSectionProps {
   /** The loaded selection, or null when none was loaded. */

@@ -13,9 +13,12 @@
  *
  * What these pins protect, each one a way this screen could quietly do harm:
  *   - mount spends no Azure calls and reads the selection exactly once;
- *   - a failed or missing selection read never turns into a Save;
- *   - a row toggled while a save is in flight stays unsaved, never "saved";
- *   - unticking Defender is a selection edit, never an Azure call;
+ *   - a failed or missing selection read never turns into a write;
+ *   - one control per source chooses it (the chooser); the method sections
+ *     only say what was chosen, so the two can never disagree;
+ *   - an Automated choice writes the selection once, at once; a failed write
+ *     is reported as not saved and retried by the next change;
+ *   - unchoosing Defender is a selection edit, never an Azure call;
  *   - an existing export (legacy's, in another resource group), a broken one
  *     or another export to the same hub disables Deploy and writes nothing;
  *   - Deploy is two clicks: the first writes nothing, the confirm writes once,
@@ -34,6 +37,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   COVERAGE_CATALOG,
+  DEFENDER_EXPORT_ITEM_ID,
+  ONBOARDING_SOURCES,
+  emptyProgress,
+  encodeProgress,
+  withSourceChosen,
+  withSourceMode,
   COVERAGE_SELECTION_KEY,
   COVERAGE_SELECTION_KIND,
   COVERAGE_SELECTION_VERSION,
@@ -58,6 +67,8 @@ import type {
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen, SHELL_GAP_MESSAGE } from "./azure-onboarding-screen";
+import { CHOICE_LABELS } from "./azure-onboarding-state";
+import { CHOICES_LOADING_TEXT } from "./howto/choose-panel";
 
 afterEach(cleanup);
 
@@ -87,6 +98,7 @@ const SECRET_KEY = "SENTINELKEY0123456789abcdef";
 const SECRET = `Endpoint=sb://${NS_NAME}.servicebus.windows.net/;SharedAccessKeyName=SendOnly;SharedAccessKey=${SECRET_KEY}`;
 
 const DEFENDER_TITLE = "Defender for Cloud alert export";
+const ACTIVITY_LOG_TITLE = "Azure Activity Log";
 
 const CONFIG = {
   tenantId: "tenant",
@@ -284,15 +296,35 @@ class HeldSaveStore extends FakeKvDocumentStore {
   }
 }
 
-/** Wait for the selection load to land (the loading line goes away). */
+/** Wait for both documents to land (the loading lines go away). */
 async function loaded(): Promise<void> {
   await waitFor(() => {
     expect(screen.queryByText("Loading the saved selection...")).toBeNull();
+    expect(screen.queryByText(CHOICES_LOADING_TEXT)).toBeNull();
   });
 }
 
 function checkbox(name: string): HTMLInputElement {
   return screen.getByRole("checkbox", { name }) as HTMLInputElement;
+}
+
+/** A source's one choose control, in Choose what to onboard. */
+function chooseBox(title: string): HTMLInputElement {
+  return screen.getByRole("checkbox", { name: `Onboard ${title}` }) as HTMLInputElement;
+}
+
+/** What a method-section row says about its source's choice. */
+function choiceText(id: string): string {
+  return screen.getByTestId(`azo-choice-${id}`).textContent ?? "";
+}
+
+/** Let every queued KV write settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+}
+
+function selectionSaves(store: FakeKvDocumentStore | null): { enabled: string[] }[] {
+  return (store?.saves ?? []).filter((s) => s.key === SELECTION_KEY).map((s) => s.value as { enabled: string[] });
 }
 
 function button(name: string): HTMLButtonElement {
@@ -388,11 +420,13 @@ async function readyToDeploy(): Promise<void> {
 /** As readyToDeploy, with the Event Hub target chosen by `target`. */
 async function readyToDeployFrom(target: () => Promise<void>): Promise<void> {
   await loaded();
-  fireEvent.click(checkbox(DEFENDER_TITLE));
+  fireEvent.click(chooseBox(DEFENDER_TITLE));
   await target();
   await readDefender();
   await chooseGroup();
 }
+
+const ENTRA_TITLE = COVERAGE_CATALOG.find((i) => i.id === "entraId")?.title ?? "";
 
 describe("AzureOnboardingScreen - mount and the saved selection", () => {
   it("mounts reading only the tenant's two documents (and, on a first run, their legacy copies), the tenant to Cribl mapping, and zero Azure calls", async () => {
@@ -417,7 +451,7 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     mount({ store });
     await loaded();
     // The legacy selection is now this tenant's, and shows.
-    await waitFor(() => expect(checkbox(DEFENDER_TITLE).checked).toBe(true));
+    await waitFor(() => expect(chooseBox(DEFENDER_TITLE).checked).toBe(true));
     expect(store.peek(SELECTION_KEY)).toEqual(legacySelection);
     expect(store.peek(COVERAGE_SELECTION_KEY)).toEqual({ kind: "soc-tenant-migrated", tenantId: "tenant" });
   });
@@ -428,21 +462,26 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     });
     mount({ store, config: { ...CONFIG, tenantId: "other-tenant" } as AzureConfig });
     await loaded();
-    expect(checkbox(DEFENDER_TITLE).checked).toBe(false);
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(false);
     expect(store.loads).toContain(tenantDocumentKey(COVERAGE_SELECTION_KEY, "other-tenant"));
     expect(store.loads).not.toContain(SELECTION_KEY);
   });
 
-  it("with no tenant id, the documents are UNKNOWN and nothing can be saved", async () => {
+  it("with no tenant id, the documents are UNKNOWN and nothing can be chosen or saved", async () => {
     const { store } = mount({ config: { ...CONFIG, tenantId: "" } as AzureConfig });
     await loaded();
     // Both documents say why: the selection and the How-to progress.
     expect(screen.getAllByText(/no tenant id/).length).toBeGreaterThanOrEqual(2);
-    expect(button("Save selection").disabled).toBe(true);
+    expect(screen.queryByRole("checkbox", { name: `Onboard ${DEFENDER_TITLE}` })).toBeNull();
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.unknown);
+    await settle();
     expect(store?.loads).toEqual([]);
+    expect(store?.saves).toEqual([]);
   });
 
-  it("a FAILED read keeps Save disabled, and clicking it writes nothing", async () => {
+  // (e) A refused selection load blocks the write: the Automated choice is
+  // unknown, its box cannot be clicked, and no path writes the selection.
+  it("a REFUSED selection load blocks every selection write, from a choice or a mode change", async () => {
     const store = new FakeKvDocumentStore().scriptLoad(SELECTION_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
@@ -451,79 +490,189 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     mount({ store });
     await loaded();
     expect(screen.getByText(/The saved selection could not be read - HTTP 403/)).toBeTruthy();
-    const save = button("Save selection");
-    expect(save.disabled).toBe(true);
-    fireEvent.click(save);
-    // Nothing can be ticked either: the selection was never loaded.
-    expect(checkbox(DEFENDER_TITLE).disabled).toBe(true);
-    await Promise.resolve();
-    expect(store.saves).toEqual([]);
+    const box = chooseBox(DEFENDER_TITLE);
+    expect(box.disabled).toBe(true);
+    expect(box.indeterminate).toBe(true);
+    fireEvent.click(box);
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.unknown);
+    // A round trip through How-to would carry a choice back into the
+    // selection; with the selection unread it must not.
+    fireEvent.click(screen.getByRole("radio", { name: `How-to ${DEFENDER_TITLE}` }));
+    fireEvent.click(screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }));
+    await settle();
+    expect(selectionSaves(store)).toEqual([]);
+    expect(store.saves.every((s) => s.key !== SELECTION_KEY)).toBe(true);
   });
 
-  it("a missing document store is a visible gap with Save disabled", async () => {
+  it("a missing document store is a visible gap and nothing can be chosen", async () => {
     const { azure } = mount({ store: null });
     expect(screen.getByText(SHELL_GAP_MESSAGE)).toBeTruthy();
-    expect(button("Save selection").disabled).toBe(true);
+    expect(screen.queryByRole("checkbox", { name: /^Onboard / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Save selection/ })).toBeNull();
     expect(azure.calls).toEqual([]);
   });
 
-  it("an absent load shows the defaults, writes nothing, and Save stores kind and version once asked", async () => {
+  it("an absent load shows the defaults and writes nothing until a choice changes", async () => {
     const { store } = mount();
     await loaded();
     expect(screen.getByText(/No saved selection was found, so the defaults are shown/)).toBeTruthy();
-    expect(button("Save selection").disabled).toBe(true);
+    await settle();
     expect(store?.saves).toEqual([]);
-
-    fireEvent.click(checkbox(DEFENDER_TITLE));
-    expect(button("Save selection").disabled).toBe(false);
-    fireEvent.click(button("Save selection"));
-    await waitFor(() => expect(store?.saves.length).toBe(1));
-    const saved = store?.saves[0];
-    expect(saved?.key).toBe(SELECTION_KEY);
-    const doc = saved?.value as { kind: string; version: number; enabled: string[] };
-    expect(doc.kind).toBe(COVERAGE_SELECTION_KIND);
-    expect(doc.version).toBe(COVERAGE_SELECTION_VERSION);
-    expect(doc.enabled).toContain("defenderExport");
-    await waitFor(() => expect(button("Save selection").disabled).toBe(true));
   });
 
-  it("a toggle made while a save is in flight stays unsaved, and Save stays enabled for it", async () => {
+  // (c) Choosing an Automated source writes the selection document once, at
+  // once, with the id enabled - no separate Save.
+  it("choosing an Automated source writes the selection document once, immediately, with kind and version", async () => {
+    const { store } = mount();
+    await loaded();
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    await waitFor(() => expect(selectionSaves(store)).toHaveLength(1));
+    await settle();
+    expect(selectionSaves(store)).toHaveLength(1);
+    const saved = store?.saves.find((s) => s.key === SELECTION_KEY)?.value as {
+      kind: string;
+      version: number;
+      enabled: string[];
+    };
+    expect(saved.kind).toBe(COVERAGE_SELECTION_KIND);
+    expect(saved.version).toBe(COVERAGE_SELECTION_VERSION);
+    expect(saved.enabled).toContain("defenderExport");
+    // An Automated choice is the selection's, never the progress document's.
+    expect(store?.saves.filter((s) => s.key === PROGRESS_KEY)).toEqual([]);
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(true);
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.automate);
+    // The first-run banner is gone: the selection is stored now.
+    await waitFor(() => expect(screen.queryByText(/No saved selection was found/)).toBeNull());
+    expect(screen.queryByRole("button", { name: /Save selection/ })).toBeNull();
+  });
+
+  // (d) A failed selection write is reported, exactly like a failed progress
+  // write, and the next successful write clears the report.
+  it("a FAILED selection write is reported as not saved, and the next change retries with everything shown", async () => {
+    const store = new FakeKvDocumentStore();
+    mount({ store });
+    await loaded();
+    store.failSaves(new Error("PUT kvstore: HTTP 500"));
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    await waitFor(() => expect(screen.getByText(/Your choice was not saved - PUT kvstore: HTTP 500/)).toBeTruthy());
+    expect(selectionSaves(store)).toEqual([]);
+    // Nothing says it was saved, and the first run's banner still says nothing is stored.
+    expect(screen.queryByText(/saved\.$/)).toBeNull();
+    expect(screen.getByText(/No saved selection was found/)).toBeTruthy();
+    store.failSaves(null);
+    fireEvent.click(chooseBox(ACTIVITY_LOG_TITLE));
+    await waitFor(() => expect(selectionSaves(store)).toHaveLength(1));
+    // The retry carries everything shown: Defender chosen, the Activity Log unchosen.
+    expect(selectionSaves(store)[0]?.enabled).toContain("defenderExport");
+    expect(selectionSaves(store)[0]?.enabled).not.toContain("activityLog");
+    await waitFor(() => expect(screen.queryByText(/Your choice was not saved/)).toBeNull());
+  });
+
+  it("choices made back to back are written in order, and the last write holds them all", async () => {
     const store = new HeldSaveStore();
     mount({ store });
     await loaded();
-    fireEvent.click(checkbox(DEFENDER_TITLE));
-    fireEvent.click(button("Save selection"));
-    await waitFor(() => expect(button("Saving...").disabled).toBe(true));
-    // The operator unticks while the write of the TICKED selection is pending.
-    fireEvent.click(checkbox(DEFENDER_TITLE));
-    expect(checkbox(DEFENDER_TITLE).checked).toBe(false);
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(true);
     store.release();
-    await waitFor(() => expect(store.saves.length).toBe(1));
-    await waitFor(() => expect(button("Save selection")).toBeTruthy());
-    // The store holds the ticked selection; the screen shows the unticked one.
-    const doc = store.saves[0]?.value as { enabled: string[] };
-    expect(doc.enabled).toContain("defenderExport");
-    expect(checkbox(DEFENDER_TITLE).checked).toBe(false);
-    expect(screen.getByText("Unsaved changes.")).toBeTruthy();
-    expect(screen.queryByText("Selection saved.")).toBeNull();
-    expect(button("Save selection").disabled).toBe(false);
+    await waitFor(() => expect(selectionSaves(store)).toHaveLength(3));
+    expect(selectionSaves(store).map((d) => d.enabled.includes("defenderExport"))).toEqual([true, false, true]);
   });
 
-  it("ticking then unticking Defender makes no Azure call", async () => {
+  it("choosing then unchoosing Defender makes no Azure call", async () => {
     const { azure } = mount();
     await loaded();
-    const box = checkbox(DEFENDER_TITLE);
+    const box = chooseBox(DEFENDER_TITLE);
     expect(box.disabled).toBe(false);
     fireEvent.click(box);
-    expect(checkbox(DEFENDER_TITLE).checked).toBe(true);
-    fireEvent.click(checkbox(DEFENDER_TITLE));
-    expect(checkbox(DEFENDER_TITLE).checked).toBe(false);
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(true);
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    expect(chooseBox(DEFENDER_TITLE).checked).toBe(false);
+    await settle();
     expect(azure.calls).toEqual([]);
   });
 });
 
+describe("AzureOnboardingScreen - one visible choice per source", () => {
+  // (a) Exactly one control per source chooses it: the chooser's box. The
+  // method sections carry no input at all.
+  it("renders exactly one choose control per source, and no input in any method section", async () => {
+    const { view } = mount();
+    await loaded();
+    for (const s of ONBOARDING_SOURCES) {
+      expect({ id: s.id, n: screen.getAllByRole("checkbox", { name: `Onboard ${s.title}` }).length }).toEqual({
+        id: s.id,
+        n: 1,
+      });
+      // No other checkbox anywhere is named after the source.
+      expect({ id: s.id, n: screen.queryAllByRole("checkbox", { name: s.title }).length }).toEqual({ id: s.id, n: 0 });
+    }
+    const rows = view.container.querySelectorAll(".azure-onboarding-row");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.querySelectorAll("input, select, button").length).toBe(0);
+    // The chooser is section 2, straight after the Event Hub.
+    expect(screen.getByRole("heading", { name: /Choose what to onboard/ })).toBeTruthy();
+  });
+
+  // (b) The bug: a saved selection that has a How-to source enabled must not
+  // tick it anywhere when its How-to choice is false.
+  it("a How-to source the saved selection has enabled but the How-to choice does not reads Not chosen in both places", async () => {
+    const store = new FakeKvDocumentStore({
+      [SELECTION_KEY]: {
+        kind: COVERAGE_SELECTION_KIND,
+        version: COVERAGE_SELECTION_VERSION,
+        enabled: ["entraId", "activityLog"],
+      },
+      [PROGRESS_KEY]: JSON.parse(
+        encodeProgress(withSourceChosen(withSourceMode(emptyProgress(), "entraId", "manual"), "entraId", false)),
+      ),
+    });
+    mount({ store });
+    await loaded();
+    expect(chooseBox(ENTRA_TITLE).checked).toBe(false);
+    expect(choiceText("entraId")).toBe(CHOICE_LABELS.notChosen);
+    // An Automated source still follows the selection, in both places.
+    expect(chooseBox(ACTIVITY_LOG_TITLE).checked).toBe(true);
+    expect(choiceText("activityLog")).toBe(CHOICE_LABELS.automate);
+    // Choosing it in How-to mode reads Chosen - How-to, and writes progress only.
+    fireEvent.click(chooseBox(ENTRA_TITLE));
+    expect(choiceText("entraId")).toBe(CHOICE_LABELS.manual);
+    await waitFor(() => expect(store.saves.some((s) => s.key === PROGRESS_KEY)).toBe(true));
+    await settle();
+    expect(selectionSaves(store)).toEqual([]);
+  });
+
+  it("a mode change to How-to leaves the selection's entry for that source unwritten", async () => {
+    const store = new FakeKvDocumentStore({
+      [SELECTION_KEY]: { kind: COVERAGE_SELECTION_KIND, version: COVERAGE_SELECTION_VERSION, enabled: ["defenderExport"] },
+    });
+    mount({ store });
+    await loaded();
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.automate);
+    fireEvent.click(screen.getByRole("radio", { name: `How-to ${DEFENDER_TITLE}` }));
+    // The choice is carried into progress; the selection is left as it is.
+    await waitFor(() => expect(store.saves.some((s) => s.key === PROGRESS_KEY)).toBe(true));
+    await settle();
+    expect(selectionSaves(store)).toEqual([]);
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.manual);
+    // Unchoosing it in How-to mode writes progress, never the selection.
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
+    await settle();
+    expect(selectionSaves(store)).toEqual([]);
+    // Back to Automate carries the How-to choice (not chosen) into the
+    // selection: that source's own mode change, so it is written once.
+    fireEvent.click(screen.getByRole("radio", { name: `Automate ${DEFENDER_TITLE}` }));
+    await waitFor(() => expect(selectionSaves(store)).toHaveLength(1));
+    expect(selectionSaves(store)[0]?.enabled).not.toContain("defenderExport");
+    expect(choiceText(DEFENDER_EXPORT_ITEM_ID)).toBe(CHOICE_LABELS.notChosen);
+  });
+});
+
 describe("AzureOnboardingScreen - the catalog layout", () => {
-  it("renders every catalog row, every unsupported source and the XDR row, with the unbuilt ones disabled", async () => {
+  it("renders every catalog row, every unsupported source and the XDR row, each with its status", async () => {
     const { view } = mount();
     await loaded();
     const rows = view.container.querySelectorAll(".azure-onboarding-row");
@@ -531,22 +680,21 @@ describe("AzureOnboardingScreen - the catalog layout", () => {
     expect(screen.getByText(/BehaviorEntities/)).toBeTruthy();
     expect(screen.getByText(/BehaviorInfo/)).toBeTruthy();
     for (const item of COVERAGE_CATALOG) {
-      const box = checkbox(item.title);
-      expect({ id: item.id, disabled: box.disabled }).toEqual({
+      // Every catalog item is an onboarding source, so every row has a choice.
+      expect({ id: item.id, label: [...Object.values(CHOICE_LABELS)].includes(choiceText(item.id) as never) }).toEqual({
+        id: item.id,
+        label: true,
+      });
+    }
+    // Only the two deployable sources can be Automated; the rest are locked.
+    for (const item of COVERAGE_CATALOG) {
+      const automate = screen.getByRole("radio", { name: `Automate ${item.title}` }) as HTMLInputElement;
+      expect({ id: item.id, disabled: automate.disabled }).toEqual({
         id: item.id,
         // AZR-98 deliberately made the Activity Log deployable beside Defender.
         disabled: item.id !== "defenderExport" && item.id !== "activityLog",
       });
     }
-    // Spelled out, so a catalog edit cannot quietly drop the two named here.
-    const entra = COVERAGE_CATALOG.find((i) => i.id === "entraId");
-    const policy = COVERAGE_CATALOG.filter(
-      (i) => (i.method === "built-in-policy" || i.method === "custom-initiative") && i.id !== "activityLog",
-    );
-    expect(entra).toBeDefined();
-    expect(policy.length).toBeGreaterThan(0);
-    expect(checkbox(entra?.title ?? "").disabled).toBe(true);
-    for (const item of policy) expect(checkbox(item.title).disabled).toBe(true);
   });
 });
 
@@ -555,7 +703,7 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     const azure = new RoutingAzure({ rules: [{ name: "ListenOnly", rights: ["Listen"] }] });
     mount({ azure });
     await loaded();
-    fireEvent.click(checkbox(DEFENDER_TITLE));
+    fireEvent.click(chooseBox(DEFENDER_TITLE));
     await chooseTarget();
     // No rule is offered: the picker has nothing to open and shows its prompt.
     expect(picker("Authorization rule").disabled).toBe(true);
@@ -741,10 +889,10 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     {
       input: "the Defender tick",
       change: async () => {
-        fireEvent.click(checkbox(DEFENDER_TITLE));
+        fireEvent.click(chooseBox(DEFENDER_TITLE));
       },
       revert: async () => {
-        fireEvent.click(checkbox(DEFENDER_TITLE));
+        fireEvent.click(chooseBox(DEFENDER_TITLE));
       },
     },
     {
@@ -911,7 +1059,7 @@ function permissionRow(action: string): HTMLElement {
 }
 
 describe("AzureOnboardingScreen - permissions to automate the Defender export (AZR-60)", () => {
-  it("denied: an error banner names the action, the role and the How-to section; Deploy stays clickable with a caution, and writes only after the confirm", async () => {
+  it("denied: an error banner names the action, the role and the chooser section; Deploy stays clickable with a caution, and writes only after the confirm", async () => {
     const { azure, store } = mount({
       capabilities: audit({ plans: "granted", read: "denied", write: "granted" }),
       capabilityContext: CONNECTED,
@@ -927,7 +1075,7 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     const b = banner();
     expect(b?.getAttribute("data-kind")).toBe("denied");
     expect(b?.textContent).toContain("your Azure identity cannot list the subscription's continuous exports");
-    expect(b?.textContent).toContain("section 8");
+    expect(b?.textContent).toContain("section 2");
     expect(b?.textContent).toContain("Security Reader");
     expect(b?.textContent).toContain("Microsoft.Security/automations/read");
     expect(b?.querySelector(".info-tip")).not.toBeNull();
@@ -1026,7 +1174,7 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     expect(button("Deploy alert export").getAttribute("aria-describedby")).toBeNull();
   });
 
-  it("the How-to button focuses the Defender row in the How-to section, and makes no Azure call", async () => {
+  it("the How-to button focuses the Defender How-to switch in Choose what to onboard (section 2), and makes no Azure call", async () => {
     const { azure } = mount({ capabilities: audit({ read: "denied" }), capabilityContext: CONNECTED });
     await loaded();
     await waitFor(() => {
@@ -1039,7 +1187,7 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     const focused = document.activeElement as HTMLInputElement | null;
     expect(focused?.getAttribute("aria-label")).toBe("How-to Defender for Cloud alert export");
     expect(focused?.type).toBe("radio");
-    expect(banner()?.textContent).toContain("switch Defender for Cloud alert export to How-to in section 8");
+    expect(banner()?.textContent).toContain("switch Defender for Cloud alert export to How-to in section 2");
     expect(azure.calls).toEqual([]);
   });
 

@@ -1,8 +1,8 @@
 /**
  * DefenderExportSection - the Defender for Cloud alert export (AZR-3, on the
  * AZR-18 Azure Native Source Onboarding screen). Rendered inside the
- * "Direct configuration" section, under the catalog row whose checkbox the
- * screen binds to the saved selection.
+ * "Direct configuration" section, under the catalog row (status only: the
+ * source is chosen in the chooser, which writes the saved selection).
  *
  * WHAT IT READS. "Read Defender state" makes the readDefenderState usecase's
  * reads (pricings, and the SUBSCRIPTION-WIDE automations list) and renders:
@@ -40,7 +40,7 @@
  * button honest. The outcome is shown in Azure's words with the delivery
  * caveat. The connection string never reaches this component.
  *
- * WHAT IT DOES NOT DO. Untick makes no Azure call (the checkbox only edits the
+ * WHAT IT DOES NOT DO. Unchoosing makes no Azure call (the chooser only edits the
  * selection). Remove and the extra Defender sources (recommendations, secure
  * score, regulatory compliance) are visible and disabled. The automation goes
  * into an EXISTING resource group the operator picks; nothing creates one.
@@ -104,7 +104,7 @@ export const PERMISSIONS_LIST_TIP =
   "export's resource group is invisible to it, and Azure answers at deploy.";
 
 const REMOVE_NOT_AVAILABLE =
-  "Removing the export from here is not available yet. Unticking it does not remove it from Azure.";
+  "Removing the export from here is not available yet. Unchoosing it does not remove it from Azure.";
 
 export interface DefenderExportSectionProps {
   /** The loaded selection, or null when none was loaded. */

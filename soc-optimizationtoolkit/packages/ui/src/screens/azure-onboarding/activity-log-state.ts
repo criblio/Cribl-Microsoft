@@ -82,7 +82,7 @@ export function oursForTarget(
 
 /**
  * Why Deploy is disabled, or null when it may run. ONE reason, in this fixed
- * priority: running; no subscription; selection not loaded; not ticked; ours
+ * priority: running; no subscription; selection not loaded; not chosen; ours
  * exists and matches; ours differs; another setting feeds the namespace; the
  * subscription is full; state not read or unreadable; no namespace; no rule;
  * the rule cannot Manage.
@@ -94,10 +94,10 @@ export function activityLogDeployDisabledReason(gate: ActivityLogDeployGate): st
   if (gate.running) return "A deploy is already running.";
   if (gate.subscriptionId === "") return "No Azure subscription is configured for this connection.";
   if (gate.selection === null) {
-    return "The saved selection has not loaded, so whether the Activity Log is ticked is not known.";
+    return "The saved selection has not loaded, so whether the Activity Log is chosen is not known.";
   }
   if (!selectedItemIds(gate.selection).includes(ACTIVITY_LOG_ITEM_ID)) {
-    return "Tick the Azure Activity Log to deploy it.";
+    return "Choose the Azure Activity Log under Choose what to onboard to deploy it.";
   }
   const state = gate.state;
   if (state !== null && state.settings.kind === "listed") {

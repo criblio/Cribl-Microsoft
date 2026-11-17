@@ -43,6 +43,7 @@ import {
   progressBlockedReason,
   progressLoadStateFrom,
   progressSummary,
+  rowChoices,
   setChosen,
   setMode,
   stepDialogView,
@@ -208,14 +209,14 @@ describe("chooser rows (D2)", () => {
     expect(p.selection).toBeNull();
   });
 
-  it("setMode How-to -> Automated carries a How-to choice back into a staged selection", () => {
+  it("setMode How-to -> Automated carries a How-to choice back into the selection to write", () => {
     const manualChosen = withSourceChosen(withSourceMode(emptyProgress(), "defenderExport", "manual"), "defenderExport", true);
     const s = ready(manualChosen);
     const change = setMode(s, SELECTION, "defenderExport", "automate")!;
     expect(change.progress.sources.defenderExport?.mode).toBe("automate");
     expect(change.selection?.enabled).toEqual(["defenderExport"]);
     expect(change.notice).toBeNull();
-    // The staged selection keeps the row chosen once the screen stages it.
+    // The selection keeps the row chosen once the screen writes it.
     const row = chooserRows(change.progress, change.selection).find((r) => r.id === "defenderExport")!;
     expect(row.chosen).toBe(true);
     // An unchosen How-to source stays unchosen.
@@ -427,5 +428,36 @@ describe("visible copy carries no history", () => {
     expect(entries.length).toBeGreaterThan(50);
     const violations = findHistoryInCopy(entries);
     expect(violations, describeViolations(violations)).toEqual([]);
+  });
+});
+
+describe("rowChoices - the method sections read the chooser's answer, never the selection", () => {
+  it("a How-to source the saved selection has enabled is not chosen unless progress says so", () => {
+    const withEntra: CoverageSelection = { ...SELECTION, enabled: ["entraId", "activityLog"] };
+    const notChosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "entraId", "manual"), "entraId", false));
+    const choices = rowChoices(notChosen, withEntra, false);
+    expect(choices.get("entraId")).toEqual({ kind: "not-chosen" });
+    // The Automated source follows the selection.
+    expect(choices.get("activityLog")).toEqual({ kind: "chosen", mode: "automate" });
+    const chosen = ready(withSourceChosen(withSourceMode(emptyProgress(), "entraId", "manual"), "entraId", true));
+    expect(rowChoices(chosen, { ...SELECTION, enabled: [] }, false).get("entraId")).toEqual({
+      kind: "chosen",
+      mode: "manual",
+    });
+  });
+
+  it("an unread document makes the choice unknown, never not chosen", () => {
+    const loading = rowChoices({ status: "loading" }, SELECTION, false);
+    expect(loading.get("entraId")).toEqual({ kind: "unknown", pending: true });
+    const failed = rowChoices(progressLoadStateFrom({ kind: "unknown", reason: "HTTP 403" }), SELECTION, false);
+    expect(failed.get("defenderExport")).toEqual({ kind: "unknown", pending: false });
+    // Progress loaded but the selection did not: only Automated sources are unknown.
+    const noSel = rowChoices(ready(emptyProgress()), null, true);
+    expect(noSel.get("defenderExport")).toEqual({ kind: "unknown", pending: true });
+    expect(noSel.get("entraId")).toEqual({ kind: "not-chosen" });
+    expect(rowChoices(ready(emptyProgress()), null, false).get("defenderExport")).toEqual({
+      kind: "unknown",
+      pending: false,
+    });
   });
 });

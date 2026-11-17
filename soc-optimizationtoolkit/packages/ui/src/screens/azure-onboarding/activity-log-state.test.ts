@@ -62,7 +62,7 @@ describe("activityLogDeployDisabledReason", () => {
     expect(activityLogDeployDisabledReason({ ...READY, subscriptionId: "" })).toMatch(/No Azure subscription/);
     expect(activityLogDeployDisabledReason({ ...READY, selection: null })).toMatch(/has not loaded/);
     expect(activityLogDeployDisabledReason({ ...READY, selection: { ...TICKED, enabled: [] } })).toBe(
-      "Tick the Azure Activity Log to deploy it.",
+      "Choose the Azure Activity Log under Choose what to onboard to deploy it.",
     );
     expect(activityLogDeployDisabledReason({ ...READY, state: null })).toBe(
       "Read the subscription's diagnostic settings first.",

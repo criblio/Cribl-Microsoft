@@ -8,7 +8,7 @@
  *     read of the PROGRESS document (`azure-onboarding-progress`, ADR 0007 D1)
  *     means, and when a tick, a mode change or a choice may be written. It
  *     mirrors the AZR-18 selection gate (azure-onboarding-state.ts
- *     loadStateFrom/canSave): only an `absent` load or a readable document of
+ *     loadStateFrom/canWriteSelection): only an `absent` load or a readable document of
  *     ours may be overwritten, so a FAILED read is never treated as a first run
  *     (claude-kit standards/cribl-kv-store.md). Every transition below returns
  *     null while writes are blocked, so the panel cannot write by mistake.
@@ -75,6 +75,7 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { withItem } from "../azure-onboarding-state";
+import type { RowChoice } from "../azure-onboarding-state";
 
 // ---------------------------------------------------------------------------
 // Load gate
@@ -261,6 +262,36 @@ export function chosenSourceIds(
   selection: CoverageSelection | null,
 ): OnboardingSourceId[] {
   return ONBOARDING_SOURCES.map((s) => s.id).filter((id) => isChosen(progress, selection, id));
+}
+
+/**
+ * The chooser's answer for every onboarding source, as the method sections
+ * show it (ADR 0007 section 2, amended 2026-11-17: one visible choice per
+ * source). Derived from {@link isChosen} and {@link effectiveMode} only, so a
+ * saved selection entry for a How-to source can never tick a method-section
+ * row. UNKNOWN, never "not chosen", when the progress document is not loaded
+ * (pending while it loads) or an Automated source's selection is not.
+ */
+export function rowChoices(
+  load: ProgressLoadState,
+  selection: CoverageSelection | null,
+  selectionPending: boolean,
+): ReadonlyMap<OnboardingSourceId, RowChoice> {
+  const progress = loadedProgress(load);
+  const out = new Map<OnboardingSourceId, RowChoice>();
+  for (const { id } of ONBOARDING_SOURCES) {
+    if (progress === null) {
+      out.set(id, { kind: "unknown", pending: load.status === "loading" });
+      continue;
+    }
+    const mode = effectiveMode(progress, id);
+    if (mode === "automate" && selection === null) {
+      out.set(id, { kind: "unknown", pending: selectionPending });
+      continue;
+    }
+    out.set(id, isChosen(progress, selection, id) ? { kind: "chosen", mode } : { kind: "not-chosen" });
+  }
+  return out;
 }
 
 /** The chosen How-to sources only: the ones whose steps the panel lists. */
@@ -578,8 +609,11 @@ export function toggleTick(
 /**
  * What a mode change produces. `progress` is written at once (D3).
  * `selection`, when not null, is the AZR-18 selection with the source's
- * choice carried over, for the screen to STAGE behind its explicit Save
- * (ADR 0005) - the same way setChosen hands back a selection. `notice` is
+ * choice carried over, which the screen also writes at once when it differs
+ * from the one shown (ADR 0007 section 2, amended 2026-11-17) - the same way
+ * setChosen hands back a selection. A move to How-to returns no selection:
+ * the source's saved entry is left as it is, ignored on screen, and is
+ * rewritten only by that source's own next choice or mode change. `notice` is
  * visible text when the choice could not be carried over.
  */
 export interface ModeChange {
@@ -596,8 +630,9 @@ export const MODE_CHOICE_NOT_CARRIED =
  * Change a source's mode. Null when writes are blocked, or when `automate` is
  * asked of a source the app cannot deploy (refused, not silently coerced).
  * The row's chosen state is carried across in BOTH directions: to How-to it
- * goes into the progress document; to Automated it comes back as a staged
- * selection (withItem), so a chosen How-to source does not silently drop out.
+ * goes into the progress document; to Automated it comes back as a selection
+ * for the screen to write (withItem), so a chosen How-to source does not
+ * silently drop out.
  */
 export function setMode(
   state: ProgressLoadState,
@@ -627,8 +662,9 @@ export type ChooseResult =
 
 /**
  * Choose or unchoose a source. A How-to source is written to the progress
- * document; an Automated source is the AZR-18 selection's tick, returned for
- * the screen's explicit Save and never written to progress.
+ * document; an Automated source is the AZR-18 selection's entry, returned for
+ * the screen to write to the selection document at once, and never written to
+ * progress.
  */
 export function setChosen(
   state: ProgressLoadState,

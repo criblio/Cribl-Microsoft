@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * Pins for the How-to components (AZR-31): the chooser with its Automate |
- * How-to toggle, the plan values form, the step list with its done ticks, and
- * the step dialog. The decisions are pinned in howto-state.test.ts; these pin
+ * How-to toggle (ChoosePanel, its own section on the screen), the plan values
+ * form, the step list with its done ticks, and the step dialog (HowToPanel). The decisions are pinned in howto-state.test.ts; these pin
  * that the components show them and report clicks as intents.
  */
 
@@ -30,8 +30,10 @@ import {
   toggleTick,
 } from "./howto-state";
 import type { ProgressLoadState } from "./howto-state";
-import { HowToPanel } from "./howto-panel";
+import { HowToPanel, PROGRESS_UNAVAILABLE_TEXT } from "./howto-panel";
 import type { HowToPanelProps } from "./howto-panel";
+import { ChoosePanel } from "./choose-panel";
+import type { ChoosePanelProps } from "./choose-panel";
 import { CREDENTIAL_REFUSED_NOTE, UNAPPLIED_NOTE } from "./plan-values-form";
 import { SELECTION_UNKNOWN_NOTE } from "./source-chooser";
 import { COPY_DONE, COPY_UNAVAILABLE } from "./step-dialog";
@@ -67,12 +69,22 @@ function renderPanel(overrides: Partial<HowToPanelProps> = {}) {
     load: ready(manualEntra()),
     selection: SELECTION,
     onToggleTick: vi.fn(),
-    onSetMode: vi.fn(),
-    onSetChosen: vi.fn(),
     onApplyPlanValues: vi.fn(),
     ...overrides,
   };
   const view = render(<HowToPanel {...props} />);
+  return { ...view, props };
+}
+
+function renderChooser(overrides: Partial<ChoosePanelProps> = {}) {
+  const props: ChoosePanelProps = {
+    load: ready(manualEntra()),
+    selection: SELECTION,
+    onSetMode: vi.fn(),
+    onSetChosen: vi.fn(),
+    ...overrides,
+  };
+  const view = render(<ChoosePanel {...props} />);
   return { ...view, props };
 }
 
@@ -118,15 +130,19 @@ describe("done checkbox", () => {
     expect(props.onToggleTick).not.toHaveBeenCalled();
   });
 
-  it("a failed progress load shows the banner and offers no enabled control", () => {
-    const { container } = renderPanel({
-      load: progressLoadStateFrom({ kind: "unknown", reason: "HTTP 403" }),
-    });
+  it("a failed progress load shows the banner in the chooser and offers no control anywhere", () => {
+    const failed = progressLoadStateFrom({ kind: "unknown", reason: "HTTP 403" });
+    const chooser = renderChooser({ load: failed });
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("HTTP 403");
     expect(alert.textContent).toContain("turned off");
-    // No chooser or steps drawn from an empty progress that would claim
-    // "nothing chosen" about a document that may exist.
+    // No chooser drawn from an empty progress that would claim "nothing
+    // chosen" about a document that may exist.
+    expect(chooser.container.querySelectorAll("input").length).toBe(0);
+    cleanup();
+    // The steps say they cannot be shown, and point at the chooser.
+    const { container } = renderPanel({ load: failed });
+    expect(container.textContent).toContain(PROGRESS_UNAVAILABLE_TEXT);
     expect(container.querySelectorAll("input").length).toBe(0);
     expect(container.querySelector(".azo-step-row")).toBeNull();
   });
@@ -198,7 +214,7 @@ describe("step dialog", () => {
 
 describe("chooser and mode toggle", () => {
   it("a locked toggle is disabled and its reason is visible text", () => {
-    const { container } = renderPanel();
+    const { container } = renderChooser();
     const entra = sourceRow(container, "entraId");
     const automate = within(entra).getByRole("radio", { name: /Automate/ }) as HTMLInputElement;
     expect(automate.disabled).toBe(true);
@@ -210,7 +226,7 @@ describe("chooser and mode toggle", () => {
   });
 
   it("reports choose and mode clicks as intents", () => {
-    const { container, props } = renderPanel();
+    const { container, props } = renderChooser();
     fireEvent.click(within(sourceRow(container, "entraId")).getByRole("checkbox"));
     expect(props.onSetChosen).toHaveBeenCalledWith("entraId", false);
     fireEvent.click(within(sourceRow(container, "defenderExport")).getByRole("radio", { name: /How-to/ }));
@@ -218,7 +234,7 @@ describe("chooser and mode toggle", () => {
   });
 
   it("an unread selection makes an Automated row's choice unknown, not unchecked", () => {
-    const { container, props } = renderPanel({ selection: null });
+    const { container, props } = renderChooser({ selection: null });
     const defender = sourceRow(container, "defenderExport");
     expect(defender.dataset.mode).toBe("automate");
     const box = within(defender).getByRole("checkbox") as HTMLInputElement;
@@ -238,7 +254,7 @@ describe("chooser and mode toggle", () => {
   });
 
   it("a loaded selection shows no unknown note", () => {
-    const { container } = renderPanel();
+    const { container } = renderChooser();
     const defender = sourceRow(container, "defenderExport");
     expect((within(defender).getByRole("checkbox") as HTMLInputElement).indeterminate).toBe(false);
     expect(defender.textContent).not.toContain(SELECTION_UNKNOWN_NOTE);
@@ -246,14 +262,27 @@ describe("chooser and mode toggle", () => {
 });
 
 describe("write-blocked panel", () => {
-  it("disables every chooser and plan control and reports no click", () => {
-    const { container, props } = renderPanel({
-      writesBlockedReason: "Saving your progress.",
-      pickedValues: { namespace: "picked-ns", hubName: "picked-hub" },
-    });
+  it("disables every chooser control and reports no click", () => {
+    const { container, props } = renderChooser({ writesBlockedReason: "Saving your progress." });
     const chooserInputs = container.querySelectorAll<HTMLInputElement>(".azo-howto-chooser input");
     expect(chooserInputs.length).toBe(chooserRows(manualEntra(), SELECTION).length * 3);
     for (const i of chooserInputs) expect(i.disabled).toBe(true);
+    expect(screen.getByText("Saving your progress.")).toBeTruthy();
+    fireEvent.click(within(sourceRow(container, "entraId")).getByRole("checkbox"));
+    fireEvent.click(within(sourceRow(container, "defenderExport")).getByRole("checkbox"));
+    fireEvent.click(within(sourceRow(container, "defenderExport")).getByRole("radio", { name: /How-to/ }));
+    fireEvent.click(within(sourceRow(container, "entraId")).getByRole("radio", { name: /How-to/ }));
+    expect(props.onSetChosen).not.toHaveBeenCalled();
+    expect(props.onSetMode).not.toHaveBeenCalled();
+  });
+
+  it("disables every plan control", () => {
+    const { container } = renderPanel({
+      writesBlockedReason: "Saving your progress.",
+      pickedValues: { namespace: "picked-ns", hubName: "picked-hub" },
+    });
+    // The chooser is not part of the How-to panel any more.
+    expect(container.querySelector(".azo-howto-chooser")).toBeNull();
     const planInputs = container.querySelectorAll<HTMLInputElement>(".azo-plan-form input");
     expect(planInputs.length).toBe(PLAN_VALUE_KEYS.length);
     for (const i of planInputs) expect(i.disabled).toBe(true);
@@ -261,12 +290,6 @@ describe("write-blocked panel", () => {
     expect(
       (screen.getByRole("button", { name: "Use the Event Hub picked above" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.click(within(sourceRow(container, "entraId")).getByRole("checkbox"));
-    fireEvent.click(within(sourceRow(container, "defenderExport")).getByRole("checkbox"));
-    fireEvent.click(within(sourceRow(container, "defenderExport")).getByRole("radio", { name: /How-to/ }));
-    fireEvent.click(within(sourceRow(container, "entraId")).getByRole("radio", { name: /How-to/ }));
-    expect(props.onSetChosen).not.toHaveBeenCalled();
-    expect(props.onSetMode).not.toHaveBeenCalled();
   });
 });
 
@@ -325,9 +348,11 @@ describe("plan values form", () => {
 
 describe("info affordances", () => {
   it("every chooser row, plan field and step row carries one (i)", () => {
-    const { container } = renderPanel();
-    const chooser = container.querySelector(".azo-howto-chooser")!;
+    const chooserView = renderChooser();
+    const chooser = chooserView.container.querySelector(".azo-howto-chooser")!;
     expect(chooser.querySelectorAll(".info-tip").length).toBe(chooserRows(manualEntra(), SELECTION).length);
+    cleanup();
+    const { container } = renderPanel();
     const form = container.querySelector(".azo-plan-form")!;
     expect(form.querySelectorAll(".info-tip").length).toBe(PLAN_VALUE_KEYS.length);
     const steps = container.querySelector("ol.azo-step-list")!;
@@ -355,9 +380,12 @@ describe("visible copy", () => {
   it("carries no project history, the panel and every step dialog", () => {
     const ticked = toggleTick(ready(manualEntra()), "eh-namespace", true)!;
     const stale = withPlanValues(ticked, { ...ticked.planValues, namespace: "ns2" });
-    const { container } = renderPanel({ load: ready(stale) });
     const entries: CopyEntry[] = [];
     const mask = (t: string) => t.replace(API_VERSION_COPY_ALLOWANCE, `$1${API_VERSION_MASK}`);
+    const chooser = renderChooser({ load: ready(stale) });
+    entries.push({ where: "chooser", text: mask(chooser.container.textContent ?? "") });
+    cleanup();
+    const { container } = renderPanel({ load: ready(stale) });
     entries.push({ where: "panel", text: mask(container.textContent ?? "") });
     const ids = Array.from(container.querySelectorAll<HTMLElement>(".azo-step-row")).map((r) => r.dataset.step!);
     expect(ids.length).toBeGreaterThan(0);

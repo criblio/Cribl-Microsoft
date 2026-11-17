@@ -161,11 +161,14 @@ async function readSettings(): Promise<void> {
 }
 
 describe("Activity Log section - before anything is read", () => {
-  it("mounts with no Azure call, the Activity Log ticked by default, and Deploy disabled with its reason in text", async () => {
+  it("mounts with no Azure call, the Activity Log chosen by default, and Deploy disabled with its reason in text", async () => {
     const azure = mount();
     await loaded();
     expect(azure.calls).toEqual([]);
-    expect((screen.getByRole("checkbox", { name: "Azure Activity Log" }) as HTMLInputElement).checked).toBe(true);
+    await waitFor(() =>
+      expect((screen.getByRole("checkbox", { name: "Onboard Azure Activity Log" }) as HTMLInputElement).checked).toBe(true),
+    );
+    expect(screen.getByTestId("azo-choice-activityLog").textContent).toBe("Chosen - Automate");
     expect(deployButton().disabled).toBe(true);
     expect(within(block()).getByText("Read the subscription's diagnostic settings first.")).toBeTruthy();
     // The Sentinel note is the one the Lake route uses, word for word.

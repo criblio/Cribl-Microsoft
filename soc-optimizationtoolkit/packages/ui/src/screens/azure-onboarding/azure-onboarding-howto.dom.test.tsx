@@ -8,8 +8,8 @@
  *   - mount reads exactly the selection and the progress document, and spends
  *     no Azure or Cribl call - not even a worker-group listing;
  *   - a tick writes the PROGRESS document only, never the selection;
- *   - a failed progress read blocks every progress write, while the AZR-18
- *     selection's Save keeps working;
+ *   - a failed progress read blocks every write, choices included, because
+ *     the mode a choice depends on lives in progress;
  *   - a source in How-to mode hides the Defender deploy controls;
  *   - Validate sends only GETs, and only through the paced wrapper;
  *   - without a pacing, Validate cannot run at all;
@@ -49,6 +49,7 @@ import type {
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen, DEFENDER_HOWTO_NOTE } from "./azure-onboarding-screen";
+import { CHOICE_LABELS } from "./azure-onboarding-state";
 import { MODE_CHOICE_NOT_CARRIED } from "./howto/howto-state";
 
 /** The four sections the screen adds after the catalog sections. */
@@ -318,7 +319,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
     expect(Object.keys(doc.ticks).length).toBe(1);
   });
 
-  it("a FAILED progress read blocks every progress write, and the selection's Save still works", async () => {
+  it("a FAILED progress read blocks every write, because a choice needs the mode progress holds", async () => {
     const store = new FakeKvDocumentStore().scriptLoad(PROGRESS_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
@@ -330,11 +331,13 @@ describe("AzureOnboardingScreen - progress writes", () => {
     // No chooser or step can be ticked: none is drawn for a document that may exist.
     expect(screen.queryAllByRole("checkbox", { name: /^Onboard / })).toEqual([]);
     expect(screen.queryAllByRole("checkbox", { name: /^Done: / })).toEqual([]);
-    // The AZR-18 selection is untouched by the progress failure.
-    fireEvent.click(screen.getByRole("checkbox", { name: DEFENDER_TITLE }));
-    fireEvent.click(button("Save selection"));
-    await waitFor(() => expect(store.saves.map((s) => s.key)).toEqual([SELECTION_KEY]));
-    expect(progressSaves(store)).toEqual([]);
+    // The method sections have no control of their own, and say the choice is
+    // not known rather than "Not chosen".
+    expect(screen.queryAllByRole("checkbox", { name: DEFENDER_TITLE })).toEqual([]);
+    expect(screen.getByTestId("azo-choice-defenderExport").textContent).toBe(CHOICE_LABELS.unknown);
+    expect(screen.getByTestId("azo-choice-entraId").textContent).toBe(CHOICE_LABELS.unknown);
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    expect(store.saves).toEqual([]);
   });
 
   it("the 'choice not carried over' notice outlives the progress save that its mode change queued", async () => {

@@ -12,6 +12,7 @@ import {
   FakeKvDocumentStore,
   AUTOMATION_PERMISSIONS,
   ITEM_AVAILABILITY,
+  ONBOARDING_SOURCES,
   automationPermissionView,
   COVERAGE_SELECTION_KEY,
   COVERAGE_SELECTION_VERSION,
@@ -34,6 +35,7 @@ import type {
   EventHubTargetRead,
   EventHubTargetRule,
   NamespaceRef,
+  SourceMode,
   ValidationResult,
 } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
@@ -49,7 +51,10 @@ import {
   UNCONFIRMED_ABSENT_NOTE,
   ZERO_PLANS_DEPLOY_ALLOWED,
   buildSections,
-  canSave,
+  canWriteSelection,
+  CHOICE_LABELS,
+  NOT_AVAILABLE_LABEL,
+  STATE_LABELS,
   criblSideReadingOf,
   defenderDeployDisabledReason,
   defenderStateNote,
@@ -67,7 +72,7 @@ import {
   sendableRules,
   withItem,
 } from "./azure-onboarding-state";
-import type { DefenderDeployGate, OnboardingLoadState, OnboardingRowView } from "./azure-onboarding-state";
+import type { DefenderDeployGate, OnboardingLoadState, OnboardingRowView, RowChoice } from "./azure-onboarding-state";
 
 const KEY = COVERAGE_SELECTION_KEY;
 
@@ -75,10 +80,8 @@ async function loadVia(store: FakeKvDocumentStore): Promise<OnboardingLoadState>
   return loadStateFrom(await store.load(KEY));
 }
 
-const EDITED = { dirty: true, saving: false } as const;
-
-describe("loadStateFrom and canSave - a failed read is not a first run", () => {
-  it("blocks Save on read-unknown, doc-foreign and doc-unreadable even when dirty", async () => {
+describe("loadStateFrom and canWriteSelection - a failed read is not a first run", () => {
+  it("blocks every write on read-unknown, doc-foreign and doc-unreadable", async () => {
     const unknown = await loadVia(
       new FakeKvDocumentStore().scriptLoad(KEY, { kind: "unknown", reason: "HTTP 403", status: 403 }),
     );
@@ -91,36 +94,32 @@ describe("loadStateFrom and canSave - a failed read is not a first run", () => {
     expect(foreign.status).toBe("doc-foreign");
     expect(unreadable.status).toBe("doc-unreadable");
     for (const load of [unknown, foreign, unreadable]) {
-      expect(canSave(load, EDITED), load.status).toBe(false);
+      expect(canWriteSelection(load), load.status).toBe(false);
       expect(loadedSelection(load), load.status).toBeNull();
     }
+    expect(canWriteSelection({ status: "loading" })).toBe(false);
   });
 
-  it("an absent load shows the defaults with a banner and is not saved automatically", async () => {
+  it("an absent load shows the defaults with a banner, and a choice may write", async () => {
     const load = await loadVia(new FakeKvDocumentStore());
 
     expect(load.status).toBe("absent");
     expect(loadedSelection(load)).toEqual(defaultSelection());
-    // Not dirty on arrival: Save stays off until the operator changes something.
-    expect(canSave(load, { dirty: false, saving: false })).toBe(false);
-    expect(canSave(load, EDITED)).toBe(true);
+    expect(canWriteSelection(load)).toBe(true);
     const banners = loadBanners(load);
     expect(banners).toHaveLength(1);
     expect(banners[0].text).toMatch(/defaults/);
-    expect(banners[0].text).toMatch(/Nothing is saved until you choose Save/);
+    expect(banners[0].text).toMatch(/Nothing is saved until you change a choice/);
   });
 
-  it("a readable document of ours is ready, keeps its selection, and saves only when dirty and idle", async () => {
+  it("a readable document of ours is ready, keeps its selection, and may be replaced", async () => {
     const mine: CoverageSelection = { ...defaultSelection(), enabled: ["defenderExport"] };
     const load = await loadVia(new FakeKvDocumentStore({ [KEY]: JSON.parse(encodeSelection(mine)) }));
 
     expect(load.status).toBe("ready");
     expect(loadedSelection(load)?.enabled).toEqual(["defenderExport"]);
     expect(loadBanners(load)).toEqual([]);
-    expect(canSave(load, EDITED)).toBe(true);
-    expect(canSave(load, { dirty: false, saving: false })).toBe(false);
-    expect(canSave(load, { dirty: true, saving: true })).toBe(false);
-    expect(canSave({ status: "loading" }, EDITED)).toBe(false);
+    expect(canWriteSelection(load)).toBe(true);
   });
 
   it("names every blocked state in a banner, and reports dropped ids", () => {
@@ -132,7 +131,7 @@ describe("loadStateFrom and canSave - a failed read is not a first run", () => {
       { status: "doc-foreign", kind: "x" },
       { status: "doc-unreadable", version: 0 },
     ] as const) {
-      expect(loadBanners(load)[0].text, load.status).toMatch(/Saving is turned off/);
+      expect(loadBanners(load)[0].text, load.status).toMatch(/is turned off/);
     }
 
     const withDropped = loadStateFrom({
@@ -146,14 +145,19 @@ describe("loadStateFrom and canSave - a failed read is not a first run", () => {
 });
 
 describe("withItem", () => {
-  it("ticks a built item, unticks any item, and refuses to tick a not-built one", () => {
+  it("chooses a built item, unchooses any item, and refuses to choose a not-built one", () => {
     const base: CoverageSelection = { ...defaultSelection(), enabled: ["entraId"] };
 
     expect(withItem(base, "defenderExport", true).enabled).toEqual(["entraId", "defenderExport"]);
     expect(withItem(base, "entraId", false).enabled).toEqual([]);
     expect(withItem(base, "communityPolicyInitiative", true)).toBe(base);
-    // AZR-98: the Activity Log is built now, so it ticks.
+    // AZR-98: the Activity Log is built now, so it can be chosen.
     expect(withItem(base, "activityLog", true).enabled).toEqual(["entraId", "activityLog"]);
+  });
+
+  it("keeps the sub-selections as they are", () => {
+    const base = defaultSelection();
+    expect(withItem(base, "defenderExport", true).subSelections).toBe(base.subSelections);
   });
 });
 
@@ -164,16 +168,26 @@ function itemRow(sections: ReturnType<typeof buildSections>, id: string): Extrac
   throw new Error(`no row ${id}`);
 }
 
-describe("buildSections - an unread state is never a confident negative", () => {
-  const ticked: CoverageSelection = { ...defaultSelection(), enabled: ["defenderExport"] };
-  const unticked: CoverageSelection = { ...defaultSelection(), enabled: [] };
+/** Every onboarding source not chosen, except `chosen` (Automate unless given). */
+function choicesOf(chosen: Readonly<Record<string, SourceMode>> = {}): Map<string, RowChoice> {
+  const out = new Map<string, RowChoice>();
+  for (const s of ONBOARDING_SOURCES) {
+    const mode = chosen[s.id];
+    out.set(s.id, mode === undefined ? { kind: "not-chosen" } : { kind: "chosen", mode });
+  }
+  return out;
+}
 
-  it("an unknown Defender row never reads 'will be deployed' or 'Not selected', ticked or not", () => {
+describe("buildSections - an unread state is never a confident negative", () => {
+  const ticked = choicesOf({ defenderExport: "automate" });
+  const unticked = choicesOf();
+
+  it("an unknown Defender row never reads 'Not deployed', chosen or not", () => {
     const unknown = new Map([[DEFENDER_EXPORT_ITEM_ID, "HTTP 403 listing automations"]]);
-    for (const selection of [ticked, unticked]) {
+    for (const choices of [ticked, unticked]) {
       for (const deployed of [[], [DEFENDER_EXPORT_ITEM_ID], null]) {
-        const row = itemRow(buildSections(selection, deployed, unknown), DEFENDER_EXPORT_ITEM_ID);
-        expect(row.label).not.toMatch(/will be deployed|Not selected/);
+        const row = itemRow(buildSections(choices, deployed, unknown), DEFENDER_EXPORT_ITEM_ID);
+        expect(row.label).not.toMatch(/Not deployed/);
         expect(row.label).toBe("Deployment state could not be read - HTTP 403 listing automations");
         expect(row.state).toBe("unknown");
       }
@@ -181,8 +195,8 @@ describe("buildSections - an unread state is never a confident negative", () => 
   });
 
   // AZR-98: two sources are read by two buttons; one read says nothing about the other.
-  it("a read of one deployable source leaves the other unread, never 'Not selected' or 'will be deployed'", () => {
-    const both: CoverageSelection = { ...defaultSelection(), enabled: ["defenderExport", "activityLog"] };
+  it("a read of one deployable source leaves the other unread, never 'Not deployed'", () => {
+    const both = choicesOf({ defenderExport: "automate", activityLog: "automate" });
     const onlyDefender = deployedFrom([
       [DEFENDER_EXPORT_ITEM_ID, [DEFENDER_EXPORT_ITEM_ID]],
       ["activityLog", null],
@@ -192,45 +206,52 @@ describe("buildSections - an unread state is never a confident negative", () => 
     expect(itemRow(sections, "activityLog").state).toBe("unread");
     const afterBoth = buildSections(both, deployedFrom([[DEFENDER_EXPORT_ITEM_ID, []], ["activityLog", ["activityLog"]]]), new Map());
     expect(itemRow(afterBoth, "activityLog").label).toBe("Deployed");
-    expect(itemRow(afterBoth, DEFENDER_EXPORT_ITEM_ID).label).toBe("Selected - will be deployed");
+    expect(itemRow(afterBoth, DEFENDER_EXPORT_ITEM_ID).label).toBe(STATE_LABELS.pending);
     expect(deployedFrom([[DEFENDER_EXPORT_ITEM_ID, null], ["activityLog", null]])).toBeNull();
   });
 
   it("before any read, the Defender row makes no deployment claim either", () => {
-    for (const selection of [ticked, unticked]) {
-      const row = itemRow(buildSections(selection, null, new Map()), DEFENDER_EXPORT_ITEM_ID);
-      expect(row.label).not.toMatch(/will be deployed|Not selected/);
+    for (const choices of [ticked, unticked]) {
+      const row = itemRow(buildSections(choices, null, new Map()), DEFENDER_EXPORT_ITEM_ID);
+      expect(row.label).not.toMatch(/Not deployed/);
       expect(row.state).toBe("unread");
     }
   });
 
   it("labels the four read states, and deployed-unselected always says it is still running", () => {
-    const at = (sel: CoverageSelection, deployed: string[]) =>
-      itemRow(buildSections(sel, deployed, new Map()), DEFENDER_EXPORT_ITEM_ID);
+    const at = (choices: Map<string, RowChoice>, deployed: string[]) =>
+      itemRow(buildSections(choices, deployed, new Map()), DEFENDER_EXPORT_ITEM_ID);
 
-    expect(at(ticked, []).label).toBe("Selected - will be deployed");
-    expect(at(unticked, []).label).toBe("Not selected");
+    expect(at(ticked, []).label).toBe("Not deployed yet");
+    expect(at(unticked, []).label).toBe("Not deployed");
     expect(at(ticked, [DEFENDER_EXPORT_ITEM_ID]).label).toBe("Deployed");
     const left = at(unticked, [DEFENDER_EXPORT_ITEM_ID]);
     expect(left.state).toBe("deployed-unselected");
     expect(left.label).toMatch(/still running/);
   });
 
-  it("entraId, ticked by default, reads 'Selected - not available yet' and is not tickable", () => {
-    const row = itemRow(buildSections(defaultSelection(), [], new Map()), "entraId");
-
-    expect(row.label).toBe("Selected - not available yet");
-    expect(row.tickable).toBe(false);
-    expect(itemRow(buildSections(defaultSelection(), [], new Map()), DEFENDER_EXPORT_ITEM_ID).tickable).toBe(true);
+  it("a not-built row says it is not available, and its choice separately", () => {
+    const row = itemRow(buildSections(choicesOf({ entraId: "manual" }), [], new Map()), "entraId");
+    expect(row.label).toBe(NOT_AVAILABLE_LABEL);
+    expect(row.choice).toEqual({ kind: "chosen", mode: "manual" });
+    expect(row.choiceLabel).toBe(CHOICE_LABELS.manual);
   });
 
-  it("with no selection loaded, nothing is tickable", () => {
-    const row = itemRow(buildSections(null, [], new Map()), DEFENDER_EXPORT_ITEM_ID);
-    expect(row.tickable).toBe(false);
+  it("the choice label comes from the chooser's answer only, in every state", () => {
+    const at = (choice: RowChoice) =>
+      itemRow(buildSections(new Map([[DEFENDER_EXPORT_ITEM_ID, choice]]), [], new Map()), DEFENDER_EXPORT_ITEM_ID)
+        .choiceLabel;
+    expect(at({ kind: "chosen", mode: "automate" })).toBe("Chosen - Automate");
+    expect(at({ kind: "chosen", mode: "manual" })).toBe("Chosen - How-to");
+    expect(at({ kind: "not-chosen" })).toBe("Not chosen");
+    expect(at({ kind: "unknown", pending: true })).toBe(CHOICE_LABELS.loading);
+    expect(at({ kind: "unknown", pending: false })).toBe(CHOICE_LABELS.unknown);
+    // An id the chooser has no answer for is unknown, never "Not chosen".
+    expect(itemRow(buildSections(new Map(), [], new Map()), "entraId").choiceLabel).toBe(CHOICE_LABELS.unknown);
   });
 
   it("keeps core's layout: every section, the unsupported rows and the XDR row", () => {
-    const sections = buildSections(defaultSelection(), [], new Map());
+    const sections = buildSections(choicesOf(), [], new Map());
     const none = sections.find((s) => s.key === "none");
     const xdr = none?.rows.find((r) => r.kind === "xdr-tables");
     expect(sections.map((s) => s.key)).toEqual([
@@ -311,7 +332,7 @@ describe("defenderDeployDisabledReason", () => {
     expect(DEFENDER_EXPORT_ITEM_ID).toBe("defenderExport");
     expect(Object.keys(onboardingState)).not.toContain("DEFENDER_ITEM_ID");
     expect(defenderDeployDisabledReason({ ...READY, selection: { ...defaultSelection(), enabled: ["entraId"] } })).toBe(
-      "Tick the Defender for Cloud alert export to deploy it.",
+      "Choose the Defender for Cloud alert export under Choose what to onboard to deploy it.",
     );
   });
 
@@ -359,7 +380,7 @@ describe("defenderDeployDisabledReason", () => {
     const cases: Array<[Partial<DefenderDeployGate>, RegExp]> = [
       [{ running: true, selection: null, state: null, hubName: "", rule: null, resourceGroup: "" }, /already running/],
       [{ selection: null, state: null, hubName: "", rule: null, resourceGroup: "" }, /has not loaded/],
-      [{ selection: { ...defaultSelection(), enabled: [] }, state: null }, /Tick the Defender/],
+      [{ selection: { ...defaultSelection(), enabled: [] }, state: null }, /Choose the Defender/],
       // The duplicate and present-differs refusals outrank every later input:
       // with the same-target export listed, a missing rule or resource group
       // (or an unread ours) must not hide the duplicate.
@@ -576,11 +597,14 @@ describe("visible copy carries no project history", () => {
 
     const sel = defaultSelection();
     for (const deployed of [[], [DEFENDER_EXPORT_ITEM_ID], null]) {
-      for (const s of buildSections(sel, deployed, new Map())) {
+      for (const s of buildSections(choicesOf({ defenderExport: "automate", entraId: "manual" }), deployed, new Map())) {
         add(`section.${s.key}`, s.title);
         for (const r of s.rows) {
           add(`row.${r.id}.title`, r.title);
-          if (r.kind === "item") add(`row.${r.id}.label`, r.label);
+          if (r.kind === "item") {
+            add(`row.${r.id}.label`, r.label);
+            add(`row.${r.id}.choice`, r.choiceLabel);
+          }
           else if (r.kind === "unsupported") {
             add(`row.${r.id}.description`, r.description);
             add(`row.${r.id}.instead`, r.instead);
@@ -588,7 +612,8 @@ describe("visible copy carries no project history", () => {
         }
       }
     }
-    add("unknown-label", itemRow(buildSections(sel, [], new Map([[DEFENDER_EXPORT_ITEM_ID, "r"]])), DEFENDER_EXPORT_ITEM_ID).label);
+    for (const [k, t] of Object.entries(CHOICE_LABELS)) add(`choice.${k}`, t);
+    add("unknown-label", itemRow(buildSections(choicesOf(), [], new Map([[DEFENDER_EXPORT_ITEM_ID, "r"]])), DEFENDER_EXPORT_ITEM_ID).label);
 
     const gates: Partial<DefenderDeployGate>[] = [
       { running: true },
@@ -748,7 +773,7 @@ describe("measuredHubsOf", () => {
 // repository..." - the legacy provenance line rendered as screen copy.
 describe("sources that cannot stream to Event Hub", () => {
   it("say what to use instead without naming a repository or a path in one", () => {
-    const rows = buildSections(defaultSelection(), [], new Map())
+    const rows = buildSections(choicesOf(), [], new Map())
       .flatMap((s) => s.rows)
       .filter((r) => r.kind === "unsupported");
     expect(rows.length).toBeGreaterThan(0);

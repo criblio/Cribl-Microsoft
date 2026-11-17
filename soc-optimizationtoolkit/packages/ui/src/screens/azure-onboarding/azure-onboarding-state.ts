@@ -5,16 +5,21 @@
  * thin composer over these:
  *
  *   - {@link loadStateFrom}: what the KV read of the saved selection means, in
- *     six states, and {@link canSave}: when Save may write. A read that FAILED
- *     is not a first run (claude-kit standards/cribl-kv-store.md): only an
- *     `absent` load or a readable document of ours may ever be overwritten, so
- *     `read-unknown`, `doc-foreign` and `doc-unreadable` block Save outright.
- *     Save is explicit - an `absent` load shows the defaults but is not dirty,
- *     so nothing is written until the operator asks.
+ *     six states, and {@link canWriteSelection}: when a choice may be written.
+ *     A read that FAILED is not a first run (claude-kit
+ *     standards/cribl-kv-store.md): only an `absent` load or a readable
+ *     document of ours may ever be overwritten, so `read-unknown`,
+ *     `doc-foreign` and `doc-unreadable` block every write outright. An
+ *     `absent` load shows the defaults and writes nothing until the operator
+ *     changes a choice (ADR 0007 section 2, amended 2026-11-17: the choice
+ *     saves at once; there is no separate Save).
  *   - {@link loadBanners}: what the load has to say out loud - ids the decode
  *     dropped, defaults in use, and the three blocked states.
  *   - {@link buildSections}: the catalog layout from core (onboarding-sections)
- *     with a label per row. A row whose deployment state could not be READ
+ *     with a label per row. The rows are STATUS ONLY: whether a source is
+ *     chosen and how is the chooser's own answer (a {@link RowChoice} per id,
+ *     from howto-state rowChoices over isChosen/effectiveMode), never read
+ *     from the selection directly, so the two places cannot disagree. A row whose deployment state could not be READ
  *     takes the `unknown` overlay's label ahead of {@link itemState}'s, because
  *     itemState has only four states and with `deployed: []` it would turn a
  *     failed measurement into "will be deployed" or "Not selected" - the
@@ -97,6 +102,7 @@ import type {
   NamespaceRef,
   OnboardingItemId,
   SectionAvailability,
+  SourceMode,
   ValidationResult,
 } from "@soc/core";
 import {
@@ -112,11 +118,11 @@ import {
  * What the saved selection's KV read means. Six states, never collapsed:
  *
  *   loading         the read has not answered yet
- *   absent          nothing of ours is stored; the defaults are shown and Save
- *                   may write (it is a first run, measured)
- *   ready           a readable document of ours; Save may replace it
+ *   absent          nothing of ours is stored; the defaults are shown and a
+ *                   choice may write (it is a first run, measured)
+ *   ready           a readable document of ours; a choice may replace it
  *   read-unknown    the read FAILED (403, 5xx, timeout). The document may
- *                   exist, so Save is blocked until a load succeeds
+ *                   exist, so writes are blocked until a load succeeds
  *   doc-foreign     the key holds something whose `kind` is not ours
  *   doc-unreadable  ours, but a `version` this release cannot read
  */
@@ -148,17 +154,12 @@ export function loadedSelection(load: OnboardingLoadState): CoverageSelection | 
 }
 
 /**
- * Whether Save may write. Only after an `absent` load or a readable document of
- * ours, only when the operator changed something, and never while a save is in
- * flight. Every other load state blocks it: overwriting there would replace a
- * document this release could not see.
+ * Whether a choice may write the selection. Only after an `absent` load or a
+ * readable document of ours. Every other load state blocks it: overwriting
+ * there would replace a document this release could not see.
  */
-export function canSave(
-  load: OnboardingLoadState,
-  edit: { readonly dirty: boolean; readonly saving: boolean },
-): boolean {
-  if (load.status !== "absent" && load.status !== "ready") return false;
-  return edit.dirty && !edit.saving;
+export function canWriteSelection(load: OnboardingLoadState): boolean {
+  return load.status === "absent" || load.status === "ready";
 }
 
 /** A line the screen renders above the sections. */
@@ -187,7 +188,7 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
           tone: "error",
           text:
             `The saved selection could not be read - ${load.reason}. ` +
-            "Saving is turned off so a selection that may exist is not overwritten. Reload to try again.",
+            "Choosing a source the app deploys is turned off so a selection that may exist is not overwritten. Reload to try again.",
         },
       ];
     case "doc-foreign":
@@ -196,7 +197,7 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
           tone: "error",
           text:
             `The stored value under this key is not an onboarding selection (kind ${describeValue(load.kind)}). ` +
-            "Saving is turned off so it is not overwritten.",
+            "Choosing a source the app deploys is turned off so it is not overwritten.",
         },
       ];
     case "doc-unreadable":
@@ -205,7 +206,7 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
           tone: "error",
           text:
             `The saved selection was written in a format this version of the app cannot read (version ${describeValue(load.version)}). ` +
-            "Saving is turned off so it is not overwritten.",
+            "Choosing a source the app deploys is turned off so it is not overwritten.",
         },
       ];
     case "absent":
@@ -214,7 +215,7 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
       if (load.decoded.usedDefaults) {
         out.push({
           tone: "info",
-          text: "No saved selection was found, so the defaults are shown. Nothing is saved until you choose Save.",
+          text: "No saved selection was found, so the defaults are shown. Nothing is saved until you change a choice.",
         });
       }
       if (load.decoded.dropped.length > 0) {
@@ -222,7 +223,7 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
           tone: "warning",
           text:
             "Some saved choices are no longer offered and were left out: " +
-            `${load.decoded.dropped.join(", ")}. Saving will store the selection without them.`,
+            `${load.decoded.dropped.join(", ")}. The next change saves the selection without them.`,
         });
       }
       return out;
@@ -231,11 +232,12 @@ export function loadBanners(load: OnboardingLoadState): OnboardingBanner[] {
 }
 
 /**
- * Tick or untick one item, keeping the selection otherwise as it was. Ticking
- * an item that is not built yet is refused (the selection is returned
- * unchanged): its checkbox is disabled, and a selection must not gain a deploy
- * the screen cannot make. Unticking is always allowed and changes nothing in
- * Azure - that is onboarding-selection's additive-only contract.
+ * Choose or unchoose one item, keeping the selection otherwise as it was
+ * (sub-selections included). Choosing an item that is not built yet is
+ * refused (the selection is returned unchanged): its Automate option is
+ * locked, and a selection must not gain a deploy the screen cannot make.
+ * Unchoosing is always allowed and changes nothing in Azure - that is
+ * onboarding-selection's additive-only contract.
  */
 export function withItem(
   selection: CoverageSelection,
@@ -255,7 +257,44 @@ export function withItem(
 // Sections
 // ---------------------------------------------------------------------------
 
-/** One row as the screen renders it. Only `item` rows have a checkbox. */
+/**
+ * Whether one source is chosen, and how, as the chooser answers it (howto-state
+ * rowChoices). `unknown` when the answer depends on a document that has not
+ * loaded (`pending`) or could not be read: never shown as "not chosen".
+ */
+export type RowChoice =
+  | { readonly kind: "chosen"; readonly mode: SourceMode }
+  | { readonly kind: "not-chosen" }
+  | { readonly kind: "unknown"; readonly pending: boolean };
+
+/** The words a method-section row shows for its {@link RowChoice}. */
+export const CHOICE_LABELS = {
+  automate: "Chosen - Automate",
+  manual: "Chosen - How-to",
+  notChosen: "Not chosen",
+  loading: "Choice not loaded yet",
+  unknown: "Choice not known - the saved choices could not be read",
+} as const;
+
+/** The visible words for one {@link RowChoice}. */
+export function choiceLabel(choice: RowChoice): string {
+  switch (choice.kind) {
+    case "chosen":
+      return choice.mode === "automate" ? CHOICE_LABELS.automate : CHOICE_LABELS.manual;
+    case "not-chosen":
+      return CHOICE_LABELS.notChosen;
+    case "unknown":
+      return choice.pending ? CHOICE_LABELS.loading : CHOICE_LABELS.unknown;
+  }
+}
+
+/** Used for an item id the chooser has no answer for. */
+const NO_CHOICE: RowChoice = { kind: "unknown", pending: false };
+
+/**
+ * One row as the screen renders it. No row has a control: a source is chosen
+ * in the chooser only, and its method-section row says what was chosen.
+ */
 export type OnboardingRowView =
   | {
       readonly kind: "item";
@@ -263,12 +302,12 @@ export type OnboardingRowView =
       readonly title: string;
       readonly description: string;
       readonly availability: ItemAvailability;
-      readonly selected: boolean;
+      /** The chooser's answer for this source. */
+      readonly choice: RowChoice;
+      readonly choiceLabel: string;
       /** itemState's answer, `unknown` when the overlay names this row, `unread` before any read. */
       readonly state: ItemState | "unknown" | "unread";
       readonly label: string;
-      /** False for a not-built item: its checkbox renders disabled. */
-      readonly tickable: boolean;
     }
   | {
       readonly kind: "unsupported";
@@ -293,14 +332,21 @@ export interface OnboardingSectionView {
   readonly rows: readonly OnboardingRowView[];
 }
 
-/** The four itemState labels for a BUILT item whose state was read. */
-const STATE_LABELS: Readonly<Record<ItemState, string>> = {
-  unselected: "Not selected",
-  pending: "Selected - will be deployed",
+/**
+ * The four itemState labels for a BUILT item whose state was read. They say
+ * only what is deployed; whether the source is chosen is the row's choice
+ * label, so the two never repeat or contradict each other.
+ */
+export const STATE_LABELS: Readonly<Record<ItemState, string>> = {
+  unselected: "Not deployed",
+  pending: "Not deployed yet",
   deployed: "Deployed",
   "deployed-unselected":
-    "Not selected - still running in Azure. Unticking does not remove it; Remove is a separate action.",
+    "Deployed - still running in Azure. Unchoosing does not remove it; Remove is a separate action.",
 };
+
+/** A not-built item's label: nothing reads its deployment. */
+export const NOT_AVAILABLE_LABEL = "Not available yet";
 
 /** The prefix of the overlay label; the reason follows it. */
 export const STATE_UNREADABLE_PREFIX = "Deployment state could not be read";
@@ -341,10 +387,11 @@ export function deployedFrom(
 }
 
 /**
- * The screen's sections, with a label per item row.
+ * The screen's sections, with a choice label and a deploy-state label per
+ * item row.
  *
- * @param selection the loaded selection, or null when none could be loaded
- *                  (every item then reads as unselected and untickable)
+ * @param choices   the chooser's answer per item id (howto-state rowChoices).
+ *                  An id missing from it reads as unknown, never as not chosen
  * @param deployed  what a read found deployed, or null when no read has been
  *                  attempted - a null is never shown as "not deployed". A
  *                  {@link DeployedReads} says which items were read: a built
@@ -353,11 +400,11 @@ export function deployedFrom(
  *                  over every other label for that row
  */
 export function buildSections(
-  selection: CoverageSelection | null,
+  choices: ReadonlyMap<OnboardingItemId, RowChoice>,
   deployedOrReads: readonly OnboardingItemId[] | DeployedReads | null,
   unknown: ReadonlyMap<OnboardingItemId, string>,
 ): OnboardingSectionView[] {
-  const desired = selection === null ? [] : selectedItemIds(selection);
+  const desired = [...choices].filter(([, c]) => c.kind === "chosen").map(([id]) => id);
   const reads: DeployedReads | null =
     deployedOrReads === null || isDeployedReads(deployedOrReads)
       ? deployedOrReads
@@ -381,15 +428,15 @@ export function buildSections(
         return { kind: "xdr-tables", id: row.id, title: row.title, tables: row.tables, reason: row.reason };
       }
       const availability = itemAvailability(row.id);
-      const selected = desired.includes(row.id);
+      const choice = choices.get(row.id) ?? NO_CHOICE;
       const base = {
         kind: "item" as const,
         id: row.id,
         title: row.item.title,
         description: row.item.description,
         availability,
-        selected,
-        tickable: selection !== null && availability.status === "available",
+        choice,
+        choiceLabel: choiceLabel(choice),
       };
       const reason = unknown.get(row.id);
       if (reason !== undefined) {
@@ -397,13 +444,9 @@ export function buildSections(
       }
       if (availability.status === "not-built") {
         // Nothing reads a not-built item's deployment, so the label says only
-        // what is known: whether it is ticked, and that it cannot deploy yet.
+        // that it cannot deploy yet; the choice label says whether it is chosen.
         const state = itemState(row.id, desired, deployed ?? []);
-        return {
-          ...base,
-          state,
-          label: selected ? "Selected - not available yet" : "Not available yet",
-        };
+        return { ...base, state, label: NOT_AVAILABLE_LABEL };
       }
       if (deployed === null || (reads !== null && reads.read !== null && !reads.read.has(row.id))) {
         return { ...base, state: "unread", label: UNREAD_LABEL };
@@ -456,10 +499,10 @@ export interface DefenderDeployGate {
 export function defenderDeployDisabledReason(gate: DefenderDeployGate): string | null {
   if (gate.running) return "A deploy is already running.";
   if (gate.selection === null) {
-    return "The saved selection has not loaded, so whether the alert export is ticked is not known.";
+    return "The saved selection has not loaded, so whether the alert export is chosen is not known.";
   }
   if (!selectedItemIds(gate.selection).includes(DEFENDER_EXPORT_ITEM_ID)) {
-    return "Tick the Defender for Cloud alert export to deploy it.";
+    return "Choose the Defender for Cloud alert export under Choose what to onboard to deploy it.";
   }
   const state = gate.state;
   if (state !== null && state.ours.kind === "present-matching") {
