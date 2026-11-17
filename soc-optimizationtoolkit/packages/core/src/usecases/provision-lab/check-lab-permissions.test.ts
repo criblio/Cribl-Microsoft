@@ -6,6 +6,9 @@ import { labDeploymentConfig } from "../../domain/labs";
 const SUB = "11111111-2222-3333-4444-555555555555";
 const RA_WRITE = "Microsoft.Authorization/roleAssignments/write";
 
+const ALL = { status: 200, body: { value: [{ actions: ["*"], notActions: [] }] } };
+const NOTHING = { status: 200, body: { value: [{ actions: [], notActions: [] }] } };
+
 describe("checkLabPermissions", () => {
   it("evaluates the profile's actions at the subscription in create-new mode", async () => {
     const azure = new FakeAzureManagement();
@@ -99,5 +102,62 @@ describe("checkLabPermissions", () => {
         flags: labDeploymentConfig("SentinelLab", "public"),
       }),
     ).rejects.toThrow("fetch RBAC permissions");
+  });
+});
+
+describe("checkLabPermissions - bring-your-own scopes outside the lab group (AZR-81)", () => {
+  const RG = "rg-preapproved";
+  const run = (azure: FakeAzureManagement) =>
+    checkLabPermissions(azure, {
+      subscriptionId: SUB,
+      resourceGroupName: RG,
+      rgMode: "bring-your-own",
+      flags: labDeploymentConfig("CompleteLab", "public"),
+    });
+
+  it("reads each scope once and evaluates each row at its own scope", async () => {
+    const azure = new FakeAzureManagement();
+    // Lab group: everything. Subscription and NetworkWatcherRG: nothing.
+    azure.respondWith(ALL, NOTHING, NOTHING);
+    const outcome = await run(azure);
+    expect(azure.calls.map((c) => c.path)).toEqual([
+      `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Authorization/permissions`,
+      `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`,
+      `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG/providers/Microsoft.Authorization/permissions`,
+    ]);
+    const granted = (action: string) => outcome.checks.find((c) => c.action === action)?.granted;
+    expect(granted("Microsoft.EventGrid/register/action")).toBe(false);
+    expect(granted("Microsoft.Network/networkWatchers/read")).toBe(false);
+    expect(granted("Microsoft.Network/networkWatchers/flowLogs/write")).toBe(false);
+    // The lab-group rows still pass on the lab group's own answer.
+    expect(granted("Microsoft.Network/networkWatchers/write")).toBe(true);
+    expect(outcome.unmeasured).toEqual([]);
+  });
+
+  it("reports an unreadable scope as unknown, never as denied", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ALL, { status: 403, body: {} }, { status: 403, body: {} });
+    const outcome = await run(azure);
+    for (const action of [
+      "Microsoft.EventGrid/register/action",
+      "Microsoft.Network/networkWatchers/read",
+      "Microsoft.Network/networkWatchers/flowLogs/write",
+    ]) {
+      expect(outcome.checks.some((c) => c.action === action), action).toBe(false);
+    }
+    expect(outcome.unmeasured.map((u) => [u.action, u.scope, u.reason])).toEqual([
+      ["Microsoft.EventGrid/register/action", `/subscriptions/${SUB}`, "permissions at this scope could not be read (HTTP 403)"],
+      ["Microsoft.Network/networkWatchers/read", `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG`, "permissions at this scope could not be read (HTTP 403)"],
+      ["Microsoft.Network/networkWatchers/flowLogs/write", `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG`, "permissions at this scope could not be read (HTTP 403)"],
+    ]);
+  });
+
+  it("reuses the subscription answer when the lab group fell back to it", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith({ status: 404, body: {} }, ALL, NOTHING);
+    const outcome = await run(azure);
+    // RG (404), subscription fallback, NetworkWatcherRG - no second subscription read.
+    expect(azure.calls).toHaveLength(3);
+    expect(outcome.checks.find((c) => c.action === "Microsoft.EventGrid/register/action")?.granted).toBe(true);
   });
 });

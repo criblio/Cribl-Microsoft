@@ -96,9 +96,18 @@ describe("labPermissionRequirements", () => {
     // that the admin grants the TTL identity's rights after the deploy,
     // while Setup's plan and preflight require the RBAC Administrator grant
     // up front - the foundation phase aborts at ttl-role-assignment without it.
+    // RE-PINNED (AZR-81): two lab steps reach outside the group - flow logs
+    // on NetworkWatcherRG, and the Event Grid registration an admin does once.
     const rows = labPermissionRequirements("bring-your-own", "rg-preapproved");
-    expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.scope.includes("rg-preapproved"))).toBe(true);
+    expect(rows.map((r) => [r.scope, r.role])).toEqual([
+      ["Resource group 'rg-preapproved'", "Contributor"],
+      ["Resource group 'rg-preapproved'", `${leastRoleFor("lab.roleAssignment.write")} (constrained)`],
+      ["Resource group 'NetworkWatcherRG'", "Network Contributor"],
+      [
+        "Subscription (admin step)",
+        "az provider register --namespace Microsoft.EventGrid --subscription <subscriptionId>",
+      ],
+    ]);
     expect(rows[0].role).toBe("Contributor");
     expect(rows[1].role).toContain(leastRoleFor("lab.roleAssignment.write"));
     expect(rows[1].reason).toContain(LAB_RBAC_CONDITION);
@@ -112,7 +121,9 @@ describe("labPermissionRequirements", () => {
       roles("lab-new-rg"),
     );
     expect(
-      labPermissionRequirements("bring-your-own", "rg-x").map((r) => r.role.replace(" (constrained)", "")),
+      labPermissionRequirements("bring-your-own", "rg-x")
+        .filter((r) => !r.scope.includes("admin step"))
+        .map((r) => r.role.replace(" (constrained)", "")),
     ).toEqual(roles("lab-byo-rg"));
   });
 });

@@ -881,3 +881,86 @@ describe("provisionLab - progress reporting", () => {
     ]);
   });
 });
+
+describe("provisionLab - a resource-group-only caller (AZR-81)", () => {
+  it("does not POST register when the Event Grid provider GET is 403, and creates the topic", async () => {
+    const flags: LabComponentFlags = {
+      ...FOUNDATION_ONLY_FLAGS,
+      storage: { ...FOUNDATION_ONLY_FLAGS.storage, deploy: true, deployEventGrid: true },
+    };
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      { status: 200, body: {} }, // GET storage account - exists
+      { status: 403, body: { error: { code: "AuthorizationFailed" } } }, // GET provider
+      { status: 404, body: {} }, // GET system topic
+      { status: 201, body: {} }, // PUT system topic
+      { status: 404, body: {} }, // GET event subscription
+      { status: 201, body: {} }, // PUT event subscription
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+    );
+    const jobs = new FakeJobStore();
+    const result = await provisionLab({ azure, jobs }, input({ flags }));
+    expect(azure.calls.some((c) => c.method === "POST" && c.path.endsWith("/register"))).toBe(false);
+    expect(result.storage?.eventGridTopic).toBeDefined();
+    const record = (await jobs.list())[0];
+    expect(record.steps.find((s) => s.name === "event-grid")?.status).toBe("succeeded");
+  });
+
+  it("names the registration remedy when the topic PUT says the subscription is unregistered", async () => {
+    const flags: LabComponentFlags = {
+      ...FOUNDATION_ONLY_FLAGS,
+      storage: { ...FOUNDATION_ONLY_FLAGS.storage, deploy: true, deployEventGrid: true },
+    };
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      { status: 200, body: {} }, // storage account exists
+      { status: 403, body: {} }, // GET provider
+      { status: 404, body: {} }, // GET system topic
+      {
+        status: 409,
+        body: { error: { code: "MissingSubscriptionRegistration", message: "not registered" } },
+      }, // PUT system topic
+    );
+    const jobs = new FakeJobStore();
+    await provisionLab({ azure, jobs }, input({ flags }));
+    const step = (await jobs.list())[0]?.steps.find((s) => s.name === "event-grid");
+    expect(step?.status).toBe("failed");
+    expect(step?.detail).toContain("az provider register --namespace Microsoft.EventGrid");
+  });
+
+  it("does not PUT a second Network Watcher when NetworkWatcherRG answers 403", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      ...FOUNDATION_OK,
+      { status: 200, body: {} }, // storage exists
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+      { status: 404, body: {} },
+      { status: 201, body: {} },
+      { status: 200, body: { properties: { provisioningState: "Succeeded" } } }, // VNet
+      { status: 404, body: {} }, // GET lab watcher
+      { status: 403, body: { error: { code: "AuthorizationFailed" } } }, // GET NetworkWatcherRG default
+    );
+    const jobs = new FakeJobStore();
+    await provisionLab(
+      { azure, jobs },
+      input({ flags: labDeploymentConfig("FlowLogLab", "public") }),
+    );
+    expect(
+      azure.calls.some((c) => c.method === "PUT" && /\/networkWatchers\/[^/]+$/.test(c.path)),
+    ).toBe(false);
+    const step = (await jobs.list())[0]?.steps.find((s) => s.name === "flow-logs");
+    expect(step?.status).toBe("failed");
+    expect(step?.detail).toContain("NetworkWatcherRG");
+    expect(step?.detail).toContain("Network Contributor");
+  });
+});

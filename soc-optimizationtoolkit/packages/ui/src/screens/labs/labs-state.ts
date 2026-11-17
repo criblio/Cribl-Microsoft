@@ -469,6 +469,10 @@ export function permissionCheckLines(outcome: LabPermissionCheckOutcome): string
   for (const check of outcome.checks) {
     lines.push(`[${check.granted ? "OK" : "MISSING"}] ${check.label} (${check.action})`);
   }
+  // Scopes whose permissions could not be read: unknown, never missing.
+  for (const row of outcome.unmeasured) {
+    lines.push(`[UNKNOWN] ${row.label} (${row.action}): ${row.reason}`);
+  }
   switch (outcome.roleAssignmentGrant.kind) {
     case "unconditional":
       lines.push(

@@ -129,6 +129,7 @@ describe("permissionCheckLines", () => {
       },
       roleConditionRemediation: "Ask an admin to edit the condition.",
       notes: ["a note"],
+      unmeasured: [],
     });
     expect(lines[0]).toContain("evaluated at /subscriptions/");
     expect(lines[1]).toContain("[OK] Deploy the TTL self-destruct watchdog");
@@ -144,8 +145,30 @@ describe("permissionCheckLines", () => {
       checks: [],
       roleAssignmentGrant: { kind: "unconditional", conditions: [] },
       notes: [],
+      unmeasured: [],
     });
     expect(lines.some((l) => l.includes("without a condition"))).toBe(true);
+  });
+
+  it("renders an unreadable scope as UNKNOWN, never MISSING (AZR-81)", () => {
+    const lines = permissionCheckLines({
+      scope: `/subscriptions/${SUB}/resourceGroups/rg-lab`,
+      checks: [],
+      roleAssignmentGrant: { kind: "unconditional", conditions: [] },
+      notes: [],
+      unmeasured: [
+        {
+          action: "Microsoft.Network/networkWatchers/read",
+          label: "Read the region's Network Watcher in NetworkWatcherRG",
+          scope: `/subscriptions/${SUB}/resourceGroups/NetworkWatcherRG`,
+          reason: "permissions at this scope could not be read (HTTP 403)",
+        },
+      ],
+    });
+    expect(lines).toContain(
+      "[UNKNOWN] Read the region's Network Watcher in NetworkWatcherRG (Microsoft.Network/networkWatchers/read): permissions at this scope could not be read (HTTP 403)",
+    );
+    expect(lines.some((l) => l.startsWith("[MISSING]"))).toBe(false);
   });
 });
 

@@ -679,3 +679,22 @@ describe("AZR-82 - the tickets ask for the management-group and Entra reads", ()
     expect(only).not.toContain("- Reader at /subscriptions");
   });
 });
+
+describe("AZR-81 - the byo lab tickets ask for the steps outside the lab group", () => {
+  it("asks for Network Contributor on NetworkWatcherRG and the Event Grid registration, in both tickets", () => {
+    const watcher =
+      "/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/NetworkWatcherRG";
+    const command =
+      "    Command:        az provider register --namespace Microsoft.EventGrid --subscription 33333333-3333-3333-3333-333333333333";
+    const roles = roleAssignmentRequest(ctxFor("lab-byo-rg"));
+    expect(roles).toContain(`- Network Contributor at ${watcher}  [feature]`);
+    expect(roles).toContain("Admin steps (setup path: lab-byo-rg)");
+    expect(roles).toContain(command);
+    const registration = appRegistrationRequest(ctxFor("lab-byo-rg"));
+    expect(registration).toContain(`Scope:          ${watcher}`);
+    expect(registration).toContain(command);
+    // Not on the paths whose subscription grant already reaches both.
+    expect(roleAssignmentRequest(ctxFor("lab-new-rg"))).not.toContain("NetworkWatcherRG");
+    expect(roleAssignmentRequest(ctxFor("lab-new-rg"))).not.toContain("Admin steps");
+  });
+});

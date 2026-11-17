@@ -55,7 +55,8 @@ describe("appPermissionPlan - completeness", () => {
           (p) => p.name === req.role && p.scopeLevel === req.scopeLevel,
         );
         expect(match, `${path}: ${req.role}`).toBeDefined();
-        expect(match?.necessity).toBe("core");
+        expect(match?.necessity).toBe(req.necessity ?? "core");
+        expect(match?.resourceGroup).toBe(req.resourceGroup);
         expect(match?.justification).toBe(req.justification);
         expect(match?.condition).toBe(req.condition);
       }
@@ -123,8 +124,14 @@ describe("what the ticket ASKS FOR is what the preflight MEASURES", () => {
       FEATURE_ROLES.filter((r) => r.unmeasured !== undefined).map((r) => r.key),
     );
     for (const path of PATHS) {
+      // A grant on a named other group (NetworkWatcherRG, AZR-81) is measured
+      // by the Labs preflight at that group, not by Setup's.
       const asksForFeatureRole = appPermissionPlan(path).some(
-        (p) => p.kind === "azure-rbac" && p.necessity === "feature" && !unmeasured.has(p.key),
+        (p) =>
+          p.kind === "azure-rbac" &&
+          p.necessity === "feature" &&
+          p.resourceGroup === undefined &&
+          !unmeasured.has(p.key),
       );
       const checksFeatureAction = REQUIRED_ACTIONS[
         preflightPathForSetupPath(path)
@@ -278,9 +285,12 @@ describe("appPermissionPlan - shape", () => {
   it("marks setup-path roles core and added roles feature", () => {
     // The whole point of the split: an approver may refuse a [feature] line and
     // still leave a working app, and the ticket says so.
-    const plan = appPermissionPlan("existing");
-    const core = plan.filter((p) => p.necessity === "core").map((p) => p.name);
-    expect(core).toEqual(rolePlanForSetupPath("existing").map((r) => r.role));
+    for (const path of PATHS) {
+      const core = appPermissionPlan(path).filter((p) => p.necessity === "core").map((p) => p.name);
+      expect(core, path).toEqual(
+        rolePlanForSetupPath(path).filter((r) => r.necessity === undefined).map((r) => r.role),
+      );
+    }
   });
 
   it("returns fresh objects - a caller cannot mutate the catalog", () => {
@@ -533,6 +543,20 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
       name: "Security Administrator",
       where: "the tenant (Entra ID directory role)",
       feature: "Check the Entra ID diagnostic settings",
+    });
+  });
+});
+
+describe("AZR-81 - the byo lab's steps outside its group", () => {
+  it("asks for Network Contributor on NetworkWatcherRG as a feature, and the preflight leaves it to the Labs check", () => {
+    const row = appPermissionPlan("lab-byo-rg").find((p) => p.resourceGroup === "NetworkWatcherRG");
+    expect(row?.name).toBe("Network Contributor");
+    expect(row?.scopeLevel).toBe("resourceGroup");
+    expect(row?.necessity).toBe("feature");
+    expect(preflightUnmeasuredGrants("lab-byo-rg")).toContainEqual({
+      name: "Network Contributor",
+      where: "resource group NetworkWatcherRG",
+      feature: "Lab vNet flow logs",
     });
   });
 });

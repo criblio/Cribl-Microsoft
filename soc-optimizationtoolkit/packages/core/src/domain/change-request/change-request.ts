@@ -57,6 +57,7 @@ import {
 } from "../azure-connectivity";
 import type { AppPermission } from "../app-permissions";
 import { leastRoleFor } from "../least-privilege";
+import { adminStepsForSetupPath } from "../role-plan";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
@@ -224,11 +225,45 @@ function permissionScope(permission: AppPermission, n: ResolvedNames): string {
   if (permission.scopeLevel === "subscription") {
     return subscriptionScope(n);
   }
+  // A named group other than the configured one (NetworkWatcherRG, AZR-81).
+  const group =
+    permission.resourceGroup === undefined
+      ? resourceGroupScope(n)
+      : "/subscriptions/" + n.subscriptionId + "/resourceGroups/" + permission.resourceGroup;
   // A group the operator may choose elsewhere (the Defender export's): the
   // configured one is the default, and the caveat says the role follows the choice.
   return permission.scopeCaveat === undefined
-    ? resourceGroupScope(n)
-    : resourceGroupScope(n) + " (" + permission.scopeCaveat + ")";
+    ? group
+    : group + " (" + permission.scopeCaveat + ")";
+}
+
+/**
+ * The setup path's one-time admin steps (AZR-81), or `null` when it has
+ * none: what an administrator does instead of granting a subscription role.
+ */
+function adminStepsSection(path: AzureSetupPath, n: ResolvedNames): string | null {
+  const steps = adminStepsForSetupPath(path);
+  if (steps.length === 0) {
+    return null;
+  }
+  return section(
+    "Admin steps (setup path: " + path + ")",
+    [
+      "One-time steps for a subscription administrator, asked for instead of a",
+      "subscription-scope role.",
+      "",
+      ...steps.map((step) =>
+        [
+          "- " + step.step + "  [feature]",
+          // One line, never wrapped: it is pasted into a shell.
+          "    Command:        " + step.command.replace("<subscriptionId>", n.subscriptionId),
+          field("Needed for:", step.feature),
+          field("Why:", step.justification),
+          field("If not done:", step.withoutIt),
+        ].join("\n"),
+      ),
+    ].join("\n"),
+  );
 }
 
 /** Column the permission-block values start at, and the wrap width. */
@@ -545,6 +580,11 @@ export function appRegistrationRequest(
     );
   }
 
+  const adminSteps = adminStepsSection(setupPath, n);
+  if (adminSteps !== null) {
+    parts.push(adminSteps);
+  }
+
   parts.push(
     criblLeastPrivilegeSection(),
     section(
@@ -648,6 +688,14 @@ export function roleAssignmentRequest(
     requestHeader(n),
     section("What is requested", requested.join("\n")),
     section("Justification", justifications.join("\n")),
+  ];
+  // The byo lab's one-time admin steps (AZR-81): the subscription owner this
+  // ticket goes to is the one who can take them.
+  const adminSteps = adminStepsSection(setupPath, n);
+  if (adminSteps !== null) {
+    parts.push(adminSteps);
+  }
+  parts.push(
     criblLeastPrivilegeSection(),
     section(
       "Specifics",
@@ -659,7 +707,7 @@ export function roleAssignmentRequest(
         "Resource group:                " + n.resourceGroup,
       ].join("\n"),
     ),
-  ];
+  );
 
   const deploy = diagramFor(ctx, options, dcrDeployFlowMermaid);
   const exported = diagramFor(ctx, options, dataExportFlowMermaid);

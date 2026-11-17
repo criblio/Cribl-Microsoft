@@ -53,6 +53,15 @@ export async function runFlowLogsPhase(ctx: LabPhaseContext): Promise<void> {
     if (is2xx(defaultWatcher.status)) {
       watcherRg = AZURE_NETWORK_WATCHER_RG;
       watcherName = azureDefaultNetworkWatcherName(input.location);
+    } else if (defaultWatcher.status === 403) {
+      // AZR-81: unreadable is not absent. Azure keeps one watcher per region
+      // per subscription and normally creates it with the first virtual
+      // network, so a second one in the lab group is rejected; do not PUT it.
+      flError =
+        `cannot read the region's Network Watcher ` +
+        `(${AZURE_NETWORK_WATCHER_RG}/${azureDefaultNetworkWatcherName(input.location)}, HTTP 403). ` +
+        `Grant the app Network Contributor on ${AZURE_NETWORK_WATCHER_RG}, ` +
+        "or have an admin create the flow logs.";
     } else {
       const createWatcher = await azure.request(
         buildNetworkWatcherPutRequest(sub, rg, watcherName, input.location),

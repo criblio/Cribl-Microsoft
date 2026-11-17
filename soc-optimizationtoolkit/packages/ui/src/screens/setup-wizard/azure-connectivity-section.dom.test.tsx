@@ -364,3 +364,31 @@ describe("the Disconnected stored-identity actions are buttons (L3)", () => {
     }
   });
 });
+
+describe("the bring-your-own lab note (AZR-81)", () => {
+  it("names the two steps outside the lab group and never claims no subscription-scope rights", () => {
+    const config = { ...EMPTY_AZURE_CONFIG, connectivity: "full" as const, setupPath: "lab-byo-rg" as const };
+    const { container } = render(
+      <PortsProvider ports={{} as unknown as UiPorts} config={config}>
+        <AzureConnectSection
+          tenantId=""
+          onTenantIdChange={vi.fn()}
+          clientId=""
+          onClientIdChange={vi.fn()}
+          setupPath="lab-byo-rg"
+          onSetupPathChange={vi.fn()}
+          secretLive={false}
+          ctx={{ appName: "test", config }}
+          onConnect={vi.fn()}
+          storageNote="note"
+        />
+      </PortsProvider>,
+    );
+    const tips = Array.from(container.querySelectorAll(".info-tip-pop")).map((n) => n.textContent ?? "");
+    const note = tips.find((t) => t.startsWith("Least privilege for labs"));
+    expect(note).toBeDefined();
+    expect(note).not.toMatch(/no subscription-scope/i);
+    expect(note).toContain("Network Contributor on NetworkWatcherRG");
+    expect(note).toContain("Event Grid needs the provider registered on the subscription once");
+  });
+});

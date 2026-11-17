@@ -59,6 +59,13 @@ export const LAB_RBAC_CONDITION =
 export type RoleScopeLevel = "subscription" | "resourceGroup";
 
 /**
+ * The resource group Azure keeps each region's default Network Watcher in.
+ * Restated from domain/labs/lab-flowlogs rather than imported, so the role
+ * plan does not depend on the labs domain; pinned equal in role-plan.test.ts.
+ */
+export const NETWORK_WATCHER_RESOURCE_GROUP = "NetworkWatcherRG";
+
+/**
  * One RBAC role the setup path requires: the built-in role, the scope level it
  * is assigned at, and a one-line justification.
  */
@@ -67,6 +74,16 @@ export interface RoleRequirement {
   role: string;
   /** The scope level the role is assigned at. */
   scopeLevel: RoleScopeLevel;
+  /**
+   * For a `resourceGroup` role on a NAMED group other than the configured one
+   * (the regional Network Watcher's NetworkWatcherRG, AZR-81).
+   */
+  resourceGroup?: string;
+  /**
+   * `feature` when the path works without the role and only one capability
+   * is lost; absent means core.
+   */
+  necessity?: "feature";
   /** One-line justification for this specific role. */
   justification: string;
   /**
@@ -110,7 +127,9 @@ export interface RoleRequirement {
  * - `lab-byo-rg` - Contributor on the pre-created lab resource group, plus RBAC
  *   Administrator on that group with the same condition, because the lab
  *   assigns its TTL identity Contributor in both resource-group modes (AZR-61
- *   audit; foundation-phase.ts).
+ *   audit; foundation-phase.ts). Network Contributor on NetworkWatcherRG is a
+ *   feature row for the flow logs (AZR-81); the Event Grid registration is an
+ *   admin step ({@link adminStepsForSetupPath}), not a subscription role.
  */
 export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
   if (path === "lab-new-rg") {
@@ -143,7 +162,7 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         role: LAB_UMBRELLA_ROLE,
         scopeLevel: "resourceGroup",
         justification:
-          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it: the Event Grid provider registration (subscription) and the regional Network Watcher (NetworkWatcherRG) need rights there, or an admin who registers the provider and creates the watcher first.",
+          "Deploy the lab workspace, DCRs, and tables into the pre-created lab resource group. The grant reaches nothing outside it; the two lab steps that do - flow logs on the regional Network Watcher, and the Event Grid provider registration - are asked for separately.",
         feature: "Deploy the lab environment",
         withoutIt:
           "Nothing on this path runs - there is no other scope the lab is allowed to deploy into.",
@@ -158,6 +177,21 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         feature: "Lab TTL self-destruct",
         withoutIt:
           "The deploy stops at the TTL step: a lab with no working self-destruct is never left running.",
+      },
+      // AZR-81: Azure keeps one Network Watcher per region per subscription,
+      // normally NetworkWatcherRG/NetworkWatcher_<region>, created with the
+      // first virtual network - so the lab cannot make its own beside it, and
+      // its flow logs are written there.
+      {
+        role: leastRoleFor("flowLog.write"),
+        scopeLevel: "resourceGroup",
+        resourceGroup: NETWORK_WATCHER_RESOURCE_GROUP,
+        necessity: "feature",
+        justification:
+          "Read the region's Network Watcher and write the lab's flow logs on it. Azure keeps one watcher per region per subscription, normally in NetworkWatcherRG, so the lab cannot create its own in the lab resource group.",
+        feature: "Lab vNet flow logs",
+        withoutIt:
+          "The flow-logs step fails with a message naming NetworkWatcherRG; the rest of the lab deploys.",
       },
     ];
   }
@@ -193,6 +227,44 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
   ];
 }
 
+/**
+ * A one-time step an administrator takes instead of granting a role: the
+ * right it needs sits at a scope the path deliberately does not ask for.
+ */
+export interface AdminStep {
+  /** What to do, in a ticket's words. */
+  step: string;
+  /** The az command that does it; `<subscriptionId>` is substituted. */
+  command: string;
+  /** The app capability that needs it. */
+  feature: string;
+  justification: string;
+  withoutIt: string;
+}
+
+/**
+ * The admin steps a setup path needs (AZR-81). The bring-your-own lab exists
+ * so that nothing is granted at the subscription; registering the Event Grid
+ * provider is a subscription action (Microsoft.EventGrid/register/action), so
+ * it is asked for as a one-time step rather than a subscription role.
+ */
+export function adminStepsForSetupPath(path: AzureSetupPath): AdminStep[] {
+  if (path !== "lab-byo-rg") {
+    return [];
+  }
+  return [
+    {
+      step: "Register the Microsoft.EventGrid resource provider on the subscription (once; skip if already registered).",
+      command: "az provider register --namespace Microsoft.EventGrid --subscription <subscriptionId>",
+      feature: "Lab Event Grid blob notifications",
+      justification:
+        "Registration is per subscription (Microsoft.EventGrid/register/action), which a resource-group grant cannot do. A custom role holding only that action at the subscription also works.",
+      withoutIt:
+        "On an unregistered subscription the Event Grid step fails; the rest of the lab deploys.",
+    },
+  ];
+}
+
 /** Concrete inputs the CLI renderer substitutes into each az command. */
 export interface RoleAssignmentCliParams {
   /** Azure AD application (client) ID; the az `--assignee`. */
@@ -223,7 +295,7 @@ function commandFor(
     ' --role "' +
     req.role +
     '" --scope ' +
-    scopeFor(req.scopeLevel, sub, rg)
+    scopeFor(req.scopeLevel, sub, req.resourceGroup ?? rg)
   );
 }
 
@@ -290,7 +362,11 @@ export function renderRoleAssignmentCli(
           "# its workspace and resources into this RG. A few lab steps reach outside it",
           "# (Event Grid provider registration, the regional Network Watcher).",
         ];
-  return [...header, ...commands, ...portalComments(path)].join("\n");
+  const adminLines = adminStepsForSetupPath(path).flatMap((step) => [
+    ...wrapComment("Admin step: " + step.step),
+    step.command.replace("<subscriptionId>", sub),
+  ]);
+  return [...header, ...commands, ...portalComments(path), ...adminLines].join("\n");
 }
 
 /**

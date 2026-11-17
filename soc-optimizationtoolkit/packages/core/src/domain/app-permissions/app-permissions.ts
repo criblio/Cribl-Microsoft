@@ -114,6 +114,11 @@ export interface AppPermission {
    */
   unverified?: true;
   /**
+   * For a resource-group grant on a NAMED group other than the configured one
+   * (NetworkWatcherRG for the byo lab's flow logs, AZR-81).
+   */
+  resourceGroup?: string;
+  /**
    * For a resource-group grant whose group the operator may choose somewhere
    * else in the app: words a ticket prints after the configured group, so the
    * approver knows the role follows the choice (the Defender export goes into
@@ -474,8 +479,11 @@ export function appPermissionPlan(path: AzureSetupPath): AppPermission[] {
       feature: req.feature,
       justification: req.justification,
       withoutIt: req.withoutIt,
-      necessity: "core",
+      necessity: req.necessity ?? "core",
     };
+    if (req.resourceGroup !== undefined) {
+      entry.resourceGroup = req.resourceGroup;
+    }
     if (req.condition !== undefined) {
       entry.condition = req.condition;
     }
@@ -485,10 +493,14 @@ export function appPermissionPlan(path: AzureSetupPath): AppPermission[] {
     return entry;
   });
 
+  // A grant on a named other group (NetworkWatcherRG) covers nothing the
+  // feature roles need: they sit in the configured group or elsewhere.
   const covered = (role: FeatureRole): boolean =>
     plan.some(
       (held) =>
-        role.coveredBy.includes(held.role) && scopeCovers(held.scopeLevel, role),
+        held.resourceGroup === undefined &&
+        role.coveredBy.includes(held.role) &&
+        scopeCovers(held.scopeLevel, role),
     );
 
   // `coveredBy` is suppression bookkeeping, not something a ticket should show,
@@ -557,7 +569,8 @@ export interface UnmeasuredGrant {
 /**
  * The plan's grants the setup preflight cannot measure: every entry on a
  * resource the configuration does not name (AZR-84), at a management group,
- * or an Entra directory role (AZR-82). The preflight reads effective
+ * an Entra directory role (AZR-82), or on a named group other than the
+ * configured one (NetworkWatcherRG, AZR-81 - the Labs preflight measures it). The preflight reads effective
  * permissions only at the configured subscription and resource group, so
  * these are reported as not measured - unknown, never denied.
  */
@@ -566,8 +579,8 @@ export function preflightUnmeasuredGrants(path: AzureSetupPath): UnmeasuredGrant
     .filter(
       (p) =>
         p.kind !== "graph-api" &&
-        p.scopeLevel !== "subscription" &&
-        p.scopeLevel !== "resourceGroup",
+        (p.resourceGroup !== undefined ||
+          (p.scopeLevel !== "subscription" && p.scopeLevel !== "resourceGroup")),
     )
     .map((p) => ({ name: p.name, where: unmeasuredWhere(p), feature: p.feature }));
 }
@@ -575,6 +588,9 @@ export function preflightUnmeasuredGrants(path: AzureSetupPath): UnmeasuredGrant
 function unmeasuredWhere(p: AppPermission): string {
   if (p.kind === "entra-directory-role") {
     return "the tenant (Entra ID directory role)";
+  }
+  if (p.resourceGroup !== undefined) {
+    return "resource group " + p.resourceGroup;
   }
   if (p.scopeLevel === "managementGroup") {
     return "the management group: " + (p.resource ?? "<management group>");

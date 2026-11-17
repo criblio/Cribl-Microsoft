@@ -80,8 +80,9 @@ const SETUP_PATH_NOTES: Readonly<Record<AzureSetupPath, string>> = {
     "only to service principals.",
   "lab-byo-rg":
     "Least privilege for labs: an admin pre-creates an empty lab resource group and grants " +
-    "Contributor on it - the lab deploys its workspace there with no subscription-scope rights. " +
-    "The admin also pre-assigns the TTL self-destruct identity its delete rights on that group.",
+    "Contributor and a conditioned RBAC Administrator on it. Two lab steps reach outside it: " +
+    "flow logs need Network Contributor on NetworkWatcherRG, and Event Grid needs the provider " +
+    "registered on the subscription once.",
 };
 
 /** The manual app-registration steps, shown behind an InfoTip (moved verbatim). */
