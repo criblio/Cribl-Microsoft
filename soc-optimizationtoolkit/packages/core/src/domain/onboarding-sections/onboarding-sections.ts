@@ -3,7 +3,8 @@
  *
  * The Azure Native Source Onboarding screen (AZR-18) renders the coverage
  * catalog as numbered sections, one per {@link CollectionMethod}, because
- * backlog.md#6 says the legacy `method` values ARE the section keys. This module
+ * backlog.md#6 says the legacy `method` values ARE the section keys (one item
+ * is overridden: the Activity Log, see SECTION_OVERRIDES). This module
  * is that layout, fixed in core so the screen composes it rather than deciding
  * it, and so a pin can count it.
  *
@@ -18,9 +19,8 @@
  * catalog + unsupported + 1 for that reason.
  *
  * AVAILABILITY IS PER ITEM, NOT PER SECTION. The `script` method holds both
- * entraId and defenderExport (coverage-model.test.ts), and only the Defender
- * export is built there; built-in-policy holds the policy initiative and the
- * Activity Log, and only the Activity Log is built there. A per-section flag
+ * activityLog, entraId and defenderExport (coverage-model.test.ts), and only
+ * the Activity Log and the Defender export are built there. A per-section flag
  * would either hide a built item or offer a deploy that does not exist. So
  * {@link ITEM_AVAILABILITY} is keyed by item id, and {@link sectionAvailability}
  * is derived from it: a section is available when any of its items is.
@@ -39,7 +39,7 @@
  */
 
 import {
-  itemsByMethod,
+  COVERAGE_CATALOG,
   UNSUPPORTED_SOURCES,
   XDR_TABLES_NOT_SUPPORTED,
   type CollectionMethod,
@@ -92,6 +92,27 @@ const SECTION_TITLES: Readonly<Record<CollectionMethod, string>> = {
 };
 
 /**
+ * Items whose SECTION differs from their catalog method (AZR-101). The catalog
+ * is a verbatim port of the legacy file, which files the Activity Log under
+ * `built-in-policy`; on this screen it is a subscription diagnostic setting the
+ * app writes directly, the same kind as Entra ID and the Defender export, so it
+ * is listed under direct configuration. Every other item sits in its method.
+ */
+const SECTION_OVERRIDES: Readonly<Record<string, Exclude<CollectionMethod, "none">>> = {
+  activityLog: "script",
+};
+
+/** The section key an item is listed under. */
+function sectionKeyOf(item: CoverageItem): CollectionMethod {
+  return SECTION_OVERRIDES[item.id] ?? item.method;
+}
+
+/** The catalog items listed under one section, in catalog order. */
+function itemsInSection(key: Exclude<CollectionMethod, "none">): readonly CoverageItem[] {
+  return COVERAGE_CATALOG.filter((item) => sectionKeyOf(item) === key);
+}
+
+/**
  * The screen's sections, in order. Built once from the catalog, so a catalog
  * item added later gets its ROW in its method's section without an edit here.
  * It still needs an entry in {@link ITEM_AVAILABILITY} and
@@ -102,7 +123,7 @@ export const ONBOARDING_SECTIONS: readonly OnboardingSection[] = [
     (key): OnboardingSection => ({
       key,
       title: SECTION_TITLES[key],
-      rows: itemsByMethod(key).map(
+      rows: itemsInSection(key).map(
         (item): OnboardingRow => ({ kind: "item", id: item.id, item }),
       ),
     }),
@@ -142,8 +163,8 @@ const NOT_BUILT_REASON = "Not available yet - this source cannot be deployed fro
  * and the subscription Activity Log setting (AZR-98) are built; Entra (AZR-2),
  * the policy initiatives and the guided XDR portal flow render as coming-soon
  * with disabled rows (plan outOfScope). The Activity Log row sits in the
- * built-in-policy section because that is its catalog method, but its
- * automation is one direct diagnostic setting, not a policy.
+ * direct-configuration (`script`) section: its automation is one subscription
+ * diagnostic setting, not a policy (AZR-101).
  *
  * The type does NOT guard completeness: {@link OnboardingItemId} is `string`,
  * so a catalog item with no entry here compiles cleanly and indexing the map

@@ -201,11 +201,11 @@ export const PROGRESS_SHELL_GAP_REASON = "this build of the app has no storage f
 
 const SECTION_TIPS: Readonly<Record<OnboardingSectionView["key"], string>> = {
   "built-in-policy":
-    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet. The Activity Log can be deployed from here as one subscription diagnostic setting, without a policy.",
+    "Azure Policy assigns diagnostic settings across many resource types at once. Deploying these initiatives from here is not available yet.",
   "custom-initiative":
     "A community-maintained policy initiative that covers resource types the built-in one does not. Deploying it from here is not available yet.",
   script:
-    "Sources configured directly, without a policy. The Defender for Cloud alert export can be deployed from here; the others are shown for completeness.",
+    "Sources configured directly, without a policy. The Activity Log (one subscription diagnostic setting) and the Defender for Cloud alert export can be deployed from here; Entra ID is shown for completeness.",
   "guided-portal":
     "The Defender XDR streaming export is finished in the Microsoft Defender portal. Guidance for it is not available here yet.",
   none: "Sources that cannot stream to an Event Hub at all, with what to use instead. Nothing here is deployed.",
