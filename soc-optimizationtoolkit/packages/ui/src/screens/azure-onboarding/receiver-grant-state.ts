@@ -11,6 +11,8 @@
  *     role and principal.
  *   - {@link receiverGrantPlanMessage} / {@link receiverGrantOutcomeMessage}:
  *     the plan and the outcome in plain words.
+ *   - {@link receiverGrantToRerecord}: an assignment this app provably made
+ *     whose record was lost, so it can be recorded again without a write.
  *
  * Visible copy carries no card ids, dates or phases (the copy-history gate
  * reads these strings).
@@ -24,8 +26,10 @@ import type {
   PlanValues,
   ReadyReceiverGrant,
   ReceiverGrantPrincipal,
+  ReceiverGrantRecord,
   ReceiverGrantScopeChoice,
 } from "@soc/core";
+import { receiverGrantKey } from "@soc/core";
 import type { PickerMessage } from "./azure-onboarding-state";
 
 /** One scope the operator can pick. */
@@ -173,3 +177,35 @@ export function receiverGrantOutcomeMessage(outcome: ApplyReceiverGrantOutcome, 
       return { tone: "error", text: `The grant stopped: ${outcome.message}` };
   }
 }
+
+/**
+ * The record to write again for an assignment this app provably made but
+ * whose record the progress document no longer holds (review round 1): the
+ * PUT succeeded, the save behind the record failed, and the page reloaded.
+ * Without the record a later removal (AZR-141) cannot list it.
+ *
+ * Only when the plan read the assignment EXACTLY at the chosen scope and
+ * its name and stamp prove it this app's (madeByThisApp). The name is
+ * deterministic over scope, role and principal, so it is evidence, not a
+ * guess. Recording needs no Azure write. Null otherwise: a grant above the
+ * scope, or one someone else made, is never recorded.
+ */
+export function receiverGrantToRerecord(
+  result: PlanReceiverGrantResult,
+  records: readonly ReceiverGrantRecord[],
+): ReceiverGrantRecord | null {
+  if (result.kind !== "already-granted" || !result.existing.madeByThisApp) return null;
+  const record: ReceiverGrantRecord = {
+    scopeId: result.scopeId,
+    principalId: result.principal.objectId,
+    assignmentName: result.existing.assignmentName,
+  };
+  const key = receiverGrantKey(record);
+  if (receiverGrantKey({ scopeId: result.existing.scope, principalId: record.principalId }) !== key) return null;
+  return records.some((r) => receiverGrantKey(r) === key) ? null : record;
+}
+
+/** What the section says beside the re-record button. */
+export const RECEIVER_GRANT_RERECORD_TEXT =
+  "This app made that assignment (its name and description say so), but your saved progress holds no record of it, " +
+  "so it would not be offered for removal later. Recording it writes only your saved progress, not Azure.";

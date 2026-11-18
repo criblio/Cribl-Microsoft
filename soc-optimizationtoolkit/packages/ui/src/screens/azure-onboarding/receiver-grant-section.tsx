@@ -16,7 +16,10 @@
  *
  * WHAT IT RECORDS. Only an assignment Azure accepted from this PUT: the
  * screen writes it to the progress document (onGranted), which is what lets a
- * later removal prove it the app's. A grant found in place is never recorded.
+ * later removal prove it the app's. A grant found in place is never recorded,
+ * with one exception: one at exactly this scope whose name and stamp prove it
+ * this app's, when the record was lost (the save behind it failed and the page
+ * reloaded). That is offered as "Record it", which writes no Azure state.
  *
  * PERMISSIONS. roleAssignments/write at the scope is not measured: a banner
  * says so and lists the actions. Never a block - Azure's answer decides.
@@ -48,6 +51,8 @@ import {
   receiverGrantOutcomeMessage,
   receiverGrantPlanMessages,
   receiverGrantScopeOptions,
+  receiverGrantToRerecord,
+  RECEIVER_GRANT_RERECORD_TEXT,
 } from "./receiver-grant-state";
 
 export interface ReceiverGrantSectionProps {
@@ -86,6 +91,7 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<{ outcome: ApplyReceiverGrantOutcome; recorded: boolean } | null>(null);
+  const [rerecorded, setRerecorded] = useState<{ key: string; recorded: boolean } | null>(null);
 
   const key = receiverGrantArmKey(scope, values, readSeq);
   const current = plan !== null && plan.key === key ? plan.result : null;
@@ -149,6 +155,13 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
 
   const options = receiverGrantScopeOptions(values);
   const messages = current === null ? [] : receiverGrantPlanMessages(current);
+  const toRerecord = current === null ? null : receiverGrantToRerecord(current, records);
+  const rerecordResult = rerecorded !== null && rerecorded.key === key ? rerecorded.recorded : null;
+
+  function rerecord(): void {
+    if (toRerecord === null) return;
+    setRerecorded({ key, recorded: onGranted(toRerecord) });
+  }
 
   return (
     <div className="azure-onboarding-block" data-testid="azo-receiver-grant">
@@ -200,6 +213,25 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
       {messages.map((m) => (
         <PickerLine key={m.text} message={m} />
       ))}
+
+      {toRerecord !== null && (
+        <div className="azure-onboarding-subblock" data-testid="azo-receiver-grant-rerecord">
+          <p className="panel-desc">{RECEIVER_GRANT_RERECORD_TEXT}</p>
+          <div className="panel-controls">
+            <button type="button" className="run-button" onClick={rerecord}>
+              Record it
+            </button>
+          </div>
+        </div>
+      )}
+      {rerecordResult === false && (
+        <PickerLine
+          message={{
+            tone: "warning",
+            text: "Your saved progress could not be updated, so the assignment is still not recorded.",
+          }}
+        />
+      )}
 
       {ready !== null && (
         <div className="azure-onboarding-subblock">

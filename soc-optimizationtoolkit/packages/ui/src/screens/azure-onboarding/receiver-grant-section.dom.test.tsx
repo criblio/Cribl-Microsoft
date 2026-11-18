@@ -13,7 +13,10 @@
  *   - a covering grant reads "Already granted" and offers no Grant button;
  *   - a blank object id with no directory is refused and nothing is written;
  *   - a 403 at the PUT is reported with the role an administrator grants, and
- *     nothing is recorded.
+ *     nothing is recorded;
+ *   - an assignment this app provably made at this scope with no record (the
+ *     save behind the record was lost) is offered "Record it", which records it
+ *     with no Azure write; a recorded one, or one someone else made, is not.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -98,7 +101,7 @@ class RoutingAzure implements AzureManagement {
   }
 }
 
-function mount(azure: RoutingAzure, v: PlanValues = values()) {
+function mount(azure: RoutingAzure, v: PlanValues = values(), records: readonly ReceiverGrantRecord[] = []) {
   const ports = { azure, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
   const recorded: ReceiverGrantRecord[] = [];
   render(
@@ -106,7 +109,7 @@ function mount(azure: RoutingAzure, v: PlanValues = values()) {
       <ReceiverGrantSection
         values={v}
         readSeq={0}
-        records={[]}
+        records={records}
         onGranted={(r) => {
           recorded.push(r);
           return true;
@@ -214,5 +217,41 @@ describe("ReceiverGrantSection (AZR-103)", () => {
     expect(within(block).getByText(/^The grant stopped: /).textContent).toContain("RBAC Administrator");
     expect(azure.writes()).toHaveLength(1);
     expect(recorded).toHaveLength(0);
+  });
+
+  describe("an assignment this app made whose record was lost (review round 1)", () => {
+    const name = receiverGrantAssignmentName(HUB_ID, P);
+    const own = (description: string) => ({
+      id: `${HUB_ID}/providers/Microsoft.Authorization/roleAssignments/${name}`,
+      name,
+      properties: { scope: HUB_ID, roleDefinitionId: RECEIVER_DEF, principalId: P, description },
+    });
+
+    it("offers Record it, and recording writes the exact record and nothing to Azure", async () => {
+      const azure = new RoutingAzure([own(receiverGrantDescription())]);
+      const { recorded, block } = mount(azure);
+      await check(block);
+      expect(within(block).getByText(/This app made it\. There is nothing to grant\.$/)).toBeTruthy();
+      const offer = within(block).getByTestId("azo-receiver-grant-rerecord");
+      fireEvent.click(within(offer).getByRole("button", { name: "Record it" }));
+      expect(recorded).toEqual([{ scopeId: HUB_ID, principalId: P, assignmentName: name }]);
+      expect(azure.writes()).toHaveLength(0);
+    });
+
+    it("offers nothing when the record is already held", async () => {
+      const azure = new RoutingAzure([own(receiverGrantDescription())]);
+      const { block } = mount(azure, values(), [{ scopeId: `${HUB_ID.toUpperCase()}/`, principalId: P, assignmentName: name }]);
+      await check(block);
+      expect(within(block).getByText(/This app made it\./)).toBeTruthy();
+      expect(within(block).queryByTestId("azo-receiver-grant-rerecord")).toBeNull();
+    });
+
+    it("offers nothing for an assignment without this app's stamp", async () => {
+      const azure = new RoutingAzure([own("made by hand")]);
+      const { block } = mount(azure);
+      await check(block);
+      expect(within(block).getByText(/^Already granted: the principal holds Azure Event Hubs Data Receiver at this scope\. There is nothing to grant\.$/)).toBeTruthy();
+      expect(within(block).queryByTestId("azo-receiver-grant-rerecord")).toBeNull();
+    });
   });
 });

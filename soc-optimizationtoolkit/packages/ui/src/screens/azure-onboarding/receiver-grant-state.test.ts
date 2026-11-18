@@ -13,6 +13,7 @@ import {
   receiverGrantOutcomeMessage,
   receiverGrantPlanMessages,
   receiverGrantScopeOptions,
+  receiverGrantToRerecord,
 } from "./receiver-grant-state";
 
 const NS = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1";
@@ -136,5 +137,33 @@ describe("receiverGrantOutcomeMessage", () => {
     expect(
       receiverGrantOutcomeMessage({ kind: "denied", step: "assignment-put", status: 403, code: "AuthorizationFailed", message: "M" }, true),
     ).toEqual({ tone: "error", text: "The grant stopped: M" });
+  });
+});
+
+describe("receiverGrantToRerecord", () => {
+  const made = (over: { scope?: string; madeByThisApp?: boolean } = {}) =>
+    ({
+      kind: "already-granted",
+      scopeId: HUB,
+      principal: ready().principal,
+      existing: { roleName: "Azure Event Hubs Data Receiver", scope: over.scope ?? HUB, assignmentName: "n1", madeByThisApp: over.madeByThisApp ?? true },
+      notes: [],
+    }) as const;
+
+  it("returns the record for this app's assignment at exactly this scope when none is held", () => {
+    expect(receiverGrantToRerecord(made(), [])).toEqual({ scopeId: HUB, principalId: P, assignmentName: "n1" });
+    // A record for another principal at the same scope does not count.
+    expect(receiverGrantToRerecord(made(), [{ scopeId: HUB, principalId: "other", assignmentName: "x" }])).toEqual({
+      scopeId: HUB,
+      principalId: P,
+      assignmentName: "n1",
+    });
+  });
+
+  it("returns null when the record is held (case and trailing slash ignored), above the scope, someone else's, or not already granted", () => {
+    expect(receiverGrantToRerecord(made(), [{ scopeId: `${HUB.toUpperCase()}/`, principalId: P.toUpperCase(), assignmentName: "n1" }])).toBeNull();
+    expect(receiverGrantToRerecord(made({ scope: NS }), [])).toBeNull();
+    expect(receiverGrantToRerecord(made({ madeByThisApp: false }), [])).toBeNull();
+    expect(receiverGrantToRerecord({ kind: "ready", ready: ready() }, [])).toBeNull();
   });
 });
