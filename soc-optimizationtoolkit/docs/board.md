@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 33 in progress, 241 done.**
+**105 in the backlog, 35 in progress, 241 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -170,6 +170,27 @@ Started. Anything here with an unfinished dependency is called out on its card.
   counts as granted only when rows come back (Resource Graph filters rather
   than refuses), an empty answer is unknown. Awaits a live preflight before
   done.
+
+- **CAP-11** The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts
+  `CAP-F1` `bug` `settled`
+  Not now because: The loss only ever turns a measured verdict into unknown -
+  it never invents a grant or a denial - so its cost is an annotation, and one
+  manual refresh restores it. No shipped route requires the enabler or Graph
+  capabilities yet; the Defender section's banner is the one surface that
+  shows a dropped verdict, as not measured. The defects where a granted ticket
+  still fails outrank it.
+  FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves
+  capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the
+  background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That
+  projection holds only what runAzurePreflight measures, so it carries none of
+  the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities
+  on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create
+  (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5).
+  After a panel run the next launch finds a matching key, skips the audit, and
+  those capabilities read unknown until a manual refresh or a scope change.
+  FIX: have the panel merge its set over the cached one (or re-run the audit's
+  extra measurements) rather than replace it; pin that a panel save keeps a
+  cached defender-plans.read verdict.
 
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled`
@@ -968,6 +989,29 @@ Started. Anything here with an unfinished dependency is called out on its card.
   management group returns full ids) are recorded and closed HERE, with
   verified live or both. [[AZR-112]] points here and does not repeat them.
 
+- **AZR-125** The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner
+  `AZR-F10` `bug` `settled`
+  Not now because: No permission is wrong or missing: the grant is the app's
+  own KV namespace, which the platform gives every App user and which cannot
+  be narrowed per key, so the omission misleads a reader of the inventory but
+  asks for nothing extra and refuses nothing. The fix also needs a decision on
+  amending a dated audit, which should not be made inside a review round.
+  Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read
+  and cribl.kv.write operations in
+  packages/core/src/domain/least-privilege/operations.ts name the app KV keys
+  read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it
+  and PUTs it from the background flow poll) nor azure-credential-lease and
+  azure-credential-owner (the tenant session's; that gap predates AZR-37).
+  Those audit strings are not free text: operations.test.ts matches each
+  against a 'method path' row of
+  docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means
+  amending that dated audit record or adding a later audit row, a decision
+  about how the audit is kept rather than a one-line edit. FIX: add the three
+  keys through whichever route is chosen (a dated addendum row is the honest
+  one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY,
+  CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed
+  again.
+
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1263,7 +1307,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (55)
+## Backlog - next (54)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1300,27 +1344,6 @@ Settled and unblocked, sequenced behind now.
   (CORRECTED 2026-10-21: Event Hub namespace creation is NOT `arm.deploy` -
   that is measured from deployments/write only; namespace write is filed under
   CAP-7.) ---
-
-- **CAP-11** The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts
-  `CAP-F1` `bug` `settled`
-  Not now because: The loss only ever turns a measured verdict into unknown -
-  it never invents a grant or a denial - so its cost is an annotation, and one
-  manual refresh restores it. No shipped route requires the enabler or Graph
-  capabilities yet; the Defender section's banner is the one surface that
-  shows a dropped verdict, as not measured. The defects where a granted ticket
-  still fails outrank it.
-  FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves
-  capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the
-  background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That
-  projection holds only what runAzurePreflight measures, so it carries none of
-  the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities
-  on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create
-  (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5).
-  After a panel run the next launch finds a matching key, skips the audit, and
-  those capabilities read unknown until a manual refresh or a scope change.
-  FIX: have the panel merge its set over the cached one (or re-run the audit's
-  extra measurements) rather than replace it; pin that a panel save keeps a
-  cached defender-plans.read verdict.
 
 - **AZR-29** Logging map: optional Cribl Lakehouse Engine lane as an alternative to Splunk/Elastic
   `AZR-F8` `story` `undecided` `blocked by AZR-19`
@@ -2263,7 +2286,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (39)
+## Backlog - later (38)
 
 Settled, gated on something above.
 
@@ -2804,29 +2827,6 @@ Settled, gated on something above.
   being retired by Microsoft in favour of VNet flow logs - decide whether NSG
   gets automation at all. Later because the permission bugs [[AZR-81]] (Event
   Grid provider registration, NetworkWatcherRG) block it.
-
-- **AZR-125** The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner
-  `AZR-F10` `bug` `settled`
-  Not now because: No permission is wrong or missing: the grant is the app's
-  own KV namespace, which the platform gives every App user and which cannot
-  be narrowed per key, so the omission misleads a reader of the inventory but
-  asks for nothing extra and refuses nothing. The fix also needs a decision on
-  amending a dated audit, which should not be made inside a review round.
-  Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read
-  and cribl.kv.write operations in
-  packages/core/src/domain/least-privilege/operations.ts name the app KV keys
-  read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it
-  and PUTs it from the background flow poll) nor azure-credential-lease and
-  azure-credential-owner (the tenant session's; that gap predates AZR-37).
-  Those audit strings are not free text: operations.test.ts matches each
-  against a 'method path' row of
-  docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means
-  amending that dated audit record or adding a later audit row, a decision
-  about how the audit is kept rather than a one-line edit. FIX: add the three
-  keys through whichever route is chosen (a dated addendum row is the honest
-  one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY,
-  CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed
-  again.
 
 - **AZR-126** Tenant gap grid: the keyboard hint promises arrow keys a screen reader in browse mode keeps
   `AZR-F10` `bug` `settled`

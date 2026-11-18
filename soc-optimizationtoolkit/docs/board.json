@@ -192,7 +192,7 @@
       "feature": "CAP-F1",
       "title": "The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
@@ -4781,7 +4781,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
