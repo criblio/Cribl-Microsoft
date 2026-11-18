@@ -22,6 +22,7 @@ export interface TenantGapEntry {
 export class TenantGapCache {
   private readonly entries = new Map<string, TenantGapEntry>();
   private running: Promise<void> | null = null;
+  private readonly listeners = new Set<() => void>();
 
   /**
    * The read still in flight, if any. It outlives the screen like the answers
@@ -37,9 +38,29 @@ export class TenantGapCache {
   /** Record `run` as the read in flight until it settles. */
   track(run: Promise<void>): void {
     const settled = run.finally(() => {
-      if (this.running === settled) this.running = null;
+      if (this.running === settled) {
+        this.running = null;
+        this.notify();
+      }
     });
     this.running = settled;
+    this.notify();
+  }
+
+  /**
+   * Be told when a read starts or ends (AZR-90 review): the shell shows that
+   * a Read all holds the Azure slot while the operator is on another screen,
+   * whose Azure reads wait until it ends. Returns the unsubscribe.
+   */
+  readonly subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  private notify(): void {
+    for (const listener of [...this.listeners]) listener();
   }
 
   /** The entry for this connection, only while it still names the tenant that was read. */

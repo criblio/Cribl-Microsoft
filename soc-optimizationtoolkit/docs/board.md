@@ -5447,7 +5447,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   last-seen.test.ts, use-live-flow.dom.test.tsx and
   onboarding-dataflow.dom.test.tsx; mutation-checked (lookback writing, and
   unknown read as never, both fail pins). NOT verified live: the KV write and
-  the popover in Live Preview.
+  the popover in Live Preview. REVIEW ROUND 1 (2026-11-17): the key is now
+  group/type:id (the same input id can exist in two worker groups, and a
+  window answer measures only the watched group, whose lanes alone are
+  recorded); a load the store refused is read again on the next poll (a
+  document read but not understood is not); each save is followed by one
+  re-read that re-saves the merge when a concurrent tab dropped or aged an
+  entry - the KV store has no compare-and-swap, so two tabs saving in the same
+  instant can still lose an entry until the next due write; a failed or
+  refused write is not tried again for 10 minutes. Five new hook pins and two
+  core pins, each mutation-checked.
 
 - **AZR-38** One definition of the Defender coverage item id
   `AZR-F9` `story` `settled` `verified: pins`
@@ -8667,7 +8676,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   restore. Pinned in run-tenant-session.test.ts (9 batch pins,
   mutation-checked: a per-tenant restore and a restore outside finally both
   fail them) and tenant-gap-screen.dom.test.tsx. NOT verified live: the Read
-  all against real tenants in Live Preview.
+  all against real tenants in Live Preview. REVIEW ROUND 1 (2026-11-17):
+  holding one exclusive section for the whole run means Azure reads from other
+  screens of the tab wait until the run ends (they ran between tenants
+  before). Kept, since restoring between tenants is what the card removed; the
+  Read all tip now says so, and the shell shows a notice above every screen
+  while a run is in flight (TenantReadInFlightNotice, fed by
+  TenantGapCache.subscribe; pinned and mutation-checked).
 
 - **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
   `AZR-F10` `story` `settled` `verified: pins`

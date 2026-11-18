@@ -14,7 +14,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   FakeKvDocumentStore,
   FakeLogger,
@@ -45,7 +45,7 @@ import type {
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { RESTORE_FAILED, TenantGapScreen } from "./tenant-gap-screen";
+import { RESTORE_FAILED, TENANT_READ_IN_FLIGHT, TenantGapScreen, TenantReadInFlightNotice } from "./tenant-gap-screen";
 import { TenantGapCache } from "./tenant-gap-state";
 
 afterEach(cleanup);
@@ -513,5 +513,40 @@ describe("TenantGapCache", () => {
     });
     expect(cache.get({ id: "pa", config: { tenantId: TA.toUpperCase() } })).not.toBeNull();
     expect(cache.get({ id: "pa", config: { tenantId: TB } })).toBeNull();
+  });
+});
+
+// AZR-90 review: a Read all holds the slot's exclusive section for its whole
+// run, so other screens' Azure reads wait. The shell says so on every screen
+// while the run is in flight, and the notice goes when it ends.
+describe("TenantReadInFlightNotice", () => {
+  it("shows exactly while a read is tracked, and goes when it settles", async () => {
+    const cache = new TenantGapCache();
+    render(<TenantReadInFlightNotice cache={cache} />);
+    expect(screen.queryByRole("status")).toBeNull();
+    let finish: () => void = () => undefined;
+    act(() => {
+      cache.track(new Promise<void>((r) => (finish = r)));
+    });
+    expect(screen.getByRole("status").textContent).toBe(TENANT_READ_IN_FLIGHT);
+    await act(async () => {
+      finish();
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("the cache tells each subscriber on start and end, and not after unsubscribe", async () => {
+    const cache = new TenantGapCache();
+    let calls = 0;
+    const off = cache.subscribe(() => calls++);
+    let finish: () => void = () => undefined;
+    cache.track(new Promise<void>((r) => (finish = r)));
+    expect(calls).toBe(1);
+    finish();
+    await cache.inFlight();
+    expect(calls).toBe(2);
+    off();
+    cache.track(Promise.resolve());
+    expect(calls).toBe(2);
   });
 });

@@ -1468,7 +1468,11 @@ work, and the active credential restored ONCE when the batch settles. The
 restore is decided by what the slot holds, so a swap that failed half-way, a
 cancel, or the batch body throwing still puts the active credential back
 (pinned in `run-tenant-session.test.ts`). A single-tenant Read is the batch of
-one and keeps its old sequence exactly.
+one and keeps its old sequence exactly. The cost of the one exclusive section:
+Azure reads from other screens of the tab wait until the whole run ends (they
+used to run between tenants). That is kept - restoring between tenants is what
+AZR-90 removed - and made visible: the Read all tip says so, and the shell
+shows a notice above every screen while a run is in flight.
 
 AZR-91 DONE 2026-11-17: the grid's indicator tips are ONE tab stop (a roving
 tabindex). Arrow keys move between indicators (clamped at the edges), Home and
@@ -3403,14 +3407,20 @@ and a dedicated consumer group), AZR-37 (a persisted last-seen beyond the
 24-hour lookback) and AZR-38 (one definition of the Defender item id).
 
 AZR-37 DONE 2026-11-17. The time a source was last seen flowing is remembered
-in its own app KV document, `azure-onboarding-flow-last-seen`, keyed by Cribl
-input (`type:id`) - NOT on the progress document the card's plan suggested: the
+in its own app KV document, `azure-onboarding-flow-last-seen`, keyed by worker
+group and Cribl input (`group/type:id`; the same input id can exist in two
+groups) - NOT on the progress document the card's plan suggested: the
 screen saves that document whole, so a write from the flow poll would race the
 operator's own saves and could undo one. Only a measured non-zero WINDOW row
 writes (the lookback is cumulative and carries no time; zero, refused and
 unreadable answers never write); the time is the UI clock when that answer
-arrived. Writes are read-merge-write (per input, the later time), at most once
-per input per ten minutes, and never over a document that could not be read.
+arrived, and only lanes in the watched group are recorded. Writes are
+read-merge-write (per input, the later time) plus one re-read that re-saves
+the merge when a concurrent tab dropped or aged an entry; the KV store has no
+compare-and-swap, so two tabs saving in the same instant can still lose an
+entry until that tab's next due write. At most once per input per ten minutes,
+never over a document that could not be read, and a failed write is not tried
+again for ten minutes. A load the store refused is retried on the next poll.
 The document is read only when Watch for data turns on, so mounting the screen
 still makes its three loads. Each hop's (i) and section (i) shows "Last seen
 flowing <time> (remembered ... not measured now)", "Never seen flowing by this

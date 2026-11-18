@@ -26,7 +26,7 @@
  *     only lays them out.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { FocusEvent, KeyboardEvent } from "react";
 import { GAP_SOURCES, NOT_READ_REASON, createRequestPacer, scanTenantGap } from "@soc/core";
 import type {
@@ -77,8 +77,9 @@ const READ_ALL_TIP =
   `proven to be that tenant's before and after it is used, and the active connection's credential is put back ` +
   `once, when the run ends - also when it is cancelled or a tenant fails. Azure reads go at most ` +
   `${VALIDATE_REQUESTS_PER_MINUTE} a minute for the whole run, counting each tenant's proof reads and sign-ins, ` +
-  `inside the budget every screen shares. Nothing in Azure or Cribl ` +
-  "is changed. Each tenant needs its client secret entered in this session.";
+  `inside the budget every screen shares. While it runs the slot is this run's: Azure reads from other ` +
+  `screens of this tab wait until the run ends, and a notice above every screen says so. Nothing in Azure ` +
+  "or Cribl is changed. Each tenant needs its client secret entered in this session.";
 
 const AZURE_TILE_TIP =
   "How many cells of the tenants read so far are configured in Azure (green), measured not configured or " +
@@ -107,6 +108,25 @@ function stamp(ms: number): string {
 /** The run's one restore failed: the operator's own connection is not back. */
 export const RESTORE_FAILED =
   "The active connection's credential could not be put back after reading. Save and connect on Setup before using other screens.";
+
+/** The shell-wide notice while a Read all holds the Azure slot (AZR-90). */
+export const TENANT_READ_IN_FLIGHT =
+  "A tenant gap Read all holds the app's Azure credential slot. Azure reads on this and other screens of this " +
+  "tab wait until it ends; cancel it on Tenant Logging Gaps to free the slot sooner.";
+
+/**
+ * The shell's notice while a Read all is in flight, on whatever screen is
+ * showing: the run holds the slot's exclusive section for every tenant, so
+ * another screen's Azure reads would otherwise spin with no reason given.
+ */
+export function TenantReadInFlightNotice({ cache }: { readonly cache: TenantGapCache }) {
+  const running = useSyncExternalStore(cache.subscribe, () => cache.inFlight() !== null);
+  return running ? (
+    <p className="connection-notice" role="status">
+      {TENANT_READ_IN_FLIGHT}
+    </p>
+  ) : null;
+}
 
 const EARLIER_RUN ="An earlier read is still finishing. Reads can start again once it has.";
 
