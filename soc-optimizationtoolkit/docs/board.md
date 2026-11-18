@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 39 in progress, 224 done.**
+**100 in the backlog, 43 in progress, 224 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (39)
+## In progress (43)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -170,6 +170,32 @@ Started. Anything here with an unfinished dependency is called out on its card.
   counts as granted only when rows come back (Resource Graph filters rather
   than refuses), an empty answer is unknown. Awaits a live preflight before
   done.
+
+- **CAP-2** Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic
+  `CAP-F1` `enabler` `settled`
+  rosoft.PolicyInsights`). Gates AZR-4.
+
+- **CAP-3** Add managed-identity creation plus probe
+  `CAP-F1` `enabler` `settled`
+  Gates AZR-4.
+
+- **CAP-4** Add Sentinel incident read (Microsoft Sentinel Reader)
+  `CAP-F1` `enabler` `settled`
+  Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor
+  actions. Gates AZR-7.
+
+- **CAP-5** Add the Graph licence and incident scopes plus probes
+  `CAP-F1` `enabler` `settled`
+  Gates AZR-6. CORRECTED 2026-11-17 (AZR-S1, backlog.md 6d point 7): LOG-09
+  listed Organization.Read.All and SecurityEvents.Read.All. The usage probe
+  lists Graph security/incidents, whose least-privileged application
+  permission is SecurityIncident.Read.All; SecurityEvents.Read.All belongs to
+  the legacy Graph security alerts and is not asked for. The licence check
+  reads GET /v1.0/subscribedSkus, which Organization.Read.All satisfies but
+  LicenseAssignment.Read.All (already asked for the data allowances) satisfies
+  more narrowly - so the capability is measured by the subscribedSkus read
+  itself, and either grant reads as granted. Per AZR-111 an empty 200 from
+  Graph is not a measured refusal: it records unknown.
 
 - **AZR-3** Defender for Cloud continuous export
   `AZR-F3` `story` `settled` `blocked by AZR-18`
@@ -1586,7 +1612,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (52)
+## Backlog - next (48)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1614,23 +1640,6 @@ Settled and unblocked, sequenced behind now.
   lint rule?
     [x] `one-off-sweep` One-off sweep of the codebase - Read every useEffect keyed on a memo, callback or inline object whose body resets operator-owned state, and fix what turns up. Cheap, and exactly the reading that found the first three - but nothing stops a fourth being written next week.
     [ ] `lint-rule` Write a custom lint rule - A permanent guard, but bigger than the three fixes were: .oxlintrc.json enables only react/rules-of-hooks and oxlint has no exhaustive-deps equivalent, so this means AUTHORING and maintaining a rule, not switching one on.
-
-- **CAP-2** Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic
-  `CAP-F1` `enabler` `settled`
-  rosoft.PolicyInsights`). Gates AZR-4.
-
-- **CAP-3** Add managed-identity creation plus probe
-  `CAP-F1` `enabler` `settled`
-  Gates AZR-4.
-
-- **CAP-4** Add Sentinel incident read (Microsoft Sentinel Reader)
-  `CAP-F1` `enabler` `settled`
-  Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor
-  actions. Gates AZR-7.
-
-- **CAP-5** Add the two Graph scopes (`Organization.Read.All`, `SecurityEvents.Read.All`) plus probes
-  `CAP-F1` `enabler` `settled`
-  Gates AZR-6.
 
 - **CAP-6** Make the four unmeasured listers measurable - subscriptions, resource groups, Resource Graph, C
   `CAP-F1` `enabler` `settled` `blocked by CAP-1`
