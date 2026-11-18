@@ -1,9 +1,9 @@
 # ADR 0008: The Cribl Event Hub source authenticates with Entra ID by default; a Listen-only SAS rule is the fallback
 
 Date: 2026-11-03
-Status: Accepted - not built. AZR-59 builds it; nothing below has run against
-        a real tenant or worker group yet. "Unverified" lists what must be
-        measured in Live Preview before AZR-59 closes.
+Status: Accepted - built (AZR-59, closed 2026-11-17 on pins); nothing below
+        has run against a real tenant or worker group yet. "Unverified" lists
+        what must be measured in Live Preview; that measurement is AZR-115.
 Invalidates: none
         No living document instructed otherwise. ADR 0007 section 5 (a
         record) is superseded in part and carries a dated banner pointing
@@ -124,7 +124,10 @@ hand-edited OAuth input still refuses by name.
   path-segment boundary: a grant on hub `h1` never covers `h10`, nor one on
   namespace `ns1` a hub of `ns10`.
 
-## Unverified (must be measured before AZR-59 closes)
+## Unverified (measured by AZR-115)
+
+Amended 2026-11-17: AZR-59 closed on pins and this list moved, unchanged, to
+AZR-115. It is still unmeasured.
 
 - **Inferred:** Cribl accepts the scope as `https://<ns>.servicebus.windows.net/.default`
   (the Azure Event Hubs Kafka OAuth pattern). Measure: a created input reads

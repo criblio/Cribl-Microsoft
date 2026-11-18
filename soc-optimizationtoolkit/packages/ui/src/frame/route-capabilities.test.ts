@@ -3,8 +3,9 @@
 // The table fails toward reachable: an id it does not list resolves to [], so
 // capabilitiesForRoute alone cannot tell "deliberately needs nothing" from
 // "nobody wrote an entry". For azure-onboarding that difference is the point -
-// its actions are needed but not yet measurable (CAP-7) - so the entry is
-// pinned to EXIST, not merely to resolve to [].
+// the entry is [] BY DESIGN (its actions are measured per section, the
+// namespace-side ones by CAP-9), so the entry is pinned to EXIST, not merely
+// to resolve to [].
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -19,15 +20,15 @@ describe("ROUTE_CAPABILITIES['azure-onboarding']", () => {
   });
 
   // CAP-7a added the Defender capabilities but deliberately left this entry
-  // empty (see the comment above it in route-capabilities.ts): the screen
-  // still states its permissions as not yet measured, and the route serves
-  // more than the Defender export.
-  it("requires nothing until CAP-7 measures its actions", () => {
+  // empty (see the comment above it in route-capabilities.ts): the route
+  // serves more than the Defender export, and its verdicts are bannered per
+  // section instead (inform, never forbid). CAP-9 does not change that.
+  it("requires nothing, permanently by design", () => {
     expect(ROUTE_CAPABILITIES["azure-onboarding"]).toEqual([]);
     expect(capabilitiesForRoute("azure-onboarding")).toEqual([]);
   });
 
-  it("carries the comment naming CAP-7, so the empty entry reads as pending", () => {
+  it("carries the comment saying the empty entry is by design and names CAP-9, not a closed card", () => {
     const source = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "route-capabilities.ts"),
       "utf8",
@@ -38,7 +39,11 @@ describe("ROUTE_CAPABILITIES['azure-onboarding']", () => {
     // The comment block directly above the entry, up to the previous entry.
     const above: string[] = [];
     for (let i = at - 1; i >= 0 && lines[i].trim().startsWith("//"); i--) above.push(lines[i]);
-    expect(above.join("\n")).toContain("CAP-7");
+    const comment = above.join("\n");
+    expect(comment).toContain("EXPLICITLY EMPTY BY DESIGN - the final state, not forgotten and not");
+    expect(comment).toContain("section by CAP-9 (split from CAP-7b), never by this entry.");
+    // CAP-7 closed 2026-11-17: nothing may read as waiting on it.
+    expect(comment).not.toMatch(/until CAP-7/);
   });
 });
 

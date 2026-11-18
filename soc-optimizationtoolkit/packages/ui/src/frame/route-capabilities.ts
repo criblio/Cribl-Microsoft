@@ -69,18 +69,20 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // audited path. The per-namespace hub GETs that follow are still not a
     // capability, so the screen keeps reporting its own errors for those.
     "eventhub-discovery": ["resourcegraph.read"],
-    // EXPLICITLY EMPTY, not forgotten. Azure Native Source Onboarding needs
-    // Defender pricings read, the security automation read and write, and the
-    // Event Hub rule's listKeys. CAP-7a added the three Defender capabilities
-    // (defender-plans.read, defender-automation.read/.write), measured only by
-    // an existing-subscription audit; listKeys is still unmeasured (CAP-7b).
-    // The entry stays [] because the route is several sources: gating all of
-    // it on the Defender export would flag the Event Hub and Entra paths for an
-    // operator who never touches Defender. Since AZR-60 the verdicts ARE read,
-    // at the right grain - per automatable section, from the declarations in
-    // core onboarding-sections/automation-permissions - and the Defender
-    // section banners them there; listKeys stays "needed, not yet measured"
-    // until CAP-7b.
+    // EXPLICITLY EMPTY BY DESIGN - the final state, not forgotten and not
+    // pending. Azure Native Source Onboarding needs Defender pricings read, the
+    // security automation read and write, and the Event Hub rule's listKeys.
+    // CAP-7a added the three Defender capabilities (defender-plans.read,
+    // defender-automation.read/.write), measured only by an
+    // existing-subscription audit. The entry stays [] because the route is
+    // several sources: gating all of it on the Defender export would flag the
+    // Event Hub and Entra paths for an operator who never touches Defender, and
+    // the capability model informs, never forbids. Since AZR-60 the verdicts
+    // ARE read, at the right grain - per automatable section, from the
+    // declarations in core onboarding-sections/automation-permissions - and
+    // each section banners them there. The Event Hub namespace-side actions
+    // (listKeys and the namespace, hub and rule writes) are measured per
+    // section by CAP-9 (split from CAP-7b), never by this entry.
     "azure-onboarding": [],
     "mapping-catalog": [],
     // Same kind of gap eventhub-discovery had before CAP-1. The logging map
