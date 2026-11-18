@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**109 in the backlog, 38 in progress, 218 done.**
+**109 in the backlog, 39 in progress, 217 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 4 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 34 | 48 | 9 |
+| Azure Native Source Onboarding | 35 | 47 | 9 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 147.
+Open work totals 148.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 57% (56/98)
+### `AZR` Azure native source onboarding - 56% (55/98)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 37/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 36/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 17/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (38)
+## In progress (39)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1313,6 +1313,72 @@ Started. Anything here with an unfinished dependency is called out on its card.
   still says a Send-only rule is safer, which is wrong for this deploy (the
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
+
+- **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Only the Defender export has a
+  Remove card ([[AZR-28]]). The screen also creates the Cribl Event Hubs /
+  Blob inputs and their secrets ([[AZR-34]]), the Lake dataset, unroll
+  pipeline and route ([[AZR-35]]), and with [[AZR-98]] the subscription
+  diagnostic setting; none can be removed from the app, and a leftover object
+  blocks a fresh deploy with already-exists. House rule (claude-kit
+  cribl-config-writes rule 11): delete only what the app can prove it created
+  (manifest id + description stamp + KV record), in teardown order (route
+  before pipeline; a shared pipeline only when no recorded route uses it; a
+  Lake dataset only on explicit opt-in because it holds data), and ship
+  Pause/Remove because there is no uninstall hook. Each removal behind its own
+  confirm quoting what goes. DONE 2026-11-17, PINS ONLY: nothing was removed,
+  paused or deleted on a real leader or in Azure; live removal has NOT been
+  exercised. BUILT: domain/onboarding-teardown (pure: planCriblTeardown gives
+  the route, the shared unroll pipeline, the Cribl source, its secret and the
+  Lake dataset one verdict each - delete only with all three kit
+  proveOwnership signals (manifest id, description stamp, the progress
+  document's record), already-gone as success, keep naming not-proven / in-use
+  / opt-in-off / unreadable with a 401/403 flagged denied - in the kit's
+  teardownOrder, the dataset last, ONLY on explicit opt-in and only when the
+  record says the app created it; recordsAfterTeardown keeps a record until
+  its removal is committed and deployed), usecases/onboarding-teardown
+  (planSourceTeardown read-only; applySourceTeardown re-reads and re-verdicts
+  each object right before its write, removes the route through the kit's
+  writeApproved with a synchronous stamp check, DELETEs pipeline / input /
+  secret, commits and deploys what went - also after a stop - and deletes the
+  dataset only after the deploy; planInputPause / applyInputPause PATCH the
+  whole source with `disabled` through the kit), and
+  usecases/activity-log-export removeActivityLogExport (GET by name, prove by
+  name + KV record + the recorded rule id, DELETE, GET for the 404). PAUSE
+  MEANS: the Cribl input's `disabled`; nothing else has a switch (a diagnostic
+  setting is removed, never paused). CREATE PATHS NOW RECORD THE PROOF:
+  LakeRouteRecord.datasetCreated (only a dataset the app's POST created;
+  withLakeRoute carries it over a later apply that finds it present) and
+  progress.activityLogSettings (written after a deploy that wrote the
+  setting). Records written before this change carry neither, so such a
+  dataset or setting is refused with the reason and never deleted. UI: a
+  'Remove or pause what this app created' panel in the Cribl source section,
+  one row per recorded source (chosen or not), Pause / Resume / Remove each
+  two clicks with a confirm quoting every object in order and what is kept and
+  why, the dataset behind its own checkbox; the Activity Log section's Remove
+  setting is live behind its own confirm. policies.yml / paths.ts: DELETE and
+  PATCH /m/:gid/system/inputs/:id, DELETE /m/:gid/system/secrets/:id, DELETE
+  /m/:gid/pipelines/:id, DELETE /products/lake/lakes/:lakeId/datasets/:id.
+  Least privilege: activityLog.diagnosticSetting.delete (Monitoring
+  Contributor, documented not measured) in the activity-log-export function,
+  so the change request and the not-measured banner name it. UNVERIFIED LIVE:
+  every DELETE's answer (404 for gone, 409 for a secret still named), the
+  files each DELETE leaves pending against the create path's (also unmeasured)
+  markers, the dataset DELETE route, the input PATCH round-trip, and a paused
+  input re-reading in the create panel as 'differs: disabled' (honest, but
+  worded as a difference). The Defender export's removal stays [[AZR-28]].
+  REOPENED 2026-11-17 by an independent review of the branch (before merge):
+  (1) HIGH records cleared and the dataset deleted while removals were still
+  uncommitted (already-gone counted as gone without checking the group's
+  pending changes or the deployed version); (2) the shared pipeline in-use
+  check missed QuickConnect connections and destinations; (3) the secret
+  in-use check read only sources; (4) the dataset in-use check saw one worker
+  group's routes only; (5) withLakeRoute could carry datasetCreated over a
+  dataset recreated outside the app; (6) policies grant DELETE/PATCH on every
+  id; (7) a paused input read as 'differs: disabled' in the create panel.
 
 - **MIG-33** Data Volume Inventory: licence counts on the card face and 30-day totals, billable versus allowance
   `MIG-F2` `story` `settled`
@@ -2996,7 +3062,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (218)
+## Done (217)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8447,63 +8513,6 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   stays a verbatim port of the legacy file (method built-in-policy);
   onboarding-sections overrides that one item's section, and the layout pin
   names the override. Not checked in Live Preview.
-
-- **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
-  `AZR-F9` `story` `settled` `verified: pins`
-  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
-  Preview (all ten sections walked), asked for by the operator to find what is
-  missing to finish automating the sources. Only the Defender export has a
-  Remove card ([[AZR-28]]). The screen also creates the Cribl Event Hubs /
-  Blob inputs and their secrets ([[AZR-34]]), the Lake dataset, unroll
-  pipeline and route ([[AZR-35]]), and with [[AZR-98]] the subscription
-  diagnostic setting; none can be removed from the app, and a leftover object
-  blocks a fresh deploy with already-exists. House rule (claude-kit
-  cribl-config-writes rule 11): delete only what the app can prove it created
-  (manifest id + description stamp + KV record), in teardown order (route
-  before pipeline; a shared pipeline only when no recorded route uses it; a
-  Lake dataset only on explicit opt-in because it holds data), and ship
-  Pause/Remove because there is no uninstall hook. Each removal behind its own
-  confirm quoting what goes. DONE 2026-11-17, PINS ONLY: nothing was removed,
-  paused or deleted on a real leader or in Azure; live removal has NOT been
-  exercised. BUILT: domain/onboarding-teardown (pure: planCriblTeardown gives
-  the route, the shared unroll pipeline, the Cribl source, its secret and the
-  Lake dataset one verdict each - delete only with all three kit
-  proveOwnership signals (manifest id, description stamp, the progress
-  document's record), already-gone as success, keep naming not-proven / in-use
-  / opt-in-off / unreadable with a 401/403 flagged denied - in the kit's
-  teardownOrder, the dataset last, ONLY on explicit opt-in and only when the
-  record says the app created it; recordsAfterTeardown keeps a record until
-  its removal is committed and deployed), usecases/onboarding-teardown
-  (planSourceTeardown read-only; applySourceTeardown re-reads and re-verdicts
-  each object right before its write, removes the route through the kit's
-  writeApproved with a synchronous stamp check, DELETEs pipeline / input /
-  secret, commits and deploys what went - also after a stop - and deletes the
-  dataset only after the deploy; planInputPause / applyInputPause PATCH the
-  whole source with `disabled` through the kit), and
-  usecases/activity-log-export removeActivityLogExport (GET by name, prove by
-  name + KV record + the recorded rule id, DELETE, GET for the 404). PAUSE
-  MEANS: the Cribl input's `disabled`; nothing else has a switch (a diagnostic
-  setting is removed, never paused). CREATE PATHS NOW RECORD THE PROOF:
-  LakeRouteRecord.datasetCreated (only a dataset the app's POST created;
-  withLakeRoute carries it over a later apply that finds it present) and
-  progress.activityLogSettings (written after a deploy that wrote the
-  setting). Records written before this change carry neither, so such a
-  dataset or setting is refused with the reason and never deleted. UI: a
-  'Remove or pause what this app created' panel in the Cribl source section,
-  one row per recorded source (chosen or not), Pause / Resume / Remove each
-  two clicks with a confirm quoting every object in order and what is kept and
-  why, the dataset behind its own checkbox; the Activity Log section's Remove
-  setting is live behind its own confirm. policies.yml / paths.ts: DELETE and
-  PATCH /m/:gid/system/inputs/:id, DELETE /m/:gid/system/secrets/:id, DELETE
-  /m/:gid/pipelines/:id, DELETE /products/lake/lakes/:lakeId/datasets/:id.
-  Least privilege: activityLog.diagnosticSetting.delete (Monitoring
-  Contributor, documented not measured) in the activity-log-export function,
-  so the change request and the not-measured banner name it. UNVERIFIED LIVE:
-  every DELETE's answer (404 for gone, 409 for a secret still named), the
-  files each DELETE leaves pending against the create path's (also unmeasured)
-  markers, the dataset DELETE route, the input PATCH round-trip, and a paused
-  input re-reading in the create panel as 'differs: disabled' (honest, but
-  worded as a difference). The Defender export's removal stays [[AZR-28]].
 
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`
