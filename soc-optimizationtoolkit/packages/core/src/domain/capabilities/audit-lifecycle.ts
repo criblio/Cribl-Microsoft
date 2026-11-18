@@ -172,9 +172,17 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * Milliseconds since the audit ran, or null when it never ran or either
- * timestamp is unparseable. Clamped at zero: a future `auditedAt` is clock skew,
- * and rendering a negative age would be worse than rendering none.
+ * Milliseconds since the OLDEST verdict in the set was measured, or null when
+ * the audit never ran or either timestamp is unparseable. Clamped at zero: a
+ * future time is clock skew, and rendering a negative age would be worse than
+ * rendering none.
+ *
+ * Oldest, not `auditedAt` (CAP-15): since the two writers share one set
+ * (CAP-11), `auditedAt` is the NEWEST measurement, and a verdict carried from
+ * an earlier audit keeps its own older time in `measuredAt`. The age answers
+ * "is this old enough that I should refresh?", so it must not let a panel run
+ * make a six-hour-old Defender or Graph verdict read as just checked. An
+ * unparseable carried time is skipped rather than voiding the whole age.
  */
 export function auditAgeMs(set: CapabilitySet, nowIso: string): number | null {
   if (set.auditedAt === null) {
@@ -185,7 +193,13 @@ export function auditAgeMs(set: CapabilitySet, nowIso: string): number | null {
   if (Number.isNaN(auditedMs) || Number.isNaN(nowMs)) {
     return null;
   }
-  return Math.max(0, nowMs - auditedMs);
+  let oldestMs = auditedMs;
+  for (const at of Object.values(set.measuredAt ?? {})) {
+    // An unparseable time is NaN, and NaN < anything is false: it is skipped.
+    const carried = at === undefined ? Number.NaN : new Date(at).getTime();
+    if (carried < oldestMs) oldestMs = carried;
+  }
+  return Math.max(0, nowMs - oldestMs);
 }
 
 /** Pluralize a whole-unit count. */

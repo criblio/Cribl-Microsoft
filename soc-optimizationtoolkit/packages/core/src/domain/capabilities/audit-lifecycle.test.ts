@@ -200,6 +200,22 @@ describe("age is reported, never enforced", () => {
     expect(describeAuditAge(future, NOW)).toBe("just now");
   });
 
+  it("reports the OLDEST carried verdict's age, not the newest write's (CAP-15)", () => {
+    // A panel run at 11:59 over an audit from 06:00: the Defender verdict it
+    // carried is six hours old, and that is what the age must say.
+    const merged: CapabilitySet = {
+      verdicts: { "dcr.write": "granted", "policy.assign": "granted", "defender-plans.read": "denied" },
+      auditedAt: "2026-08-06T11:59:00Z",
+      connectionId: "k",
+      measuredAt: { "policy.assign": "2026-08-06T09:00:00Z", "defender-plans.read": "2026-08-06T06:00:00Z" },
+    };
+    expect(auditAgeMs(merged, NOW)).toBe(6 * 60 * 60 * 1000);
+    expect(describeAuditAge(merged, NOW)).toBe("6 hours ago");
+    // An unparseable carried time is skipped, not allowed to void the age.
+    const skewed: CapabilitySet = { ...merged, measuredAt: { "policy.assign": "garbage" } };
+    expect(describeAuditAge(skewed, NOW)).toBe("1 minute ago");
+  });
+
   it("degrades to null on an unparseable timestamp", () => {
     expect(auditAgeMs(auditedAt("not-a-date"), NOW)).toBeNull();
     expect(auditAgeMs(auditedAt(NOW), "not-a-date")).toBeNull();
