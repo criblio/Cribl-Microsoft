@@ -3,7 +3,9 @@
 Date: 2026-10-26
 Status: Accepted - not verified live. Every pin below proves the code; none of
         it has run against a real tenant or a real worker group. The
-        live-verification list at the end is what closes AZR-30 to AZR-34.
+        live-verification list at the end is what closes AZR-30 to AZR-34
+        (amended 2026-11-17: its unobserved items are cards AZR-112 to
+        AZR-115; see the end).
 Invalidates: backlog.md
         backlog.md section 6h records AZR-S2 as "write when connected, export
         when not", with the write "gated on `source.manage`".
@@ -482,3 +484,12 @@ None of these ran during the build:
 
 AZR-30 to AZR-34 close only after this pass, with `verified` set to `live` or
 `both`.
+
+**Amended 2026-11-17 (closeout).** That rule is retired for AZR-32 and AZR-34:
+both closed on pins, with the operator's partial passes recorded on the cards,
+and every item still unobserved moved to its own card - item 3's remainder to
+AZR-112 (its two AZR-39 readings stay on AZR-39, which closes on them), items
+4 and 5 for the SAS fallback to AZR-113, item 7 (and item 6 for the Blob lane)
+to AZR-114, and the Entra ID credential to AZR-115 (ADR 0008).
+What this falsifies: any reading of a done AZR-32 or AZR-34 as "verified live";
+read `verified: pins` and the split cards instead.

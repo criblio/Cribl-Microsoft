@@ -38,7 +38,31 @@ const FUNCTIONS = [
     id: "permission-check",
     label: "Check the app's effective permissions",
     necessity: "core",
-    operations: ["rbac.permissions.read", "dcr.list", "workspace.read", "tables.list", "resourceGraph.query"],
+    operations: [
+      "rbac.permissions.read",
+      "dcr.list",
+      "workspace.read",
+      "tables.list",
+      "resourceGraph.query",
+    ],
+  },
+  // CAP-4 / CAP-5. The capability audit's OPTIONAL probes: each measures a
+  // permission ahead of the feature that needs it (AZR-6, AZR-7) and only
+  // annotates. A refusal costs an unknown, never the permission check, so
+  // they are `feature`, not part of the core function above - nothing that
+  // derives the asked-for roles from core functions may ask for them.
+  {
+    id: "capability-probes",
+    label: "Measure optional permissions ahead of the features that need them",
+    necessity: "feature",
+    operations: [
+      // CAP-4: the Sentinel incidents probe ($top=1) on the configured workspace.
+      "sentinel.incidents.read",
+      // CAP-5: the two Graph probes, on the Graph token.
+      "entra.token",
+      "graph.subscribedSkus.read",
+      "graph.securityIncidents.read",
+    ],
   },
   {
     id: "dcr-deploy",
@@ -251,6 +275,18 @@ const FUNCTIONS = [
       "tables.list",
       "workspace.query",
     ],
+  },
+  // PLANNED (AZR-4): nothing performs this yet. Listed so the CAP-2 / CAP-3
+  // writes the capability model measures ahead of the feature are not orphan
+  // facts; no change request asks for them until the feature ships. NOT the
+  // complete set AZR-4 needs: granting the assignment identity its roles is a
+  // role-assignment write, and referencing a user-assigned identity probably
+  // needs userAssignedIdentities/assign/action (CAP-12; see enabler-actions).
+  {
+    id: "policy-logging",
+    label: "Assign the Azure Policy logging initiatives and remediate existing resources",
+    necessity: "feature",
+    operations: ["policy.assignment.write", "policy.remediation.write", "managedIdentity.write"],
   },
   {
     id: "labs",

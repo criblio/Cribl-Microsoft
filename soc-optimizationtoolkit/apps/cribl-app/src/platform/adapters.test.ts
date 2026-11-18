@@ -304,3 +304,117 @@ describe("PlatformGraphDirectory.readSubscribedSkus (MIG-14)", () => {
     expect(skuGets()).toHaveLength(0);
   });
 });
+
+describe("PlatformGraphDirectory.probePermission (CAP-5)", () => {
+  const URLS = {
+    "subscribed-skus": "https://graph.microsoft.com/v1.0/subscribedSkus?$select=skuId",
+    "security-incidents": "https://graph.microsoft.com/v1.0/security/incidents?$top=1",
+  } as const;
+
+  /** Token PUTs succeed; GETs answer the scripted (status, body) pairs in order. */
+  function script(...answers: { status: number; body: unknown }[]) {
+    const queue = [...answers];
+    fetchWithTimeout.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return { ok: true, status: 200, text: async () => "" };
+      if (url !== URLS["subscribed-skus"] && url !== URLS["security-incidents"]) {
+        throw new Error(`unexpected url ${url}`);
+      }
+      const next = queue.shift() ?? { status: 500, body: {} };
+      return {
+        ok: next.status === 200,
+        status: next.status,
+        text: async () => JSON.stringify(next.body),
+        headers: { get: () => "application/json" },
+      };
+    });
+  }
+  const directory = (docs = new FakeKvDocumentStore()) =>
+    new PlatformGraphDirectory("tenant", makeAzureCredentialSlot(docs), "shared", "client");
+  const gets = () =>
+    fetchWithTimeout.mock.calls
+      .filter((c) => (c[1] as RequestInit | undefined)?.method === "GET")
+      .map((c) => c[0] as string);
+
+  /** A directory whose slot already holds this tenant's Graph token. */
+  async function warmed() {
+    const dir = directory();
+    script({ status: 200, body: { value: [{ id: "1" }] } });
+    await dir.probePermission("subscribed-skus");
+    fetchWithTimeout.mockClear();
+    return dir;
+  }
+
+  it("sends the smallest read for each probe and returns the answer uninterpreted", async () => {
+    const dir = await warmed();
+    script({ status: 200, body: { value: [] } }, { status: 200, body: { value: [{ id: "1" }] } });
+    expect(await dir.probePermission("subscribed-skus")).toEqual({ status: 200, body: { value: [] } });
+    expect(await dir.probePermission("security-incidents")).toEqual({
+      status: 200,
+      body: { value: [{ id: "1" }] },
+    });
+    expect(gets()).toEqual([URLS["subscribed-skus"], URLS["security-incidents"]]);
+  });
+
+  it("re-mints once on a 403 and returns the second answer, still a 403 when consent is missing", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    const dir = await warmed();
+    mints.mockClear();
+    script({ status: 403, body: {} }, { status: 403, body: { error: { code: "Forbidden" } } });
+    const result = await dir.probePermission("security-incidents");
+    expect(gets()).toEqual([URLS["security-incidents"], URLS["security-incidents"]]);
+    expect(mints).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ status: 403, body: { error: { code: "Forbidden" } }, reminted: true });
+  });
+
+  it("never re-mints a token it minted for this probe, and says it minted (review r2)", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    mints.mockClear();
+    // Fresh page load: the slot holds no Graph token for this tenant.
+    script({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } }, { status: 200, body: {} });
+    const result = await directory().probePermission("subscribed-skus");
+    expect(mints).toHaveBeenCalledTimes(1);
+    expect(gets()).toEqual([URLS["subscribed-skus"]]);
+    expect(result).toEqual({
+      status: 403,
+      body: { error: { code: "Authorization_RequestDenied" } },
+      reminted: true,
+    });
+  });
+
+  it("does not re-mint when told not to: one GET, no token request (review r1)", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    const dir = directory();
+    // Warm the slot so ensureGraph mints nothing more on this instance.
+    script({ status: 200, body: { value: [{ id: "1" }] } });
+    await dir.probePermission("subscribed-skus");
+    mints.mockClear();
+    fetchWithTimeout.mockClear();
+
+    script({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } }, { status: 200, body: {} });
+    const result = await dir.probePermission("security-incidents", { remint: false });
+    expect(gets()).toEqual([URLS["security-incidents"]]);
+    expect(mints).toHaveBeenCalledTimes(0);
+    expect(result).toEqual({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } });
+
+    // The default still re-mints once and says so.
+    fetchWithTimeout.mockClear();
+    script({ status: 403, body: {} }, { status: 403, body: {} });
+    expect(await dir.probePermission("security-incidents")).toEqual({ status: 403, body: {}, reminted: true });
+    expect(gets()).toHaveLength(2);
+    expect(mints).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses (rejects, nothing sent) while another tenant owns the shared slot", async () => {
+    script({ status: 200, body: { value: [{ id: "1" }] } });
+    const docs = new FakeKvDocumentStore({
+      [CREDENTIAL_OWNER_KEY]: encodeCredentialOwner({ profileId: "px", tenantId: "other", clientId: "cx" }, "w-1"),
+    });
+    await expect(directory(docs).probePermission("subscribed-skus")).rejects.toBeInstanceOf(
+      SharedCredentialRefusal,
+    );
+    expect(gets()).toHaveLength(0);
+  });
+});
