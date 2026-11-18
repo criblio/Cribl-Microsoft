@@ -12,7 +12,9 @@
  *     every Azure request - the work's reads and the session's proof reads and
  *     token mints - inside ONE pacer per run: Validate's rate for the whole
  *     run, not per tenant, and the budget every screen shares. Cancel ends a
- *     wait for room at once and sends nothing more.
+ *     wait for room at once and sends nothing more. The run is ONE
+ *     tenant-session batch (AZR-90): the slot swaps tenant to tenant and the
+ *     active credential is restored once at the end, not after every tenant.
  *     Without a session or the shell's pacing the reads are disabled with the
  *     reason - nothing goes out unpaced.
  *   - ANSWERS ARE CACHED per tenant with their time, in a cache the shell
@@ -24,7 +26,8 @@
  *     only lays them out.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { FocusEvent, KeyboardEvent } from "react";
 import { GAP_SOURCES, NOT_READ_REASON, createRequestPacer, scanTenantGap } from "@soc/core";
 import type {
   BatchPacing,
@@ -40,7 +43,9 @@ import { VALIDATE_REQUESTS_PER_MINUTE } from "../azure-onboarding/validate/valid
 import {
   AZURE_WORD,
   CRIBL_WORD,
+  moveGridFocus,
   progressLine,
+  type GridPos,
   stateCounts,
   type ScanProgress,
   type TenantGapCache,
@@ -69,10 +74,12 @@ const PANEL_TIP =
 
 const READ_ALL_TIP =
   `Reads every tenant in turn, never two at once: each one's credential is put in the app's single Azure slot, ` +
-  `proven to be that tenant's, used, and the active connection's put back. Azure reads go at most ` +
+  `proven to be that tenant's before and after it is used, and the active connection's credential is put back ` +
+  `once, when the run ends - also when it is cancelled or a tenant fails. Azure reads go at most ` +
   `${VALIDATE_REQUESTS_PER_MINUTE} a minute for the whole run, counting each tenant's proof reads and sign-ins, ` +
-  `inside the budget every screen shares. Nothing in Azure or Cribl ` +
-  "is changed. Each tenant needs its client secret entered in this session.";
+  `inside the budget every screen shares. While it runs the slot is this run's: Azure reads from other ` +
+  `screens of this tab wait until the run ends, and a notice above every screen says so. Nothing in Azure ` +
+  "or Cribl is changed. Each tenant needs its client secret entered in this session.";
 
 const AZURE_TILE_TIP =
   "How many cells of the tenants read so far are configured in Azure (green), measured not configured or " +
@@ -98,17 +105,77 @@ function stamp(ms: number): string {
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
 }
 
-const EARLIER_RUN = "An earlier read is still finishing. Reads can start again once it has.";
+/** The run's one restore failed: the operator's own connection is not back. */
+export const RESTORE_FAILED =
+  "The active connection's credential could not be put back after reading. Save and connect on Setup before using other screens.";
 
-function Indicator(props: { side: "azure" | "cribl"; indicator: GapIndicator; sourceId: string; where: string }) {
-  const { side, indicator, sourceId, where } = props;
+/**
+ * The shell-wide notice while a Read all holds the Azure slot (AZR-90). It
+ * shows on other screens only after the operator left Tenant Logging Gaps,
+ * and leaving already cancelled the run (the unmount abort), so it must not
+ * send them back to a Cancel button that is no longer there (review round 3).
+ */
+export const TENANT_READ_IN_FLIGHT =
+  "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
+  "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging Gaps " +
+  "stops it, and leaving that screen cancels it too; the slot frees once its current request returns and the active " +
+  "connection's credential is back.";
+
+/**
+ * The shell's notice while a Read all is in flight, on whatever screen is
+ * showing: the run holds the slot's exclusive section for every tenant, so
+ * another screen's Azure reads would otherwise spin with no reason given.
+ */
+export function TenantReadInFlightNotice({ cache }: { readonly cache: TenantGapCache }) {
+  const running = useSyncExternalStore(cache.subscribe, () => cache.inFlight() !== null);
+  return running ? (
+    <p className="connection-notice" role="status">
+      {TENANT_READ_IN_FLIGHT}
+    </p>
+  ) : null;
+}
+
+const EARLIER_RUN =
+  "An earlier read is still finishing: leaving this screen cancelled it, and it stops once its current request " +
+  "returns and the active connection's credential is back. Reads can start again once it has.";
+
+/** Id of the hidden line that tells a keyboard user how to move between the grid's tips. */
+const GRID_HINT_ID = "tgap-grid-keys";
+const GRID_HINT =
+  "Arrow keys move between indicators, Home and End to the first and last in the row, Control with Home or End to " +
+  "the first and last in the grid. Enter or Space shows or hides the reason.";
+
+function Indicator(props: {
+  side: "azure" | "cribl";
+  indicator: GapIndicator;
+  sourceId: string;
+  where: string;
+  pos: GridPos;
+  /** True for the one indicator holding the grid's tab stop. */
+  stop: boolean;
+}) {
+  const { side, indicator, sourceId, where, pos, stop } = props;
   const word = side === "azure" ? AZURE_WORD[indicator.state] : CRIBL_WORD[indicator.state];
   const label = side === "azure" ? "Azure" : "Cribl";
   return (
-    <span className={`tgap-ind tgap-${indicator.state}`} data-side={side} data-state={indicator.state} data-source={sourceId}>
+    <span
+      className={`tgap-ind tgap-${indicator.state}`}
+      data-side={side}
+      data-state={indicator.state}
+      data-source={sourceId}
+      data-row={pos.row}
+      data-col={pos.col}
+    >
       <span className="tgap-dot" aria-hidden="true" />
       <span className="tgap-word">{`${label}: ${word}`}</span>
-      <InfoTip text={indicator.reason} label={`${where}, ${label}: why`} />
+      {/* The tip is the cell's only focusable part, so its name carries the
+        * state word: arrowing onto it must say what the cell shows. */}
+      <InfoTip
+        text={indicator.reason}
+        label={`${where}, ${label}: ${word}, why`}
+        tabIndex={stop ? 0 : -1}
+        describedBy={GRID_HINT_ID}
+      />
     </span>
   );
 }
@@ -134,6 +201,38 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
   // A read started on an earlier visit and still running (seeded on mount).
   const [earlierRun, setEarlierRun] = useState<boolean>(() => cache.inFlight() !== null);
   const abort = useRef<AbortController | null>(null);
+  // The grid's ONE tab stop (AZR-91): a roving tabindex over the indicator
+  // tips, so a keyboard user does not pass two stops per cell to reach the
+  // next tenant's Read button.
+  const [stop, setStop] = useState<GridPos>({ row: 0, col: 0 });
+  const gridBody = useRef<HTMLTableSectionElement>(null);
+  const gridCols = GAP_SOURCES.length * 2;
+  const stopAt: GridPos = {
+    row: Math.min(stop.row, Math.max(0, profiles.length - 1)),
+    col: Math.min(stop.col, gridCols - 1),
+  };
+  const tipAt = (pos: GridPos): HTMLElement | null =>
+    gridBody.current?.querySelector<HTMLElement>(`[data-row="${pos.row}"][data-col="${pos.col}"] [role="button"]`) ?? null;
+  const posOf = (target: EventTarget): GridPos | null => {
+    if (!(target instanceof HTMLElement) || target.getAttribute("role") !== "button") return null;
+    const ind = target.closest<HTMLElement>("[data-col]");
+    if (ind === null) return null;
+    return { row: Number(ind.dataset.row), col: Number(ind.dataset.col) };
+  };
+  const onGridKeyDown = (event: KeyboardEvent<HTMLTableSectionElement>) => {
+    const from = posOf(event.target);
+    if (from === null) return;
+    const to = moveGridFocus(from, event.key, event.ctrlKey || event.metaKey, profiles.length, gridCols);
+    if (to === null) return;
+    event.preventDefault();
+    setStop(to);
+    tipAt(to)?.focus();
+  };
+  // A click or a programmatic focus on any tip moves the stop there too.
+  const onGridFocus = (event: FocusEvent<HTMLTableSectionElement>) => {
+    const at = posOf(event.target);
+    if (at !== null && (at.row !== stop.row || at.col !== stop.col)) setStop(at);
+  };
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -175,8 +274,10 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
       // spends the app-wide shared budget.
       const pacer = createRequestPacer({ ...pacing, maxRequestsPerMinute: VALIDATE_REQUESTS_PER_MINUTE });
       let interrupted: string | null = null;
-      const run = async (): Promise<void> => {
-      try {
+      // Every tenant of the run inside ONE batch (AZR-90): the slot swaps
+      // tenant to tenant and the active credential goes back once, at the end
+      // - also when a tenant fails half-way or the run is cancelled.
+      const scanAll = async (batch: Pick<TenantSession, "runForTenant">): Promise<void> => {
         for (let index = 0; index < targets.length; index++) {
           if (controller.signal.aborted) break;
           const profile = targets[index]!;
@@ -184,7 +285,7 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           let row: TenantGapRow;
           try {
             row = await scanTenantGap(
-              { session, documents: store, cribl: ports.cribl, pacer, ...(logger !== undefined ? { logger } : {}) },
+              { session: batch, documents: store, cribl: ports.cribl, pacer, ...(logger !== undefined ? { logger } : {}) },
               profile,
               {
                 signal: controller.signal,
@@ -205,13 +306,28 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           if (kept !== null) setEntries((prev) => ({ ...prev, [profile.id]: kept }));
           logger?.info("tenant-gap: tenant read", { status: row.status.state, cancelled: row.cancelled });
         }
+      };
+      const run = async (): Promise<void> => {
+      try {
+        let restoreFailed: string | null = null;
+        try {
+          const batch = await session.runBatch(scanAll, { pacer });
+          if (batch.restore.kind === "failed") restoreFailed = batch.restore.reason;
+        } catch (error) {
+          // scanAll catches each tenant's failure, so this is unexpected; the
+          // batch has already put the active credential back by now.
+          setMessage(`Reading stopped: ${errorText(error)}`);
+        }
+        const notes: string[] = [];
         if (controller.signal.aborted) {
-          setMessage(
+          notes.push(
             interrupted === null
               ? "Reading was cancelled; tenants not reached keep their earlier answer."
               : `Reading was cancelled while reading ${interrupted}; ${interrupted} and the tenants not reached keep their earlier answer, if they had one.`,
           );
         }
+        if (restoreFailed !== null) notes.push(`${RESTORE_FAILED} (${restoreFailed})`);
+        if (notes.length > 0) setMessage(notes.join(" "));
       } finally {
         if (abort.current === controller) abort.current = null;
         setProgress(null);
@@ -288,6 +404,9 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           <span className="tgap-tile-value">{readRows.length === 0 ? "No tenant read yet" : tile(criblCounts)}</span>
         </div>
       </div>
+      <p id={GRID_HINT_ID} hidden>
+        {GRID_HINT}
+      </p>
       <div className="tgap-scroll">
         <table className="tgap-grid">
           <thead>
@@ -308,8 +427,8 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
               ))}
             </tr>
           </thead>
-          <tbody>
-            {profiles.map((p) => {
+          <tbody ref={gridBody} onKeyDown={onGridKeyDown} onFocus={onGridFocus}>
+            {profiles.map((p, rowIndex) => {
               const entry = entries[p.id];
               const row = entry?.row;
               return (
@@ -336,12 +455,15 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
                       Read
                     </button>
                   </th>
-                  {GAP_SOURCES.map((s) => {
+                  {GAP_SOURCES.map((s, sourceIndex) => {
                     const cell = row?.cells.find((c) => c.sourceId === s.id);
+                    const where = `${p.name}, ${s.title}`;
+                    const pos = (side: 0 | 1): GridPos => ({ row: rowIndex, col: sourceIndex * 2 + side });
+                    const isStop = (side: 0 | 1) => stopAt.row === rowIndex && stopAt.col === sourceIndex * 2 + side;
                     return (
                       <td key={s.id} className="tgap-cell">
-                        <Indicator side="azure" sourceId={s.id} where={`${p.name}, ${s.title}`} indicator={cell?.azure ?? NOT_READ} />
-                        <Indicator side="cribl" sourceId={s.id} where={`${p.name}, ${s.title}`} indicator={cell?.cribl ?? NOT_READ} />
+                        <Indicator side="azure" sourceId={s.id} where={where} indicator={cell?.azure ?? NOT_READ} pos={pos(0)} stop={isStop(0)} />
+                        <Indicator side="cribl" sourceId={s.id} where={where} indicator={cell?.cribl ?? NOT_READ} pos={pos(1)} stop={isStop(1)} />
                       </td>
                     );
                   })}

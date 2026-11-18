@@ -33,6 +33,7 @@ import {
   SettingsScreen,
   TenantCriblMappingSection,
   TenantGapCache,
+  TenantReadInFlightNotice,
   TenantGapScreen,
   TenantListSection,
   SetupWizard,
@@ -1885,6 +1886,8 @@ function App() {
           />
         </div>
         {switchNotice !== '' && <p className="connection-notice">{switchNotice}</p>}
+        {/* AZR-90: a Read all holds the Azure slot for its whole run; say so on every screen. */}
+        <TenantReadInFlightNotice cache={TENANT_GAP_CACHE} />
         {identityDrifted && (
           <p className="connection-hint">
             identity changed - the stored secret was saved under a different tenant/client id. Use

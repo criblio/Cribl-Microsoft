@@ -51,10 +51,12 @@ import {
   DATAFLOW_PERSPECTIVES,
   FLOW_STATE_LABEL,
   buildOnboardingLanes,
+  describeLastSeen,
   lookbackPhrase,
   type BuildOnboardingLanesInput,
   type DataflowPerspective,
   type LaneCardKind,
+  type OnboardingSourceId,
 } from "@soc/core";
 
 import {
@@ -66,7 +68,7 @@ import {
 } from "../../../components/diagram";
 import { InfoTip } from "../../../components/info-tip";
 import { clampToSection, layoutLanes, relayoutEdges, type LaidCard, type LaidSection, type LaneLayout } from "./lane-layout";
-import { formatAsOf, type LiveFlow, type LiveFlowRequest } from "./use-live-flow";
+import { formatAsOf, formatLastSeen, type LiveFlow, type LiveFlowRequest } from "./use-live-flow";
 
 const PERSPECTIVE_LABEL: Readonly<Record<DataflowPerspective, string>> = {
   azure: "Azure side",
@@ -225,6 +227,13 @@ export function OnboardingDataflow({
     ...(live.unmatchedLabels.length > 0 ? [`Inputs in the answer that match no lane: ${live.unmatchedLabels.join(", ")}`] : []),
   ].join("\n\n");
 
+  // AZR-37: when the lane was last seen flowing, as REMEMBERED (labelled so),
+  // beside the measured verdict. Null while not watching: nothing was read.
+  const lastSeenLine = (sourceId: string): string | null => {
+    const view = live.lastSeen?.[sourceId as OnboardingSourceId];
+    return view === undefined ? null : describeLastSeen(view, formatLastSeen);
+  };
+
   const asOfText = !watching
     ? "Not watching: nothing is read from Cribl."
     : live.asOf === null
@@ -267,6 +276,7 @@ export function OnboardingDataflow({
       const from = cardsById.get(edge.from);
       const to = cardsById.get(edge.to);
       const detail = edge.flow.kind === "measured" && edge.flow.state.kind === "not-measured" ? edge.flow.state.detail : "";
+      const edgeSource = lanes.lanes.find((l) => l.edges.some((e) => e.id === edge.id))?.sourceId ?? null;
       return (
         <DiagramInfoPopover
           className="azo-flow-popover"
@@ -283,6 +293,9 @@ export function OnboardingDataflow({
           <ul className="azo-flow-popover-facts">
             <li>The one hop Cribl's intake metrics measure for this source. Only a flowing hop animates.</li>
             {detail !== "" && <li>{detail}</li>}
+            {edgeSource !== null && lastSeenLine(edgeSource) !== null && (
+              <li data-azo-last-seen="">{lastSeenLine(edgeSource)}</li>
+            )}
           </ul>
           <button type="button" className="azo-flow-btn azo-flow-popover-close" aria-label="Close" onClick={closeInfo}>
             x
@@ -317,6 +330,7 @@ export function OnboardingDataflow({
           <li>{`Transport: ${lane.transport === "eventhub" ? "Event Hub" : "Blob storage"}. Cribl source type: ${lane.criblInputType}.`}</li>
           <li>{lane.inputId === null ? "Cribl input id: needs plan values." : `Cribl input id: ${lane.inputId}.`}</li>
           <li>{`Azure to Cribl: ${measured?.flow.label ?? "not measured"}.`}</li>
+          {lastSeenLine(info.id) !== null && <li data-azo-last-seen="">{lastSeenLine(info.id)}</li>}
         </ul>
         <button type="button" className="azo-flow-btn azo-flow-popover-close" aria-label="Close" onClick={closeInfo}>
           x

@@ -68,7 +68,7 @@ import type {
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen, SHELL_GAP_MESSAGE } from "./azure-onboarding-screen";
-import { CHOICE_LABELS } from "./azure-onboarding-state";
+import { CHOICE_LABELS, UNSUPPORTED_LABEL } from "./azure-onboarding-state";
 import { CHOICES_LOADING_TEXT } from "./howto/choose-panel";
 
 afterEach(cleanup);
@@ -791,6 +791,30 @@ describe("AzureOnboardingScreen - the catalog layout", () => {
         // AZR-98 made the Activity Log, and AZR-99 Entra ID, deployable beside Defender.
         disabled: item.id !== "defenderExport" && item.id !== "activityLog" && item.id !== "entraId",
       });
+    }
+  });
+
+  // AZR-8 (backlog.md#6e): a source with no Event Hub path is a visible,
+  // labelled row with its reason and what to use instead - never silence.
+  it("shows every source that cannot reach an Event Hub as an unavailable row, with its reason and alternative", async () => {
+    const { view } = mount();
+    await loaded();
+    const rows = [...view.container.querySelectorAll<HTMLElement>("[data-unsupported]")];
+    expect(rows.map((r) => r.dataset.unsupported)).toEqual(UNSUPPORTED_SOURCES.map((u) => u.id));
+    for (const u of UNSUPPORTED_SOURCES) {
+      const row = rows.find((r) => r.dataset.unsupported === u.id)!;
+      expect([...row.children].map((c) => c.textContent)).toEqual([
+        u.title,
+        UNSUPPORTED_LABEL,
+        u.description,
+        `Instead: ${u.instead}`,
+      ]);
+      // Status only: nothing on the row can be chosen or deployed.
+      expect(row.querySelectorAll("input, button, [role='button']").length).toBe(0);
+    }
+    // The two flow-log sources say why: Storage Account only.
+    for (const id of ["vnetFlowLogs", "nsgFlowLogs"]) {
+      expect(rows.find((r) => r.dataset.unsupported === id)!.textContent).toContain("Storage Account only");
     }
   });
 });

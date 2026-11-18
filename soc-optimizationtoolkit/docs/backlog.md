@@ -1145,6 +1145,16 @@ Account only - use the Blob source, here" answers the question instead. This is
 the same honesty rule as item 4: the absence of a source must be stated with its
 reason, never left as silence.
 
+AZR-8 DONE 2026-11-17. The rows themselves already rendered in the screen's
+reference section (AZR-18, with the operator-facing "Instead" from AZR-43); what
+was missing was the STATUS: every other row carries a state label and these
+carried none, so they read as descriptions rather than as sources that are
+unavailable. Each now shows "Unavailable through an Event Hub" in the state
+slot (greyed), then the reason (the catalog's description, "Storage Account
+only - ..." for the flow logs) and what to use instead. Pinned per source in
+`azure-onboarding-screen.dom.test.tsx`. The VNet Flow Logs blob How-to that the
+row's "Instead" points at is unchanged.
+
 ### 6f. Agent-based - AMA plus DCR
 
 **VM guest OS logs** (SecurityEvent, WindowsEvent, Syslog) reach Sentinel through
@@ -1471,10 +1481,61 @@ holds across every tenant instead of restarting per tenant, and the tenant
 session's own proxied requests - each proof read, and two per token mint -
 spend it too. A cancelled read sends nothing more (the pacer re-checks the
 signal after every wait), and never replaces a tenant's earlier complete
-answer. Two follow-ups are left on purpose: AZR-90 (restore the active
+answer. Two follow-ups were left on purpose: AZR-90 (restore the active
 credential once per Read all, not once per tenant - budget time, not
 correctness, now that the mints are paced) and AZR-91 (a roving tabindex
 over the grid; every tip is already named for its tenant, source and side).
+
+AZR-90 DONE 2026-11-17: a Read all is ONE tenant-session batch
+(`runTenantSessionBatch`, `TenantSession.runBatch`): one lease (re-read and
+renewed before each tenant after the first), one exclusive section, the slot
+swapped tenant to tenant with each tenant still proven before and after its
+work, and the active credential restored ONCE when the batch settles. The
+restore is decided by what the slot holds, so a swap that failed half-way, a
+cancel, or the batch body throwing still puts the active credential back
+(pinned in `run-tenant-session.test.ts`). A single-tenant Read is the batch of
+one and keeps its old sequence exactly. The cost of the one exclusive section:
+Azure reads from other screens of the tab wait until the whole run ends (they
+used to run between tenants). That is kept - restoring between tenants is what
+AZR-90 removed - and made visible: the Read all tip says so, and the shell
+shows a notice above every screen while a run is in flight.
+
+AZR-90 review round 2 (2026-11-18): the lease and the exclusive section are
+taken LAZILY, by the first run that passes its refusals - a Read of a tenant
+whose secret was not entered, or whose plan reads nothing, writes no lease and
+blocks no other screen, and a run refused by another tab's lease leaves the
+next tenant free to try again. Before the one restore the lease is re-checked
+and renewed (a slow last tenant no longer restores outside its lease). A lease
+another tab took is never renewed or released; the restore still runs over
+it, on purpose: a slot left holding a tenant no tab is reading would be used by
+the next ordinary batch or a run for the active tenant (which does not swap),
+whereas the other tab's runs are proven before and after their work, so the
+overlap turns them unknown, not wrong, and their own restore follows. The
+shell notice now says the slot is held from the first tenant read through
+Azure, not from the click.
+
+AZR-90 review round 3 (2026-11-18): the renewal before each tenant no longer
+refuses on the local expiry alone. It re-reads the lease and refuses only when
+ANOTHER tab holds it unexpired (the reason now says so); a lease that merely
+expired after a slow tenant, and that nobody took, is taken again and the next
+tenant is read, as the pre-restore check already did. Before this, one tenant
+running past the TTL turned every later tenant unknown with a false "another
+tab" reason. The shell notice and the "earlier read" line now say that leaving
+Tenant Logging Gaps cancels the read (the screen aborts it on unmount), instead
+of sending the operator back to a Cancel button that is no longer there.
+
+AZR-91 DONE 2026-11-17: the grid's indicator tips are ONE tab stop (a roving
+tabindex). Arrow keys move between indicators (clamped at the edges), Home and
+End to the row's ends, Ctrl with Home or End to the grid's; Enter or Space
+still toggles a tip's reason. Each tip's name now carries the state word as
+well as tenant, source and side, and every tip is described by a hidden line
+saying how to move. The tenant column (status tip, Read button) stays in the
+ordinary tab order, so the tab stops in the table body are one Read button per
+tenant, its status tip once read, and one for the whole grid.
+
+The hidden keyboard hint describes the focus-mode model; screen readers in
+browse mode keep the arrow keys, because the table is not a composite widget.
+Unverified with a screen reader; AZR-126 carries it.
 
 ## 7. Verification gaps
 
@@ -3398,6 +3459,27 @@ Follow-up stories: AZR-35 (route the source to the Sentinel destination, with
 records unrolled - the route is only read today), AZR-36 (create a Listen rule
 and a dedicated consumer group), AZR-37 (a persisted last-seen beyond the
 24-hour lookback) and AZR-38 (one definition of the Defender item id).
+
+AZR-37 DONE 2026-11-17. The time a source was last seen flowing is remembered
+in its own app KV document, `azure-onboarding-flow-last-seen`, keyed by worker
+group and Cribl input (`group/type:id`; the same input id can exist in two
+groups) - NOT on the progress document the card's plan suggested: the
+screen saves that document whole, so a write from the flow poll would race the
+operator's own saves and could undo one. Only a measured non-zero WINDOW row
+writes (the lookback is cumulative and carries no time; zero, refused and
+unreadable answers never write); the time is the UI clock when that answer
+arrived, and only lanes in the watched group are recorded. Writes are
+read-merge-write (per input, the later time) plus one re-read that re-saves
+the merge when a concurrent tab dropped or aged an entry; the KV store has no
+compare-and-swap, so two tabs saving in the same instant can still lose an
+entry until that tab's next due write. At most once per input per ten minutes,
+never over a document that could not be read, and a failed write is not tried
+again for ten minutes. A load the store refused is retried on the next poll.
+The document is read only when Watch for data turns on, so mounting the screen
+still makes its three loads. Each hop's (i) and section (i) shows "Last seen
+flowing <time> (remembered ... not measured now)", "Never seen flowing by this
+app", or unknown with the reason; an unreadable document is never shown as
+never seen. Not verified live.
 
 **What is still open from earlier decisions.** AZR-S2 (section 6h) asked for an
 export fallback when no Cribl is connected and a `source.manage` gate; neither

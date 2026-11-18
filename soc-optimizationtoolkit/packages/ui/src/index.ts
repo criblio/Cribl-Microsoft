@@ -774,7 +774,7 @@ export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-re
 export { TenantCriblMappingSection } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 export type { TenantCriblMappingSectionProps } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 // ADR 0009 decision 6: the multi-tenant native logging gap dashboard.
-export { TenantGapScreen } from "./screens/tenant-gap/tenant-gap-screen";
+export { TENANT_READ_IN_FLIGHT, TenantGapScreen, TenantReadInFlightNotice } from "./screens/tenant-gap/tenant-gap-screen";
 export type { TenantGapScreenProps } from "./screens/tenant-gap/tenant-gap-screen";
 export { TenantGapCache } from "./screens/tenant-gap/tenant-gap-state";
 export type { TenantGapEntry } from "./screens/tenant-gap/tenant-gap-state";

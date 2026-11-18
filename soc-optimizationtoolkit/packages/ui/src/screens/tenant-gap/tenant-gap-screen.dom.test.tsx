@@ -14,7 +14,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   FakeKvDocumentStore,
   FakeLogger,
@@ -36,14 +36,16 @@ import type {
   CriblRequest,
   GraphDirectory,
   PortHttpResponse,
+  TenantBatchRun,
   TenantPorts,
   TenantProfile,
+  TenantRestore,
   TenantRun,
   TenantSession,
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { TenantGapScreen } from "./tenant-gap-screen";
+import { RESTORE_FAILED, TENANT_READ_IN_FLIGHT, TenantGapScreen, TenantReadInFlightNotice } from "./tenant-gap-screen";
 import { TenantGapCache } from "./tenant-gap-state";
 
 afterEach(cleanup);
@@ -106,6 +108,22 @@ class FakeSession implements TenantSession {
     }
     const value = await work({ azure: this.azure, graph: {} as GraphDirectory });
     return { kind: "done", tenantId: profile.config.tenantId, value, restore: { kind: "not-needed" } };
+  }
+  /** Each batch: the profiles its runs read (AZR-90: a Read all is ONE batch). */
+  readonly batches: string[][] = [];
+  batchRestore: TenantRestore = { kind: "restored" };
+  async runBatch<R>(body: (session: TenantSession) => Promise<R>): Promise<TenantBatchRun<R>> {
+    const runs: string[] = [];
+    this.batches.push(runs);
+    const inner: TenantSession = {
+      runForTenant: (profile, work) => {
+        runs.push(profile.id);
+        return this.runForTenant(profile, work);
+      },
+      runBatch: (b) => this.runBatch(b),
+    };
+    const value = await body(inner);
+    return { value, restore: this.batchRestore };
   }
 }
 
@@ -185,6 +203,23 @@ describe("TenantGapScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
     await waitFor(() => expect(session?.runs).toEqual(["pa", "pb"]));
     await waitFor(() => expect(screen.getAllByText(/^Read at /).length).toBe(2));
+  });
+
+  // AZR-90: the active credential went back after EVERY tenant (two paced
+  // token mints each); a Read all is now one batch with one restore.
+  it("Read all reads every tenant inside ONE session batch", async () => {
+    const { session } = mount();
+    fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
+    await waitFor(() => expect(screen.getAllByText(/^Read at /).length).toBe(2));
+    expect(session?.batches).toEqual([["pa", "pb"]]);
+  });
+
+  it("says so when the run's one restore of the active credential failed", async () => {
+    const session = new FakeSession(new CountingAzure());
+    session.batchRestore = { kind: "failed", reason: "AADSTS700016" };
+    mount({ session });
+    fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
+    await waitFor(() => expect(screen.getByText(`${RESTORE_FAILED} (AADSTS700016)`)).toBeTruthy());
   });
 
   it("a tenant whose proof fails is unknown in every cell, both indicators, with the reason", async () => {
@@ -376,7 +411,12 @@ describe("TenantGapScreen", () => {
     const second = mount({ cache, azure });
     const readAll = screen.getByRole("button", { name: "Read all tenants" }) as HTMLButtonElement;
     expect(readAll.disabled).toBe(true);
-    expect(screen.getByText(/earlier read is still finishing/i)).toBeTruthy();
+    expect(screen.getByText(/earlier read is still finishing/i).textContent).toBe(
+      "An earlier read is still finishing: leaving this screen cancelled it, and it stops once its current request " +
+        "returns and the active connection's credential is back. Reads can start again once it has.",
+    );
+    // Leaving cancelled it: no Cancel is offered for a run this visit does not own.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     gate.resolve();
     await waitFor(() => expect(readAll.disabled).toBe(false));
     expect(first.session?.runs).toEqual(["pa"]);
@@ -388,7 +428,79 @@ describe("TenantGapScreen", () => {
     mount();
     const first = GAP_SOURCES[0]!;
     const tip = indicators("pa", "cribl")[0]!.querySelector('[role="button"]')!;
-    expect(tip.getAttribute("aria-label")).toBe(`Contoso, ${first.title}, Cribl: why`);
+    expect(tip.getAttribute("aria-label")).toBe(`Contoso, ${first.title}, Cribl: Unknown, why`);
+  });
+
+  describe("one tab stop with arrow keys between cells (AZR-91)", () => {
+    const COLS = GAP_SOURCES.length * 2;
+    const gridTips = () => [...document.querySelectorAll<HTMLElement>("tbody [data-col] [role='button']")];
+    const tipAt = (row: number, col: number) =>
+      document.querySelector<HTMLElement>(`tbody [data-row="${row}"][data-col="${col}"] [role="button"]`)!;
+    const stops = () => gridTips().filter((t) => t.tabIndex === 0);
+    const press = (key: string, init: { ctrlKey?: boolean } = {}) =>
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key, ...init });
+
+    it("gives the whole grid of tips ONE tab stop, so each row's Read button is a stop away", () => {
+      mount();
+      expect(gridTips().length).toBe(PROFILES.length * COLS);
+      expect(stops()).toEqual([tipAt(0, 0)]);
+      // Everything tabbable in the body: one Read button per tenant plus the grid's one stop.
+      const tabbable = [...document.querySelectorAll<HTMLElement>("tbody button, tbody [tabindex]")].filter(
+        (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled,
+      );
+      expect(tabbable.length).toBe(PROFILES.length + 1);
+    });
+
+    it("moves focus and the stop with the arrows, clamped at the edges", () => {
+      mount();
+      tipAt(0, 0).focus();
+      press("ArrowLeft");
+      expect(document.activeElement).toBe(tipAt(0, 0));
+      press("ArrowRight");
+      expect(document.activeElement).toBe(tipAt(0, 1));
+      press("ArrowDown");
+      expect(document.activeElement).toBe(tipAt(1, 1));
+      press("ArrowDown");
+      expect(document.activeElement).toBe(tipAt(1, 1));
+      press("ArrowUp");
+      expect(document.activeElement).toBe(tipAt(0, 1));
+      expect(stops()).toEqual([tipAt(0, 1)]);
+    });
+
+    it("Home and End go to the row's ends; with Ctrl, to the grid's", () => {
+      mount();
+      tipAt(1, 3).focus();
+      press("End");
+      expect(document.activeElement).toBe(tipAt(1, COLS - 1));
+      press("Home");
+      expect(document.activeElement).toBe(tipAt(1, 0));
+      press("End", { ctrlKey: true });
+      expect(document.activeElement).toBe(tipAt(PROFILES.length - 1, COLS - 1));
+      press("Home", { ctrlKey: true });
+      expect(document.activeElement).toBe(tipAt(0, 0));
+      expect(stops()).toEqual([tipAt(0, 0)]);
+    });
+
+    it("a tip focused by click takes the stop, and Enter still toggles its reason", () => {
+      mount();
+      const tip = tipAt(1, 2);
+      tip.focus();
+      // A browser fires focusin with focus(); happy-dom does not, so send it.
+      fireEvent.focusIn(tip);
+      expect(stops()).toEqual([tip]);
+      expect(tip.getAttribute("aria-expanded")).toBe("true");
+      fireEvent.keyDown(tip, { key: "Enter" });
+      expect(tip.getAttribute("aria-expanded")).toBe("false");
+      // Enter is the tip's own key: focus does not move.
+      expect(document.activeElement).toBe(tip);
+    });
+
+    it("every grid tip is described by the keyboard hint", () => {
+      mount();
+      const hint = document.getElementById("tgap-grid-keys")!;
+      expect(hint.textContent).toContain("Arrow keys move between indicators");
+      expect(gridTips().every((t) => t.getAttribute("aria-describedby") === "tgap-grid-keys")).toBe(true);
+    });
   });
 
   it("uses no native select", () => {
@@ -406,5 +518,49 @@ describe("TenantGapCache", () => {
     });
     expect(cache.get({ id: "pa", config: { tenantId: TA.toUpperCase() } })).not.toBeNull();
     expect(cache.get({ id: "pa", config: { tenantId: TB } })).toBeNull();
+  });
+});
+
+// AZR-90 review: a Read all holds the slot's exclusive section for its whole
+// run, so other screens' Azure reads wait. The shell says so on every screen
+// while the run is in flight, and the notice goes when it ends.
+describe("TenantReadInFlightNotice", () => {
+  it("shows exactly while a read is tracked, and goes when it settles", async () => {
+    const cache = new TenantGapCache();
+    render(<TenantReadInFlightNotice cache={cache} />);
+    expect(screen.queryByRole("status")).toBeNull();
+    let finish: () => void = () => undefined;
+    act(() => {
+      cache.track(new Promise<void>((r) => (finish = r)));
+    });
+    expect(screen.getByRole("status").textContent).toBe(TENANT_READ_IN_FLIGHT);
+    // Review round 3: off Tenant Logging Gaps the run is already cancelled, so
+    // the notice says leaving cancels it rather than sending the operator back
+    // to a Cancel button the screen no longer shows.
+    expect(TENANT_READ_IN_FLIGHT).toBe(
+      "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
+        "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging " +
+        "Gaps stops it, and leaving that screen cancels it too; the slot frees once its current request returns and " +
+        "the active connection's credential is back.",
+    );
+    await act(async () => {
+      finish();
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("the cache tells each subscriber on start and end, and not after unsubscribe", async () => {
+    const cache = new TenantGapCache();
+    let calls = 0;
+    const off = cache.subscribe(() => calls++);
+    let finish: () => void = () => undefined;
+    cache.track(new Promise<void>((r) => (finish = r)));
+    expect(calls).toBe(1);
+    finish();
+    await cache.inFlight();
+    expect(calls).toBe(2);
+    off();
+    cache.track(Promise.resolve());
+    expect(calls).toBe(2);
   });
 });

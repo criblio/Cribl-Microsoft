@@ -421,6 +421,8 @@ describe("PlatformTenantSession - end to end over the transport", () => {
       // switching, target, switching, active (AZR-92)
       "azure-credential-owner",
       "azure-credential-owner",
+      // renewed before the restore (review round 2), then the restore
+      "azure-credential-lease",
       "azure-credential-owner",
       "azure-credential-owner",
       "azure-credential-lease",

@@ -428,6 +428,8 @@ export type OnboardingRowView =
       readonly id: string;
       readonly title: string;
       readonly description: string;
+      /** Its status, {@link UNSUPPORTED_LABEL}: shown as a state like every other row's, never silence. */
+      readonly label: string;
       /** What to do instead: the catalog's operator-facing `instead` (AZR-43), never the legacy `alternative`. */
       readonly instead: string;
     }
@@ -461,6 +463,14 @@ export const STATE_LABELS: Readonly<Record<ItemState, string>> = {
 
 /** A not-built item's label: nothing reads its deployment. */
 export const NOT_AVAILABLE_LABEL = "Not available yet";
+
+/**
+ * A source that cannot stream to an Event Hub at all (backlog.md#6e, AZR-8):
+ * a visible unavailable row with its reason, so an operator who looks for flow
+ * logs finds them and why, instead of concluding the tool missed them. True of
+ * every UNSUPPORTED_SOURCES entry - that block IS "no Event Hub path".
+ */
+export const UNSUPPORTED_LABEL = "Unavailable through an Event Hub";
 
 /** The prefix of the overlay label; the reason follows it. */
 export const STATE_UNREADABLE_PREFIX = "Deployment state could not be read";
@@ -535,6 +545,7 @@ export function buildSections(
           id: row.id,
           title: row.item.title,
           description: row.item.description,
+          label: UNSUPPORTED_LABEL,
           instead: row.item.instead,
         };
       }

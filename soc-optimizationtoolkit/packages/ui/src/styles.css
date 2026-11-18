@@ -6803,6 +6803,12 @@ details[open] > summary::before {
   color: var(--warn);
 }
 
+/* A source with no Event Hub path at all (AZR-8): stated, greyed, not hidden. */
+.azure-onboarding-state-unavailable {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .azure-onboarding-banner {
   font-size: 13px;
   line-height: 20px;

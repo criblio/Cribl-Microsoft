@@ -63,8 +63,9 @@ function progressFor(ids: readonly OnboardingSourceId[], withSources = true): On
   return p;
 }
 
-function liveWith(states: LiveFlow["states"], asOf: number | null = null): LiveFlow {
+function liveWith(states: LiveFlow["states"], asOf: number | null = null, lastSeen: LiveFlow["lastSeen"] = null): LiveFlow {
   return {
+    lastSeen,
     polling: states !== null,
     states,
     lookbackStatus: "answered",
@@ -174,6 +175,62 @@ describe("OnboardingDataflow - measured-hop labels (AZR-45)", () => {
     expect(labels).toEqual(["not measured"]);
     fireEvent.click(container.querySelector("[data-azo-edge-info]") as Element);
     expect(getByRole("dialog").querySelector(".azo-flow-popover-status")?.textContent).toBe("not measured: no Cribl source yet");
+  });
+});
+
+// AZR-37: "never seen in the last 24 hours" for a source that flowed three
+// days ago is true and unhelpful; the remembered time sits beside it, labelled
+// as remembered, and unknown stays unknown.
+describe("OnboardingDataflow - last seen, remembered", () => {
+  const AT = Date.UTC(2026, 10, 14, 9, 30, 0);
+  const lastSeenText = (container: HTMLElement) =>
+    Array.from(container.ownerDocument.querySelectorAll("[data-azo-last-seen]")).map((n) => n.textContent);
+
+  it("puts the remembered time beside the measured verdict in the hop's (i)", () => {
+    const { container } = render(
+      <OnboardingDataflow
+        {...props({
+          watching: true,
+          live: liveWith({ entraId: NEVER, activityLog: NEVER }, 1_000, {
+            entraId: { kind: "seen", at: AT },
+            activityLog: { kind: "never" },
+          }),
+        })}
+      />,
+    );
+    const infos = Array.from(container.querySelectorAll("[data-azo-edge-info]"));
+    fireEvent.click(infos[0] as Element);
+    const first = lastSeenText(container);
+    fireEvent.click(infos[0] as Element);
+    fireEvent.click(infos[1] as Element);
+    const second = lastSeenText(container);
+    const seen = `Last seen flowing ${new Date(AT).toLocaleDateString()} ${new Date(AT).toLocaleTimeString()} (remembered by this app from an earlier reading, not measured now).`;
+    const never = "Never seen flowing by this app (it remembers only what it measured while Watch for data was on).";
+    expect([...first, ...second].sort()).toEqual([never, seen].sort());
+  });
+
+  it("says unknown, with the reason, when the remembered times could not be read", () => {
+    const { container } = render(
+      <OnboardingDataflow
+        {...props({
+          watching: true,
+          live: liveWith({ entraId: NEVER, activityLog: NEVER }, 1_000, {
+            entraId: { kind: "unknown", reason: "the remembered times could not be read (HTTP 503)" },
+            activityLog: { kind: "unknown", reason: "the remembered times could not be read (HTTP 503)" },
+          }),
+        })}
+      />,
+    );
+    fireEvent.click(container.querySelector("[data-azo-edge-info]") as Element);
+    expect(lastSeenText(container)).toEqual([
+      "When it was last seen flowing is unknown: the remembered times could not be read (HTTP 503).",
+    ]);
+  });
+
+  it("shows no last-seen line while not watching: nothing was read", () => {
+    const { container } = render(<OnboardingDataflow {...props()} />);
+    fireEvent.click(container.querySelector("[data-azo-edge-info]") as Element);
+    expect(lastSeenText(container)).toEqual([]);
   });
 });
 

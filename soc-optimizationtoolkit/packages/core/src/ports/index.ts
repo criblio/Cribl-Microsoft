@@ -37,6 +37,7 @@ export type {
 } from './graph-directory';
 export type {
   CredentialSlot,
+  TenantBatchRun,
   TenantPorts,
   TenantProfile,
   TenantRestore,

@@ -20,7 +20,7 @@ import {
   judgeSlotOwner,
   takenLease,
 } from "../../domain/tenancy";
-import { runTenantSession } from "./run-tenant-session";
+import { runTenantSession, runTenantSessionBatch } from "./run-tenant-session";
 
 const A = "aaaaaaaa-0000-0000-0000-00000000000a";
 const B = "bbbbbbbb-0000-0000-0000-00000000000b";
@@ -108,6 +108,12 @@ function setup(opts: { seed?: Record<string, unknown>; active?: TenantProfile | 
   return { log, slot, store, deps };
 }
 
+/** The lease the store holds now, decoded. */
+async function leaseIn(store: FakeKvDocumentStore) {
+  const read = await store.load(CREDENTIAL_LEASE_KEY);
+  return read.kind === "value" ? decodeLease(read.value) : null;
+}
+
 const proven = (tenantId: string) => ({ status: 200, body: { subscriptionId: "sb", tenantId } });
 /** The proof before the work and the proof after it both answer as `tenantId`. */
 const provenTwice = (tenantId: string) => [proven(tenantId), proven(tenantId)];
@@ -134,6 +140,9 @@ describe("runTenantSession - the swap path", () => {
       "owner:pb",
       `ports:${B}`,
       "work",
+      // Re-checked and renewed before the restore, so the restore runs under
+      // this tab's lease even after a slow tenant (review round 2).
+      "lease:take",
       "owner:switching",
       "install:pa",
       `mint:${A}`,
@@ -153,11 +162,32 @@ describe("runTenantSession - the swap path", () => {
     expect(decodeLease(take?.value)).toEqual({ holder: "tab-1", expiresAt: 65_000 });
   });
 
-  it("does NOT release a lease that has already expired - it may be someone else's now", async () => {
+  it("does NOT release (or renew) a lease another tab took after this one expired, but still restores", async () => {
+    const { log, slot, store, deps } = setup({ clock: [1000, 999_999] });
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSession(deps, TARGET, async () => {
+      await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 999_000, 60_000));
+      return 1;
+    });
+    expect(out).toMatchObject({ kind: "unknown", stage: "lease", restore: { kind: "restored" } });
+    expect(log.filter((l) => l.startsWith("lease:"))).toEqual(["lease:take", "lease:take"]);
+    expect((await leaseIn(store))).toEqual({ holder: "tab-2", expiresAt: 1_059_000 });
+  });
+
+  it("re-takes an expired lease nobody else took before the restore, then releases it", async () => {
     const { log, slot, deps } = setup({ clock: [1000, 999_999] });
-    slot.azure.respondWith(proven(B));
-    await runTenantSession(deps, TARGET, async () => 1);
-    expect(log).not.toContain("lease:release");
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSession(deps, TARGET, async () => 1);
+    expect(out).toMatchObject({ kind: "unknown", stage: "lease", restore: { kind: "restored" } });
+    expect(log.slice(log.indexOf(`ports:${B}`) + 1)).toEqual([
+      "lease:take",
+      "owner:switching",
+      "install:pa",
+      `mint:${A}`,
+      "owner:pa",
+      "exclusive:exit",
+      "lease:release",
+    ]);
   });
 });
 
@@ -288,13 +318,17 @@ describe("runTenantSession - the proof gates the batch", () => {
 
 describe("runTenantSession - the lease must still be ours when the work ends", () => {
   it("is UNKNOWN (lease) when another holder took the lease during the work", async () => {
-    const { slot, store, deps } = setup();
+    const { log, slot, store, deps } = setup();
     slot.azure.respondWith(...provenTwice(B));
     const out = await runTenantSession(deps, TARGET, async () => {
       await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 1000, 60_000));
       return 1;
     });
     expect(out).toMatchObject({ kind: "unknown", stage: "lease", restore: { kind: "restored" } });
+    // Tab 2's lease (the second take) is left standing (review round 2): no
+    // renewal, no release.
+    expect(log.filter((l) => l.startsWith("lease:"))).toEqual(["lease:take", "lease:take"]);
+    expect((await leaseIn(store))?.holder).toBe("tab-2");
   });
 
   it("is UNKNOWN (lease) when the lease expired during the work - another tab may have swapped the slot", async () => {
@@ -302,8 +336,9 @@ describe("runTenantSession - the lease must still be ours when the work ends", (
     slot.azure.respondWith(...provenTwice(B));
     const out = await runTenantSession(deps, TARGET, async () => 1);
     expect(out).toMatchObject({ kind: "unknown", stage: "lease" });
-    // And an expired lease is never released: it may be someone else's.
-    expect(log).not.toContain("lease:release");
+    // Nobody took it meanwhile, so it is taken again for the restore and then
+    // released; a lease another tab took is never released (pinned above).
+    expect(log.filter((l) => l.startsWith("lease:"))).toEqual(["lease:take", "lease:take", "lease:release"]);
   });
 
   it("is UNKNOWN (lease) when the lease cannot be re-read after the work", async () => {
@@ -394,6 +429,7 @@ describe("runTenantSession - the caller's pacer and signal", () => {
       "acquire",
       "work",
       "acquire",
+      "lease:take",
       "install:pa",
       "acquire",
       "acquire",
@@ -550,5 +586,334 @@ describe("runTenantSession - the owner record other tabs check", () => {
       expect(out.restore.kind === "failed" ? out.restore.reason : "").toMatch(/record/);
       expect(decodeCredentialOwner(store.peek(CREDENTIAL_OWNER_KEY))?.profileId).toBe("pb");
     });
+  });
+});
+
+// AZR-90: a Read all restored the active credential after EVERY tenant - two
+// paced token mints each, for nothing. The batch swaps tenant to tenant and
+// restores ONCE, and that one restore must survive every failure on the way.
+describe("runTenantSessionBatch - tenant to tenant, one restore", () => {
+  const C = "cccccccc-0000-0000-0000-00000000000c";
+  const THIRD: TenantProfile = { id: "pc", name: "Woodgrove", config: { tenantId: C, clientId: "cc", subscriptionId: "sc" } };
+
+  function batchSetup(opts: Parameters<typeof setup>[0] = {}) {
+    const s = setup(opts);
+    s.slot.credentials.add("pc");
+    return s;
+  }
+  const work = (log: string[], name: string) => async () => {
+    log.push(`work:${name}`);
+    return name;
+  };
+  const RESTORE_TAIL = ["lease:take", "owner:switching", "install:pa", `mint:${A}`, "owner:pa", "exclusive:exit", "lease:release"];
+
+  it("swaps A to B to C under one lease and one exclusive section, and restores the active credential once", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B), ...provenTwice(C));
+    const out = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, work(log, "pb")),
+      await session.runForTenant(THIRD, work(log, "pc")),
+    ]);
+
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(out.value).toEqual([
+      { kind: "done", tenantId: B, value: "pb", restore: { kind: "deferred" } },
+      { kind: "done", tenantId: C, value: "pc", restore: { kind: "deferred" } },
+    ]);
+    expect(log).toEqual([
+      "lease:take",
+      "exclusive:enter",
+      "owner:switching",
+      "install:pb",
+      `mint:${B}`,
+      "owner:pb",
+      `ports:${B}`,
+      "work:pb",
+      // Renewed before the next tenant, so a long run never outlives it.
+      "lease:take",
+      // Straight from B to C: the active connection is NOT put back between.
+      "owner:switching",
+      "install:pc",
+      `mint:${C}`,
+      "owner:pc",
+      `ports:${C}`,
+      "work:pc",
+      ...RESTORE_TAIL,
+    ]);
+  });
+
+  it("spends two mints for the ONE restore, not two per tenant", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B), ...provenTwice(C), ...provenTwice(B));
+    let acquires = 0;
+    const pacer = {
+      acquire: async () => {
+        acquires += 1;
+      },
+    };
+    await runTenantSessionBatch({ ...deps, pacer }, async (session) => {
+      for (const p of [TARGET, THIRD, TARGET]) await session.runForTenant(p, async () => 1);
+    });
+    // Per tenant: 2 (mint) + 1 (proof) + 1 (proof after) = 4; plus 2 for the one restore.
+    expect(acquires).toBe(3 * 4 + 2);
+    expect(log.filter((l) => l === `mint:${A}`)).toEqual([`mint:${A}`]);
+  });
+
+  it("restores once when a tenant fails half-way, another's work throws, and the last swap breaks", async () => {
+    const { log, slot, deps } = batchSetup();
+    // B: its mint fails after its credential went in. C: proven, then the
+    // work throws. B again: its credential cannot even be installed.
+    slot.failMintFor = B;
+    slot.azure.respondWith(proven(C));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      const first = await session.runForTenant(TARGET, async () => 1);
+      const second = await session.runForTenant(THIRD, async () => {
+        throw new Error("boom");
+      });
+      slot.failMintFor = null;
+      slot.failInstallFor = "pb";
+      const third = await session.runForTenant(TARGET, async () => 1);
+      slot.failInstallFor = null;
+      return [first, second, third].map((r) => (r.kind === "unknown" ? r.stage : r.kind));
+    });
+    expect(out.value).toEqual(["swap", "work", "swap"]);
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(log.filter((l) => l === "install:pa")).toEqual(["install:pa"]);
+    expect(log.slice(-RESTORE_TAIL.length)).toEqual(RESTORE_TAIL);
+  });
+
+  it("restores and releases, then rejects, when the body itself throws mid-run", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B));
+    await expect(
+      runTenantSessionBatch(deps, async (session) => {
+        await session.runForTenant(TARGET, async () => 1);
+        throw new Error("screen gone");
+      }),
+    ).rejects.toThrow("screen gone");
+    expect(log.slice(-RESTORE_TAIL.length)).toEqual(RESTORE_TAIL);
+  });
+
+  it("restores once a cancel stops the run part-way, never handing the restore the signal", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B));
+    const signal = { aborted: false };
+    const handed: unknown[] = [];
+    const pacer = {
+      acquire: async (s?: { readonly aborted: boolean }) => {
+        handed.push(s);
+        if (s?.aborted === true) throw new Error("cancelled");
+      },
+    };
+    const out = await runTenantSessionBatch({ ...deps, pacer }, async (session) => {
+      const first = await session.runForTenant(TARGET, async () => 1, { pacer, signal });
+      signal.aborted = true;
+      const second = await session.runForTenant(THIRD, async () => 1, { pacer, signal });
+      return [first.kind, second.kind === "unknown" ? second.stage : second.kind];
+    });
+    expect(out.value).toEqual(["done", "swap"]);
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(handed.slice(-2)).toEqual([undefined, undefined]);
+    expect(log.slice(-RESTORE_TAIL.length)).toEqual(RESTORE_TAIL);
+  });
+
+  it("needs no restore when every tenant read was the active connection", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(A), ...provenTwice(A));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      await session.runForTenant(ACTIVE, async () => 1);
+      await session.runForTenant(ACTIVE, async () => 1);
+    });
+    expect(out.restore).toEqual({ kind: "not-needed" });
+    expect(log.filter((l) => l.startsWith("install:") || l.startsWith("owner:"))).toEqual([]);
+  });
+
+  it("reads the active connection mid-run by putting it back, and then needs no restore at the end", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B), ...provenTwice(A));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      await session.runForTenant(TARGET, async () => 1);
+      await session.runForTenant(ACTIVE, async () => 1);
+    });
+    expect(out.restore).toEqual({ kind: "not-needed" });
+    expect(log.filter((l) => l.startsWith("install:"))).toEqual(["install:pb", "install:pa"]);
+  });
+
+  it("stops reading, and still restores, when another tab took the lease between tenants", async () => {
+    const { log, slot, store, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      const first = await session.runForTenant(TARGET, async () => 1);
+      await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 1000, 60_000));
+      const second = await session.runForTenant(THIRD, async () => 1);
+      return { first: first.kind, second };
+    });
+    expect(out.value.first).toBe("done");
+    expect(out.value.second).toMatchObject({ kind: "unknown", stage: "lease", tenantId: C });
+    expect(log).not.toContain("install:pc");
+    // The restore still runs (a slot left on B would serve tenant B to the
+    // next ordinary batch), but tab 2's lease is neither renewed nor released.
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(log.slice(log.indexOf(`ports:${B}`) + 1)).toEqual([
+      "lease:take", // tab 2's
+      "owner:switching",
+      "install:pa",
+      `mint:${A}`,
+      "owner:pa",
+      "exclusive:exit",
+    ]);
+    expect((await leaseIn(store))?.holder).toBe("tab-2");
+  });
+
+  // Review round 3: one slow tenant let the lease expire, and every tenant
+  // after it was refused as "another tab" although no other tab existed.
+  it("re-takes its own expired lease before the next tenant and still reads it", async () => {
+    // now(): take at 1000; B's after-check at 2000; the renewal before C at
+    // 999_999, long past the 60 s TTL; C's after-check; the restore.
+    const { log, slot, store, deps } = batchSetup({ clock: [1000, 2000, 999_999, 1_000_500, 1_000_600] });
+    slot.azure.respondWith(...provenTwice(B), ...provenTwice(C));
+    const out = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, work(log, "pb")),
+      await session.runForTenant(THIRD, work(log, "pc")),
+    ]);
+    expect(out.value).toEqual([
+      { kind: "done", tenantId: B, value: "pb", restore: { kind: "deferred" } },
+      { kind: "done", tenantId: C, value: "pc", restore: { kind: "deferred" } },
+    ]);
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(log.slice(log.indexOf("work:pb") + 1)).toEqual([
+      "lease:take", // re-taken at 999_999
+      "owner:switching",
+      "install:pc",
+      `mint:${C}`,
+      "owner:pc",
+      `ports:${C}`,
+      "work:pc",
+      ...RESTORE_TAIL,
+    ]);
+    expect(await leaseIn(store)).toBeNull();
+  });
+
+  it("refuses the next tenant, naming the other tab, when another tab took the expired lease", async () => {
+    const { log, slot, store, deps } = batchSetup({ clock: [1000, 2000, 999_999] });
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      await session.runForTenant(TARGET, async () => 1);
+      await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 990_000, 60_000));
+      return session.runForTenant(THIRD, async () => 1);
+    });
+    expect(out.value).toEqual({
+      kind: "unknown",
+      tenantId: C,
+      stage: "lease",
+      reason:
+        "Another tab of this app took the credential lease before Woodgrove was read, so it may be using the shared credential; it was not read.",
+      restore: { kind: "deferred" },
+    });
+    expect(log).not.toContain("install:pc");
+    expect((await leaseIn(store))?.holder).toBe("tab-2");
+  });
+
+  it("leaves another tab's lease standing when it is taken after the last tenant, before the restore", async () => {
+    const { log, slot, store, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      const run = await session.runForTenant(TARGET, work(log, "pb"));
+      // The last tenant's Cribl listing and bookkeeping run long; tab 2 takes the lease.
+      await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 1000, 60_000));
+      return run.kind;
+    });
+    expect(out.value).toBe("done");
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(log.slice(log.indexOf("work:pb") + 1)).toEqual([
+      "lease:take", // tab 2's
+      "owner:switching",
+      "install:pa",
+      `mint:${A}`,
+      "owner:pa",
+      "exclusive:exit",
+    ]);
+    expect((await leaseIn(store))?.holder).toBe("tab-2");
+  });
+
+  it("does not release a lease it cannot re-read at the end", async () => {
+    const { log, slot, store, deps } = batchSetup();
+    slot.azure.respondWith(...provenTwice(A));
+    await runTenantSessionBatch(deps, async (session) => {
+      await session.runForTenant(ACTIVE, work(log, "pa"));
+      store.scriptLoad(CREDENTIAL_LEASE_KEY, { kind: "unknown", reason: "HTTP 502", status: 502 });
+    });
+    expect(log.filter((l) => l.startsWith("lease:"))).toEqual(["lease:take"]);
+  });
+
+  // Review round 2: the lease and the exclusive section are taken by the first
+  // run that passes its refusals, so a Read of refused tenants touches nothing.
+  it("writes no lease and never enters the section when every tenant is refused or none is asked for", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.credentials.delete("pb");
+    let entered = 0;
+    const exclusive = slot.exclusive.bind(slot);
+    slot.exclusive = async <T>(fn: () => Promise<T>) => {
+      entered += 1;
+      return exclusive(fn);
+    };
+    const refused = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, async () => 1),
+      await session.runForTenant({ ...THIRD, config: { ...THIRD.config, subscriptionId: "" } }, async () => 1),
+    ]);
+    expect(refused.value.map((r) => (r.kind === "unknown" ? r.stage : r.kind))).toEqual(["credential", "identity"]);
+    expect(refused.restore).toEqual({ kind: "not-needed" });
+    const empty = await runTenantSessionBatch(deps, async () => "nothing read");
+    expect(empty).toEqual({ value: "nothing read", restore: { kind: "not-needed" } });
+    expect(log).toEqual([]);
+    expect(entered).toBe(0);
+  });
+
+  it("takes the lease at the first tenant that may be read, after a refused one", async () => {
+    const { log, slot, deps } = batchSetup();
+    slot.credentials.delete("pb");
+    slot.azure.respondWith(...provenTwice(C));
+    const out = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, work(log, "pb")),
+      await session.runForTenant(THIRD, work(log, "pc")),
+    ]);
+    expect(out.value.map((r) => r.kind)).toEqual(["unknown", "done"]);
+    expect(log.slice(0, 3)).toEqual(["lease:take", "exclusive:enter", "owner:switching"]);
+    expect(log.slice(-RESTORE_TAIL.length)).toEqual(RESTORE_TAIL);
+  });
+
+  it("tries the lease again at the next tenant once the other tab has released it", async () => {
+    const { log, slot, store, deps } = batchSetup({ seed: { [CREDENTIAL_LEASE_KEY]: takenLease("tab-2", 1000, 30_000) } });
+    slot.azure.respondWith(...provenTwice(C));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      const first = await session.runForTenant(TARGET, work(log, "pb"));
+      await store.save(CREDENTIAL_LEASE_KEY, null);
+      log.length = 0;
+      const second = await session.runForTenant(THIRD, work(log, "pc"));
+      return [first.kind === "unknown" ? first.stage : first.kind, second.kind];
+    });
+    expect(out.value).toEqual(["lease", "done"]);
+    expect(log).toEqual([
+      "lease:take",
+      "exclusive:enter",
+      "owner:switching",
+      "install:pc",
+      `mint:${C}`,
+      "owner:pc",
+      `ports:${C}`,
+      "work:pc",
+      ...RESTORE_TAIL,
+    ]);
+  });
+
+  it("touches nothing but the lease read when another tab holds it, and says so for every tenant", async () => {
+    const { log, deps } = batchSetup({ seed: { [CREDENTIAL_LEASE_KEY]: takenLease("tab-2", 1000, 30_000) } });
+    const out = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, async () => 1),
+      await session.runForTenant(THIRD, async () => 1),
+    ]);
+    expect(out.value.map((r) => (r.kind === "unknown" ? r.stage : r.kind))).toEqual(["lease", "lease"]);
+    expect(out.restore).toEqual({ kind: "not-needed" });
+    expect(log).toEqual([]);
   });
 });
