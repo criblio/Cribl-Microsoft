@@ -128,6 +128,7 @@ import {
   entraDeployTarget,
   entraProfileFrom,
   entraSettingRecord,
+  readEntraSettingState,
   expectedEntraSetting,
   withEntraSetting,
   withoutEntraSetting,
@@ -209,7 +210,7 @@ import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
 import { EntraSettingSection } from "./entra-setting-section";
 import { EntraRemovePanel } from "./entra-remove-panel";
-import { entraDeployedItems } from "./entra-setting-state";
+import { entraDeployedItems, entraReadDisprovesRecord } from "./entra-setting-state";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
 import { ChoosePanel } from "./howto/choose-panel";
@@ -414,6 +415,8 @@ export function AzureOnboardingScreen({
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
   const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
   const [entraState, setEntraState] = useState<EntraSettingState | null>(null);
+  // AZR-99: the next Entra read follows the app's own write (see onEntraState).
+  const entraReadAfterDeploy = useRef(false);
 
   // How-to progress (ADR 0007 D1, D3).
   const [progressLoad, setProgressLoad] = useState<ProgressLoadState>(
@@ -919,6 +922,7 @@ export function AzureOnboardingScreen({
    * run, and records the setting (by tenant) so Remove can prove it the app's.
    */
   function onEntraDeployed(deploy: EntraDeployForValidation): void {
+    entraReadAfterDeploy.current = true;
     amendLastRun(deploy, entraAmendNote(deploy.outcome, new Date().toLocaleTimeString()));
     logger?.info(`${LOG} Entra ID deploy applied to the last Validate result`, { outcome: deploy.outcome });
     const p = loadedProgress(latestProgressLoad.current);
@@ -941,11 +945,45 @@ export function AzureOnboardingScreen({
     }
   }
 
-  /** AZR-99: after a removal that left nothing behind, forget the record. */
-  function onEntraRemoved(outcome: EntraRemoveOutcome): void {
-    if (outcome.kind !== "removed" && outcome.kind !== "already-gone") return;
+  /**
+   * AZR-99: every Entra read lands here. A read that no longer lists the
+   * setting forgets this tenant's record (entraReadDisprovesRecord), so a
+   * stale record never proves ownership of a setting re-created by hand -
+   * except the read right after the app's own write, which may simply lag.
+   */
+  function onEntraState(next: EntraSettingState): void {
+    setEntraState(next);
+    const afterOwnWrite = entraReadAfterDeploy.current;
+    entraReadAfterDeploy.current = false;
+    if (afterOwnWrite) return;
     const p = loadedProgress(latestProgressLoad.current);
-    if (p !== null) commitProgress(withoutEntraSetting(p, config.tenantId), "entra setting removed");
+    if (p === null || !entraReadDisprovesRecord(next, entraSettingRecord(p, config.tenantId))) return;
+    if (commitProgress(withoutEntraSetting(p, config.tenantId), "entra setting found gone")) {
+      logger?.info(`${LOG} Entra ID setting record dropped: the read no longer lists it`, {});
+      showMessage("howto", {
+        tone: "info",
+        text: `${ENTRA_SETTING_NAME} is no longer in this tenant, so this page has forgotten creating it. A setting of that name made later is not removed from here.`,
+      });
+    }
+  }
+
+  /**
+   * AZR-99: after a removal that left nothing behind, forget the record; after
+   * any removal that reached Azure, re-read, so the row and Deploy stop
+   * describing the setting as it was before.
+   */
+  function onEntraRemoved(outcome: EntraRemoveOutcome): void {
+    if (outcome.kind === "removed" || outcome.kind === "already-gone") {
+      const p = loadedProgress(latestProgressLoad.current);
+      if (p !== null) commitProgress(withoutEntraSetting(p, config.tenantId), "entra setting removed");
+    }
+    if (outcome.kind === "removed" || outcome.kind === "removed-not-confirmed" || outcome.kind === "already-gone") {
+      void readEntraSettingState(ports.azure, logger).then(onEntraState, (error: unknown) => {
+        // The usecase never throws; a wiring fault must not leave the old state looking current.
+        setEntraState(null);
+        logger?.error(`${LOG} Entra ID re-read after remove threw`, { error: errorText(error) });
+      });
+    }
   }
 
   /** AZR-105: after a removal that left nothing behind, forget the record. */
@@ -1341,7 +1379,7 @@ export function AzureOnboardingScreen({
                   picked={target}
                   record={progress === null ? null : entraSettingRecord(progress, config.tenantId)}
                   state={entraState}
-                  onState={setEntraState}
+                  onState={onEntraState}
                   onDeployed={onEntraDeployed}
                   howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(ENTRA_ITEM_ID)}

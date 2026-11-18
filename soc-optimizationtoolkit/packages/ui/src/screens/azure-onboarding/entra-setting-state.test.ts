@@ -7,6 +7,7 @@ import {
   entraDeployDisabledReason,
   entraDeployedItems,
   entraOutcomeMessage,
+  entraReadDisprovesRecord,
   entraRemoveDisabledReason,
   entraRemoveMessage,
   planRuleRights,
@@ -93,6 +94,27 @@ describe("entraDeployedItems (the row label)", () => {
   it("before a target exists it is the read's own answer; unread is null", () => {
     expect(entraDeployedItems(WIDER, null)).toEqual([ENTRA_ITEM_ID]);
     expect(entraDeployedItems(null, INPUT)).toBeNull();
+  });
+});
+
+describe("entraReadDisprovesRecord (forgetting a stale record)", () => {
+  const RECORD = { tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE_ID };
+  it("a list without ours disproves a record, empty or not", () => {
+    expect(entraReadDisprovesRecord(LISTED_EMPTY, RECORD)).toBe(true);
+    const others: EntraSettingState = { ...LISTED_EMPTY, ours: { kind: "absent", measured: true } };
+    expect(entraReadDisprovesRecord(others, RECORD)).toBe(true);
+  });
+
+  it("ours listed, an unreadable list, or no record never drops anything", () => {
+    expect(entraReadDisprovesRecord(WIDER, RECORD)).toBe(false);
+    expect(entraReadDisprovesRecord(LISTED_EMPTY, null)).toBe(false);
+    const unread: EntraSettingState = {
+      settings: { kind: "unread", failure: { kind: "denied", status: 403, code: "AuthorizationFailed", message: "no" } },
+      ours: { kind: "unknown", reason: "no" },
+      deployed: [],
+      unknownReason: "no",
+    } as unknown as EntraSettingState;
+    expect(entraReadDisprovesRecord(unread, RECORD)).toBe(false);
   });
 });
 

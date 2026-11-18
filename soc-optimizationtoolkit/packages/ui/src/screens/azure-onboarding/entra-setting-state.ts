@@ -102,6 +102,21 @@ export function entraDiffersAdvice(record: EntraSettingRecord | null, observedRu
 }
 
 /**
+ * Whether a read disproves this tenant's record of writing the setting: the
+ * tenant's list was read and holds no CriblEntraIDLogs. Kept, the record would
+ * let Remove "prove" ownership of a setting someone re-creates by hand later
+ * under the same name and rule (the How-to steps and the legacy script use
+ * both). An EMPTY list counts too: it is never shown as "none", but forgetting
+ * the record is the safe direction - the worst it costs is that the app no
+ * longer offers to remove a setting, never that it removes one it did not
+ * write. The caller skips the read that follows the app's own write.
+ */
+export function entraReadDisprovesRecord(state: EntraSettingState, record: EntraSettingRecord | null): boolean {
+  // Judged from the listing itself, the same classification the read makes.
+  return record !== null && state.settings.kind === "listed" && classifyOursEntraSetting(state.settings.listing).kind === "absent";
+}
+
+/**
  * The rights of the plan's rule, when section 1's pick IS that rule on that
  * namespace; null otherwise (the operator's own names, or nothing picked).
  */

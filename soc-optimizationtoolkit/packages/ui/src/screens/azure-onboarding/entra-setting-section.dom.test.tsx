@@ -17,7 +17,10 @@
  *     category to the namespace, each disable Deploy and write nothing;
  *   - after the app's own deploy, Remove sits in "Remove or pause what this
  *     app created", is two clicks, quotes setting, tenant and rule, and sends
- *     one DELETE.
+ *     one DELETE; the screen then re-reads, so nothing still says "applied";
+ *   - a read that no longer lists the setting forgets the app's record (but
+ *     not the read right after its own write), so a setting re-created by
+ *     hand under the same name and rule is never offered for removal.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -66,6 +69,8 @@ function setting(name: string, ruleId: string, categories: readonly string[] = S
 class RoutingAzure implements AzureManagement {
   readonly calls: AzureManagementRequest[] = [];
   private readonly settings: unknown[];
+  /** When true, the tenant LIST omits ours while a GET by name still finds it (Azure's list lagging a write). */
+  listLags = false;
   constructor(settings: unknown[] = []) {
     this.settings = [...settings];
   }
@@ -85,7 +90,9 @@ class RoutingAzure implements AzureManagement {
         ],
       });
     }
-    if (r.method === "GET" && r.path === LIST) return ok({ value: this.settings });
+    if (r.method === "GET" && r.path === LIST) {
+      return ok({ value: this.listLags ? this.settings.filter((x) => (x as { id: string }).id !== OURS) : this.settings });
+    }
     if (r.method === "PUT" && r.path === OURS) {
       const written = { id: OURS, name: "CriblEntraIDLogs", properties: (r.body as { properties: unknown }).properties };
       this.settings.push(written);
@@ -224,6 +231,59 @@ describe("Entra ID section - deploy and remove", () => {
     expect(azure.writes().filter((c) => c.method === "DELETE")).toEqual([{ method: "DELETE", path: OURS, apiVersion: API }]);
     // The record is gone with it: Remove is off, with its reason.
     await waitFor(() => expect((within(teardown()).getByRole("button", { name: "Remove Entra ID setting" }) as HTMLButtonElement).disabled).toBe(true));
+    // The screen re-read the tenant: the row and Deploy no longer describe the removed setting.
+    const row = (): HTMLElement => document.querySelector<HTMLElement>('li[data-item="entraId"] .azure-onboarding-state')!;
+    await waitFor(() => expect(row().textContent).not.toBe("Deployed"));
+    expect(within(block()).queryByText(/CriblEntraIDLogs is already applied in this tenant/)).toBeNull();
+    expect(deployButton().disabled).toBe(false);
+    expect(azure.calls.filter((c) => c.method === "GET" && c.path === LIST).length).toBe(4);
+  });
+});
+
+describe("Entra ID section - the app's record follows what Azure lists", () => {
+  it("a setting deleted by hand, then re-created by hand, is never offered for removal", async () => {
+    const azure = mount();
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Entra ID deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs is already applied in this tenant, exactly as this app would write it/)).toBeTruthy());
+    expect((within(teardown()).getByRole("button", { name: "Remove Entra ID setting" }) as HTMLButtonElement).disabled).toBe(false);
+
+    // Deleted in the Entra admin center: the next read forgets the record.
+    const stored = (azure as unknown as { settings: unknown[] }).settings;
+    stored.splice(0, stored.length);
+    await readSettings();
+    await waitFor(() => expect(azure.calls.filter((c) => c.method === "GET" && c.path === LIST).length).toBe(4));
+    await waitFor(() => expect(within(teardown()).queryByRole("button", { name: "Remove Entra ID setting" })).toBeNull());
+    expect(
+      screen.getByText("CriblEntraIDLogs is no longer in this tenant, so this page has forgotten creating it. A setting of that name made later is not removed from here."),
+    ).toBeTruthy();
+
+    // Re-created by hand from the How-to steps, same name and rule: not this app's to remove.
+    stored.push(setting("CriblEntraIDLogs", RULE_ID));
+    await readSettings();
+    await waitFor(() => expect(azure.calls.filter((c) => c.method === "GET" && c.path === LIST).length).toBe(5));
+    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs is already applied in this tenant, exactly as this app would write it/)).toBeTruthy(), { timeout: 5000 });
+    expect(within(teardown()).queryByRole("button", { name: "Remove Entra ID setting" })).toBeNull();
+    expect(azure.writes().map((w) => w.method)).toEqual(["PUT"]);
+  });
+
+  it("the read right after the app's own write keeps the record even when the list lags", async () => {
+    const azure = mount();
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    azure.listLags = true;
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Entra ID deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs was created and read back from Azure/)).toBeTruthy());
+    // The post-deploy re-read ran (and did not list ours) ...
+    await waitFor(() => expect(azure.calls.filter((c) => c.method === "GET" && c.path === LIST).length).toBe(3));
+    // ... and the record that proves the write survives it.
+    await waitFor(() => expect((within(teardown()).getByRole("button", { name: "Remove Entra ID setting" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByText(/so this page has forgotten creating it/)).toBeNull();
   });
 });
 

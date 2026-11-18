@@ -8474,7 +8474,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   points at the app's own Remove instead of the Entra admin center; (3) ONE
   category rule (core entraCategoriesDiff: exactly the chosen ones, groups
   named) shared by Validate and Deploy, and the row label judged against the
-  plan's target. Pins mutation-checked; still nothing live.
+  plan's target. Pins mutation-checked; still nothing live. REVIEW ROUND 2
+  (2026-11-18, before merge): (1) a Remove that reached Azure re-reads the
+  tenant, so the row and Deploy stop calling the removed setting applied; (2)
+  a read whose list no longer holds CriblEntraIDLogs forgets this tenant's
+  record (empty list included: forgetting is the safe direction), except the
+  read right after the app's own write, so a setting deleted and then
+  re-created by hand under the same name and rule is never removed from the
+  app. Residual: a delete and re-create with no app read between them is still
+  indistinguishable, since an aadiam setting carries no timestamp or etag to
+  prove it. Pins mutation-checked; nothing live.
 
 - **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
   `AZR-F9` `bug` `settled` `verified: pins`
