@@ -133,6 +133,9 @@ import {
   expectedEntraSetting,
   withEntraSetting,
   withoutEntraSetting,
+  listenRuleName,
+  withEventHubAccess,
+  withoutEventHubAccess,
 } from "@soc/core";
 import type {
   TenantInventory,
@@ -182,6 +185,9 @@ import type {
   TenantCriblMappingRead,
   ValidationPlan,
   ValidationResult,
+  EventHubAccessRecord,
+  ListenAccessApplyResult,
+  ListenAccessRemoveOutcome,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
@@ -250,6 +256,9 @@ import { TeardownPanel } from "./cribl-source/teardown-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
 import { onboardingGroupChoice, onboardingGroupResolution } from "./cribl-source/group-choice";
 import { StrandedSourcesNotice } from "./cribl-source/stranded-sources-notice";
+import { ListenAccessPanel } from "./cribl-source/listen-access-panel";
+import { ListenAccessRemovePanel } from "./cribl-source/listen-access-remove-panel";
+import { eventHubSourcesInUse } from "./cribl-source/listen-access-state";
 import { strandedNoticeOf } from "./cribl-source/stranded-sources-state";
 import { OnboardingDataflow } from "./dataflow/onboarding-dataflow";
 import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
@@ -1089,6 +1098,54 @@ export function AzureOnboardingScreen({
     logger?.info(`${LOG} namespace rules read`, { namespace: ns.name, state: mapped.state });
   }
 
+  // AZR-36: the hubs every chosen AUTOMATED Event Hub lane reads, for the
+  // consumer group. A How-to lane is the operator's to set up by hand: the app
+  // offers no Azure write for it.
+  const automatedEventHubLanes = useMemo(
+    () =>
+      progress === null
+        ? []
+        : chosen.filter((id) => onboardingSource(id)?.transport === "eventhub" && effectiveMode(progress, id) === "automate"),
+    [chosen, progress],
+  );
+  const listenAccessHubs = useMemo(() => {
+    const out: string[] = [];
+    for (const id of automatedEventHubLanes) {
+      const topics = topicsFor(id);
+      if (topics === null || topics.kind !== "ok") continue;
+      for (const hub of topics.topics) if (!out.includes(hub)) out.push(hub);
+    }
+    return out;
+  }, [automatedEventHubLanes, topicsFor]);
+  const hasEventHubLane = automatedEventHubLanes.length > 0;
+  const listenAccessNamespace =
+    values === null || ehLoc === null || values.namespace.trim() === "" || ehLoc.subscriptionId.trim() === "" || ehLoc.resourceGroup.trim() === ""
+      ? null
+      : { subscriptionId: ehLoc.subscriptionId.trim(), resourceGroup: ehLoc.resourceGroup.trim(), name: values.namespace.trim() };
+
+  /** AZR-36: record what the app's PUTs created, so Remove can prove it; re-read the rules for the picker. */
+  function onListenAccessCreated(result: ListenAccessApplyResult): void {
+    if (result.records.length > 0) {
+      const p = loadedProgress(latestProgressLoad.current);
+      const recorded = p !== null && commitProgress(withEventHubAccess(p, result.records), "event hub access created");
+      if (!recorded) {
+        showMessage("howto", {
+          tone: "warning",
+          text: "The Listen rule or consumer group was created, but your saved progress could not be updated, so this page cannot prove it created them and will not offer to remove them.",
+        });
+      }
+    }
+    if (result.records.some((r) => r.kind === "listen-rule")) void onReadRules();
+  }
+
+  /** AZR-36: forget an object once it is removed or found gone. */
+  function onListenAccessRemoved(record: EventHubAccessRecord, outcome: ListenAccessRemoveOutcome): void {
+    if (outcome.kind !== "removed" && outcome.kind !== "already-gone") return;
+    const p = loadedProgress(latestProgressLoad.current);
+    if (p !== null) commitProgress(withoutEventHubAccess(p, record.resourceId), "event hub access removed");
+    if (record.kind === "listen-rule") void onReadRules();
+  }
+
   function onGroupChange(next: string): void {
     setGroupId(next);
     const p = loadedProgress(latestProgressLoad.current);
@@ -1473,6 +1530,16 @@ export function AzureOnboardingScreen({
       <NumberedSection number={firstExtra + 3} title={HOWTO_SECTION_TITLES.cribl} status="available" infoTip={CRIBL_TIP}>
         {rulesMessage !== null && <PickerLine message={rulesMessage} />}
         <StrandedSourcesNotice notice={strandedNotice} />
+        {values !== null && hasEventHubLane && (
+          <ListenAccessPanel
+            namespace={listenAccessNamespace}
+            hubs={listenAccessHubs}
+            consumerGroup={values.consumerGroup}
+            ruleName={listenRuleName(values.listenRule)}
+            readSeq={readSeq}
+            onCreated={onListenAccessCreated}
+          />
+        )}
         {progress === null || values === null ? (
           <p className="field-hint">The Cribl source can be created once your How-to progress is loaded.</p>
         ) : (
@@ -1524,6 +1591,11 @@ export function AzureOnboardingScreen({
                   onRunningChange={setActivityLogRemoving}
                 />
                 <EntraRemovePanel record={entraSettingRecord(progress, config.tenantId)} onRemoved={onEntraRemoved} />
+                <ListenAccessRemovePanel
+                  records={progress.eventHubAccess ?? []}
+                  inUseBy={eventHubSourcesInUse(progress)}
+                  onRemoved={onListenAccessRemoved}
+                />
               </>
             }
           />
