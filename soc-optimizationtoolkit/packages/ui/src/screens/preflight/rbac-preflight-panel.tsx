@@ -252,6 +252,12 @@ export function RbacPreflightPanel({
   // set carries the connection it was measured against, so if the panel's setup
   // path differs from the app's the worst case is a later re-audit, never a
   // wrong answer.
+  //
+  // The save MERGES (CAP-11): this projection holds only what the preflight
+  // measures, not the audit's subscription-scope and Graph verdicts, so a
+  // replace used to turn those back into unknown. saveCapabilityAudit now keeps
+  // every cached verdict this run did not measure, and replaces one it did only
+  // when this measurement is the newer.
   useEffect(() => {
     if (azure.phase !== "done" || azure.result === null) {
       return;

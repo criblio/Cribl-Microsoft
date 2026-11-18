@@ -165,6 +165,16 @@ export interface CapabilitySet {
    * reused - the caller compares this before trusting `verdicts`.
    */
   connectionId: string | null;
+  /**
+   * OPTIONAL per-capability measurement times (ISO-8601), for verdicts measured
+   * EARLIER than `auditedAt` (CAP-11). A verdict with no entry here was measured
+   * at `auditedAt`. Two writers measure into one cached set - the app-level
+   * audit and the RBAC preflight panel - and each measures a different subset,
+   * so after a merge (mergeCapabilitySets) a set can hold verdicts of different
+   * ages. The times are what let a later merge replace a verdict only with a
+   * NEWER measurement of the same capability.
+   */
+  measuredAt?: Readonly<Partial<Record<Capability, string>>>;
 }
 
 /** The facts that decide a verdict before any audit has run. */

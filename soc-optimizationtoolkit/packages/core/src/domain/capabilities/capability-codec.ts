@@ -53,6 +53,12 @@ export interface CachedCapabilitySet {
   verdicts: Record<string, string>;
   auditedAt: string | null;
   connectionId: string | null;
+  /**
+   * Per-capability measurement times for verdicts older than `auditedAt`
+   * (CAP-11). Written only when there is one, so a single-writer set keeps the
+   * shape it had before; an entry stored by an older build simply lacks it.
+   */
+  measuredAt?: Record<string, string>;
 }
 
 const KNOWN_CAPABILITIES: ReadonlySet<string> = new Set<string>([
@@ -85,10 +91,17 @@ export function serializeCapabilitySet(set: CapabilitySet): CachedCapabilitySet 
       verdicts[capability] = verdict;
     }
   }
+  const measuredAt: Record<string, string> = {};
+  for (const [capability, at] of Object.entries(set.measuredAt ?? {})) {
+    if (typeof at === "string" && verdicts[capability] !== undefined) {
+      measuredAt[capability] = at;
+    }
+  }
   return {
     verdicts,
     auditedAt: set.auditedAt,
     connectionId: set.connectionId,
+    ...(Object.keys(measuredAt).length > 0 ? { measuredAt } : {}),
   };
 }
 
@@ -115,9 +128,21 @@ export function parseCapabilitySet(value: unknown): CapabilitySet {
       }
     }
   }
+  // A time is kept only for a verdict that survived parsing: a time with no
+  // verdict would describe a measurement nothing holds.
+  const measuredAt: Partial<Record<Capability, string>> = {};
+  const rawTimes = value["measuredAt"];
+  if (isPlainObject(rawTimes)) {
+    for (const [capability, at] of Object.entries(rawTimes)) {
+      if (typeof at === "string" && verdicts[capability as Capability] !== undefined) {
+        measuredAt[capability as Capability] = at;
+      }
+    }
+  }
   return {
     verdicts,
     auditedAt: stringOrNull(value["auditedAt"]),
     connectionId: stringOrNull(value["connectionId"]),
+    ...(Object.keys(measuredAt).length > 0 ? { measuredAt } : {}),
   };
 }

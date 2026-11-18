@@ -60,6 +60,7 @@ export type {
   NavItemCapabilities,
 } from "./nav-annotation";
 export { annotateNavItems, unavailableCount } from "./nav-annotation";
+export { mergeCapabilitySets } from "./capability-merge";
 export type { CachedCapabilitySet } from "./capability-codec";
 export {
   CAPABILITY_AUDIT_CACHE_KEY,
