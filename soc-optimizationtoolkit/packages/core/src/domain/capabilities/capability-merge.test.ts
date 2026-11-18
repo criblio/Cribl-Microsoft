@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { mergeCapabilitySets } from "./capability-merge";
+import { mergeCapabilitySets, supersedeCapabilitySet } from "./capability-merge";
 import { parseCapabilitySet, serializeCapabilitySet } from "./capability-codec";
 import type { CapabilitySet } from "./capabilities";
 
@@ -74,6 +74,41 @@ describe("mergeCapabilitySets", () => {
   it("returns the incoming set when nothing is stored", () => {
     const incoming = set({ "dcr.write": "denied" }, T2);
     expect(mergeCapabilitySets({ verdicts: {}, auditedAt: null, connectionId: null }, incoming)).toBe(incoming);
+  });
+});
+
+describe("supersedeCapabilitySet (the audit, which attempts every capability)", () => {
+  const T3 = "2026-11-18T09:10:00Z";
+
+  it("drops every older stored verdict, measured again or not", () => {
+    const out = supersedeCapabilitySet(
+      set({ "graph-incidents.read": "granted", "dcr.write": "granted" }, T1),
+      set({ "dcr.write": "denied" }, T2),
+    );
+    expect(out).toEqual({ verdicts: { "dcr.write": "denied" }, auditedAt: T2, connectionId: KEY });
+  });
+
+  it("keeps only a STRICTLY newer stored measurement, with its own time", () => {
+    const stored: CapabilitySet = {
+      ...set({ "dcr.write": "denied", "policy.assign": "granted", "table.write": "unknown" }, T3),
+      measuredAt: { "policy.assign": T2 },
+    };
+    // The audit started at T2: dcr.write (T3) is newer and survives over the
+    // audit's own grant; policy.assign (T2) ties and goes; an unknown is no
+    // measurement and goes.
+    const out = supersedeCapabilitySet(stored, set({ "dcr.write": "granted" }, T2));
+    expect(out).toEqual({
+      verdicts: { "dcr.write": "denied" },
+      auditedAt: T3,
+      connectionId: KEY,
+    });
+  });
+
+  it("replaces outright across connections and over an empty store", () => {
+    const incoming = set({ "dcr.write": "denied" }, T2, "other");
+    expect(supersedeCapabilitySet(set({ "policy.assign": "granted" }, T3), incoming)).toBe(incoming);
+    const own = set({ "dcr.write": "denied" }, T2);
+    expect(supersedeCapabilitySet({ verdicts: {}, auditedAt: null, connectionId: null }, own)).toBe(own);
   });
 });
 

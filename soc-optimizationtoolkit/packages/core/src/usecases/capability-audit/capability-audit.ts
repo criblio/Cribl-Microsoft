@@ -34,6 +34,7 @@ import {
   capabilityAuditKey,
   emptyCapabilitySet,
   mergeCapabilitySets,
+  supersedeCapabilitySet,
   parseCapabilitySet,
   serializeCapabilitySet,
   shouldRunAudit,
@@ -284,6 +285,13 @@ export async function loadCachedCapabilities(
  *     Defender on existing-rg, Graph). A verdict is now replaced only by a
  *     newer measurement of the same capability.
  *
+ * `options.supersede` is for a writer that ATTEMPTED every capability - the
+ * app-level audit, which measures everything the panel measures and more. It
+ * replaces every verdict older than its own run, so a capability it tried and
+ * could not settle reads unknown rather than keeping its own stale earlier
+ * grant (supersedeCapabilitySet). Only a measurement newer than the run - a
+ * panel that saved meanwhile - survives it. The panel omits it and merges.
+ *
  * A READ FAILURE SKIPS THE WRITE. With the cached set unreadable there is
  * nothing to merge over, and writing the incoming set alone would erase
  * whatever the other writer measured - the defect this exists to prevent. The
@@ -294,6 +302,7 @@ export async function saveCapabilityAudit(
   set: CapabilitySet,
   tenantId: string,
   logger?: Logger,
+  options: { supersede?: boolean } = {},
 ): Promise<CapabilitySet> {
   if (cache === undefined) {
     return set;
@@ -308,7 +317,8 @@ export async function saveCapabilityAudit(
     });
     return set;
   }
-  const merged = mergeCapabilitySets(stored, set);
+  const merged =
+    options.supersede === true ? supersedeCapabilitySet(stored, set) : mergeCapabilitySets(stored, set);
   try {
     await cache.set(key, serializeCapabilitySet(merged));
   } catch (err) {
@@ -402,11 +412,15 @@ export async function runCapabilityAudit(
     ...measured,
     verdicts: { ...subscription, ...graph, ...measured.verdicts },
   };
-  // Merged over what the cache holds for this same connection (CAP-11), so a
-  // measurement this run could not repeat - a Graph probe that rejected, a
-  // subscription read that failed - keeps its earlier verdict, and what the
-  // caller renders is what the next launch will read.
-  const stored = await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger);
+  // The audit attempted every capability, so it SUPERSEDES the cached set
+  // (CAP-11 review round 1): a capability this run tried and could not settle
+  // - a Graph probe that rejected or answered inconclusively, a subscription
+  // read that failed - reads unknown rather than keeping an earlier grant. Only
+  // a panel measurement saved after this run started survives. What the caller
+  // renders is what the next launch will read.
+  const stored = await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger, {
+    supersede: true,
+  });
 
   logger?.info("capability-audit: audited", {
     trigger: input.trigger,

@@ -21,6 +21,10 @@
  *     `unreachable` are the ABSENCE of one (verdictFor derives them from
  *     context), so an incoming one never displaces a measured verdict.
  *
+ * THAT IS THE PANEL'S RULE. The audit attempts every capability the panel does
+ * and more, so it uses supersedeCapabilitySet instead: it may retract its own
+ * earlier verdicts, and only a measurement newer than its run survives it.
+ *
  * A DIFFERENT CONNECTION IS NOT MERGED. A set measured for another key answers
  * another question (isSetForConnection), so carrying its verdicts across would
  * be the worst failure this model can have - confidently wrong about
@@ -123,4 +127,49 @@ export function mergeCapabilitySets(stored: CapabilitySet, incoming: CapabilityS
     connectionId: incoming.connectionId,
     ...(Object.keys(measuredAt).length > 0 ? { measuredAt } : {}),
   };
+}
+
+/**
+ * Write `incoming` from a writer that ATTEMPTED every capability: the app-level
+ * audit (CAP-11, review round 1). Such a writer may retract its own earlier
+ * answers. A capability it tried and could not settle this time must read
+ * unknown, rather than keep a grant measured before the role was removed.
+ * Causes include an empty 200 or an unrecognised 403 from a Graph probe
+ * (AZR-111), a probe that rejected, or a subscription read that failed.
+ * Carrying the old verdict would claim a grant this run did not measure, while
+ * the set's audit time says it was just checked.
+ *
+ * So the stored set contributes ONLY measurements strictly newer than this
+ * write's own time, i.e. a panel run that saved after this audit started.
+ * Those are not stale relative to the audit and keep their verdict (the
+ * out-of-order case mergeCapabilitySets exists for). Everything older is
+ * superseded, whether or not this run measured it again. A tie or an unreadable
+ * stored time goes to this write. Different connections are replaced outright,
+ * as in the merge.
+ */
+export function supersedeCapabilitySet(stored: CapabilitySet, incoming: CapabilitySet): CapabilitySet {
+  if (stored.connectionId === null || stored.connectionId !== incoming.connectionId) {
+    return incoming;
+  }
+  const newer: Partial<Record<Capability, CapabilityVerdict>> = {};
+  const newerAt: Partial<Record<Capability, string>> = {};
+  let newest: string | null = null;
+  for (const [capability, verdict] of Object.entries(stored.verdicts) as [
+    Capability,
+    CapabilityVerdict | undefined,
+  ][]) {
+    if (!isMeasurement(verdict)) continue;
+    const at = measuredTime(stored, capability);
+    if (at === null || ms(at) === null || isAtLeastAsNew(incoming.auditedAt, at)) continue;
+    newer[capability] = verdict;
+    newerAt[capability] = at;
+    if (isAtLeastAsNew(at, newest)) newest = at;
+  }
+  const kept: CapabilitySet = {
+    verdicts: newer,
+    auditedAt: newest,
+    connectionId: stored.connectionId,
+    measuredAt: newerAt,
+  };
+  return mergeCapabilitySets(kept, incoming);
 }

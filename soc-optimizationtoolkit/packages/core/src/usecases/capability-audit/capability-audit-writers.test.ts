@@ -233,3 +233,73 @@ describe("audit, then an RBAC panel refresh (CAP-11)", () => {
     expect(writes).toHaveLength(0);
   });
 });
+
+describe("an audit retracts its own earlier verdicts it could not repeat (CAP-11 review round 1)", () => {
+  const LATER = "2026-11-18T15:00:00Z";
+  const EMPTY: GraphProbeResponse = { status: 200, body: { value: [] } };
+  const granting: GraphDirectory = { ...GRAPH, probePermission: async () => ROW };
+
+  async function audit(
+    cache: ContentCache,
+    graph: GraphDirectory,
+    nowIso: string,
+    subscription: PortHttpResponse = SUBSCRIPTION,
+  ): Promise<CapabilitySet> {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(...groupReads(), subscription);
+    const result = await runCapabilityAudit(
+      { azure, cribl: new FakeCriblClient(), cache, graph },
+      { ...INPUT, trigger: "manual", nowIso },
+    );
+    expect(result.decision.run).toBe(true);
+    return result.set;
+  }
+
+  it("an empty 200 on a refresh turns an earlier graph-incidents.read grant into unknown", async () => {
+    const cache = new FakeContentCache();
+    const first = await audit(cache, granting, AUDIT_AT);
+    expect(first.verdicts["graph-incidents.read"]).toBe("granted");
+
+    const emptyIncidents: GraphDirectory = {
+      ...GRAPH,
+      probePermission: async (probe) => (probe === "subscribed-skus" ? ROW : EMPTY),
+    };
+    const second = await audit(cache, emptyIncidents, LATER);
+    const stored = await loadCachedCapabilities(cache, "tenant-a");
+    for (const set of [second, stored]) {
+      expect(set.verdicts["graph-incidents.read"]).toBeUndefined();
+      expect(set.verdicts["graph-licences.read"]).toBe("granted");
+      expect(set.auditedAt).toBe(LATER);
+      expect(set.measuredAt).toBeUndefined();
+    }
+  });
+
+  it("a probe that rejects, and a failed subscription read, retract their earlier verdicts too", async () => {
+    const cache = new FakeContentCache();
+    const first = await audit(cache, GRAPH, AUDIT_AT);
+    expect(first.verdicts["graph-licences.read"]).toBe("granted");
+    expect(first.verdicts["policy.assign"]).toBe("denied");
+    expect(first.verdicts["defender-plans.read"]).toBe("granted");
+
+    const rejecting: GraphDirectory = {
+      ...GRAPH,
+      probePermission: () => Promise.reject(new Error("network")),
+    };
+    const second = await audit(cache, rejecting, LATER, { status: 500, body: {} });
+    const lost = Object.keys(AUDIT_ONLY).filter((c) => second.verdicts[c as Capability] !== undefined);
+    expect(lost).toEqual([]);
+    expect(Object.keys((await loadCachedCapabilities(cache, "tenant-a")).verdicts).sort()).toEqual(
+      Object.keys(second.verdicts).sort(),
+    );
+  });
+
+  it("a panel run between two audits still keeps the audit-only verdicts (the panel merges)", async () => {
+    const cache = new FakeContentCache();
+    await audit(cache, GRAPH, AUDIT_AT);
+    await saveCapabilityAudit(cache, await panelSet(groupReads(), PANEL_AT), "tenant-a");
+    const stored = await loadCachedCapabilities(cache, "tenant-a");
+    for (const [capability, verdict] of Object.entries(AUDIT_ONLY)) {
+      expect(stored.verdicts[capability as Capability]).toBe(verdict);
+    }
+  });
+});
