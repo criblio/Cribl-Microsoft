@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**108 in the backlog, 33 in progress, 242 done.**
+**109 in the backlog, 33 in progress, 242 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 10 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 62 | 4 |
+| Azure Native Source Onboarding | 32 | 62 | 5 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 18 | 18 | 6 |
 
-Open work totals 141.
+Open work totals 142.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 67% (75/112)
+### `AZR` Azure native source onboarding - 66% (75/113)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 49/67 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 49/68 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1013,7 +1013,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (14)
 
 Next to pick up. Nothing blocks these.
 
@@ -1260,6 +1260,22 @@ Next to pick up. Nothing blocks these.
   (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815
   keeps its Defender-only case). If [[AZR-116]] measures that Send suffices,
   the fix is instead to relax the Activity Log gate.
+
+- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
+  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
+  source) only looks for the CLIENT id in the directory listing. When the
+  listing lacks the client id but lists the typed object id under ANOTHER
+  appId, the directory has disproved the pair, yet the plan reads
+  principalCheck 'not-cross-checked' and goes on to read the receive role for
+  that other principal, so its role verdict describes the wrong identity and a
+  source is offered that will fail to read. AZR-103 closed the same gap for
+  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
+  appId and display name the directory gives); this card applies the same rule
+  to crossCheckPrincipal so both callers agree, with a pin in
+  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
+  principal-mismatch before any Azure or Cribl call).
 
 ---
 
@@ -9310,6 +9326,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   and PrincipalNotFound bodies, the conditioned RBAC Administrator actually
   permitting the write, and the propagation delay before Cribl's first read
   (not measured; the success message says Azure can take a few minutes).
+  REVIEW ROUND 1 (2026-11-18): a typed object id the directory lists under
+  ANOTHER client id now refuses principal-mismatch instead of reading 'not
+  cross-checked' (the grant would have gone to that application); and an
+  assignment this app provably made at exactly this scope (deterministic name
+  plus stamp) whose record was lost - the PUT succeeded but the KV save behind
+  the record failed before a reload - is offered 'Record it', which writes
+  only the progress document, so the AZR-141 teardown can still list it. Pins
+  only, mutation-checked.
 
 - **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
   `AZR-F9` `story` `settled` `verified: pins`
