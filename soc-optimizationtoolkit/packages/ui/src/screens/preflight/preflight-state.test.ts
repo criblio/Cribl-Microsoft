@@ -33,6 +33,7 @@ function azureReady(overrides: Partial<AzurePreflight> = {}): AzurePreflight {
     scopeKind: "resource-group",
     scope: "/subscriptions/s/resourceGroups/rg",
     permissionsFetched: true,
+    workspaceScope: "",
     checks: REQUIRED_ACTIONS[SETUP_PATH].map((req) => ({
       action: req.action,
       label: req.label,
@@ -139,6 +140,7 @@ describe("deriveAzureDots", () => {
       "done",
       azureReady({
         permissionsFetched: false,
+        workspaceScope: "",
         hasRequiredAccess: false,
         error: "fetch RBAC permissions: HTTP 500",
         checks: REQUIRED_ACTIONS[SETUP_PATH].map((req) => ({
@@ -264,6 +266,7 @@ describe("derivePreflightView", () => {
     // read does not imply write, so the side (and the whole report) is not ready.
     const readerAzure = azureReady({
       permissionsFetched: true,
+      workspaceScope: "",
       hasRequiredAccess: false,
       checks: REQUIRED_ACTIONS[SETUP_PATH].map((req) => ({
         action: req.action,
@@ -293,6 +296,7 @@ describe("derivePreflightView", () => {
     const notConfigured = azureReady({
       configured: false,
       permissionsFetched: false,
+      workspaceScope: "",
       hasRequiredAccess: false,
       error: "No resource group configured",
       probes: [],

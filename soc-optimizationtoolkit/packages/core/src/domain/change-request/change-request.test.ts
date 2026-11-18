@@ -233,13 +233,17 @@ describe("appRegistrationRequest", () => {
 });
 
 describe("roleAssignmentRequest role selection", () => {
-  it("existing: Reader + Monitoring/Log Analytics Contributor as the path's own roles, unchanged", () => {
+  it("existing: Reader + Monitoring Contributor, and Log Analytics Contributor on the workspace (AZR-85)", () => {
     const out = roleAssignmentRequest(ctxFor("existing"));
     expect(out).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
     expect(out).toContain(
       "- Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
+    // RE-PINNED (AZR-85): at the group it also reached every other resource there.
     expect(out).toContain(
+      "- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab\n",
+    );
+    expect(out).not.toContain(
       "- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
     // One justification line per role, and the SP named by client id.

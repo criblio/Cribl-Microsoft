@@ -27,6 +27,7 @@ import {
   CRIBL_CAPABILITY_PROBES,
   RBAC_PERMISSIONS_API_VERSION,
   criblProbeGrantsManage,
+  capabilitiesFromSides,
 } from "./index";
 import type { PermissionPreflightInput } from "./index";
 import { RESOURCE_GRAPH_PROBE_QUERY } from "./permission-preflight";
@@ -133,11 +134,12 @@ describe("scope selection per SetupPath", () => {
 describe("Reader-only is not deployable (read does not imply write)", () => {
   it("passes every read probe yet yields hasRequiredAccess false", async () => {
     const azure = new FakeAzureManagement();
-    // perms(READER) + dcr-list + workspace-get + tables-list + resource-graph
-    // query all succeed (reader can read everything) - the probes are all OK.
-    // The fifth response joined with CAP-1's probe, and is a row because only
-    // a row counts as an OK query; the assertion is unchanged.
-    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    // perms(READER) at the group, then at the workspace (AZR-85: the group
+    // did not grant tables/write), + dcr-list + workspace-get + tables-list +
+    // resource-graph query all succeed (reader can read everything) - the
+    // probes are all OK. The graph response is a row because only a row
+    // counts as an OK query; the assertion is unchanged.
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW);
 
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
@@ -196,16 +198,93 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
 // The Resource Graph probe (CAP-1)
 // ---------------------------------------------------------------------------
 
+describe("Log Analytics Contributor on the workspace is measured there (AZR-85)", () => {
+  const WS_PERMISSIONS =
+    `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.OperationalInsights` +
+    `/workspaces/${WS}/providers/Microsoft.Authorization/permissions`;
+  // What the ticket now asks: Monitoring Contributor-like rights at the group,
+  // and Log Analytics Contributor on the workspace alone.
+  const GROUP = permSet({
+    actions: ["*/read", "Microsoft.Insights/*", "Microsoft.Resources/deployments/*"],
+  });
+  const ON_WORKSPACE = permSet({ actions: ["*/read", "Microsoft.OperationalInsights/*"] });
+  const tableCheck = (checks: { action: string; granted: boolean }[]) =>
+    checks.find((c) => c.action === "Microsoft.OperationalInsights/workspaces/tables/write");
+
+  it("reads the workspace's permissions and finds the grant the group cannot see", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(GROUP), permsResponse(GROUP, ON_WORKSPACE), OK, OK, OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(azure.calls[1]?.path).toBe(WS_PERMISSIONS);
+    expect(result.workspaceScope).toBe(WS_PERMISSIONS.replace("/providers/Microsoft.Authorization/permissions", ""));
+    expect(tableCheck(result.checks)?.granted).toBe(true);
+    // Every core action is granted: an approver who granted exactly the
+    // ticket reads deployable, not "cannot create custom tables".
+    expect(result.hasRequiredAccess).toBe(true);
+  });
+
+  it("does not read the workspace when the group already grants tables/write", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(azure.calls.map((c) => c.path)).not.toContain(WS_PERMISSIONS);
+    expect(azure.calls).toHaveLength(5);
+    expect(result.workspaceScope).toBe("");
+    expect(tableCheck(result.checks)?.granted).toBe(true);
+  });
+
+  it("keeps the group's answer, and says it did, when the workspace cannot be read", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(GROUP), { status: 404, body: {} }, OK, OK, OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(result.workspaceScope).toBe("");
+    expect(tableCheck(result.checks)?.granted).toBe(false);
+    // The capability model does not turn the group's miss into a denial.
+    const set = capabilitiesFromSides(
+      result,
+      { mode: "cloud", workerGroup: "", probes: [], hasRequiredAccess: true, error: "" },
+      { auditedAt: null, connectionId: null },
+    );
+    expect(set.verdicts["table.write"]).toBeUndefined();
+    expect(set.verdicts["dcr.write"]).toBe("granted");
+  });
+
+  it("records a workspace-measured miss as denied", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(GROUP), permsResponse(GROUP), OK, OK, OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(result.workspaceScope).not.toBe("");
+    const set = capabilitiesFromSides(
+      result,
+      { mode: "cloud", workerGroup: "", probes: [], hasRequiredAccess: true, error: "" },
+      { auditedAt: null, connectionId: null },
+    );
+    expect(set.verdicts["table.write"]).toBe("denied");
+  });
+
+  it("issues no workspace read without a workspace name", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(GROUP), OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", { ...FULL_TARGET, workspaceName: "" });
+    expect(azure.calls).toHaveLength(3);
+    expect(result.workspaceScope).toBe("");
+  });
+});
+
 describe("Resource Graph probe", () => {
   it("issues one read-only query, last, on a resource-group path", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW);
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
-    // perms + dcr-list + workspace-get + tables-list + the query, in that order:
-    // appending keeps every earlier probe where scripted callers expect it.
-    expect(azure.calls).toHaveLength(5);
-    const query = azure.calls[4];
+    // perms at the group + perms at the workspace (AZR-85) + dcr-list +
+    // workspace-get + tables-list + the query, in that order: appending keeps
+    // every earlier probe where scripted callers expect it.
+    expect(azure.calls).toHaveLength(6);
+    expect(azure.calls[1]?.path).toBe(
+      `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.OperationalInsights/workspaces/${WS}/providers/Microsoft.Authorization/permissions`,
+    );
+    const query = azure.calls[5];
     expect(query.method).toBe("POST");
     expect(query.path).toBe("/providers/Microsoft.ResourceGraph/resources");
     expect(query.body).toEqual({
@@ -214,7 +293,7 @@ describe("Resource Graph probe", () => {
     });
     // The other probes stay GETs. The query is the one POST, and Resource Graph
     // has no write to reach.
-    expect(azure.calls.slice(1, 4).map((c) => c.method)).toEqual(["GET", "GET", "GET"]);
+    expect(azure.calls.slice(1, 5).map((c) => c.method)).toEqual(["GET", "GET", "GET", "GET"]);
     const probe = result.probes.find((p) => p.name === "resource-graph-query");
     expect(probe?.status).toBe("ok");
   });
@@ -250,7 +329,7 @@ describe("Resource Graph probe", () => {
     // since an empty subscription answers the same way.
     for (const body of [{ totalRecords: 0, count: 0, data: [] }, {}, { data: "x" }]) {
       const azure = new FakeAzureManagement();
-      azure.respondWith(permsResponse(READER), OK, OK, OK, { status: 200, body });
+      azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, { status: 200, body });
       const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
       const probe = result.probes.find((p) => p.name === "resource-graph-query");
       expect(probe?.status, JSON.stringify(body)).toBe("unknown");

@@ -35,6 +35,7 @@ const FILLED: RoleAssignmentCliParams = {
   clientId: "CID",
   subscriptionId: "SUB",
   resourceGroup: "RG",
+  workspaceName: "WS",
 };
 
 describe("rolePlanForSetupPath", () => {
@@ -59,10 +60,11 @@ describe("rolePlanForSetupPath", () => {
           "The app can still generate the DCR ARM template for someone else to deploy, but cannot deploy it itself - no data path is created.",
       },
       {
+        // AZR-85: on the workspace, not its group.
         role: "Log Analytics Contributor",
-        scopeLevel: "resourceGroup",
+        scopeLevel: "workspace",
         justification:
-          "Create custom Log Analytics tables and configure the workspace for ingestion.",
+          "Create custom Log Analytics tables in the workspace. Asked on the workspace itself, not its resource group, where the role would also reach every other resource there. A custom role with only Microsoft.OperationalInsights/workspaces/read, Microsoft.OperationalInsights/workspaces/tables/read, Microsoft.OperationalInsights/workspaces/tables/write on the workspace is narrower still.",
         feature: "Create custom tables",
         withoutIt:
           "Onboarding a source to a table that does not exist yet fails; existing native tables can still be targeted.",
@@ -213,10 +215,10 @@ describe("renderRoleAssignmentCli - characterization", () => {
   it("existing, all-blank params -> placeholders", () => {
     expect(renderRoleAssignmentCli("existing", BLANK)).toBe(
       [
-        "# Existing workspace: least privilege, scoped to its resource group",
+        "# Existing workspace: least privilege, scoped to its resource group and the workspace",
         'az role assignment create --assignee <clientId> --role "Reader" --scope /subscriptions/<subscriptionId>',
         'az role assignment create --assignee <clientId> --role "Monitoring Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
-        'az role assignment create --assignee <clientId> --role "Log Analytics Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>',
+        'az role assignment create --assignee <clientId> --role "Log Analytics Contributor" --scope /subscriptions/<subscriptionId>/resourceGroups/<workspaceRg>/providers/Microsoft.OperationalInsights/workspaces/<workspaceName>',
       ].join("\n"),
     );
   });
@@ -224,10 +226,10 @@ describe("renderRoleAssignmentCli - characterization", () => {
   it("existing, filled params", () => {
     expect(renderRoleAssignmentCli("existing", FILLED)).toBe(
       [
-        "# Existing workspace: least privilege, scoped to its resource group",
+        "# Existing workspace: least privilege, scoped to its resource group and the workspace",
         'az role assignment create --assignee CID --role "Reader" --scope /subscriptions/SUB',
         'az role assignment create --assignee CID --role "Monitoring Contributor" --scope /subscriptions/SUB/resourceGroups/RG',
-        'az role assignment create --assignee CID --role "Log Analytics Contributor" --scope /subscriptions/SUB/resourceGroups/RG',
+        'az role assignment create --assignee CID --role "Log Analytics Contributor" --scope /subscriptions/SUB/resourceGroups/RG/providers/Microsoft.OperationalInsights/workspaces/WS',
       ].join("\n"),
     );
   });

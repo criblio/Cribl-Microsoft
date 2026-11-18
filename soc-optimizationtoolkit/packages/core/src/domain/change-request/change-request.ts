@@ -236,6 +236,16 @@ function scopeParts(permission: AppPermission, n: ResolvedNames): ScopeParts {
   if (permission.scopeLevel === "subscription") {
     return { base: subscriptionScope(n), onResource: false };
   }
+  if (permission.scopeLevel === "workspace") {
+    // The configured workspace itself, not its group (AZR-85).
+    return {
+      base:
+        resourceGroupScope(n) +
+        "/providers/Microsoft.OperationalInsights/workspaces/" +
+        n.workspaceName,
+      onResource: false,
+    };
+  }
   // A named group other than the configured one (NetworkWatcherRG, AZR-81).
   const group =
     permission.resourceGroup === undefined

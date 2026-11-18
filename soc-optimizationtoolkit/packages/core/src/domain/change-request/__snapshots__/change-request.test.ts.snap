@@ -110,10 +110,16 @@ Assign each role to the service principal for Cribl SOC Toolkit (client id:
                     someone else to deploy, but cannot deploy it itself - no
                     data path is created.
 - Log Analytics Contributor  [core]
-    Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+    Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab
     Needed for:     Create custom tables
-    Why:            Create custom Log Analytics tables and configure the
-                    workspace for ingestion.
+    Why:            Create custom Log Analytics tables in the workspace. Asked
+                    on the workspace itself, not its resource group, where the
+                    role would also reach every other resource there. A custom
+                    role with only
+                    Microsoft.OperationalInsights/workspaces/read,
+                    Microsoft.OperationalInsights/workspaces/tables/read,
+                    Microsoft.OperationalInsights/workspaces/tables/write on
+                    the workspace is narrower still.
     If not granted: Onboarding a source to a table that does not exist yet
                     fails; existing native tables can still be targeted.
 
@@ -470,7 +476,7 @@ What is requested
 Assign the following roles to the service principal for Cribl SOC Toolkit (client id: 11111111-1111-1111-1111-111111111111):
 - Reader at /subscriptions/33333333-3333-3333-3333-333333333333
 - Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
-- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab
 - Microsoft Sentinel Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab  [feature]
 - RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab  [feature]
     Condition: Constrain roles and principal types: only Monitoring Metrics Publisher, only to service principals.
@@ -488,7 +494,7 @@ Justification
 -------------
 - Reader (/subscriptions/33333333-3333-3333-3333-333333333333): Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.
 - Monitoring Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create and update Data Collection Rules in the workspace resource group.
-- Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create custom Log Analytics tables and configure the workspace for ingestion.
+- Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab): Create custom Log Analytics tables in the workspace. Asked on the workspace itself, not its resource group, where the role would also reach every other resource there. A custom role with only Microsoft.OperationalInsights/workspaces/read, Microsoft.OperationalInsights/workspaces/tables/read, Microsoft.OperationalInsights/workspaces/tables/write on the workspace is narrower still.
 - Microsoft Sentinel Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Installing analytic rules and workbooks, and onboarding a workspace to Sentinel, WRITE Microsoft.SecurityInsights resources. Log Analytics Contributor grants read across the subscription but no Microsoft.SecurityInsights write, so without this role the install fails on the first rule.
 - RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Data only flows through a Data Collection Rule if the sending identity holds Monitoring Metrics Publisher ON THAT RULE, and creating a role assignment is itself a privileged action that Contributor does not include. Attach the condition below so this grant cannot be used to assign anything else.
 - Azure Event Hubs Data Owner on the Event Hub namespace that holds the rule - skip if a role above already covers it: Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.

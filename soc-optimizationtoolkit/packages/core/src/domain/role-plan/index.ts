@@ -2,6 +2,7 @@ export {
   LAB_RBAC_CONDITION,
   LAB_TTL_ROLE,
   NETWORK_WATCHER_RESOURCE_GROUP,
+  WORKSPACE_TABLE_ACTIONS,
   adminStepsForSetupPath,
   rolePlanForSetupPath,
   renderRoleAssignmentCli,

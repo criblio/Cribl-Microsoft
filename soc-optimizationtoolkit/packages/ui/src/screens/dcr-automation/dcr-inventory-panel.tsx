@@ -262,6 +262,7 @@ export function DcrInventoryPanel() {
           subscriptionId: config.subscriptionId,
           dcrResourceGroup: inventoryRg,
           workspaceResourceGroup: config.resourceGroup,
+          workspaceName: config.workspaceName,
           includeTableEdit: true,
         });
         setMissingActions(perms.missing);
@@ -763,7 +764,7 @@ export function DcrInventoryPanel() {
                     ...missingActions.map(
                       (m) => `  ${m.action}${"\n"}    at ${m.scope}`,
                     ),
-                    "(Monitoring Contributor covers the DCR action; Log Analytics Contributor covers the table action.)",
+                    "(Monitoring Contributor covers the DCR action; Log Analytics Contributor on the workspace covers the table action.)",
                   ].join("\n")}
                 </pre>
               )}

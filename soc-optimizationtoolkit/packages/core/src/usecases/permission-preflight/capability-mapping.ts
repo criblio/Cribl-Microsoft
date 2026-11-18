@@ -43,7 +43,8 @@ import type {
   CapabilityVerdict,
   CriblCapability,
 } from "../../domain/capabilities";
-import type { SetupPath } from "../../domain/azure-permissions";
+import { REQUIRED_ACTIONS } from "../../domain/azure-permissions";
+import type { PermissionCheckResult, SetupPath } from "../../domain/azure-permissions";
 import { operationAction } from "../../domain/least-privilege";
 import {
   DEFENDER_AUTOMATIONS_READ,
@@ -177,31 +178,66 @@ export interface CapabilityAuditMeta {
 type Verdicts = Partial<Record<Capability, CapabilityVerdict>>;
 
 /**
- * Azure verdicts from the effective-action checks.
+ * Azure verdicts from effective-action checks read at one scope.
  *
- * Gated on `permissionsFetched`: an unread permissions API yields fabricated
+ * Gated on `fetched`: an unread permissions API yields fabricated
  * granted:false checks (see rule 3 in the module doc), and those are not
  * measurements. When it was read, granted maps to `granted` and NOT granted maps
  * to `denied` - at that point it IS a measurement, which is the entire reason
- * the preflight prefers effective actions over role names. The exception is
- * {@link GRANT_ONLY_AZURE_ACTIONS}, evaluated above their resource's scope:
- * there NOT granted is not a measurement, and nothing is recorded.
+ * the preflight prefers effective actions over role names. The exceptions are
+ * {@link GRANT_ONLY_AZURE_ACTIONS} and the `grantOnly` set the caller passes,
+ * evaluated above their resource's scope: there NOT granted is not a
+ * measurement, and nothing is recorded.
  */
-function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
-  if (!preflight.permissionsFetched) {
-    return;
+export function azureCheckVerdicts(
+  fetched: boolean,
+  checks: readonly PermissionCheckResult[],
+  grantOnly: ReadonlySet<string> = new Set(),
+): Verdicts {
+  const into: Verdicts = {};
+  if (!fetched) {
+    return into;
   }
-  for (const check of preflight.checks) {
+  for (const check of checks) {
     const capability = AZURE_ACTION_CAPABILITIES[check.action];
     if (capability === undefined) {
       continue;
     }
     if (check.granted) {
       into[capability] = "granted";
-    } else if (!GRANT_ONLY_AZURE_ACTIONS.has(check.action)) {
+    } else if (!GRANT_ONLY_AZURE_ACTIONS.has(check.action) && !grantOnly.has(check.action)) {
       into[capability] = "denied";
     }
   }
+  return into;
+}
+
+/**
+ * The setup path's workspace-scoped actions (AZR-85) when the preflight could
+ * not read the workspace and evaluated them at its own scope instead: a role
+ * held on the workspace alone is invisible there, so NOT granted is no denial.
+ */
+function workspaceActionsReadAbove(preflight: AzurePreflight): ReadonlySet<string> {
+  if (preflight.workspaceScope !== "") {
+    return new Set();
+  }
+  return new Set(
+    REQUIRED_ACTIONS[preflight.setupPath]
+      .filter((req) => req.resourceScope === "workspace")
+      .map((req) => req.action),
+  );
+}
+
+/** Azure verdicts from the preflight's effective-action checks. */
+function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
+  Object.assign(
+    into,
+    azureCheckVerdicts(
+      preflight.permissionsFetched,
+      preflight.checks,
+      workspaceActionsReadAbove(preflight),
+    ),
+  );
 }
 
 /**

@@ -328,7 +328,7 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
     // literal, and two already disagreed with no pin (Sentinel content and
     // the DCR grant are registry 'resource' scope, asked at the RG). A
     // registry scope correction must reach the ticket, or be argued against.
-    const breadth = { resource: 0, resourceGroup: 1, subscription: 2, managementGroup: 3 } as const;
+    const breadth = { resource: 0, workspace: 0, resourceGroup: 1, subscription: 2, managementGroup: 3 } as const;
     for (const role of FEATURE_ROLES) {
       const registry = privilegeOperation(role.operationId).scope;
       if (role.broaderScopeWhy === undefined) {
@@ -441,6 +441,22 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
     expect(scopeCovers("subscription", { scopeLevel: "resource", outsideConfiguredScope: true })).toBe(false);
     expect(scopeCovers("subscription", { scopeLevel: "resource" })).toBe(true);
     expect(scopeCovers("resourceGroup", { scopeLevel: "resource" })).toBe(false);
+  });
+
+  it("covers the configured workspace from its group or subscription, and a workspace grant covers only it (AZR-85)", () => {
+    expect(scopeCovers("subscription", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("resourceGroup", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("workspace", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("workspace", { scopeLevel: "resourceGroup" })).toBe(false);
+    expect(scopeCovers("workspace", { scopeLevel: "resource" })).toBe(false);
+    expect(scopeCovers("workspace", { scopeLevel: "subscription" })).toBe(false);
+  });
+
+  it("asks Log Analytics Contributor on the workspace, and the preflight measures it there (AZR-85)", () => {
+    const plan = appPermissionPlan("existing");
+    const la = plan.filter((p) => p.name === "Log Analytics Contributor");
+    expect(la.map((p) => p.scopeLevel)).toEqual(["workspace"]);
+    expect(preflightUnmeasuredGrants(plan).map((g) => g.name)).not.toContain("Log Analytics Contributor");
   });
 
   it("reports those grants to the preflight as not measured, with the ticket's words", () => {

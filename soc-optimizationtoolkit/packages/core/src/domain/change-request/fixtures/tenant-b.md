@@ -107,10 +107,16 @@ Assign each role to the service principal for Cribl SOC Optimization Toolkit (cl
                     someone else to deploy, but cannot deploy it itself - no  
                     data path is created.  
 - Log Analytics Contributor  [core]  
-    Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`  
+    Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`/providers/Microsoft.OperationalInsights/workspaces/`<workspace name>`  
     Needed for:     Create custom tables  
-    Why:            Create custom Log Analytics tables and configure the  
-                    workspace for ingestion.  
+    Why:            Create custom Log Analytics tables in the workspace. Asked  
+                    on the workspace itself, not its resource group, where the  
+                    role would also reach every other resource there. A custom  
+                    role with only  
+                    Microsoft.OperationalInsights/workspaces/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/write on  
+                    the workspace is narrower still.  
     If not granted: Onboarding a source to a table that does not exist yet  
                     fails; existing native tables can still be targeted.  
 

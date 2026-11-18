@@ -173,6 +173,14 @@ export interface RequiredAction {
    * (see the lab action list, which is core throughout and says so once).
    */
   necessity?: PermissionNecessity;
+  /**
+   * `workspace` when the role that grants the action is asked on the
+   * configured workspace resource rather than at the path's scope (AZR-85:
+   * Log Analytics Contributor on the workspace). Evaluators that know the
+   * workspace read its permissions for these actions; at the resource group a
+   * workspace-only grant is invisible, so a NOT granted there is no denial.
+   */
+  resourceScope?: "workspace";
 }
 
 /**
@@ -246,6 +254,8 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     {
       action: operationAction("table.write"),
       label: "Create custom tables",
+      // AZR-85: Log Analytics Contributor is asked on the workspace.
+      resourceScope: "workspace",
     },
     {
       action: "Microsoft.Resources/deployments/write",
@@ -270,6 +280,20 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     {
       action: operationAction("dcr.roleAssignment.write"),
       label: `Grant Cribl's identity access to each DCR (${leastRoleFor("dcr.roleAssignment.write")})`,
+      necessity: "feature",
+    },
+    // AZR-86 (audit discrepancy 17): content install also PUTs Content Hub
+    // packages and the solutions' parsers (savedSearches), and nothing
+    // measured either - alertRules/write alone passed an identity whose
+    // custom role could write rules but not install the solution.
+    {
+      action: operationAction("sentinel.contentPackage.write"),
+      label: `Install Content Hub solutions (${leastRoleFor("sentinel.contentPackage.write")})`,
+      necessity: "feature",
+    },
+    {
+      action: operationAction("savedSearch.write"),
+      label: `Install solution parsers as saved searches (${leastRoleFor("savedSearch.write")})`,
       necessity: "feature",
     },
   ],
