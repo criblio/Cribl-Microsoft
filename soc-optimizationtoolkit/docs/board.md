@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 42 in progress, 217 done.**
+**107 in the backlog, 39 in progress, 220 done.**
 
 ## By menu item
 
@@ -26,7 +26,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Menu | Open | Done | Now |
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
-| Setup | 5 | 5 | 2 |
+| Setup | 3 | 7 | 2 |
 | Sentinel Integration | 53 | 103 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
@@ -34,7 +34,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 10 | 4 | 0 |
+| Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 35 | 47 | 9 |
 | Azure Logging Map | 3 | 2 | 1 |
@@ -42,7 +42,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 148.
+Open work totals 146.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 56% (55/98)
+### `AZR` Azure native source onboarding - 59% (58/99)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +65,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 36/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 17/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-110* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (42)
+## In progress (39)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1314,56 +1314,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
 
-- **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
-  `AZR-F10` `bug` `settled`
-  Not now because: Over-asking, not under-asking: an approver who grants it as
-  written gets a working app with broader rights than needed, so nothing fails
-  and no data is lost. It outranks features because it is the first thing a
-  security reviewer reading the existing-path ticket will push back on, but it
-  ranks below the open defects where a granted ticket still leaves a feature
-  failing (AZR-81, AZR-82, AZR-84).
-  FOUND by the AZR-61 audit (discrepancy 16, low, wrong-scope). Every
-  tables/write and savedSearches call addresses the workspace by full id, and
-  the registry's table.write scope is the workspace; Log Analytics Contributor
-  at the RG also carries VM-extension, storage listKeys and deployments rights
-  over everything in it. FIX: ask at the workspace (a resource-scoped row, as
-  the feature roles now derive), or offer a custom role with tables/read+write
-  and workspaces/read on the workspace.
-
-- **AZR-86** Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked
-  `AZR-F10` `bug` `settled`
-  Not now because: Each gap leaves a capability reading unknown where it could
-  read granted or denied, and unknown is honest: no screen claims a permission
-  it has not measured. The fixes need a live Graph measurement first (the
-  refusal shape is disputed in the repo), so ordering them before AZR-81..84,
-  where a granted ticket still fails at run time, would spend the live session
-  on the smaller cost.
-  FOUND by the AZR-61 audit (discrepancies 17, 18 and 21, low). Content
-  install also PUTs and DELETEs contentPackages and savedSearches
-  (content-install.ts), and a 403 on the DELETE is swallowed and resurfaces as
-  the original 400; Application.Read.All is asked but never probed, and the
-  repo disagrees with itself on whether Graph refuses with a 403 or an empty
-  200 (adapters.ts and proxies.yml vs list-service-principals.ts); the
-  background capability audit never measures the defender-* capabilities for
-  the existing setup path. FIX: add contentPackages/write and
-  savedSearches/write as feature checks; settle the Graph refusal shape live,
-  then probe it per tenant; run the subscription-scope evaluation in the
-  background audit, per tenant.
-
-- **AZR-88** The resource-creation change request omits the Event Hub tier and the Cribl principal's Event Hub data-plane grant
-  `AZR-F10` `bug` `settled`
-  Not now because: The failure is loud and early: plan-cribl-source refuses
-  the Basic namespace with a message that names the tier, so nobody loses data
-  or time beyond one recreate. The data-plane half depends on ADR 0008
-  reaching this branch, so it cannot be finished before that merge anyway.
-  FOUND by the AZR-61 audit (discrepancy 23, low, change-request-gap).
-  plan-cribl-source refuses a Basic namespace, but the ticket never says
-  Standard or higher, so an admin can create the one tier the app then
-  rejects. Once ADR 0008 (Entra ID default credential) lands here, the ticket
-  should also ask for Azure Event Hubs Data Receiver for the Cribl service
-  principal on the namespace or hub, which replaces listKeys for that
-  credential kind.
-
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1378,7 +1328,30 @@ Started. Anything here with an unfinished dependency is called out on its card.
   (LAB_RBAC_CONDITION) would then name that role instead of Contributor. FIX:
   pick the role, change foundation-phase's role definition id and the
   condition together, and re-pin the TTL grant analysis that looks for the
-  Contributor GUID.
+  Contributor GUID. CODE DONE 2026-11-17, stays in progress until a live lab
+  run: the TTL identity is assigned Managed Application Contributor Role
+  (641177b8-a67a-45b9-a033-47bc880bb21e, Learn
+  built-in-roles/management-and-governance: read on everything plus
+  Microsoft.Resources/subscriptions/resourceGroups/*), not Contributor.
+  Evidence that the group delete action is enough: Learn
+  delete-resource-group, 'Required access and deletion failures': 'The only
+  permission required to delete a resource group is permission to the delete
+  action for deleting resource groups. You don't need permission to delete
+  individual resources within that resource group.' A custom role
+  (resourceGroups/read + delete) was NOT used: creating it needs
+  Microsoft.Authorization/roleDefinitions/write, which neither RBAC
+  Administrator nor Contributor holds, and granting it would let the app widen
+  the role its constrained grant may assign. Changed together: lab-foundation
+  TTL_ROLE_DEFINITION_ID and the request builder, LAB_RBAC_CONDITION
+  (role-plan, read from the registry's lab.ttl.resourceGroup.delete least role
+  and pinned equal to TTL_ROLE_NAME), the ABAC analysis (kinds renamed
+  conditional-allows-ttl-role / conditional-blocks-ttl-role; a condition
+  naming the Contributor GUID now reads as blocking), both remediation texts,
+  the manual az command, the run messages, the setup copy, the feature catalog
+  and the snapshots. NEEDS LIVE: one lab deploy plus a TTL expiry under the
+  new role; and every existing RBAC Administrator condition written for
+  Contributor must be re-authored before the next lab deploy, which the Labs
+  preflight now flags.
 
 - **MIG-33** Data Volume Inventory: licence counts on the card face and 30-day totals, billable versus allowance
   `MIG-F2` `story` `settled`
@@ -1634,7 +1607,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (53)
+## Backlog - next (54)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2472,6 +2445,29 @@ Settled and unblocked, sequenced behind now.
     [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
     [x] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
 
+- **AZR-110** Application.Read.All is asked but never probed, because the Graph refusal shape is unsettled; a refused parser DELETE is swallowed
+  `AZR-F10` `bug` `settled`
+  Not now because: Part (1) cannot be fixed before a live Graph measurement:
+  guessing the refusal shape would either claim a denial nobody measured or
+  read a refusal as a grant, and until then the capability reads unknown,
+  which costs an annotation, not data. Part (2) needs a tenant where the
+  solution's own parser exists and our identity cannot delete savedSearches, a
+  narrow combination, so it rides with (1) rather than outranking the defects
+  where a granted ticket still fails.
+  SPLIT FROM [[AZR-86]] 2026-11-17 (audit discrepancy 18, plus one found while
+  fixing 17). (1) The repo disagrees with itself on how Graph refuses GET
+  /v1.0/servicePrincipals without Application.Read.All: adapters.ts and
+  proxies.yml expect a 403, list-service-principals.ts treats an empty 200 as
+  possible. Until one live call in a tenant without the consent settles it,
+  the capability stays unknown, which is honest. FIX: measure the refusal
+  shape live, record it, then probe the permission per tenant and map the
+  result. (2) installParser's cleanup DELETE of our duplicate parser
+  (content-install.ts, when another savedSearch provides the alias) is not
+  inspected: a 403 leaves both functions and the step still reports 'already
+  provided by the solution', so queries can fail with 'multiple functions with
+  the same name'. FIX: treat a 401/403 there as a failed step that names
+  savedSearches/delete.
+
 ---
 
 ## Backlog - later (40)
@@ -3013,7 +3009,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (217)
+## Done (220)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8740,6 +8736,70 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Setup preflight lists the requested ones as [unknown], never missing. Not
   checked live.
 
+- **AZR-85** Log Analytics Contributor is asked at the resource group where the workspace resource is enough
+  `AZR-F10` `bug` `settled` `verified: pins`
+  Not now because: Over-asking, not under-asking: an approver who grants it as
+  written gets a working app with broader rights than needed, so nothing fails
+  and no data is lost. It outranks features because it is the first thing a
+  security reviewer reading the existing-path ticket will push back on, but it
+  ranks below the open defects where a granted ticket still leaves a feature
+  failing (AZR-81, AZR-82, AZR-84).
+  FOUND by the AZR-61 audit (discrepancy 16, low, wrong-scope). Every
+  tables/write and savedSearches call addresses the workspace by full id, and
+  the registry's table.write scope is the workspace; Log Analytics Contributor
+  at the RG also carries VM-extension, storage listKeys and deployments rights
+  over everything in it. FIX: ask at the workspace (a resource-scoped row, as
+  the feature roles now derive), or offer a custom role with tables/read+write
+  and workspaces/read on the workspace. DONE 2026-11-17 (pins): the existing
+  path asks Log Analytics Contributor on the workspace resource (role-plan
+  scope level 'workspace'), and its justification names the narrower custom
+  role (WORKSPACE_TABLE_ACTIONS, read from the registry: workspaces/read,
+  tables/read, tables/write). The az script, both tickets and the tenant
+  fixtures render the workspace id. The measurement moved with the ask, so the
+  ask cannot read as denied: REQUIRED_ACTIONS tags tables/write resourceScope
+  'workspace'; runAzurePreflight reads the workspace's permissions when the
+  group did not grant it (one extra GET), the Setup validation reads a
+  'Workspace scope' check, and the DCR update check reads the workspace when
+  its name is known. When the workspace cannot be read the group's answer
+  stands for the deploy gate but the capability model records no denial
+  (workspaceScope ''). Live check outstanding: a grant on the workspace alone,
+  measured in Live Preview.
+
+- **AZR-86** Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked
+  `AZR-F10` `bug` `settled` `verified: pins`
+  Not now because: Each gap leaves a capability reading unknown where it could
+  read granted or denied, and unknown is honest: no screen claims a permission
+  it has not measured. The fixes need a live Graph measurement first (the
+  refusal shape is disputed in the repo), so ordering them before AZR-81..84,
+  where a granted ticket still fails at run time, would spend the live session
+  on the smaller cost.
+  FOUND by the AZR-61 audit (discrepancies 17, 18 and 21, low). Content
+  install also PUTs and DELETEs contentPackages and savedSearches
+  (content-install.ts), and a 403 on the DELETE is swallowed and resurfaces as
+  the original 400; Application.Read.All is asked but never probed, and the
+  repo disagrees with itself on whether Graph refuses with a 403 or an empty
+  200 (adapters.ts and proxies.yml vs list-service-principals.ts); the
+  background capability audit never measures the defender-* capabilities for
+  the existing setup path. FIX: add contentPackages/write and
+  savedSearches/write as feature checks; settle the Graph refusal shape live,
+  then probe it per tenant; run the subscription-scope evaluation in the
+  background audit, per tenant. DONE 2026-11-17 (pins), the parts that need no
+  live measurement: (1) contentPackages/write and savedSearches/write are
+  feature checks on existing-rg (labels name Microsoft Sentinel Contributor
+  and Monitoring Contributor, from the registry). (2) The background
+  capability audit, when it audits existing-rg, also reads the subscription's
+  effective permissions once and records the defender-plans.read,
+  defender-automation.read and defender-automation.write verdicts (the write
+  grant-only, as on existing-subscription); it runs inside each tenant's
+  audit, and an unread subscription records nothing. (3) A 401/403 on the
+  orphan contentPackages DELETE is no longer swallowed: the install stops and
+  names contentPackages/delete instead of resurfacing the original 400. MOVED
+  TO [[AZR-110]]: settling the Graph refusal shape live (403 vs empty 200) and
+  then probing Application.Read.All per tenant, which stays honestly unknown
+  until then; and the swallowed 403 on the parser savedSearches DELETE. Live
+  check outstanding for (2): a resource-group audit against a subscription
+  where Security Admin is held.
+
 - **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
   `AZR-F10` `bug` `settled` `verified: pins`
   FOUND by the AZR-61 audit (discrepancy 22, low, wrong-role) and by AZR-61
@@ -8756,6 +8816,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   feature/multi-tenant-azure: built test-first, adversarially reviewed (every
   confirmed finding fixed and its pin mutation-checked), and every CI gate
   re-run green by the operator's session after the last commit.
+
+- **AZR-88** The resource-creation change request omits the Event Hub tier and the Cribl principal's Event Hub data-plane grant
+  `AZR-F10` `bug` `settled` `verified: pins`
+  Not now because: The failure is loud and early: plan-cribl-source refuses
+  the Basic namespace with a message that names the tier, so nobody loses data
+  or time beyond one recreate. The data-plane half depends on ADR 0008
+  reaching this branch, so it cannot be finished before that merge anyway.
+  FOUND by the AZR-61 audit (discrepancy 23, low, change-request-gap).
+  plan-cribl-source refuses a Basic namespace, but the ticket never says
+  Standard or higher, so an admin can create the one tier the app then
+  rejects. Once ADR 0008 (Entra ID default credential) lands here, the ticket
+  should also ask for Azure Event Hubs Data Receiver for the Cribl service
+  principal on the namespace or hub, which replaces listKeys for that
+  credential kind. DONE 2026-11-17 (pins): ADR 0008 has landed (AZR-59 BUILT;
+  EVENT_HUB_RECEIVER_ROLES in eventhub-arm), so both halves are done. The
+  resource-creation ticket asks for pricing tier Standard or Premium, not
+  Basic, in plan-cribl-source's words, and asks for Azure Event Hubs Data
+  Receiver on the namespace (or each hub Cribl reads) for the Cribl service
+  principal (object id as a placeholder; the config does not hold it), naming
+  Data Owner and the app's own registration as refused and the Listen-only SAS
+  rule as the skip case. Its Specifics list the tier and the role. Live check
+  outstanding: none beyond AZR-59's own Unverified list.
 
 - **DBT-254** Two copies of "is this an ASim table?" disagreed on case
   `DBT-F1` `bug` `settled` `verified: pins`
