@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 33 in progress, 241 done.**
+**106 in the backlog, 34 in progress, 241 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (34)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -968,6 +968,25 @@ Started. Anything here with an unfinished dependency is called out on its card.
   management group returns full ids) are recorded and closed HERE, with
   verified live or both. [[AZR-112]] points here and does not repeat them.
 
+- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. The recommended Entra ID
+  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
+  Data Receiver; today that is only a How-to step ('Give the Cribl principal
+  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
+  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
+  request. Nothing creates it, so the default credential cannot work without a
+  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
+  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
+  deterministic GUID name, create-only, refusing when the assignment exists
+  for that principal and role (already-applied) and when the app identity
+  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
+  User Access Administrator or Role Based Access Control Administrator,
+  ideally constrained to this role). Least-privilege registry and change
+  request updated. Measure the propagation delay before Cribl's first read.
+
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1263,7 +1282,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (55)
+## Backlog - next (54)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1952,25 +1971,6 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
-
-- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
-  Preview (all ten sections walked), asked for by the operator to find what is
-  missing to finish automating the sources. The recommended Entra ID
-  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
-  Data Receiver; today that is only a How-to step ('Give the Cribl principal
-  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
-  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
-  request. Nothing creates it, so the default credential cannot work without a
-  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
-  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
-  deterministic GUID name, create-only, refusing when the assignment exists
-  for that principal and role (already-applied) and when the app identity
-  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
-  User Access Administrator or Role Based Access Control Administrator,
-  ideally constrained to this role). Least-privilege registry and change
-  request updated. Measure the propagation delay before Cribl's first read.
 
 - **AZR-104** Route the remaining onboarding sources (Entra ID, the diagnostic-settings initiatives, XDR, flow logs) from their Cribl source to a destination
   `AZR-F9` `story` `settled` `blocked by AZR-35`
