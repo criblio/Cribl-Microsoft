@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 243 done.**
+**105 in the backlog, 33 in progress, 244 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 9 | 11 | 0 |
+| Permission Verification | 8 | 12 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 30 | 61 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
@@ -42,7 +42,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 139.
+Open work totals 138.
 
 ## Epics and features
 
@@ -101,13 +101,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `CAP` Capability taxonomy extension _(enabler)_ - 46% (6/13)
+### `CAP` Capability taxonomy extension _(enabler)_ - 54% (7/13)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `CAP-F1` Capability taxonomy extension | Permission Verification | 6/13 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-15, CAP-12, CAP-7, CAP-9, CAP-10 |
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 7/13 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-15, CAP-12, CAP-7, CAP-9, CAP-10 |
 
 ### `REL` Ship what is built _(enabler)_ - 0% (0/2)
 
@@ -2242,7 +2242,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (39)
+## Backlog - later (38)
 
 Settled, gated on something above.
 
@@ -2257,18 +2257,6 @@ Settled, gated on something above.
   opens it. DONE WHEN: a capability exists with a real probe (the step-2
   mapping rule records only measurements), and the [[AZR-19]] route requires
   it.
-
-- **CAP-15** Show a carried verdict's own audit age where it is older than the set's
-  `CAP-F1` `story` `settled`
-  Filed 2026-11-18 from CAP-11. Since the two writers merge into one cached
-  set, a set can hold verdicts of different ages: auditedAt (what the
-  audit-age chip renders) is the NEWEST measurement, and a verdict carried
-  from an older run keeps its own time in CapabilitySet.measuredAt. Nothing
-  renders measuredAt yet, so an operator reading the chip after an RBAC panel
-  run sees the panel's age for the Defender, enabler and Graph verdicts that
-  were measured by the earlier audit. DONE WHEN: a surface that shows a
-  carried verdict (the Defender section banner first) says when that verdict
-  was measured, read through verdict age rather than the set age.
 
 - **CAP-12** Confirm and measure the managed-identity assign action a policy assignment needs
   `CAP-F1` `enabler` `settled`
@@ -2831,7 +2819,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (243)
+## Done (244)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3014,7 +3002,52 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   VERIFIED LIVE: no Live Preview run; the panel save is unchanged
   fire-and-forget, and two writers interleaving their read-merge-write inside
   the same instant can still lose one write (costs an annotation until the
-  next audit).
+  next audit). REVIEW ROUND 1 (2026-11-18): the audit no longer merges over
+  its own earlier results. A capability it attempted without a conclusive
+  answer (an empty 200 or an unrecognised 403 from a Graph probe, AZR-111; a
+  probe that rejects; a failed subscription read) used to keep the previous
+  run's verdict while the set's auditedAt moved to now - a stale grant shown
+  as just audited. runCapabilityAudit now saves with saveCapabilityAudit(...,
+  { supersede: true }), which uses the new supersedeCapabilitySet: every
+  stored verdict older than the audit's own time is dropped, measured again or
+  not, and only a measurement strictly newer than the run (a panel that saved
+  meanwhile) survives. The panel still merges, so it keeps the audit-only
+  verdicts. Pins: capability-audit-writers.test.ts adds three (an audit grants
+  graph-incidents.read, then a manual audit whose probe returns an empty 200
+  leaves it unknown - absent from both the returned and the stored set; a
+  rejecting probe plus a 500 subscription read leaves none of the eight
+  audit-only verdicts; a panel between two audits still keeps them) and
+  capability-merge.test.ts three supersede pins. Mutation-checked: saving the
+  audit with merge fails the two retract pins; keeping every stored verdict
+  fails 4, keeping none fails 2 (the out-of-order pin among them), and a
+  non-strict time comparison fails 1. The age chip half of the finding is
+  CAP-15, closed in the same round.
+
+- **CAP-15** The audit-age chip reports the newest write's age over older carried verdicts
+  `CAP-F1` `bug` `settled` `verified: pins`
+  Filed 2026-11-18 from CAP-11, first as a story; RETYPED to a bug in CAP-11
+  review round 1, because the branch that introduced it was still open. Since
+  the two writers merge into one cached set, a set can hold verdicts of
+  different ages: auditedAt is the NEWEST measurement, and a verdict carried
+  from an older run keeps its own time in CapabilitySet.measuredAt. auditAgeMs
+  read auditedAt alone, so after an RBAC panel run the audit-age chip
+  (audit-age-chip.tsx), the describeCapabilityAudit label and the Defender
+  automation-permissions line all reported the panel's age for Defender,
+  enabler and Graph verdicts the earlier audit measured - an audit at 09:00
+  and a panel at 15:00 read as minutes old, though policy.assign was six hours
+  old. DONE 2026-11-18 (pins): auditAgeMs
+  (domain/capabilities/audit-lifecycle.ts) now returns the age of the OLDEST
+  measurement in the set - the earliest of auditedAt and every measuredAt
+  time, an unparseable carried time skipped - so every surface that renders
+  the age (all go through auditAgeMs/describeAuditAge) answers 'is this old
+  enough to refresh?' conservatively. Pinned in audit-lifecycle.test.ts: a set
+  audited 11:59 carrying verdicts from 09:00 and 06:00 reads exactly 6 hours
+  (21600000 ms, '6 hours ago'); an unparseable carried time leaves '1 minute
+  ago'. Mutation-checked: ignoring measuredAt fails the pin. Per-verdict ages
+  on a surface were the original story's wish and are not built; the chip no
+  longer overstates freshness, which was the defect. Since the audit now
+  supersedes rather than merges (CAP-11 review round 1), a manual refresh
+  clears every carried time. NOT VERIFIED LIVE.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `verified: both`
@@ -9486,6 +9519,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   was red on the four keys before the fix. It cannot see a key spelled inline
   rather than as an exported *_KEY constant, nor @soc/ui or shell-owned keys.
   No permission changed; verified none live because nothing live changed.
+  REVIEW ROUND 1 (2026-11-18): two more omitted keys found by review - the
+  tenant-migration claims azure-coverage-selection-migrated and
+  azure-onboarding-progress-migrated (tenantMigrationClaimKey(base) =
+  {base}-migrated, read and written by loadTenantDocument, read by
+  readStrandedLegacyDocument). Added to the addendum's GET and PUT rows, its
+  record line and notes (beside the {key}.{tenantId} remark), and to the
+  cribl.kv.read/write cited strings. kv-keys.test.ts now also derives
+  tenantMigrationClaimKey(k) for the two tenant-scoped base keys and pins the
+  derived set exactly (eight keys). Mutation-checked: removing the two names
+  from the cribl.kv.read row fails the guard on exactly those two.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`
