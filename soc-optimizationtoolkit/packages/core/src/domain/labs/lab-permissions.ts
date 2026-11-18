@@ -11,12 +11,12 @@
  * ("Constrain roles and principal types" - the feature-catalog permission
  * design). The permissions API reports the action as granted, but the
  * condition still rejects the PUT at runtime when its allowed-role list does
- * not include the TTL role (Managed Application Contributor Role since
- * AZR-89; Contributor before it) - exactly the AuthorizationFailed("ABAC condition
+ * not include Contributor - exactly the AuthorizationFailed("ABAC condition
  * that is not fulfilled") a live lab run hits. {@link
  * analyzeRoleAssignmentGrant} therefore reads the CONDITION strings off the
  * raw permissions response and reports whether any granting element is
- * unconditional or whether a condition textually allows the TTL role GUID - a stated BEST-EFFORT signal (conditions are free-form expressions),
+ * unconditional or whether a condition textually allows the Contributor role
+ * GUID - a stated BEST-EFFORT signal (conditions are free-form expressions),
  * strong enough to warn before a deploy fails halfway.
  *
  * Pure: no IO, no fetch, no React, no Date/crypto.
@@ -28,7 +28,7 @@ import {
   type PermissionsResponse,
   type RequiredAction,
 } from "../azure-permissions";
-import { TTL_ROLE_DEFINITION_ID, TTL_ROLE_NAME } from "./lab-foundation";
+import { CONTRIBUTOR_ROLE_DEFINITION_ID } from "./lab-foundation";
 import type { LabComponentFlags } from "./lab-profiles";
 import { isLabPhaseRequired } from "./lab-profiles";
 import { operationAction } from "../least-privilege";
@@ -236,8 +236,8 @@ export function labRequiredActions(
 /** How the caller holds roleAssignments/write, condition included. */
 export type RoleAssignmentGrantKind =
   | "unconditional"
-  | "conditional-allows-ttl-role"
-  | "conditional-blocks-ttl-role"
+  | "conditional-allows-contributor"
+  | "conditional-blocks-contributor"
   /**
    * The condition pins SPECIFIC principal ids ("Constrain roles and
    * principals") - unsatisfiable by design for the lab: the TTL identity is
@@ -287,17 +287,15 @@ export function parseLabPermissionsResponse(body: unknown): PermissionsResponse 
  *
  * - "unconditional": some granting element has no condition - the TTL grant
  *   will not be condition-blocked.
- * - "conditional-allows-ttl-role": every granting element is conditional,
- *   and at least one condition CONTAINS the TTL role GUID
- *   ({@link TTL_ROLE_DEFINITION_ID}) - a
+ * - "conditional-allows-contributor": every granting element is conditional,
+ *   and at least one condition CONTAINS the Contributor role GUID - a
  *   best-effort textual signal that the constrained grant permits the TTL
  *   assignment.
- * - "conditional-blocks-ttl-role": every granting element is conditional
- *   and NONE mentions the TTL role GUID - the live PUT will fail with
+ * - "conditional-blocks-contributor": every granting element is conditional
+ *   and NONE mentions the Contributor GUID - the live PUT will fail with
  *   AuthorizationFailed("ABAC condition that is not fulfilled"); the
- *   condition's allowed-role list must gain the TTL role
- *   ({@link TTL_ROLE_DEFINITION_ID}) for service principals. A condition
- *   written for the legacy Contributor grant lands here (AZR-89).
+ *   condition's allowed-role list must gain Contributor
+ *   ({@link CONTRIBUTOR_ROLE_DEFINITION_ID}) for service principals.
  * - "not-granted": no element grants the action at all.
  */
 export function analyzeRoleAssignmentGrant(
@@ -340,33 +338,32 @@ export function analyzeRoleAssignmentGrant(
   // principalType: ServicePrincipal on the PUT).
   const pinsPrincipalIds = (condition: string): boolean =>
     condition.toLowerCase().includes("roleassignments:principalid]");
-  const hasTtlRole = (condition: string): boolean =>
-    condition.toLowerCase().includes(TTL_ROLE_DEFINITION_ID.toLowerCase());
+  const hasContributor = (condition: string): boolean =>
+    condition.toLowerCase().includes(CONTRIBUTOR_ROLE_DEFINITION_ID.toLowerCase());
 
-  if (conditions.some((c) => hasTtlRole(c) && !pinsPrincipalIds(c))) {
-    return { kind: "conditional-allows-ttl-role", conditions };
+  if (conditions.some((c) => hasContributor(c) && !pinsPrincipalIds(c))) {
+    return { kind: "conditional-allows-contributor", conditions };
   }
   if (conditions.some(pinsPrincipalIds)) {
     return { kind: "conditional-constrains-principals", conditions };
   }
-  return { kind: "conditional-blocks-ttl-role", conditions };
+  return { kind: "conditional-blocks-contributor", conditions };
 }
 
 /**
  * The remediation text for a condition-blocked TTL grant - the exact fix for
  * the live AuthorizationFailed("ABAC condition") failure: extend the RBAC
  * Administrator assignment's condition so its allowed-role list includes
- * the TTL role for service principals (LAB_RBAC_CONDITION names exactly the
- * TTL role + Monitoring Metrics Publisher).
+ * Contributor for service principals (the feature-catalog constrained-grant
+ * design names exactly Contributor + Monitoring Metrics Publisher).
  */
 export const ROLE_CONDITION_REMEDIATION =
   "The app's RBAC Administrator grant carries a role-assignment condition (ABAC) " +
-  `whose allowed-role list does not appear to include ${TTL_ROLE_NAME}, so the TTL ` +
+  "whose allowed-role list does not appear to include Contributor, so the TTL " +
   "self-destruct grant will fail at deploy time. Ask an admin to edit the " +
   "condition (Azure portal: the role assignment's 'Condition' tab) and add " +
-  `${TTL_ROLE_NAME} (${TTL_ROLE_DEFINITION_ID}) to the allowed roles for ` +
-  "service principals (a condition written for Contributor, the role earlier " +
-  "versions assigned, no longer matches) - or grant the role manually after each deploy using the " +
+  `Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) to the allowed roles for ` +
+  "service principals - or grant the role manually after each deploy using the " +
   "az command the run prints.";
 
 /**
@@ -381,7 +378,7 @@ export const ROLE_CONDITION_PRINCIPALS_REMEDIATION =
   "pins SPECIFIC principal ids ('Constrain roles and principals'). That can " +
   "never match the lab's TTL identity, which is created at deploy time. Ask an " +
   "admin to re-author the condition as 'Constrain roles and principal types': " +
-  `allowed roles ${TTL_ROLE_NAME} (${TTL_ROLE_DEFINITION_ID}) and Monitoring ` +
+  `allowed roles Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) and Monitoring ` +
   "Metrics Publisher (3913510d-42f4-4e42-8a64-420c390055eb), allowed principal " +
   "type ServicePrincipal - or grant the role manually after each deploy using " +
   "the az command the run prints.";

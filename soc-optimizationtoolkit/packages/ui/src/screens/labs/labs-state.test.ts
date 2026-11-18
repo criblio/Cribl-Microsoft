@@ -124,7 +124,7 @@ describe("permissionCheckLines", () => {
         },
       ],
       roleAssignmentGrant: {
-        kind: "conditional-blocks-ttl-role",
+        kind: "conditional-blocks-contributor",
         conditions: ["(...GuidEquals {3913510d-...})"],
       },
       roleConditionRemediation: "Ask an admin to edit the condition.",

@@ -13,7 +13,6 @@ import {
   buildLabPlan,
   labTtlInstants,
   provisionLabStepsFor,
-  TTL_ROLE_NAME,
   type FinalizeFlowLogPackOutcome,
   type JobStep,
   type LabComponentFlags,
@@ -326,7 +325,7 @@ export function labRunResultLines(result: ProvisionLabResult): string[] {
     lines.push(
       result.roleAlreadyAssigned
         ? "Watchdog delete permission was already granted."
-        : `Watchdog granted ${TTL_ROLE_NAME} on the resource group (it can now self-delete).`,
+        : "Watchdog granted Contributor on the resource group (it can now self-delete).",
     );
   } else if (result.manualRoleAssignmentCommand !== undefined) {
     lines.push(
@@ -481,19 +480,17 @@ export function permissionCheckLines(outcome: LabPermissionCheckOutcome): string
           "self-destruct grant will succeed.",
       );
       break;
-    case "conditional-allows-ttl-role":
+    case "conditional-allows-contributor":
       lines.push(
         "TTL grant: roleAssignments/write is held through a CONDITIONAL " +
-          "(ABAC) assignment whose condition appears to allow the TTL role, " +
-          `${TTL_ROLE_NAME} - ` +
+          "(ABAC) assignment whose condition appears to allow Contributor - " +
           "expected to succeed (best-effort textual check).",
       );
       break;
-    case "conditional-blocks-ttl-role":
+    case "conditional-blocks-contributor":
       lines.push(
         "TTL grant: roleAssignments/write is held ONLY through a conditional " +
-          "(ABAC) assignment that does NOT appear to allow the TTL role, " +
-          `${TTL_ROLE_NAME} (a condition written for Contributor no longer matches) - the ` +
+          "(ABAC) assignment that does NOT appear to allow Contributor - the " +
           "deploy WILL fail at ttl-role-assignment.",
       );
       break;

@@ -63,7 +63,7 @@ describe("checkLabPermissions", () => {
       flags: labDeploymentConfig("FlowLogLab", "public"),
     });
 
-    expect(outcome.roleAssignmentGrant.kind).toBe("conditional-blocks-ttl-role");
+    expect(outcome.roleAssignmentGrant.kind).toBe("conditional-blocks-contributor");
     expect(outcome.roleConditionRemediation).toContain("Contributor");
     const row = outcome.checks.find((c) => c.action === RA_WRITE);
     expect(row?.granted).toBe(false);

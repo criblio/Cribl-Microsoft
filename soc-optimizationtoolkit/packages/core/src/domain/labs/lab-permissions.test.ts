@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ROLE_CONDITION_REMEDIATION,
-  TTL_ROLE_DEFINITION_ID,
+  CONTRIBUTOR_ROLE_DEFINITION_ID,
   analyzeRoleAssignmentGrant,
   buildLabPermissionsGetRequest,
   labRequiredActions,
@@ -119,7 +118,7 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
     expect(analysis.kind).toBe("unconditional");
   });
 
-  it("conditional-allows when the condition names the TTL role GUID", () => {
+  it("conditional-allows when the condition names the Contributor GUID", () => {
     const analysis = analyzeRoleAssignmentGrant({
       value: [
         {
@@ -127,14 +126,14 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
           notActions: [],
           condition:
             "((!(ActionMatches{'Microsoft.Authorization/roleAssignments:RoleDefinitionId'})) OR " +
-            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${TTL_ROLE_DEFINITION_ID}, 3913510d-42f4-4e42-8a64-420c390055eb}))`,
+            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${CONTRIBUTOR_ROLE_DEFINITION_ID}, 3913510d-42f4-4e42-8a64-420c390055eb}))`,
         },
       ],
     });
-    expect(analysis.kind).toBe("conditional-allows-ttl-role");
+    expect(analysis.kind).toBe("conditional-allows-contributor");
   });
 
-  it("conditional-blocks when no condition mentions the TTL role - the live 403 case", () => {
+  it("conditional-blocks when no condition mentions Contributor - the live 403 case", () => {
     const analysis = analyzeRoleAssignmentGrant({
       value: [
         {
@@ -151,7 +150,7 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
         },
       ],
     });
-    expect(analysis.kind).toBe("conditional-blocks-ttl-role");
+    expect(analysis.kind).toBe("conditional-blocks-contributor");
     expect(analysis.conditions).toHaveLength(1);
   });
 
@@ -165,7 +164,7 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
           // Contributor, but the pinned principal ids can never match the
           // deploy-time TTL identity - still blocked.
           condition:
-            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${TTL_ROLE_DEFINITION_ID}}) AND ` +
+            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${CONTRIBUTOR_ROLE_DEFINITION_ID}}) AND ` +
             "(@Request[Microsoft.Authorization/roleAssignments:PrincipalId] ForAnyOfAnyValues:GuidEquals {00000000-0000-0000-0000-000000000001})",
         },
       ],
@@ -180,30 +179,12 @@ describe("analyzeRoleAssignmentGrant (the ABAC condition analysis)", () => {
           actions: [RA_WRITE],
           notActions: [],
           condition:
-            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${TTL_ROLE_DEFINITION_ID}}) AND ` +
+            `(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${CONTRIBUTOR_ROLE_DEFINITION_ID}}) AND ` +
             "(@Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})",
         },
       ],
     });
-    expect(analysis.kind).toBe("conditional-allows-ttl-role");
-  });
-
-  it("conditional-blocks a condition written for the legacy Contributor grant (AZR-89)", () => {
-    const analysis = analyzeRoleAssignmentGrant({
-      value: [
-        {
-          actions: [RA_WRITE],
-          notActions: [],
-          condition:
-            "(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] " +
-            "ForAnyOfAnyValues:GuidEquals {b24988ac-6180-42a0-ab88-20f7382dd24c, 3913510d-42f4-4e42-8a64-420c390055eb})",
-        },
-      ],
-    });
-    expect(analysis.kind).toBe("conditional-blocks-ttl-role");
-    expect(ROLE_CONDITION_REMEDIATION).toContain(
-      "Managed Application Contributor Role (641177b8-a67a-45b9-a033-47bc880bb21e)",
-    );
+    expect(analysis.kind).toBe("conditional-allows-contributor");
   });
 
   it("not-granted when nothing grants the action (Contributor's notActions deny it)", () => {

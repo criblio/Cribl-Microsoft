@@ -67,7 +67,7 @@ export interface LabPermissionCheckOutcome {
   roleAssignmentGrant: RoleAssignmentGrantAnalysis;
   /**
    * The remediation text for a condition-blocked TTL grant; present exactly
-   * when the analysis is "conditional-blocks-ttl-role".
+   * when the analysis is "conditional-blocks-contributor".
    */
   roleConditionRemediation?: string;
   /** Non-fatal notes (e.g. the bring-your-own fallback to subscription). */
@@ -207,7 +207,7 @@ export async function checkLabPermissions(
 
   const roleAssignmentGrant = analyzeRoleAssignmentGrant(response.body);
   // Keep the plain check row consistent with the deeper analysis: a grant
-  // that exists only behind a TTL-role-blocking condition WILL fail the
+  // that exists only behind a Contributor-blocking condition WILL fail the
   // TTL PUT, so the row must not read as an unqualified pass.
   const outcome: LabPermissionCheckOutcome = {
     scope,
@@ -217,7 +217,7 @@ export async function checkLabPermissions(
     unmeasured,
   };
   if (
-    roleAssignmentGrant.kind === "conditional-blocks-ttl-role" ||
+    roleAssignmentGrant.kind === "conditional-blocks-contributor" ||
     roleAssignmentGrant.kind === "conditional-constrains-principals"
   ) {
     outcome.roleConditionRemediation =

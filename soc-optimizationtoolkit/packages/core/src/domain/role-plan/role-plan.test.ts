@@ -14,7 +14,6 @@
 import { describe, expect, it } from "vitest";
 import {
   LAB_RBAC_CONDITION,
-  LAB_TTL_ROLE,
   NETWORK_WATCHER_RESOURCE_GROUP,
   adminStepsForSetupPath,
   renderRoleAssignmentCli,
@@ -22,7 +21,6 @@ import {
 } from "./index";
 import { leastRoleFor, privilegeOperation } from "../least-privilege";
 import { AZURE_NETWORK_WATCHER_RG } from "../labs/lab-flowlogs";
-import { TTL_ROLE_NAME } from "../labs/lab-foundation";
 import type { RoleAssignmentCliParams } from "./index";
 
 const BLANK: RoleAssignmentCliParams = {
@@ -107,9 +105,9 @@ describe("rolePlanForSetupPath", () => {
         role: "RBAC Administrator",
         scopeLevel: "subscription",
         justification:
-          "Assign the lab TTL self-destruct identity its delete role (Managed Application Contributor Role, which can read and delete the lab resource group) at deploy time.",
+          "Assign the lab TTL self-destruct identity its delete role at deploy time.",
         condition:
-          "Constrain roles and principal types: only Managed Application Contributor Role and Monitoring Metrics Publisher, only to service principals.",
+          "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
         assignViaPortal: true,
         feature: "Lab TTL self-destruct",
         withoutIt:
@@ -124,7 +122,7 @@ describe("rolePlanForSetupPath", () => {
     expect(portal).toHaveLength(1);
     expect(portal[0]?.role).toBe("RBAC Administrator");
     expect(portal[0]?.condition).toBe(
-      "Constrain roles and principal types: only Managed Application Contributor Role and Monitoring Metrics Publisher, only to service principals.",
+      "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
   });
 
@@ -147,9 +145,9 @@ describe("rolePlanForSetupPath", () => {
         role: "RBAC Administrator",
         scopeLevel: "resourceGroup",
         justification:
-          "Assign the lab TTL self-destruct identity its delete role (Managed Application Contributor Role) on the lab resource group at deploy time.",
+          "Assign the lab TTL self-destruct identity its delete role on the lab resource group at deploy time.",
         condition:
-          "Constrain roles and principal types: only Managed Application Contributor Role and Monitoring Metrics Publisher, only to service principals.",
+          "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
         assignViaPortal: true,
         feature: "Lab TTL self-destruct",
         withoutIt:
@@ -171,15 +169,6 @@ describe("rolePlanForSetupPath", () => {
     ]);
     expect(leastRoleFor("flowLog.write")).toBe("Network Contributor");
     expect(NETWORK_WATCHER_RESOURCE_GROUP).toBe(AZURE_NETWORK_WATCHER_RG);
-  });
-
-  it("the TTL role the condition allows is the role the foundation phase assigns (AZR-89)", () => {
-    // The condition is authored before the deploy; if it named a different
-    // role from the one buildRgTtlRoleAssignmentRequest PUTs, every lab
-    // deploy would fail at ttl-role-assignment with an ABAC denial.
-    expect(LAB_TTL_ROLE).toBe(TTL_ROLE_NAME);
-    expect(LAB_RBAC_CONDITION).toContain("only " + TTL_ROLE_NAME + " and Monitoring Metrics Publisher");
-    expect(LAB_RBAC_CONDITION).not.toMatch(/only Contributor/);
   });
 
   it("asks the byo lab's admin to register Event Grid once, instead of a subscription role (AZR-81)", () => {

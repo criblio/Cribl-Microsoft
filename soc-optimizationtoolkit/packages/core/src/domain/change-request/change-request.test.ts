@@ -298,7 +298,7 @@ describe("roleAssignmentRequest role selection", () => {
       "RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333",
     );
     expect(out).toContain(
-      "Condition: Constrain roles and principal types: only Managed Application Contributor Role and Monitoring Metrics Publisher, only to service principals.",
+      "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
     // Not the existing path's roles: no Reader at the subscription. (Reader on
     // an Event Hub namespace outside it is asked, AZR-84.)
@@ -313,7 +313,7 @@ describe("roleAssignmentRequest role selection", () => {
     expect(out).toContain(`- Contributor at ${rg}\n`);
     expect(out).toContain(`- RBAC Administrator at ${rg}\n`);
     expect(out).toContain(
-      "Condition: Constrain roles and principal types: only Managed Application Contributor Role and Monitoring Metrics Publisher, only to service principals.",
+      "Condition: Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.",
     );
     expect(out).not.toContain("- Reader at /subscriptions");
   });

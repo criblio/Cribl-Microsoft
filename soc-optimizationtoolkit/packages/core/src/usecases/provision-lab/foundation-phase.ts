@@ -1,9 +1,8 @@
 /**
  * Phase 1 - Foundation (ALWAYS runs; LAB-02): the lab resource group with
  * the MANDATORY TTL self-destruct - the tagged group, the hourly TTL
- * watchdog Logic App (system-assigned identity), and the role grant
- * (Managed Application Contributor Role, AZR-89) that lets the watchdog
- * delete its own resource group at expiry.
+ * watchdog Logic App (system-assigned identity), and the Contributor grant
+ * that lets the watchdog delete its own resource group at expiry.
  *
  * THE ONE ABORTING PHASE: returns false when the run must stop (resource
  * group unusable, or the TTL mandate unmet - the app never creates billable
@@ -12,12 +11,11 @@
  */
 
 import {
-  TTL_ROLE_DEFINITION_ID,
-  TTL_ROLE_NAME,
+  CONTRIBUTOR_ROLE_DEFINITION_ID,
   buildResourceGroupGetRequest,
   buildResourceGroupPatchTagsRequest,
   buildResourceGroupPutRequest,
-  buildRgTtlRoleAssignmentRequest,
+  buildRgContributorRoleAssignmentRequest,
   buildTtlLogicAppGetRequest,
   buildTtlLogicAppPutRequest,
   labFoundationTags,
@@ -151,7 +149,7 @@ export async function runFoundationPhase(ctx: LabPhaseContext): Promise<boolean>
   if (result.principalId === "") {
     const error =
       `TTL Logic App '${result.logicAppName}' has no managed-identity principal id ` +
-      `after ${ctx.maxAttempts} attempt(s) - re-run the deploy, then grant ${TTL_ROLE_NAME} manually if it persists`;
+      `after ${ctx.maxAttempts} attempt(s) - re-run the deploy, then grant Contributor manually if it persists`;
     errors.push(error);
     await ctx.setStep("ttl-logic-app", "failed", error);
     await ctx.skipSteps(ctx.remainingAfter("ttl-role-assignment"), ttlSkipReason);
@@ -168,7 +166,7 @@ export async function runFoundationPhase(ctx: LabPhaseContext): Promise<boolean>
   // --- ttl-role-assignment --------------------------------------------------
   await ctx.setStep("ttl-role-assignment", "running");
   const assignmentName = input.mintAssignmentName();
-  const roleRequest = buildRgTtlRoleAssignmentRequest({
+  const roleRequest = buildRgContributorRoleAssignmentRequest({
     subscriptionId: sub,
     resourceGroup: rg,
     assignmentName,
@@ -195,12 +193,12 @@ export async function runFoundationPhase(ctx: LabPhaseContext): Promise<boolean>
     const command = manualLabRoleCommand(sub, rg, result.principalId);
     result.manualRoleAssignmentCommand = command;
     // A constrained RBAC Administrator grant whose ABAC condition does not
-    // allow assigning the TTL role fails exactly here - name the fix.
+    // allow assigning Contributor fails exactly here - name the fix.
     const bodyText = JSON.stringify(response.body) ?? "";
     const abacHint = /ABAC condition/i.test(bodyText)
       ? " The app's RBAC Administrator grant carries a role-assignment condition " +
         "that does not allow this assignment - ask an admin to add " +
-        `${TTL_ROLE_NAME} (${TTL_ROLE_DEFINITION_ID}) to the condition's ` +
+        `Contributor (${CONTRIBUTOR_ROLE_DEFINITION_ID}) to the condition's ` +
         "allowed roles for service principals; if the condition pins SPECIFIC " +
         "principal ids, it must be re-authored to principal TYPES instead (the " +
         "TTL identity is created at deploy time and cannot be pre-listed). " +
@@ -208,7 +206,7 @@ export async function runFoundationPhase(ctx: LabPhaseContext): Promise<boolean>
       : "";
     const error =
       httpErrorText(
-        `grant ${TTL_ROLE_NAME} to the TTL identity on '${rg}'`,
+        `grant Contributor to the TTL identity on '${rg}'`,
         response.status,
         response.body,
       ) +

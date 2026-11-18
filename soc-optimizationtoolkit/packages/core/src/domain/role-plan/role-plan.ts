@@ -56,22 +56,12 @@ export const WORKSPACE_TABLE_ACTIONS: readonly string[] = Object.freeze(
 const LAB_UMBRELLA_ROLE = "Contributor";
 
 /**
- * The role the lab TTL identity is granted on the lab resource group: the
- * registry's least role for the TTL delete (AZR-89), read rather than
- * restated, and pinned equal to domain/labs' TTL_ROLE_NAME in
- * role-plan.test.ts (this module does not import the labs domain).
- */
-export const LAB_TTL_ROLE = leastRoleFor("lab.ttl.resourceGroup.delete");
-
-/**
  * The condition on every lab-path RBAC Administrator grant: the TTL identity
- * gets {@link LAB_TTL_ROLE} (Contributor before AZR-89), and Cribl's identity
- * gets Monitoring Metrics Publisher on each DCR the lab deploys.
+ * gets Contributor, and Cribl's identity gets Monitoring Metrics Publisher on
+ * each DCR the lab deploys.
  */
 export const LAB_RBAC_CONDITION =
-  "Constrain roles and principal types: only " +
-  LAB_TTL_ROLE +
-  " and Monitoring Metrics Publisher, only to service principals.";
+  "Constrain roles and principal types: only Contributor and Monitoring Metrics Publisher, only to service principals.";
 
 /**
  * The scope level a role is assigned at. Kept abstract (a LEVEL, not a fully
@@ -153,11 +143,11 @@ export interface RoleRequirement {
  * - `lab-new-rg` - Contributor on the subscription (resource-group creation is a
  *   subscription-level action and covers all lab operations), plus RBAC
  *   Administrator on the subscription, assigned via the portal and CONSTRAINED
- *   to only {@link LAB_TTL_ROLE} and Monitoring Metrics Publisher, only to service
+ *   to only Contributor and Monitoring Metrics Publisher, only to service
  *   principals.
  * - `lab-byo-rg` - Contributor on the pre-created lab resource group, plus RBAC
  *   Administrator on that group with the same condition, because the lab
- *   assigns its TTL identity {@link LAB_TTL_ROLE} in both resource-group modes (AZR-61
+ *   assigns its TTL identity Contributor in both resource-group modes (AZR-61
  *   audit; foundation-phase.ts). Network Contributor on NetworkWatcherRG is a
  *   feature row for the flow logs (AZR-81); the Event Grid registration is an
  *   admin step ({@link adminStepsForSetupPath}), not a subscription role.
@@ -178,9 +168,7 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         role: leastRoleFor("lab.roleAssignment.write"),
         scopeLevel: "subscription",
         justification:
-          "Assign the lab TTL self-destruct identity its delete role (" +
-          LAB_TTL_ROLE +
-          ", which can read and delete the lab resource group) at deploy time.",
+          "Assign the lab TTL self-destruct identity its delete role at deploy time.",
         condition: LAB_RBAC_CONDITION,
         assignViaPortal: true,
         feature: "Lab TTL self-destruct",
@@ -204,9 +192,7 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
         role: leastRoleFor("lab.roleAssignment.write"),
         scopeLevel: "resourceGroup",
         justification:
-          "Assign the lab TTL self-destruct identity its delete role (" +
-          LAB_TTL_ROLE +
-          ") on the lab resource group at deploy time.",
+          "Assign the lab TTL self-destruct identity its delete role on the lab resource group at deploy time.",
         condition: LAB_RBAC_CONDITION,
         assignViaPortal: true,
         feature: "Lab TTL self-destruct",
