@@ -307,6 +307,30 @@ describe("evaluatePermissions / allGranted per setup path", () => {
     );
   });
 
+  it("measures the content-install package and parser writes as feature checks (AZR-86)", () => {
+    const feature = REQUIRED_ACTIONS["existing-rg"]
+      .filter((r) => r.necessity === "feature")
+      .map((r) => [r.action, r.label]);
+    expect(feature).toContainEqual([
+      "Microsoft.SecurityInsights/contentPackages/write",
+      "Install Content Hub solutions (Microsoft Sentinel Contributor)",
+    ]);
+    expect(feature).toContainEqual([
+      "Microsoft.OperationalInsights/workspaces/savedSearches/write",
+      "Install solution parsers as saved searches (Monitoring Contributor)",
+    ]);
+    // A custom role holding alertRules/write but neither of these passes the
+    // rule check and reads both as missing - the gap the audit found.
+    const results = evaluatePermissions(
+      response(permSet({ actions: ["Microsoft.SecurityInsights/alertRules/write"], notActions: [] })),
+      REQUIRED_ACTIONS["existing-rg"],
+    );
+    const byAction = new Map(results.map((r) => [r.action, r.granted]));
+    expect(byAction.get("Microsoft.SecurityInsights/alertRules/write")).toBe(true);
+    expect(byAction.get("Microsoft.SecurityInsights/contentPackages/write")).toBe(false);
+    expect(byAction.get("Microsoft.OperationalInsights/workspaces/savedSearches/write")).toBe(false);
+  });
+
   it("Contributor grants RG/deployment writes but DENIES roleAssignments/write for lab-new-rg (case-insensitive)", () => {
     const results = evaluatePermissions(
       response(CONTRIBUTOR),

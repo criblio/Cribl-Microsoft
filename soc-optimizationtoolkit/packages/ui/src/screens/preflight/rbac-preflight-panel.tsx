@@ -102,6 +102,7 @@ function azureThrowFallback(setupPath: SetupPath, err: unknown): AzurePreflight 
         : "subscription",
     scope: "",
     permissionsFetched: false,
+    workspaceScope: "",
     // checkResult, not a hand-built row: an errored panel must group its rows
     // identically to a measured one, and spelling the necessity default here
     // is how those two drift apart. (Architecture audit 2026-08-11 - this was

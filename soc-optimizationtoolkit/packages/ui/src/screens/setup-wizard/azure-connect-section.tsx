@@ -68,8 +68,9 @@ export interface AzureConnectSectionProps {
 /** The setup-path notes, shown behind an InfoTip (moved verbatim from inline prose). */
 const SETUP_PATH_NOTES: Readonly<Record<AzureSetupPath, string>> = {
   existing:
-    "Least privilege for an existing environment: Monitoring Contributor and Log Analytics " +
-    "Contributor scoped to the workspace resource group, plus Reader on the subscription. " +
+    "Least privilege for an existing environment: Monitoring Contributor scoped to the workspace " +
+    "resource group, Log Analytics Contributor on the workspace itself, plus Reader on the " +
+    "subscription. " +
     "Nothing is granted subscription-wide beyond read.",
   "lab-new-rg":
     "Requires Contributor at the subscription scope (resource group creation is a " +

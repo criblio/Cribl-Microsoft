@@ -387,7 +387,7 @@ export function AzureResourcesSection({
       setStored([...baseLines, "", "Permission validation: querying scopes..."].join("\n"));
       const validationLines: string[] = [];
       try {
-        for (const check of permissionScopeChecks(setupPath, subscriptionId, rgName)) {
+        for (const check of permissionScopeChecks(setupPath, subscriptionId, rgName, workspaceName)) {
           if (check.kind === "needs-input") {
             validationLines.push(check.message);
             continue;
@@ -423,6 +423,7 @@ export function AzureResourcesSection({
     setupPath,
     subscriptionId,
     rgName,
+    workspaceName,
     connectivity,
     allowedPermissions,
     savedSetupPath,
@@ -436,7 +437,7 @@ export function AzureResourcesSection({
   // script never assigns a role the operator did not tick.
   const script = renderRoleAssignmentCli(
     setupPath,
-    { clientId, subscriptionId, resourceGroup: rgName },
+    { clientId, subscriptionId, resourceGroup: rgName, workspaceName },
     requestedRoleNames(connectivity, allowedPermissions, savedSetupPath),
   );
   const copyScript = async () => {

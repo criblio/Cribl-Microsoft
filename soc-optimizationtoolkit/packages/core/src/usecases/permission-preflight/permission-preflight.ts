@@ -73,6 +73,7 @@ import {
 import type {
   PermissionCheckResult,
   PermissionSet,
+  RequiredAction,
   SetupPath,
 } from "../../domain/azure-permissions";
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
@@ -305,6 +306,15 @@ export interface AzurePreflight {
   scope: string;
   /** Whether the RBAC permissions API returned successfully. */
   permissionsFetched: boolean;
+  /**
+   * The workspace ARM id the workspace-scoped actions were evaluated at
+   * (AZR-85), or '' when they were evaluated at {@link scope} instead - the
+   * group already granted them, no workspace was named, or its permissions
+   * could not be read. At {@link scope}
+   * a grant still counts (it is inherited), but a role held on the workspace
+   * alone is not seen, so a NOT granted there is not a measurement.
+   */
+  workspaceScope: string;
   /** Per-required-action effective-permission results (order preserved). */
   checks: PermissionCheckResult[];
   /** Live existence probes (decoration/truth; do not gate readiness alone). */
@@ -443,6 +453,71 @@ function deniedChecks(setupPath: SetupPath): PermissionCheckResult[] {
 
 }
 
+/** What {@link evaluateActionsAtScope} measured at one scope. */
+export interface ScopeEvaluation {
+  /** True when the RBAC permissions API answered 2xx at the scope. */
+  fetched: boolean;
+  /**
+   * One result per required action, in order. When `fetched` is false every
+   * result is granted:false - the conservative stance for a deploy gate, and
+   * NOT a measurement (capability-mapping rule 3).
+   */
+  checks: PermissionCheckResult[];
+  /** Greppable error text ('' when fetched). */
+  error: string;
+}
+
+/**
+ * Read the caller's effective permissions at one ARM scope and evaluate
+ * `required` against them. TOTAL: a non-2xx or a transport failure yields
+ * `fetched: false`, never a rejection.
+ *
+ * Used where a second scope is measured beside the setup path's own: the
+ * configured workspace for its workspace-scoped actions (AZR-85), and the
+ * subscription for the Defender actions during a resource-group audit
+ * (AZR-86).
+ */
+export async function evaluateActionsAtScope(
+  azure: AzureManagement,
+  scope: string,
+  required: readonly RequiredAction[],
+): Promise<ScopeEvaluation> {
+  const unread = (error: string): ScopeEvaluation => ({
+    fetched: false,
+    checks: required.map((req) => checkResult(req, false)),
+    error,
+  });
+  try {
+    const response = await azure.request({
+      method: "GET",
+      path: `${scope}/providers/Microsoft.Authorization/permissions`,
+      apiVersion: RBAC_PERMISSIONS_API_VERSION,
+    });
+    if (!is2xx(response.status)) {
+      return unread(httpErrorText("fetch RBAC permissions", response.status, response.body));
+    }
+    return {
+      fetched: true,
+      checks: evaluatePermissions({ value: extractPermissionSets(response.body) }, [...required]),
+      error: "",
+    };
+  } catch (err) {
+    return unread(`fetch RBAC permissions: ${errText(err)}`);
+  }
+}
+
+/** The ARM id of the configured workspace, or null when any part is blank. */
+export function workspaceArmScope(target: AzurePreflightTarget): string | null {
+  if (target.subscriptionId === "" || target.resourceGroup === "" || target.workspaceName === "") {
+    return null;
+  }
+  return (
+    `/subscriptions/${target.subscriptionId}` +
+    `/resourceGroups/${target.resourceGroup}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${target.workspaceName}`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Azure side
 // ---------------------------------------------------------------------------
@@ -530,6 +605,7 @@ export async function runAzurePreflight(
       scopeKind,
       scope: "",
       permissionsFetched: false,
+      workspaceScope: "",
       checks: deniedChecks(setupPath),
       probes: [],
       hasRequiredAccess: false,
@@ -543,28 +619,56 @@ export async function runAzurePreflight(
   const required = REQUIRED_ACTIONS[setupPath];
 
   // --- Effective-action evaluation from the RBAC permissions API ---
-  let permissionsFetched = false;
-  let checks: PermissionCheckResult[];
-  let error = "";
-  try {
-    const response = await azure.request({
-      method: "GET",
-      path: `${scope}/providers/Microsoft.Authorization/permissions`,
-      apiVersion: RBAC_PERMISSIONS_API_VERSION,
-    });
-    if (is2xx(response.status)) {
-      permissionsFetched = true;
-      checks = evaluatePermissions(
-        { value: extractPermissionSets(response.body) },
-        required,
-      );
-    } else {
-      checks = deniedChecks(setupPath);
-      error = httpErrorText("fetch RBAC permissions", response.status, response.body);
+  const atScope = await evaluateActionsAtScope(azure, scope, required);
+  const permissionsFetched = atScope.fetched;
+  let checks = atScope.checks;
+  const error = atScope.error;
+
+  // --- Workspace-scoped actions at the workspace itself (AZR-85) ---
+  // Log Analytics Contributor is asked on the workspace, which the
+  // resource-group read above cannot see. The workspace read sees the
+  // workspace's own assignments AND those inherited from the group and the
+  // subscription, so it is the right scope for these actions in every case.
+  // Unread, the resource-group result stands (a grant there is inherited).
+  // Read only when the group did not already grant them: an inherited grant
+  // is final, and a skipped GET is one less against the proxy budget.
+  let workspaceScope = "";
+  const wsIndexes = required.flatMap((req, i) =>
+    req.resourceScope === "workspace" && checks[i]?.granted !== true ? [i] : [],
+  );
+  const wsScope = workspaceArmScope(target);
+  if (permissionsFetched && wsIndexes.length > 0 && wsScope !== null) {
+    const atWorkspace = await evaluateActionsAtScope(
+      azure,
+      wsScope,
+      wsIndexes.map((i) => required[i] as RequiredAction),
+    );
+    if (atWorkspace.fetched) {
+      workspaceScope = wsScope;
+      checks = checks.map((check, i) => {
+        const at = wsIndexes.indexOf(i);
+        return at === -1 ? check : (atWorkspace.checks[at] as PermissionCheckResult);
+      });
     }
-  } catch (err) {
-    checks = deniedChecks(setupPath);
-    error = `fetch RBAC permissions: ${errText(err)}`;
+  }
+  // Read only above the workspace and not granted there: a role held on the
+  // workspace alone is invisible, so the row is unknown, not missing, and
+  // readiness does not fail on it (coreGranted skips unmeasured rows).
+  if (permissionsFetched && workspaceScope === "" && wsIndexes.length > 0) {
+    const why =
+      wsScope === null
+        ? "no workspace is configured"
+        : "the workspace's permissions could not be read";
+    checks = checks.map((check, i) =>
+      wsIndexes.includes(i)
+        ? {
+            ...check,
+            unmeasured:
+              `not measured: the role is asked on the workspace, and ${why}; ` +
+              "the resource group does not grant it",
+          }
+        : check,
+    );
   }
 
   // --- Live existence probes (truth; do not gate readiness on their own) ---
@@ -632,6 +736,7 @@ export async function runAzurePreflight(
     scopeKind,
     scope,
     permissionsFetched,
+    workspaceScope,
     checks,
     probes,
     hasRequiredAccess,
@@ -834,7 +939,7 @@ function firstAzureIssue(azure: AzurePreflight): string | null {
     return "Azure: permission check failed";
   }
   for (const check of azure.checks) {
-    if (!check.granted) {
+    if (!check.granted && check.unmeasured === undefined) {
       return `Azure: cannot ${check.label.toLowerCase()}`;
     }
   }
@@ -877,6 +982,7 @@ function azureFallback(setupPath: SetupPath, err: unknown): AzurePreflight {
     scopeKind: scopeKindForSetupPath(setupPath),
     scope: "",
     permissionsFetched: false,
+    workspaceScope: "",
     checks: deniedChecks(setupPath),
     probes: [],
     hasRequiredAccess: false,

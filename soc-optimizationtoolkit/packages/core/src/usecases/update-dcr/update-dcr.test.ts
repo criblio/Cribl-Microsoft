@@ -503,6 +503,30 @@ describe("checkDcrUpdatePermissions", () => {
     expect(azure.calls.length).toBe(1);
   });
 
+  it("reads the table write on the workspace itself when its name is given (AZR-85)", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(grantAll, readOnly);
+    const check = await checkDcrUpdatePermissions(azure, {
+      subscriptionId: "sub",
+      dcrResourceGroup: "rg",
+      workspaceResourceGroup: "rg",
+      workspaceName: "law",
+      includeTableEdit: true,
+    });
+    // Log Analytics Contributor is asked on the workspace, which the group
+    // read cannot see, so the shared-group shortcut no longer applies.
+    expect(azure.calls.map((c) => c.path)).toEqual([
+      "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Authorization/permissions",
+      "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law/providers/Microsoft.Authorization/permissions",
+    ]);
+    expect(check.missing).toEqual([
+      {
+        action: "Microsoft.OperationalInsights/workspaces/tables/write",
+        scope: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law",
+      },
+    ]);
+  });
+
   it("fails OPEN when the permissions API is unreadable", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith({ status: 403, body: {} });

@@ -396,6 +396,22 @@ export const FEATURE_ROLES: readonly FeatureRole[] = Object.freeze([
     necessity: "feature" as const,
     unmeasured: "At a management group, which no preflight scope reads.",
   }),
+  // AZR-85 review: Enable Sentinel PUTs the SecurityInsights(workspace)
+  // Microsoft.OperationsManagement solution at the workspace's resource
+  // group. Log Analytics Contributor at the group covered it by accident;
+  // asked on the workspace, it no longer does, so it is asked for here -
+  // only where Sentinel is not yet enabled.
+  featureRole("sentinel.solution.write", {
+    key: "Log Analytics Contributor (resource group)",
+    existingOnly: true,
+    scopeCaveat: "skip if Microsoft Sentinel is already enabled on the workspace",
+    feature: "Enable Microsoft Sentinel on the workspace",
+    justification:
+      "Enable Sentinel writes the SecurityInsights solution for the workspace, a Microsoft.OperationsManagement/solutions resource in the workspace's resource group rather than under the workspace, so the workspace grant above does not reach it. A custom role with only Microsoft.OperationsManagement/solutions/write and Microsoft.OperationsManagement/solutions/read at the resource group is narrower still.",
+    withoutIt:
+      "Enable Sentinel on the targeting screen fails with a 403; enabling it in the portal (Microsoft Sentinel > Create, then pick the workspace) does the same thing. Nothing else is affected.",
+    necessity: "feature" as const,
+  }),
   // AZR-61 audit discrepancy 2 (high): the preflight measured the Defender
   // export's actions and no ticket asked for a role that grants them.
   featureRole("defender.automation.write", {
@@ -459,6 +475,9 @@ const ENTRA_DIRECTORY_ROLES: readonly AppPermission[] = Object.freeze([
  *   may sit in a different resource group from the one the plan names.
  * - A subscription grant covers its resource groups and their resources, and
  *   an equal scope covers itself.
+ * - A grant at the configured resource group or subscription covers the
+ *   configured workspace inside it; a workspace grant covers nothing but the
+ *   workspace (AZR-85).
  * - Nothing a setup path holds covers a management group: a subscription is
  *   BELOW one, so subscription Reader never stands in for management group
  *   Reader (AZR-82 refuter correction).
@@ -473,6 +492,9 @@ export function scopeCovers(
   const needed = role.scopeLevel;
   if (held === needed) {
     return true;
+  }
+  if (needed === "workspace") {
+    return held === "subscription" || held === "resourceGroup";
   }
   return held === "subscription" && (needed === "resourceGroup" || needed === "resource");
 }
@@ -607,8 +629,9 @@ export interface UnmeasuredGrant {
  * resource the configuration does not name (AZR-84), at a management group,
  * an Entra directory role (AZR-82), or on a named group other than the
  * configured one (NetworkWatcherRG, AZR-81 - the Labs preflight measures it). The preflight reads effective
- * permissions only at the configured subscription and resource group, so
- * these are reported as not measured - unknown, never denied.
+ * permissions only at the configured subscription, resource group and
+ * workspace (AZR-85), so these are reported as not measured - unknown, never
+ * denied.
  */
 export function preflightUnmeasuredGrants(
   requested: readonly AppPermission[],
@@ -620,7 +643,9 @@ export function preflightUnmeasuredGrants(
       (p) =>
         p.kind !== "graph-api" &&
         (p.resourceGroup !== undefined ||
-          (p.scopeLevel !== "subscription" && p.scopeLevel !== "resourceGroup")),
+          (p.scopeLevel !== "subscription" &&
+            p.scopeLevel !== "resourceGroup" &&
+            p.scopeLevel !== "workspace")),
     )
     .map((p) => ({ name: p.name, where: unmeasuredWhere(p), feature: p.feature }));
 }

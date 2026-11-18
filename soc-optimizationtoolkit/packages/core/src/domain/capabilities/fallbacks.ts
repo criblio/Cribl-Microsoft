@@ -96,6 +96,14 @@ export const CAPABILITY_FALLBACKS: Readonly<
     label: "Built Cribl pack (.crbl)",
     action: "The pack carries the routes - upload it by hand.",
   },
+  // AZR-85 review. The artifact is the request for the solution write; the
+  // ticket's row also says enabling it in the portal does the same thing.
+  "sentinel.enable": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      "Send it to whoever administers RBAC for the solution write at the resource group, or ask them to enable Sentinel in the portal.",
+  },
   // CAP-7a. Its own kind rather than `arm-template`: that kind's run is the
   // Sentinel Integration export, which builds no continuous export. The How-to
   // steps (onboarding-howto-steps/defender-steps) carry the body the Automated

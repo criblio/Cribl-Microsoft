@@ -765,6 +765,57 @@ describe("content-install over SafeAzureManagement (DBT-74)", () => {
   });
 
   describe("a 403 is an answer, and the STEP is still ok:false (no ok-inversion)", () => {
+    it("installSolution: both orphan DELETEs refused - names the missing right, not the original 400 (AZR-86)", async () => {
+      const azure = scripted(PRODUCT_PACKAGE, ORPHAN_CONFLICT, FORBIDDEN, FORBIDDEN);
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({
+        name: "Sol",
+        ok: false,
+        detail:
+          "a stale package already holds this solution's contentId, and deleting the stale " +
+          "package c-sl was refused (HTTP 403); deleting the stale package c was refused (HTTP 403): " +
+          "Microsoft.SecurityInsights/contentPackages/delete is needed (Microsoft Sentinel " +
+          "Contributor includes it). The install was refused with: " +
+          'HTTP 400 {"error":{"message":"contentId c is already associated with another package"}}',
+      });
+      // No retry PUT: with nothing deleted it could only repeat the 400.
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT", "DELETE", "DELETE"]);
+    });
+
+    it("installSolution: one refused DELETE does not fail an install the other delete cleared (review E)", async () => {
+      // 403 on the versioned name, 204 on the contentId name: the retry PUT
+      // succeeds, so the install succeeds.
+      const azure = scripted(
+        PRODUCT_PACKAGE,
+        ORPHAN_CONFLICT,
+        FORBIDDEN,
+        { status: 204, body: {} },
+        { status: 200, body: {} },
+      );
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({ name: "Sol", ok: true, detail: "installed (version 1.0.0)" });
+      expect(azure.calls.map((c) => c.method)).toEqual(["GET", "PUT", "DELETE", "DELETE", "PUT"]);
+    });
+
+    it("installSolution: a failed retry after a refused DELETE names contentPackages/delete (review E)", async () => {
+      const azure = scripted(
+        PRODUCT_PACKAGE,
+        ORPHAN_CONFLICT,
+        FORBIDDEN,
+        { status: 204, body: {} },
+        ORPHAN_CONFLICT,
+      );
+      const outcome = await installSolution(azure, WS, "c", "Sol");
+      expect(outcome).toEqual({
+        name: "Sol",
+        ok: false,
+        detail:
+          'HTTP 400 {"error":{"message":"contentId c is already associated with another package"}}; ' +
+          "deleting the stale package c-sl was refused (HTTP 403): " +
+          "Microsoft.SecurityInsights/contentPackages/delete is needed (Microsoft Sentinel Contributor includes it)",
+      });
+    });
+
     it("onboardSentinelWorkspace", async () => {
       const outcome = await onboardSentinelWorkspace(scripted(FORBIDDEN), WS);
       expect(outcome).toEqual({ ok: false, detail: FORBIDDEN_DETAIL });

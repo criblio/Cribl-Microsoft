@@ -129,9 +129,9 @@ describe("connectInputIssue", () => {
 });
 
 describe("permissionScopeChecks", () => {
-  it("existing: both scopes when fully selected, with encoded ARM paths", () => {
-    const checks = permissionScopeChecks("existing", "sub 1", "rg/x");
-    expect(checks).toHaveLength(2);
+  it("existing: three scopes when fully selected, with encoded ARM paths", () => {
+    const checks = permissionScopeChecks("existing", "sub 1", "rg/x", "law 1");
+    expect(checks).toHaveLength(3);
     expect(checks[0]).toMatchObject({
       kind: "check",
       label: "Subscription scope (existing-subscription)",
@@ -144,8 +144,25 @@ describe("permissionScopeChecks", () => {
       label: "Resource group scope (existing-rg)",
       permissionsPath:
         "/subscriptions/sub%201/resourceGroups/rg%2Fx/providers/Microsoft.Authorization/permissions",
-      required: REQUIRED_ACTIONS["existing-rg"],
+      required: REQUIRED_ACTIONS["existing-rg"].filter((r) => r.resourceScope !== "workspace"),
     });
+    // AZR-85: Log Analytics Contributor is asked on the workspace, so its
+    // table write is read there - a group read cannot see that grant.
+    expect(checks[2]).toMatchObject({
+      kind: "check",
+      label: "Workspace scope (existing-rg)",
+      permissionsPath:
+        "/subscriptions/sub%201/resourceGroups/rg%2Fx/providers/Microsoft.OperationalInsights/workspaces/law%201/providers/Microsoft.Authorization/permissions",
+    });
+    const atWorkspace = checks[2]?.kind === "check" ? checks[2].required.map((r) => r.action) : [];
+    expect(atWorkspace).toEqual(["Microsoft.OperationalInsights/workspaces/tables/write"]);
+    const atGroup = checks[1]?.kind === "check" ? checks[1].required.map((r) => r.action) : [];
+    expect(atGroup).not.toContain("Microsoft.OperationalInsights/workspaces/tables/write");
+  });
+
+  it("existing: no workspace selected asks for one instead of reading the group for the table write", () => {
+    const checks = permissionScopeChecks("existing", "sub-1", "rg-1");
+    expect(checks.map((c) => c.kind)).toEqual(["check", "check", "needs-input"]);
   });
 
   it("existing: blank inputs degrade to needs-input messages, never failures", () => {

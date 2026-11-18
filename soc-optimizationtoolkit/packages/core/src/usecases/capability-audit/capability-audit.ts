@@ -43,13 +43,17 @@ import type {
   AuditTrigger,
   CapabilitySet,
 } from "../../domain/capabilities";
-import { runPermissionPreflight } from "../permission-preflight";
+import { evaluateActionsAtScope, runPermissionPreflight } from "../permission-preflight";
+import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../../domain/defender-export/defender-permissions";
 import type {
   AzurePreflightTarget,
   CriblShellMode,
   PermissionReport,
 } from "../permission-preflight";
-import { capabilitiesFromReport } from "../permission-preflight/capability-mapping";
+import {
+  azureCheckVerdicts,
+  capabilitiesFromReport,
+} from "../permission-preflight/capability-mapping";
 
 /** The ports the audit orchestrates. */
 export interface CapabilityAuditPorts {
@@ -100,6 +104,37 @@ export interface CapabilityAuditResult {
   report: PermissionReport | null;
   /** Whether an audit ran, and why. */
   decision: AuditDecision;
+}
+
+/**
+ * The Defender verdicts a resource-group audit adds from the subscription
+ * (AZR-86, audit discrepancy 21).
+ *
+ * The existing path audits `existing-rg`, whose scope is the workspace's
+ * resource group, while the Defender export's pricings and automations are
+ * read at the subscription. So the default audit never measured them, and the
+ * Defender capabilities stayed unknown for every existing-path tenant. This
+ * reads the subscription's effective permissions once and evaluates only the
+ * Defender actions - the same list `existing-subscription` checks, with the
+ * same grant-only rule for the export write.
+ *
+ * One more GET per audit, and only on `existing-rg` with a subscription set.
+ * Unread, it records nothing (rule 3), so a refusal costs an annotation.
+ */
+export async function defenderSubscriptionVerdicts(
+  azure: AzureManagement,
+  setupPath: SetupPath,
+  subscriptionId: string,
+): Promise<CapabilitySet["verdicts"]> {
+  if (setupPath !== "existing-rg" || subscriptionId === "") {
+    return {};
+  }
+  const evaluated = await evaluateActionsAtScope(
+    azure,
+    `/subscriptions/${subscriptionId}`,
+    DEFENDER_SUBSCRIPTION_ACTIONS,
+  );
+  return azureCheckVerdicts(evaluated.fetched, evaluated.checks);
 }
 
 /** Render a thrown value as text. */
@@ -231,10 +266,22 @@ export async function runCapabilityAudit(
     };
   }
 
-  const set = capabilitiesFromReport(report, {
+  const measured = capabilitiesFromReport(report, {
     auditedAt: input.nowIso,
     connectionId: key,
   });
+  // AZR-86: the subscription-scope Defender evaluation, per tenant (this
+  // audit, its key and its cache entry are one tenant's). Fills only what
+  // the preflight left unmeasured.
+  const defender = await defenderSubscriptionVerdicts(
+    ports.azure,
+    input.setupPath,
+    input.azure.subscriptionId,
+  );
+  const set: CapabilitySet = {
+    ...measured,
+    verdicts: { ...defender, ...measured.verdicts },
+  };
   await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger);
 
   logger?.info("capability-audit: audited", {
