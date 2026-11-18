@@ -43,10 +43,10 @@ export const XDR_STEPS: readonly HowToStep[] = [
     ],
     rbac: [
       "Security Administrator or Global Administrator in Microsoft Entra ID to add a stream.",
-      "Contributor on the namespace {{namespace}} in {{resourceGroup}} for the person who saves it, and the Microsoft.Insights resource provider registered in {{subscriptionId}}.",
+      "Contributor on the namespace {{namespace}} in {{eventHubResourceGroup}} for the person who saves it, and the Microsoft.Insights resource provider registered in {{eventHubSubscriptionId}}.",
     ],
     confirmHow: "The Streaming API page lists the stream with the namespace {{namespace}}; Azure cannot be asked about it, so Validate reports it as not measurable and shows hub arrival instead.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "hubName"],
     checkKinds: ["xdr-streaming"],
     provenance: "inferred",
     warning: "Some tables are very high volume. Check the tier notes below before ticking them, and plan to filter in Cribl.",

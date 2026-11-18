@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**109 in the backlog, 38 in progress, 218 done.**
+**107 in the backlog, 38 in progress, 221 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 4 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 34 | 48 | 9 |
+| Azure Native Source Onboarding | 32 | 51 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 147.
+Open work totals 145.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 57% (56/98)
+### `AZR` Azure native source onboarding - 60% (59/99)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -60,11 +60,11 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding | 0/2 | AZR-4, AZR-5 |
 | `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding | 1/5 | AZR-13, AZR-3, AZR-26, AZR-27, AZR-28 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding | 0/1 | AZR-6 |
-| `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 0/3 | AZR-S1, AZR-7, D-8 |
+| `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 1/4 | AZR-S1, AZR-7, AZR-110, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 37/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 17/23 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1328,7 +1328,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1553,22 +1553,9 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
-- **AZR-109** Direct configuration repeats an unattributed How-to note per source, and the page description names only the Defender export
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after
-  AZR-100/101. Section 5 Direct configuration showed "This source is set to
-  How-to, so the app does not deploy it. Follow its steps under How to set it
-  up yourself, or switch it back to Automate under Choose what to onboard."
-  twice - once for the Azure Activity Log and once for the Defender export -
-  with neither naming its source, and the Activity Log one shown although it
-  is Not chosen. The route description above the screen still reads "... and
-  deploy the Defender for Cloud alert export", though the Activity Log is
-  deployable too (AZR-98). FIX: name the source in the note and show it only
-  for a chosen How-to source; update the route description.
-
 ---
 
-## Backlog - next (56)
+## Backlog - next (55)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2266,21 +2253,6 @@ Settled and unblocked, sequenced behind now.
   domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
   on ONE diagnostic-setting body/compare module rather than a third copy.
 
-- **AZR-102** One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
-  Preview (all ten sections walked), asked for by the operator to find what is
-  missing to finish automating the sources. Section 1 'Event Hub the sources
-  send to' picks namespace, hub and authorization rule; section 8's plan
-  values ('Your names and ids') hold their own Event Hub namespace, Event Hub
-  name and Send rule, bridged by a 'Use the Event Hub picked above' button.
-  [[AZR-24]] only persists the section 1 choice. Two copies can drift: a
-  deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to
-  steps, Validate and the Cribl source plan read the plan values. Make one the
-  source and derive the other (or show the plan value as read-only from the
-  picker with an explicit override), and pin that a deploy and the steps name
-  the same hub.
-
 - **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
   `AZR-F9` `story` `settled` `blocked by AZR-59`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -2473,21 +2445,6 @@ Settled, gated on something above.
   mapping rule records only measurements), and the [[AZR-19]] route requires
   it.
 
-- **AZR-S1** Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives
-  `AZR-F5` `spike` `undecided`
-  Streaming carries alert-grain tables; path B returns the incident object
-  with triage state. Settle before building either AZR-6 or AZR-7 - presenting
-  A as a replacement loses triage state silently, presenting them as unrelated
-  builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT
-  SEEDABLE AS A CLICK (2026-08-28): the cited section instructs "verify
-  against the APIs rather than reasoning it out", and the outcome handling is
-  already pre-committed - if only alerts, the honest presentation is alerts
-  via A, incidents via B. A click would record an opinion where the card
-  demands a fact. Worth carrying into the spike: the repo's own catalog lists
-  the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
-  UrlClickEvents), so complementary is the likely answer - still unverified,
-  which is the point.
-
 - **AZR-8** Blob-only sources as visible unavailable rows
   `AZR-F6` `story` `settled`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
@@ -2515,19 +2472,51 @@ Settled, gated on something above.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `AZR-F4` `story` `settled` `blocked by AZR-S1, CAP-5`
+  `AZR-F4` `story` `settled` `blocked by CAP-5`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
   forever. Tables absent from the Streaming API show greyed with the reason.
-  `backlog.md#6c`.
+  `backlog.md#6c`. AZR-S1 (2026-11-17): no streamed table is at incident grain
+  and AlertInfo carries no status, classification, owner or incident id - the
+  worklist must say streaming is detection telemetry and that triage state
+  comes from AZR-7, so nobody enables AlertInfo expecting case state. The
+  usage probe calls Graph `security/incidents`, whose documented
+  least-privileged application permission is SecurityIncident.Read.All, not
+  the SecurityEvents.Read.All that LOG-09 lists - request and measure that
+  one. `backlog.md#6c`.
 
-- **AZR-7** Sentinel incidents via a Cribl REST collector
-  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4`
+- **AZR-7** Incidents with triage state via a Cribl REST collector (Graph or Sentinel by tenant)
+  `AZR-F5` `story` `settled` `blocked by CAP-4, AZR-110`
   Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on
   creation misses every update to an open incident. Repeat deliveries are
   correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`.
-  Build on `lab-cribl.ts:149`. `backlog.md#6d`.
+  Build on `lab-cribl.ts:149`. `backlog.md#6d`. AZR-S1 (2026-11-17) changes
+  what this builds. Path B is not secondary to XDR streaming but beside it: it
+  is the only source of incident triage state. The SOURCE depends on the
+  tenant: (a) Sentinel onboarded to the Defender portal - poll Graph `GET
+  /security/incidents?$filter=lastUpdateDateTime ge
+  {earliest}&$expand=alerts`, paging on @odata.nextLink, app permission
+  SecurityIncident.Read.All; it embeds alerts with their evidence, which
+  answers the entities question, and avoids the Sentinel copy's sync lag and
+  5-10 minute batching. Graph documents no $orderby, so the watermark must not
+  assume ordered pages. (b) Not onboarded - the existing Sentinel
+  SecurityInsights request is right and the only option; alerts and entities
+  are separate sub-resources there. Same rule in both: filter on
+  last-modified, expect repeats, dedupe downstream on id + last-modified.
+  Choosing (a) or (b) needs AZR-110. `backlog.md#6d`.
+
+- **AZR-110** Detect whether a Sentinel workspace is onboarded to the Defender portal
+  `AZR-F5` `spike` `undecided`
+  Filed by AZR-S1. AZR-7 must poll Graph `security/incidents` when the
+  workspace is onboarded to the Defender portal and the Sentinel
+  SecurityInsights incidents API when it is not, and Graph does not return
+  Sentinel incidents at all without onboarding. Find a readable signal for the
+  onboarding state with least privilege - candidates to test, none confirmed:
+  `providerName` of recent Sentinel incidents reading Microsoft XDR, or
+  `additionalData.providerIncidentUrl` being present; a Graph incident whose
+  alerts carry a Sentinel serviceSource. Until measured, the honest UI is to
+  ask the operator and say why. Needs a live tenant. `backlog.md#6d`.
 
 - **AZR-10** Dataflow diagrams, one per category
   `AZR-F8` `story` `settled`
@@ -2996,7 +2985,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (218)
+## Done (221)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3025,6 +3014,44 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   "permissions: checked 4 days ago" with the (i) and Re-check permissions on
   Dataflow, Sentinel Integration, DCR Automation and Pack Maintenance; the (i)
   opens and explains the stored result. Re-check itself was not clicked.
+
+- **AZR-S1** Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives
+  `AZR-F5` `spike` `settled` `verified: none`
+  Streaming carries alert-grain tables; path B returns the incident object
+  with triage state. Settle before building either AZR-6 or AZR-7 - presenting
+  A as a replacement loses triage state silently, presenting them as unrelated
+  builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT
+  SEEDABLE AS A CLICK (2026-08-28): the cited section instructs "verify
+  against the APIs rather than reasoning it out", and the outcome handling is
+  already pre-committed - if only alerts, the honest presentation is alerts
+  via A, incidents via B. A click would record an opinion where the card
+  demands a fact. Worth carrying into the spike: the repo's own catalog lists
+  the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
+  UrlClickEvents), so complementary is the likely answer - still unverified,
+  which is the point. DONE 2026-11-17 (docs/azr-s1-spike): COMPLEMENTARY.
+  Answered from Microsoft Learn schemas and API references, not from a live
+  API - no tenant was queried, hence verified none. (1) The Streaming API
+  lists 23 GA tables (AlertInfo, AlertEvidence, CloudAppEvents, ten Device*,
+  four Email*, three Identity*, UrlClickEvents); none is at incident grain,
+  and BehaviorInfo/BehaviorEntities are not available. (2) AlertInfo has eight
+  columns - Timestamp, AlertId, Title, Category, Severity, ServiceSource,
+  DetectionSource, AttackTechniques - so a streamed alert carries no status,
+  classification, determination, owner, comments, last-modified time, or even
+  an incident id. Path A is detection telemetry with no triage state at any
+  grain; path B is the only source of triage state. (3) In a tenant whose
+  Sentinel workspace is onboarded to the Defender portal, Microsoft recommends
+  Graph `security/incidents` for incidents and alerts; the Sentinel
+  SecurityInsights incident there is a synced copy (up to 5 min lag, changes
+  within 5-10 min batched to the latest). Without onboarding, Graph does not
+  return Sentinel incidents and the Sentinel API is the only source. AZR-7
+  updated accordingly; AZR-110 filed for detecting the onboarding state. Graph
+  `alerts_v2` is alert grain WITH triage state but is redundant with
+  `security/incidents?$expand=alerts`. Also found: the 6c/LOG-09 Graph
+  permission list names SecurityEvents.Read.All, but listing
+  security/incidents documents SecurityIncident.Read.All - noted on AZR-6. Not
+  verified live: Graph $filter on lastUpdateDateTime with $expand=alerts, its
+  $top ceiling and throttling, the absent $orderby, and whether alert-level
+  triage bumps the incident lastUpdateDateTime. `backlog.md#6d`.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
   `AZR-F3` `bug` `settled` `verified: pins`
@@ -8448,6 +8475,53 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   onboarding-sections overrides that one item's section, and the layout pin
   names the override. Not checked in Live Preview.
 
+- **AZR-102** One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule
+  `AZR-F9` `story` `settled` `verified: pins`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. Section 1 'Event Hub the sources
+  send to' picks namespace, hub and authorization rule; section 8's plan
+  values ('Your names and ids') hold their own Event Hub namespace, Event Hub
+  name and Send rule, bridged by a 'Use the Event Hub picked above' button.
+  [[AZR-24]] only persists the section 1 choice. Two copies can drift: a
+  deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to
+  steps, Validate and the Cribl source plan read the plan values. Make one the
+  source and derive the other (or show the plan value as read-only from the
+  picker with an explicit override), and pin that a deploy and the steps name
+  the same hub. DONE 2026-11-17 (1.13.24): the section 1 picker is the one
+  source of the five Event Hub plan values (EVENT_HUB_PLAN_KEYS: subscription,
+  resource group, namespace, hub, Send rule). A complete pick writes them into
+  the progress document at once and the How-to form shows them read-only; "Use
+  my own Event Hub names" keeps the operator's own, which the picker then
+  never overwrites, and a warning names any difference from section 1. The
+  choice is a new optional progress field eventHubSource (section1 | own).
+  Migration: a document without it follows section 1 only when it names no
+  Event Hub, so an existing saved plan survives as the operator's own (ADR
+  0007 amendment). Replaces the "Use the Event Hub picked above" button.
+  Pinned in core progress-document.test.ts, howto-state.test.ts,
+  howto-panel.dom.test.tsx and azure-onboarding-screen.dom.test.tsx, including
+  that the Defender PUT targets exactly the hub the saved plan names
+  (mutation-checked). Seeding the picker from the plan stays AZR-24. Live
+  Preview verification is pending. REVIEW FIX (same day): the picker no longer
+  writes the shared subscription and resource group (storage, Defender,
+  flow-log and policy steps read those; they stay the operator's and
+  editable). New plan values eventHubSubscriptionId and eventHubResourceGroup
+  hold where the namespace lives and fall back to the shared ones when blank
+  (eventHubLocation); every Event Hub address built from the plan goes through
+  it, and a fingerprint reads a blank one as its shared key so earlier ticks
+  stay done. The migration check reads only the keys the picker writes. A pick
+  made while progress was loading is written once progress becomes writable,
+  and following section 1 with nothing picked says the names shown are the
+  last saved. Pinned and mutation-checked; Live Preview verification is
+  pending. RE-REVIEW FIX: the policy identity's Event Hubs role scope now
+  names the namespace where it lives (a sweep pin holds every namespace path
+  any step prints to that location); Validate's required values resolve the
+  namespace location before reporting a value missing, and need the shared
+  subscription only for the Defender export and Activity Log checks; a tick
+  fingerprint records the resolved namespace location under the shared key's
+  name, so naming the same address explicitly does not stale a tick. Pinned
+  and mutation-checked; Live Preview verification is pending.
+
 - **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
   `AZR-F9` `story` `settled` `verified: pins`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -9003,3 +9077,26 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   --version X.Y.Z, which packaged 1.13.7; the check-release-drift pin asserts
   the new wording. The root script itself is unchanged (changing it would need
   a version bump of its own).
+
+- **AZR-109** Direct configuration repeats an unattributed How-to note per source, and the page description names only the Defender export
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after
+  AZR-100/101. Section 5 Direct configuration showed "This source is set to
+  How-to, so the app does not deploy it. Follow its steps under How to set it
+  up yourself, or switch it back to Automate under Choose what to onboard."
+  twice - once for the Azure Activity Log and once for the Defender export -
+  with neither naming its source, and the Activity Log one shown although it
+  is Not chosen. The route description above the screen still reads "... and
+  deploy the Defender for Cloud alert export", though the Activity Log is
+  deployable too (AZR-98). FIX: name the source in the note and show it only
+  for a chosen How-to source; update the route description. DONE 2026-11-17
+  (1.13.24): the note is now named per source (howtoDeployNote: "The <source>
+  is set to How-to, so the app does not deploy it. ...") and shown only for a
+  source CHOSEN in How-to mode; a How-to source that is not chosen shows
+  neither the note nor deploy controls (deployBlockView in
+  azure-onboarding-state.ts). The route description in App.tsx now names both
+  deployable sources, the Activity Log setting and the Defender export. Pinned
+  in azure-onboarding-state.test.ts and azure-onboarding-howto.dom.test.tsx
+  (mutation-checked). Live Preview verification is pending. REVIEW FIX: a
+  How-to source whose choice is unknown shows the named note, never deploy
+  controls (not reachable from rowChoices today; held as a guard).

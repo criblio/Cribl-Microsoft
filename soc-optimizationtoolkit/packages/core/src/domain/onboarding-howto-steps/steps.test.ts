@@ -216,7 +216,8 @@ describe("how-to step catalog", () => {
     const rows = renderStep(step, FULL).values;
     const expected = expectedExportFor({
       subscriptionId: FULL.subscriptionId,
-      namespace: { subscriptionId: FULL.subscriptionId, resourceGroup: FULL.resourceGroup, name: FULL.namespace },
+      // AZR-102: the namespace in its own subscription and resource group; the export in the shared ones.
+      namespace: { subscriptionId: FULL.eventHubSubscriptionId, resourceGroup: FULL.eventHubResourceGroup, name: FULL.namespace },
       hubName: FULL.hubName,
     });
     expect(rows.find((r) => r.label === "Scope path")?.value).toBe(expected.scopePath);
@@ -229,7 +230,7 @@ describe("how-to step catalog", () => {
       subscriptionId: FULL.subscriptionId,
       resourceGroup: FULL.resourceGroup,
       location: FULL.region,
-      namespace: { subscriptionId: FULL.subscriptionId, resourceGroup: FULL.resourceGroup, name: FULL.namespace },
+      namespace: { subscriptionId: FULL.eventHubSubscriptionId, resourceGroup: FULL.eventHubResourceGroup, name: FULL.namespace },
       hubName: FULL.hubName,
       connectionString: CONNECTION_STRING_STAND_IN,
     });
@@ -491,12 +492,12 @@ describe("the Cribl principal's Event Hubs receive role", () => {
     const step = howToStep("eh-role-receiver")!;
     expect(step.title).toBe("Give the Cribl principal Azure Event Hubs Data Receiver on the hub {{hubName}}");
     expect(step.cli).toBe(
-      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
+      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
     );
     expect(step.rbac.join(" ")).toContain("Microsoft.Authorization/roleAssignments/write on the hub");
     expect(step.rbac.join(" ")).toMatch(/User Access Administrator/);
     expect(step.rbac.join(" ")).toMatch(/Role Based Access Control Administrator/);
-    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
+    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
     expect(howToStep("eh-role-receiver-auto")!.cli).not.toContain("eventhubs/");
   });
 
@@ -509,5 +510,38 @@ describe("the Cribl principal's Event Hubs receive role", () => {
 
   it("marks the SAS Listen rule as the fallback to Entra ID", () => {
     expect(howToStep("eh-rule-listen")!.warning).toMatch(/Entra ID/);
+  });
+});
+
+// AZR-102 re-review: the policy identity's Event Hubs role scope built the
+// namespace path from the SHARED subscription and resource group while its CLI
+// line used the namespace's own, so a namespace elsewhere got a scope that
+// does not exist.
+describe("every Event Hub namespace address uses the namespace's own location", () => {
+  const ELSEWHERE: PlanValues = {
+    ...FULL,
+    subscriptionId: "sub-shared",
+    resourceGroup: "rg-shared",
+    eventHubSubscriptionId: "sub-eh",
+    eventHubResourceGroup: "rg-eh",
+  };
+
+  it("the policy identity's Event Hubs role scope names the namespace where it lives", () => {
+    const rows = renderStep(howToStep("policy-identity")!, ELSEWHERE).values;
+    const scope = rows.find((r) => r.label === `${LEGACY_WRITER.identityRoles[1].roleName} scope`)?.value;
+    expect(scope).toBe(`/subscriptions/sub-eh/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/${FULL.namespace}`);
+  });
+
+  it("no step prints a namespace path under the shared subscription or resource group", () => {
+    let paths = 0;
+    for (const step of ALL_HOWTO_STEPS) {
+      for (const text of renderedTexts(renderStep(step, ELSEWHERE, ["Standard"]))) {
+        for (const m of text.matchAll(/\/subscriptions\/[^/\s"]+\/resourceGroups\/[^/\s"]+\/providers\/Microsoft\.EventHub\/namespaces\//g)) {
+          paths++;
+          expect(m[0], step.id).toBe("/subscriptions/sub-eh/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/");
+        }
+      }
+    }
+    expect(paths).toBeGreaterThan(10);
   });
 });

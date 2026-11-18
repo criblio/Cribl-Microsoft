@@ -97,10 +97,10 @@ export const ENTRA_STEPS: readonly HowToStep[] = [
     portal: [
       "Open the Microsoft Entra admin center and select Monitoring and health, then Diagnostic settings, then + Add diagnostic setting.",
       `Name: ${DEFAULT_SETTING_NAME}. Tick the categories listed below and nothing else.`,
-      "Tick Stream to an event hub: subscription {{subscriptionId}}, namespace {{namespace}}, leave Event hub name empty, policy name {{sendRule}}.",
+      "Tick Stream to an event hub: subscription {{eventHubSubscriptionId}}, namespace {{namespace}}, leave Event hub name empty, policy name {{sendRule}}.",
       "Save.",
     ],
-    cli: `az rest --method put --url "${ENTRA_URL}" --body @entra-setting.json\n# entra-setting.json is the Setting body below, for the rule {{sendRule}} in {{namespace}} ({{resourceGroup}}, {{subscriptionId}}).`,
+    cli: `az rest --method put --url "${ENTRA_URL}" --body @entra-setting.json\n# entra-setting.json is the Setting body below, for the rule {{sendRule}} in {{namespace}} ({{eventHubResourceGroup}}, {{eventHubSubscriptionId}}).`,
     values: (v, sub) => {
       const request = entraSettingRequest(v, sub);
       return [
@@ -116,7 +116,7 @@ export const ENTRA_STEPS: readonly HowToStep[] = [
       "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action on the rule {{sendRule}}.",
     ],
     confirmHow: `Diagnostic settings in the Entra admin center lists ${DEFAULT_SETTING_NAME} streaming to {{namespace}}; after the first sign-ins, hubs named after the categories appear in the namespace.`,
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "sendRule"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "sendRule"],
     checkKinds: ["entra-setting"],
     provenance: "repo",
     warning: ENTRA_WARNING,
@@ -170,7 +170,7 @@ export const ACTIVITY_LOG_STEPS: readonly HowToStep[] = [
       `Remediation: choose the user-assigned identity ${LEGACY_WRITER.identityName} and location {{region}}.`,
       markerPortalLine(ACTIVITY),
     ],
-    cli: `az policy assignment create --name ${ACTIVITY} --scope ${MG_TEMPLATE} --policy ${ACTIVITY_DEF_TEMPLATE} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @activity-params.json ${MARKER_CLI}\n# activity-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}}.\n${MARKER_CLI_NOTE}`,
+    cli: `az policy assignment create --name ${ACTIVITY} --scope ${MG_TEMPLATE} --policy ${ACTIVITY_DEF_TEMPLATE} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @activity-params.json ${MARKER_CLI}\n# activity-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}} ({{eventHubResourceGroup}}, {{eventHubSubscriptionId}}).\n${MARKER_CLI_NOTE}`,
     values: (v) => [
       { label: "Assignment name", value: ACTIVITY },
       { label: "Assignment ID", value: assignmentId(v.managementGroupId, ACTIVITY) },
@@ -180,7 +180,7 @@ export const ACTIVITY_LOG_STEPS: readonly HowToStep[] = [
     ],
     rbac: ["Microsoft.Authorization/policyAssignments/write at the management group (Resource Policy Contributor includes it)."],
     confirmHow: `Policy, Assignments shows ${ACTIVITY} at {{managementGroupId}}; each subscription's Activity Log, Export Activity Logs, lists a setting streaming to {{namespace}}.`,
-    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule"],
+    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule", "eventHubSubscriptionId", "eventHubResourceGroup"],
     checkKinds: ["policy-assignment", "activity-log-setting"],
     provenance: "repo",
   },

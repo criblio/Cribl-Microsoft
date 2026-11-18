@@ -14,6 +14,7 @@ import {
   PLAN_VALUE_KEYS,
   emptyProgress,
   encodeProgress,
+  withEventHubSource,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -23,6 +24,10 @@ import { describeViolations, findHistoryInCopy } from "../../../components/copy-
 import type { CopyEntry } from "../../../components/copy-rules";
 import {
   AUTOMATE_LOCKED_REASON,
+  EVENT_HUB_FOLLOWS_NOTE,
+  EVENT_HUB_OWN_NOTE,
+  FOLLOW_SECTION1_LABEL,
+  USE_OWN_EVENT_HUB_LABEL,
   chooserRows,
   progressLoadStateFrom,
   stepDialogView,
@@ -46,6 +51,15 @@ afterEach(() => {
 });
 
 const SELECTION: CoverageSelection = { mode: "Centralized", enabled: [], subSelections: {} };
+
+/** A complete section 1 pick (AZR-102). */
+const PICKED = {
+  eventHubSubscriptionId: "sub-p",
+  eventHubResourceGroup: "rg-p",
+  namespace: "picked-ns",
+  hubName: "picked-hub",
+  sendRule: "send-p",
+};
 
 const VALUES = {
   ...emptyProgress().planValues,
@@ -307,7 +321,8 @@ describe("write-blocked panel", () => {
   it("disables every plan control", () => {
     const { container } = renderPanel({
       writesBlockedReason: "Saving your progress.",
-      pickedValues: { namespace: "picked-ns", hubName: "picked-hub" },
+      pickedEventHub: PICKED,
+      onChooseEventHubSource: vi.fn(),
     });
     // The chooser is not part of the How-to panel any more.
     expect(container.querySelector(".azo-howto-chooser")).toBeNull();
@@ -315,9 +330,7 @@ describe("write-blocked panel", () => {
     expect(planInputs.length).toBe(PLAN_VALUE_KEYS.length);
     for (const i of planInputs) expect(i.disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Apply" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(
-      (screen.getByRole("button", { name: "Use the Event Hub picked above" }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect((screen.getByRole("button", { name: FOLLOW_SECTION1_LABEL }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -366,11 +379,67 @@ describe("plan values form", () => {
     expect(JSON.stringify(sent)).not.toContain("SharedAccessKey");
   });
 
-  it("'Use the Event Hub picked above' fills the draft only", () => {
-    const { props } = renderPanel({ pickedValues: { namespace: "picked-ns", hubName: "picked-hub" } });
-    fireEvent.click(screen.getByRole("button", { name: "Use the Event Hub picked above" }));
-    expect((screen.getByRole("textbox", { name: "Event Hub namespace" }) as HTMLInputElement).value).toBe("picked-ns");
+});
+
+// AZR-102: one Event Hub. The plan's Event Hub names follow the section 1
+// picker (read-only here) unless the operator keeps their own.
+describe("plan values form - the Event Hub names", () => {
+  const EH_FIELDS = ["Event Hub subscription ID", "Event Hub resource group", "Event Hub namespace", "Event Hub name", "Send rule"];
+
+  function following(): OnboardingProgress {
+    return withEventHubSource(withPlanValues(manualEntra(), { ...VALUES, ...PICKED }), "section1");
+  }
+
+  it("while they follow section 1, exactly the five Event Hub fields are read-only and show the stored names", () => {
+    const onChoose = vi.fn();
+    const { container } = renderPanel({ load: ready(following()), pickedEventHub: PICKED, onChooseEventHubSource: onChoose });
+    const locked = Array.from(container.querySelectorAll<HTMLInputElement>(".azo-plan-form input[data-locked]"));
+    expect(locked.map((i) => i.getAttribute("aria-label"))).toEqual(EH_FIELDS);
+    for (const i of locked) expect(i.readOnly).toBe(true);
+    expect((screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement).value).toBe("picked-hub");
+    expect((screen.getByRole("textbox", { name: "Region" }) as HTMLInputElement).readOnly).toBe(false);
+    // The shared subscription and resource group stay the operator's.
+    expect((screen.getByRole("textbox", { name: "Subscription ID" }) as HTMLInputElement).readOnly).toBe(false);
+    expect((screen.getByRole("textbox", { name: "Resource group" }) as HTMLInputElement).value).toBe("rg-1");
+    expect(screen.getByTestId("azo-plan-eventhub").textContent).toBe(EVENT_HUB_FOLLOWS_NOTE + USE_OWN_EVENT_HUB_LABEL);
+    expect(screen.queryByRole("button", { name: FOLLOW_SECTION1_LABEL })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: USE_OWN_EVENT_HUB_LABEL }));
+    expect(onChoose).toHaveBeenCalledTimes(1);
+    expect(onChoose).toHaveBeenCalledWith("own");
+  });
+
+  it("a typed change to a locked field is ignored, so Apply has nothing to send", () => {
+    const { props } = renderPanel({ load: ready(following()), pickedEventHub: PICKED });
+    fireEvent.change(screen.getByRole("textbox", { name: "Event Hub name" }), { target: { value: "typed" } });
+    expect((screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement).value).toBe("picked-hub");
+    expect((screen.getByRole("button", { name: "Apply" }) as HTMLButtonElement).disabled).toBe(true);
     expect(props.onApplyPlanValues).not.toHaveBeenCalled();
+  });
+
+  it("the operator's own names are editable, and a different section 1 hub is named as a warning", () => {
+    const onChoose = vi.fn();
+    // manualEntra names ns1 and has no eventHubSource: a plan saved before
+    // AZR-102, kept as the operator's own.
+    renderPanel({ pickedEventHub: PICKED, onChooseEventHubSource: onChoose });
+    expect((screen.getByRole("textbox", { name: "Event Hub namespace" }) as HTMLInputElement).readOnly).toBe(false);
+    const block = screen.getByTestId("azo-plan-eventhub");
+    expect(block.dataset.follows).toBe("own");
+    expect(block.textContent).toContain(EVENT_HUB_OWN_NOTE);
+    expect(block.textContent).toContain(
+      "Section 1 and these names differ (Event Hub subscription ID, Event Hub resource group, Event Hub namespace, Event Hub name, Send rule): a deploy on this page writes to section 1's Event Hub, picked-ns/picked-hub, while the How-to steps, Validate and the Cribl source use ns1/(no hub).",
+    );
+    fireEvent.click(screen.getByRole("button", { name: FOLLOW_SECTION1_LABEL }));
+    expect(onChoose).toHaveBeenCalledWith("section1");
+  });
+
+  it("a stored change (section 1 picked another hub) keeps an edit in progress in another field", () => {
+    const { rerender, props } = renderPanel({ load: ready(following()), pickedEventHub: PICKED });
+    fireEvent.change(screen.getByRole("textbox", { name: "Region" }), { target: { value: "westus" } });
+    const moved = { ...PICKED, hubName: "hub-2" };
+    const next = withPlanValues(following(), { ...following().planValues, ...moved });
+    rerender(<HowToPanel {...props} load={ready(next)} pickedEventHub={moved} />);
+    expect((screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement).value).toBe("hub-2");
+    expect((screen.getByRole("textbox", { name: "Region" }) as HTMLInputElement).value).toBe("westus");
   });
 });
 

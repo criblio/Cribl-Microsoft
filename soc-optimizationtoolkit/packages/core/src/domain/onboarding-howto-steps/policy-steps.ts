@@ -24,7 +24,7 @@ import { coverageItem } from "../coverage-model";
 import { COMMUNITY_TIER_SERVICES } from "../coverage-model/coverage-catalog";
 import { LEGACY_WRITER, TOOLKIT_MARKER_KEY } from "../logging-map/ownership";
 import type { PlanValues } from "../onboarding-howto/plan-values";
-import { planRuleId } from "./eventhub-steps";
+import { planNamespace, planRuleId } from "./eventhub-steps";
 import type { HowToStep } from "./steps";
 
 /**
@@ -170,8 +170,8 @@ export const MARKER_CLI_NOTE = `# ${MARKER_FILE} holds the assignment metadata b
 
 /** A plan namespace path written with placeholders, for CLI templates. */
 const NS_TEMPLATE = eventHubNamespacePath({
-  subscriptionId: "{{subscriptionId}}",
-  resourceGroup: "{{resourceGroup}}",
+  subscriptionId: "{{eventHubSubscriptionId}}",
+  resourceGroup: "{{eventHubResourceGroup}}",
   name: "{{namespace}}",
 });
 const MG_TEMPLATE = managementGroupScope("{{managementGroupId}}");
@@ -239,11 +239,8 @@ export const POLICY_IDENTITY_STEP: HowToStep = {
     },
     {
       label: `${EVENTHUB_ROLE.roleName} scope`,
-      value: eventHubNamespacePath({
-        subscriptionId: v.subscriptionId,
-        resourceGroup: v.resourceGroup,
-        name: v.namespace,
-      }),
+      // The namespace where it lives (AZR-102), as the CLI line's NS_TEMPLATE says.
+      value: eventHubNamespacePath(planNamespace(v)),
     },
   ],
   rbac: [
@@ -251,7 +248,7 @@ export const POLICY_IDENTITY_STEP: HowToStep = {
     "Microsoft.Authorization/roleAssignments/write at the management group and on the namespace (User Access Administrator or Owner).",
   ],
   confirmHow: `The identity ${LEGACY_WRITER.identityName} lists both role assignments under Azure role assignments.`,
-  dependsOnValues: ["subscriptionId", "resourceGroup", "region", "managementGroupId", "namespace"],
+  dependsOnValues: ["subscriptionId", "resourceGroup", "region", "managementGroupId", "namespace", "eventHubSubscriptionId", "eventHubResourceGroup"],
   checkKinds: ["policy-identity-roles"],
   provenance: "repo",
   warning:
@@ -278,7 +275,7 @@ export const POLICY_STEPS: readonly HowToStep[] = [
       `Remediation: choose the user-assigned identity ${LEGACY_WRITER.identityName} and location {{region}}.`,
       markerPortalLine(AUDIT),
     ],
-    cli: `az policy assignment create --name ${AUDIT} --scope ${MG_TEMPLATE} --policy-set-definition ${LEGACY_WRITER.builtInSetIds.audit} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @audit-params.json ${MARKER_CLI}\n# audit-params.json holds the assignment parameters below; drop any the initiative does not declare. The rule is {{sendRule}} in {{namespace}}.\n${MARKER_CLI_NOTE}`,
+    cli: `az policy assignment create --name ${AUDIT} --scope ${MG_TEMPLATE} --policy-set-definition ${LEGACY_WRITER.builtInSetIds.audit} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @audit-params.json ${MARKER_CLI}\n# audit-params.json holds the assignment parameters below; drop any the initiative does not declare. The rule is {{sendRule}} in {{namespace}} ({{eventHubResourceGroup}}, {{eventHubSubscriptionId}}).\n${MARKER_CLI_NOTE}`,
     values: (v) => [
       { label: "Assignment name", value: AUDIT },
       { label: "Assignment ID", value: assignmentId(v.managementGroupId, AUDIT) },
@@ -289,7 +286,7 @@ export const POLICY_STEPS: readonly HowToStep[] = [
     ],
     rbac: ["Microsoft.Authorization/policyAssignments/write at the management group (Resource Policy Contributor includes it)."],
     confirmHow: `Policy, Assignments shows ${AUDIT} at {{managementGroupId}} with the identity attached.`,
-    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule"],
+    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule", "eventHubSubscriptionId", "eventHubResourceGroup"],
     checkKinds: ["policy-assignment"],
     provenance: "repo",
   },
@@ -352,7 +349,7 @@ export const POLICY_STEPS: readonly HowToStep[] = [
       `Remediation: choose the user-assigned identity ${LEGACY_WRITER.identityName} and location {{region}}.`,
       markerPortalLine(COMMUNITY),
     ],
-    cli: `az policy assignment create --name ${COMMUNITY} --scope ${MG_TEMPLATE} --policy-set-definition ${managementGroupScope("{{managementGroupId}}")}/providers/Microsoft.Authorization/policySetDefinitions/${LEGACY_WRITER.communitySetName} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @community-params.json ${MARKER_CLI}\n# community-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}}.\n${MARKER_CLI_NOTE}`,
+    cli: `az policy assignment create --name ${COMMUNITY} --scope ${MG_TEMPLATE} --policy-set-definition ${managementGroupScope("{{managementGroupId}}")}/providers/Microsoft.Authorization/policySetDefinitions/${LEGACY_WRITER.communitySetName} --mi-user-assigned ${IDENTITY_TEMPLATE} --location {{region}} --params @community-params.json ${MARKER_CLI}\n# community-params.json holds the assignment parameters below. The rule is {{sendRule}} in {{namespace}} ({{eventHubResourceGroup}}, {{eventHubSubscriptionId}}).\n${MARKER_CLI_NOTE}`,
     values: (v) => [
       { label: "Assignment name", value: COMMUNITY },
       { label: "Assignment ID", value: assignmentId(v.managementGroupId, COMMUNITY) },
@@ -362,7 +359,7 @@ export const POLICY_STEPS: readonly HowToStep[] = [
     ],
     rbac: ["Microsoft.Authorization/policyAssignments/write at the management group (Resource Policy Contributor includes it)."],
     confirmHow: `Policy, Assignments shows ${COMMUNITY} at {{managementGroupId}} with the identity attached.`,
-    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule"],
+    dependsOnValues: ["subscriptionId", "resourceGroup", "managementGroupId", "region", "namespace", "sendRule", "eventHubSubscriptionId", "eventHubResourceGroup"],
     checkKinds: ["policy-assignment"],
     provenance: "repo",
   },

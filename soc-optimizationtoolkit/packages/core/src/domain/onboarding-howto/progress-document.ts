@@ -32,6 +32,7 @@
 import type { KvDocumentLoad } from "../../ports/kv-document-store";
 import {
   changedValueKeys,
+  EVENT_HUB_PLAN_KEYS,
   PLAN_VALUE_KEYS,
   defaultPlanValues,
   isPlanValueKey,
@@ -139,6 +140,39 @@ export interface OnboardingProgress {
    * and is never removed by the app.
    */
   readonly activityLogSettings?: readonly ActivityLogSettingRecord[];
+  /**
+   * AZR-102: where the Event Hub plan values (EVENT_HUB_PLAN_KEYS) come from.
+   * `section1` - they follow the screen's Event Hub picker, which writes them;
+   * `own` - the operator's own names, which the picker never overwrites.
+   * Optional so a document from before AZR-102 still reads; absent is
+   * resolved by {@link eventHubFollowsSection1}. An older release decodes this
+   * key as dropped, and its next save omits it.
+   */
+  readonly eventHubSource?: EventHubSource;
+}
+
+/** Where the Event Hub plan values come from (AZR-102). */
+export type EventHubSource = "section1" | "own";
+
+/**
+ * Whether the Event Hub plan values follow the section 1 picker (AZR-102).
+ *
+ * MIGRATION. A document written before AZR-102 has no `eventHubSource`. It
+ * follows section 1 only when every key the picker writes
+ * (EVENT_HUB_PLAN_KEYS) is blank: names an operator typed, or copied from the picker, stay
+ * theirs until they choose to follow section 1, so a pick on this screen
+ * never silently replaces a saved How-to plan.
+ */
+export function eventHubFollowsSection1(p: OnboardingProgress): boolean {
+  if (p.eventHubSource !== undefined) return p.eventHubSource === "section1";
+  // Only the keys the picker writes: the shared subscription and resource
+  // group are the operator's and never decide this.
+  return EVENT_HUB_PLAN_KEYS.every((k) => (p.planValues[k] ?? "").trim() === "");
+}
+
+/** Record where the Event Hub plan values come from (AZR-102). */
+export function withEventHubSource(p: OnboardingProgress, source: EventHubSource): OnboardingProgress {
+  return { ...p, eventHubSource: source };
 }
 
 /** The progress a first run starts from. */
@@ -225,6 +259,8 @@ export function encodeProgress(progress: OnboardingProgress): string {
     // encodes exactly as it did before AZR-35.
     ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
     ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
+    // AZR-102: written only once set, so an older document encodes as before.
+    ...(progress.eventHubSource === undefined ? {} : { eventHubSource: progress.eventHubSource }),
   });
 }
 
@@ -378,6 +414,12 @@ export function decodeProgress(raw: unknown): DecodedProgress {
   } else if (raw["activityLogSettings"] !== undefined) {
     dropped.push("activityLogSettings");
   }
+  // AZR-102: anything but the two known values is dropped (and reported), so
+  // the document then resolves by the pre-AZR-102 rule.
+  const rawSource = raw["eventHubSource"];
+  const eventHubSource: EventHubSource | undefined =
+    rawSource === "section1" || rawSource === "own" ? rawSource : undefined;
+  if (rawSource !== undefined && eventHubSource === undefined) dropped.push("eventHubSource");
 
   for (const k of Object.keys(raw)) {
     if (
@@ -391,6 +433,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         "workerGroup",
         "criblLakeRoutes",
         "activityLogSettings",
+        "eventHubSource",
       ].includes(k)
     ) {
       dropped.push(k);
@@ -406,6 +449,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
       workerGroup,
       ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
       ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
+      ...(eventHubSource === undefined ? {} : { eventHubSource }),
     },
     dropped,
   };

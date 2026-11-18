@@ -359,6 +359,49 @@ export function choiceDeployBlock(choice: RowChoice, noun: string): string | nul
   }
 }
 
+/**
+ * The note shown in place of a deployable source's controls while it is
+ * chosen in How-to mode. It names the source (AZR-109): Direct configuration
+ * holds two deployable sources, and an unattributed note under each read as
+ * one note shown twice.
+ */
+export function howtoDeployNote(title: string): string {
+  return `The ${title} is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.`;
+}
+
+/**
+ * What a deployable source's block in its method section shows (AZR-109):
+ *
+ *   deploy      its deploy section, which gates Deploy on the choice itself
+ *               (Automate, not chosen, or a choice that is unknown)
+ *   howto-note  the source is CHOSEN in How-to mode: the named note instead
+ *               (or in How-to mode with its choice unknown)
+ *   none        the source is in How-to mode and NOT chosen: nothing. The
+ *               row above already says "Not chosen"; a note telling the
+ *               operator to follow steps for a source they did not choose,
+ *               or deploy controls a choice in How-to mode could never enable,
+ *               would both mislead.
+ *
+ * `howTo` is the source's effective mode as the progress document holds it;
+ * false while progress is not loaded, so an unknown choice keeps its deploy
+ * section and that section says why Deploy is off.
+ */
+export type DeployBlockView =
+  | { readonly kind: "deploy" }
+  | { readonly kind: "howto-note"; readonly text: string }
+  | { readonly kind: "none" };
+
+export function deployBlockView(choice: RowChoice, howTo: boolean, title: string): DeployBlockView {
+  if (choice.kind === "chosen" && choice.mode === "manual") return { kind: "howto-note", text: howtoDeployNote(title) };
+  if (howTo && choice.kind === "not-chosen") return { kind: "none" };
+  // In How-to mode with the choice unknown: the app does not deploy it either
+  // way, so the named note, never deploy controls. rowChoices does not produce
+  // this pair today (a How-to choice is read from progress, which howTo needs
+  // loaded); held here so a future source of "unknown" cannot reopen Deploy.
+  if (howTo && choice.kind === "unknown") return { kind: "howto-note", text: howtoDeployNote(title) };
+  return { kind: "deploy" };
+}
+
 /** Used for an item id the chooser has no answer for. */
 const NO_CHOICE: RowChoice = { kind: "unknown", doc: "progress", cause: "not-read" };
 

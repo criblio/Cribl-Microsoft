@@ -203,11 +203,12 @@
       "feature": "AZR-F5",
       "title": "Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives",
       "type": "spike",
-      "status": "backlog",
+      "status": "done",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
-      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT SEEDABLE AS A CLICK (2026-08-28): the cited section instructs \"verify against the APIs rather than reasoning it out\", and the outcome handling is already pre-committed - if only alerts, the honest presentation is alerts via A, incidents via B. A click would record an opinion where the card demands a fact. Worth carrying into the spike: the repo's own catalog lists the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence, UrlClickEvents), so complementary is the likely answer - still unverified, which is the point."
+      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT SEEDABLE AS A CLICK (2026-08-28): the cited section instructs \"verify against the APIs rather than reasoning it out\", and the outcome handling is already pre-committed - if only alerts, the honest presentation is alerts via A, incidents via B. A click would record an opinion where the card demands a fact. Worth carrying into the spike: the repo's own catalog lists the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence, UrlClickEvents), so complementary is the likely answer - still unverified, which is the point.\n\nDONE 2026-11-17 (docs/azr-s1-spike): COMPLEMENTARY. Answered from Microsoft Learn schemas and API references, not from a live API - no tenant was queried, hence verified none. (1) The Streaming API lists 23 GA tables (AlertInfo, AlertEvidence, CloudAppEvents, ten Device*, four Email*, three Identity*, UrlClickEvents); none is at incident grain, and BehaviorInfo/BehaviorEntities are not available. (2) AlertInfo has eight columns - Timestamp, AlertId, Title, Category, Severity, ServiceSource, DetectionSource, AttackTechniques - so a streamed alert carries no status, classification, determination, owner, comments, last-modified time, or even an incident id. Path A is detection telemetry with no triage state at any grain; path B is the only source of triage state. (3) In a tenant whose Sentinel workspace is onboarded to the Defender portal, Microsoft recommends Graph `security/incidents` for incidents and alerts; the Sentinel SecurityInsights incident there is a synced copy (up to 5 min lag, changes within 5-10 min batched to the latest). Without onboarding, Graph does not return Sentinel incidents and the Sentinel API is the only source. AZR-7 updated accordingly; AZR-110 filed for detecting the onboarding state. Graph `alerts_v2` is alert grain WITH triage state but is redundant with `security/incidents?$expand=alerts`. Also found: the 6c/LOG-09 Graph permission list names SecurityEvents.Read.All, but listing security/incidents documents SecurityIncident.Read.All - noted on AZR-6. Not verified live: Graph $filter on lastUpdateDateTime with $expand=alerts, its $top ceiling and throttling, the absent $orderby, and whether alert-level triage bumps the incident lastUpdateDateTime. `backlog.md#6d`.",
+      "verified": "none"
     },
     {
       "id": "AZR-13",
@@ -321,13 +322,13 @@
         "AZR-S1",
         "CAP-5"
       ],
-      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md#6c`."
+      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md#6c`.\n\nAZR-S1 (2026-11-17): no streamed table is at incident grain and AlertInfo carries no status, classification, owner or incident id - the worklist must say streaming is detection telemetry and that triage state comes from AZR-7, so nobody enables AlertInfo expecting case state. The usage probe calls Graph `security/incidents`, whose documented least-privileged application permission is SecurityIncident.Read.All, not the SecurityEvents.Read.All that LOG-09 lists - request and measure that one. `backlog.md#6c`."
     },
     {
       "id": "AZR-7",
       "epic": "AZR",
       "feature": "AZR-F5",
-      "title": "Sentinel incidents via a Cribl REST collector",
+      "title": "Incidents with triage state via a Cribl REST collector (Graph or Sentinel by tenant)",
       "type": "story",
       "status": "backlog",
       "priority": "later",
@@ -335,9 +336,22 @@
       "dependsOn": [
         "AZR-S1",
         "CAP-4",
-        "DBT-1"
+        "DBT-1",
+        "AZR-110"
       ],
-      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md#6d`."
+      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md#6d`.\n\nAZR-S1 (2026-11-17) changes what this builds. Path B is not secondary to XDR streaming but beside it: it is the only source of incident triage state. The SOURCE depends on the tenant: (a) Sentinel onboarded to the Defender portal - poll Graph `GET /security/incidents?$filter=lastUpdateDateTime ge {earliest}&$expand=alerts`, paging on @odata.nextLink, app permission SecurityIncident.Read.All; it embeds alerts with their evidence, which answers the entities question, and avoids the Sentinel copy's sync lag and 5-10 minute batching. Graph documents no $orderby, so the watermark must not assume ordered pages. (b) Not onboarded - the existing Sentinel SecurityInsights request is right and the only option; alerts and entities are separate sub-resources there. Same rule in both: filter on last-modified, expect repeats, dedupe downstream on id + last-modified. Choosing (a) or (b) needs AZR-110. `backlog.md#6d`."
+    },
+    {
+      "id": "AZR-110",
+      "epic": "AZR",
+      "feature": "AZR-F5",
+      "title": "Detect whether a Sentinel workspace is onboarded to the Defender portal",
+      "type": "spike",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Filed by AZR-S1. AZR-7 must poll Graph `security/incidents` when the workspace is onboarded to the Defender portal and the Sentinel SecurityInsights incidents API when it is not, and Graph does not return Sentinel incidents at all without onboarding. Find a readable signal for the onboarding state with least privilege - candidates to test, none confirmed: `providerName` of recent Sentinel incidents reading Microsoft XDR, or `additionalData.providerIncidentUrl` being present; a Graph incident whose alerts carry a Sentinel serviceSource. Until measured, the honest UI is to ask the operator and say why. Needs a live tenant. `backlog.md#6d`."
     },
     {
       "id": "AZR-10",
@@ -4591,14 +4605,15 @@
     {
       "id": "AZR-102",
       "type": "story",
-      "status": "backlog",
+      "status": "done",
       "priority": "next",
       "dependsOn": [],
       "title": "One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule",
-      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 1 'Event Hub the sources send to' picks namespace, hub and authorization rule; section 8's plan values ('Your names and ids') hold their own Event Hub namespace, Event Hub name and Send rule, bridged by a 'Use the Event Hub picked above' button. [[AZR-24]] only persists the section 1 choice. Two copies can drift: a deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to steps, Validate and the Cribl source plan read the plan values. Make one the source and derive the other (or show the plan value as read-only from the picker with an explicit override), and pin that a deploy and the steps name the same hub.",
+      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 1 'Event Hub the sources send to' picks namespace, hub and authorization rule; section 8's plan values ('Your names and ids') hold their own Event Hub namespace, Event Hub name and Send rule, bridged by a 'Use the Event Hub picked above' button. [[AZR-24]] only persists the section 1 choice. Two copies can drift: a deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to steps, Validate and the Cribl source plan read the plan values. Make one the source and derive the other (or show the plan value as read-only from the picker with an explicit override), and pin that a deploy and the steps name the same hub. DONE 2026-11-17 (1.13.24): the section 1 picker is the one source of the five Event Hub plan values (EVENT_HUB_PLAN_KEYS: subscription, resource group, namespace, hub, Send rule). A complete pick writes them into the progress document at once and the How-to form shows them read-only; \"Use my own Event Hub names\" keeps the operator's own, which the picker then never overwrites, and a warning names any difference from section 1. The choice is a new optional progress field eventHubSource (section1 | own). Migration: a document without it follows section 1 only when it names no Event Hub, so an existing saved plan survives as the operator's own (ADR 0007 amendment). Replaces the \"Use the Event Hub picked above\" button. Pinned in core progress-document.test.ts, howto-state.test.ts, howto-panel.dom.test.tsx and azure-onboarding-screen.dom.test.tsx, including that the Defender PUT targets exactly the hub the saved plan names (mutation-checked). Seeding the picker from the plan stays AZR-24. Live Preview verification is pending. REVIEW FIX (same day): the picker no longer writes the shared subscription and resource group (storage, Defender, flow-log and policy steps read those; they stay the operator's and editable). New plan values eventHubSubscriptionId and eventHubResourceGroup hold where the namespace lives and fall back to the shared ones when blank (eventHubLocation); every Event Hub address built from the plan goes through it, and a fingerprint reads a blank one as its shared key so earlier ticks stay done. The migration check reads only the keys the picker writes. A pick made while progress was loading is written once progress becomes writable, and following section 1 with nothing picked says the names shown are the last saved. Pinned and mutation-checked; Live Preview verification is pending. RE-REVIEW FIX: the policy identity's Event Hubs role scope now names the namespace where it lives (a sweep pin holds every namespace path any step prints to that location); Validate's required values resolve the namespace location before reporting a value missing, and need the shared subscription only for the Defender export and Activity Log checks; a tick fingerprint records the resolved namespace location under the shared key's name, so naming the same address explicitly does not stale a tick. Pinned and mutation-checked; Live Preview verification is pending.",
       "epic": "AZR",
       "feature": "AZR-F9",
-      "settled": "settled"
+      "settled": "settled",
+      "verified": "pins"
     },
     {
       "id": "AZR-103",
@@ -5166,12 +5181,13 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "backlog",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "Direct configuration repeats an unattributed How-to note per source, and the page description names only the Defender export",
-      "detail": "FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after AZR-100/101. Section 5 Direct configuration showed \"This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.\" twice - once for the Azure Activity Log and once for the Defender export - with neither naming its source, and the Activity Log one shown although it is Not chosen. The route description above the screen still reads \"... and deploy the Defender for Cloud alert export\", though the Activity Log is deployable too (AZR-98). FIX: name the source in the note and show it only for a chosen How-to source; update the route description."
+      "detail": "FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after AZR-100/101. Section 5 Direct configuration showed \"This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.\" twice - once for the Azure Activity Log and once for the Defender export - with neither naming its source, and the Activity Log one shown although it is Not chosen. The route description above the screen still reads \"... and deploy the Defender for Cloud alert export\", though the Activity Log is deployable too (AZR-98). FIX: name the source in the note and show it only for a chosen How-to source; update the route description. DONE 2026-11-17 (1.13.24): the note is now named per source (howtoDeployNote: \"The <source> is set to How-to, so the app does not deploy it. ...\") and shown only for a source CHOSEN in How-to mode; a How-to source that is not chosen shows neither the note nor deploy controls (deployBlockView in azure-onboarding-state.ts). The route description in App.tsx now names both deployable sources, the Activity Log setting and the Defender export. Pinned in azure-onboarding-state.test.ts and azure-onboarding-howto.dom.test.tsx (mutation-checked). Live Preview verification is pending. REVIEW FIX: a How-to source whose choice is unknown shows the named note, never deploy controls (not reachable from rowChoices today; held as a guard).",
+      "verified": "pins"
     },
     {
       "id": "DBT-305",

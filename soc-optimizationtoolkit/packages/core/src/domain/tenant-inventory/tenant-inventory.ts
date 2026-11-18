@@ -13,6 +13,7 @@ import type { DiagnosticSettingRead } from "../activity-log-export/diagnostic-se
 import type { OnboardingSourceId } from "../onboarding-howto/sources";
 import { onboardingSource } from "../onboarding-howto/sources";
 import type { OnboardingProgress } from "../onboarding-howto/progress-document";
+import { eventHubLocation } from "../onboarding-howto/plan-values";
 import { ENTRA_CATEGORIES } from "../entra-diagnostics/entra-categories";
 import { ACTIVITY_LOG_CATEGORIES } from "../activity-log-export/activity-log-setting";
 import type { DefenderAutomation } from "../defender-export/defender-automation";
@@ -340,8 +341,10 @@ export interface AppArchiveEvidence {
 const ROUTABLE_CATEGORIES: readonly InventoryCategoryId[] = ["entraId", "activityLog", DEFENDER_EXPORT_ITEM_ID];
 
 export function archiveEvidenceFrom(progress: OnboardingProgress): AppArchiveEvidence {
-  const sub = progress.planValues["subscriptionId"] ?? "";
-  const rg = progress.planValues["resourceGroup"] ?? "";
+  // AZR-102: the namespace's own subscription and resource group, or the shared ones.
+  const loc = eventHubLocation(progress.planValues);
+  const sub = (loc.subscriptionId ?? "").trim();
+  const rg = (loc.resourceGroup ?? "").trim();
   const ns = progress.planValues["namespace"] ?? "";
   const namespacePath =
     sub === "" || rg === "" || ns === ""

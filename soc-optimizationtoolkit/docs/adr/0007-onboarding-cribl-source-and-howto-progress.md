@@ -80,6 +80,49 @@ JSON of the plan values its step depends on, and reads "done against older
 values" when they change. The AZR-18 picker is still not seeded from the
 plan (AZR-24 stays open).
 
+**Amendment (2026-11-17, AZR-102): one Event Hub.** The section 1 picker
+and the plan values held separate copies of the Event Hub, bridged by a "Use
+the Event Hub picked above" button, so a deploy (which reads the picker) could
+write to one hub while the steps, Validate and the Cribl source (which read the
+plan) named another. Now the picker is the source of the five Event Hub plan
+values (`EVENT_HUB_PLAN_KEYS`: the namespace's OWN subscription and resource
+group - the new plan values `eventHubSubscriptionId` and
+`eventHubResourceGroup` - namespace, hub, Send rule): a complete pick
+(namespace and hub) writes them into the progress document at once, and the
+form shows them read-only. The picker never writes the shared
+`subscriptionId` and `resourceGroup`: storage, Defender, flow-log and policy
+steps read those, and they stay the operator's and editable. Every Event Hub
+address built from the plan (the Event Hub, Entra, Activity Log, policy and
+XDR steps, Validate, the Cribl source plan, the screen's rule read and the
+tenant inventory's archive evidence) goes through `eventHubLocation`, which
+falls back to the shared values when the namespace's own are blank, so a plan
+saved before them addresses its namespace exactly as it did. Validate's
+required values resolve the same way, so a blank shared resource group does
+not block an Event Hub check whose namespace has its own; the shared
+subscription stays required only for the checks listed on it (Defender export,
+Activity Log setting). A tick fingerprint records each namespace location key
+by its RESOLVED value under one canonical name, the shared key's, so ticks
+taken before these keys existed stay done, and naming the same address
+explicitly (following section 1 with the namespace in the shared resource
+group) changes nothing.
+If progress is still loading when a pick lands, the pick is written once
+progress becomes writable. With nothing picked (the pick is not kept across a
+reload), a plan that follows section 1 keeps its last saved names and says
+so. The operator can choose
+"Use my own Event Hub names" instead; the picker then never overwrites them,
+and a warning names any difference from section 1. The choice is the optional
+progress field `eventHubSource` (`section1` | `own`), encoded only once set,
+so a document without it encodes as before. **Migration:** a document from
+before this change has no `eventHubSource`; it follows section 1 only when
+every key the picker writes is blank (the shared subscription and resource
+group never count), so a plan an operator
+already saved is kept as their own until they choose "Follow the Event Hub
+picked in section 1" (`eventHubFollowsSection1`). An older release decodes the
+field as dropped and its next save omits it, which reads back as the
+migration rule. The picker itself is still React state; seeding it from the
+plan remains AZR-24. Plan value edits other than the Event Hub names still
+save only on Apply.
+
 ### 2. A source is Automated or How-to, and Automated is a function
 
 `isAutomatable(id)` is `itemAvailability(id).status === 'available'`, a

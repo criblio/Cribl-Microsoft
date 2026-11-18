@@ -43,8 +43,10 @@
  *     carried as they are and rewritten only by that source's own choice or
  *     mode change.
  *   - PROGRESS SAVES PER CLICK (D3): a tick, a mode change, choosing a source,
- *     Apply on the plan values, the worker group and a created Cribl source
- *     each write the progress document once, serialized through one promise
+ *     Apply on the plan values, a complete Event Hub pick in section 1 while
+ *     the plan's Event Hub names follow it (AZR-102), the switch between
+ *     following section 1 and the operator's own names, the worker group and
+ *     a created Cribl source each write the progress document once, serialized through one promise
  *     chain and a latest-state ref. Only after an `absent` or readable load
  *     (canWriteProgress); a failed progress load blocks those writes, and
  *     with them every choice, because the mode lives in progress.
@@ -88,6 +90,7 @@ import {
   emptyProgress,
   encodeProgress,
   encodeSelection,
+  eventHubLocation,
   laneTopics,
   loadTenantDocument,
   listingRows,
@@ -140,6 +143,7 @@ import type {
   ActivityLogState,
   DefenderDeployForValidation,
   DefenderState,
+  EventHubSource,
   OnboardingDeployForValidation,
   KvDocumentLoad,
   LakeRouteSourceId,
@@ -172,6 +176,7 @@ import {
   buildSections,
   canWriteSelection,
   criblSideReadingOf,
+  deployBlockView,
   deployedFrom,
   loadBanners,
   loadStateFrom,
@@ -196,8 +201,11 @@ import { ChoosePanel } from "./howto/choose-panel";
 import {
   applyPlanValues,
   canWriteProgress,
+  chooseEventHubSource,
   chosenSourceIds,
   effectiveMode,
+  followPickedEventHub,
+  pickedEventHub,
   howtoModeRadioId,
   howtoRowAnchorId,
   loadedProgress,
@@ -275,10 +283,6 @@ const CRIBL_TIP =
 /** Shown instead of the diagram until both documents have loaded. */
 export const DATAFLOW_WAITING_TEXT =
   "The dataflow appears once the saved selection and your How-to progress are loaded.";
-
-/** Shown in place of a source's deploy controls while it is in How-to mode (Defender export, Activity Log). */
-export const DEFENDER_HOWTO_NOTE =
-  "This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.";
 
 /** No Event Hub chosen yet. The choice is React state only; it is not persisted. */
 const EMPTY_EVENTHUB_TARGET: EventHubTarget = { namespace: null, hubName: "", rule: null };
@@ -588,6 +592,11 @@ export function AzureOnboardingScreen({
     progress !== null && effectiveMode(progress, DEFENDER_EXPORT_ITEM_ID) === "manual";
   const activityLogHowTo =
     progress !== null && effectiveMode(progress, ACTIVITY_LOG_ITEM_ID) === "manual";
+  // AZR-109: a chosen How-to source shows a note naming it; an unchosen
+  // How-to source shows neither the note nor deploy controls.
+  const titleOf = (id: OnboardingSourceId): string => onboardingSource(id)?.title ?? id;
+  const defenderBlock = deployBlockView(choiceOf(DEFENDER_EXPORT_ITEM_ID), defenderHowTo, titleOf(DEFENDER_EXPORT_ITEM_ID));
+  const activityLogBlock = deployBlockView(choiceOf(ACTIVITY_LOG_ITEM_ID), activityLogHowTo, titleOf(ACTIVITY_LOG_ITEM_ID));
   const chosen = useMemo(
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
@@ -719,19 +728,37 @@ export function AzureOnboardingScreen({
     if (p !== null) commitProgress(p, "plan values");
   }
 
-  // The AZR-18 picker's names, for "Use the Event Hub picked above". React
-  // state only: the picker itself is not seeded from the plan.
-  const pickedValues = useMemo((): Partial<PlanValues> | null => {
-    const ns = target.namespace;
-    if (ns === null) return null;
-    return {
-      subscriptionId: ns.subscriptionId,
-      resourceGroup: ns.resourceGroup,
-      namespace: ns.name,
-      hubName: target.hubName,
-      sendRule: target.rule?.name ?? "",
-    };
-  }, [target]);
+  // ONE EVENT HUB (AZR-102). The section 1 picker is the source of the Event
+  // Hub plan values: a complete pick (namespace and hub) writes them to the
+  // progress document at once, unless the operator keeps their own names. The
+  // deploy sections read the picker and the steps, Validate and the Cribl
+  // source read the plan, so both now name the same hub. The picker itself is
+  // still React state, not seeded from the plan (AZR-24).
+  const pickedHub = useMemo(() => pickedEventHub(target), [target]);
+
+  function onTargetChange(next: EventHubTarget): void {
+    setTarget(next);
+    const p = followPickedEventHub(latestProgressLoad.current, pickedEventHub(next));
+    if (p !== null) commitProgress(p, "event hub from section 1");
+  }
+
+  // A pick made while progress was still loading (or could not be written)
+  // was not written then. Once progress becomes writable, write it once:
+  // followPickedEventHub returns null when the plan already names it, so this
+  // cannot loop, and later picks go through onTargetChange.
+  const progressWritable = canWriteProgress(progressLoad);
+  useEffect(() => {
+    if (!progressWritable) return;
+    const p = followPickedEventHub(latestProgressLoad.current, pickedEventHub(target));
+    if (p !== null) commitProgress(p, "event hub from section 1 after load");
+    // Runs on the transition to writable only; target is read as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressWritable]);
+
+  function onChooseEventHubSource(source: EventHubSource): void {
+    const p = chooseEventHubSource(latestProgressLoad.current, source, pickedEventHub(target));
+    if (p !== null) commitProgress(p, source === "own" ? "own event hub names" : "follow section 1");
+  }
 
   // -------------------------------------------------------------------------
   // Validate (D16)
@@ -879,8 +906,12 @@ export function AzureOnboardingScreen({
   // -------------------------------------------------------------------------
 
   const measuredHubs = measuredHubsOf(lastResult);
+  // AZR-102: the namespace's own subscription and resource group, or the shared ones.
+  const ehLoc = values === null ? null : eventHubLocation(values);
   const namespaceKey =
-    values === null ? "" : `${values.subscriptionId.trim()}/${values.resourceGroup.trim()}/${values.namespace.trim()}`;
+    values === null || ehLoc === null
+      ? ""
+      : `${ehLoc.subscriptionId.trim()}/${ehLoc.resourceGroup.trim()}/${values.namespace.trim()}`;
   // Rules read for another namespace than the plan's are not offered.
   const rulesForPlan = rules !== null && rules.ns === namespaceKey ? rules.read : null;
 
@@ -908,9 +939,10 @@ export function AzureOnboardingScreen({
 
   async function onReadRules(): Promise<void> {
     if (values === null) return;
+    const loc = eventHubLocation(values);
     const ns = {
-      subscriptionId: values.subscriptionId.trim(),
-      resourceGroup: values.resourceGroup.trim(),
+      subscriptionId: loc.subscriptionId.trim(),
+      resourceGroup: loc.resourceGroup.trim(),
       name: values.namespace.trim(),
     };
     if (ns.subscriptionId === "" || ns.resourceGroup === "" || ns.name === "") {
@@ -1180,7 +1212,7 @@ export function AzureOnboardingScreen({
         onRead={() => void onReadInventory()}
       />
 
-      <EventHubPrerequisiteSection number={1} value={target} onChange={setTarget} />
+      <EventHubPrerequisiteSection number={1} value={target} onChange={onTargetChange} />
 
       <NumberedSection
         number={CHOOSER_SECTION_NUMBER}
@@ -1216,8 +1248,10 @@ export function AzureOnboardingScreen({
           >
             {rows}
             {view.rows.some((r) => r.kind === "item" && r.id === ACTIVITY_LOG_ITEM_ID) &&
-              (activityLogHowTo ? (
-                <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
+              (activityLogBlock.kind === "none" ? null : activityLogBlock.kind === "howto-note" ? (
+                <p className="field-hint" data-testid={`azo-howto-note-${ACTIVITY_LOG_ITEM_ID}`}>
+                  {activityLogBlock.text}
+                </p>
               ) : (
                 <ActivityLogSection
                   choice={choiceOf(ACTIVITY_LOG_ITEM_ID)}
@@ -1232,8 +1266,10 @@ export function AzureOnboardingScreen({
                 />
               ))}
             {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_EXPORT_ITEM_ID) &&
-              (defenderHowTo ? (
-                <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
+              (defenderBlock.kind === "none" ? null : defenderBlock.kind === "howto-note" ? (
+                <p className="field-hint" data-testid={`azo-howto-note-${DEFENDER_EXPORT_ITEM_ID}`}>
+                  {defenderBlock.text}
+                </p>
               ) : (
                 <DefenderExportSection
                   choice={choiceOf(DEFENDER_EXPORT_ITEM_ID)}
@@ -1274,7 +1310,8 @@ export function AzureOnboardingScreen({
             load={progressLoad}
             selection={selection}
             result={lastResult}
-            pickedValues={pickedValues}
+            pickedEventHub={pickedHub}
+            onChooseEventHubSource={onChooseEventHubSource}
             onToggleTick={onToggleTick}
             onApplyPlanValues={onApplyPlanValues}
           />
