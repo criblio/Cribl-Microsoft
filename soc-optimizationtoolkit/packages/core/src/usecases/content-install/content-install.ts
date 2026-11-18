@@ -776,8 +776,26 @@ export async function installSolution(
     /already associated with another package/i.test(bodyText(attempt.response))
   ) {
     logger?.info("content-install: clearing orphaned package association", { contentId });
-    await deleteContentPackage(arm, ws, contentProductId);
-    await deleteContentPackage(arm, ws, contentId);
+    const conflict = failDetail(attempt.response);
+    // AZR-86: a refused DELETE used to be swallowed, and the retry PUT then
+    // failed with the ORIGINAL 400, which names the conflict but not the
+    // missing right. Stop at the refusal and name it instead.
+    const refused = [
+      await deleteContentPackage(arm, ws, contentProductId),
+      await deleteContentPackage(arm, ws, contentId),
+    ].find((r) => r !== null);
+    if (refused !== undefined) {
+      return {
+        name: displayName,
+        ok: false,
+        detail:
+          `a stale package (${refused.name}) already holds this solution's contentId, ` +
+          `and deleting it was refused (HTTP ${refused.status}): ` +
+          "Microsoft.SecurityInsights/contentPackages/delete is needed " +
+          "(Microsoft Sentinel Contributor includes it). The install was refused with: " +
+          conflict,
+      };
+    }
     attempt = await put();
     if (!attempt.ok) return { name: displayName, ok: false, detail: attempt.error };
   }
@@ -793,18 +811,24 @@ export async function installSolution(
 
 /**
  * Uninstall (DELETE) a contentPackages resource by name; best-effort, never
- * rejects. Takes the SAFE view, so the attempt is deliberately not inspected -
- * the retry PUT after it still surfaces any real failure.
+ * rejects. Returns the refusal when ARM answered 401 or 403, and null
+ * otherwise: a 404 or 2xx clears the way, and a transport failure or other
+ * status is left to the retry PUT, which surfaces any real failure. A
+ * refusal is returned because the retry would only repeat the original
+ * conflict and hide the missing right (AZR-86).
  */
 async function deleteContentPackage(
   arm: SafeAzureManagement,
   ws: WorkspaceScope,
   name: string,
-): Promise<void> {
-  if (name === "") return;
-  await arm.request({
+): Promise<{ name: string; status: number } | null> {
+  if (name === "") return null;
+  const attempt = await arm.request({
     method: "DELETE",
     path: `${workspaceInsightsScope(ws)}/contentPackages/${name}`,
     apiVersion: SECURITY_INSIGHTS_API_VERSION,
   });
+  if (!attempt.ok) return null;
+  const status = attempt.response.status;
+  return status === 401 || status === 403 ? { name, status } : null;
 }
