@@ -239,15 +239,33 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
     async (doc: FlowLastSeen, at: number) => {
       if (store === undefined) return;
       try {
-        const fresh = readFlowLastSeen(await store.load(FLOW_LAST_SEEN_KEY));
+        const load = await store.load(FLOW_LAST_SEEN_KEY);
+        const fresh = readFlowLastSeen(load);
         if (fresh.kind === "unknown") {
           writeFailedAt.current = at;
           logger?.warn("live-flow: last-seen document unreadable; not written", { reason: fresh.reason });
+          // The lanes say unknown too, never "never seen" from an older read
+          // (review round 2). A refused load is read again by the next poll.
+          if (mounted.current) {
+            if (load.kind === "unknown") lastSeenLoad.current = null;
+            setLastSeen(fresh);
+          }
           return;
         }
         let merged = mergeFlowLastSeen(fresh.doc, doc);
         await store.save(FLOW_LAST_SEEN_KEY, encodeFlowLastSeen(merged));
-        const after = readFlowLastSeen(await store.load(FLOW_LAST_SEEN_KEY));
+        const afterLoad = await store.load(FLOW_LAST_SEEN_KEY);
+        const after = readFlowLastSeen(afterLoad);
+        if (after.kind === "unknown" && afterLoad.kind !== "unknown") {
+          // Read, but no longer understood: another tab or release rewrote it
+          // since this save. Shown as unknown; the next load reads it again.
+          logger?.warn("live-flow: last-seen document unreadable after the write", { reason: after.reason });
+          if (mounted.current) {
+            lastSeenLoad.current = null;
+            setLastSeen(after);
+          }
+          return;
+        }
         if (after.kind === "read" && lostFlowLastSeen(after.doc, merged).length > 0) {
           merged = mergeFlowLastSeen(after.doc, merged);
           await store.save(FLOW_LAST_SEEN_KEY, encodeFlowLastSeen(merged));

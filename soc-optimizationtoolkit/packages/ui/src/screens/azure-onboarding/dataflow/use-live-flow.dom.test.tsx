@@ -431,6 +431,28 @@ describe("useLiveFlow - last seen, remembered", () => {
     });
   });
 
+  // Review round 2: a document that became unreadable after it was first read
+  // (another tab or a newer release rewrote it) turns the lanes unknown at the
+  // write, instead of leaving the older read on screen as "never seen".
+  it("a document rewritten unreadable before a write turns every lane unknown, and is not written over", async () => {
+    const elsewhere: LiveFlowLane = { sourceId: "activityLog", input: ENTRA.input, groupId: "g2" };
+    const store = new FakeKvDocumentStore();
+    const { client } = fakeCribl(() => rows(3));
+    const { cap, watch } = setupWithStore(client, store, { t: 8_000 }, [ENTRA, elsewhere]);
+    await watch();
+    await runOnce(cap); // lookback, into the empty document that was read
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "never" }, activityLog: { kind: "never" } });
+    const newer = { kind: "soc.flow-last-seen", version: 2, byInput: {} };
+    await store.save(FLOW_LAST_SEEN_KEY, newer);
+    const savesBefore = lastSeenSaves(store).length;
+    await runOnce(cap); // window: due, but the read before the write cannot decode it
+    await act(async () => {});
+    expect(lastSeenSaves(store)).toHaveLength(savesBefore);
+    expect(store.peek(FLOW_LAST_SEEN_KEY)).toEqual(newer);
+    const unknown = { kind: "unknown", reason: "the remembered times could not be read (it was written by a release this one cannot read)" };
+    expect(cap.live?.lastSeen).toEqual({ entraId: unknown, activityLog: unknown });
+  });
+
   // Review round 1 (AZR-37): a failed load is retried, a concurrent writer's
   // drop is repaired, another group's lane is never stamped, and a failing
   // store is not hammered once a minute.
