@@ -304,7 +304,8 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
     }
     readingsRef.current = next;
     setReadings(next);
-  }, []);
+    // setLastSeen is stable, so the poll registration stays stable too.
+  }, [setLastSeen]);
 
   const active = watching && visible && group !== "" && lanes.length > 0;
   useRegisterPoll(
