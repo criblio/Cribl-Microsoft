@@ -1389,8 +1389,9 @@ function OnboardingRows({ rows }: { rows: readonly OnboardingRowView[] }) {
       {rows.map((row) => {
         if (row.kind === "unsupported") {
           return (
-            <li key={row.id} className="azure-onboarding-row">
+            <li key={row.id} className="azure-onboarding-row" data-unsupported={row.id}>
               <span className="field-label">{row.title}</span>
+              <span className="azure-onboarding-state azure-onboarding-state-unavailable">{row.label}</span>
               <span className="field-hint">{row.description}</span>
               <span className="field-hint">{`Instead: ${row.instead}`}</span>
             </li>

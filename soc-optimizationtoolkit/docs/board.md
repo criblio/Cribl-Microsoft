@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 41 in progress, 226 done.**
+**100 in the backlog, 40 in progress, 227 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 51 | 8 |
+| Azure Native Source Onboarding | 31 | 52 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 0 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 141.
+Open work totals 140.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 64% (64/100)
+### `AZR` Azure native source onboarding - 65% (65/100)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -61,7 +61,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding | 1/5 | AZR-13, AZR-3, AZR-26, AZR-27, AZR-28 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding | 0/1 | AZR-6 |
 | `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 1/4 | AZR-S1, AZR-7, AZR-110, D-8 |
-| `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
+| `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (41)
+## In progress (40)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -201,12 +201,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   continuous export to Event Hub; test with a real alert. Microsoft
   continuous-export docs are silent. Delivery stays UNVERIFIED until a real
   alert is exported.
-
-- **AZR-8** Blob-only sources as visible unavailable rows
-  `AZR-F6` `story` `settled`
-  vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
-  end to end. The `notSupported` block is a feature of the legacy config, not
-  an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -2923,7 +2917,7 @@ Settled, gated on something above.
   new deploy with `already-exists`.
 
 - **AZR-106** Automate the VNet and NSG flow-log sources on the Azure side: flow log, storage queue and Event Grid subscription
-  `AZR-F9` `story` `settled` `blocked by AZR-8`
+  `AZR-F9` `story` `settled`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
   Preview (all ten sections walked), asked for by the operator to find what is
   missing to finish automating the sources. VNet Flow Logs and NSG Flow Logs
@@ -2954,7 +2948,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (226)
+## Done (227)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3098,6 +3092,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
     [x] `derive` Catalog derives from entra-diagnostics - ENTRA_PROFILES becomes the single authority and the catalog imports it. The provenance pin changes from "equals the legacy two" to "contains the legacy two, plus SecurityOnly which AZR-2 added deliberately". Removes the duplication for good - but it WEAKENS a verbatim pin written this morning, which is the move check 3 of the audit exists to catch, so it has to be a decision rather than a quiet edit.
     [ ] `widen-catalog` Hand-add SecurityOnly to the catalog - Smallest diff. Leaves TWO hand-maintained lists that must agree - the duplicated decision that caused this in the first place - so the next profile change breaks it again.
     [ ] `drop-securityonly` Withdraw SecurityOnly - Keeps the port pristine and re-opens the LOG-07 drift AZR-2 was asked to resolve. Honest, but it undoes a deliberate decision instead of fixing the plumbing under it.
+
+- **AZR-8** Blob-only sources as visible unavailable rows
+  `AZR-F6` `story` `settled` `verified: pins`
+  vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
+  end to end. The `notSupported` block is a feature of the legacy config, not
+  an omission. Smallest sub-item by a wide margin. `backlog.md#6e`. DONE
+  2026-11-17: the four notSupported rows already rendered in the onboarding
+  screen's reference section (AZR-18, AZR-43) but with no status. Each now
+  carries a greyed state label, 'Unavailable through an Event Hub', beside the
+  reason (description) and the Instead line, and a data-unsupported hook.
+  Pinned per source in azure-onboarding-screen.dom.test.tsx (exact child text,
+  no control on the row, flow logs say Storage Account only; mutation-checked
+  by removing the label). NOT verified live in Live Preview.
 
 - **AZR-20** Logging map: draggable cards + Reset layout, or keep the fixed layout
   `AZR-F8` `decision` `settled` `verified: live`

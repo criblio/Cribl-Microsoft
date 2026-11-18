@@ -631,6 +631,7 @@ describe("visible copy carries no project history", () => {
             add(`row.${r.id}.choice`, r.choiceLabel);
           }
           else if (r.kind === "unsupported") {
+            add(`row.${r.id}.label`, r.label);
             add(`row.${r.id}.description`, r.description);
             add(`row.${r.id}.instead`, r.instead);
           } else add(`row.${r.id}.reason`, r.reason);

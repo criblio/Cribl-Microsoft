@@ -264,11 +264,12 @@
       "feature": "AZR-F6",
       "title": "Blob-only sources as visible unavailable rows",
       "type": "story",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "vNet and NSG Flow Logs have no Event Hub path; the blob path already exists end to end. The `notSupported` block is a feature of the legacy config, not an omission. Smallest sub-item by a wide margin. `backlog.md#6e`."
+      "detail": "vNet and NSG Flow Logs have no Event Hub path; the blob path already exists end to end. The `notSupported` block is a feature of the legacy config, not an omission. Smallest sub-item by a wide margin. `backlog.md#6e`. DONE 2026-11-17: the four notSupported rows already rendered in the onboarding screen's reference section (AZR-18, AZR-43) but with no status. Each now carries a greyed state label, 'Unavailable through an Event Hub', beside the reason (description) and the Instead line, and a data-unsupported hook. Pinned per source in azure-onboarding-screen.dom.test.tsx (exact child text, no control on the row, flow logs say Storage Account only; mutation-checked by removing the label). NOT verified live in Live Preview.",
+      "verified": "pins"
     },
     {
       "id": "AZR-9",

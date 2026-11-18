@@ -1145,6 +1145,16 @@ Account only - use the Blob source, here" answers the question instead. This is
 the same honesty rule as item 4: the absence of a source must be stated with its
 reason, never left as silence.
 
+AZR-8 DONE 2026-11-17. The rows themselves already rendered in the screen's
+reference section (AZR-18, with the operator-facing "Instead" from AZR-43); what
+was missing was the STATUS: every other row carries a state label and these
+carried none, so they read as descriptions rather than as sources that are
+unavailable. Each now shows "Unavailable through an Event Hub" in the state
+slot (greyed), then the reason (the catalog's description, "Storage Account
+only - ..." for the flow logs) and what to use instead. Pinned per source in
+`azure-onboarding-screen.dom.test.tsx`. The VNet Flow Logs blob How-to that the
+row's "Instead" points at is unchanged.
+
 ### 6f. Agent-based - AMA plus DCR
 
 **VM guest OS logs** (SecurityEvent, WindowsEvent, Syslog) reach Sentinel through
