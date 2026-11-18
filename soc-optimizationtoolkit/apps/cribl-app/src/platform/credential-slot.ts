@@ -305,9 +305,16 @@ export class AzureCredentialSlot implements CredentialSlot {
     if (this.armTenant !== tenantKey(tenantId)) await this.mintArm(tenantId);
   }
 
-  /** Mint the Graph token unless the slot already holds `tenantId`'s. */
-  async ensureGraph(tenantId: string): Promise<void> {
-    if (this.graphTenant !== tenantKey(tenantId)) await this.mintGraph(tenantId);
+  /**
+   * Mint the Graph token unless the slot already holds `tenantId`'s. Resolves
+   * true when it minted (or joined a mint in flight), so the caller knows the
+   * token already reflects current consent and a 401/403 re-mint would only
+   * repeat it (CAP-5 review r2).
+   */
+  async ensureGraph(tenantId: string): Promise<boolean> {
+    if (this.graphTenant === tenantKey(tenantId)) return false;
+    await this.mintGraph(tenantId);
+    return true;
   }
 
   private mintOnce(key: string, mint: () => Promise<void>): Promise<void> {

@@ -26,7 +26,8 @@
  *      DCR ingestion grant) cannot report "not ready" to an operator who can
  *      deploy perfectly well. See domain/azure-permissions PermissionNecessity.
  *   2. LIVE EXISTENCE PROBES - no-op reads (workspace GET, tables list, DCR
- *      list, and a one-row Resource Graph query - a POST, but query-only).
+ *      list, a one-row Resource Graph query - a POST, but query-only - and
+ *      one Sentinel incident from the configured workspace, CAP-4).
  *      PROBES ARE TRUTH about what is actually reachable/readable right
  *      now. They decorate the report but never, on their own, flip
  *      deploy-readiness: a Reader passes every probe yet must still read as NOT
@@ -79,6 +80,7 @@ import type {
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
 import { resourceGraphRequest } from "../../domain/eventhub-discovery";
 import { WORKSPACE_API_VERSION } from "../azure-discovery";
+import { SECURITY_INSIGHTS_API_VERSION } from "../content-install/content-install";
 import { httpErrorText, is2xx, prop } from "../arm-http";
 
 // ---------------------------------------------------------------------------
@@ -327,6 +329,14 @@ export interface AzurePreflight {
   hasRequiredAccess: boolean;
   /** Raw greppable error text ('' when none). */
   error: string;
+  /**
+   * The permission sets read at {@link scope}, present only when
+   * {@link permissionsFetched}. The capability audit evaluates actions the
+   * setup path does not require (the CAP-2/CAP-3 enablers, the Defender
+   * export's) against this same read on the subscription-scope paths, so
+   * measuring them there costs no request.
+   */
+  scopePermissions?: readonly PermissionSet[];
 }
 
 /** Outcome of one Cribl capability probe. */
@@ -465,6 +475,11 @@ export interface ScopeEvaluation {
   checks: PermissionCheckResult[];
   /** Greppable error text ('' when fetched). */
   error: string;
+  /**
+   * The permission sets the scope returned ([] when not fetched), so a caller
+   * can evaluate further actions against the SAME read without a second GET.
+   */
+  permissions: PermissionSet[];
 }
 
 /**
@@ -486,6 +501,7 @@ export async function evaluateActionsAtScope(
     fetched: false,
     checks: required.map((req) => checkResult(req, false)),
     error,
+    permissions: [],
   });
   try {
     const response = await azure.request({
@@ -496,10 +512,12 @@ export async function evaluateActionsAtScope(
     if (!is2xx(response.status)) {
       return unread(httpErrorText("fetch RBAC permissions", response.status, response.body));
     }
+    const permissions = extractPermissionSets(response.body);
     return {
       fetched: true,
-      checks: evaluatePermissions({ value: extractPermissionSets(response.body) }, [...required]),
+      checks: evaluatePermissions({ value: permissions }, [...required]),
       error: "",
+      permissions,
     };
   } catch (err) {
     return unread(`fetch RBAC permissions: ${errText(err)}`);
@@ -718,6 +736,26 @@ export async function runAzurePreflight(
     request: resourceGraphRequest(target.subscriptionId, RESOURCE_GRAPH_PROBE_QUERY),
     evidence: resourceGraphReturnedRows,
   });
+  // CAP-4. One incident from the configured workspace, after Resource Graph
+  // so the probes before it keep their order. ARM authorizes before the
+  // Sentinel provider answers, so a 2xx is a grant even with no incidents in
+  // it; a workspace without Sentinel answers 404, which stays unknown.
+  if (target.resourceGroup !== "" && target.workspaceName !== "") {
+    probeRequests.push({
+      name: "sentinel-incidents-list",
+      label: "Read Microsoft Sentinel incidents",
+      request: {
+        method: "GET",
+        path:
+          `/subscriptions/${target.subscriptionId}` +
+          `/resourceGroups/${target.resourceGroup}` +
+          `/providers/Microsoft.OperationalInsights/workspaces/${target.workspaceName}` +
+          "/providers/Microsoft.SecurityInsights/incidents",
+        apiVersion: SECURITY_INSIGHTS_API_VERSION,
+        query: { $top: "1" },
+      },
+    });
+  }
   const probes = await Promise.all(
     probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request, p.evidence)),
   );
@@ -741,6 +779,7 @@ export async function runAzurePreflight(
     probes,
     hasRequiredAccess,
     error,
+    ...(permissionsFetched ? { scopePermissions: atScope.permissions } : {}),
   };
 }
 

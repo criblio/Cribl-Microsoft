@@ -114,6 +114,32 @@ export const CAPABILITY_FALLBACKS: Readonly<
     label: "How-to steps for the Defender continuous export",
     action: "Hand them to someone with Security Admin on the subscription to follow.",
   },
+  // CAP-2 / CAP-3. Measured ahead of the Azure Policy feature (AZR-4), which
+  // will build the artifact proper (the assignment and remediation bodies,
+  // and a request row for the role). Rule 2 still wants a handoff for each
+  // write, but the request generated today is the setup path's, which asks
+  // for none of these roles until a feature calls them (least privilege,
+  // pinned in app-permissions.test.ts). So the text names NO role (review
+  // r1): an offer naming Resource Policy Contributor would hand over a
+  // request that leaves it out. The pin there fails if one comes back.
+  "policy.assign": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      "Send it to whoever administers Azure Policy, and ask them to add the role that assigns policy where the initiative is assigned - the request does not include it yet.",
+  },
+  "policy.remediate": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      "Send it to whoever administers Azure Policy, and ask them to add the role that runs remediations where they run - the request does not include it yet.",
+  },
+  "identity.create": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      "Send it to whoever administers RBAC, and ask them to add the role that creates managed identities on the identity's resource group - the request does not include it yet.",
+  },
 });
 
 /**

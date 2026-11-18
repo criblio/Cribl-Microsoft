@@ -28,7 +28,13 @@ export {
   isStreamWorkerGroup,
   streamWorkerGroups,
 } from './cribl-client';
-export type { GraphDirectory, ServicePrincipalRef } from './graph-directory';
+export type {
+  GraphDirectory,
+  GraphPermissionProbe,
+  GraphProbeOptions,
+  GraphProbeResponse,
+  ServicePrincipalRef,
+} from './graph-directory';
 export type {
   CredentialSlot,
   TenantPorts,

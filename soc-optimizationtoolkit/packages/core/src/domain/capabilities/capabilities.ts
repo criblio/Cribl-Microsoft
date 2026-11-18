@@ -39,6 +39,34 @@
  * RBAC evaluation (solutions/write). Separate from `table.write` because
  * since AZR-85 Log Analytics Contributor is asked on the workspace, which no
  * longer reaches a resource-group solution.
+ *
+ * The six below are ENABLERS (CAP-2..CAP-5): measured ahead of the Azure
+ * onboarding features that will need them (backlog.md 6h), so no route or
+ * ticket uses them yet.
+ *
+ * `policy.assign` and `policy.remediate` (CAP-2) are policyAssignments/write
+ * and remediations/write, and `identity.create` (CAP-3) is
+ * userAssignedIdentities/write - the Azure Policy logging initiatives (AZR-4).
+ * Measured from the SUBSCRIPTION effective-action read only, never a probe.
+ * The two policy verdicts are about the configured SUBSCRIPTION: a denial there
+ * also rules out every management group above it (their grants are inherited
+ * and visible), but a grant there proves nothing about a management group.
+ * `identity.create` is grant-only, because the identity lands in a resource
+ * group the operator picks (domain/capability-enablers).
+ *
+ * `sentinel-incidents.read` (CAP-4) is Microsoft.SecurityInsights/incidents/read
+ * on the configured workspace - Microsoft Sentinel Reader - measured by a
+ * one-incident probe of the incidents list. ARM authorizes before the
+ * provider answers, so an empty list is still a grant.
+ *
+ * `graph-licences.read` and `graph-incidents.read` (CAP-5) are the Microsoft
+ * Graph application permissions: reading the tenant's licence SKUs
+ * (LicenseAssignment.Read.All, or the broader Organization.Read.All LOG-09
+ * asked for) and listing Defender XDR incidents (SecurityIncident.Read.All -
+ * NOT SecurityEvents.Read.All, AZR-S1). Measured by one Graph read each in the
+ * capability audit. GRANTED MEANS THE READ RETURNED A ROW: whether Graph
+ * refuses with a 403 or an empty 200 is unsettled (AZR-111), so an empty
+ * answer is left unmeasured, never denied.
  */
 export type AzureCapability =
   | "dcr.write"
@@ -52,7 +80,13 @@ export type AzureCapability =
   | "defender-automation.read"
   | "defender-automation.write"
   | "resourcegraph.read"
-  | "sentinel.enable";
+  | "sentinel.enable"
+  | "policy.assign"
+  | "policy.remediate"
+  | "identity.create"
+  | "sentinel-incidents.read"
+  | "graph-licences.read"
+  | "graph-incidents.read";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -76,6 +110,12 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "defender-automation.write",
   "resourcegraph.read",
   "sentinel.enable",
+  "policy.assign",
+  "policy.remediate",
+  "identity.create",
+  "sentinel-incidents.read",
+  "graph-licences.read",
+  "graph-incidents.read",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([
