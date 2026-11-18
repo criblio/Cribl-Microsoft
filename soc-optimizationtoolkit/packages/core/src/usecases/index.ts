@@ -18,6 +18,7 @@ export * from "./eventhub-target";
 export * from "./defender-export";
 // AZR-98: read the subscription diagnostic settings; create-only Activity Log setting.
 export * from "./activity-log-export";
+export * from "./entra-diagnostic-export";
 // DBT-301: insert routes into a routing table without touching the others.
 export * from "./route-insert";
 // AZR-35: route an onboarding source to Cribl Lake through the unroll pipeline.

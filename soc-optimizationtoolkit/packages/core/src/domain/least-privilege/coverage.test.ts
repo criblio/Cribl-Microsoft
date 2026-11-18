@@ -167,6 +167,12 @@ describe("least-privilege coverage of Azure call sites", () => {
     expect(reached("apps/cribl-app/src/platform/adapters.ts")).toContain("graph.servicePrincipals.read");
     expect(reached("apps/cribl-app/src/platform/adapters.ts")).toContain("graph.subscribedSkus.read");
     expect(reached("apps/cribl-app/src/platform/http.ts")).toContain("entra.token");
+    // CAP-5: the capability audit's Graph incidents probe; CAP-4: the
+    // preflight's Sentinel incidents probe.
+    expect(reached("apps/cribl-app/src/platform/adapters.ts")).toContain("graph.securityIncidents.read");
+    expect(
+      reached("packages/core/src/usecases/permission-preflight/permission-preflight.ts"),
+    ).toContain("sentinel.incidents.read");
   }, 120_000);
 
   it("maps every site with a readable path to at least one registry operation", () => {

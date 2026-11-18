@@ -35,8 +35,10 @@ import {
 import { rolePlanForSetupPath } from "../role-plan";
 import { REQUIRED_ACTIONS, preflightPathForSetupPath } from "../azure-permissions";
 import type { AzureSetupPath } from "../azure-config";
+import { CAPABILITY_FALLBACKS } from "../capabilities";
 import {
   LEAST_PRIVILEGE_FUNCTIONS,
+  LEAST_PRIVILEGE_REGISTRY,
   leastRoleFor,
   privilegeOperation,
 } from "../least-privilege";
@@ -592,7 +594,9 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
     expect(role?.justification).toContain("privileged Entra directory role");
     expect(role?.justification).toContain("change security policy and Conditional Access across the whole tenant");
     expect(role?.justification).toContain("only so Validate's optional Entra ID diagnostic settings check");
-    expect(role?.justification).toContain("We recommend refusing it unless that check is needed.");
+    expect(role?.justification).toContain("the onboarding screen's optional Entra ID Deploy can create (and Remove can delete) the one tenant setting CriblEntraIDLogs");
+    expect(role?.justification).toContain("We recommend refusing it unless that check or that deploy is needed.");
+    expect(role?.withoutIt).toContain("the Entra ID Deploy is refused by Azure");
   });
 
   it("reports both to the preflight as not measured", () => {
@@ -605,8 +609,78 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
     expect(grants).toContainEqual({
       name: "Security Administrator",
       where: "the tenant (Entra ID directory role)",
-      feature: "Check the Entra ID diagnostic settings",
+      feature: "Check, deploy and remove the Entra ID diagnostic setting",
     });
+  });
+});
+
+describe("CAP-2..CAP-5 - measured ahead of their features, asked for by no ticket", () => {
+  // Least privilege: the capability model measures these before any shipped
+  // feature calls them, and a change request must not ask for a role nothing
+  // uses. The feature that calls them (AZR-4, AZR-6, AZR-7) adds its ticket
+  // row from the same registry operation, and this pin then moves with it.
+  const NOT_YET_ASKED = [
+    leastRoleFor("policy.assignment.write"),
+    leastRoleFor("managedIdentity.write"),
+    leastRoleFor("sentinel.incidents.read"),
+    leastRoleFor("graph.securityIncidents.read"),
+  ];
+
+  it("reads Resource Policy Contributor, Managed Identity Contributor, Microsoft Sentinel Reader and SecurityIncident.Read.All from the registry", () => {
+    expect(NOT_YET_ASKED).toEqual([
+      "Resource Policy Contributor",
+      "Managed Identity Contributor",
+      "Microsoft Sentinel Reader",
+      "SecurityIncident.Read.All",
+    ]);
+    expect(leastRoleFor("policy.remediation.write")).toBe("Resource Policy Contributor");
+  });
+
+  it("asks for none of them on any setup path", () => {
+    for (const path of PATHS) {
+      for (const role of NOT_YET_ASKED) {
+        expect(names(path), `${path}: ${role}`).not.toContain(role);
+      }
+    }
+  });
+
+  it("no role-assignment fallback names a role that no setup path's request contains (review r1)", () => {
+    // The role-assignment-request artifact is the setup path's request. An
+    // offer naming a role it leaves out hands over the wrong ticket.
+    const asked = new Set(PATHS.flatMap((path) => names(path)));
+    const registryRoles = new Set(LEAST_PRIVILEGE_REGISTRY.map((row) => row.leastRole));
+    const offers = Object.entries(CAPABILITY_FALLBACKS).filter(
+      ([, fallback]) => fallback?.kind === "role-assignment-request",
+    );
+    expect(offers.map(([capability]) => capability).sort()).toEqual([
+      "identity.create",
+      "policy.assign",
+      "policy.remediate",
+      "role.assign",
+      "sentinel.enable",
+    ]);
+    for (const [capability, fallback] of offers) {
+      for (const role of registryRoles) {
+        if (fallback?.action.includes(role) === true) {
+          expect(asked.has(role), `${capability} names ${role}`).toBe(true);
+        }
+      }
+    }
+    for (const role of NOT_YET_ASKED) {
+      for (const [capability, fallback] of offers) {
+        expect(fallback?.action ?? "", capability).not.toContain(role);
+      }
+    }
+  });
+
+  it("never asks for SecurityEvents.Read.All or Organization.Read.All (AZR-S1; licences need LicenseAssignment.Read.All)", () => {
+    for (const path of PATHS) {
+      expect(names(path)).not.toContain("SecurityEvents.Read.All");
+      expect(names(path)).not.toContain("Organization.Read.All");
+    }
+    expect(graphPermissions(appPermissionPlan("existing")).map((p) => p.name)).toContain(
+      "LicenseAssignment.Read.All",
+    );
   });
 });
 

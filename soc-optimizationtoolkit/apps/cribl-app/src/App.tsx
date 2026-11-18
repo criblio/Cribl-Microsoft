@@ -2283,7 +2283,8 @@ function App() {
   // and the subscription Activity Log diagnostic setting (AZR-98); every
   // other category renders visible and disabled. The only Azure resources it
   // creates are those two, each behind a two-step confirm. The KV document store arrives through makeCloudPorts, so no port
-  // is wired here. requires: [] until CAP-7 measures its actions - see
+  // is wired here. requires: [] by design (capability model: verdicts are
+  // bannered per section; CAP-9 measures the namespace-side actions) - see
   // route-capabilities.ts.
   const azureOnboardingView = (
     <>

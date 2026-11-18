@@ -74,6 +74,8 @@ export * from "./domain/eventhub-discovery";
 export * from "./domain/eventhub-arm";
 // AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
 export * from "./domain/defender-export";
+// CAP-2 / CAP-3: write actions measured ahead of the Azure Policy feature.
+export * from "./domain/capability-enablers";
 // AZR-98: the subscription Activity Log diagnostic setting (create-only).
 export * from "./domain/activity-log-export";
 // AZR-105: Remove and Pause for what the onboarding screen created (pure plan).

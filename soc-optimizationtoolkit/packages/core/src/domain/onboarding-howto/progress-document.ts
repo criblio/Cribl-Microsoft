@@ -120,6 +120,21 @@ export interface ActivityLogSettingRecord {
   readonly ruleId: string;
 }
 
+/**
+ * The Entra ID tenant diagnostic setting the app created (AZR-99), recorded so
+ * a removal can prove it. Keyed by TENANT: the setting is directory-wide, one
+ * per tenant, and a connection switch to another tenant must not find a
+ * record that proves a same-named setting there. Like the Activity Log record,
+ * it holds the rule id the app wrote in place of a description stamp.
+ */
+export interface EntraSettingRecord {
+  readonly tenantId: string;
+  /** The setting's name as written (ENTRA_SETTING_NAME). */
+  readonly settingName: string;
+  /** The eventHubAuthorizationRuleId the PUT wrote. */
+  readonly ruleId: string;
+}
+
 export interface OnboardingProgress {
   readonly sources: Readonly<Partial<Record<OnboardingSourceId, SourceProgress>>>;
   readonly planValues: PlanValues;
@@ -140,6 +155,12 @@ export interface OnboardingProgress {
    * and is never removed by the app.
    */
   readonly activityLogSettings?: readonly ActivityLogSettingRecord[];
+  /**
+   * AZR-99: the Entra ID tenant diagnostic settings the app created, one per
+   * tenant. Optional for the same reason; absent reads as none, and an older
+   * release decodes this key as dropped.
+   */
+  readonly entraSettings?: readonly EntraSettingRecord[];
   /**
    * AZR-102: where the Event Hub plan values (EVENT_HUB_PLAN_KEYS) come from.
    * `section1` - they follow the screen's Event Hub picker, which writes them;
@@ -247,6 +268,9 @@ export function encodeProgress(progress: OnboardingProgress): string {
   const activityLogSettings = [...(progress.activityLogSettings ?? [])]
     .map((r) => ({ subscriptionId: r.subscriptionId, settingName: r.settingName, ruleId: r.ruleId }))
     .sort((a, b) => (a.subscriptionId < b.subscriptionId ? -1 : a.subscriptionId > b.subscriptionId ? 1 : 0));
+  const entraSettings = [...(progress.entraSettings ?? [])]
+    .map((r) => ({ tenantId: r.tenantId, settingName: r.settingName, ruleId: r.ruleId }))
+    .sort((a, b) => (a.tenantId < b.tenantId ? -1 : a.tenantId > b.tenantId ? 1 : 0));
   return JSON.stringify({
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
@@ -259,6 +283,7 @@ export function encodeProgress(progress: OnboardingProgress): string {
     // encodes exactly as it did before AZR-35.
     ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
     ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
+    ...(entraSettings.length > 0 ? { entraSettings } : {}),
     // AZR-102: written only once set, so an older document encodes as before.
     ...(progress.eventHubSource === undefined ? {} : { eventHubSource: progress.eventHubSource }),
   });
@@ -414,6 +439,29 @@ export function decodeProgress(raw: unknown): DecodedProgress {
   } else if (raw["activityLogSettings"] !== undefined) {
     dropped.push("activityLogSettings");
   }
+
+  const entraSettings: EntraSettingRecord[] = [];
+  if (Array.isArray(raw["entraSettings"])) {
+    raw["entraSettings"].forEach((v, i) => {
+      const ok =
+        isRecord(v) &&
+        str(v["tenantId"]) !== null &&
+        str(v["settingName"]) !== null &&
+        str(v["ruleId"]) !== null &&
+        !entraSettings.some((r) => r.tenantId.toLowerCase() === String(v["tenantId"]).toLowerCase());
+      if (!ok) {
+        dropped.push(`entraSettings[${i}]`);
+        return;
+      }
+      entraSettings.push({
+        tenantId: v["tenantId"] as string,
+        settingName: v["settingName"] as string,
+        ruleId: v["ruleId"] as string,
+      });
+    });
+  } else if (raw["entraSettings"] !== undefined) {
+    dropped.push("entraSettings");
+  }
   // AZR-102: anything but the two known values is dropped (and reported), so
   // the document then resolves by the pre-AZR-102 rule.
   const rawSource = raw["eventHubSource"];
@@ -433,6 +481,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         "workerGroup",
         "criblLakeRoutes",
         "activityLogSettings",
+        "entraSettings",
         "eventHubSource",
       ].includes(k)
     ) {
@@ -449,6 +498,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
       workerGroup,
       ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
       ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
+      ...(entraSettings.length > 0 ? { entraSettings } : {}),
       ...(eventHubSource === undefined ? {} : { eventHubSource }),
     },
     dropped,
@@ -686,6 +736,24 @@ export function withoutActivityLogSetting(p: OnboardingProgress, subscriptionId:
   const left = (p.activityLogSettings ?? []).filter((r) => !sameSubscription(r.subscriptionId, subscriptionId));
   const { activityLogSettings: _drop, ...rest } = p;
   return left.length > 0 ? { ...rest, activityLogSettings: left } : rest;
+}
+
+/** The Entra ID setting record for a tenant, or null (AZR-99). */
+export function entraSettingRecord(p: OnboardingProgress, tenantId: string): EntraSettingRecord | null {
+  return (p.entraSettings ?? []).find((r) => sameSubscription(r.tenantId, tenantId)) ?? null;
+}
+
+/** Record the Entra ID setting the app wrote in a tenant, replacing an earlier record for it (AZR-99). */
+export function withEntraSetting(p: OnboardingProgress, record: EntraSettingRecord): OnboardingProgress {
+  const others = (p.entraSettings ?? []).filter((r) => !sameSubscription(r.tenantId, record.tenantId));
+  return { ...p, entraSettings: [...others, record] };
+}
+
+/** Forget the Entra ID setting record of a tenant (AZR-99), after it was removed or found gone. */
+export function withoutEntraSetting(p: OnboardingProgress, tenantId: string): OnboardingProgress {
+  const left = (p.entraSettings ?? []).filter((r) => !sameSubscription(r.tenantId, tenantId));
+  const { entraSettings: _drop, ...rest } = p;
+  return left.length > 0 ? { ...rest, entraSettings: left } : rest;
 }
 
 /** Remember the worker group the operator picked. */

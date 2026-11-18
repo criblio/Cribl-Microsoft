@@ -50,8 +50,15 @@ import {
   DEFENDER_AUTOMATIONS_WRITE,
   DEFENDER_PRICINGS_READ,
 } from "../../domain/defender-export/defender-permissions";
+import {
+  MANAGED_IDENTITY_WRITE,
+  POLICY_ASSIGNMENTS_WRITE,
+  POLICY_REMEDIATIONS_WRITE,
+} from "../../domain/capability-enablers";
+import type { GraphPermissionProbe, GraphProbeResponse } from "../../ports/graph-directory";
 import type { AzurePreflight, CriblPreflight, PermissionReport } from "./permission-preflight";
 import { checkedAzureActions, criblProbeGrantsManage } from "./permission-preflight";
+import { is2xx, prop } from "../arm-http";
 
 // ---------------------------------------------------------------------------
 // Mapping tables (exported as DATA)
@@ -89,6 +96,12 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
     [DEFENDER_AUTOMATIONS_WRITE]: "defender-automation.write",
     // AZR-85 review: Enable Sentinel's solution PUT, at the resource group.
     [operationAction("sentinel.solution.write")]: "sentinel.enable",
+    // CAP-2 / CAP-3. Never in REQUIRED_ACTIONS (nothing calls them yet): the
+    // capability audit evaluates them at the subscription, beside the
+    // Defender actions, through azureCheckVerdicts.
+    [POLICY_ASSIGNMENTS_WRITE]: "policy.assign",
+    [POLICY_REMEDIATIONS_WRITE]: "policy.remediate",
+    [MANAGED_IDENTITY_WRITE]: "identity.create",
   });
 
 /**
@@ -105,9 +118,17 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
  *
  * pricings/read and automations/read stay two-sided: the app reads both at the
  * subscription itself, so the subscription evaluation is their real scope.
+ *
+ * The user-assigned managed identity the Azure Policy assignments run as
+ * (CAP-3) is the same case: it is created in a resource group the operator
+ * picks, so only a subscription grant is a measurement. The two policy writes
+ * (CAP-2) stay two-sided: a management group's grants are inherited and
+ * visible at the subscription, so a miss there is a real denial at the
+ * subscription and above it (domain/capability-enablers).
  */
 export const GRANT_ONLY_AZURE_ACTIONS: ReadonlySet<string> = new Set([
   DEFENDER_AUTOMATIONS_WRITE,
+  MANAGED_IDENTITY_WRITE,
 ]);
 
 /**
@@ -125,7 +146,64 @@ export const AZURE_PROBE_CAPABILITIES: Readonly<Record<string, AzureCapability>>
     // CAP-1. A POST, but a query: Resource Graph has no write, so the probe
     // still proves only a read.
     "resource-graph-query": "resourcegraph.read",
+    // CAP-4. One incident from the configured workspace's Sentinel incidents.
+    "sentinel-incidents-list": "sentinel-incidents.read",
   });
+
+/**
+ * Microsoft Graph permission probe -> the capability it establishes (CAP-5).
+ *
+ * Both are application-permission READS, run by the capability audit through
+ * the optional GraphDirectory probe. Not part of the permission preflight's
+ * report: the preflight reads ARM only, and the RBAC panel shows ARM rows.
+ */
+export const GRAPH_PROBE_CAPABILITIES: Readonly<Record<GraphPermissionProbe, AzureCapability>> =
+  Object.freeze({
+    "subscribed-skus": "graph-licences.read",
+    "security-incidents": "graph-incidents.read",
+  });
+
+/**
+ * The verdict one Graph probe response establishes, or undefined when it
+ * establishes nothing (rule 3).
+ *
+ *   - 2xx WITH at least one row in `value`: granted - Graph returned data it
+ *     returns only to a consented identity.
+ *   - 2xx with no rows: NOTHING. Whether Graph refuses a missing application
+ *     permission with a 403 or answers 200 with nothing in it is unsettled in
+ *     this repo (AZR-111), and a tenant can genuinely have no incidents, so an
+ *     empty answer is evidence of neither.
+ *   - 403 whose error code is {@link GRAPH_PERMISSION_DENIED_CODE}: denied.
+ *     That code is Graph's "insufficient privileges" answer for a missing
+ *     permission. The adapter has already re-minted the token once, so a
+ *     token issued before the consent cannot be the cause.
+ *   - any OTHER 403: nothing. Graph's security API can refuse for reasons
+ *     that are not a missing consent - a tenant not licensed or provisioned
+ *     for Defender XDR - and AZR-6 has to tell those apart, so a refusal is
+ *     recorded as a denial only when it says it is about privileges. Which
+ *     code the security API actually returns for a missing
+ *     SecurityIncident.Read.All is unmeasured (AZR-111; CAP-5's live list).
+ *   - anything else (401, 404, 429, 5xx): nothing - not a permission answer.
+ */
+export function graphProbeVerdict(
+  response: GraphProbeResponse,
+): "granted" | "denied" | undefined {
+  if (is2xx(response.status)) {
+    const value = prop(response.body, "value");
+    return Array.isArray(value) && value.length > 0 ? "granted" : undefined;
+  }
+  if (response.status !== 403) {
+    return undefined;
+  }
+  const code = prop(prop(response.body, "error"), "code");
+  return code === GRAPH_PERMISSION_DENIED_CODE ? "denied" : undefined;
+}
+
+/**
+ * The Graph error code that names a missing privilege. The one 403 a Graph
+ * probe records as denied.
+ */
+export const GRAPH_PERMISSION_DENIED_CODE = "Authorization_RequestDenied";
 
 /**
  * Cribl probe key -> capability. One probe per Cribl capability, exactly.

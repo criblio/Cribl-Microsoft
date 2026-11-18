@@ -45,6 +45,7 @@ import {
 } from "../defender-export/defender-automation";
 import { STANDARD_TIER } from "../defender-export/defender-plans";
 import { DEFAULT_SETTING_NAME } from "../entra-diagnostics/entra-diagnostic-setting";
+import { entraCategoriesDiff } from "../entra-diagnostics/entra-setting-deploy";
 import {
   readDiagnosticSetting,
   settingTargetsNamespace,
@@ -382,10 +383,11 @@ function settingDiffs(
     diffs.push({ field: "eventHubName", expected: autoHubText, actual: setting.hub });
   }
   if (expectedCategories.length > 0) {
-    const off = expectedCategories.filter((c) => !setting.enabled.some((e) => same(e, c)));
-    if (off.length > 0) {
-      diffs.push({ field: "logs", expected: expectedCategories.join(", "), actual: `not enabled: ${off.join(", ")}` });
-    }
+    // The ONE Entra category rule, shared with Deploy (entraCategoriesDiff:
+    // exactly the chosen ones), so Validate and the Entra section never
+    // disagree about the same setting.
+    const logs = entraCategoriesDiff(expectedCategories, setting);
+    if (logs !== null) diffs.push(logs);
   } else if (setting.enabled.length === 0 && setting.enabledGroups.length === 0) {
     diffs.push({ field: "logs", expected: "at least one category enabled", actual: "none enabled" });
   }

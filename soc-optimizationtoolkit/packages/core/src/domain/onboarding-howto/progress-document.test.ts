@@ -25,6 +25,9 @@ import {
   withoutTick,
   activityLogSettingRecord,
   withActivityLogSetting,
+  withEntraSetting,
+  withoutEntraSetting,
+  entraSettingRecord,
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
@@ -151,13 +154,13 @@ describe("progress document codec", () => {
   it("decodes a stored automate as manual where the source is not automatable", () => {
     const raw = JSON.parse(encodeProgress(emptyProgress()));
     raw.sources = {
-      entraId: { chosen: true, mode: "automate" },
+      xdrStreaming: { chosen: true, mode: "automate" },
       defenderExport: { chosen: true, mode: "automate" },
     };
     const { progress, dropped } = decodeProgress(raw);
-    expect(progress.sources.entraId).toEqual({ chosen: true, mode: "manual" });
+    expect(progress.sources.xdrStreaming).toEqual({ chosen: true, mode: "manual" });
     expect(progress.sources.defenderExport).toEqual({ chosen: true, mode: "automate" });
-    expect(dropped).toContain("sources.entraId.mode:automate");
+    expect(dropped).toContain("sources.xdrStreaming.mode:automate");
   });
 
   it("drops and reports unknown source ids, keys and malformed records", () => {
@@ -179,8 +182,8 @@ describe("progress document codec", () => {
 
 describe("transitions", () => {
   it("refuses automate on a non-automatable source", () => {
-    const p = withSourceMode(emptyProgress(), "entraId", "automate");
-    expect(p.sources.entraId?.mode).toBe("manual");
+    const p = withSourceMode(emptyProgress(), "xdrStreaming", "automate");
+    expect(p.sources.xdrStreaming?.mode).toBe("manual");
     expect(withSourceMode(emptyProgress(), "defenderExport", "automate").sources.defenderExport?.mode).toBe(
       "automate",
     );
@@ -439,5 +442,37 @@ describe("strandedCriblSources (AZR-96)", () => {
     expect(strandedCriblSources(emptyProgress(), foreign)).toEqual([]);
     const wrongVersion = { ...JSON.parse(legacy), version: 2 };
     expect(strandedCriblSources(emptyProgress(), wrongVersion)).toEqual([]);
+  });
+});
+
+describe("Entra ID setting records (AZR-99)", () => {
+  const RULE = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n/authorizationRules/send";
+
+  it("keeps one record per tenant, round-trips, and forgets one without touching the other", () => {
+    let p = withEntraSetting(emptyProgress(), { tenantId: "T1", settingName: "CriblEntraIDLogs", ruleId: RULE });
+    p = withEntraSetting(p, { tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: `${RULE}2` });
+    p = withEntraSetting(p, { tenantId: "t2", settingName: "CriblEntraIDLogs", ruleId: RULE });
+    expect(p.entraSettings).toHaveLength(2);
+    expect(entraSettingRecord(p, "T1")?.ruleId).toBe(`${RULE}2`);
+    const back = decodeProgress(JSON.parse(encodeProgress(p))).progress;
+    expect(back.entraSettings?.map((r) => r.tenantId)).toEqual(["t1", "t2"]);
+    expect(entraSettingRecord(back, "t2")).toEqual({ tenantId: "t2", settingName: "CriblEntraIDLogs", ruleId: RULE });
+    const one = withoutEntraSetting(back, "T2");
+    expect(one.entraSettings?.map((r) => r.tenantId)).toEqual(["t1"]);
+    const gone = withoutEntraSetting(one, "t1");
+    expect(gone).not.toHaveProperty("entraSettings");
+    expect(JSON.parse(encodeProgress(gone))).not.toHaveProperty("entraSettings");
+  });
+
+  it("drops and reports malformed and duplicate records, never inventing one", () => {
+    const raw = JSON.parse(encodeProgress(emptyProgress()));
+    raw.entraSettings = [
+      { tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE },
+      { tenantId: "T1", settingName: "CriblEntraIDLogs", ruleId: RULE },
+      { tenantId: "t2", settingName: "CriblEntraIDLogs" },
+    ];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(progress.entraSettings).toEqual([{ tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE }]);
+    expect(dropped).toEqual(["entraSettings[1]", "entraSettings[2]"]);
   });
 });

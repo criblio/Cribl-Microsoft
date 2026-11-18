@@ -957,6 +957,59 @@ const OPERATIONS = {
       "GET /providers/Microsoft.Management/managementGroups/{mg}/providers/Microsoft.PolicyInsights/remediations",
     ],
   },
+  // CAP-2 and CAP-3 (2026-11-17): the writes the Azure Policy logging
+  // initiatives need (backlog.md 6a, AZR-4). Nothing calls them yet; they are
+  // registered so the capability model can measure them from effective
+  // actions ahead of the feature, and so the feature's change request reads
+  // its least role from here rather than restating it.
+  "policy.assignment.write": {
+    id: "policy.assignment.write",
+    calls: [
+      { method: "PUT", path: "{*}/providers/Microsoft.Authorization/policyAssignments/{assignment}", api: "arm" },
+    ],
+    operation: "Microsoft.Authorization/policyAssignments/write",
+    leastRole: "Resource Policy Contributor",
+    alsoGrantedBy: ["Owner", "User Access Administrator"],
+    scope: "managementGroup",
+    scopeNote: "the management group (or subscription) the logging initiative is assigned at",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/management-and-governance",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with CAP-2, after the 2026-11-03 audit: no code assigns a policy yet (AZR-4 is not built). Resource Policy Contributor carries Microsoft.Authorization/policyassignments/*; Contributor does not (its notActions exclude Microsoft.Authorization/*/Write). Documented, not measured.",
+  },
+  "policy.remediation.write": {
+    id: "policy.remediation.write",
+    calls: [
+      { method: "PUT", path: "{*}/providers/Microsoft.PolicyInsights/remediations/{remediation}", api: "arm" },
+    ],
+    operation: "Microsoft.PolicyInsights/remediations/write",
+    leastRole: "Resource Policy Contributor",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "managementGroup",
+    scopeNote: "the management group (or subscription) the remediation runs at",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/management-and-governance",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with CAP-2, after the 2026-11-03 audit: no code starts a remediation yet (AZR-4). DeployIfNotExists acts only on new resources, so the existing ones need a remediation task; Resource Policy Contributor carries Microsoft.PolicyInsights/*. Documented, not measured.",
+  },
+  "managedIdentity.write": {
+    id: "managedIdentity.write",
+    calls: [
+      { method: "PUT", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity}", api: "arm" },
+    ],
+    operation: "Microsoft.ManagedIdentity/userAssignedIdentities/write",
+    leastRole: "Managed Identity Contributor",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resourceGroup",
+    scopeNote: "the resource group the policy's user-assigned managed identity is created in",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/identity",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added with CAP-3, after the 2026-11-03 audit: no code creates a managed identity yet (AZR-4). Every DeployIfNotExists assignment needs a user-assigned identity (backlog.md 6a). Documented, not measured.",
+  },
   "rbac.roleAssignments.read": {
     id: "rbac.roleAssignments.read",
     calls: [
@@ -1156,6 +1209,8 @@ const OPERATIONS = {
     id: "entra.diagnosticSettings.read",
     calls: [
       { method: "GET", path: "/providers/microsoft.aadiam/diagnosticSettings", api: "arm" },
+      // AZR-99: the Entra deploy reads its own setting back by name, and Remove reads it before and after.
+      { method: "GET", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
     ],
     operation: "microsoft.aadiam/diagnosticSettings/read",
     leastRole: "Security Administrator",
@@ -1167,6 +1222,43 @@ const OPERATIONS = {
     audit: [
       "GET /providers/microsoft.aadiam/diagnosticSettings",
     ],
+  },
+  "entra.diagnosticSetting.write": {
+    id: "entra.diagnosticSetting.write",
+    calls: [
+      { method: "PUT", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "microsoft.aadiam/diagnosticSettings/write",
+    // Azure also checks the caller may use the rule the setting names, though
+    // no key is returned to the caller (as for any diagnostic setting).
+    extraActions: [
+      "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action on the rule the setting names",
+    ],
+    leastRole: "Security Administrator",
+    alsoGrantedBy: ["Global Administrator"],
+    scope: "tenant",
+    scopeNote: "the tenant (an Entra directory role, not an Azure role; the app cannot measure it)",
+    citation: "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/howto-stream-logs-to-event-hub",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-99: the Entra ID deploy creates the one tenant diagnostic setting CriblEntraIDLogs. Microsoft documents Security Administrator for creating Entra diagnostic settings; whether a service principal holding it can PUT through ARM is not measured.",
+  },
+  "entra.diagnosticSetting.delete": {
+    id: "entra.diagnosticSetting.delete",
+    calls: [
+      { method: "DELETE", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "microsoft.aadiam/diagnosticSettings/delete",
+    leastRole: "Security Administrator",
+    alsoGrantedBy: ["Global Administrator"],
+    scope: "tenant",
+    scopeNote: "the tenant (an Entra directory role, not an Azure role; the app cannot measure it)",
+    citation: "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/howto-configure-diagnostic-settings",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-99: Remove deletes the tenant diagnostic setting the Entra deploy created, only once the app proved it its own. Not measured - no delete has been made with a reduced identity.",
   },
   "networkWatcher.read": {
     id: "networkWatcher.read",
@@ -1690,6 +1782,26 @@ const OPERATIONS = {
     auditGap:
       "The call arrived with MIG-14 (data allowances) on main and reached this registry in the 2026-11-03 merge, after the audit was taken. Least privilege is from the Microsoft Graph page cited (Application: LicenseAssignment.Read.All; Directory and Organization read are higher), read 2026-11-03.",
   },
+  // CAP-5 (2026-11-17). The Defender XDR usage probe (AZR-6) and the incident
+  // collector on a Defender-portal tenant (AZR-7) list Graph security
+  // incidents. AZR-S1 found the least privilege is SecurityIncident.Read.All,
+  // not the SecurityEvents.Read.All LOG-09 asked for (legacy alerts API).
+  "graph.securityIncidents.read": {
+    id: "graph.securityIncidents.read",
+    calls: [
+      { method: "GET", path: "https://graph.microsoft.com/v1.0/security/incidents", api: "graph" },
+    ],
+    operation: "SecurityIncident.Read.All",
+    leastRole: "SecurityIncident.Read.All",
+    alsoGrantedBy: ["SecurityIncident.ReadWrite.All"],
+    scope: "tenant",
+    scopeNote: "the tenant, consented on the app registration by an Entra administrator",
+    citation: "https://learn.microsoft.com/en-us/graph/api/security-list-incidents?view=graph-rest-1.0",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added with CAP-5, after the 2026-11-03 audit: the capability audit's probe is the only caller (GET security/incidents, $top=1). Least privilege is from the Microsoft Graph page cited (Application: SecurityIncident.Read.All), read 2026-11-17 for AZR-S1.",
+  },
   "entra.token": {
     id: "entra.token",
     calls: [
@@ -2198,6 +2310,25 @@ const OPERATIONS = {
     audit: [
       "GET /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationsManagement/solutions/SecurityInsights({workspace})",
     ],
+  },
+  // CAP-4 (2026-11-17). The incident collector on a tenant not onboarded to
+  // the Defender portal (AZR-7, path B) reads Sentinel incidents; the
+  // permission preflight probes the same list with $top=1.
+  "sentinel.incidents.read": {
+    id: "sentinel.incidents.read",
+    calls: [
+      { method: "GET", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{ws}/providers/Microsoft.SecurityInsights/incidents", api: "arm" },
+    ],
+    operation: "Microsoft.SecurityInsights/incidents/read",
+    leastRole: "Microsoft Sentinel Reader",
+    alsoGrantedBy: ["Reader", "Microsoft Sentinel Responder", "Microsoft Sentinel Contributor", "Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the Sentinel workspace",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/security",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added with CAP-4, after the 2026-11-03 audit: the permission preflight's probe is the only caller (GET incidents, $top=1). Microsoft Sentinel Reader carries Microsoft.SecurityInsights/*/read. Documented; the probe measures it per identity.",
   },
   "sentinel.solution.write": {
     id: "sentinel.solution.write",

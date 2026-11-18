@@ -138,8 +138,9 @@ describe("Reader-only is not deployable (read does not imply write)", () => {
     // did not grant tables/write), + dcr-list + workspace-get + tables-list +
     // resource-graph query all succeed (reader can read everything) - the
     // probes are all OK. The graph response is a row because only a row
-    // counts as an OK query; the assertion is unchanged.
-    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    // counts as an OK query; the assertion is unchanged. The last OK is the
+    // Sentinel incidents probe (CAP-4), which Reader's */read also passes.
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW, OK);
 
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
@@ -225,10 +226,11 @@ describe("Log Analytics Contributor on the workspace is measured there (AZR-85)"
 
   it("does not read the workspace when the group already grants tables/write", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW);
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW, OK);
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
     expect(azure.calls.map((c) => c.path)).not.toContain(WS_PERMISSIONS);
-    expect(azure.calls).toHaveLength(5);
+    // Group perms, four probes, and the Sentinel incidents probe (CAP-4).
+    expect(azure.calls).toHaveLength(6);
     expect(result.workspaceScope).toBe("");
     expect(tableCheck(result.checks)?.granted).toBe(true);
   });
@@ -294,13 +296,14 @@ describe("Log Analytics Contributor on the workspace is measured there (AZR-85)"
 describe("Resource Graph probe", () => {
   it("issues one read-only query, last, on a resource-group path", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW, OK);
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
     // perms at the group + perms at the workspace (AZR-85) + dcr-list +
     // workspace-get + tables-list + the query, in that order: appending keeps
-    // every earlier probe where scripted callers expect it.
-    expect(azure.calls).toHaveLength(6);
+    // every earlier probe where scripted callers expect it. The Sentinel
+    // incidents probe (CAP-4) follows the query for the same reason.
+    expect(azure.calls).toHaveLength(7);
     expect(azure.calls[1]?.path).toBe(
       `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.OperationalInsights/workspaces/${WS}/providers/Microsoft.Authorization/permissions`,
     );
@@ -365,6 +368,56 @@ describe("Resource Graph probe", () => {
 
   it("asks for one row and nothing that could be large", () => {
     expect(RESOURCE_GRAPH_PROBE_QUERY).toMatch(/\| limit 1$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Sentinel incidents probe (CAP-4)
+// ---------------------------------------------------------------------------
+
+describe("Sentinel incidents probe (CAP-4)", () => {
+  const INCIDENTS =
+    `/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.OperationalInsights` +
+    `/workspaces/${WS}/providers/Microsoft.SecurityInsights/incidents`;
+
+  it("reads one incident from the configured workspace, after the Resource Graph query", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW, { status: 200, body: { value: [] } });
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    expect(azure.calls).toHaveLength(6);
+    expect(azure.calls[4]?.path).toBe("/providers/Microsoft.ResourceGraph/resources");
+    const call = azure.calls[5];
+    expect(call?.method).toBe("GET");
+    expect(call?.path).toBe(INCIDENTS);
+    expect(call?.apiVersion).toBe("2025-09-01");
+    expect(call?.query).toEqual({ $top: "1" });
+    // ARM authorizes before Sentinel answers, so an empty list is still a grant.
+    const probe = result.probes.find((p) => p.name === "sentinel-incidents-list");
+    expect(probe?.status).toBe("ok");
+    expect(probe?.label).toBe("Read Microsoft Sentinel incidents");
+  });
+
+  it("reads a 403 as denied and a 404 (no Sentinel on the workspace) as unknown", async () => {
+    const statusFor = async (status: number): Promise<string | undefined> => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW, { status, body: {} });
+      const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+      return result.probes.find((p) => p.name === "sentinel-incidents-list")?.status;
+    };
+    expect(await statusFor(403)).toBe("denied");
+    expect(await statusFor(404)).toBe("unknown");
+  });
+
+  it("is not issued without a workspace, and never decides deploy readiness", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(OWNER), OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", { ...FULL_TARGET, workspaceName: "" });
+    expect(azure.calls.map((c) => c.path)).not.toContain(INCIDENTS);
+    expect(result.probes.map((p) => p.name)).toEqual(["dcr-list", "resource-graph-query"]);
+
+    const denied = new FakeAzureManagement();
+    denied.respondWith(permsResponse(OWNER), OK, OK, OK, GRAPH_ROW, { status: 403, body: {} });
+    expect((await runAzurePreflight(denied, "existing-rg", FULL_TARGET)).hasRequiredAccess).toBe(true);
   });
 });
 
@@ -572,10 +625,12 @@ describe("partial render", () => {
 
   it("renders the Azure half when the RBAC permissions fetch itself fails", async () => {
     const azure = new FakeAzureManagement();
-    // perms 403 (denied), then the 4 read probes still run and can be denied
-    // too (the fourth, the Resource Graph query, joined with CAP-1).
+    // perms 403 (denied), then the 5 read probes still run and can be denied
+    // too (the fourth, the Resource Graph query, joined with CAP-1; the
+    // fifth, the Sentinel incidents list, with CAP-4).
     azure.respondWith(
       { status: 403, body: { error: { code: "AuthorizationFailed" } } },
+      { status: 403, body: {} },
       { status: 403, body: {} },
       { status: 403, body: {} },
       { status: 403, body: {} },

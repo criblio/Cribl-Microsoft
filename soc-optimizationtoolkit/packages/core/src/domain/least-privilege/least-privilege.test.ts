@@ -85,3 +85,35 @@ describe("least-privilege registry", () => {
     ]);
   });
 });
+
+describe("the capability audit's optional probes (CAP-4, CAP-5; review r1)", () => {
+  // The probes only annotate. A core row would let anything that derives the
+  // asked-for roles from core functions ask for Microsoft Sentinel Reader and
+  // SecurityIncident.Read.All on every setup path.
+  const PROBE_ONLY: OperationId[] = ["sentinel.incidents.read", "graph.securityIncidents.read"];
+
+  it("registers them under the feature-necessity capability-probes function", () => {
+    const fn = privilegeFunction("capability-probes");
+    expect(fn.necessity).toBe("feature");
+    expect(fn.operations).toEqual([
+      "sentinel.incidents.read",
+      "entra.token",
+      "graph.subscribedSkus.read",
+      "graph.securityIncidents.read",
+    ]);
+  });
+
+  it("gives no core function a probe-only operation", () => {
+    const core = LEAST_PRIVILEGE_REGISTRY.filter((row) => row.necessity === "core");
+    for (const id of PROBE_ONLY) {
+      expect(core.filter((row) => row.operationId === id), id).toEqual([]);
+    }
+    expect(privilegeFunction("permission-check").operations).toEqual([
+      "rbac.permissions.read",
+      "dcr.list",
+      "workspace.read",
+      "tables.list",
+      "resourceGraph.query",
+    ]);
+  });
+});

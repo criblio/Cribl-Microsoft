@@ -1280,6 +1280,32 @@ or REST collector, is `source.manage`.
 > with the Defender `pricings`/`automations` actions and the namespace rule
 > `listKeys/action`.
 
+> BUILT 2026-11-17 (CAP-2..CAP-5, verified pins only): `policy.assign`,
+> `policy.remediate` and `identity.create` are measured from the subscription's
+> effective actions in the background audit's existing Defender read (no probe;
+> the identity write grant-only); `sentinel-incidents.read` by a one-incident
+> preflight probe of the workspace; `graph-licences.read` and
+> `graph-incidents.read` by two one-row Graph reads in the audit, where an empty
+> 200 records nothing (AZR-111). The Graph scope is `SecurityIncident.Read.All`,
+> not `SecurityEvents.Read.All` (AZR-S1), and the licence read is measured by
+> `subscribedSkus` itself, which `LicenseAssignment.Read.All` (already asked)
+> satisfies more narrowly than `Organization.Read.All`. No change request asks
+> for any of these until AZR-4, AZR-6 or AZR-7 calls them. Every verdict awaits a
+> live audit. REVIEW R1 (same day, pins): the enablers are evaluated on every
+> setup path (subscription-scope paths reuse the preflight's own read); a Graph
+> 403 is a denial only with error code `Authorization_RequestDenied`, since the
+> security API may refuse an unlicensed tenant; one token re-mint per audit; the
+> probe operations sit in a `feature` function, not the core permission check;
+> and the enabler fallbacks name no role the generated request leaves out.
+> REVIEW R3 (2026-11-18, pins): the one-mint budget now also covers the mint a
+> probe makes on a fresh page load (that token is never re-minted on its own
+> 401/403), so the stated cost - at most one mint and three GETs - holds. Two
+> limits recorded for AZR-4: `policy.assign` is measured at the SUBSCRIPTION and
+> proves nothing about a management-group assignment, and the three enablers
+> are not the complete set - the assignment identity's role grants need
+> `role.assign`, and a user-assigned identity reference probably needs
+> `userAssignedIdentities/assign/action` (CAP-12, unconfirmed).
+
 > AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
 > workflow, so verified none): EXTEND the existing Event Hub surface; do not build
 > a second one. Event Hub Discovery is single-subscription and read-only -
@@ -3467,7 +3493,9 @@ commit markers are a guess, and a wrong guess refuses rather than commits),
 whether the `/products/stream/groups` routes answer through the app proxy, the
 metrics label form for the new input, and whether Cribl accepts the
 `queueName` expression. ADR 0007's live-verification list is the full set;
-AZR-30 to AZR-34 close only after it.
+AZR-30 to AZR-34 close only after it. (Amended 2026-11-17: AZR-32 and AZR-34
+closed on pins; the unobserved items are AZR-112 to AZR-115, per ADR 0007's
+closing amendment.)
 
 ## 25. DBT-223: Rule Coverage scopes a column to log types, not to the whole solution - 2026-10-30
 

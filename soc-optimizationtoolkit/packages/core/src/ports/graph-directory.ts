@@ -58,4 +58,50 @@ export interface GraphDirectory {
   readSubscribedSkus(): Promise<
     { kind: "read"; body: unknown } | { kind: "denied"; status: number; detail: string }
   >;
+
+  /**
+   * OPTIONAL (CAP-5): one minimal Graph read that measures an application
+   * permission for the capability audit. `subscribed-skus` is
+   * GET /v1.0/subscribedSkus?$select=skuId (LicenseAssignment.Read.All, or
+   * Organization.Read.All); `security-incidents` is
+   * GET /v1.0/security/incidents?$top=1 (SecurityIncident.Read.All).
+   *
+   * Resolves with the raw status and body for EVERY HTTP answer - core decides
+   * what it proves (capability-mapping graphProbeVerdict) - after the same
+   * single token re-mint on 401/403 the other reads do, unless
+   * `options.remint` is false. Rejects only on a transport or credential-slot
+   * failure. Optional because a shell or a test fake without it simply leaves
+   * both capabilities unmeasured.
+   */
+  probePermission?(
+    probe: GraphPermissionProbe,
+    options?: GraphProbeOptions,
+  ): Promise<GraphProbeResponse>;
+}
+
+/** How one Graph probe may spend requests. */
+export interface GraphProbeOptions {
+  /**
+   * Whether a 401/403 may re-mint the Graph token and retry (default true).
+   * The audit passes false once a probe in the same audit has re-minted: a
+   * token minted seconds ago already reflects current consent, so a second
+   * mint would cost a token POST, a KV write and a repeat GET for nothing.
+   */
+  remint?: boolean;
+}
+
+/** The Graph reads the capability audit probes with (CAP-5). */
+export type GraphPermissionProbe = "subscribed-skus" | "security-incidents";
+
+/** A Graph probe's HTTP answer, uninterpreted. */
+export interface GraphProbeResponse {
+  status: number;
+  body: unknown;
+  /**
+   * True when the adapter minted the Graph token for this probe - before its
+   * first GET (no token for this tenant was held) or as the 401/403 retry -
+   * so the answer already reflects current consent and the audit spends its
+   * one-mint budget on it.
+   */
+  reminted?: boolean;
 }

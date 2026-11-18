@@ -104,8 +104,8 @@ describe("the declaration", () => {
   });
 
   it("the coverage check fails when a source becomes automatable undeclared (the pin can fail)", () => {
-    const planted = { ...ITEM_AVAILABILITY, entraId: { status: "available" as const } };
-    expect(undeclaredAutomatableItems(planted, AUTOMATION_PERMISSIONS)).toEqual(["entraId"]);
+    const planted = { ...ITEM_AVAILABILITY, xdrStreaming: { status: "available" as const } };
+    expect(undeclaredAutomatableItems(planted, AUTOMATION_PERMISSIONS)).toEqual(["xdrStreaming"]);
   });
 
   it("a not-built source has no declaration: there is nothing to automate, so no banner", () => {

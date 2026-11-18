@@ -160,8 +160,8 @@ const NOT_BUILT_REASON = "Not available yet - this source cannot be deployed fro
 
 /**
  * Availability per catalog item. The Defender for Cloud alert export (AZR-3)
- * and the subscription Activity Log setting (AZR-98) are built; Entra (AZR-2),
- * the policy initiatives and the guided XDR portal flow render as coming-soon
+ * the subscription Activity Log setting (AZR-98) and the Entra ID tenant
+ * setting (AZR-99) are built; the policy initiatives and the guided XDR portal flow render as coming-soon
  * with disabled rows (plan outOfScope). The Activity Log row sits in the
  * direct-configuration (`script`) section: its automation is one subscription
  * diagnostic setting, not a policy (AZR-101).
@@ -177,7 +177,7 @@ export const ITEM_AVAILABILITY: Readonly<Record<OnboardingItemId, ItemAvailabili
   diagnosticSettingsInitiative: { status: "not-built", reason: NOT_BUILT_REASON },
   communityPolicyInitiative: { status: "not-built", reason: NOT_BUILT_REASON },
   activityLog: { status: "available" },
-  entraId: { status: "not-built", reason: NOT_BUILT_REASON },
+  entraId: { status: "available" },
   defenderExport: { status: "available" },
   xdrStreaming: { status: "not-built", reason: NOT_BUILT_REASON },
 };
