@@ -8475,7 +8475,14 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   made while progress was loading is written once progress becomes writable,
   and following section 1 with nothing picked says the names shown are the
   last saved. Pinned and mutation-checked; Live Preview verification is
-  pending.
+  pending. RE-REVIEW FIX: the policy identity's Event Hubs role scope now
+  names the namespace where it lives (a sweep pin holds every namespace path
+  any step prints to that location); Validate's required values resolve the
+  namespace location before reporting a value missing, and need the shared
+  subscription only for the Defender export and Activity Log checks; a tick
+  fingerprint records the resolved namespace location under the shared key's
+  name, so naming the same address explicitly does not stale a tick. Pinned
+  and mutation-checked; Live Preview verification is pending.
 
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`

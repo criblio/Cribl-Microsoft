@@ -95,13 +95,12 @@ export function withEventHubLocation(v: PlanValues): PlanValues {
 }
 
 /**
- * A blank namespace location key MEANS its shared key (eventHubLocation), so a
- * fingerprint reads it as that key: name and value. A tick taken before these
- * keys existed fingerprinted the shared subscription and resource group, and
- * reading a blank one this way reproduces that fingerprint exactly, so an
- * upgrade does not mark every done Event Hub step as done against older
- * values. It also keeps the fingerprint honest: with the key blank, changing
- * the shared value does move the namespace.
+ * The shared key each namespace location key falls back to (eventHubLocation),
+ * and the canonical name a fingerprint records it under. A tick taken before
+ * these keys existed fingerprinted the shared subscription and resource group;
+ * recording the resolved location under those names reproduces it exactly, so
+ * an upgrade does not mark every done Event Hub step stale. With the key blank,
+ * changing the shared value still moves the namespace, and the tick goes stale.
  */
 const BLANK_MEANS: Readonly<Partial<Record<PlanValueKey, PlanValueKey>>> = {
   eventHubSubscriptionId: "subscriptionId",
@@ -160,12 +159,20 @@ export function defaultPlanValues(
  * key holds.
  */
 export function planFingerprint(values: PlanValues, keys: readonly PlanValueKey[]): string {
-  const read = [...new Set(keys)].map((k) => {
+  // An Event Hub location key is fingerprinted by its RESOLVED value under ONE
+  // canonical name, its shared key's (AZR-102 re-review): whether the plan
+  // names the namespace's resource group itself or leaves it to the shared one,
+  // the same address gives the same fingerprint, and a tick recorded before
+  // these keys existed (which used the shared names) still matches.
+  const entries = [...new Set(keys)].map((k): [string, string] => {
     const shared = BLANK_MEANS[k];
-    return shared !== undefined && planValueOf(values, k) === "" ? shared : k;
+    if (shared === undefined) return [k, planValueOf(values, k)];
+    const own = planValueOf(values, k);
+    return [shared, own !== "" ? own : planValueOf(values, shared)];
   });
-  const sorted = [...new Set(read)].sort();
-  return JSON.stringify(sorted.map((k) => [k, planValueOf(values, k)]));
+  const unique = [...new Map(entries.map((e) => [JSON.stringify(e), e])).values()];
+  unique.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0) : a[0] < b[0] ? -1 : 1));
+  return JSON.stringify(unique);
 }
 
 /** A plan value as every comparison reads it: unset is "", and spaces at either end do not count. */

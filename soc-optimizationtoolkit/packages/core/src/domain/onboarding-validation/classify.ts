@@ -66,11 +66,11 @@ import type {
 } from "../onboarding-howto/check-kinds";
 import {
   PLAN_VALUE_LABELS,
-  missingValues,
   type PlanValues,
 } from "../onboarding-howto/plan-values";
 import {
   CHECK_REQUIRED_VALUES,
+  requiredMissing,
   DEFAULT_ARRIVAL_WINDOW,
   STORAGE_READER_ROLES,
   planNamespace,
@@ -715,7 +715,7 @@ export function classifyCheck(
   reads: readonly ListRead<unknown>[],
   expectations: CheckExpectations = {},
 ): StepVerdict {
-  const missing = missingValues(values, CHECK_REQUIRED_VALUES[kind]);
+  const missing = requiredMissing(values, CHECK_REQUIRED_VALUES[kind]);
   if (missing.length > 0) {
     return unknown("missing-value", `Set ${missing.map((k) => PLAN_VALUE_LABELS[k].label).join(", ")} first.`);
   }

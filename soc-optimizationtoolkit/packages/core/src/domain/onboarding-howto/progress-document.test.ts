@@ -314,6 +314,18 @@ describe("where the Event Hub plan values come from (AZR-102)", () => {
     const located = { ...p.planValues, eventHubResourceGroup: "rg-eh" };
     expect(planFingerprint(located, now)).not.toBe(before);
     expect(planFingerprint({ ...located, resourceGroup: "r2" }, now)).toBe(planFingerprint(located, now));
+    // Re-review: naming the SAME address explicitly (following section 1 and
+    // picking the namespace in the shared resource group) is no change.
+    const explicitSame = { ...p.planValues, eventHubSubscriptionId: "s", eventHubResourceGroup: "r" };
+    expect(planFingerprint(explicitSame, now)).toBe(before);
+    expect(planFingerprint(explicitSame, [...now, "subscriptionId", "resourceGroup"])).toBe(before);
+    // A step that uses both, with the namespace elsewhere, records both values.
+    expect(planFingerprint(located, ["resourceGroup", "eventHubResourceGroup"])).toBe(
+      JSON.stringify([
+        ["resourceGroup", "r"],
+        ["resourceGroup", "rg-eh"],
+      ]),
+    );
   });
 });
 

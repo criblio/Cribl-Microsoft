@@ -512,3 +512,36 @@ describe("the Cribl principal's Event Hubs receive role", () => {
     expect(howToStep("eh-rule-listen")!.warning).toMatch(/Entra ID/);
   });
 });
+
+// AZR-102 re-review: the policy identity's Event Hubs role scope built the
+// namespace path from the SHARED subscription and resource group while its CLI
+// line used the namespace's own, so a namespace elsewhere got a scope that
+// does not exist.
+describe("every Event Hub namespace address uses the namespace's own location", () => {
+  const ELSEWHERE: PlanValues = {
+    ...FULL,
+    subscriptionId: "sub-shared",
+    resourceGroup: "rg-shared",
+    eventHubSubscriptionId: "sub-eh",
+    eventHubResourceGroup: "rg-eh",
+  };
+
+  it("the policy identity's Event Hubs role scope names the namespace where it lives", () => {
+    const rows = renderStep(howToStep("policy-identity")!, ELSEWHERE).values;
+    const scope = rows.find((r) => r.label === `${LEGACY_WRITER.identityRoles[1].roleName} scope`)?.value;
+    expect(scope).toBe(`/subscriptions/sub-eh/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/${FULL.namespace}`);
+  });
+
+  it("no step prints a namespace path under the shared subscription or resource group", () => {
+    let paths = 0;
+    for (const step of ALL_HOWTO_STEPS) {
+      for (const text of renderedTexts(renderStep(step, ELSEWHERE, ["Standard"]))) {
+        for (const m of text.matchAll(/\/subscriptions\/[^/\s"]+\/resourceGroups\/[^/\s"]+\/providers\/Microsoft\.EventHub\/namespaces\//g)) {
+          paths++;
+          expect(m[0], step.id).toBe("/subscriptions/sub-eh/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/");
+        }
+      }
+    }
+    expect(paths).toBeGreaterThan(10);
+  });
+});

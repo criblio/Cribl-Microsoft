@@ -24,7 +24,7 @@ import { coverageItem } from "../coverage-model";
 import { COMMUNITY_TIER_SERVICES } from "../coverage-model/coverage-catalog";
 import { LEGACY_WRITER, TOOLKIT_MARKER_KEY } from "../logging-map/ownership";
 import type { PlanValues } from "../onboarding-howto/plan-values";
-import { planRuleId } from "./eventhub-steps";
+import { planNamespace, planRuleId } from "./eventhub-steps";
 import type { HowToStep } from "./steps";
 
 /**
@@ -239,11 +239,8 @@ export const POLICY_IDENTITY_STEP: HowToStep = {
     },
     {
       label: `${EVENTHUB_ROLE.roleName} scope`,
-      value: eventHubNamespacePath({
-        subscriptionId: v.subscriptionId,
-        resourceGroup: v.resourceGroup,
-        name: v.namespace,
-      }),
+      // The namespace where it lives (AZR-102), as the CLI line's NS_TEMPLATE says.
+      value: eventHubNamespacePath(planNamespace(v)),
     },
   ],
   rbac: [

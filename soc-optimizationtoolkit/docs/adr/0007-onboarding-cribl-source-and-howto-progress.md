@@ -96,8 +96,15 @@ address built from the plan (the Event Hub, Entra, Activity Log, policy and
 XDR steps, Validate, the Cribl source plan, the screen's rule read and the
 tenant inventory's archive evidence) goes through `eventHubLocation`, which
 falls back to the shared values when the namespace's own are blank, so a plan
-saved before them addresses its namespace exactly as it did. A fingerprint
-leaves those two keys out while blank, so ticks taken before them stay done.
+saved before them addresses its namespace exactly as it did. Validate's
+required values resolve the same way, so a blank shared resource group does
+not block an Event Hub check whose namespace has its own; the shared
+subscription stays required only for the checks listed on it (Defender export,
+Activity Log setting). A tick fingerprint records each namespace location key
+by its RESOLVED value under one canonical name, the shared key's, so ticks
+taken before these keys existed stay done, and naming the same address
+explicitly (following section 1 with the namespace in the shared resource
+group) changes nothing.
 If progress is still loading when a pick lands, the pick is written once
 progress becomes writable. With nothing picked (the pick is not kept across a
 reload), a plan that follows section 1 keeps its last saved names and says

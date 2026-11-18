@@ -157,7 +157,35 @@ describe("requestsFor: the paths come from the owning builders", () => {
 
   it("eh-rule-manage reads the same rules listing as eh-rule-send, so a run reads it once", () => {
     expect(requestsOf("eh-rule-manage", {})).toEqual(requestsOf("eh-rule-send", {}));
-    expect(CHECK_REQUIRED_VALUES["eh-rule-manage"]).toEqual(["subscriptionId", "resourceGroup", "namespace", "sendRule"]);
+    expect(CHECK_REQUIRED_VALUES["eh-rule-manage"]).toEqual([
+      "eventHubSubscriptionId",
+      "eventHubResourceGroup",
+      "namespace",
+      "sendRule",
+    ]);
+  });
+
+  // AZR-102 re-review: with the shared resource group blank and the
+  // namespace's own set, Validate said "missing Resource group" and sent no
+  // Event Hub read although the steps rendered fine.
+  it("an Event Hub check is satisfied by the namespace's own location, and still needs the shared one only where it reads it", () => {
+    const own: PlanValues = { ...FULL, resourceGroup: "", eventHubResourceGroup: "rg-eh" };
+    const r = requestsFor("eh-namespace", own, AUDIT);
+    expect(r.kind).toBe("requests");
+    expect(r.kind === "requests" ? r.requests.map((q) => q.request.path) : []).toEqual([
+      "/subscriptions/sub-1/resourceGroups/rg-eh/providers/Microsoft.EventHub/namespaces/ns1",
+    ]);
+    expect(arrivalRequestFor(own, "h1").kind).toBe("request");
+    // Both blank: the Event Hub key is what is reported missing.
+    expect(requestsFor("eh-namespace", { ...FULL, resourceGroup: "" }, AUDIT)).toEqual({
+      kind: "missing",
+      missing: ["eventHubResourceGroup"],
+    });
+    // The export and the Activity Log setting are listed on the SHARED subscription.
+    const noSharedSub: PlanValues = { ...FULL, subscriptionId: "", eventHubSubscriptionId: "sub-eh" };
+    expect(requestsFor("defender-export", noSharedSub, AUDIT)).toEqual({ kind: "missing", missing: ["subscriptionId"] });
+    expect(requestsFor("activity-log-setting", noSharedSub, AUDIT)).toEqual({ kind: "missing", missing: ["subscriptionId"] });
+    expect(requestsFor("eh-hub", noSharedSub, AUDIT).kind).toBe("requests");
   });
 
   it("policy-definition is ONE GET listing the custom definitions at the management group", () => {
@@ -239,8 +267,8 @@ describe("checkExpectationsFor", () => {
 describe("requestsFor: eh-role-receiver", () => {
   it("needs the namespace and the Cribl principal's object id", () => {
     expect(CHECK_REQUIRED_VALUES["eh-role-receiver"]).toEqual([
-      "subscriptionId",
-      "resourceGroup",
+      "eventHubSubscriptionId",
+      "eventHubResourceGroup",
       "namespace",
       "criblPrincipalObjectId",
     ]);
