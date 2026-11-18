@@ -33,6 +33,8 @@ import {
   capabilityAuditCacheKey,
   capabilityAuditKey,
   emptyCapabilitySet,
+  mergeCapabilitySets,
+  supersedeCapabilitySet,
   parseCapabilitySet,
   serializeCapabilitySet,
   shouldRunAudit,
@@ -267,29 +269,62 @@ export async function loadCachedCapabilities(
 }
 
 /**
- * Persist a set under `tenantId`'s key; a write failure only costs a re-audit
- * next launch.
+ * MERGE a writer's measurements into `tenantId`'s cached set and persist the
+ * result; returns the set as stored (or as it would have been, when the write
+ * fails). A write failure only costs a re-audit next launch.
  *
- * Exported because the RBAC preflight panel measures the same thing on demand
- * and should feed the same cache rather than run a competing audit beside it.
- * Safe for either writer: the set carries the connection it was measured
- * against, so a set stored for one connection can never be read AS another's,
- * and the per-tenant key means it never evicts another tenant's audit.
+ * Exported because the RBAC preflight panel measures part of the same thing on
+ * demand and should feed the same cache rather than run a competing audit
+ * beside it. Safe for either writer:
+ *   - the set carries the connection it was measured against, so a set stored
+ *     for one connection can never be read AS another's, and the per-tenant key
+ *     means it never evicts another tenant's audit;
+ *   - it MERGES rather than replaces (CAP-11, mergeCapabilitySets): each writer
+ *     measures a different subset, and a replace by the panel used to drop
+ *     every verdict only the audit measures (subscription-scope enablers,
+ *     Defender on existing-rg, Graph). A verdict is now replaced only by a
+ *     newer measurement of the same capability.
+ *
+ * `options.supersede` is for a writer that ATTEMPTED every capability - the
+ * app-level audit, which measures everything the panel measures and more. It
+ * replaces every verdict older than its own run, so a capability it tried and
+ * could not settle reads unknown rather than keeping its own stale earlier
+ * grant (supersedeCapabilitySet). Only a measurement newer than the run - a
+ * panel that saved meanwhile - survives it. The panel omits it and merges.
+ *
+ * A READ FAILURE SKIPS THE WRITE. With the cached set unreadable there is
+ * nothing to merge over, and writing the incoming set alone would erase
+ * whatever the other writer measured - the defect this exists to prevent. The
+ * skipped write costs at most a re-audit.
  */
 export async function saveCapabilityAudit(
   cache: ContentCache | undefined,
   set: CapabilitySet,
   tenantId: string,
   logger?: Logger,
-): Promise<void> {
+  options: { supersede?: boolean } = {},
+): Promise<CapabilitySet> {
   if (cache === undefined) {
-    return;
+    return set;
   }
+  const key = capabilityAuditCacheKey(tenantId);
+  let stored: CapabilitySet;
   try {
-    await cache.set(capabilityAuditCacheKey(tenantId), serializeCapabilitySet(set));
+    stored = parseCapabilitySet(await cache.get(key));
+  } catch (err) {
+    logger?.info("capability-audit: cache read before write failed; not writing", {
+      error: errText(err),
+    });
+    return set;
+  }
+  const merged =
+    options.supersede === true ? supersedeCapabilitySet(stored, set) : mergeCapabilitySets(stored, set);
+  try {
+    await cache.set(key, serializeCapabilitySet(merged));
   } catch (err) {
     logger?.info("capability-audit: cache write failed", { error: errText(err) });
   }
+  return merged;
 }
 
 /**
@@ -377,12 +412,20 @@ export async function runCapabilityAudit(
     ...measured,
     verdicts: { ...subscription, ...graph, ...measured.verdicts },
   };
-  await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger);
+  // The audit attempted every capability, so it SUPERSEDES the cached set
+  // (CAP-11 review round 1): a capability this run tried and could not settle
+  // - a Graph probe that rejected or answered inconclusively, a subscription
+  // read that failed - reads unknown rather than keeping an earlier grant. Only
+  // a panel measurement saved after this run started survives. What the caller
+  // renders is what the next launch will read.
+  const stored = await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger, {
+    supersede: true,
+  });
 
   logger?.info("capability-audit: audited", {
     trigger: input.trigger,
     reason: decision.reason,
     measured: Object.keys(set.verdicts).length,
   });
-  return { set, key, report, decision };
+  return { set: stored, key, report, decision };
 }
