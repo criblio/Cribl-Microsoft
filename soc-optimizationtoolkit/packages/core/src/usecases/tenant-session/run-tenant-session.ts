@@ -23,12 +23,18 @@
  *      holder's and unexpired. Otherwise it is unknown - its answers may be
  *      another tenant's.
  *   6. Restore the ACTIVE connection's credential and tokens, whatever happened
- *      - the same order: switching, credential, tokens, owner.
- *   7. Release the lease, unless it has already expired (it may be someone
- *      else's by then).
+ *      - the same order: switching, credential, tokens, owner. When a restore
+ *      is needed the lease is re-checked first and renewed while no other
+ *      holder has it; the restore runs even when another holder does (see
+ *      restoreAtEnd for why).
+ *   7. Release the lease - only when this batch never saw another holder's
+ *      lease and a re-read still names this holder.
  *
  * THE BATCH FORM (AZR-90). {@link runTenantSessionBatch} holds ONE lease and
- * ONE exclusive section across many tenants: steps 3 to 5b run per tenant,
+ * ONE exclusive section across many tenants, both taken by the FIRST run that
+ * passes its step-1 refusals (a batch of refused tenants touches nothing, and
+ * a run refused by another tab's lease leaves the next run free to try
+ * again): steps 3 to 5b run per tenant,
  * swapping straight from the last tenant read to the next (A to B to C), and
  * steps 6 and 7 run ONCE when the batch's body settles. Before every tenant
  * after the first the lease is re-read and renewed, so a long Read all never
@@ -124,6 +130,12 @@ const DEFERRED: TenantRestore = { kind: "deferred" };
 const IN_DOUBT = Symbol("in-doubt");
 type SlotHolds = TenantProfile | null | typeof IN_DOUBT;
 
+/** A batch's exclusive section while it is open: `exit` lets it restore and close; `done` is that restore. */
+interface OpenSection {
+  readonly exit: () => void;
+  readonly done: Promise<TenantRestore>;
+}
+
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -204,23 +216,19 @@ export async function runTenantSessionBatch<R>(
     for (let i = 0; i < count; i++) await pacer?.acquire(signal);
   };
 
-  // 2. The lease. Refused: every run says why, nothing else is touched.
-  const takenAt = deps.now();
-  const leaseRefusal = await takeLease();
-  if (leaseRefusal !== null) {
-    const refusedSession: TenantSession = {
-      runForTenant: async <T>(profile: TenantProfile) =>
-        refusal<T>(slot, active, profile) ??
-        unknownRun<T>(normalizeTenantId(profile.config.tenantId), "lease", leaseRefusal),
-      runBatch: async <S>(inner: (session: TenantSession) => Promise<S>) => ({
-        value: await inner(refusedSession),
-        restore: NOT_NEEDED,
-      }),
-    };
-    return { value: await body(refusedSession), restore: NOT_NEEDED };
-  }
   const ttl = deps.leaseTtlMs ?? DEFAULT_TENANT_LEASE_TTL_MS;
-  let expiresAt = takenAt + ttl;
+  // 2. The lease and the exclusive section are taken LAZILY, by the first run
+  // that passes its refusals (review round 2): a batch whose every tenant is
+  // refused, or that never asks for a tenant, writes no lease and never blocks
+  // another screen's Azure batch. A lease another tab holds refuses that run
+  // only; the next run tries again, since nothing was touched.
+  let takenAt = 0;
+  let expiresAt = 0;
+  /** Set once this batch SAW another holder's lease: this batch then never releases it. */
+  let leaseLost = false;
+  /** The open exclusive section, once entered: `exit` lets it run the restore and close. */
+  let held: OpenSection | null = null;
+  let acquiring: Promise<string | null> | null = null;
 
   let ownerWrites = 0;
   const writeId = (): string => `${deps.holderId}:${takenAt}:${++ownerWrites}`;
@@ -244,7 +252,6 @@ export async function runTenantSessionBatch<R>(
 
   // What the slot holds now. It starts as the active connection's.
   let holds: SlotHolds = active;
-  let runs = 0;
 
   const session: TenantSession = {
     runForTenant: runOne,
@@ -255,38 +262,67 @@ export async function runTenantSessionBatch<R>(
   let restored: TenantRestore = NOT_NEEDED;
   let value: R;
   try {
-    value = await slot.exclusive(async () => {
-      try {
-        return await body(session);
-      } finally {
-        // 6. Restore ONCE, whatever happened - body threw, a swap failed half-way, a cancel.
-        restored = await restoreIfNeeded();
-      }
-    });
+    value = await body(session);
   } finally {
-    // 7. Release, unless expired - an expired lease may be someone else's now.
-    if (deps.now() < expiresAt) {
+    if (acquiring !== null) await acquiring;
+    const open = held as OpenSection | null;
+    if (open !== null) {
+      // 6. Restore ONCE, inside the section, whatever happened - body threw,
+      // a swap failed half-way, a cancel.
+      open.exit();
       try {
-        await documents.save(CREDENTIAL_LEASE_KEY, releasedLease());
+        restored = await open.done;
       } catch (err) {
-        logger?.warn("tenant-session: lease not released; it expires on its own", { error: errText(err) });
+        restored = { kind: "failed", reason: errText(err) };
       }
+      // 7. Release - only a lease that still names this holder.
+      await releaseLease();
     }
   }
   return { value, restore: restored };
 
   // -- the steps ------------------------------------------------------------
 
+  /** Take the lease, then enter the exclusive section. Null once both are held; otherwise why not. */
+  function acquire(): Promise<string | null> {
+    acquiring ??= (async (): Promise<string | null> => {
+      const at = deps.now();
+      const refused = await takeLease(at);
+      if (refused !== null) return refused;
+      takenAt = at;
+      expiresAt = at + ttl;
+      let entered!: () => void;
+      const inside = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      let exit!: () => void;
+      const leave = new Promise<void>((resolve) => {
+        exit = resolve;
+      });
+      const done = slot.exclusive(async () => {
+        entered();
+        await leave;
+        return restoreAtEnd();
+      });
+      held = { exit, done };
+      await Promise.race([inside, done.then(() => undefined)]);
+      return null;
+    })().finally(() => {
+      acquiring = null;
+    });
+    return acquiring;
+  }
+
   /** Null once the lease is this holder's; otherwise why not. */
-  async function takeLease(): Promise<string | null> {
+  async function takeLease(at: number): Promise<string | null> {
     const leaseRead = await documents.load(CREDENTIAL_LEASE_KEY);
-    const verdict = leaseHeldByOther(leaseRead, deps.holderId, takenAt);
+    const verdict = leaseHeldByOther(leaseRead, deps.holderId, at);
     if (verdict.held === "unknown") return `The credential lease could not be read (${verdict.reason}).`;
     if (verdict.held) {
       return "Another tab of this app is reading a tenant through the shared credential right now. Try again when it finishes.";
     }
     try {
-      await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, takenAt, deps.leaseTtlMs ?? DEFAULT_TENANT_LEASE_TTL_MS));
+      await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, at, ttl));
     } catch (err) {
       return `The credential lease could not be taken (${errText(err)}).`;
     }
@@ -307,7 +343,10 @@ export async function runTenantSessionBatch<R>(
       return `The credential lease could not be re-read before ${label(profile)} was read (${read.reason}), so it was not read.`;
     }
     const lease = read.kind === "value" ? decodeLease(read.value) : null;
-    if (lease === null || lease.holder !== deps.holderId) return lost;
+    if (lease === null || lease.holder !== deps.holderId) {
+      if (lease !== null) leaseLost = true;
+      return lost;
+    }
     try {
       await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, at, ttl));
     } catch (err) {
@@ -315,6 +354,50 @@ export async function runTenantSessionBatch<R>(
     }
     expiresAt = at + ttl;
     return null;
+  }
+
+  /**
+   * The end of the section. When the slot needs the active credential back,
+   * the lease is re-checked first and renewed while no other holder has it, so
+   * the restore runs under this tab's lease even after a slow last tenant
+   * (review round 2). The restore runs EVEN when another holder now has the
+   * lease, deliberately: left undone, the slot would keep a tenant no tab is
+   * reading, and an ordinary batch or a run for the active tenant (which does
+   * not swap) would then use it. The other holder's runs are proven before
+   * and after their work, so overlapping them turns them unknown, not wrong,
+   * and their own restore follows.
+   */
+  async function restoreAtEnd(): Promise<TenantRestore> {
+    if (!restoreNeeded()) return NOT_NEEDED;
+    if (!leaseLost) {
+      const at = deps.now();
+      const verdict = leaseHeldByOther(await documents.load(CREDENTIAL_LEASE_KEY), deps.holderId, at);
+      if (verdict.held === true) {
+        leaseLost = true;
+        logger?.warn("tenant-session: another tab holds the credential lease; restoring the active credential anyway");
+      } else if (verdict.held === false) {
+        try {
+          await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, at, ttl));
+          expiresAt = at + ttl;
+        } catch (err) {
+          logger?.warn("tenant-session: lease not renewed before the restore", { error: errText(err) });
+        }
+      }
+    }
+    return restore(active!);
+  }
+
+  /** Release only a lease this batch never saw lost and that, re-read, still names this holder. */
+  async function releaseLease(): Promise<void> {
+    if (leaseLost) return;
+    const read = await documents.load(CREDENTIAL_LEASE_KEY);
+    const lease = read.kind === "value" ? decodeLease(read.value) : null;
+    if (lease === null || lease.holder !== deps.holderId) return;
+    try {
+      await documents.save(CREDENTIAL_LEASE_KEY, releasedLease());
+    } catch (err) {
+      logger?.warn("tenant-session: lease not released; it expires on its own", { error: errText(err) });
+    }
   }
 
   async function runOne<T>(
@@ -332,7 +415,11 @@ export async function runTenantSessionBatch<R>(
     const own = (run: TenantRun<T>): TenantRun<T> => ({ ...run, restore: DEFERRED });
     const unknown = (stage: TenantRunStage, reason: string): TenantRun<T> => unknownRun(tenantId, stage, reason, DEFERRED);
 
-    if (runs++ > 0) {
+    if (held === null) {
+      // The first run past its refusals takes the lease and the section.
+      const notTaken = await acquire();
+      if (notTaken !== null) return unknownRun(tenantId, "lease", notTaken);
+    } else {
       const lost = await renewLease(profile);
       if (lost !== null) return unknown("lease", lost);
     }
@@ -413,6 +500,7 @@ export async function runTenantSessionBatch<R>(
     }
     const lease = read.kind === "value" ? decodeLease(read.value) : null;
     if (lease === null || lease.holder !== deps.holderId) {
+      if (lease !== null) leaseLost = true;
       return "The credential lease was no longer this tab's when the work finished, so another tab may have changed the shared credential during it; nothing read in this batch can be trusted.";
     }
     return null;
@@ -434,10 +522,9 @@ export async function runTenantSessionBatch<R>(
   }
 
   /** The active credential goes back only when the slot is not already known to hold it. */
-  async function restoreIfNeeded(): Promise<TenantRestore> {
-    if (active === null) return NOT_NEEDED;
-    if (holds !== IN_DOUBT && holds !== null && holds.id === active.id) return NOT_NEEDED;
-    return restore(active);
+  function restoreNeeded(): boolean {
+    if (active === null) return false;
+    return !(holds !== IN_DOUBT && holds !== null && holds.id === active.id);
   }
 
   async function restore(to: TenantProfile): Promise<TenantRestore> {

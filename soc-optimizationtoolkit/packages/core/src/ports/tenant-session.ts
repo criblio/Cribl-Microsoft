@@ -129,6 +129,10 @@ export interface TenantSession {
    * inside is still proven before and after its work, and reports its
    * restore as `deferred`; the returned `restore` is the batch's one.
    *
+   * The lease and the section are taken by the first run that passes its
+   * refusals, so a batch that reads no tenant through Azure writes no lease
+   * and blocks no other batch.
+   *
    * The restore runs whatever happened - a run that failed half-way through a
    * swap, a cancel, or `body` itself throwing. Rejects only when `body`
    * rejects, and only after the restore and the lease release.

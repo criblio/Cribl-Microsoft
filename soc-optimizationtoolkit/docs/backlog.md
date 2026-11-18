@@ -1474,6 +1474,20 @@ used to run between tenants). That is kept - restoring between tenants is what
 AZR-90 removed - and made visible: the Read all tip says so, and the shell
 shows a notice above every screen while a run is in flight.
 
+AZR-90 review round 2 (2026-11-18): the lease and the exclusive section are
+taken LAZILY, by the first run that passes its refusals - a Read of a tenant
+whose secret was not entered, or whose plan reads nothing, writes no lease and
+blocks no other screen, and a run refused by another tab's lease leaves the
+next tenant free to try again. Before the one restore the lease is re-checked
+and renewed (a slow last tenant no longer restores outside its lease). A lease
+another tab took is never renewed or released; the restore still runs over
+it, on purpose: a slot left holding a tenant no tab is reading would be used by
+the next ordinary batch or a run for the active tenant (which does not swap),
+whereas the other tab's runs are proven before and after their work, so the
+overlap turns them unknown, not wrong, and their own restore follows. The
+shell notice now says the slot is held from the first tenant read through
+Azure, not from the click.
+
 AZR-91 DONE 2026-11-17: the grid's indicator tips are ONE tab stop (a roving
 tabindex). Arrow keys move between indicators (clamped at the edges), Home and
 End to the row's ends, Ctrl with Home or End to the grid's; Enter or Space

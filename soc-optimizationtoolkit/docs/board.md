@@ -5456,7 +5456,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   entry - the KV store has no compare-and-swap, so two tabs saving in the same
   instant can still lose an entry until the next due write; a failed or
   refused write is not tried again for 10 minutes. Five new hook pins and two
-  core pins, each mutation-checked.
+  core pins, each mutation-checked. Review round 2 (2026-11-18): when the read
+  before a write (or the re-read after it) finds the document no longer
+  understood, every lane now shows unknown with the reason instead of the
+  older read's 'never seen'; a refused load is read again by the next poll.
+  Pinned; not verified live.
 
 - **AZR-38** One definition of the Defender coverage item id
   `AZR-F9` `story` `settled` `verified: pins`
@@ -8682,7 +8686,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   before). Kept, since restoring between tenants is what the card removed; the
   Read all tip now says so, and the shell shows a notice above every screen
   while a run is in flight (TenantReadInFlightNotice, fed by
-  TenantGapCache.subscribe; pinned and mutation-checked).
+  TenantGapCache.subscribe; pinned and mutation-checked). Review round 2
+  (2026-11-18): the lease and the exclusive section are now taken by the first
+  run that passes its refusals, so a Read of a refused tenant (or one with no
+  plan values) writes no lease and blocks no other screen, and a run refused
+  by another tab's lease no longer refuses the rest of the run. The lease is
+  re-checked and renewed before the one restore; a lease another tab took is
+  never renewed or released (the restore still runs, deliberately: a slot left
+  on a tenant no tab is reading would serve it to the next ordinary batch,
+  while the other tab's proven runs only turn unknown). Pinned with mutation
+  checks; not verified live.
 
 - **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
   `AZR-F10` `story` `settled` `verified: pins`

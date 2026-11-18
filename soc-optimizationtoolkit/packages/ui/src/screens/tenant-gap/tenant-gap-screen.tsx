@@ -111,8 +111,9 @@ export const RESTORE_FAILED =
 
 /** The shell-wide notice while a Read all holds the Azure slot (AZR-90). */
 export const TENANT_READ_IN_FLIGHT =
-  "A tenant gap Read all holds the app's Azure credential slot. Azure reads on this and other screens of this " +
-  "tab wait until it ends; cancel it on Tenant Logging Gaps to free the slot sooner.";
+  "A tenant gap read is running. From the first tenant it reads through Azure until it ends, it holds the app's " +
+  "Azure credential slot, and Azure reads on this and other screens of this tab wait; cancel it on Tenant Logging " +
+  "Gaps to free the slot sooner.";
 
 /**
  * The shell's notice while a Read all is in flight, on whatever screen is
