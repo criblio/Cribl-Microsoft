@@ -488,7 +488,8 @@ AZR-30 to AZR-34 close only after this pass, with `verified` set to `live` or
 **Amended 2026-11-17 (closeout).** That rule is retired for AZR-32 and AZR-34:
 both closed on pins, with the operator's partial passes recorded on the cards,
 and every item still unobserved moved to its own card - item 3's remainder to
-AZR-112, items 4 and 5 for the SAS fallback to AZR-113, item 7 (and item 6 for
-the Blob lane) to AZR-114, and the Entra ID credential to AZR-115 (ADR 0008).
+AZR-112 (its two AZR-39 readings stay on AZR-39, which closes on them), items
+4 and 5 for the SAS fallback to AZR-113, item 7 (and item 6 for the Blob lane)
+to AZR-114, and the Entra ID credential to AZR-115 (ADR 0008).
 What this falsifies: any reading of a done AZR-32 or AZR-34 as "verified live";
 read `verified: pins` and the split cards instead.

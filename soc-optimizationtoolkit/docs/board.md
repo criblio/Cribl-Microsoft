@@ -962,7 +962,11 @@ Started. Anything here with an unfinished dependency is called out on its card.
   rule step (eh-rule-manage) read 'as expected' for RootManageSharedAccessKey,
   which does carry Manage. NOT exercised: a Send-only rule reading 'present
   but different' (the namespace has no such rule) and the policy-definition
-  listing (no management group id in the plan).
+  listing (no management group id in the plan). OWNER 2026-11-17 (closeout
+  review): the two outstanding live items above (a Send-only rule reads
+  'present but different'; the $filter=policyType eq 'Custom' listing at the
+  management group returns full ids) are recorded and closed HERE, with
+  verified live or both. [[AZR-112]] points here and does not repeat them.
 
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
@@ -1243,13 +1247,16 @@ Next to pick up. Nothing blocks these.
   Activity Log section on the same screen requires Manage
   (activity-log-state.ts:134-137, activity-log-section.tsx:316: 'A diagnostic
   setting needs a namespace rule with Manage rights, because Azure creates the
-  hub itself'). An operator who follows the note and picks or creates a
-  Send-only rule (eventhub-prerequisite-section.tsx:354 offers 'Create
-  Send-only rule') is then refused by the Activity Log deploy. SCOPE: ruleNote
-  takes the selected items; when a selected source needs Manage (activityLog
-  today; entraId when AZR-99 lands), the note says that source needs Manage
-  instead of recommending Send-only; the Defender-only case keeps today's
-  text. Pin the three cases with exact strings
+  hub itself'). An operator who follows the note makes a Send-only rule in the
+  Azure portal (the app cannot create one: the 'Create Send-only rule' button
+  at eventhub-prerequisite-section.tsx:353-355 is disabled, with
+  CREATE_NOT_AVAILABLE beneath it, and its label repeats the same Send-only
+  advice), picks it in the rule picker, and is then refused by the Activity
+  Log gate. Reproduce through the picker, not the disabled button. SCOPE:
+  ruleNote takes the selected items; when a selected source needs Manage
+  (activityLog today; entraId when AZR-99 lands), the note says that source
+  needs Manage instead of recommending Send-only; the Defender-only case keeps
+  today's text. Pin the three cases with exact strings
   (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815
   keeps its Defender-only case). If [[AZR-116]] measures that Send suffices,
   the fix is instead to relax the Activity Log gate.
@@ -1754,9 +1761,13 @@ Settled and unblocked, sequenced behind now.
   decided here"). AZR-11 is scoped to use-existing only: creating a namespace,
   hub or rule renders as visible, disabled controls. This card makes them
   work, behind a confirm, and needs CAP-7 to measure namespace write first.
-  RE-POINTED 2026-11-17: dependsOn CAP-7 became [[CAP-9]] when CAP-7 closed;
-  the namespace write this card needs measured is the CAP-7b half that moved
-  there.
+  RE-POINTED 2026-11-17: dependsOn CAP-7 became [[CAP-9]] when CAP-7 closed.
+  CAP-9 measures all three creates this card adds, each at its own scope: the
+  namespace write at the resource group (the namespace has no id yet; this
+  card's form passes the chosen resource group), and the hub and rule writes
+  at the namespace. A missing grant shows as a banner beside its Create
+  button; the button stays clickable behind its confirm, and Azure's own
+  refusal is shown if the write fails (inform, never forbid).
 
 - **AZR-23** Create a dedicated Send-only authorization rule for the onboarding export
   `AZR-F9` `story` `settled` `blocked by AZR-22`
@@ -2097,14 +2108,20 @@ Settled and unblocked, sequenced behind now.
   name'; (2) the storage queue, Event Grid system topic and flow log reads
   with real Blob plan values (none ran: the lab plan had no Blob values); (3)
   the pacer at 40 a minute actually throttling a run large enough to reach it
-  (both live runs were 14 and 18 requests); (4) the AZR-39 items: a Send-only
-  rule named as the Azure write rule reads 'present but different' on the
-  Manage rule step, and the management-group policyDefinitions listing accepts
-  $filter=policyType eq 'Custom' at 2023-04-01 and returns full ids. Already
-  observed and NOT to redo: GET-only, Entra 403 read as 'could not be read',
-  Basic namespace present-differs, quiet hub, consumer group 404 then as
-  expected. A defect found becomes its own card. Done = verified live, with
-  the recorded shapes in this card.
+  (both live runs were 14 and 18 requests); (4) the response shape and
+  api-version of the two diagnosticSettings GETs Validate sends: the
+  subscription's
+  (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings) and
+  Entra's (aadiam), with a principal that can read it (ADR 0007 item 3; only
+  the aadiam 403 was observed). [[AZR-116]] records the subscription setting's
+  PUT read-back, not this GET. NOT HERE: the two AZR-39 live items (a
+  Send-only rule reading 'present but different' on the Manage rule step; the
+  management-group policyDefinitions $filter=policyType eq 'Custom' listing)
+  are owned and closed by [[AZR-39]]; this card neither runs nor waits on
+  them. Already observed and NOT to redo: GET-only, Entra 403 read as 'could
+  not be read', Basic namespace present-differs, quiet hub, consumer group 404
+  then as expected. A defect found becomes its own card. Done = verified live,
+  with the recorded shapes in this card.
 
 - **AZR-113** Live-verify the Listen-only SAS fallback of the Cribl Event Hub source create (ADR 0007 items 4 and 5 remainder)
   `AZR-F9` `enabler` `settled`
@@ -2121,9 +2138,16 @@ Settled and unblocked, sequenced behind now.
   name and never the key, a real connection string parses, a Send-only paste
   refuses 'cannot listen' before any write; (5) a hand-edited existing input
   refuses and names the field; (6) the commit and deploy timeouts are long
-  enough. Requires a Listen-only rule on the hub (AZR-58 refuses Manage);
-  creating one from the app is [[AZR-36]], by hand is fine here. Done =
-  verified live with each item recorded.
+  enough; (7) the secret is stored with secretType text - GET
+  /m/<g>/system/secrets/<id> back after the create and record the field (ADR
+  0007 item 5; the 2026-11-04 pass recorded that the create succeeded, not the
+  stored type); (8) the input is type eventhub with no password field in its
+  GET body (item 5); (9) the HTTP status GET /products/stream/groups/<g>
+  answers through the app proxy under the shipped grants - 200, 403 or 404 -
+  recorded before any write (item 4; the 2026-11-03 pass could not reach it
+  outside apply). Requires a Listen-only rule on the hub (AZR-58 refuses
+  Manage); creating one from the app is [[AZR-36]], by hand is fine here. Done
+  = verified live with each item recorded.
 
 - **AZR-114** Live-verify the Blob lane source create end to end (ADR 0007 item 7)
   `AZR-F9` `enabler` `settled`
@@ -2178,24 +2202,41 @@ Settled and unblocked, sequenced behind now.
   here and in least-privilege operations (activityLog.diagnosticSetting.write
   moves from Documented to measured).
 
-- **CAP-9** Measure Event Hub listKeys and namespace write at the namespace scope (CAP-7b)
+- **CAP-9** Measure the Event Hub namespace-side permissions: listKeys and the namespace, hub and rule creates (CAP-7b)
   `CAP-F1` `enabler` `settled` `blocked by AZR-24`
-  SPLIT 2026-11-17 from [[CAP-7]] (its CAP-7b half, never built).
-  Microsoft.EventHub/namespaces/authorizationRules/listKeys/action and
-  Microsoft.EventHub/namespaces/write can be granted on the namespace itself,
-  so the subscription-scope evaluation CAP-7a uses would read them as denied.
-  SCOPE: once the namespace target is persisted ([[AZR-24]]), evaluate
-  effective permissions AT the namespace resource id and map both actions to
-  new capabilities; listKeys is NEVER probed (a probe would return a key) and
-  no probe grants a write, so both are evaluation-only, a miss read as unknown
-  unless the namespace-scope evaluation itself answered. Replace the 'needed,
-  not yet measured' namespace lists in
+  SPLIT 2026-11-17 from [[CAP-7]] (its CAP-7b half, never built). The
+  subscription-scope evaluation CAP-7a uses cannot see a grant made on the
+  namespace or its resource group, so it would read these as denied. SCOPE,
+  each action evaluated at the scope where it can actually be granted,
+  evaluation only (no probe grants a write, and listKeys is NEVER probed: a
+  probe would return a key), a miss read as unknown unless the evaluation at
+  that scope itself answered: (a)
+  Microsoft.EventHub/namespaces/authorizationRules/listKeys/action AT the
+  namespace resource id of the persisted target ([[AZR-24]]) - what the
+  Defender export and Activity Log sections need; (b)
+  Microsoft.EventHub/namespaces/write AT THE RESOURCE GROUP the new namespace
+  is created in - a namespace that does not exist yet has no resource id to
+  evaluate at (least-privilege/operations.ts:54-68 already records scope
+  resourceGroup); the evaluator takes that resource group as a parameter and
+  [[AZR-22]]'s create form supplies it; (c)
+  Microsoft.EventHub/namespaces/eventhubs/write (operations.ts:102-116) and
+  Microsoft.EventHub/namespaces/authorizationRules/write AT the existing
+  namespace - the rule write has NO registry operation today, so add one
+  (least role and citation per the least-privilege registry). Map each to a
+  capability; replace the 'needed, not yet measured' namespace lists in
   domain/onboarding-sections/automation-permissions.ts:167-169 and
-  defender-export/defender-permissions.ts:10 with measured rows;
-  route-capabilities.ts:84 stays [] (the audit informs, never forbids). Pins:
-  a namespace-scope grant reads granted, a subscription-scope miss alone never
-  reads denied, and no probe request for listKeys is ever built. Unblocks
-  [[AZR-22]]'s namespace write gating.
+  defender-export/defender-permissions.ts:80-82 with measured rows. The result
+  is a banner beside the action it covers; route-capabilities.ts:84 stays []
+  and no Create or Deploy button is disabled by it (the audit informs, never
+  forbids). Pins: per action, a grant at its own scope reads granted; a
+  subscription-scope miss alone never reads denied; the namespace write is
+  evaluated at the resource-group id, never a namespace id; no probe request
+  for listKeys is ever built. Lets [[AZR-22]] banner each of its three creates
+  with a measured verdict. WIDENED 2026-11-17 (closeout review): as first
+  split this card covered only listKeys and the namespace write at an existing
+  namespace, so AZR-22's namespace create (no resource id yet), hub create and
+  rule create would have had no measurement while the board said CAP-9
+  unblocked them. (b) and (c) are that missing half.
 
 - **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
   `CAP-F1` `enabler` `settled`
@@ -2203,13 +2244,22 @@ Settled and unblocked, sequenced behind now.
   (domain/onboarding-sections/automation-permissions.ts:172-184) has measured:
   [] because no capability covers Microsoft.Insights/diagnosticSettings/write
   (and /read) at the subscription, so the section always banners 'not
-  measured'. SCOPE: add a capability for the subscription-scope
-  diagnostic-settings read and write, measured by the same subscription-scope
-  RBAC evaluation as CAP-7a (no probe; the write grant-only if the evaluation
-  cannot see it), and move the subscription row from notMeasured to measured.
-  The namespace-rule action stays not measured until [[CAP-9]]. Pins as
-  CAP-7a's: granted, denied, unknown and never-checked rows. LIVE CHECK (also
-  covers CAP-7a's unobserved case): an identity lacking
+  measured'. SCOPE: add capabilities for the subscription-scope
+  Microsoft.Insights/diagnosticSettings read, write and delete (the delete is
+  AZR-105's Remove, activity-log-export/activity-log-permissions.ts:34-40),
+  measured by the same subscription-scope RBAC evaluation as CAP-7a (no
+  probe), and move the subscription row from notMeasured to measured. DECIDED
+  2026-11-17: the write and delete are NOT grant-only. The setting is an
+  extension resource on the subscription itself
+  (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings/<name>;
+  least-privilege/operations.ts gives scope 'subscription'), so no assignment
+  below the subscription can grant it and the subscription-scope evaluation is
+  authoritative for a denial - unlike the Defender automation write, which
+  lives in a resource group (GRANT_ONLY_AZURE_ACTIONS). Do not add them there;
+  a pin holds that, which is what lets the LIVE CHECK below expect DENIED. The
+  namespace-rule action stays not measured until [[CAP-9]]. Pins as CAP-7a's:
+  granted, denied, unknown and never-checked rows. LIVE CHECK (also covers
+  CAP-7a's unobserved case): an identity lacking
   Microsoft.Insights/diagnosticSettings/write and
   Microsoft.Security/automations/read shows the DENIED banner on both sections
   in Live Preview, with Deploy still clickable.
