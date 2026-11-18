@@ -99,7 +99,7 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
 
   const azure = ports.azure;
   const checkReason =
-    azure === undefined ? "No Azure connection is configured, so the grant cannot be checked." : planning || running ? "Working..." : null;
+    azure === undefined ? "The grant cannot be checked: there is no Azure connection configured." : planning || running ? "Working..." : null;
 
   async function check(): Promise<void> {
     if (azure === undefined || planning || running) return;
