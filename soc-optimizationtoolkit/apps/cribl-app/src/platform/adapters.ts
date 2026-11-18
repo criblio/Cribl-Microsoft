@@ -20,6 +20,7 @@ import type {
   GithubPatManager,
   GraphDirectory,
   GraphPermissionProbe,
+  GraphProbeOptions,
   GraphProbeResponse,
   InstalledPack,
   JobRecord,
@@ -590,24 +591,33 @@ export class PlatformGraphDirectory implements GraphDirectory {
    * answering 403). Every HTTP answer is returned as is; core decides what it
    * proves, and an empty 200 proves nothing (AZR-111).
    */
-  async probePermission(probe: GraphPermissionProbe): Promise<GraphProbeResponse> {
+  async probePermission(
+    probe: GraphPermissionProbe,
+    options?: GraphProbeOptions,
+  ): Promise<GraphProbeResponse> {
+    const remint = options?.remint !== false;
     return this.mode === 'session'
-      ? this.probe(probe, async () => undefined)
-      : this.slot.shared(this.identity, 'read', (recheck) => this.probe(probe, recheck));
+      ? this.probe(probe, remint, async () => undefined)
+      : this.slot.shared(this.identity, 'read', (recheck) => this.probe(probe, remint, recheck));
   }
 
-  private async probe(probe: GraphPermissionProbe, recheck: SlotRecheck): Promise<GraphProbeResponse> {
+  private async probe(
+    probe: GraphPermissionProbe,
+    remint: boolean,
+    recheck: SlotRecheck,
+  ): Promise<GraphProbeResponse> {
     if (this.mode === 'shared') {
       await this.slot.ensureGraph(this.tenantId);
     }
     const url = GRAPH_PROBE_URLS[probe];
-    let res = await this.page(url);
-    if (res.status === 401 || res.status === 403) {
-      await recheck();
-      await this.slot.mintGraph(this.tenantId);
-      res = await this.page(url);
+    const res = await this.page(url);
+    if (!remint || (res.status !== 401 && res.status !== 403)) {
+      return { status: res.status, body: res.body };
     }
-    return { status: res.status, body: res.body };
+    await recheck();
+    await this.slot.mintGraph(this.tenantId);
+    const retried = await this.page(url);
+    return { status: retried.status, body: retried.body, reminted: true };
   }
 }
 

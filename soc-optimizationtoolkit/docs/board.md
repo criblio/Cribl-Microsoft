@@ -3000,7 +3000,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (pinned). Fallback: a role-assignment request naming Resource Policy
   Contributor. NOT VERIFIED LIVE: one audit against an identity holding
   Resource Policy Contributor at the subscription (granted) and one with plain
-  Contributor (policy.assign denied, policy.remediate granted).
+  Contributor (policy.assign denied, policy.remediate granted). REVIEW R1
+  2026-11-17 (pins): the enablers are now measured on EVERY setup path, not
+  only existing-rg - on the subscription-scope paths (existing-subscription,
+  lab-new-rg-subscription) against the preflight's own subscription read
+  (report.azure.scopePermissions, no extra request), on lab-byo-rg by the same
+  single subscription GET as existing-rg. The fallback no longer names
+  Resource Policy Contributor, because the role-assignment request generated
+  today is the setup path's and leaves it out (pinned: no role-assignment
+  fallback names a role no setup path's request contains); AZR-4 adds the role
+  to the request and the name to the offer together.
 
 - **CAP-3** Add managed-identity creation plus probe
   `CAP-F1` `enabler` `settled` `verified: pins`
@@ -3012,7 +3021,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   operator picks, where a role is invisible from the subscription, so a miss
   there records nothing. No probe. Asked for by no ticket until AZR-4 ships
   (pinned). NOT VERIFIED LIVE: an audit against an identity with Managed
-  Identity Contributor at the subscription reading granted.
+  Identity Contributor at the subscription reading granted. REVIEW R1
+  2026-11-17 (pins): measured on every setup path, as CAP-2
+  (subscription-scope paths reuse the preflight's read; lab-byo-rg reads the
+  subscription once). The fallback no longer names Managed Identity
+  Contributor, for the reason on CAP-2.
 
 - **CAP-4** Add Sentinel incident read (Microsoft Sentinel Reader)
   `CAP-F1` `enabler` `settled` `verified: pins`
@@ -3029,7 +3042,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   also grants it). One more GET per preflight and per audit. Asked for by no
   ticket until AZR-7 ships (pinned). NOT VERIFIED LIVE: the probe's 200 on a
   Sentinel workspace, its 403 for an identity without */read there, and its
-  404 on a workspace without Sentinel.
+  404 on a workspace without Sentinel. REVIEW R1 2026-11-17 (pins): the
+  registry operation sentinel.incidents.read moved out of the core
+  permission-check function into a new feature-necessity function
+  capability-probes (pinned: no core row carries it), so nothing deriving
+  asked-for roles from core functions can ask for Microsoft Sentinel Reader.
 
 - **CAP-5** Add the Graph licence and incident scopes plus probes
   `CAP-F1` `enabler` `settled` `verified: pins`
@@ -3061,7 +3078,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   was already in proxies.yml (no path allowlist); its comment now names the
   probes. NOT VERIFIED LIVE: the probes' answers in a tenant with and without
   each consent - which also measures part of AZR-111's open refusal shape for
-  these two endpoints.
+  these two endpoints. REVIEW R1 2026-11-17 (pins): (1) a 403 is recorded as
+  denied ONLY when Graph's error code is Authorization_RequestDenied (missing
+  privileges); any other 403 records nothing, because the security API may
+  refuse a tenant not licensed or provisioned for Defender XDR and AZR-6 must
+  tell that apart from a missing consent. Which code security/incidents
+  returns without SecurityIncident.Read.All is unmeasured - added to the live
+  list below. (2) COST, corrected: two Graph GETs when both probes are
+  answered first time; a refused probe re-mints the Graph token and retries,
+  and the audit now allows that re-mint once per audit
+  (GraphProbeOptions.remint), so at most one token mint (token request + KV
+  write) and three Graph GETs per audit that runs, none when the cached audit
+  is reused. (3) The probe operations moved to the feature-necessity
+  capability-probes function (see CAP-4). NOT VERIFIED LIVE (added): the 403
+  body and error code of GET /v1.0/security/incidents without
+  SecurityIncident.Read.All, and with it consented in a tenant without a
+  Defender XDR licence.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `verified: both`

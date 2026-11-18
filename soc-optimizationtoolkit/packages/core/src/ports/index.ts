@@ -31,6 +31,7 @@ export {
 export type {
   GraphDirectory,
   GraphPermissionProbe,
+  GraphProbeOptions,
   GraphProbeResponse,
   ServicePrincipalRef,
 } from './graph-directory';

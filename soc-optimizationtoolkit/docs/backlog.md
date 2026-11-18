@@ -1281,7 +1281,12 @@ or REST collector, is `source.manage`.
 > `subscribedSkus` itself, which `LicenseAssignment.Read.All` (already asked)
 > satisfies more narrowly than `Organization.Read.All`. No change request asks
 > for any of these until AZR-4, AZR-6 or AZR-7 calls them. Every verdict awaits a
-> live audit.
+> live audit. REVIEW R1 (same day, pins): the enablers are evaluated on every
+> setup path (subscription-scope paths reuse the preflight's own read); a Graph
+> 403 is a denial only with error code `Authorization_RequestDenied`, since the
+> security API may refuse an unlicensed tenant; one token re-mint per audit; the
+> probe operations sit in a `feature` function, not the core permission check;
+> and the enabler fallbacks name no role the generated request leaves out.
 
 > AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
 > workflow, so verified none): EXTEND the existing Event Hub surface; do not build

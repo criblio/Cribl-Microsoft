@@ -44,9 +44,21 @@ const FUNCTIONS = [
       "workspace.read",
       "tables.list",
       "resourceGraph.query",
+    ],
+  },
+  // CAP-4 / CAP-5. The capability audit's OPTIONAL probes: each measures a
+  // permission ahead of the feature that needs it (AZR-6, AZR-7) and only
+  // annotates. A refusal costs an unknown, never the permission check, so
+  // they are `feature`, not part of the core function above - nothing that
+  // derives the asked-for roles from core functions may ask for them.
+  {
+    id: "capability-probes",
+    label: "Measure optional permissions ahead of the features that need them",
+    necessity: "feature",
+    operations: [
       // CAP-4: the Sentinel incidents probe ($top=1) on the configured workspace.
       "sentinel.incidents.read",
-      // CAP-5: the capability audit's two Graph probes, on the Graph token.
+      // CAP-5: the two Graph probes, on the Graph token.
       "entra.token",
       "graph.subscribedSkus.read",
       "graph.securityIncidents.read",

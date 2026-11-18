@@ -173,8 +173,16 @@ export const GRAPH_PROBE_CAPABILITIES: Readonly<Record<GraphPermissionProbe, Azu
  *     permission with a 403 or answers 200 with nothing in it is unsettled in
  *     this repo (AZR-111), and a tenant can genuinely have no incidents, so an
  *     empty answer is evidence of neither.
- *   - 403: denied. The adapter has already re-minted the token once, so a
+ *   - 403 whose error code is {@link GRAPH_PERMISSION_DENIED_CODE}: denied.
+ *     That code is Graph's "insufficient privileges" answer for a missing
+ *     permission. The adapter has already re-minted the token once, so a
  *     token issued before the consent cannot be the cause.
+ *   - any OTHER 403: nothing. Graph's security API can refuse for reasons
+ *     that are not a missing consent - a tenant not licensed or provisioned
+ *     for Defender XDR - and AZR-6 has to tell those apart, so a refusal is
+ *     recorded as a denial only when it says it is about privileges. Which
+ *     code the security API actually returns for a missing
+ *     SecurityIncident.Read.All is unmeasured (AZR-111; CAP-5's live list).
  *   - anything else (401, 404, 429, 5xx): nothing - not a permission answer.
  */
 export function graphProbeVerdict(
@@ -184,8 +192,18 @@ export function graphProbeVerdict(
     const value = prop(response.body, "value");
     return Array.isArray(value) && value.length > 0 ? "granted" : undefined;
   }
-  return response.status === 403 ? "denied" : undefined;
+  if (response.status !== 403) {
+    return undefined;
+  }
+  const code = prop(prop(response.body, "error"), "code");
+  return code === GRAPH_PERMISSION_DENIED_CODE ? "denied" : undefined;
 }
+
+/**
+ * The Graph error code that names a missing privilege. The one 403 a Graph
+ * probe records as denied.
+ */
+export const GRAPH_PERMISSION_DENIED_CODE = "Authorization_RequestDenied";
 
 /**
  * Cribl probe key -> capability. One probe per Cribl capability, exactly.

@@ -48,6 +48,7 @@ import type {
 import { evaluateActionsAtScope, runPermissionPreflight } from "../permission-preflight";
 import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../../domain/defender-export/defender-permissions";
 import { ENABLER_SUBSCRIPTION_ACTIONS } from "../../domain/capability-enablers";
+import { evaluatePermissions } from "../../domain/azure-permissions";
 import type { RequiredAction } from "../../domain/azure-permissions";
 import type { GraphDirectory, GraphPermissionProbe } from "../../ports/graph-directory";
 import type {
@@ -129,7 +130,8 @@ export const SUBSCRIPTION_AUDIT_ACTIONS: readonly RequiredAction[] = Object.free
 ]);
 
 /**
- * The verdicts a resource-group audit adds from the subscription.
+ * The verdicts every audit adds from the subscription, for actions the setup
+ * path's own check does not evaluate.
  *
  * DEFENDER (AZR-86, audit discrepancy 21). The existing path audits
  * `existing-rg`, whose scope is the workspace's resource group, while the
@@ -138,23 +140,40 @@ export const SUBSCRIPTION_AUDIT_ACTIONS: readonly RequiredAction[] = Object.free
  * unknown for every existing-path tenant.
  *
  * ENABLERS (CAP-2, CAP-3). The Azure Policy assignment, remediation and
- * managed-identity writes are measured here too, ahead of the feature that
- * will call them (domain/capability-enablers says what the subscription read
- * can and cannot prove for each). They ride in the SAME read, so measuring
- * them costs no request.
+ * managed-identity writes are measured ahead of the feature that will call
+ * them (domain/capability-enablers says what the subscription read can and
+ * cannot prove for each). They are in no setup path's required actions, so
+ * every path evaluates them here.
  *
- * One GET per audit, and only on `existing-rg` with a subscription set. The
- * grant-only rule applies to the Defender export write and the managed
- * identity write. Unread, it records nothing (rule 3), so a refusal costs an
- * annotation.
+ * WHICH READ, PER SETUP PATH:
+ *   - subscription scope (`existing-subscription`, `lab-new-rg-subscription`):
+ *     the preflight already read the subscription, so these actions are
+ *     evaluated against THAT read (`report.azure.scopePermissions`) - no
+ *     request. Unread there, nothing is recorded and nothing is re-asked.
+ *   - resource-group scope (`existing-rg`, `lab-byo-rg`): one GET of the
+ *     subscription's permissions.
+ * Never with no subscription set. The grant-only rule applies to the Defender
+ * export write and the managed identity write. Unread, it records nothing
+ * (rule 3), so a refusal costs an annotation. Where the preflight also
+ * measured an action (Defender on existing-subscription), its verdict wins.
  */
 export async function subscriptionScopeVerdicts(
   azure: AzureManagement,
-  setupPath: SetupPath,
+  report: PermissionReport,
   subscriptionId: string,
 ): Promise<CapabilitySet["verdicts"]> {
-  if (setupPath !== "existing-rg" || subscriptionId === "") {
+  if (subscriptionId === "") {
     return {};
+  }
+  if (report.azure.scopeKind === "subscription") {
+    const permissions = report.azure.scopePermissions;
+    if (!report.azure.permissionsFetched || permissions === undefined) {
+      return {};
+    }
+    return azureCheckVerdicts(
+      true,
+      evaluatePermissions({ value: [...permissions] }, [...SUBSCRIPTION_AUDIT_ACTIONS]),
+    );
   }
   const evaluated = await evaluateActionsAtScope(
     azure,
@@ -169,9 +188,14 @@ export async function subscriptionScopeVerdicts(
  * read per probe in {@link GRAPH_PROBE_CAPABILITIES}, run in sequence.
  *
  * Records only what graphProbeVerdict says a response proves - a row is a
- * grant, a 403 a denial, and an empty 200 nothing (AZR-111). A shell whose
- * GraphDirectory has no probe, or no GraphDirectory at all, records nothing;
- * so does a probe that rejects. Two Graph GETs per audit that runs.
+ * grant, a 403 naming missing privileges a denial, and an empty 200 or any
+ * other 403 nothing (AZR-111). A shell whose GraphDirectory has no probe, or
+ * no GraphDirectory at all, records nothing; so does a probe that rejects.
+ *
+ * COST per audit that runs: two Graph GETs when both are answered first time;
+ * a refused probe (401/403) re-mints the token and retries, so at most ONE
+ * token mint (a token request plus a KV write) and THREE Graph GETs - the
+ * re-mint is allowed only until one probe in this audit has spent it.
  */
 export async function graphPermissionVerdicts(
   graph: GraphDirectory | undefined,
@@ -182,9 +206,14 @@ export async function graphPermissionVerdicts(
     return into;
   }
   const probes = Object.keys(GRAPH_PROBE_CAPABILITIES) as GraphPermissionProbe[];
+  // One token re-mint per audit at most: a probe after one that re-minted is
+  // already reading on a token that reflects current consent.
+  let reminted = false;
   for (const probe of probes) {
     try {
-      const verdict = graphProbeVerdict(await graph.probePermission(probe));
+      const response = await graph.probePermission(probe, { remint: !reminted });
+      reminted = reminted || response.reminted === true;
+      const verdict = graphProbeVerdict(response);
       if (verdict !== undefined) {
         into[GRAPH_PROBE_CAPABILITIES[probe]] = verdict;
       }
@@ -333,7 +362,7 @@ export async function runCapabilityAudit(
   // what the preflight left unmeasured.
   const subscription = await subscriptionScopeVerdicts(
     ports.azure,
-    input.setupPath,
+    report,
     input.azure.subscriptionId,
   );
   // CAP-5: the Graph application permissions, measured on this tenant's

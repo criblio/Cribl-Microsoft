@@ -20,6 +20,7 @@ import {
   AZURE_PROBE_CAPABILITIES,
   CRIBL_PROBE_CAPABILITIES,
   GRANT_ONLY_AZURE_ACTIONS,
+  GRAPH_PERMISSION_DENIED_CODE,
   GRAPH_PROBE_CAPABILITIES,
   azureCheckVerdicts,
   capabilitiesCheckedForSetupPath,
@@ -942,18 +943,39 @@ describe("the Graph permission probes (CAP-5)", () => {
     });
   });
 
-  it("grant only on a row, deny only on a 403, and read an empty 200 as nothing (AZR-111)", () => {
+  it("grant only on a row, deny only on a privileges 403, and read an empty 200 as nothing (AZR-111)", () => {
     expect(graphProbeVerdict({ status: 200, body: { value: [{ id: "x" }] } })).toBe("granted");
     expect(graphProbeVerdict({ status: 200, body: { value: [] } })).toBeUndefined();
     expect(graphProbeVerdict({ status: 200, body: {} })).toBeUndefined();
     expect(graphProbeVerdict({ status: 200, body: { value: "x" } })).toBeUndefined();
     expect(graphProbeVerdict({ status: 200, body: null })).toBeUndefined();
-    expect(graphProbeVerdict({ status: 403, body: {} })).toBe("denied");
+    expect(
+      graphProbeVerdict({
+        status: 403,
+        body: { error: { code: "Authorization_RequestDenied", message: "Insufficient privileges" } },
+      }),
+    ).toBe("denied");
+    expect(GRAPH_PERMISSION_DENIED_CODE).toBe("Authorization_RequestDenied");
     for (const status of [400, 401, 404, 429, 500, 503]) {
       expect(
         graphProbeVerdict({ status, body: { value: [{ id: "x" }] } }),
         String(status),
       ).toBeUndefined();
     }
+  });
+
+  it("records nothing for a 403 that does not say it is about privileges (review r1)", () => {
+    // A tenant not licensed or provisioned for Defender XDR may be refused
+    // with a 403 even with SecurityIncident.Read.All consented; recording that
+    // as denied would tell AZR-6's operator to request a permission they hold.
+    expect(graphProbeVerdict({ status: 403, body: {} })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 403, body: null })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 403, body: "Forbidden" })).toBeUndefined();
+    expect(
+      graphProbeVerdict({ status: 403, body: { error: { code: "Forbidden", message: "Tenant not provisioned" } } }),
+    ).toBeUndefined();
+    expect(
+      graphProbeVerdict({ status: 403, body: { error: { code: "UnknownError" } } }),
+    ).toBeUndefined();
   });
 });

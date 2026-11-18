@@ -68,11 +68,26 @@ export interface GraphDirectory {
    *
    * Resolves with the raw status and body for EVERY HTTP answer - core decides
    * what it proves (capability-mapping graphProbeVerdict) - after the same
-   * single token re-mint on 401/403 the other reads do. Rejects only on a
-   * transport or credential-slot failure. Optional because a shell or a test
-   * fake without it simply leaves both capabilities unmeasured.
+   * single token re-mint on 401/403 the other reads do, unless
+   * `options.remint` is false. Rejects only on a transport or credential-slot
+   * failure. Optional because a shell or a test fake without it simply leaves
+   * both capabilities unmeasured.
    */
-  probePermission?(probe: GraphPermissionProbe): Promise<GraphProbeResponse>;
+  probePermission?(
+    probe: GraphPermissionProbe,
+    options?: GraphProbeOptions,
+  ): Promise<GraphProbeResponse>;
+}
+
+/** How one Graph probe may spend requests. */
+export interface GraphProbeOptions {
+  /**
+   * Whether a 401/403 may re-mint the Graph token and retry (default true).
+   * The audit passes false once a probe in the same audit has re-minted: a
+   * token minted seconds ago already reflects current consent, so a second
+   * mint would cost a token POST, a KV write and a repeat GET for nothing.
+   */
+  remint?: boolean;
 }
 
 /** The Graph reads the capability audit probes with (CAP-5). */
@@ -82,4 +97,6 @@ export type GraphPermissionProbe = "subscribed-skus" | "security-incidents";
 export interface GraphProbeResponse {
   status: number;
   body: unknown;
+  /** True when the adapter re-minted the token before this answer. */
+  reminted?: boolean;
 }

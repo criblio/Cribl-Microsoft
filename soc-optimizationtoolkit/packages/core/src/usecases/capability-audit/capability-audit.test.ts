@@ -328,6 +328,59 @@ describe("persistence", () => {
     });
   });
 
+  describe("the enablers are measured on every setup path (review r1)", () => {
+    const SUB_PERMISSIONS = `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`;
+    const POLICY_AND_IDENTITY = permSet({
+      actions: [
+        "Microsoft.Authorization/policyassignments/*",
+        "Microsoft.PolicyInsights/*",
+        "Microsoft.ManagedIdentity/userAssignedIdentities/*",
+      ],
+    });
+
+    it("evaluates them against the lab subscription path's own read, adding no request", async () => {
+      const azure = new FakeAzureManagement();
+      // One subscription read by the preflight; every later call answers OK.
+      azure.respondWith(permsResponse(POLICY_AND_IDENTITY), OK, OK, OK, OK, OK, OK);
+      const result = await runCapabilityAudit(
+        { azure, cribl: new FakeCriblClient() },
+        { ...INPUT, setupPath: "lab-new-rg-subscription" },
+      );
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+      expect(result.set.verdicts["policy.assign"]).toBe("granted");
+      expect(result.set.verdicts["policy.remediate"]).toBe("granted");
+      expect(result.set.verdicts["identity.create"]).toBe("granted");
+    });
+
+    it("records nothing from a subscription path whose read failed, and does not re-ask", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith({ status: 403, body: {} }, OK, OK, OK, OK, OK, OK);
+      const result = await runCapabilityAudit(
+        { azure, cribl: new FakeCriblClient() },
+        { ...INPUT, setupPath: "existing-subscription" },
+      );
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+      expect(result.set.verdicts["policy.assign"]).toBeUndefined();
+      expect(result.set.verdicts["identity.create"]).toBeUndefined();
+    });
+
+    it("reads the subscription once on lab-byo-rg, as on existing-rg", async () => {
+      const azure = new FakeAzureManagement();
+      // Group perms (Owner), five probes, then the subscription perms.
+      azure.respondWith(permsResponse(OWNER), OK, OK, OK, OK, OK, permsResponse(POLICY_AND_IDENTITY));
+      const result = await runCapabilityAudit(
+        { azure, cribl: new FakeCriblClient() },
+        { ...INPUT, setupPath: "lab-byo-rg" },
+      );
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+      expect(azure.calls[6]?.path).toBe(SUB_PERMISSIONS);
+      expect(result.set.verdicts["policy.assign"]).toBe("granted");
+      expect(result.set.verdicts["policy.remediate"]).toBe("granted");
+      expect(result.set.verdicts["identity.create"]).toBe("granted");
+      expect(result.set.verdicts["defender-plans.read"]).toBe("denied");
+    });
+  });
+
   it("re-audits after a scope change, because the key changed", async () => {
     const cache = new FakeContentCache();
     await runCapabilityAudit(ownerPorts(cache), INPUT);
@@ -380,14 +433,17 @@ describe("the Graph permission probes (CAP-5)", () => {
   /** A Graph reader whose probes answer from a table and record what was asked. */
   function graphWith(
     answers: Partial<Record<GraphPermissionProbe, GraphProbeResponse | Error>>,
-  ): GraphDirectory & { asked: GraphPermissionProbe[] } {
+  ): GraphDirectory & { asked: GraphPermissionProbe[]; remints: (boolean | undefined)[] } {
     const asked: GraphPermissionProbe[] = [];
+    const remints: (boolean | undefined)[] = [];
     return {
       asked,
+      remints,
       listServicePrincipals: async () => [],
       readSubscribedSkus: async () => ({ kind: "denied", status: 403, detail: "unused" }),
-      probePermission: async (probe) => {
+      probePermission: async (probe, options) => {
         asked.push(probe);
+        remints.push(options?.remint);
         const answer = answers[probe];
         if (answer === undefined || answer instanceof Error) {
           throw answer ?? new Error(`no answer for ${probe}`);
@@ -398,6 +454,10 @@ describe("the Graph permission probes (CAP-5)", () => {
   }
   const ROW: GraphProbeResponse = { status: 200, body: { value: [{ id: "x" }] } };
   const EMPTY: GraphProbeResponse = { status: 200, body: { value: [] } };
+  const DENIED: GraphProbeResponse = {
+    status: 403,
+    body: { error: { code: "Authorization_RequestDenied", message: "Insufficient privileges" } },
+  };
 
   it("asks each probe once, in order, and records a row as granted", async () => {
     const graph = graphWith({ "subscribed-skus": ROW, "security-incidents": ROW });
@@ -408,9 +468,35 @@ describe("the Graph permission probes (CAP-5)", () => {
     expect(graph.asked).toEqual(["subscribed-skus", "security-incidents"]);
   });
 
-  it("never records an empty 200 as denied (AZR-111), and records a 403 as denied", async () => {
-    const graph = graphWith({ "subscribed-skus": EMPTY, "security-incidents": { status: 403, body: {} } });
+  it("never records an empty 200 as denied (AZR-111), and records a privileges 403 as denied", async () => {
+    const graph = graphWith({ "subscribed-skus": EMPTY, "security-incidents": DENIED });
     expect(await graphPermissionVerdicts(graph)).toEqual({ "graph-incidents.read": "denied" });
+  });
+
+  it("allows one token re-mint per audit: none after a probe that re-minted (review r1)", async () => {
+    const graph = graphWith({
+      "subscribed-skus": { ...DENIED, reminted: true },
+      "security-incidents": DENIED,
+    });
+    expect(await graphPermissionVerdicts(graph)).toEqual({
+      "graph-licences.read": "denied",
+      "graph-incidents.read": "denied",
+    });
+    expect(graph.remints).toEqual([true, false]);
+  });
+
+  it("still lets the second probe re-mint when the first did not", async () => {
+    const graph = graphWith({ "subscribed-skus": ROW, "security-incidents": ROW });
+    await graphPermissionVerdicts(graph);
+    expect(graph.remints).toEqual([true, true]);
+  });
+
+  it("records a 403 that does not name missing privileges as nothing (review r1)", async () => {
+    const graph = graphWith({
+      "subscribed-skus": ROW,
+      "security-incidents": { status: 403, body: { error: { code: "Forbidden" } } },
+    });
+    expect(await graphPermissionVerdicts(graph)).toEqual({ "graph-licences.read": "granted" });
   });
 
   it("records nothing for a probe that rejects, and still runs the other", async () => {
@@ -434,7 +520,7 @@ describe("the Graph permission probes (CAP-5)", () => {
     // ownerPorts scripts the group read and three probes; the rest of the
     // ARM reads are answered here.
     (ports.azure as FakeAzureManagement).respondWith(OK, OK, permsResponse(OWNER));
-    const graph = graphWith({ "subscribed-skus": ROW, "security-incidents": { status: 403, body: {} } });
+    const graph = graphWith({ "subscribed-skus": ROW, "security-incidents": DENIED });
     const result = await runCapabilityAudit({ ...ports, graph }, INPUT);
     expect(result.set.verdicts["graph-licences.read"]).toBe("granted");
     expect(result.set.verdicts["graph-incidents.read"]).toBe("denied");

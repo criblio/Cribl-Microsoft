@@ -349,7 +349,31 @@ describe("PlatformGraphDirectory.probePermission (CAP-5)", () => {
     script({ status: 403, body: {} }, { status: 403, body: { error: { code: "Forbidden" } } });
     const result = await directory().probePermission("security-incidents");
     expect(gets()).toHaveLength(2);
-    expect(result).toEqual({ status: 403, body: { error: { code: "Forbidden" } } });
+    expect(result).toEqual({ status: 403, body: { error: { code: "Forbidden" } }, reminted: true });
+  });
+
+  it("does not re-mint when told not to: one GET, no token request (review r1)", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    const dir = directory();
+    // Warm the slot so ensureGraph mints nothing more on this instance.
+    script({ status: 200, body: { value: [{ id: "1" }] } });
+    await dir.probePermission("subscribed-skus");
+    mints.mockClear();
+    fetchWithTimeout.mockClear();
+
+    script({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } }, { status: 200, body: {} });
+    const result = await dir.probePermission("security-incidents", { remint: false });
+    expect(gets()).toEqual([URLS["security-incidents"]]);
+    expect(mints).toHaveBeenCalledTimes(0);
+    expect(result).toEqual({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } });
+
+    // The default still re-mints once and says so.
+    fetchWithTimeout.mockClear();
+    script({ status: 403, body: {} }, { status: 403, body: {} });
+    expect(await dir.probePermission("security-incidents")).toEqual({ status: 403, body: {}, reminted: true });
+    expect(gets()).toHaveLength(2);
+    expect(mints).toHaveBeenCalledTimes(1);
   });
 
   it("refuses (rejects, nothing sent) while another tenant owns the shared slot", async () => {

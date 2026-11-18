@@ -329,6 +329,14 @@ export interface AzurePreflight {
   hasRequiredAccess: boolean;
   /** Raw greppable error text ('' when none). */
   error: string;
+  /**
+   * The permission sets read at {@link scope}, present only when
+   * {@link permissionsFetched}. The capability audit evaluates actions the
+   * setup path does not require (the CAP-2/CAP-3 enablers, the Defender
+   * export's) against this same read on the subscription-scope paths, so
+   * measuring them there costs no request.
+   */
+  scopePermissions?: readonly PermissionSet[];
 }
 
 /** Outcome of one Cribl capability probe. */
@@ -467,6 +475,11 @@ export interface ScopeEvaluation {
   checks: PermissionCheckResult[];
   /** Greppable error text ('' when fetched). */
   error: string;
+  /**
+   * The permission sets the scope returned ([] when not fetched), so a caller
+   * can evaluate further actions against the SAME read without a second GET.
+   */
+  permissions: PermissionSet[];
 }
 
 /**
@@ -488,6 +501,7 @@ export async function evaluateActionsAtScope(
     fetched: false,
     checks: required.map((req) => checkResult(req, false)),
     error,
+    permissions: [],
   });
   try {
     const response = await azure.request({
@@ -498,10 +512,12 @@ export async function evaluateActionsAtScope(
     if (!is2xx(response.status)) {
       return unread(httpErrorText("fetch RBAC permissions", response.status, response.body));
     }
+    const permissions = extractPermissionSets(response.body);
     return {
       fetched: true,
-      checks: evaluatePermissions({ value: extractPermissionSets(response.body) }, [...required]),
+      checks: evaluatePermissions({ value: permissions }, [...required]),
       error: "",
+      permissions,
     };
   } catch (err) {
     return unread(`fetch RBAC permissions: ${errText(err)}`);
@@ -763,6 +779,7 @@ export async function runAzurePreflight(
     probes,
     hasRequiredAccess,
     error,
+    ...(permissionsFetched ? { scopePermissions: atScope.permissions } : {}),
   };
 }
 
