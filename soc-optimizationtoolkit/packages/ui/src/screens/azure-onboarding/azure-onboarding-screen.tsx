@@ -129,6 +129,7 @@ import {
   entraProfileFrom,
   entraSettingRecord,
   readEntraSettingState,
+  readActivityLogState,
   expectedEntraSetting,
   withEntraSetting,
   withoutEntraSetting,
@@ -210,6 +211,7 @@ import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
 import { EntraSettingSection } from "./entra-setting-section";
 import { EntraRemovePanel } from "./entra-remove-panel";
+import { ActivityLogRemovePanel } from "./activity-log-remove-panel";
 import { entraDeployedItems, entraReadDisprovesRecord } from "./entra-setting-state";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
@@ -986,11 +988,25 @@ export function AzureOnboardingScreen({
     }
   }
 
-  /** AZR-105: after a removal that left nothing behind, forget the record. */
+  /**
+   * AZR-105: after a removal that left nothing behind, forget the record.
+   * AZR-121: the Remove now sits in the teardown panel, outside the Activity
+   * Log section, so the section cannot re-read after it; the screen does,
+   * after any removal that reached Azure, so the row and Deploy stop
+   * describing the setting as it was before.
+   */
   function onActivityLogRemoved(outcome: ActivityLogRemoveOutcome): void {
-    if (outcome.kind !== "removed" && outcome.kind !== "already-gone") return;
-    const p = loadedProgress(latestProgressLoad.current);
-    if (p !== null) commitProgress(withoutActivityLogSetting(p, config.subscriptionId), "activity log setting removed");
+    if (outcome.kind === "removed" || outcome.kind === "already-gone") {
+      const p = loadedProgress(latestProgressLoad.current);
+      if (p !== null) commitProgress(withoutActivityLogSetting(p, config.subscriptionId), "activity log setting removed");
+    }
+    if (outcome.kind === "removed" || outcome.kind === "removed-not-confirmed" || outcome.kind === "already-gone") {
+      void readActivityLogState(ports.azure, config.subscriptionId, logger).then(setActivityLogState, (error: unknown) => {
+        // The usecase never throws; a wiring fault must not leave the old state looking current.
+        setActivityLogState(null);
+        logger?.error(`${LOG} Activity Log re-read after remove threw`, { error: errorText(error) });
+      });
+    }
   }
 
   function amendLastRun(deploy: OnboardingDeployForValidation, note: string): void {
@@ -1362,8 +1378,6 @@ export function AzureOnboardingScreen({
                   state={activityLogState}
                   onState={setActivityLogState}
                   onDeployed={onActivityLogDeployed}
-                  record={progress === null ? null : activityLogSettingRecord(progress, config.subscriptionId)}
-                  onRemoved={onActivityLogRemoved}
                   howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
                 />
@@ -1495,7 +1509,14 @@ export function AzureOnboardingScreen({
               onApplyPause,
             }}
             azure={
-              <EntraRemovePanel record={entraSettingRecord(progress, config.tenantId)} onRemoved={onEntraRemoved} />
+              <>
+                {/* AZR-121: from the record, whatever the Activity Log's choice or mode. */}
+                <ActivityLogRemovePanel
+                  record={activityLogSettingRecord(progress, config.subscriptionId)}
+                  onRemoved={onActivityLogRemoved}
+                />
+                <EntraRemovePanel record={entraSettingRecord(progress, config.tenantId)} onRemoved={onEntraRemoved} />
+              </>
             }
           />
         )}
