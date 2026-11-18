@@ -32,6 +32,13 @@
  * not that every resource is visible - Resource Graph filters rows by what the
  * identity can read rather than refusing, so an answer with no rows is left
  * unmeasured, and an empty discovery result is still not a verified none.
+ *
+ * `sentinel.enable` is the Enable Sentinel action on the targeting screen: a
+ * PUT of the SecurityInsights(workspace) Microsoft.OperationsManagement
+ * solution at the workspace's resource group. Measured from the resource-group
+ * RBAC evaluation (solutions/write). Separate from `table.write` because
+ * since AZR-85 Log Analytics Contributor is asked on the workspace, which no
+ * longer reaches a resource-group solution.
  */
 export type AzureCapability =
   | "dcr.write"
@@ -44,7 +51,8 @@ export type AzureCapability =
   | "defender-plans.read"
   | "defender-automation.read"
   | "defender-automation.write"
-  | "resourcegraph.read";
+  | "resourcegraph.read"
+  | "sentinel.enable";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -67,6 +75,7 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "defender-automation.read",
   "defender-automation.write",
   "resourcegraph.read",
+  "sentinel.enable",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([

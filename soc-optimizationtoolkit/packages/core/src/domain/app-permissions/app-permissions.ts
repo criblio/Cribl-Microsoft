@@ -396,6 +396,22 @@ export const FEATURE_ROLES: readonly FeatureRole[] = Object.freeze([
     necessity: "feature" as const,
     unmeasured: "At a management group, which no preflight scope reads.",
   }),
+  // AZR-85 review: Enable Sentinel PUTs the SecurityInsights(workspace)
+  // Microsoft.OperationsManagement solution at the workspace's resource
+  // group. Log Analytics Contributor at the group covered it by accident;
+  // asked on the workspace, it no longer does, so it is asked for here -
+  // only where Sentinel is not yet enabled.
+  featureRole("sentinel.solution.write", {
+    key: "Log Analytics Contributor (resource group)",
+    existingOnly: true,
+    scopeCaveat: "skip if Microsoft Sentinel is already enabled on the workspace",
+    feature: "Enable Microsoft Sentinel on the workspace",
+    justification:
+      "Enable Sentinel writes the SecurityInsights solution for the workspace, a Microsoft.OperationsManagement/solutions resource in the workspace's resource group rather than under the workspace, so the workspace grant above does not reach it. A custom role with only Microsoft.OperationsManagement/solutions/write and Microsoft.OperationsManagement/solutions/read at the resource group is narrower still.",
+    withoutIt:
+      "Enable Sentinel on the targeting screen fails with a 403; enabling it in the portal (Microsoft Sentinel > Create, then pick the workspace) does the same thing. Nothing else is affected.",
+    necessity: "feature" as const,
+  }),
   // AZR-61 audit discrepancy 2 (high): the preflight measured the Defender
   // export's actions and no ticket asked for a role that grants them.
   featureRole("defender.automation.write", {

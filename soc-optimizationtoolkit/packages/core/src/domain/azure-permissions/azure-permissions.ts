@@ -296,6 +296,22 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
       label: `Install solution parsers as saved searches (${leastRoleFor("savedSearch.write")})`,
       necessity: "feature",
     },
+    // AZR-85 review: Enable Sentinel PUTs a Microsoft.OperationsManagement
+    // solution at the resource group. Log Analytics Contributor at the group
+    // used to cover it by accident; asked on the workspace it does not.
+    {
+      action: operationAction("sentinel.solution.write"),
+      label: `Enable Microsoft Sentinel on the workspace (${leastRoleFor("sentinel.solution.write")})`,
+      necessity: "feature",
+    },
+    // Create workspace on the targeting screen. Monitoring Contributor at the
+    // group, already asked on this path, includes it; measured so a custom
+    // role without it reads as missing rather than unknown.
+    {
+      action: operationAction("workspace.write"),
+      label: `Create a Log Analytics workspace (${leastRoleFor("workspace.write")})`,
+      necessity: "feature",
+    },
   ],
   "lab-new-rg-subscription": [
     {
@@ -391,6 +407,13 @@ export interface PermissionCheckResult {
   granted: boolean;
   /** Carried over from the {@link RequiredAction}, so renderers can group. */
   necessity: PermissionNecessity;
+  /**
+   * Set, with the reason, when the action could not be evaluated at the scope
+   * its role is asked at (AZR-85: a workspace action read only at the resource
+   * group). `granted` is then false but NOT a measurement: renderers show
+   * unknown, and {@link coreGranted} does not fail on it.
+   */
+  unmeasured?: string;
 }
 
 /**
@@ -436,7 +459,8 @@ export function allGranted(results: PermissionCheckResult[]): boolean {
  */
 export function coreGranted(results: PermissionCheckResult[]): boolean {
   return results.every(
-    (result) => result.necessity !== "core" || result.granted,
+    (result) =>
+      result.necessity !== "core" || result.granted || result.unmeasured !== undefined,
   );
 }
 
@@ -445,6 +469,7 @@ export function missingFeatureActions(
   results: PermissionCheckResult[],
 ): PermissionCheckResult[] {
   return results.filter(
-    (result) => result.necessity === "feature" && !result.granted,
+    (result) =>
+      result.necessity === "feature" && !result.granted && result.unmeasured === undefined,
   );
 }

@@ -43,7 +43,6 @@ import type {
   CapabilityVerdict,
   CriblCapability,
 } from "../../domain/capabilities";
-import { REQUIRED_ACTIONS } from "../../domain/azure-permissions";
 import type { PermissionCheckResult, SetupPath } from "../../domain/azure-permissions";
 import { operationAction } from "../../domain/least-privilege";
 import {
@@ -88,6 +87,8 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
     [DEFENDER_PRICINGS_READ]: "defender-plans.read",
     [DEFENDER_AUTOMATIONS_READ]: "defender-automation.read",
     [DEFENDER_AUTOMATIONS_WRITE]: "defender-automation.write",
+    // AZR-85 review: Enable Sentinel's solution PUT, at the resource group.
+    [operationAction("sentinel.solution.write")]: "sentinel.enable",
   });
 
 /**
@@ -185,14 +186,14 @@ type Verdicts = Partial<Record<Capability, CapabilityVerdict>>;
  * measurements. When it was read, granted maps to `granted` and NOT granted maps
  * to `denied` - at that point it IS a measurement, which is the entire reason
  * the preflight prefers effective actions over role names. The exceptions are
- * {@link GRANT_ONLY_AZURE_ACTIONS} and the `grantOnly` set the caller passes,
- * evaluated above their resource's scope: there NOT granted is not a
- * measurement, and nothing is recorded.
+ * {@link GRANT_ONLY_AZURE_ACTIONS} and a check marked `unmeasured` (AZR-85),
+ * each evaluated above its
+ * resource's scope: there NOT granted is not a measurement, and nothing is
+ * recorded.
  */
 export function azureCheckVerdicts(
   fetched: boolean,
   checks: readonly PermissionCheckResult[],
-  grantOnly: ReadonlySet<string> = new Set(),
 ): Verdicts {
   const into: Verdicts = {};
   if (!fetched) {
@@ -205,7 +206,10 @@ export function azureCheckVerdicts(
     }
     if (check.granted) {
       into[capability] = "granted";
-    } else if (!GRANT_ONLY_AZURE_ACTIONS.has(check.action) && !grantOnly.has(check.action)) {
+    } else if (
+      !GRANT_ONLY_AZURE_ACTIONS.has(check.action) &&
+      check.unmeasured === undefined
+    ) {
       into[capability] = "denied";
     }
   }
@@ -213,31 +217,12 @@ export function azureCheckVerdicts(
 }
 
 /**
- * The setup path's workspace-scoped actions (AZR-85) when the preflight could
- * not read the workspace and evaluated them at its own scope instead: a role
- * held on the workspace alone is invisible there, so NOT granted is no denial.
+ * Azure verdicts from the preflight's effective-action checks. A workspace
+ * action the preflight could only read above the workspace arrives marked
+ * `unmeasured` (AZR-85), and records nothing.
  */
-function workspaceActionsReadAbove(preflight: AzurePreflight): ReadonlySet<string> {
-  if (preflight.workspaceScope !== "") {
-    return new Set();
-  }
-  return new Set(
-    REQUIRED_ACTIONS[preflight.setupPath]
-      .filter((req) => req.resourceScope === "workspace")
-      .map((req) => req.action),
-  );
-}
-
-/** Azure verdicts from the preflight's effective-action checks. */
 function applyAzureChecks(preflight: AzurePreflight, into: Verdicts): void {
-  Object.assign(
-    into,
-    azureCheckVerdicts(
-      preflight.permissionsFetched,
-      preflight.checks,
-      workspaceActionsReadAbove(preflight),
-    ),
-  );
+  Object.assign(into, azureCheckVerdicts(preflight.permissionsFetched, preflight.checks));
 }
 
 /**

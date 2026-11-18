@@ -215,7 +215,7 @@ The wizard shows only the rows for features the user enables (progressive, least
 
 | Capability (features) | Scope | Required role / permission |
 |---|---|---|
-| DCR/DCE deployment, custom tables, MMA migration (Tier 1 DCR-*) | Target resource group + workspace | Monitoring Contributor on the resource group + Log Analytics Contributor on the workspace resource (AZR-85; a custom role with tables read/write and workspaces/read on the workspace is narrower still) |
+| DCR/DCE deployment, custom tables, MMA migration (Tier 1 DCR-*) | Target resource group + workspace | Monitoring Contributor on the resource group + Log Analytics Contributor on the workspace resource (AZR-85; a custom role with tables read/write and workspaces/read on the workspace is narrower still). Enable Sentinel also needs Microsoft.OperationsManagement/solutions/write at the resource group (Log Analytics Contributor there, asked as a feature row, skip if Sentinel is already enabled) |
 | Assign Monitoring Metrics Publisher to the ingestion SP (ENG-37) | Deployed DCRs | Role Based Access Control Administrator (or User Access Administrator) |
 | Resource discovery via Resource Graph (EVH-03/04, VNF-01, LOG-10) | Subscription(s) | Reader |
 | Event Hub connection-string generation (EVH-06, LOG-16) | Event Hub namespaces | listKeys action (Azure Event Hubs Data Owner or equivalent) |

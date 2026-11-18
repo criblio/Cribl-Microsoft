@@ -230,7 +230,8 @@ describe("mapping tables", () => {
     // still real MEASUREMENTS - they only decline to gate deploy readiness - so
     // they belong in this list exactly like core ones.
     expect(capabilitiesCheckedForSetupPath("existing-rg").sort()).toEqual(
-      ["arm.deploy", "dcr.write", "role.assign", "table.write"].sort(),
+      // RE-PINNED (AZR-85 review): sentinel.enable, the Enable Sentinel solution write.
+      ["arm.deploy", "dcr.write", "role.assign", "sentinel.enable", "table.write"].sort(),
     );
     // RE-PINNED 2026-10-27 (CAP-7a): the three Defender capabilities joined
     // existing-subscription, the one path evaluated at the subscription their

@@ -60,7 +60,7 @@ import type {
   ResourceGroupChoices,
   TargetScope,
 } from "@soc/core";
-import { emptyCapabilitySet, listingRows } from "@soc/core";
+import { emptyCapabilitySet, listingRows, verdictFor } from "@soc/core";
 import {
   emptyInventoryMessage,
   unmeasuredInventoryMessage,
@@ -73,6 +73,7 @@ import {
   releaseClaimOnCancel,
   formatScopeChip,
   sanitizeResourceGroupName,
+  sentinelEnableNote,
   validateResourceGroupName,
 } from "./targeting-state";
 
@@ -180,6 +181,14 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
   // cannot settle it. Both said the harmful thing before: the resource-group
   // line invited creating one, and the subscription line asserted a permission
   // problem that an identity with genuinely zero subscriptions does not have.
+  // AZR-85 review: Enable Sentinel needs the solution write at the resource
+  // group. Measured for the committed group only, so a browsed one hedges.
+  const sentinelNote = sentinelEnableNote(
+    verdictFor("sentinel.enable", auditedCapabilities, auditedContext),
+    browseSub.trim() === config.subscriptionId.trim() &&
+      browseRg.trim() === config.resourceGroup.trim(),
+  );
+
   const emptySubscriptions = unmeasuredInventoryMessage("enabled subscriptions");
   const emptyResourceGroups = unmeasuredInventoryMessage("resource groups");
 
@@ -976,6 +985,11 @@ export function AzureTargetingScreen(props: AzureTargetingScreenProps) {
             </button>
           )}
         </div>
+        {sentinelStatus !== "enabled" && sentinelNote !== null && (
+          <span className="field-hint" data-testid="sentinel-enable-permission">
+            {sentinelNote}
+          </span>
+        )}
         {sentinelStatus === "disabled" && (
           <span className="field-hint">
             Sentinel is not enabled on this workspace - Enable it above before

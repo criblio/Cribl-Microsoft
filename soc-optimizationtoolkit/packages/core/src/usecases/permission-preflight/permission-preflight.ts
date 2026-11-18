@@ -651,6 +651,25 @@ export async function runAzurePreflight(
       });
     }
   }
+  // Read only above the workspace and not granted there: a role held on the
+  // workspace alone is invisible, so the row is unknown, not missing, and
+  // readiness does not fail on it (coreGranted skips unmeasured rows).
+  if (permissionsFetched && workspaceScope === "" && wsIndexes.length > 0) {
+    const why =
+      wsScope === null
+        ? "no workspace is configured"
+        : "the workspace's permissions could not be read";
+    checks = checks.map((check, i) =>
+      wsIndexes.includes(i)
+        ? {
+            ...check,
+            unmeasured:
+              `not measured: the role is asked on the workspace, and ${why}; ` +
+              "the resource group does not grant it",
+          }
+        : check,
+    );
+  }
 
   // --- Live existence probes (truth; do not gate readiness on their own) ---
   const probeRequests: {
@@ -920,7 +939,7 @@ function firstAzureIssue(azure: AzurePreflight): string | null {
     return "Azure: permission check failed";
   }
   for (const check of azure.checks) {
-    if (!check.granted) {
+    if (!check.granted && check.unmeasured === undefined) {
       return `Azure: cannot ${check.label.toLowerCase()}`;
     }
   }

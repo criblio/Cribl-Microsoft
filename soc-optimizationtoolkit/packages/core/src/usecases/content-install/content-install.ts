@@ -777,27 +777,44 @@ export async function installSolution(
   ) {
     logger?.info("content-install: clearing orphaned package association", { contentId });
     const conflict = failDetail(attempt.response);
-    // AZR-86: a refused DELETE used to be swallowed, and the retry PUT then
-    // failed with the ORIGINAL 400, which names the conflict but not the
-    // missing right. Stop at the refusal and name it instead.
-    const refused = [
+    // AZR-86: a refused DELETE used to be swallowed, and a failed retry PUT
+    // then showed only the ORIGINAL 400, which names the conflict but not the
+    // missing right. Which of the two names holds the contentId is not known,
+    // so one refusal is not yet a failure: the other delete may be the one
+    // the retry needs (review E). Stop early only when every delete was
+    // refused; otherwise retry, and name the refusal if the retry fails.
+    const deletes = [
       await deleteContentPackage(arm, ws, contentProductId),
       await deleteContentPackage(arm, ws, contentId),
-    ].find((r) => r !== null);
-    if (refused !== undefined) {
+    ];
+    const refused = deletes.filter((r): r is { name: string; status: number } => r !== null);
+    const refusalNote = refused
+      .map(
+        (r) =>
+          `deleting the stale package ${r.name} was refused (HTTP ${r.status})`,
+      )
+      .join("; ");
+    const needsDelete =
+      "Microsoft.SecurityInsights/contentPackages/delete is needed " +
+      "(Microsoft Sentinel Contributor includes it)";
+    if (refused.length === deletes.length) {
       return {
         name: displayName,
         ok: false,
         detail:
-          `a stale package (${refused.name}) already holds this solution's contentId, ` +
-          `and deleting it was refused (HTTP ${refused.status}): ` +
-          "Microsoft.SecurityInsights/contentPackages/delete is needed " +
-          "(Microsoft Sentinel Contributor includes it). The install was refused with: " +
-          conflict,
+          `a stale package already holds this solution's contentId, and ${refusalNote}: ` +
+          `${needsDelete}. The install was refused with: ${conflict}`,
       };
     }
     attempt = await put();
     if (!attempt.ok) return { name: displayName, ok: false, detail: attempt.error };
+    if (!is2xx(attempt.response.status) && refused.length > 0) {
+      return {
+        name: displayName,
+        ok: false,
+        detail: `${failDetail(attempt.response)}; ${refusalNote}: ${needsDelete}`,
+      };
+    }
   }
   const res = attempt.response;
   logger?.info("content-install: solution install PUT", {

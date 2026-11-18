@@ -157,6 +157,18 @@ describe("deriveAzureDots", () => {
     expect(required.every((d) => d.status !== "missing")).toBe(true);
   });
 
+  it("marks a check read only above its scope as UNKNOWN with the reason, never missing (AZR-85 review D)", () => {
+    const reason =
+      "not measured: the role is asked on the workspace, and no workspace is configured; the resource group does not grant it";
+    const checks = REQUIRED_ACTIONS[SETUP_PATH].map((req, i) => ({
+      ...checkResult(req, i > 0),
+      ...(i === 0 ? { unmeasured: reason } : {}),
+    }));
+    const dots = deriveAzureDots(azureState("done", azureReady({ checks })), SETUP_PATH);
+    expect(dots[0].status).toBe("unknown");
+    expect(dots[0].detail).toBe(reason);
+  });
+
   it("maps a denied probe to missing and an indeterminate probe to unknown", () => {
     const state = azureState(
       "done",

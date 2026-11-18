@@ -239,6 +239,12 @@ describe("Log Analytics Contributor on the workspace is measured there (AZR-85)"
     const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
     expect(result.workspaceScope).toBe("");
     expect(tableCheck(result.checks)?.granted).toBe(false);
+    // Review D: read only above the workspace, so the row is unknown, not a
+    // missing core permission, and readiness does not fail on it.
+    expect(result.checks.find((c) => c.action === "Microsoft.OperationalInsights/workspaces/tables/write")?.unmeasured).toBe(
+      "not measured: the role is asked on the workspace, and the workspace's permissions could not be read; the resource group does not grant it",
+    );
+    expect(result.hasRequiredAccess).toBe(true);
     // The capability model does not turn the group's miss into a denial.
     const set = capabilitiesFromSides(
       result,
@@ -262,12 +268,26 @@ describe("Log Analytics Contributor on the workspace is measured there (AZR-85)"
     expect(set.verdicts["table.write"]).toBe("denied");
   });
 
-  it("issues no workspace read without a workspace name", async () => {
+  it("issues no workspace read without a workspace name, and reads the row as unknown", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(permsResponse(GROUP), OK, GRAPH_ROW);
     const result = await runAzurePreflight(azure, "existing-rg", { ...FULL_TARGET, workspaceName: "" });
     expect(azure.calls).toHaveLength(3);
     expect(result.workspaceScope).toBe("");
+    expect(result.checks.find((c) => c.action === "Microsoft.OperationalInsights/workspaces/tables/write")?.unmeasured).toBe(
+      "not measured: the role is asked on the workspace, and no workspace is configured; the resource group does not grant it",
+    );
+    expect(result.hasRequiredAccess).toBe(true);
+  });
+
+  it("a workspace-measured miss is a real missing core permission", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(permsResponse(GROUP), permsResponse(GROUP), OK, OK, OK, GRAPH_ROW);
+    const result = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
+    const table = result.checks.find((c) => c.action === "Microsoft.OperationalInsights/workspaces/tables/write");
+    expect(table?.granted).toBe(false);
+    expect(table?.unmeasured).toBeUndefined();
+    expect(result.hasRequiredAccess).toBe(false);
   });
 });
 

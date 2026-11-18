@@ -6,6 +6,7 @@ import {
   commitNoticeText,
   formatScopeChip,
   parseTargetScope,
+  sentinelEnableNote,
   releaseClaimOnCancel,
   sanitizeResourceGroupName,
   shouldClaimLoad,
@@ -240,5 +241,34 @@ describe("releaseClaimOnCancel", () => {
     claimed = key;
     claimed = releaseClaimOnCancel(claimed, key, true);
     expect(shouldClaimLoad(claimed, key)).toBe(true);
+  });
+});
+
+describe("sentinelEnableNote (AZR-85 review)", () => {
+  const GRANT =
+    "Microsoft.OperationsManagement/solutions/write at the resource group " +
+    "(Log Analytics Contributor there, or a custom role with that action)";
+
+  it("says nothing when the audit measured the grant on this group", () => {
+    expect(sentinelEnableNote("granted", true)).toBeNull();
+  });
+
+  it("names the 403 and the grant when the audit measured a denial", () => {
+    expect(sentinelEnableNote("denied", true)).toBe(
+      `The permission audit found this identity lacks ${GRANT}, so Enable is expected to fail with a 403. Ask for that grant, or enable Sentinel in the portal.`,
+    );
+  });
+
+  it("is unknown, never denied, before an audit", () => {
+    expect(sentinelEnableNote("unknown", true)).toBe(`Not measured yet: Enable needs ${GRANT}.`);
+    expect(sentinelEnableNote("unreachable", true)).toBe(`Not measured yet: Enable needs ${GRANT}.`);
+  });
+
+  it("never borrows the committed group's verdict for a browsed one", () => {
+    for (const verdict of ["granted", "denied", "unknown"] as const) {
+      expect(sentinelEnableNote(verdict, false)).toBe(
+        `Not checked for this resource group: Enable needs ${GRANT}; the permission audit measured the committed scope only.`,
+      );
+    }
   });
 });

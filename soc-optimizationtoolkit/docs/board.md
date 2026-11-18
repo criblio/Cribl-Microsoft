@@ -8810,7 +8810,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   its name is known. When the workspace cannot be read the group's answer
   stands for the deploy gate but the capability model records no denial
   (workspaceScope ''). Live check outstanding: a grant on the workspace alone,
-  measured in Live Preview.
+  measured in Live Preview. REVIEW FIXES 2026-11-17 (pins): (C) Enable
+  Sentinel PUTs the SecurityInsights Microsoft.OperationsManagement solution
+  at the resource group, which the group-level grant used to cover by
+  accident. It is now its own [feature] row, Log Analytics Contributor
+  (resource group), marked 'skip if Microsoft Sentinel is already enabled on
+  the workspace' and naming the narrower custom role (solutions/write and
+  solutions/read), asked on the existing path only. It is measured as a
+  feature check on existing-rg, mapped to a new capability sentinel.enable
+  (fallback: the role-assignment request), and the targeting screen shows a
+  note beside Enable Sentinel: denied names the 403 and the grant, unmeasured
+  says so, and a browsed group outside the audited scope is never given the
+  committed group's verdict. The button stays clickable. Create workspace
+  (workspace.write) is covered by the Monitoring Contributor already asked at
+  the group (Learn built-in-roles/monitor lists workspaces/write for it); it
+  is now a measured feature check. (D) When tables/write could only be read
+  above the workspace (no workspace configured, or its permissions unreadable)
+  and the group does not grant it, the check carries an 'unmeasured' reason:
+  the preflight row shows unknown, the summary skips it, and coreGranted does
+  not fail readiness on it.
 
 - **AZR-86** Sentinel content writes, the Graph directory read and the Defender actions on the existing path are asked for but not measured, or measured but not asked
   `AZR-F10` `bug` `settled` `verified: pins`
@@ -8845,7 +8863,11 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   then probing Application.Read.All per tenant, which stays honestly unknown
   until then; and the swallowed 403 on the parser savedSearches DELETE. Live
   check outstanding for (2): a resource-group audit against a subscription
-  where Security Admin is held.
+  where Security Admin is held. REVIEW FIX 2026-11-17 (pins): one refused
+  orphan DELETE no longer fails the install on its own, since the other delete
+  may be the one the retry needs. The install stops early only when every
+  delete was refused; otherwise it retries, and a retry that still fails names
+  contentPackages/delete beside its own error.
 
 - **AZR-87** How-to blob and flow-log rbac lines name User Access Administrator, Contributor and Network Contributor alone, where the registry names narrower or additional rights
   `AZR-F10` `bug` `settled` `verified: pins`
