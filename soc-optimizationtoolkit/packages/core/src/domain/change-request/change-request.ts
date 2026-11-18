@@ -58,6 +58,7 @@ import {
 import type { AppPermission } from "../app-permissions";
 import { leastRoleFor } from "../least-privilege";
 import { adminStepsForSetupPath } from "../role-plan";
+import { EVENT_HUB_RECEIVER_ROLES } from "../eventhub-arm";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
@@ -759,10 +760,18 @@ export function roleAssignmentRequest(
 }
 
 /**
+ * The role the Cribl service principal needs on the namespace for the Event
+ * Hub source's default Entra ID credential (AZR-88, ADR 0008): the one role
+ * plan-cribl-source accepts, read from the same list it checks.
+ */
+const CRIBL_RECEIVER_ROLE = EVENT_HUB_RECEIVER_ROLES[0]?.roleName ?? "Azure Event Hubs Data Receiver";
+
+/**
  * Request creation of resources the app needs but the requester may lack rights
  * to create: for the lab-new-rg path a resource group with a MANDATORY TTL
  * auto-delete, and an Event Hub namespace for the diagnostic-settings export
- * path. Embeds the data export flow.
+ * path - at a tier Cribl can read, with the Cribl service principal's receive
+ * role on it (AZR-88). Embeds the data export flow.
  */
 export function resourceCreationRequest(
   ctx: ChangeRequestContext,
@@ -789,6 +798,20 @@ export function resourceCreationRequest(
     "- Create an Event Hub namespace in resource group " + n.resourceGroup,
     "  (subscription " + n.subscriptionId + ") to receive Azure",
     "  diagnostic-settings streams for the data export path.",
+    // AZR-88: plan-cribl-source refuses a Basic namespace ("Basic tier,
+    // which has no Kafka endpoint for Cribl to read; use Standard or
+    // Premium"), so a ticket that left the tier open let an admin create the
+    // one tier the app then rejects.
+    "  Pricing tier: Standard or Premium, not Basic. Basic has no Kafka",
+    "  endpoint for Cribl to read, and the app refuses a Basic namespace.",
+    "- Assign " + CRIBL_RECEIVER_ROLE + " on that namespace (or on each",
+    "  hub Cribl reads) to the service principal Cribl Stream signs in as:",
+    "  <cribl service principal object id>. This is the Cribl Event Hubs",
+    "  source's default Entra ID credential, so no shared access key leaves",
+    "  Azure. Use a principal made for Cribl, not " + n.appName + "'s own",
+    "  registration, and not Azure Event Hubs Data Owner: the app refuses",
+    "  both. Skip this if the source will use a Listen-only shared access",
+    "  rule instead.",
   );
 
   const parts: string[] = [
@@ -812,6 +835,8 @@ export function resourceCreationRequest(
         "Subscription:   " + n.subscriptionId,
         "Resource group: " + n.resourceGroup,
         "Setup path:     " + setupPath,
+        "Event Hub tier: Standard or Premium (not Basic)",
+        "Cribl role:     " + CRIBL_RECEIVER_ROLE + " for the Cribl service principal",
       ].join("\n"),
     ),
   ];

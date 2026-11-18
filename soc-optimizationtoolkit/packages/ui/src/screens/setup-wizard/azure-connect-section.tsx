@@ -68,15 +68,17 @@ export interface AzureConnectSectionProps {
 /** The setup-path notes, shown behind an InfoTip (moved verbatim from inline prose). */
 const SETUP_PATH_NOTES: Readonly<Record<AzureSetupPath, string>> = {
   existing:
-    "Least privilege for an existing environment: Monitoring Contributor and Log Analytics " +
-    "Contributor scoped to the workspace resource group, plus Reader on the subscription. " +
+    "Least privilege for an existing environment: Monitoring Contributor scoped to the workspace " +
+    "resource group, Log Analytics Contributor on the workspace itself, plus Reader on the " +
+    "subscription. " +
     "Nothing is granted subscription-wide beyond read.",
   "lab-new-rg":
     "Requires Contributor at the subscription scope (resource group creation is a " +
     "subscription-level action, and it covers all workspace and DCR operations inside the lab, " +
     "so no workspace resource group is needed) and RBAC Administrator at the subscription scope " +
     "for the lab TTL self-destruct. Assign RBAC Administrator in the portal with the condition " +
-    '"Constrain roles and principal types": only Contributor and Monitoring Metrics Publisher, ' +
+    '"Constrain roles and principal types": only Managed Application Contributor Role and ' +
+    "Monitoring Metrics Publisher, " +
     "only to service principals.",
   "lab-byo-rg":
     "Least privilege for labs: an admin pre-creates an empty lab resource group and grants " +
