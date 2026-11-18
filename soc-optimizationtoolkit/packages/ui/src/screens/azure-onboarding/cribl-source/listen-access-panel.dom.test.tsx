@@ -32,7 +32,10 @@ const res = (status: number, body: unknown): PortHttpResponse => ({ ok: status <
 /** A namespace whose objects are a map by path; PUT adds, DELETE removes. */
 class NamespaceAzure implements AzureManagement {
   readonly calls: AzureManagementRequest[] = [];
-  constructor(readonly objects: Map<string, unknown> = new Map()) {}
+  readonly objects: Map<string, unknown>;
+  constructor(objects: Map<string, unknown> = new Map()) {
+    this.objects = objects;
+  }
   async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
     if (r.method === "GET") return this.objects.has(r.path) ? res(200, this.objects.get(r.path)) : res(404, {});
